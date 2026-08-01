@@ -20036,24 +20036,34 @@ describe('Wake 88 — "the <topic> (broadcast|flow) fires sendSystemPm with key=
   // Reuses Wake 82's fireSystemPmWebhook driver because the trigger
   // type (webhook|broadcast|flow) doesn't change effective semantics —
   // only the Gherkin author's English phrasing differs.
-  test('broadcast trigger → ok', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
-    const r = await executeStep(
-      {
-        kind: 'When',
-        text: 'the policy-update broadcast fires sendSystemPm with key="policy_update_v4" recipient=Marcus',
+  /**
+   * THESE PINNED A CONTRACT THAT COULD NEVER WORK.
+   *
+   * They passed `ctx.webDriver.fireSystemPmWebhook` as a jest.fn and asserted
+   * it was called — so the matcher looked healthy while no web driver, on any
+   * of the seven web surfaces, implemented that method. It cannot: sendSystemPm
+   * is a server-side function, and a browser has no way to invoke one. Every
+   * matrix run produced 15 failures here.
+   *
+   * The step now performs the real admin action that SENDS the PM, and lets
+   * the product decide whether to send anything. A harness that wrote the PM
+   * itself would prove only that the harness can write a PM.
+   */
+  test('a flow with a real product action drives that action', async () => {
+    const calls = [];
+    const ctx = makeCtx({
+      fetch: async (url, init) => {
+        calls.push({ url, method: init?.method });
+        return { status: 200, json: async () => ({ success: true }), text: async () => '{}' };
       },
-      ctx,
-    );
-    expect(r.ok).toBe(true);
-    // Marcus = P-04 = 60000010
-    expect(spy).toHaveBeenCalledWith('policy-update', 'policy_update_v4', 60000010);
-  });
-
-  test('flow trigger → ok', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
+    });
+    // Greta already signed in: callApiAs otherwise signs in on demand, which
+    // needs PERSONAS_PASSWORD and would make this a credentials test.
+    ctx.sessions.set('Greta', {
+      persona: { uniqueId: 50000090, displayName: 'Greta' },
+      idToken: 'test-id-token',
+      localId: 'greta-uid',
+    });
     const r = await executeStep(
       {
         kind: 'When',
@@ -20062,13 +20072,29 @@ describe('Wake 88 — "the <topic> (broadcast|flow) fires sendSystemPm with key=
       ctx,
     );
     expect(r.ok).toBe(true);
-    // Layla = P-13 = 50000070
-    expect(spy).toHaveBeenCalledWith('suspension-notice', 'moderation_suspension_notice', 50000070);
+    // Layla = P-13 = 50000070 — suspended for real, via the real route.
+    expect(calls.some((c) => c.url.includes('/api/user/50000070/suspend'))).toBe(true);
+  });
+
+  test('a trigger with NO product flow is refused by name, not faked', async () => {
+    // "policy-update broadcast" has no endpoint in this API. Inventing a PM
+    // for it would make the scenario green for a feature that does not exist.
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'When',
+        text: 'the policy-update broadcast fires sendSystemPm with key="policy_update_v4" recipient=Marcus',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no product flow is wired/);
+    // The error lists what IS wired, so the fix needs no second command.
+    expect(r.error).toMatch(/suspension-notice flow/);
   });
 
   test('unknown recipient → fail', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
+    const ctx = makeCtx();
     const r = await executeStep(
       {
         kind: 'When',
@@ -20090,9 +20116,11 @@ describe('Wake 89 — broad "the <noun> fires sendSystemPm with key="<X>"[ recip
   // Broad fallback for trigger phrases that don't match Wake 82's
   // "<X> webhook" or Wake 88's "<X> broadcast|flow". Placed LAST so the
   // narrower matchers still fire first.
-  test('bare broadcast (no recipient) → ok', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
+  test('a bare "broadcast" has no product flow and says so', async () => {
+    // There is no broadcast endpoint in this API. Previously this passed by
+    // calling a jest.fn that stood in for a web-driver method no driver has
+    // ever implemented — green here, 15 failures per matrix run.
+    const ctx = makeCtx();
     const r = await executeStep(
       {
         kind: 'When',
@@ -20100,13 +20128,14 @@ describe('Wake 89 — broad "the <noun> fires sendSystemPm with key="<X>"[ recip
       },
       ctx,
     );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('broadcast', 'policy_update_v4', null);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no product flow is wired/);
   });
 
-  test('test harness with recipient → ok', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
+  test('"the test harness" is refused — the harness must not send its own PM', async () => {
+    // This scenario asserts an UNKNOWN key produces no PM. Letting the
+    // harness send it would test the harness, not the product.
+    const ctx = makeCtx();
     const r = await executeStep(
       {
         kind: 'When',
@@ -20114,9 +20143,8 @@ describe('Wake 89 — broad "the <noun> fires sendSystemPm with key="<X>"[ recip
       },
       ctx,
     );
-    expect(r.ok).toBe(true);
-    // Adam = P-01 = 90000001
-    expect(spy).toHaveBeenCalledWith('test harness', 'totally_made_up_key', 90000001);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no product flow is wired/);
   });
 
   test('does NOT shadow Wake 82 webhook variant (now W132 Firestore-write)', async () => {
@@ -20975,28 +21003,40 @@ describe('Wake 90 — Wake 89 broad sendSystemPm extension: writes ctx.lastSentS
   // ctx.lastSentSystemPm so the new Wake 90 "the recipient is X"
   // matcher has data to read. Additive change — no existing test
   // depends on this field being absent.
-  test('writes lastSentSystemPm with recipient name + id', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
+  test('records the send only when a real flow actually ran', async () => {
+    const ctx = makeCtx({
+      fetch: async () => ({
+        status: 200,
+        json: async () => ({ success: true }),
+        text: async () => '{}',
+      }),
+    });
+    ctx.sessions.set('Greta', {
+      persona: { uniqueId: 50000090, displayName: 'Greta' },
+      idToken: 'test-id-token',
+      localId: 'greta-uid',
+    });
     const r = await executeStep(
       {
         kind: 'When',
-        text: 'the test harness fires sendSystemPm with key="X" recipient=Adam',
+        text: 'the suspension-notice flow fires sendSystemPm with key="X" recipient=Layla',
       },
       ctx,
     );
     expect(r.ok).toBe(true);
     expect(ctx.lastSentSystemPm).toEqual({
-      trigger: 'test harness',
+      trigger: 'suspension-notice flow',
       key: 'X',
-      recipientName: 'Adam',
-      recipientId: 90000001,
+      recipientName: 'Layla',
+      recipientId: 50000070,
     });
   });
 
-  test('bare broadcast (no recipient) → recipientId null', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ webDriver: { fireSystemPmWebhook: spy } });
+  test('records NOTHING when the trigger has no product flow', async () => {
+    // The downstream "the recipient is X" assertion reads this field. Writing
+    // it for a send that never happened would let that assertion pass on
+    // bookkeeping alone.
+    const ctx = makeCtx();
     const r = await executeStep(
       {
         kind: 'When',
@@ -21004,13 +21044,8 @@ describe('Wake 90 — Wake 89 broad sendSystemPm extension: writes ctx.lastSentS
       },
       ctx,
     );
-    expect(r.ok).toBe(true);
-    expect(ctx.lastSentSystemPm).toEqual({
-      trigger: 'broadcast',
-      key: 'policy_update_v4',
-      recipientName: null,
-      recipientId: null,
-    });
+    expect(r.ok).toBe(false);
+    expect(ctx.lastSentSystemPm).toBeUndefined();
   });
 });
 

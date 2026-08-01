@@ -919,6 +919,84 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
  * world it does not have, and the resulting failure would be attributed to
  * whichever assertion happened to touch the missing state first.
  */
+/**
+ * Make the product send a system PM, by performing the flow that sends it.
+ *
+ * The corpus phrases these as "the post-approval webhook fires sendSystemPm
+ * with key=…". They used to be routed at `ctx.webDriver.fireSystemPmWebhook`
+ * — asking a BROWSER to invoke a server-side function, which no web driver
+ * can do and none ever implemented. 15 failures per matrix run.
+ *
+ * `sendSystemPm` is not an endpoint; it is a side effect of real admin
+ * actions. So the honest way to prove "the age-up welcome PM is sent" is to
+ * approve the age-verification submission for real and let the product decide
+ * whether to send anything. A harness that wrote the PM itself would prove
+ * only that the harness can write a PM.
+ *
+ * A trigger with no product surface is REFUSED BY NAME rather than faked: the
+ * scenario is then attributable to a missing feature, not to a broken one.
+ */
+const SYSTEM_PM_TRIGGERS = {
+  'post-approval webhook': {
+    describe: 'approving the pending age-verification submission',
+    async fire(ctx, recipientName, recipientId) {
+      return callApiAs(
+        ctx,
+        'Greta',
+        'POST',
+        `/api/admin/age-verification/test-${recipientId}-pending/approve`,
+        { reviewedBy: 'Greta' },
+      );
+    },
+  },
+  'rejection webhook': {
+    describe: 'rejecting the pending age-verification submission',
+    async fire(ctx, recipientName, recipientId) {
+      return callApiAs(
+        ctx,
+        'Greta',
+        'POST',
+        `/api/admin/age-verification/test-${recipientId}-pending/reject`,
+        { reason: 'Document does not support the claimed date of birth' },
+      );
+    },
+  },
+  'suspension-notice flow': {
+    describe: 'suspending the recipient',
+    async fire(ctx, recipientName, recipientId) {
+      return callApiAs(ctx, 'Greta', 'POST', `/api/user/${recipientId}/suspend`, {
+        reason: 'Repeat harassment',
+        canAppeal: true,
+        endDate: new Date(Date.now() + 3 * 86400000).toISOString(),
+      });
+    },
+  },
+};
+
+async function fireSystemPmTrigger(ctx, trigger, recipientName, recipientId) {
+  const spec = SYSTEM_PM_TRIGGERS[String(trigger).trim()];
+  if (!spec) {
+    return {
+      ok: false,
+      error: `no product flow is wired for the "${trigger}" trigger — sendSystemPm is a side effect of real admin actions, not an endpoint, so this step needs the action that sends the PM (known triggers: ${Object.keys(
+        SYSTEM_PM_TRIGGERS,
+      ).join(', ')})`,
+    };
+  }
+  if (!recipientId) {
+    return { ok: false, error: `"${trigger}" needs a recipient to act on` };
+  }
+  try {
+    await spec.fire(ctx, recipientName, recipientId);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `${trigger} failed while ${spec.describe}: ${e.message}`,
+    };
+  }
+}
+
 async function callApiAs(ctx, personaName, method, apiPath, body = undefined) {
   let sess = ctx.sessions?.get(personaName);
   if (!sess?.idToken) {
@@ -11908,7 +11986,7 @@ const matchers = [
     pattern:
       /^the (\w+(?:-\w+)*) (broadcast|flow) fires sendSystemPm with key="([^"]+)" recipient=([A-Z][a-z]+)$/,
     async handler(m, ctx) {
-      const triggerName = m[1];
+      const trigger = `${m[1]} ${m[2]}`;
       const key = m[3];
       const recipientName = m[4];
       const personas = loadPersonas();
@@ -11916,16 +11994,17 @@ const matchers = [
       if (!p?.uniqueId) {
         return { ok: false, error: `recipient "${recipientName}" not in registry` };
       }
-      if (!ctx.webDriver?.fireSystemPmWebhook) {
-        return { ok: false, error: 'ctx.webDriver.fireSystemPmWebhook not configured' };
-      }
-      const ok = await ctx.webDriver.fireSystemPmWebhook(triggerName, key, p.uniqueId);
-      if (!ok) {
-        return {
-          ok: false,
-          error: `${triggerName} failed to fire sendSystemPm key=${key}`,
-        };
-      }
+      // Same treatment as the broad matcher below: perform the real flow that
+      // sends the PM, rather than asking a browser to invoke a server-side
+      // function it has no way to reach.
+      const fired = await fireSystemPmTrigger(ctx, trigger, recipientName, p.uniqueId);
+      if (!fired.ok) return fired;
+      ctx.lastSentSystemPm = {
+        trigger,
+        key,
+        recipientName,
+        recipientId: p.uniqueId,
+      };
       return { ok: true };
     },
   },
@@ -11953,16 +12032,8 @@ const matchers = [
         }
         recipientId = p.uniqueId;
       }
-      if (!ctx.webDriver?.fireSystemPmWebhook) {
-        return { ok: false, error: 'ctx.webDriver.fireSystemPmWebhook not configured' };
-      }
-      const ok = await ctx.webDriver.fireSystemPmWebhook(trigger, key, recipientId);
-      if (!ok) {
-        return {
-          ok: false,
-          error: `${trigger} failed to fire sendSystemPm key=${key}`,
-        };
-      }
+      const fired = await fireSystemPmTrigger(ctx, trigger, recipientName, recipientId);
+      if (!fired.ok) return fired;
       // Wake 90 — record send for downstream "the recipient is X" assertion.
       ctx.lastSentSystemPm = {
         trigger,
