@@ -1743,4 +1743,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Hesap bilgileriniz ShyTalk personeli tarafından güncellendi. Sonuç olarak, görebileceğiniz kişiler ve odalar daha küçük bir çevreye daraltıldı.\n\nBunun bir hata olduğunu düşünüyorsanız destek ekibiyle iletişime geçin, biz de durumu inceleyelim.</string>
     <string name="official_badge">Resmî</string>
+    <string name="leaderboard_title">Liderlik Tablosu</string>
 </resources>

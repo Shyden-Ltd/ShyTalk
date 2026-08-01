@@ -1741,4 +1741,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">รายละเอียดบัญชีของคุณได้รับการอัปเดตโดยเจ้าหน้าที่ของ ShyTalk ด้วยเหตุนี้ ผู้คนและห้องที่คุณมองเห็นจึงถูกจำกัดให้เหลือวงกลมเล็กลง\n\nหากคุณคิดว่านี่เป็นข้อผิดพลาด โปรดติดต่อฝ่ายสนับสนุนแล้วเราจะตรวจสอบ</string>
     <string name="official_badge">ทางการ</string>
+    <string name="leaderboard_title">กระดานผู้นำ</string>
 </resources>

@@ -1742,4 +1742,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Персонал ShyTalk оновив дані вашого облікового запису. У результаті видимі вам люди та кімнати було звужено до меншого кола.\n\nЯкщо ви вважаєте, що це помилка, зверніться до служби підтримки, і ми її розглянемо.</string>
     <string name="official_badge">Офіційно</string>
+    <string name="leaderboard_title">Таблиця лідерів</string>
 </resources>

@@ -1024,4 +1024,5 @@
     <string name="age_seg_age_down_admin_pm">Your account details have been updated by ShyTalk staff. As a result, the people and rooms visible to you have been narrowed to a smaller circle.\n\nIf you think this is a mistake, contact support and we\'ll review it.</string>
 
     <string name="official_badge">Official</string>
+    <string name="leaderboard_title">Leaderboard</string>
 </resources>

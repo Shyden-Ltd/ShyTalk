@@ -1739,4 +1739,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Les détails de votre compte ont été mis à jour par le personnel de ShyTalk. Par conséquent, les personnes et les salles visibles ont été réduites à un cercle plus petit.\n\nSi vous pensez qu\'il s\'agit d\'une erreur, contactez l\'assistance et nous l\'examinerons.</string>
     <string name="official_badge">Officiel</string>
+    <string name="leaderboard_title">Classement</string>
 </resources>

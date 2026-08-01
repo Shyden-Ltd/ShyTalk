@@ -170,6 +170,32 @@ fun GiftWallContent(
                         }
                     }
 
+                    // RANKING — the ViewModel has loaded this since GiftWallViewModel
+                    // was written and no screen ever rendered it, so the data was
+                    // fetched on every open and thrown away. SHY-0265.
+                    //
+                    // Each row carries the ranked user's id in its testTag so a test
+                    // can assert WHO is at a position rather than "a list exists".
+                    if (state.ranking.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            stringResource(Res.string.leaderboard_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.testTag("giftWall_rankingHeader"),
+                        )
+                        state.ranking.take(10).forEachIndexed { index, entry ->
+                            Text(
+                                // A blank display name would render as a bare
+                                // rank with nobody attached; the id is a worse
+                                // label but a true one.
+                                "${index + 1}. ${entry.displayName.ifBlank { entry.userId }} — ${entry.count}",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.testTag("giftWall_rank_${entry.userId}"),
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }

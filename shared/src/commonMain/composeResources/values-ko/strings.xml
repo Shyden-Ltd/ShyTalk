@@ -1743,4 +1743,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">귀하의 계정 세부 정보가 ShyTalk 직원에 의해 업데이트되었습니다. 결과적으로 귀하에게 표시되는 사람과 방은 더 작은 원으로 좁혀졌습니다.\n\n이것이 실수라고 생각하시면 지원팀에 문의하시면 검토해 드리겠습니다.</string>
     <string name="official_badge">공식</string>
+    <string name="leaderboard_title">리더보드</string>
 </resources>

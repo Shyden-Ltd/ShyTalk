@@ -1743,4 +1743,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">I dettagli del tuo account sono stati aggiornati dallo staff di ShyTalk. Di conseguenza, le persone e le stanze virtuali visibili per te sono state ristrette a una cerchia più piccola.\n\nSe ritieni che si tratti di un errore, contatta l\'assistenza e lo esamineremo.</string>
     <string name="official_badge">Ufficiale</string>
+    <string name="leaderboard_title">Classifica</string>
 </resources>

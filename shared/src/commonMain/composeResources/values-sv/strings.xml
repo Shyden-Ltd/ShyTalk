@@ -1742,4 +1742,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Dina kontouppgifter har uppdaterats av ShyTalks personal. Som ett resultat har de personer och rum som är synliga för dig begränsats till en mindre cirkel.\n\nOm du tror att detta är ett misstag, kontakta supporten så granskar vi det.</string>
     <string name="official_badge">Officiell</string>
+    <string name="leaderboard_title">Topplista</string>
 </resources>

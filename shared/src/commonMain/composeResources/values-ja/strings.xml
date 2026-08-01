@@ -1743,4 +1743,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">アカウントの詳細は ShyTalk スタッフによって更新されました。その結果、表示されるユーザーと部屋はより小さな円に狭められました。\n\nこれが間違いだと思われる場合は、サポートにご連絡ください。確認させていただきます。</string>
     <string name="official_badge">公式</string>
+    <string name="leaderboard_title">ランキング</string>
 </resources>

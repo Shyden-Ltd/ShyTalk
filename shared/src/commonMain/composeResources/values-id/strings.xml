@@ -1743,4 +1743,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Detail akun Anda telah diperbarui oleh staf ShyTalk. Akibatnya, orang dan ruangan yang terlihat oleh Anda telah dipersempit menjadi lingkaran yang lebih kecil.\n\nJika menurut Anda ini adalah kesalahan, hubungi dukungan dan kami akan meninjaunya.</string>
     <string name="official_badge">Resmi</string>
+    <string name="leaderboard_title">Papan Peringkat</string>
 </resources>

@@ -1743,4 +1743,5 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Dane Twojego konta zostały zaktualizowane przez pracowników ShyTalk. W rezultacie widoczne dla Ciebie osoby i pokoje zostały zawężone do mniejszego kręgu.\n\nJeśli uważasz, że to pomyłka, skontaktuj się z pomocą techniczną, a my to sprawdzimy.</string>
     <string name="official_badge">Oficjalne</string>
+    <string name="leaderboard_title">Ranking</string>
 </resources>
