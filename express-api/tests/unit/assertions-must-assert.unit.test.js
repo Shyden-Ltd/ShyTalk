@@ -99,7 +99,6 @@ const KNOWN_HOLLOW = [
   'androidShowsSystemPmFromOfficia',
   'androidShowsToastAndNavigates',
   'androidShowsToastAndNavigatesBack',
-  'androidShowsUserCard',
   'androidShowsUserCardSkeletons',
   'androidShowsWarningScreenOnRelaunch',
   'androidShowsWelcomePmInLanguage',

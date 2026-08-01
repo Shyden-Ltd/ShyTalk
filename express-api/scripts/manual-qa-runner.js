@@ -13539,11 +13539,22 @@ const matchers = [
       if (!driver?.[methodName]) {
         return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
-      const ok = await driver[methodName](viewer, target);
+      // Resolve the persona NAME to its uniqueId: the card is tagged
+      // `userCard_<uniqueId>`, and a display name is neither unique nor stable
+      // (a room alias replaces it on screen). Without this the assertion can
+      // only ask "is a card open", which is what it used to do.
+      const targetPersona = loadPersonas().get(target);
+      if (!targetPersona?.uniqueId) {
+        return {
+          ok: false,
+          error: `persona "${target}" not in registry — cannot identify their user card`,
+        };
+      }
+      const ok = await driver[methodName](viewer, targetPersona.uniqueId);
       if (!ok) {
         return {
           ok: false,
-          error: `${platform} UI does not show ${target}'s user card to ${viewer}`,
+          error: `${platform} UI does not show ${target}'s user card (userCard_${targetPersona.uniqueId}) to ${viewer}`,
         };
       }
       return { ok: true };

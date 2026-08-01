@@ -2261,27 +2261,25 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   //
   // Per-user verification needs user-id → testTag map. Deferred. Both
   // args (_viewer, _target) accepted-and-ignored.
-  driver.androidShowsUserCard = async (_viewer, _target) => {
+  driver.androidShowsUserCard = async (_viewer, targetUniqueId) => {
+    // WAS: `async (_name, _target) => /userCard_/.test(dump)` — it took the
+    // target and checked only that SOME card was open, so it passed on the
+    // wrong user's card, and on a card left open from an earlier step.
+    //
+    // The product now tags the sheet `userCard_<uniqueId>` (UserCardPopup.kt),
+    // so the subject is checkable. The caller resolves the persona name to its
+    // uniqueId, because a display name is not unique and an alias can replace
+    // it on screen — the id is the only stable identity the card carries.
+    if (targetUniqueId === undefined || targetUniqueId === null || targetUniqueId === '') {
+      return false;
+    }
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?userCard_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    const esc = String(targetUniqueId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Anchored on the closing quote so `userCard_5000001` cannot satisfy an
+    // assertion about `userCard_50000010`.
+    return new RegExp(`resource-id="(?:[^"]*:id\\/)?userCard_${esc}"`).test(dump);
   };
-
-  // Wake 97 — `<Name>'s <Plat> UI shows skeleton placeholders for user
-  // cards` (j14). Low-bandwidth loading-state assertion. Driver
-  // receives `(name)`.
-  //
-  // Foundation strategy: presence-check on the `userCardSkeleton_*`
-  // testTag PREFIX. No `userCardSkeleton_*` testTag exists in
-  // shared/src/commonMain yet — skeleton placeholder UI is unbuilt.
-  // Returns false in real journeys today; lands true when ships with
-  // userCardSkeleton_row / userCardSkeleton_shimmer etc.
-  //
-  // Distinct from sibling `userCard_*` — skeletons are the loading
-  // state BEFORE the user-card overlay renders. The `_name` arg is
-  // accepted-and-ignored.
   driver.androidShowsUserCardSkeletons = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;

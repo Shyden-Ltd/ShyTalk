@@ -168,3 +168,60 @@ describe('classifyAndroidAuthState — degraded mode', () => {
     expect(classifyAndroidAuthState('<node text="service degraded"/>')).toBe('unknown');
   });
 });
+
+/**
+ * `androidShowsUserCard` must identify WHOSE card is open.
+ *
+ * Operator 2026-08-01: "fix the assertions and make sure they're doing the
+ * right thing. 'it appears' isn't good enough."
+ *
+ * It used to be `async (_name, _target) => /userCard_/.test(dump)` — it took
+ * the target and checked only that SOME card was on screen. It passed on the
+ * wrong user's card, and on a card left open by an earlier step.
+ *
+ * The product now tags the sheet `userCard_${user.uniqueId}` (UserCardPopup.kt)
+ * so the subject is checkable, and the runner resolves the persona name to that
+ * id — a display name is neither unique nor stable, since a room alias replaces
+ * it on screen.
+ */
+describe('androidShowsUserCard — identifies its subject', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const dumpFor = (id) =>
+    `<node resource-id="com.shyden.shytalk.local:id/userCard_${id}" bounds="[0,0][100,100]" />`;
+
+  function driverWithDump(dump) {
+    return createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+  }
+
+  test('true for the card that IS the target', async () => {
+    const d = await driverWithDump(dumpFor('50000010'));
+    expect(await d.androidShowsUserCard('Bea', '50000010')).toBe(true);
+  });
+
+  test('FALSE for a different user’s card — the whole point', async () => {
+    const d = await driverWithDump(dumpFor('50000099'));
+    expect(await d.androidShowsUserCard('Bea', '50000010')).toBe(false);
+  });
+
+  test('a prefix does not satisfy a longer id', async () => {
+    // `userCard_5000001` must not answer an assertion about `userCard_50000010`
+    // — the anchored closing quote is what prevents it.
+    const d = await driverWithDump(dumpFor('5000001'));
+    expect(await d.androidShowsUserCard('Bea', '50000010')).toBe(false);
+  });
+
+  test('false when no card is open at all', async () => {
+    const d = await driverWithDump('<node resource-id="a/main_roomsTab" />');
+    expect(await d.androidShowsUserCard('Bea', '50000010')).toBe(false);
+  });
+
+  test('false when given no target, rather than passing vacuously', async () => {
+    const d = await driverWithDump(dumpFor('50000010'));
+    for (const bad of [undefined, null, '']) {
+      expect(await d.androidShowsUserCard('Bea', bad)).toBe(false);
+    }
+  });
+});

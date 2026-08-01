@@ -45,6 +45,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -109,6 +110,11 @@ fun UserCardPopup(
         Column(
             modifier =
                 Modifier
+                    // Carries the SUBJECT's id, not just "a card is open". The
+                    // driver assertion took a target name and checked only that
+                    // some card existed — so it passed on the wrong user's card.
+                    // An id in the tag is what lets it check the right one.
+                    .testTag("userCard_${user.uniqueId}")
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
                     .padding(bottom = 24.dp),
