@@ -491,7 +491,15 @@ fun PrivateMessageBubble(
                             text = stringResource(Res.string.edited_count, message.editCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = metaColor,
-                            modifier = Modifier.clickable { onViewEditHistory() },
+                            modifier =
+                                Modifier
+                                    // Identifies WHICH message carries the edit
+                                    // marker. The driver assertion took a body
+                                    // and a tag and checked neither — it looked
+                                    // for `editedBody_`, which the product has
+                                    // never rendered.
+                                    .testTag("privateChat_edited_${message.messageId}")
+                                    .clickable { onViewEditHistory() },
                         )
                     }
 

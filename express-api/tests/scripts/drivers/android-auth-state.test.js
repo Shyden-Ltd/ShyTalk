@@ -349,3 +349,55 @@ describe('androidShowsInResults — names its subject', () => {
     }
   });
 });
+
+/**
+ * `androidShowsEditedBodyWithTag` — both halves of the claim.
+ *
+ * j07: `shows the edited body "typo here" with an "edited" tag`. Two claims,
+ * and both matter: the new text having replaced the old, AND the edit being
+ * disclosed. An edit that silently rewrites history without the marker is a
+ * moderation problem, not a cosmetic one.
+ *
+ * It used to check `editedBody_`, which the product never renders — so it
+ * always returned false and every message-edit scenario blamed the app.
+ */
+describe('androidShowsEditedBodyWithTag — body AND disclosure', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+  const bodyNode = (t) => `<node text="${t}" bounds="[0,0][9,9]" />`;
+  const marker = '<node resource-id="com.x:id/privateChat_edited_m1" text="Edited (1)" />';
+
+  test('true when the new body is shown AND the edit is disclosed', async () => {
+    const d = await withDump(bodyNode('typo here') + marker);
+    expect(await d.androidShowsEditedBodyWithTag('Alice', 'typo here', 'edited')).toBe(true);
+  });
+
+  test('FALSE when the body is right but the edit is NOT disclosed', async () => {
+    // The silent-rewrite case. This is the one that matters most and the one
+    // the old implementation was structurally incapable of catching.
+    const d = await withDump(bodyNode('typo here'));
+    expect(await d.androidShowsEditedBodyWithTag('Alice', 'typo here', 'edited')).toBe(false);
+  });
+
+  test('FALSE when the edit marker is there but the body never changed', async () => {
+    const d = await withDump(bodyNode('the original text') + marker);
+    expect(await d.androidShowsEditedBodyWithTag('Alice', 'typo here', 'edited')).toBe(false);
+  });
+
+  test('the rendered label satisfies disclosure when no marker tag is present', async () => {
+    // Web and older builds render `Edited (1)` without a per-message tag.
+    const d = await withDump(bodyNode('typo here') + '<node text="Edited (1)" />');
+    expect(await d.androidShowsEditedBodyWithTag('Alice', 'typo here', 'Edited')).toBe(true);
+  });
+
+  test('an empty body is refused rather than matching everything', async () => {
+    const d = await withDump(bodyNode('anything') + marker);
+    for (const bad of ['', '   ', null, undefined]) {
+      expect(await d.androidShowsEditedBodyWithTag('Alice', bad, 'edited')).toBe(false);
+    }
+  });
+});

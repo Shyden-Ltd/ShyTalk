@@ -1930,28 +1930,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   //
   // Per-body and per-tag verification need text-extraction. Deferred.
   // All 3 args (_name, _body, _tag) accepted-and-ignored.
-  driver.androidShowsEditedBodyWithTag = async (_name, _body, _tag) => {
+  driver.androidShowsEditedBodyWithTag = async (_viewer, body, tag) => {
+    // WAS: `async (_name, _body, _tag) => /editedBody_/.test(dump)` — a tag
+    // the product never renders, so it always returned false and every
+    // message-edit scenario blamed the app.
+    //
+    // j07 asserts: shows the edited body "typo here" with an "edited" tag.
+    // Two claims, and BOTH matter — the new text having replaced the old, and
+    // the edit being disclosed. An edit that silently rewrites history without
+    // the marker is a moderation problem, not a cosmetic one.
+    if (!body || !String(body).trim()) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?editedBody_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    const esc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 1. the NEW body is on screen
+    if (!new RegExp(`(?:text|content-desc)="[^"]*${esc(body)}[^"]*"`).test(dump)) return false;
+    // 2. the edit is disclosed — either the per-message marker tag, or the
+    //    rendered label (`Edited (n)`, localised) when a tag word is given.
+    const markerTag = /resource-id="(?:[^"]*:id\/)?privateChat_edited_[^"]+"/.test(dump);
+    if (markerTag) return true;
+    if (!tag || !String(tag).trim()) return false;
+    return new RegExp(`(?:text|content-desc)="[^"]*${esc(tag)}[^"]*"`, 'i').test(dump);
   };
-
-  // Wake 100 — `<Name>'s <Plat> UI shows the in-app gift notification
-  // with sender "<X>" and gift "<Y>"` (j05). Toast/banner when a gift
-  // is received in real time. Driver receives
-  // `(recipient, sender, giftId)`.
-  //
-  // Foundation strategy: presence-check on the `giftNotification_*`
-  // testTag PREFIX. No `giftNotification_*` testTag exists in
-  // shared/src/commonMain yet — the real-time gift notification toast
-  // is unbuilt. Returns false in real journeys today; lands true when
-  // ships with giftNotification_toast / giftNotification_giftIcon.
-  //
-  // Per-sender and per-gift verification need text/image extraction.
-  // Deferred. All 3 args (_recipient, _sender, _giftId) accepted-and-
-  // ignored.
   driver.androidShowsInAppGiftNotification = async (_recipient, _sender, _giftId) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
