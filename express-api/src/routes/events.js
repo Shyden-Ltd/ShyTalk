@@ -19,7 +19,7 @@
  * claim, in both directions.
  */
 const router = require('express').Router();
-const { db } = require('../utils/firebase');
+const { db, FieldValue } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
 const log = require('../utils/log');
@@ -151,6 +151,106 @@ router.post('/events', async (req, res) => {
     res.status(201).json({ event });
   } catch (err) {
     log.error('events', 'POST /events failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Answer an invite.
+ *
+ * ONE handler for accept and decline because they are the same operation with
+ * a different destination list, and splitting them duplicated the four ways
+ * this can go wrong: a closed event, someone else's invite, an unknown event,
+ * and a repeat.
+ *
+ * IDEMPOTENT BY CONSTRUCTION. A double tap on a slow connection must not roster
+ * someone twice — a duplicate inflates every count the host reads and could seat
+ * one person on two seats. `arrayRemove` then `arrayUnion` also makes a
+ * change-of-mind move the member ACROSS rather than leaving them on both lists,
+ * which would give the host a roster whose numbers do not add up.
+ */
+async function answerInvite(req, res, decision) {
+  const uniqueId = req.auth.uniqueId;
+  const { eventId } = req.params;
+
+  const inviteRef = db.doc(`users/${uniqueId}/eventInvites/${eventId}`);
+  const [eventSnap, inviteSnap] = await Promise.all([
+    db.doc(`events/${eventId}`).get(),
+    inviteRef.get(),
+  ]);
+
+  if (!eventSnap.exists) return res.status(404).json({ error: 'Event not found' });
+  // A missing invite and someone else's invite are the same answer on purpose:
+  // "not found" tells a stranger nothing about who else was invited.
+  if (!inviteSnap.exists) return res.status(404).json({ error: 'Invite not found' });
+
+  const event = eventSnap.data();
+  if (event.state === STATE.CLOSED) {
+    // Silently accepting would add a performer to a show that already happened.
+    return res.status(409).json({ error: 'This event has closed' });
+  }
+
+  const accepted = decision === 'ACCEPTED';
+  await db.doc(`events/${eventId}`).update({
+    accepted: accepted ? FieldValue.arrayUnion(uniqueId) : FieldValue.arrayRemove(uniqueId),
+    declined: accepted ? FieldValue.arrayRemove(uniqueId) : FieldValue.arrayUnion(uniqueId),
+  });
+  await inviteRef.update({ status: decision, answeredAt: new Date().toISOString() });
+
+  log.info('events', 'invite answered', { eventId, decision });
+  res.json({ ok: true, status: decision });
+}
+
+router.post('/events/:eventId/invite/accept', async (req, res) => {
+  try {
+    await answerInvite(req, res, 'ACCEPTED');
+  } catch (err) {
+    log.error('events', 'invite accept failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/events/:eventId/invite/decline', async (req, res) => {
+  try {
+    await answerInvite(req, res, 'DECLINED');
+  } catch (err) {
+    log.error('events', 'invite decline failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Read one event.
+ *
+ * Visible to the HOST and to anyone on the roster — a performer needs the start
+ * time and who else is on it to decide whether to accept. Nobody else: an event
+ * names real people and when they will be somewhere.
+ *
+ * `rosterStates` resolves each member to pending / accepted / declined, which is
+ * what j16's roster panel shows. Without it the host is guessing who turned up.
+ */
+router.get('/events/:eventId', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const snap = await db.doc(`events/${req.params.eventId}`).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Event not found' });
+
+    const event = snap.data();
+    const roster = event.roster || [];
+    if (event.hostId !== uniqueId && !roster.includes(uniqueId)) {
+      return res.status(403).json({ error: 'Not your event' });
+    }
+
+    const accepted = new Set(event.accepted || []);
+    const declined = new Set(event.declined || []);
+    const rosterStates = roster.map((id) => ({
+      uniqueId: id,
+      status: accepted.has(id) ? 'ACCEPTED' : declined.has(id) ? 'DECLINED' : 'PENDING',
+    }));
+
+    res.json({ event: { ...event, rosterStates } });
+  } catch (err) {
+    log.error('events', 'GET /events/:eventId failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
