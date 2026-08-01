@@ -401,3 +401,66 @@ describe('androidShowsEditedBodyWithTag — body AND disclosure', () => {
     }
   });
 });
+
+/**
+ * `androidShowsCountBadge` reads the NAMED count.
+ *
+ * It was `(_name, _delta, _label) => /countBadge_/.test(dump)` — a tag the
+ * product never renders, so it always returned false.
+ *
+ * HONEST SCOPE, pinned here so nobody later mistakes it for a delta check:
+ * "shows a +1 in the Followers count" is a difference, and a difference needs a
+ * before and an after. One dump has only the after. So this asserts what the
+ * after can support — the named count is on screen, renders a number, and that
+ * number is at least the delta. A true delta needs the runner to capture a
+ * baseline first.
+ */
+describe('androidShowsCountBadge — reads the named count', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+  const col = (label, value) =>
+    `<node resource-id="com.x:id/profile_count_${label}"><node text="${value}" /><node text="${label}" /></node>`;
+
+  test('true when the named count is present and plausible', async () => {
+    const d = await withDump(col('followers', '12'));
+    expect(await d.androidShowsCountBadge('Alice', 1, 'Followers')).toBe(true);
+  });
+
+  test('FALSE when the count named by the step is not on screen', async () => {
+    // Only "following" is rendered; the step asks about "followers".
+    const d = await withDump(col('following', '12'));
+    expect(await d.androidShowsCountBadge('Alice', 1, 'Followers')).toBe(false);
+  });
+
+  test('FALSE when the count is blank or a dash', async () => {
+    // `Following (Private)` renders "-". A count that is not a number cannot
+    // have been incremented, and the old check could not tell.
+    for (const v of ['', '-', 'n/a']) {
+      const d = await withDump(col('followers', v));
+      expect(await d.androidShowsCountBadge('Alice', 1, 'Followers')).toBe(false);
+    }
+  });
+
+  test('FALSE when the count is too small for the claimed increase', async () => {
+    // "+3" cannot have happened on a counter reading 1.
+    const d = await withDump(col('followers', '1'));
+    expect(await d.androidShowsCountBadge('Alice', 3, 'Followers')).toBe(false);
+  });
+
+  test('a missing label or delta is refused, not assumed', async () => {
+    const d = await withDump(col('followers', '12'));
+    expect(await d.androidShowsCountBadge('Alice', 1, '')).toBe(false);
+    expect(await d.androidShowsCountBadge('Alice', Number.NaN, 'Followers')).toBe(false);
+  });
+
+  test('stalkers delegates to the same check against its own count', async () => {
+    const present = await withDump(col('stalkers', '4'));
+    expect(await present.androidShowsStalkersDelta('Bea', 2)).toBe(true);
+    const absent = await withDump(col('followers', '4'));
+    expect(await absent.androidShowsStalkersDelta('Bea', 2)).toBe(false);
+  });
+});

@@ -684,9 +684,11 @@ private fun ProfileContent(
                         // Following
                         Column(
                             modifier =
-                                Modifier.clickable(enabled = !followingHidden) {
-                                    onNavigateToFollowList?.invoke(user.uid, "following")
-                                },
+                                Modifier
+                                    .testTag("profile_count_following")
+                                    .clickable(enabled = !followingHidden) {
+                                        onNavigateToFollowList?.invoke(user.uid, "following")
+                                    },
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
@@ -703,9 +705,15 @@ private fun ProfileContent(
                         // Followers
                         Column(
                             modifier =
-                                Modifier.clickable {
-                                    onNavigateToFollowList?.invoke(user.uid, "followers")
-                                },
+                                Modifier
+                                    // The COUNT is what tests assert on, so it
+                                    // carries its own tag. Driver assertions
+                                    // looked for `countBadge_`, which the
+                                    // product has never rendered.
+                                    .testTag("profile_count_followers")
+                                    .clickable {
+                                        onNavigateToFollowList?.invoke(user.uid, "followers")
+                                    },
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
@@ -723,9 +731,15 @@ private fun ProfileContent(
                         if (isOwn) {
                             Column(
                                 modifier =
-                                    Modifier.clickable {
-                                        onNavigateToFollowList?.invoke(user.uid, "stalkers")
-                                    },
+                                    Modifier
+                                        // `newStalkerCount` drives the badge, and
+                                        // j02 asserts a delta on it. The driver
+                                        // looked for `stalkersDelta_`, which has
+                                        // never existed.
+                                        .testTag("profile_count_stalkers")
+                                        .clickable {
+                                            onNavigateToFollowList?.invoke(user.uid, "stalkers")
+                                        },
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
                                 BadgedBox(

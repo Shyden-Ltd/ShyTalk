@@ -88,14 +88,12 @@ function assertionsIgnoringEveryArgument(file, prefix) {
 // Two guards, two questions: "does it check its subject" and "does the thing
 // it checks exist". Neither subsumes the other.
 const KNOWN_HOLLOW = [
-  'androidShowsCountBadge',
   'androidShowsFrozenBanner',
   'androidShowsInAppGiftNotification',
   'androidShowsNonEmptyLocaleText',
   'androidShowsOfficialBadge',
   'androidShowsOwnRankInTop',
   'androidShowsSeatRequestNotification',
-  'androidShowsStalkersDelta',
   'androidShowsToastAndNavigates',
   'androidShowsToastAndNavigatesBack',
   'androidShowsWelcomePmInLanguage',

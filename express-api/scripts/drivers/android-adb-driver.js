@@ -1906,30 +1906,39 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // testTag map. Per-delta verification (matching the actual displayed
   // +N) needs text-extraction. Both deferred. All 3 args
   // (_name, _delta, _label) accepted-and-ignored.
-  driver.androidShowsCountBadge = async (_name, _delta, _label) => {
+  driver.androidShowsCountBadge = async (_viewer, delta, label) => {
+    // WAS: `async (_name, _delta, _label) => /countBadge_/.test(dump)` — a tag
+    // the product never renders, so it always returned false.
+    //
+    // HONEST SCOPE, stated because the step's wording promises more than one
+    // observation can deliver. "shows a +1 in the Followers count" is a DELTA,
+    // and a delta needs a before and an after; a single dump has only the after.
+    // So this asserts everything the after CAN support:
+    //   - the named count is actually on screen (labelled, not "some badge")
+    //   - it renders a number, not a blank or a dash
+    //   - that number is at least `delta` — a "+1" cannot have happened on a
+    //     counter reading 0.
+    // A true delta needs the runner to capture the baseline first. Until it
+    // does, this fails on a missing, blank or impossible count, which is three
+    // more failures than it could produce before.
+    const key = String(label || '')
+      .trim()
+      .toLowerCase();
+    if (!key) return false;
+    if (!Number.isFinite(Number(delta))) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?countBadge_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const tagRx = new RegExp(
+      `resource-id="(?:[^"]*:id\\/)?profile_count_${esc}"[^>]*>([\\s\\S]{0,400})`,
+    );
+    const m = tagRx.exec(dump);
+    if (!m) return false;
+    // The count is the first integer rendered inside that column.
+    const num = /(?:text|content-desc)="(-?\d+)"/.exec(m[1]);
+    if (!num) return false;
+    return Number(num[1]) >= Number(delta);
   };
-
-  // Wake 103 — `<Name>'s <Plat> UI shows the edited body "<X>" with an
-  // "<Y>" tag` (j07). Message-edit indicator on the recipient view.
-  // Driver receives `(name, body, tag)`.
-  //
-  // Foundation strategy: presence-check on the `editedBody_*` testTag
-  // PREFIX. No `editedBody_*` testTag exists in shared/src/commonMain
-  // yet — only the source-side `room_msg_editTarget_<id>` testTag
-  // exists (MessageBubble.kt:241), which marks the message being
-  // edited (NOT the post-edit "(edited)" badge on the recipient view
-  // — distinct concerns).
-  //
-  // Returns false in real journeys today; lands true when ships with
-  // editedBody_<msgId> / editedBody_badge testTags.
-  //
-  // Per-body and per-tag verification need text-extraction. Deferred.
-  // All 3 args (_name, _body, _tag) accepted-and-ignored.
   driver.androidShowsEditedBodyWithTag = async (_viewer, body, tag) => {
     // WAS: `async (_name, _body, _tag) => /editedBody_/.test(dump)` — a tag
     // the product never renders, so it always returned false and every
@@ -2148,26 +2157,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // Per-delta verification (matching the actual +N) needs text-
   // extraction. Deferred. Both args (_name, _delta) accepted-and-
   // ignored.
-  driver.androidShowsStalkersDelta = async (_name, _delta) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?stalkersDelta_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+  driver.androidShowsStalkersDelta = async (_viewer, delta) => {
+    // Same shape as the follower count, and the same honest scope: one dump
+    // shows the after, not the difference. `stalkersDelta_` never existed.
+    return driver.androidShowsCountBadge(_viewer, delta, 'stalkers');
   };
-
-  // Wake 93 — `OR within Nms <Name>'s <Plat> UI shows a "<X>" toast
-  // and navigates back to "<Y>"` (j10:36). Alternate-outcome step.
-  // Driver receives `(name, toast, route, timeout)`.
-  //
-  // Foundation strategy: presence-check on the `toastWithRoute_*`
-  // testTag PREFIX. No `toastWithRoute_*` testTag exists in
-  // shared/src/commonMain yet — toast-with-navigation combination is
-  // unbuilt. Returns false in real journeys today; lands true when
-  // ships with toastWithRoute_text / toastWithRoute_destination etc.
-  //
-  // Per-toast / per-route / timeout verification deferred. All 4 args
-  // (_name, _toast, _route, _timeout) accepted-and-ignored.
   driver.androidShowsToastAndNavigates = async (_name, _toast, _route, _timeout) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
