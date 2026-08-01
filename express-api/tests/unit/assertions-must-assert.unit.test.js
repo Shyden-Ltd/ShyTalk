@@ -58,11 +58,17 @@ function assertionsIgnoringEveryArgument(file, prefix) {
       .split(',')
       .map((a) => a.trim())
       .filter(Boolean);
-    if (args.length === 0) continue;
-    // `_name` is the repo's convention for "deliberately unused" — eslint's
-    // `argsIgnorePattern: ^_` requires it. Every argument underscored means
-    // the body cannot be looking at any of them.
-    if (args.every((a) => a.startsWith('_'))) offenders.push(name);
+    // The FIRST argument is the viewer ("Adam's Android UI shows…"). A driver
+    // owns exactly one device, so the viewer is already implied and ignoring it
+    // is correct — `androidShowsMessageInConversationThread(_name)` is not
+    // hollow, it simply has no subject beyond "the thread that is open".
+    //
+    // What must never be ignored are the arguments describing WHAT should be
+    // shown. Flagging the viewer too made the first version of this check
+    // report three methods as regressions the moment they were fixed.
+    const subject = args.slice(1);
+    if (subject.length === 0) continue;
+    if (subject.every((a) => a.startsWith('_'))) offenders.push(name);
   }
   return offenders.sort();
 }
@@ -74,33 +80,26 @@ function assertionsIgnoringEveryArgument(file, prefix) {
  * usually "does a tag with this prefix exist anywhere on screen". Removing an
  * entry means the method now uses its arguments; adding one is a regression.
  */
+// NOTE. Eleven entries left this list when the rule was tightened to subject
+// arguments — NOT because they were fixed. They take only a viewer, so this
+// guard has nothing to say about them. Several still check a testTag the
+// product never renders (roomClosedSummary_, rankings_, beansChart_,
+// userCardSkeleton_), and THAT is caught by no-phantom-testtags.unit.test.js.
+// Two guards, two questions: "does it check its subject" and "does the thing
+// it checks exist". Neither subsumes the other.
 const KNOWN_HOLLOW = [
-  'androidIsNoLongerInVoiceRoom',
-  'androidIsStillInRoom',
-  'androidShowsBeansPerWeekChart',
-  'androidShowsContributorsList',
   'androidShowsCountBadge',
   'androidShowsEditedBodyWithTag',
   'androidShowsFrozenBanner',
   'androidShowsInAppGiftNotification',
   'androidShowsInResults',
-  'androidShowsInThread',
-  'androidShowsMessageInConversationThread',
   'androidShowsNonEmptyLocaleText',
   'androidShowsOfficialBadge',
-  'androidShowsOnlyMinorCohortInRankings',
   'androidShowsOwnRankInTop',
-  'androidShowsPmThreadDirection',
-  'androidShowsRoomClosedSummary',
-  'androidShowsRoomWarningBanner',
   'androidShowsSeatRequestNotification',
-  'androidShowsSecondOffensiveMessage',
   'androidShowsStalkersDelta',
-  'androidShowsSystemPmFromOfficia',
   'androidShowsToastAndNavigates',
   'androidShowsToastAndNavigatesBack',
-  'androidShowsUserCardSkeletons',
-  'androidShowsWarningScreenOnRelaunch',
   'androidShowsWelcomePmInLanguage',
 ];
 

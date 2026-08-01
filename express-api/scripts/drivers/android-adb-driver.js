@@ -1345,27 +1345,14 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // ships per-message testTags (currently only the input field has
   // a testTag). Same shape as PR #731's androidNavigatesToProfileScreen.
   driver.androidShowsMessageInConversationThread = async (_name) => {
+    // WAS: checked `privateChat_messageInput` — the INPUT BOX. It returned
+    // true on an empty conversation with the keyboard showing, which is the
+    // opposite of what the step claims. Now it looks for an actual message
+    // bubble, which the product tags `privateChat_msg_<dir>_<messageId>`.
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
-    return tagRx.test(dump);
+    return /resource-id="(?:[^"]*:id\/)?privateChat_msg_(?:sent|recv)_[^"]+"/.test(dump);
   };
-
-  // Wake 102 — `<Name>'s Android UI shows a new conversation with
-  // <Other> highlighted as unread` (j07 — recipient's inbox shows
-  // new unread conversation from sender). Driver receives
-  // `(viewer, other)`.
-  //
-  // Foundation strategy: two-step composition (mirrors PR #745):
-  //   1. main_messagesTab testTag PRESENT (viewer is in messages
-  //      area — this assertion can't be made from anywhere else).
-  //   2. other's name appears in text/content-desc with symmetric
-  //      word-boundary protection.
-  //
-  // The "highlighted as unread" semantic is journey-orchestrated.
-  // No per-row testTag exists for unread state today; a future PR
-  // could layer this with e.g. `conversation_row_${id}_unread`.
   driver.androidShowsNewUnreadConversation = async (_viewer, other) => {
     if (typeof other !== 'string' || !other.trim()) return false;
     const dump = await driver.androidUiDump();
@@ -1473,34 +1460,18 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // <noun>" being visible is implied by the thread being open. A
   // future PR could layer per-message verification with parameterised
   // testTags or by parsing message bodies in the dump.
-  driver.androidShowsInThread = async (_name, _noun, _suffix) => {
+  driver.androidShowsInThread = async (_name, _noun, suffix) => {
+    // WAS: checked the message INPUT existed — true on an empty thread.
+    //
+    // The corpus distinguishes direction in the suffix: j07 asserts "shows the
+    // message in the thread with timestamp + sent indicator", which is a claim
+    // about the SENDER's own view. A received message must not satisfy it.
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
-    return tagRx.test(dump);
+    const wantsSent = /\bsent\b/i.test(String(suffix || ''));
+    const dir = wantsSent ? 'sent' : '(?:sent|recv)';
+    return new RegExp(`resource-id="(?:[^"]*:id\\/)?privateChat_msg_${dir}_[^"]+"`).test(dump);
   };
-
-  // Wake 101 — `<Name>'s Android UI shows <Other>'s seat with <X>
-  // indicator` (j09 mic-on / j10 mic-off). Generic per-seat
-  // indicator assertion. Driver receives `(viewer, target,
-  // indicator)`.
-  //
-  // Foundation strategy: TRIPLE composition (mirrors PR #747's
-  // androidShowsGiftFromSender):
-  //   1. room_seatGrid testTag PRESENT (viewer on room screen)
-  //   2. target's name appears with symmetric word-boundary
-  //   3. indicator text appears with symmetric word-boundary
-  //
-  // Per-seat indicator scoping is journey-orchestrated — no per-
-  // seat testTag exists yet. The journey ensures only the
-  // relevant seat is in view at assertion time. A future PR could
-  // layer per-seat per-indicator testTags (e.g.
-  // `room_seat_${n}_micOn`).
-  //
-  // Cross-seat pass-through (same as PR #747's cross-entry): two
-  // independent scans over the whole dump. Journey orchestrator's
-  // responsibility to ensure single-seat context.
   driver.androidShowsSeatWithIndicator = async (_viewer, target, indicator) => {
     if (typeof target !== 'string' || !target.trim()) return false;
     if (typeof indicator !== 'string' || !indicator.trim()) return false;
@@ -1603,33 +1574,22 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // A future PR could layer direction verification via `adb shell
   // getprop persist.sys.locale` or parsing uiautomator's `class`
   // attribute for layout-direction hints.
-  driver.androidShowsPmThreadDirection = async (_name, _direction) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
-    return tagRx.test(dump);
+  driver.androidShowsPmThreadDirection = async (_name, direction) => {
+    // WAS: checked `privateChat_messageInput` and ignored `direction` —
+    // an RTL assertion that passed on an LTR screen, which is exactly the
+    // locale bug j13 exists to catch.
+    //
+    // `parseLayoutDirection` reads the real direction out of the dump and was
+    // already wired to androidGetLayoutDirection; this assertion simply never
+    // called it. A comment here claimed direction "isn't surfaced via
+    // uiautomator" while the helper that surfaces it sat 90 lines below.
+    const want = String(direction || '')
+      .trim()
+      .toLowerCase();
+    if (want !== 'rtl' && want !== 'ltr') return false;
+    const actual = parseLayoutDirection(await driver.androidUiDump());
+    return actual === want;
   };
-
-  // Show welcome PM in language — j13 locale verification. The journey
-  // switches the viewer's locale (via the in-app language picker), then
-  // a fixture-driven welcome PM lands in the conversation. This matcher
-  // verifies the conversation thread is OPEN by checking for the
-  // privateChat_messageInput tag in the dump.
-  //
-  // Foundation policy: the locale `code` parameter is accepted-and-ignored.
-  // Verifying that displayed text is in a specific language would require
-  // comparing the message body against the localised welcome strings for
-  // each of the app's 20 supported locales, which needs access to the
-  // shared/src/commonMain/composeResources/values-{locale}/strings.xml
-  // files. The journey orchestrator ensures this matcher fires after the
-  // locale switch settled.
-  //
-  // A future PR could layer locale verification by reading the message
-  // text from a `welcomePm_message` testTag (currently not exposed) and
-  // hashing it against a known-locale registry, OR by parsing the
-  // `text="..."` attribute on the message node and checking script
-  // categories (Latin / Cyrillic / CJK).
   driver.androidShowsWelcomePmInLanguage = async (_name, _code) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;

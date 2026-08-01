@@ -225,3 +225,68 @@ describe('androidShowsUserCard — identifies its subject', () => {
     }
   });
 });
+
+/**
+ * The private-chat assertions checked the INPUT BOX, not the messages.
+ *
+ * All three of these read `privateChat_messageInput` — the text field you type
+ * into. So "shows the message in the thread" returned true on an EMPTY
+ * conversation with the keyboard up, which is the precise opposite of the claim.
+ *
+ * The product now tags each bubble `privateChat_msg_<sent|recv>_<messageId>`
+ * (PrivateMessageBubble.kt), carrying identity and direction.
+ */
+describe('private-chat assertions check messages, not the input box', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const INPUT_ONLY = '<node resource-id="com.x:id/privateChat_messageInput" bounds="[0,0][9,9]" />';
+  const sent = (id) =>
+    `<node resource-id="com.x:id/privateChat_msg_sent_${id}" bounds="[0,0][9,9]" />`;
+  const recv = (id) =>
+    `<node resource-id="com.x:id/privateChat_msg_recv_${id}" bounds="[0,0][9,9]" />`;
+
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+
+  test('an empty thread is NOT a thread with a message — the original bug', async () => {
+    const d = await withDump(INPUT_ONLY);
+    expect(await d.androidShowsMessageInConversationThread('Adam')).toBe(false);
+    expect(await d.androidShowsInThread('Adam', 'message', '')).toBe(false);
+  });
+
+  test('a real message bubble satisfies it', async () => {
+    const d = await withDump(INPUT_ONLY + recv('m1'));
+    expect(await d.androidShowsMessageInConversationThread('Adam')).toBe(true);
+  });
+
+  test('"with sent indicator" requires the SENDER\'s own message', async () => {
+    // j07: "shows the message in the thread with timestamp + sent indicator" is
+    // a claim about the sender's view. A received message must not satisfy it.
+    const received = await withDump(INPUT_ONLY + recv('m1'));
+    expect(
+      await received.androidShowsInThread('Adam', 'message', 'with timestamp + sent indicator'),
+    ).toBe(false);
+    const ownMessage = await withDump(INPUT_ONLY + sent('m1'));
+    expect(
+      await ownMessage.androidShowsInThread('Adam', 'message', 'with timestamp + sent indicator'),
+    ).toBe(true);
+  });
+
+  test('layout direction is actually compared, not assumed', async () => {
+    // This asserted RTL by checking that a text field existed, so it passed on
+    // an LTR screen — the exact locale bug j13 exists to catch.
+    const ltr = await withDump('<node resource-id="a/x" bounds="[0,0][100,50]" />');
+    ltr.androidUiDump = async () =>
+      '<hierarchy rotation="0"><node bounds="[0,0][100,50]" /></hierarchy>';
+    expect(await ltr.androidShowsPmThreadDirection('Lena', 'rtl')).toBe(false);
+  });
+
+  test('an unrecognised direction is refused rather than assumed true', async () => {
+    const d = await withDump(INPUT_ONLY);
+    for (const bad of ['', null, undefined, 'sideways']) {
+      expect(await d.androidShowsPmThreadDirection('Lena', bad)).toBe(false);
+    }
+  });
+});

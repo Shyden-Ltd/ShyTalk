@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -96,10 +97,15 @@ fun PrivateMessageBubble(
     val timeStrings = rememberRelativeTimeStrings()
     // System/mod messages: render as centered, non-interactive text
     val isSystemMessage = message.type == PrivateMessageType.MOD_ACTION || message.type == PrivateMessageType.SYSTEM
+    // Identity AND direction, so a test can assert WHICH message and WHOSE.
+    // Driver assertions previously checked only that the message INPUT existed
+    // — "shows the message in the thread" passed on an empty conversation.
+    val msgTag = "privateChat_msg_" + (if (isSent) "sent_" else "recv_") + message.messageId
     if (isSystemMessage) {
         Box(
             modifier =
                 modifier
+                    .testTag(msgTag)
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
@@ -119,6 +125,7 @@ fun PrivateMessageBubble(
         Row(
             modifier =
                 modifier
+                    .testTag(msgTag)
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start,
@@ -187,6 +194,7 @@ fun PrivateMessageBubble(
     Row(
         modifier =
             modifier
+                .testTag(msgTag)
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 2.dp),
         horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start,
