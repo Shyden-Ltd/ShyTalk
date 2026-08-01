@@ -3274,9 +3274,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   };
 
   driver.androidTypeIntoConversationInput = async (text) => {
-    const focused =
-      (await driver.androidTapByTag('pm_messageInput')) ||
-      (await driver.androidTapByTag('conversation_input'));
+    // `privateChat_messageInput` is the real tag (PrivateChatScreen). The two
+    // names tried here before — `pm_messageInput` and `conversation_input` —
+    // exist nowhere in the product, so the input was never focused and the
+    // typing went to whatever had focus instead.
+    const focused = await driver.androidTapByTag('privateChat_messageInput');
     if (!focused) return false;
     return await driver.androidTypeText(text);
   };
@@ -3362,7 +3364,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidSendMessageTo = async (target, text) => {
     if (!(await driver.androidOpenConversation(target))) return false;
     if (!(await driver.androidTypeIntoConversationInput(text))) return false;
-    return (await driver.androidTapByTag('pm_sendButton')) || driver.androidTapNamedButton('Send');
+    // `conversation_sendButton` is the real tag; `pm_sendButton` does not exist.
+    return (
+      (await driver.androidTapByTag('conversation_sendButton')) ||
+      driver.androidTapNamedButton('Send')
+    );
   };
 
   // Long-press then choose from the context menu. The press must outlast the
@@ -3453,16 +3459,33 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return (await driver.androidTapByTag('gift_send')) || driver.androidTapNamedButton('Send');
   };
 
+  // Tags corrected 2026-08-01 to the ones the product actually renders. These
+  // named `rooms_create` and `room_confirmCreate`, neither of which exists
+  // anywhere in shared/src — so the taps always missed and every room-creation
+  // scenario failed as a PRODUCT defect. The real tags are on
+  // shared/.../RoomListScreen + CreateRoomScreen.
   driver.androidCreateRoomComposite = async (title) => {
     if (!(await driver.androidOpenScreen('rooms'))) return false;
-    if (!(await driver.androidTapByTag('rooms_create'))) return false;
+    if (!(await driver.androidTapByTag('main_createRoomFab'))) return false;
     if (title && !(await driver.androidTypeText(title))) return false;
-    return (await driver.androidTapByTag('room_confirmCreate')) || driver.androidConfirm();
+    return (await driver.androidTapByTag('createRoom_confirmButton')) || driver.androidConfirm();
   };
 
+  /**
+   * Pull-to-refresh the rooms list.
+   *
+   * The `|| true` this used to end with made the method ALWAYS succeed — a tap
+   * on a tag the product does not render (`rooms_refresh`), then a truthy
+   * return regardless. Every "refreshes the list" step passed without anything
+   * having been refreshed.
+   *
+   * There is no refresh CONTROL in the product; the list is a live listener.
+   * Re-entering the screen is what actually re-subscribes, so that is what this
+   * does, and it reports whether that worked.
+   */
   driver.androidRefreshRoomsList = async () => {
-    if (!(await driver.androidOpenScreen('rooms'))) return false;
-    return (await driver.androidTapByTag('rooms_refresh')) || true;
+    if (!(await driver.androidOpenScreen('profile'))) return false;
+    return await driver.androidOpenScreen('rooms');
   };
 
   driver.androidTapEventInviteAction = async (action) => driver.androidTapNamedButton(action);
