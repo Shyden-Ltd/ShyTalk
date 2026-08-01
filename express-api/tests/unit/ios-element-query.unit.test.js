@@ -182,3 +182,64 @@ describe('the iOS batch is attached and not placeholders', () => {
     }
   });
 });
+
+describe('batch 6 — the rest of the iOS surface', () => {
+  const BATCH_6 = [
+    'iosAttemptProfileDeepLink',
+    'iosEditBodyAndConfirm',
+    'iosPickDOB',
+    'iosSendGift',
+    'iosSeatGridState',
+    'iosShowsBannerFromUser',
+    'iosShowsAdultCohortVisitor',
+    'iosShowsNewFollowerNotification',
+    'iosShowsStatsForUser',
+    'iosShowsTranslationOf',
+    'iosShowsCohortChangeBanner',
+    'iosShowsPmWithBadge',
+    'iosShowsTabWithNoNavTo',
+    'iosNetworkLinkConditioner',
+    'iosNetworkDropFor',
+    'iosReceiveLiveKitToken',
+  ];
+
+  it.each(BATCH_6)('%s is defined on the driver', (name) => {
+    expect(SRC).toMatch(new RegExp(`driver\\.${name}\\s*=`));
+  });
+
+  it('none is a stub', () => {
+    for (const name of BATCH_6) {
+      const at = SRC.indexOf(`driver.${name} =`);
+      expect(SRC.slice(at, at + 300)).not.toMatch(/'stub:|TODO|not implemented/i);
+    }
+  });
+
+  it('network conditioning REPORTS its capability instead of silently no-opping', () => {
+    // iOS exposes link conditioning only through Developer settings; it cannot
+    // be synthesised from the host. A silent no-op would let a connectivity
+    // scenario pass having tested nothing about connectivity — the exact
+    // shape of false confidence this whole story exists to remove.
+    const at = SRC.indexOf('driver.iosNetworkLinkConditioner');
+    const body = SRC.slice(at, at + 700);
+    expect(body).toContain('supported: false');
+    expect(body).toContain('why:');
+  });
+
+  it('iosShowsTabWithNoNavTo checks BOTH halves', () => {
+    // A one-sided check is satisfied by a tab that is simply absent, which is
+    // a different bug entirely.
+    const at = SRC.indexOf('driver.iosShowsTabWithNoNavTo');
+    const body = SRC.slice(at, at + 500);
+    expect(body).toContain('dumpHasText');
+    expect(body).toContain('iosOpenTab');
+  });
+
+  it('parses the iOS seat grid from name + label, which are separate attributes', () => {
+    // Unlike Android, where both can ride on `text`, XCUITest puts the seat id
+    // on @name and the occupant on @label. Reading only one yields empty seats.
+    const at = SRC.indexOf('driver.iosSeatGridState');
+    const body = SRC.slice(at, at + 600);
+    expect(body).toContain('name="seat_');
+    expect(body).toContain('label=');
+  });
+});

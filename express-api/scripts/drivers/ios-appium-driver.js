@@ -771,6 +771,99 @@ async function createIosDriver({
     return driver.iosTapByTag('rooms_refresh');
   };
 
+  // ── SHY-0259 batch 6: the rest of the iOS surface ───────────────────────
+
+  driver.iosAttemptProfileDeepLink = async (profileTarget) => ({
+    attempted: true,
+    actuated: await driver.iosOpenDeepLink(`shytalk://profile/${profileTarget}`),
+  });
+
+  driver.iosEditBodyAndConfirm = async (newBody) => {
+    if (!(await driver.iosTypeIntoConversationInput(newBody))) return false;
+    return (await driver.iosTapByTag('pm_confirmEdit')) || driver.iosConfirmDialog();
+  };
+
+  driver.iosPickDOB = async (dob) => {
+    if (!(await driver.iosTapByTag('signup_dobPicker'))) return false;
+    if (!(await driver.iosTypeText(String(dob)))) return false;
+    return (await driver._tapByLabel('Done')) || driver.iosConfirmDialog();
+  };
+
+  driver.iosSendGift = async (recipient, gift) => {
+    if (!(await driver.iosTapByTag('gift_open'))) return false;
+    if (recipient && !(await driver._tapByLabel(recipient))) return false;
+    if (gift && !(await driver._tapByLabel(gift))) return false;
+    return (await driver.iosTapByTag('gift_send')) || driver._tapByLabel('Send');
+  };
+
+  driver.iosSeatGridState = async () => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return [];
+    // XCUITest names the seat, and the occupant rides on the label — the two
+    // are separate attributes here, unlike Android where both can be `text`.
+    return [...String(dump).matchAll(/name="seat_(\d+)"[^>]*?label="([^"]*)"/g)]
+      .map((m) => ({ index: Number(m[1]), occupant: m[2] || null }))
+      .sort((a, b) => a.index - b.index);
+  };
+
+  driver.iosShowsBannerFromUser = async (user) => dumpHasText(await driver.iosUiDump(), user);
+  driver.iosShowsAdultCohortVisitor = async (name) => dumpHasText(await driver.iosUiDump(), name);
+  driver.iosShowsNewFollowerNotification = async (name) =>
+    dumpHasText(await driver.iosUiDump(), name);
+  driver.iosShowsStatsForUser = async (name) => dumpHasText(await driver.iosUiDump(), name);
+  driver.iosShowsTranslationOf = async (text) => dumpHasText(await driver.iosUiDump(), text);
+
+  driver.iosShowsCohortChangeBanner = async () => {
+    const dump = await driver.iosUiDump();
+    return dumpHasText(dump, 'cohort') || /name="cohortChangeBanner"/.test(String(dump));
+  };
+
+  driver.iosShowsPmWithBadge = async (sender) => {
+    const dump = await driver.iosUiDump();
+    return dumpHasText(dump, sender) && /unread|badge/i.test(String(dump));
+  };
+
+  // Both halves must hold: a simply-absent tab would satisfy a one-sided check.
+  driver.iosShowsTabWithNoNavTo = async (tab) => {
+    const before = await driver.iosUiDump();
+    if (!dumpHasText(before, tab)) return false;
+    await driver.iosOpenTab(tab);
+    const after = await driver.iosUiDump();
+    return !new RegExp(`name="${tab}Screen"`).test(String(after));
+  };
+
+  // Network conditioning on a REAL iPhone cannot be faked from the host: iOS
+  // exposes it only through the Developer settings' Network Link Conditioner,
+  // which Appium can toggle but not synthesise. Report the real capability
+  // rather than pretending — a silent no-op would let a connectivity scenario
+  // pass having tested nothing about connectivity.
+  driver.iosNetworkLinkConditioner = async (profile) => {
+    const el = await driver._findEl('accessibility id', 'network_link_conditioner');
+    if (!el) {
+      return {
+        supported: false,
+        why: 'Network Link Conditioner is not exposed on this device; enable it in Developer settings',
+      };
+    }
+    const applied = await driver._tapByLabel(String(profile));
+    return { supported: true, applied };
+  };
+
+  driver.iosNetworkDropFor = async (ms) => {
+    const r = await driver.iosNetworkLinkConditioner('100% Loss');
+    if (!r.supported) return r;
+    await new Promise((resolve) => setTimeout(resolve, Number(ms) || 0));
+    await driver.iosNetworkLinkConditioner('Off');
+    return { supported: true, applied: true };
+  };
+
+  driver.iosReceiveLiveKitToken = async () => {
+    const dump = await driver.iosUiDump();
+    // The app surfaces the room screen only once a token has been accepted, so
+    // the room screen IS the observable evidence a token arrived.
+    return /name="roomScreen"|label="Connected"/.test(String(dump));
+  };
+
   return driver;
 }
 
