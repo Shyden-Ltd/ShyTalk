@@ -112,11 +112,33 @@ cmd_launch() {
   # Seen 2026-07-31: both device cells stalled at 0 scenarios while the phone
   # thrashed on the persona picker. Auth wiring, not product debt.
   [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
-  # GAUNTLET_BROWSERS scopes the matrix to the hardware actually plugged in.
-  # Devices come and go; an absent one is a normal operating condition, not a
-  # reason to spend driver-init time on cells that cannot possibly work.
-  # Unset means the full matrix, so this is inert by default.
-  [ -n "${GAUNTLET_BROWSERS:-}" ] && env_prefix="${env_prefix}GAUNTLET_BROWSERS='${GAUNTLET_BROWSERS}' "
+  # Scope the matrix to the hardware actually plugged in. Devices come and go;
+  # an absent one is a normal operating condition, not a reason to spend
+  # driver-init time on cells that cannot possibly work. All three are unset by
+  # default, so this block is inert unless the operator asks for narrowing.
+  #
+  # EVERY scoping variable MUST be listed here. The runner is forked detached
+  # through `nohup bash -c "<env_prefix>node ..."`, so anything not named in the
+  # prefix simply does not reach it — `GAUNTLET_DEVICES=mac,android` would look
+  # like it worked and the iPhone cells would run anyway. A silently-ignored
+  # scope is worse than a rejected one.
+  #
+  #   GAUNTLET_DEVICES  mac,android,iphone — what is plugged in. The honest knob:
+  #                     "the iPhone is out of action" is one word here, versus
+  #                     seven browser slugs, where a typo runs too little.
+  #   GAUNTLET_BROWSERS the pre-cell knob, still honoured. Scopes the BROWSER
+  #                     side only — an app cell has no browser and survives it.
+  #   GAUNTLET_CELLS    exact cell slugs, for a targeted re-run.
+  #   GAUNTLET_PHASE_GATE  report (default) | stop — see scripts/matrix-phases.js.
+  # Explicit `if`, not `[ … ] && …`: as the last statement in a loop body the
+  # `&&` form leaves $? = 1 whenever the variable is unset, which under a future
+  # `set -e` would end the script silently right before the dispatch.
+  for scope_var in GAUNTLET_DEVICES GAUNTLET_BROWSERS GAUNTLET_CELLS GAUNTLET_PHASE_GATE; do
+    scope_val="$(eval "printf '%s' \"\${${scope_var}:-}\"")"
+    if [ -n "$scope_val" ]; then
+      env_prefix="${env_prefix}${scope_var}='${scope_val}' "
+    fi
+  done
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------

@@ -17465,7 +17465,49 @@ function stripPerCellFlags(sourceArgv) {
 // place. Lazy-requires each driver module so callers paying for only
 // some cells don't load every driver into memory.
 function buildDriverFactories({ headed }) {
+  /** The desktop browser a cross-over cell pairs with its device. */
+  const desktop = (u) =>
+    require('./drivers/web-playwright-driver').createWebDriver({
+      baseURL: u,
+      headless: !headed,
+      browser: 'chromium',
+    });
+  const androidApp = () => require('./drivers/android-adb-driver').createAndroidDriver({});
+  const iosApp = () => require('./drivers/ios-appium-driver').createIosDriver({});
+
+  /**
+   * A cross-over cell holds BOTH surfaces, so its health check must prove BOTH
+   * bootstrap — half a cross-over cell cannot run a single cross-over scenario.
+   * Closing is all-or-nothing for the same reason: leaking a browser because
+   * the device failed is how the next run finds a port already bound.
+   */
+  const both = async (u, app) => {
+    const web = await desktop(u);
+    try {
+      const ui = await app();
+      return {
+        webDriver: web,
+        uiDriver: ui,
+        // `--smoke` calls webUiDump; delegate so a cross cell smokes like a
+        // browser cell rather than reporting "method not configured".
+        webUiDump: (...a) => web.webUiDump(...a),
+        close: async () => {
+          await Promise.allSettled([web.close(), ui.close()]);
+        },
+      };
+    } catch (e) {
+      await web.close().catch(() => {});
+      throw e;
+    }
+  };
+
   return {
+    // ── app cells: the APK alone, no browser ────────────────────────────
+    'app-android': () => androidApp(),
+    'app-ios': () => iosApp(),
+    // ── cross-over cells: a desktop browser AND a device ────────────────
+    'cross-android': ({ baseURL: u }) => both(u, androidApp),
+    'cross-ios': ({ baseURL: u }) => both(u, iosApp),
     chromium: ({ baseURL: u }) =>
       require('./drivers/web-playwright-driver').createWebDriver({
         baseURL: u,

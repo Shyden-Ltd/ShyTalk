@@ -333,6 +333,45 @@ describe('per-target cell allowlist', () => {
   });
 });
 
+describe('every cell has a driver factory — the second list that drifted', () => {
+  /**
+   * THE BUG THIS CAUGHT (2026-08-01, ten minutes after the cells landed):
+   *
+   *   app-android    | fail |  0ms
+   *   app-ios        | fail |  0ms
+   *   cross-android  | fail |  0ms
+   *   cross-ios      | fail |  0ms
+   *
+   * `buildDriverFactories()` is a second, hand-maintained list of cell slugs.
+   * Adding cells to the registry did not add them there, so `--check-drivers`
+   * reported the four new cells as FAILING — at 0ms, which is the tell: nothing
+   * was attempted. Four red cells that were never wired, on the health check
+   * whose entire job is to say whether the matrix can run.
+   *
+   * Two lists of the same thing is what this whole exercise is about. The
+   * registry cannot enumerate factories (it must stay dependency-free), so the
+   * second list stays — but it can no longer drift in silence.
+   */
+  const { buildDriverFactories } = require('../../scripts/manual-qa-runner');
+
+  it('the factory map is non-empty, so this is not vacuous', () => {
+    expect(Object.keys(buildDriverFactories({ headed: false })).length).toBeGreaterThan(10);
+  });
+
+  it.each(CELL_SLUGS.map((c) => [c]))('%s has a factory', (cell) => {
+    expect(typeof buildDriverFactories({ headed: false })[cell]).toBe('function');
+  });
+
+  it('has no factory for a cell that does not exist', () => {
+    // The other direction: a factory for a retired cell is dead code that
+    // still shows up in the health check as something to care about.
+    const extra = Object.keys(buildDriverFactories({ headed: false })).filter(
+      (k) => !CELL_SLUGS.includes(k),
+    );
+    expect(extra).toEqual([]);
+  });
+});
+
 describe('the registry is internally consistent', () => {
   it('slugs are unique', () => {
     expect(new Set(CELL_SLUGS).size).toBe(CELL_SLUGS.length);
