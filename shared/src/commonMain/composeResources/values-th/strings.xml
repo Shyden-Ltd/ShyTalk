@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_down_admin_pm">รายละเอียดบัญชีของคุณได้รับการอัปเดตโดยเจ้าหน้าที่ของ ShyTalk ด้วยเหตุนี้ ผู้คนและห้องที่คุณมองเห็นจึงถูกจำกัดให้เหลือวงกลมเล็กลง\n\nหากคุณคิดว่านี่เป็นข้อผิดพลาด โปรดติดต่อฝ่ายสนับสนุนแล้วเราจะตรวจสอบ</string>
     <string name="official_badge">ทางการ</string>
     <string name="leaderboard_title">กระดานผู้นำ</string>
+    <string name="gift_notification_banner">%1$s ส่ง %2$s ให้คุณ</string>
 </resources>

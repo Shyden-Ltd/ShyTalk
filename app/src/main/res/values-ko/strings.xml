@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">님이 %1$s을(를) 보냈습니다</string>
+    <string name="notification_new_message">새 메시지</string>
+    <string name="notification_someone">누군가</string>
+</resources>

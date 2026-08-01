@@ -1744,4 +1744,5 @@
     <string name="age_seg_age_down_admin_pm">تم تحديث تفاصيل حسابك بواسطة موظفي ShyTalk. ونتيجة لذلك، تم تضييق نطاق الأشخاص والغرف المرئية لك إلى دائرة أصغر.\n\nإذا كنت تعتقد أن هذا خطأ، فاتصل بالدعم وسنراجعه.</string>
     <string name="official_badge">رسمي</string>
     <string name="leaderboard_title">لوحة المتصدرين</string>
+    <string name="gift_notification_banner">أرسل لك %1$s %2$s</string>
 </resources>

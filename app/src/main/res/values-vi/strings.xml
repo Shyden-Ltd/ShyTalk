@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">đã gửi cho bạn %1$s</string>
+    <string name="notification_new_message">Tin nhắn mới</string>
+    <string name="notification_someone">Ai đó</string>
+</resources>

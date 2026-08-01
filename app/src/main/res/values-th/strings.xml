@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">ส่ง %1$s ให้คุณ</string>
+    <string name="notification_new_message">ข้อความใหม่</string>
+    <string name="notification_someone">ใครบางคน</string>
+</resources>

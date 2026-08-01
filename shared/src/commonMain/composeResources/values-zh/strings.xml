@@ -1744,4 +1744,5 @@
     <string name="age_seg_age_down_admin_pm">ShyTalk 工作人员已更新您的帐户详细信息。因此，您可见的人员和房间已缩小到较小的圈子。\n\n如果您认为这是一个错误，请联系支持人员，我们将进行审核。</string>
     <string name="official_badge">官方</string>
     <string name="leaderboard_title">排行榜</string>
+    <string name="gift_notification_banner">%1$s 送给你 %2$s</string>
 </resources>

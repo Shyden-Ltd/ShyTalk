@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">надіслав(ла) вам %1$s</string>
+    <string name="notification_new_message">Нове повідомлення</string>
+    <string name="notification_someone">Хтось</string>
+</resources>

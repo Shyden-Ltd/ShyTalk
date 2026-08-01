@@ -2,4 +2,7 @@
     <string name="app_name">ShyTalk</string>
     <string name="notification_in_live_room">You are in a LIVE room</string>
     <string name="notification_tap_to_return">Tap to return</string>
+    <string name="gift_notification_body">sent you a %1$s</string>
+    <string name="notification_new_message">New message</string>
+    <string name="notification_someone">Someone</string>
 </resources>

@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">ने आपको %1$s भेजा</string>
+    <string name="notification_new_message">नया संदेश</string>
+    <string name="notification_someone">कोई</string>
+</resources>

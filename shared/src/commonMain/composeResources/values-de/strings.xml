@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_down_admin_pm">Ihre Kontodaten wurden von ShyTalk-Mitarbeitern aktualisiert. Dadurch wurden die für Sie sichtbaren Personen und Räume auf einen kleineren Kreis eingegrenzt.\n\nWenn Sie der Meinung sind, dass dies ein Fehler ist, kontaktieren Sie den Support und wir werden ihn überprüfen.</string>
     <string name="official_badge">Offiziell</string>
     <string name="leaderboard_title">Bestenliste</string>
+    <string name="gift_notification_banner">%1$s hat dir %2$s geschickt</string>
 </resources>

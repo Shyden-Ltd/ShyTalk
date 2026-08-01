@@ -1744,4 +1744,5 @@
     <string name="age_seg_age_down_admin_pm">Uw accountgegevens zijn bijgewerkt door medewerkers van ShyTalk. Als gevolg hiervan zijn de voor u zichtbare mensen en kamers beperkt tot een kleinere kring.\n\nAls u denkt dat dit een vergissing is, neem dan contact op met de ondersteuning, zodat we dit kunnen beoordelen.</string>
     <string name="official_badge">Officieel</string>
     <string name="leaderboard_title">Ranglijst</string>
+    <string name="gift_notification_banner">%1$s stuurde je %2$s</string>
 </resources>

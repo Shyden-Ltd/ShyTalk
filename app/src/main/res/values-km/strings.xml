@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">បានផ្ញើ %1$s ជូនអ្នក</string>
+    <string name="notification_new_message">សាររបស់ថ្មី</string>
+    <string name="notification_someone">នរណាម្នាក់</string>
+</resources>

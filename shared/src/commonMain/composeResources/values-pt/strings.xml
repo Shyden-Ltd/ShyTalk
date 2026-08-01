@@ -1744,4 +1744,5 @@
     <string name="age_seg_age_down_admin_pm">Os detalhes da sua conta foram atualizados pela equipe do ShyTalk. Como resultado, as pessoas e salas visíveis para você foram reduzidas a um círculo menor.\n\nSe você acha que isso é um erro, entre em contato com o suporte e nós analisaremos o problema.</string>
     <string name="official_badge">Oficial</string>
     <string name="leaderboard_title">Classificação</string>
+    <string name="gift_notification_banner">%1$s enviou-lhe %2$s</string>
 </resources>

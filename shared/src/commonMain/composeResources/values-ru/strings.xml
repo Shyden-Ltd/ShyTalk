@@ -1744,4 +1744,5 @@
     <string name="age_seg_age_down_admin_pm">Данные вашей учетной записи были обновлены сотрудниками ShyTalk. В результате круг видимых вам людей и комнат сузился до меньшего круга.\n\nЕсли вы считаете, что это ошибка, обратитесь в службу поддержки, и мы рассмотрим ее.</string>
     <string name="official_badge">Официально</string>
     <string name="leaderboard_title">Таблица лидеров</string>
+    <string name="gift_notification_banner">%1$s отправил(а) вам %2$s</string>
 </resources>

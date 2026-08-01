@@ -1025,4 +1025,5 @@
 
     <string name="official_badge">Official</string>
     <string name="leaderboard_title">Leaderboard</string>
+    <string name="gift_notification_banner">%1$s sent you a %2$s</string>
 </resources>

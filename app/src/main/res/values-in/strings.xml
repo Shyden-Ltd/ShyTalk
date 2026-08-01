@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">mengirimimu %1$s</string>
+    <string name="notification_new_message">Pesan baru</string>
+    <string name="notification_someone">Seseorang</string>
+</resources>

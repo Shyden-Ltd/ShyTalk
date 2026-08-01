@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">skickade dig %1$s</string>
+    <string name="notification_new_message">Nytt meddelande</string>
+    <string name="notification_someone">Någon</string>
+</resources>

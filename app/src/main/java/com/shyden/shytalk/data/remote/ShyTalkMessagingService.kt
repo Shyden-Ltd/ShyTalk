@@ -11,6 +11,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.shyden.shytalk.MainActivity
 import com.shyden.shytalk.R
+import com.shyden.shytalk.core.push.emitGiftNotification
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.data.repository.NotificationRepository
@@ -54,10 +55,76 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
 
         when (type) {
             "PM" -> handlePmNotification(data)
+            "GIFT" -> handleGiftNotification(data)
             "AGE_VERIF_APPROVED" -> handleAgeVerifApproved()
             "AGE_VERIF_REJECTED" -> handleAgeVerifRejected(data)
             "AGE_VERIF_DOB_MODIFIED" -> handleAgeVerifDobModified(data)
         }
+    }
+
+    /**
+     * A gift arrived (SHY-0266).
+     *
+     * FOREGROUND and BACKGROUND are different products here, not the same one
+     * suppressed. In the background the user needs a tray notification they can
+     * come back to; in the foreground a system notification over the app they
+     * are already looking at is noise, so it becomes an in-app banner instead.
+     *
+     * The PM handler RETURNS on foreground — correct for a message, which has a
+     * conversation to come back to. A gift has no destination to navigate to, so
+     * dropping it in the foreground would mean the recipient never learns about
+     * it at all: the sender paid for a gesture nobody saw.
+     */
+    private fun handleGiftNotification(data: Map<String, String>) {
+        val senderId = data["senderId"] ?: return
+        val senderName = data["senderName"] ?: return
+        val giftName = data["giftName"] ?: return
+
+        val inForeground =
+            try {
+                val roomManager: RoomLifecycleManager =
+                    org.koin.core.context.GlobalContext
+                        .get()
+                        .get()
+                roomManager.isAppInForeground
+            } catch (e: Exception) {
+                // Unknown foreground state: show the tray notification. Missing
+                // one is recoverable; showing nothing is not.
+                Log.w(TAG, "Foreground check failed — showing notification", e)
+                false
+            }
+
+        if (inForeground) {
+            emitGiftNotification(senderId, senderName, giftName)
+            return
+        }
+
+        ensureNotificationChannel()
+        val intent =
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        val pendingIntent =
+            PendingIntent.getActivity(
+                this,
+                senderId.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        val notification =
+            NotificationCompat
+                .Builder(this, Constants.PM_NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                // Both names. "You received a gift" does not make the gesture
+                // land, which is the entire point of gifting to the sender.
+                .setContentTitle(senderName)
+                .setContentText(getString(R.string.gift_notification_body, giftName))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+                .build()
+        getSystemService(NotificationManager::class.java)
+            ?.notify(("gift-" + senderId + giftName).hashCode(), notification)
     }
 
     private fun handlePmNotification(data: Map<String, String>) {
@@ -72,8 +139,8 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
             Log.w(TAG, "Foreground check failed — showing notification", e)
         }
 
-        val senderName = data["senderName"] ?: "Someone"
-        val messageText = data["messageText"] ?: "New message"
+        val senderName = data["senderName"] ?: getString(R.string.notification_someone)
+        val messageText = data["messageText"] ?: getString(R.string.notification_new_message)
         val senderId = data["senderId"] ?: return
         val conversationId = data["conversationId"] ?: return
         val isGroup = data["isGroup"]?.toBooleanStrictOrNull() ?: false
@@ -97,7 +164,11 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        val notificationText = if (showPreview) messageText else "New message"
+        // Localised. Every notification string in this file was hardcoded English,
+        // so a user reading the app in Japanese still got "New message" on their
+        // lock screen — the one place they see the product without opening it.
+        val notificationText =
+            if (showPreview) messageText else getString(R.string.notification_new_message)
 
         val notification =
             NotificationCompat

@@ -1744,4 +1744,5 @@
     <string name="age_seg_age_down_admin_pm">Thông tin tài khoản của bạn đã được nhân viên ShyTalk cập nhật. Do đó, những người và phòng hiển thị với bạn đã bị thu hẹp thành một vòng kết nối nhỏ hơn.\n\nNếu bạn cho rằng đây là sự nhầm lẫn, hãy liên hệ với bộ phận hỗ trợ và chúng tôi sẽ xem xét vấn đề đó.</string>
     <string name="official_badge">Chính thức</string>
     <string name="leaderboard_title">Bảng xếp hạng</string>
+    <string name="gift_notification_banner">%1$s đã gửi cho bạn %2$s</string>
 </resources>

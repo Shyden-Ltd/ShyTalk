@@ -1829,4 +1829,5 @@
     <string name="age_seg_age_down_admin_pm">ព័ត៌មានលម្អិតគណនីរបស់អ្នកត្រូវបានធ្វើបច្ចុប្បន្នភាពដោយបុគ្គលិក ShyTalk ។ ជាលទ្ធផល មនុស្ស និងបន្ទប់ដែលអាចមើលឃើញដោយអ្នកត្រូវបានបង្រួមទៅជារង្វង់តូចជាង។\n\nប្រសិនបើអ្នកគិតថានេះជាកំហុស សូមទាក់ទងផ្នែកជំនួយ ហើយយើងនឹងពិនិត្យមើលវា។</string>
     <string name="official_badge">ផ្លូវការ</string>
     <string name="leaderboard_title">តារាងចំណាត់ថ្នាក់</string>
+    <string name="gift_notification_banner">%1$s បានផ្ញើ %2$s ជូនអ្នក</string>
 </resources>

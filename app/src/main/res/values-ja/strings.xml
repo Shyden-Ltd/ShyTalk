@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">があなたに%1$sを贈りました</string>
+    <string name="notification_new_message">新着メッセージ</string>
+    <string name="notification_someone">誰か</string>
+</resources>

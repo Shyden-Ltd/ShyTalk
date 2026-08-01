@@ -1,0 +1,5 @@
+<resources>
+    <string name="gift_notification_body">sana %1$s gönderdi</string>
+    <string name="notification_new_message">Yeni mesaj</string>
+    <string name="notification_someone">Biri</string>
+</resources>

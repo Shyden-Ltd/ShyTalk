@@ -37,6 +37,8 @@ import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.push.PushPermissionState
 import com.shyden.shytalk.core.push.PushPermissionStore
+import com.shyden.shytalk.core.push.consumeGiftNotification
+import com.shyden.shytalk.core.push.giftNotifications
 import com.shyden.shytalk.core.ui.PushPermissionDeniedBanner
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -75,6 +77,33 @@ fun RoomListContent(
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.clearError()
+        }
+    }
+
+    // IN-APP GIFT BANNER (SHY-0266).
+    //
+    // A gift arriving while the app is open produced nothing at all: the push
+    // handler suppressed the tray notification because the user was already
+    // looking at the app, and there was no in-app surface to show instead. So
+    // the recipient never learned about it, and the sender paid for a gesture
+    // nobody saw.
+    //
+    // Shown through the same snackbar host as everything else, so it inherits
+    // the app_toast testTag and one dismissal behaviour rather than inventing a
+    // second notion of "a thing that appears briefly".
+    val pendingGift by giftNotifications.collectAsState()
+    // Resolved in composable scope: `stringResource` is a @Composable and cannot
+    // be called from inside LaunchedEffect's coroutine.
+    val giftBanner =
+        pendingGift?.let {
+            stringResource(Res.string.gift_notification_banner, it.senderName, it.giftName)
+        }
+    LaunchedEffect(pendingGift) {
+        if (giftBanner != null) {
+            snackbarHostState.showSnackbar(giftBanner)
+            // Consumed whether it was dismissed or timed out — a banner left
+            // pending would re-fire on the next recomposition.
+            consumeGiftNotification()
         }
     }
 
