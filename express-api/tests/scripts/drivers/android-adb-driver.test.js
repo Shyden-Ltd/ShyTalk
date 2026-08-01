@@ -16766,19 +16766,30 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     );
   });
 
-  test('persona_picker_open not on screen → throws naming the missing testTag (and the three likely causes)', async () => {
+  test('picker unreachable → the error reports EVIDENCE, not a list of guesses', async () => {
+    // This test used to assert the three speculative causes the message listed
+    // ("ALREADY signed in" / "predates PR #882" / 'flavor is "prod"'). On
+    // 2026-08-01 that message was emitted 29 times in a row by one cell and
+    // never once said what was actually on screen — the real cause,
+    // DegradedModeScreen, was not among the three guesses and could not have
+    // been diagnosed from them.
+    //
+    // The contract is now: report what was OBSERVED. State, testTags on screen,
+    // whether the reset ran, whether the tunnels are up. Pinning the guesses
+    // was pinning the thing that made the failure undiagnosable.
     setupExec(['<node resource-id="something_else" bounds="[0,0][100,100]" />']);
     const driver = await createAndroidDriver();
     const promise = driver.androidPersonaSignIn('P-10', 'rooms');
     promise.catch(() => {});
     // Advance past the 3s app-launch wait so the picker check fires.
     await jest.advanceTimersByTimeAsync(4000);
-    await expect(promise).rejects.toThrow(/could not tap "persona_picker_open"/);
-    // Error mentions all three likely causes so the operator can
-    // triage without re-reading the driver source.
-    await expect(promise).rejects.toThrow(/ALREADY signed in/);
-    await expect(promise).rejects.toThrow(/predates PR #882/);
-    await expect(promise).rejects.toThrow(/build flavor is "prod"/);
+    await expect(promise).rejects.toThrow(/could not reach the persona picker/);
+    // The observation, which is what makes it diagnosable.
+    await expect(promise).rejects.toThrow(/Observed state/);
+    await expect(promise).rejects.toThrow(/testTags currently on screen/);
+    // The transport, because a dropped adb reverse is the most common cause and
+    // presents identically to a product bug.
+    await expect(promise).rejects.toThrow(/Reverse tunnels missing/);
   });
 
   test('dialog never shows persona_row even after 10 scrolls → throws naming the persona', async () => {

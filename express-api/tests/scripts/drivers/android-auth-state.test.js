@@ -110,3 +110,61 @@ describe('classifyAndroidAuthState — unknown / degenerate inputs', () => {
     ).toBe('unknown');
   });
 });
+
+/**
+ * THE DEGRADED-MODE SCREEN — the state that cost a whole cell.
+ *
+ * Measured 2026-08-01. `app-android` produced 1 pass then 29 consecutive
+ * failures, all "could not tap persona_picker_open". The classifier recognises
+ * main by main_roomsTab / main_profileTab / main_settingsButton and returns
+ * 'unknown' for anything else, and 'unknown' means "never act" — so no sign-out
+ * ran and the next step tapped a button that was not on screen.
+ *
+ * What WAS on screen only became visible once the error reported evidence
+ * instead of guesses:
+ *
+ *   Observed state: "unknown"
+ *   testTags currently on screen: degraded_title, degraded_acknowledgeButton
+ *
+ * That is `DegradedModeScreen.kt`, a real product screen shown when the backend
+ * is unreachable — which, on a device whose reverse tunnels have dropped, is
+ * every launch. A screen the harness cannot name is a screen it cannot leave.
+ */
+describe('classifyAndroidAuthState — degraded mode', () => {
+  test('recognises the degraded screen by its acknowledge button', () => {
+    expect(
+      classifyAndroidAuthState('<node resource-id="com.x:id/degraded_acknowledgeButton"/>'),
+    ).toBe('degraded');
+  });
+
+  test('recognises it by its title too, so a mid-render dump still classifies', () => {
+    expect(classifyAndroidAuthState('<node resource-id="com.x:id/degraded_title"/>')).toBe(
+      'degraded',
+    );
+  });
+
+  test('degraded wins over signed_in — the gate is ON TOP of the session', () => {
+    // Same precedence reason as `warning`: the session may well be valid, but
+    // nothing beneath the gate is reachable until it is cleared.
+    const dump = '<node resource-id="a/degraded_title"/><node resource-id="a/main_roomsTab"/>';
+    expect(classifyAndroidAuthState(dump)).toBe('degraded');
+  });
+
+  test('a moderation warning still outranks degraded', () => {
+    // Warning is the more specific gate and has its own acknowledge flow.
+    const dump =
+      '<node resource-id="a/warning_acknowledgeButton"/><node resource-id="a/degraded_title"/>';
+    expect(classifyAndroidAuthState(dump)).toBe('warning');
+  });
+
+  test('the picker still classifies as picker when no gate is present', () => {
+    // Guard against the new branch swallowing the state it sits next to.
+    expect(classifyAndroidAuthState('<node resource-id="a/persona_picker_open"/>')).toBe('picker');
+  });
+
+  test('a dump merely MENTIONING degradation is not the degraded screen', () => {
+    // Anchored on testTags, never on prose: a room named "degraded" must not
+    // send the driver into a recovery flow.
+    expect(classifyAndroidAuthState('<node text="service degraded"/>')).toBe('unknown');
+  });
+});

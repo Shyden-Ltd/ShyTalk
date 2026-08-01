@@ -87,6 +87,10 @@ function selectSerial(preferredSerial) {
  *                    (`warning_acknowledgeButton`). Must win over signed_in so
  *                    the caller signs out/acknowledges rather than treating the
  *                    user as fully on main.
+ *   - 'degraded'   — the backend-unreachable gate (`degraded_title` /
+ *                    `degraded_acknowledgeButton`, DegradedModeScreen.kt). Also
+ *                    wins over signed_in: the session may be valid but nothing
+ *                    beneath the gate is reachable. Caller acknowledges it.
  *   - 'splash'     — the launch intro screen (`splash_continueButton`), shown
  *                    on cold start before the picker/main resolves. A transient
  *                    gate the caller dismisses (tap Continue) then re-classifies.
@@ -107,6 +111,13 @@ function selectSerial(preferredSerial) {
 function classifyAndroidAuthState(dumpXml) {
   const x = String(dumpXml || '');
   if (x.includes('warning_acknowledgeButton')) return 'warning';
+  // DegradedModeScreen.kt — shown when the backend is unreachable, which on a
+  // device whose reverse tunnels have dropped is every single launch. Ranked
+  // above signed_in for the same reason `warning` is: the session underneath
+  // may be perfectly valid, but nothing below the gate is reachable until it is
+  // cleared. Cost a whole cell on 2026-08-01 by classifying as 'unknown', whose
+  // contract is "never act" — 1 pass then 29 identical failures.
+  if (x.includes('degraded_acknowledgeButton') || x.includes('degraded_title')) return 'degraded';
   if (x.includes('splash_continueButton')) return 'splash';
   if (x.includes('legal_continueButton') || x.includes('legal_acceptTermsCheckbox')) {
     return 'legal_gate';
@@ -357,6 +368,22 @@ async function createAndroidDriver({ serial: preferred } = {}) {
    *
    * Re-running the commands is idempotent and costs ~50ms, so it is cheap
    * enough to do before any action that depends on the backend being reachable.
+   *
+   * THIRD OCCURRENCE, so this now VERIFIES rather than fires-and-forgets
+   * (2026-08-01). Setting a tunnel is a point-in-time act and the device can
+   * re-enumerate at any moment — including between this call and the Firebase
+   * request that needs it. Observed within one 75-second sign-in: nine tunnels
+   * set, `adb reverse --list` empty afterwards, transport_id having advanced.
+   * The app had meanwhile fallen to DegradedModeScreen and logcat showed
+   * `FirebaseNetworkException: unreachable host`.
+   *
+   * The old version swallowed every failure into console.error, so a run whose
+   * tunnels never came up looked identical to one where they did — and the
+   * symptom surfaced three screens later as "the picker testTag isn't visible",
+   * which reads exactly like a product bug.
+   *
+   * @returns {string[]} ports still missing AFTER the attempt — empty means the
+   *   device can genuinely reach the stack right now.
    */
   function ensureReverseTunnels() {
     for (const port of REVERSE_PORTS) {
@@ -366,6 +393,24 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         console.error(`[android-driver] adb reverse tcp:${port} failed: ${e.message}`);
       }
     }
+    // Read back. `adb reverse` can report success and still leave nothing
+    // bound if the transport changed underneath it.
+    let listed = '';
+    try {
+      listed = String(adb(['reverse', '--list']) || '');
+    } catch (e) {
+      console.error(`[android-driver] adb reverse --list failed: ${e.message}`);
+      return REVERSE_PORTS.map(String);
+    }
+    const missing = REVERSE_PORTS.filter((p) => !listed.includes(`tcp:${p}`)).map(String);
+    if (missing.length) {
+      console.error(
+        `[android-driver] reverse tunnels MISSING after setup: ${missing.join(', ')} — ` +
+          `the app cannot reach the local stack and will show its degraded screen. ` +
+          `Usually a USB re-enumeration; re-seat the cable or use wireless adb.`,
+      );
+    }
+    return missing;
   }
   driver._ensureReverseTunnels = ensureReverseTunnels;
 
@@ -2676,6 +2721,24 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
+      // Backend-unreachable gate. REPAIR THE TRANSPORT FIRST, then dismiss.
+      //
+      // "Degraded" means the app could not reach the backend, and on a USB
+      // device the overwhelmingly likely cause is that `adb reverse` vanished
+      // in a re-enumeration — not that the stack is down. Tapping acknowledge
+      // without re-establishing the tunnels just returns the app to a screen it
+      // will bounce straight off again, so the loop burns its whole budget and
+      // reports a "product" failure caused by a USB cable.
+      //
+      // The bounded loop is still the backstop: if the tunnels genuinely cannot
+      // be restored, this exits with the missing ports named rather than
+      // retrying forever.
+      if (state === 'degraded') {
+        ensureReverseTunnels();
+        await driver.androidTapByTag('degraded_acknowledgeButton');
+        await new Promise((r) => setTimeout(r, 1200)); // sleep-ok: settle before the loop re-dumps
+        continue;
+      }
       if (/Claim Today|Daily Reward/i.test(dump)) {
         await tapByVisibleText('Later');
         await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
@@ -2797,7 +2860,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // The tunnels may have died since driver construction (see
     // ensureReverseTunnels). Re-assert them here rather than discovering the
     // loss as a missing picker twenty minutes into a cell.
-    ensureReverseTunnels();
+    // Verified, not assumed. A missing tunnel here is the difference between a
+    // sign-in that works and 29 identical "picker isn't visible" failures, so
+    // the result is carried into the error message rather than logged and lost.
+    const missingTunnels = ensureReverseTunnels();
     if (!/^P-\d{2}$/.test(personaId)) {
       throw new Error(
         `androidPersonaSignIn requires a P-NN persona id (got "${personaId}") — ephemeral personas P-01/P-03 sign up via the prod flow, not the picker`,
@@ -2874,14 +2940,21 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       launchState = await advancePastLaunchGates();
     }
+    // Last resort: drop the app's stored session outright. NOT available on
+    // every device — the OnePlus CPH2653 refuses it:
+    //   SecurityException: PID … does not have permission CLEAR_APP_USER_DATA
+    // A bare `catch {}` here hid that entirely, so the error below claimed a
+    // "reset attempt" that the OS had rejected. Whether it ran is reported.
+    let resetNote = 'not attempted';
     if (launchState !== 'picker') {
       try {
         adb(['shell', 'pm', 'clear', pkg]);
         adb(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
         await new Promise((r) => setTimeout(r, 3000)); // sleep-ok: cold start after pm clear
         launchState = await advancePastLaunchGates();
-      } catch {
-        // Fall through to the error below, which reports what was observed.
+        resetNote = 'pm clear ran';
+      } catch (e) {
+        resetNote = `pm clear unavailable on this device (${String(e.message).slice(0, 120)})`;
       }
     }
 
@@ -2905,8 +2978,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       throw new Error(
         `androidPersonaSignIn: could not reach the persona picker on ShyTalk ${target}. ` +
-          `Observed state after sign-out + reset attempts: "${launchState}". ` +
+          `Observed state after sign-out + reset attempts: "${launchState}" (reset: ${resetNote}). ` +
           `testTags currently on screen: ${onScreen}. ` +
+          `Reverse tunnels missing at start of sign-in: ` +
+          `${missingTunnels.length ? missingTunnels.join(', ') : 'none'}. ` +
+          `If the state is "degraded", the app cannot reach the backend — that is ` +
+          `almost always a USB re-enumeration dropping \`adb reverse\`, not the stack. ` +
           `If the state is "unknown", classifyAndroidAuthState does not recognise this screen — ` +
           `add its anchor tag there rather than widening the blind tap. ` +
           `If it is "signed_in", sign-out ran but did not take effect. ` +
