@@ -165,6 +165,21 @@ async function createMobileSamsungAndroidDriver({
     removeForward();
   };
 
+  // SHY-0259 second pass: the shared web surface, on this driver's own page.
+  require('./web-common-methods').attachCommonWebMethods(driver, {
+    slug: 'mobile-samsung-android',
+    baseURL,
+    navigate: async (u) => {
+      const page = await pageFor('default');
+      await page.goto(String(u), { waitUntil: 'domcontentloaded' });
+      return true;
+    },
+    evaluate: async (src, arg) => {
+      const page = await pageFor('default');
+      return page.evaluate(new Function('return (' + src + ')')(), arg);
+    },
+  });
+
   return driver;
 }
 

@@ -301,6 +301,37 @@ async function createMobileWebkitIosDriver({
     _onWebviewContext = false;
   };
 
+  // SHY-0259 second pass: the shared web surface. Built on this driver's own
+  // Appium /execute/sync channel, so every web method the corpus calls works
+  // here too instead of failing as `not configured`.
+  require('./web-common-methods').attachCommonWebMethods(driver, {
+    slug: 'mobile-webkit-ios',
+    baseURL,
+    navigate: async (u) => {
+      try {
+        await navigateTo(u);
+        return true;
+      } catch (e) {
+        console.error('[mobile-webkit-ios] navigate failed: ' + e.message);
+        return false;
+      }
+    },
+    evaluate: async (src, arg) => {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/execute/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          script: 'return (' + src + ').apply(null, arguments);',
+          args: [arg],
+        }),
+      });
+      if (!r.ok) throw new Error(`execute/sync ${r.status}`);
+      const body = await r.json();
+      return body.value;
+    },
+  });
+
   return driver;
 }
 

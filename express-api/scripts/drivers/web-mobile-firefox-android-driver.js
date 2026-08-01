@@ -321,6 +321,36 @@ async function createMobileFirefoxAndroidDriver({
     }
   };
 
+  // SHY-0259 second pass: the shared web surface over geckodriver's own
+  // W3C /execute/sync endpoint — the same channel navigateTo already uses.
+  require('./web-common-methods').attachCommonWebMethods(driver, {
+    slug: 'mobile-firefox-android',
+    baseURL,
+    navigate: async (u) => {
+      try {
+        await navigateTo(String(u));
+        return true;
+      } catch (e) {
+        console.error(`[mobile-firefox-android] navigate failed: ${e.message}`);
+        return false;
+      }
+    },
+    evaluate: async (src, arg) => {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`http://127.0.0.1:${port}/session/${sid}/execute/sync`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          script: 'return (' + src + ').apply(null, arguments);',
+          args: [arg],
+        }),
+      });
+      if (!r.ok) throw new Error(`geckodriver /execute/sync ${r.status}`);
+      const body = await r.json();
+      return body.value;
+    },
+  });
+
   return driver;
 }
 

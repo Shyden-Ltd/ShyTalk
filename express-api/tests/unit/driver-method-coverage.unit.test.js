@@ -101,3 +101,43 @@ describe('capability reporting is honest where a surface genuinely cannot act', 
     expect(body).toMatch(/why:/);
   });
 });
+
+/**
+ * PER-DRIVER coverage — the hole the first version of this guard had.
+ *
+ * The union check above proves a name exists SOMEWHERE under scripts/drivers/.
+ * That is not the property that matters: the matrix has seven web drivers, and
+ * a method defined only on the desktop Playwright one still fails as
+ * `not configured` on the other six. The first gauntlet run after "the gap is
+ * closed" reported exactly that, for webOpenScreen, on mobile-safari-ios.
+ *
+ * So each web driver is checked on its own.
+ */
+describe('every WEB driver carries the shared web surface', () => {
+  const WEB_DRIVERS = fs.readdirSync(DRIVERS_DIR).filter((f) => /^web-.*-driver\.js$/.test(f));
+
+  // A representative slice of the shared surface. If a driver has these it has
+  // the mixin; if it lacks them it never called attachCommonWebMethods.
+  const SHARED = [
+    'webOpenScreen',
+    'webTapNamedButton',
+    'webShowsNamedButton',
+    'webShowsMessageInput',
+    'webConfirmDialog',
+    'webOpenConversation',
+    'webAdminOpenTab',
+  ];
+
+  it('finds all seven web drivers', () => {
+    expect(WEB_DRIVERS.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it.each(WEB_DRIVERS)('%s provides the shared web methods', (file) => {
+    const src = fs.readFileSync(path.join(DRIVERS_DIR, file), 'utf8');
+    const viaMixin = src.includes('attachCommonWebMethods');
+    const missing = SHARED.filter((m) => !src.includes(m));
+    // Either it defines them itself (desktop Playwright does) or it attaches
+    // the mixin. Anything else leaves that surface silently unrunnable.
+    expect(viaMixin || missing.length === 0).toBe(true);
+  });
+});

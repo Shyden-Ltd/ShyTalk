@@ -47,6 +47,7 @@ const HELPER_FILES = new Set([
   'device-lock.js', // cross-process device mutex
   'ui-dump-query.js', // uiautomator dump queries
   'ios-element-query.js', // XCUITest locator construction
+  'web-common-methods.js', // SHY-0259: shared web surface mixin, applied BY drivers
 ]);
 
 function discoverDrivers() {
