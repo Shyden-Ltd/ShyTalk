@@ -79,6 +79,7 @@ const {
   dumpHasTextField,
 } = require('./ios-element-query');
 const { createSubmitClock } = require('./render-timing');
+const { boundedFetch, SESSION_TIMEOUT_MS } = require('./device-io-timeout');
 
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
@@ -179,8 +180,15 @@ async function createIosDriver({
   appiumBaseUrl = process.env.APPIUM_BASE_URL || DEFAULT_APPIUM_BASE_URL,
   wdaTeamId = process.env.WDA_TEAM_ID,
   bundleId: explicitBundleId,
-  fetchImpl = globalThis.fetch,
+  fetchImpl: rawFetch = globalThis.fetch,
 } = {}) {
+  // BOUNDED. Sixteen call sites in this driver reach Appium over HTTP, and
+  // not one of them carried a timeout — Node's fetch waits forever. On
+  // 2026-08-01 the iOS cell sat for 1885 seconds inside one scenario, using
+  // no CPU, because WebDriverAgent had stopped answering and nothing said
+  // when to give up. Wrapping at the single point they all flow through means
+  // a future call site cannot forget.
+  const fetchImpl = boundedFetch(rawFetch, { label: 'ios-appium' });
   // Cheap env validation FIRST, device probe second: a no-device
   // environment (CI, phone unplugged) must surface the missing env var,
   // not a misleading "no physical iPhone" for what is a config gap —
@@ -258,6 +266,13 @@ async function createIosDriver({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(caps),
+      // Session creation installs, signs and launches WebDriverAgent, and on
+      // a cold device that legitimately takes minutes — an xcodebuild of WDA
+      // was observed mid-run on 2026-08-01. The default 30s bound would abort
+      // a session that was going to succeed, so this one call gets its own,
+      // and boundedFetch honours a caller-supplied signal rather than
+      // overriding it.
+      signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
     });
     if (!r.ok) {
       const body = await r.text();

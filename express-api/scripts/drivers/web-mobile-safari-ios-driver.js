@@ -42,6 +42,7 @@
    manual QA runner (operator-facing CLI), not application code. */
 
 const path = require('path');
+const { boundedFetch, SESSION_TIMEOUT_MS } = require('./device-io-timeout');
 
 // Reuse ios-appium-driver's selectUdid (already pinned in its tests).
 // This driver and that one share the same device-selection logic so
@@ -76,9 +77,13 @@ async function createMobileSafariIosDriver({
   appiumBaseUrl = process.env.APPIUM_BASE_URL || DEFAULT_APPIUM_BASE_URL,
   wdaTeamId = process.env.WDA_TEAM_ID,
   udid: preferredUdid,
-  fetchImpl = globalThis.fetch,
+  fetchImpl: rawFetch = globalThis.fetch,
   selectUdidImpl = selectUdid,
 } = {}) {
+  // BOUNDED — see device-io-timeout.js. Appium calls here carried no
+  // timeout, and Node's fetch waits forever, so a dead WebDriverAgent
+  // session hung this cell until the two-hour cell timeout.
+  const fetchImpl = boundedFetch(rawFetch, { label: 'mobile-safari-ios' });
   // Cheap env validation FIRST, device probe second: a no-device
   // environment (CI, phone unplugged) must surface the missing env var,
   // not a misleading "no physical iPhone" for what is a config gap —
@@ -135,6 +140,8 @@ async function createMobileSafariIosDriver({
       },
     };
     const r = await fetchImpl(`${appiumBaseUrl}/session`, {
+      // WDA install/launch is legitimately slow on a cold device.
+      signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(caps),

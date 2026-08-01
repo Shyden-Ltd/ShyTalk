@@ -428,7 +428,15 @@ describe('createMobileSafariIosDriver — takeScreenshot delegation', () => {
       const [args] = spy.mock.calls[0];
       expect(args.appiumBaseUrl).toBe(DEFAULT_APPIUM_BASE_URL);
       expect(args.sessionId).toBe('sess-xyz');
-      expect(args.fetchImpl).toBe(fetchImpl);
+      // Not identity: the driver now wraps every Appium call in a timeout
+      // (device-io-timeout.js), and the screenshot path must inherit that
+      // bound like any other — an unbounded screenshot hangs the cell just as
+      // effectively as an unbounded source dump. What matters is that the
+      // INJECTED fetch is the one ultimately called.
+      expect(typeof args.fetchImpl).toBe('function');
+      fetchImpl.mockClear();
+      await args.fetchImpl('http://127.0.0.1:4723/status');
+      expect(fetchImpl).toHaveBeenCalled();
       expect(args.outputDir).toBe('/tmp/report');
       expect(args.slug).toBe('mobile-safari-ios');
       expect(result).toEqual(['/mock/safari.png']);

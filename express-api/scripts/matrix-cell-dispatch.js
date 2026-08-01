@@ -26,6 +26,8 @@
  * runner per cell.
  */
 const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const { EXIT_DRIVER_INIT_FAILED } = require('./matrix-dispatch');
 
 /**
@@ -41,11 +43,39 @@ const DEFAULT_MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
 
 // Collects a child stream up to `limit` bytes (head-biased) and reports
 // whether anything was dropped.
-function cappedCollector(stream, limit) {
+/**
+ * Collect a cell's output, and MIRROR IT LIVE if a sink is given.
+ *
+ * The buffered-only version made a hung cell a black box precisely when you
+ * needed to see inside it. On the 2026-08-01 run, `chromium.log`,
+ * `firefox.log` and `webkit.log` existed — those cells had finished — while
+ * the two device cells, the ones actually stuck, had no log at all, because
+ * the log is written when the child closes.
+ *
+ * So the two things you want during a stall — what the cell is doing, and how
+ * long it has been doing it — were exactly the two things unavailable. The
+ * live mirror is what makes the next stall diagnosable without waiting two
+ * hours for the cell timeout.
+ *
+ * @param {import('stream').Readable} stream
+ * @param {number} limit byte cap for the in-memory copy
+ * @param {(chunk: Buffer) => void} [sink] receives every chunk, uncapped
+ */
+function cappedCollector(stream, limit, sink) {
   const chunks = [];
   let bytes = 0;
   let truncated = false;
   stream.on('data', (c) => {
+    if (sink) {
+      // Mirrored BEFORE the cap check: the tail of a long-running cell is the
+      // part that says where it stopped, and capping it away loses precisely
+      // the evidence a stall investigation needs.
+      try {
+        sink(c);
+      } catch {
+        /* a failed mirror must never take down the run it is observing */
+      }
+    }
     if (bytes >= limit) {
       truncated = true;
       return;
@@ -109,9 +139,23 @@ function createCellDispatcher({
     const child = spawn(nodePath, [runnerPath, ...cellArgs], spawnOpts);
     let readStdout = () => '';
     let readStderr = () => '';
+    // Live mirror, so a RUNNING cell can be inspected. Without it the only
+    // log appears when the cell closes, which is never for a hung one — the
+    // exact case worth looking at. Appended to `<cell>.live.log`, kept
+    // separate from the formatted `<cell>.log` the run writes at the end so
+    // neither can corrupt the other.
+    let liveFd = null;
+    if (captureStdio && reportDir) {
+      try {
+        liveFd = fs.openSync(path.join(reportDir, `${browser}.live.log`), 'a');
+      } catch {
+        /* diagnostics are best-effort; never fail a cell over its own log */
+      }
+    }
+    const mirror = liveFd === null ? undefined : (chunk) => fs.writeSync(liveFd, chunk);
     if (captureStdio) {
-      readStdout = cappedCollector(child.stdout, maxCaptureBytes);
-      readStderr = cappedCollector(child.stderr, maxCaptureBytes);
+      readStdout = cappedCollector(child.stdout, maxCaptureBytes, mirror);
+      readStderr = cappedCollector(child.stderr, maxCaptureBytes, mirror);
     }
 
     const { code, signal } = await new Promise((resolve, reject) => {
@@ -132,6 +176,17 @@ function createCellDispatcher({
         resolve({ code: exitCode, signal: exitSignal }),
       );
     });
+
+    if (liveFd !== null) {
+      // Released as soon as the cell ends, whatever the outcome — a leaked
+      // descriptor per cell would exhaust the runner's limit on a long matrix.
+      try {
+        fs.closeSync(liveFd);
+      } catch {
+        /* already gone */
+      }
+      liveFd = null;
+    }
 
     const timedOut = code === null && signal === 'SIGTERM' && Boolean(cellTimeoutMs);
     const initFailed = code === EXIT_DRIVER_INIT_FAILED;

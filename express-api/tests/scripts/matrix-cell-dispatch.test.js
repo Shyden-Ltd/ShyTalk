@@ -554,3 +554,105 @@ describe('SHY-0255: a cell that ended without finishing classifies fail, never p
     expect(result.ok).toBe(true);
   });
 });
+
+/**
+ * A RUNNING cell must be inspectable.
+ *
+ * The per-cell log is written when the child closes, so on the 2026-08-01
+ * gauntlet run chromium.log / firefox.log / webkit.log existed — those cells
+ * had finished — while the two device cells, the ones actually stuck, had NO
+ * log at all. The two things you want during a stall (what the cell is doing,
+ * and for how long) were exactly the two things unavailable, and the cell had
+ * a two-hour timeout to burn before saying anything.
+ */
+describe('createCellDispatcher — live log mirror', () => {
+  test('output is readable WHILE the cell is still running', async () => {
+    const dir = tmpDir('live-mirror-');
+    const dispatch = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      reportDir: dir,
+      cellLogs,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: {
+        ...process.env,
+        FAKE_CELL_STDOUT: 'started work\n',
+        // Long enough that the assertion below genuinely runs mid-cell.
+        FAKE_CELL_SLEEP_MS: '1500',
+      },
+    });
+
+    const inFlight = dispatch({ browser: 'chromium' });
+    const live = path.join(dir, 'chromium.live.log');
+
+    // Poll for the mirrored line rather than sleeping a fixed amount: the
+    // property is "it appears before the cell ends", not "it appears at 400ms".
+    let seen = '';
+    const deadline = Date.now() + 1200;
+    while (Date.now() < deadline) {
+      if (fs.existsSync(live)) {
+        seen = fs.readFileSync(live, 'utf8');
+        if (seen.includes('started work')) break;
+      }
+      await new Promise((r) => setTimeout(r, 25)); // sleep-ok: polling a real file for a real subprocess
+    }
+    expect(seen).toContain('started work');
+
+    // And the cell was genuinely still running when that was read.
+    const finishedEarly = await Promise.race([
+      inFlight.then(() => true),
+      new Promise((r) => setTimeout(() => r(false), 0)), // sleep-ok: zero-delay probe, not a wait
+    ]);
+    expect(finishedEarly).toBe(false);
+
+    await inFlight;
+  });
+
+  test('the mirror captures stderr as well as stdout', async () => {
+    const dir = tmpDir('live-mirror-err-');
+    const dispatch = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      reportDir: dir,
+      cellLogs,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_STDERR: 'driver wedged\n' },
+    });
+    await dispatch({ browser: 'firefox' });
+    expect(fs.readFileSync(path.join(dir, 'firefox.live.log'), 'utf8')).toContain('driver wedged');
+  });
+
+  test('a timed-out cell still leaves its live log behind', async () => {
+    // The whole point: the cell that never closes is the one worth reading.
+    const dir = tmpDir('live-mirror-timeout-');
+    const dispatch = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      cellTimeoutMs: 300,
+      reportDir: dir,
+      cellLogs,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_STDOUT: 'about to hang\n', FAKE_CELL_SLEEP_MS: '5000' },
+    });
+    await expect(dispatch({ browser: 'webkit' })).rejects.toMatchObject({ code: 'CELL_TIMEOUT' });
+    expect(fs.readFileSync(path.join(dir, 'webkit.live.log'), 'utf8')).toContain('about to hang');
+  });
+
+  test('no reportDir → no mirror, and no crash', async () => {
+    const dispatch = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_STDOUT: 'x\n' },
+    });
+    await expect(dispatch({ browser: 'chromium' })).resolves.toBe(true);
+  });
+});

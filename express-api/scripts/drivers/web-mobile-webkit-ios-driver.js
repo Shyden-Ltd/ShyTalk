@@ -34,6 +34,7 @@
    manual QA runner (operator-facing CLI), not application code. */
 
 const path = require('path');
+const { boundedFetch, SESSION_TIMEOUT_MS } = require('./device-io-timeout');
 
 // Reuse ios-appium-driver's selectUdid for device-selection parity with
 // the other iOS drivers (Safari + native app).
@@ -92,9 +93,13 @@ async function createMobileWebkitIosDriver({
   appiumBaseUrl = process.env.APPIUM_BASE_URL || DEFAULT_APPIUM_BASE_URL,
   wdaTeamId = process.env.WDA_TEAM_ID,
   udid: preferredUdid,
-  fetchImpl = globalThis.fetch,
+  fetchImpl: rawFetch = globalThis.fetch,
   selectUdidImpl = selectUdid,
 } = {}) {
+  // BOUNDED — see device-io-timeout.js. Appium calls here carried no
+  // timeout, and Node's fetch waits forever, so a dead WebDriverAgent
+  // session hung this cell until the two-hour cell timeout.
+  const fetchImpl = boundedFetch(rawFetch, { label: 'mobile-webkit-ios' });
   if (!isSupportedBrowser(browser)) {
     throw new Error(
       `createMobileWebkitIosDriver: browser "${browser}" is not supported. Use one of: ${supportedBrowsersList().join(', ')}.`,
@@ -154,6 +159,8 @@ async function createMobileWebkitIosDriver({
       },
     };
     const r = await fetchImpl(`${appiumBaseUrl}/session`, {
+      // WDA install/launch is legitimately slow on a cold device.
+      signal: AbortSignal.timeout(SESSION_TIMEOUT_MS),
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(caps),

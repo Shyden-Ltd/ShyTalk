@@ -37,6 +37,7 @@ const { execSync } = require('child_process');
 const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
 const { withDeviceLock } = require('./device-lock');
 const { createSubmitClock } = require('./render-timing');
+const { execBounds, describeExecFailure, DEFAULT_ADB_TIMEOUT_MS } = require('./device-io-timeout');
 const {
   centreOf,
   centreOfCardWithLabel,
@@ -253,9 +254,38 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // Stamped by every submit action; read by measureRenderingTimeFromSubmit.
   const submitClock = createSubmitClock();
 
-  function adb(args) {
+  /**
+   * One adb call, BOUNDED.
+   *
+   * Without a timeout this blocks forever, and on 2026-08-01 it did: the
+   * Android cell spent 2174 seconds — thirty-six minutes — inside a single
+   * scenario, using no CPU, until the two-hour cell timeout would have fired.
+   * `adb shell uiautomator dump` needs an exclusive UiAutomation connection
+   * and wedges when it cannot get one; a USB re-enumeration does the same to
+   * any adb call in flight.
+   *
+   * A bounded call that fails names the operation and the scenario. An
+   * unbounded one loses the whole cell, and with it every scenario the cell
+   * never reached.
+   *
+   * NOTE: the command is still assembled as a shell string with manual
+   * single-quoting (see `escapeInputText`, which exists because free-form user
+   * text reaches here). Moving to execFileSync with an argument array would
+   * remove the shell entirely — worth doing, but it changes the quoting
+   * contract for every caller that passes text and so needs a device run to
+   * verify. Out of scope for this timeout fix.
+   */
+  function adb(args, { timeoutMs = DEFAULT_ADB_TIMEOUT_MS } = {}) {
     const cmd = ['adb', '-s', serial, ...args].map((a) => `'${a}'`).join(' ');
-    return execSync(cmd, { encoding: 'utf8' });
+    try {
+      return execSync(cmd, execBounds({ timeoutMs }));
+    } catch (e) {
+      throw describeExecFailure(e, {
+        label: `android-driver ${serial}`,
+        command: `adb ${args.join(' ')}`,
+        timeoutMs,
+      });
+    }
   }
   driver.adb = adb;
 
