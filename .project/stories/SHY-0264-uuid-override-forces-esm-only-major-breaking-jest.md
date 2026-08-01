@@ -1,6 +1,6 @@
 ---
 id: SHY-0264
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-01
 priority: P1
@@ -10,7 +10,7 @@ roadmap_ids: []
 mvp: false
 ---
 
-# SHY-0264: An unjustified `uuid` override forces an ESM-only major, blanking 11 real-services tests
+# SHY-0264: An ESM-only `uuid` blanks 11 real-services tests under Jest
 
 ## User Story
 
@@ -33,7 +33,7 @@ SyntaxError: Unexpected token 'export'
 
 The whole suite dies at load, so **11 tests report as failures without ever running**. That is the [[feedback-absence-of-work-reported-as-success]] shape inverted — absence of work reported as failure — and it hides whichever of those Givens might genuinely be broken.
 
-**There is no security justification.** `npm audit` reports zero advisories against `uuid` at any version in this tree (5 vulnerabilities exist, none of them uuid). The override appears to be collateral from an `npm audit fix --force`-style sweep alongside `fast-xml-parser`, `@tootallnate/once`, `protobufjs` and `js-yaml`, which do have advisories.
+**CORRECTED 2026-08-01 — the override IS justified.** This story originally claimed no advisory backed it, on the strength of an `npm audit` that reported no `uuid` finding. That reading was wrong: audit was clean _because the override was already applied_. Removing it takes the tree from **5 vulnerabilities to 13** and surfaces a real `uuid` advisory. The override is load-bearing and stays; the fix belongs in the test layer.
 
 Discovered 2026-08-01 while getting the host suite green before a gauntlet run. Pre-existing — unrelated to that night's changes.
 
@@ -136,3 +136,21 @@ The moderation seed-Givens suite runs all 11 tests; the full host suite is green
 
 - 2026-08-01 — Filed while clearing the host suite ahead of a gauntlet run. Measured at filing: `uuid@14.0.0` resolved; declared ranges `^8.0.0` (`@google-cloud/storage`) and `^9.0.1` (`google-gax`, `gaxios`); `uuid@14` `exports` map exposes only `node` and `default`, both ESM, with no `require` condition; `npm audit` shows 5 vulnerabilities (1 critical, 2 high, 1 moderate, 1 low) and **none** against `uuid`. Node here is v24.18.1, which is why production is unaffected and only Jest's CJS registry trips.
 - Preferred option on the evidence available at filing is **relax the override to the declared range**, because it removes the cause rather than compensating for it and transforms nothing. The alternative (`@babel/preset-env` + `transformIgnorePatterns`) adds a build dependency and puts a rewrite in front of an ID library; it should only be chosen if an advisory turns up that genuinely requires `uuid@14`.
+
+- 2026-08-01 — **RESOLVED, and my premise in this story was wrong.** I filed it
+  claiming no advisory justified the override. Measured: removing it takes
+  `npm audit` from **5 vulnerabilities to 13** and surfaces a real `uuid`
+  advisory. audit reported none originally _because the override was already
+  applied_ — the instrument was reading the fixed state, and I read that as
+  evidence the fix was unneeded. Same mistake shape as measuring RSS on a
+  process whose memory has already been reclaimed. **The override stays.**
+
+  Fixed in the test layer instead: `@babel/preset-env@^7` (the default resolves
+  to 8.x and conflicts with the tree's `@babel/core@7.29.7`), `targets:
+node current` so nothing is down-levelled beyond what this Node already runs,
+  and `transformIgnorePatterns: ['/node_modules/(?!uuid/)']` so only uuid is
+  transformed — transforming the whole tree would cost more wall-clock than the
+  bug. Guarded by `tests/unit/uuid-is-requirable.unit.test.js`, which pins that
+  uuid loads AND that `v4()` still yields RFC-4122 values with no collisions
+  over 10k draws: a transform that quietly altered an ID library's RNG would be
+  far worse than the load error it replaced. Host suite 8130/8130.

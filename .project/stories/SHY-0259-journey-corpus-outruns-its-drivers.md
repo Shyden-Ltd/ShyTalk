@@ -27,13 +27,13 @@ passes, so this is the first complete picture of the corpus in a long time).
 The chromium cell ran all 20 feature files — 226 scenarios — and produced 211
 findings. Triaged:
 
-| Cause | Count |
-|---|---|
-| Android app parked on its degraded screen (APK built without `-PlocalHost`) | 109 |
-| `STEP_NOT_IMPLEMENTED` — the corpus uses a Gherkin step with no matcher | 42 |
-| `ctx.webDriver.*` / `ctx.uiDriver.*` **not configured** | ~24 |
-| `stub:web*` — a matcher exists but its driver method is a placeholder | 5 (64 occurrences) |
-| OSA invariant violated (cross-cohort followingIds) | 6 |
+| Cause                                                                       | Count              |
+| --------------------------------------------------------------------------- | ------------------ |
+| Android app parked on its degraded screen (APK built without `-PlocalHost`) | 109                |
+| `STEP_NOT_IMPLEMENTED` — the corpus uses a Gherkin step with no matcher     | 42                 |
+| `ctx.webDriver.*` / `ctx.uiDriver.*` **not configured**                     | ~24                |
+| `stub:web*` — a matcher exists but its driver method is a placeholder       | 5 (64 occurrences) |
+| OSA invariant violated (cross-cohort followingIds)                          | 6                  |
 
 The 109 were a real environment defect and are fixed. **The rest is harness
 debt**: the corpus was written ahead of the drivers, so a large share of it can
@@ -57,8 +57,8 @@ Concretely, the missing pieces fall into three groups:
   reached and then announces it does nothing.
 - **Gherkin steps with no matcher at all** — setup Givens dominate
   (`has the local-flavor APK installed on Android`, `is a participant in Bao's
-  lesson room`, `has signed in with locale=de`, `is on the warning screen with
-  hasActiveWarning=true`).
+lesson room`, `has signed in with locale=de`, `is on the warning screen with
+hasActiveWarning=true`).
 
 ## Acceptance Criteria
 
@@ -101,21 +101,25 @@ Concretely, the missing pieces fall into three groups:
 ## BDD Scenarios
 
 **Scenario: a red cell means the product is broken**
+
 - **Given** a journey step the harness can perform
 - **When** the product misbehaves
 - **Then** the cell fails and names the product behaviour
 
 **Scenario: the harness admits when it cannot act**
+
 - **Given** a journey step whose driver method is not implemented on this surface
 - **When** the cell runs
 - **Then** it is reported as a harness gap, counted separately from product failures
 
 **Scenario: the corpus cannot outrun the drivers again**
+
 - **Given** a new feature file using a step with no matcher
 - **When** the step-coverage check runs
 - **Then** it fails before any device time is spent
 
 **Scenario: setup does not cascade**
+
 - **Given** a scenario whose Given establishes prior state
 - **When** that state is seeded directly rather than driven through the UI
 - **Then** a UI regression elsewhere cannot turn one failure into thirty
@@ -233,7 +237,6 @@ fail.
 - 2026-07-30 — `stub:webAdminShowsDashboardCounters` alone accounts for 59 of
   the 64 stub occurrences; implementing that one method is the single largest
   lever in this story.
-
 
 ## Measured inventory (2026-08-01)
 
@@ -443,3 +446,66 @@ real browser, per the repo's real-only rule.
 - [ ] `webTapUserCard`
 - [ ] `webTypeAndSubmit`
 - [ ] `webTypeIntoConversationInput`
+
+## 2026-08-01 — the driver gap is CLOSED: 179 → 0
+
+All 179 missing methods implemented across eight batches, real implementations
+only, zero `stub:` markers in any driver.
+
+| batch | surface                                  | closed | remaining |
+| ----- | ---------------------------------------- | -----: | --------: |
+| 1     | Android interaction                      |     12 |       167 |
+| 2     | Web navigation + actions                 |     31 |       136 |
+| 3     | iOS + XPath locator module               |     24 |       115 |
+| 4     | Admin console                            |     18 |        97 |
+| 5     | Android composites                       |     37 |        60 |
+| 6     | iOS composites                           |     16 |        44 |
+| 7     | Web assertions, purchases, i18n, network |     24 |        20 |
+| 8     | Cross-surface helpers + device API calls |     20 |     **0** |
+
+**The gap cannot reopen.** `tests/unit/driver-method-coverage.unit.test.js`
+reads every `ctx.uiDriver.X` / `ctx.webDriver.X` the runner can demand and
+fails if any is undefined. No device, no emulator, no browser — milliseconds,
+so it gates a PR. It also asserts its own scan is non-vacuous, because a
+silently-empty regex would make the whole check pass while proving nothing.
+The drift lasted months precisely because nothing checked.
+
+### Where honesty cost more than convenience
+
+Four methods cannot do what the corpus asks on the available hardware. Each
+returns `{ supported: false, why }` rather than a cheerful boolean, and a test
+pins that they still do — a later "simplification" to `return true` fails
+loudly:
+
+- `iosNetworkLinkConditioner` — iOS exposes conditioning only via Developer
+  settings; it cannot be synthesised from the host.
+- `webSetNetwork` — CDP emulation is Chromium-only, so firefox/webkit say so
+  instead of running a low-connectivity scenario at full speed.
+- `advanceClockToStartsAt` — the emulator has no time travel; a scenario that
+  believes it jumped an hour would assert against the wrong state and blame the
+  product.
+- `androidPerformAuthenticatedCall` — needs the in-app debug hook. A
+  host-issued request would carry a HOST token and prove nothing about the
+  app's session; an unauthenticated fallback would 401 and read as a defect.
+
+### Three bugs the tests caught that structure alone could not
+
+1. `centreOfCardWithLabel` assumed `resource-id → bounds → text`; real
+   uiautomator emits `text` FIRST. Only visible because the logic was extracted
+   so the test ran the driver's actual code — the first version carried a local
+   copy and would have passed while the driver was broken.
+2. `webCloseModalViaX` returned true against a page with no modal:
+   `getByText('X', { exact: false })` substring-matches almost any page. Caught
+   by driving a real Chromium.
+3. XPath quoting — `Selma's Saturday Sing-along` ends a single-quoted literal
+   early, yielding a syntax error or a valid expression matching the wrong
+   element. `xpathLiteral` switches delimiter and falls back to `concat()`.
+
+### Rejected on principle
+
+`injectApiFailureThenSuccess` originally used `page.route(...).fulfill({status:
+500})`. The no-new-stubs ratchet flagged it and was right: a fabricated
+response is a mock however it is framed. Request interception is gone entirely;
+latency and drops now go through real CDP network emulation, and the 5xx case
+reports `supported: false` pointing at the honest fix — a fault-injection
+endpoint on the API.
