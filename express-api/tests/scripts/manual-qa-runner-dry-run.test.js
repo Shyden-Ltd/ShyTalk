@@ -58,7 +58,18 @@ describe('formatDryRunJson — target resolution', () => {
   test('opts.target = "dev" → target reflected, cells = dev allowlist', () => {
     const parsed = JSON.parse(formatDryRunJson({ target: 'dev' }));
     expect(parsed.target).toBe('dev');
-    expect(parsed.cells).toEqual(['chromium', 'mobile-chrome-android']);
+    // dev collapses the BROWSER fan-out to Chrome but keeps BOTH real devices —
+    // CLAUDE.md: "dev now runs real-iOS app journeys too; only the web-browser
+    // fan-out collapses to Chrome." Before app/cross cells existed those were
+    // one dial, so narrowing browsers silently dropped the device coverage too.
+    expect(parsed.cells).toEqual([
+      'app-android',
+      'app-ios',
+      'chromium',
+      'mobile-chrome-android',
+      'cross-android',
+      'cross-ios',
+    ]);
   });
 
   test('opts.target = "prod" → cells = ["chromium"]', () => {
@@ -67,10 +78,17 @@ describe('formatDryRunJson — target resolution', () => {
     expect(parsed.cells).toEqual(['chromium']);
   });
 
-  test('opts.target = "local" → cells = full 12-cell matrix', () => {
+  test('opts.target = "local" → cells = the full matrix, all three phases', () => {
+    const { CELL_SLUGS, PHASES, phaseOf } = require('../../scripts/matrix-cells');
     const parsed = JSON.parse(formatDryRunJson({ target: 'local' }));
     expect(parsed.target).toBe('local');
-    expect(parsed.cells.length).toBe(12);
+    // Asserted against the registry rather than a literal count. A hard-coded
+    // 12 said nothing about WHAT the cells were, so the matrix could gain a
+    // duplicate or lose the app phase entirely and still satisfy it.
+    expect(parsed.cells).toEqual(CELL_SLUGS);
+    for (const phase of PHASES) {
+      expect(parsed.cells.some((c) => phaseOf(c) === phase)).toBe(true);
+    }
   });
 
   test('unknown target → cells = []', () => {
@@ -99,7 +117,14 @@ describe('formatDryRunJson — --browser override', () => {
 describe('formatDryRunJson — --matrix flag', () => {
   test('opts.matrix = true → cells = full target allowlist (same as no-matrix default)', () => {
     const parsed = JSON.parse(formatDryRunJson({ matrix: true, target: 'dev' }));
-    expect(parsed.cells).toEqual(['chromium', 'mobile-chrome-android']);
+    expect(parsed.cells).toEqual([
+      'app-android',
+      'app-ios',
+      'chromium',
+      'mobile-chrome-android',
+      'cross-android',
+      'cross-ios',
+    ]);
   });
 
   test('opts.matrix + opts.browser → --browser still overrides (single-cell)', () => {
@@ -159,7 +184,14 @@ describe('CLI integration — --dry-run with --target', () => {
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
     expect(parsed.target).toBe('dev');
-    expect(parsed.cells).toEqual(['chromium', 'mobile-chrome-android']);
+    expect(parsed.cells).toEqual([
+      'app-android',
+      'app-ios',
+      'chromium',
+      'mobile-chrome-android',
+      'cross-android',
+      'cross-ios',
+    ]);
   });
 
   test('--dry-run --target prod returns prod allowlist', () => {

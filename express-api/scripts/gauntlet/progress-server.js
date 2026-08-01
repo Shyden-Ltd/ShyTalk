@@ -27,7 +27,15 @@ const {
   formatElapsed,
   retryDelayMs,
 } = require('./progress-model');
-const { allowedBrowsersFor } = require('../browser-allowlist');
+/**
+ * `capsFor` — what each matrix cell can drive — is asked of the registry, never
+ * re-derived. This file used to carry its own copy of the rule
+ * (`cell.endsWith('-android') → ['web','android']`), which is how the dashboard
+ * came to show app scenarios under `chrome·A 🤖 samsung·A 🤖 edge·A 🤖
+ * firefox·A` — four columns for one phone. It agreed with the runner's identical
+ * mistake, so nothing looked wrong. Two copies of one rule is how they drift.
+ */
+const { allowedCellsFor, capsFor, phaseOf, PHASES } = require('../matrix-cells');
 
 const GAUNTLET_TMP = process.env.GAUNTLET_TMP || '/tmp/shytalk-gauntlet';
 const DEFAULT_PORT = Number(process.env.GAUNTLET_UI_PORT || 4310);
@@ -40,17 +48,6 @@ const {
   mergeCellActivity,
 } = require('../scenario-progress');
 const { applicableCells, requiredPlatforms, GATING_PLATFORMS } = require('../scenario-surface');
-
-/**
- * What each matrix cell can drive. Desktop browsers are web-only; a
- * mobile-*-android cell adds the Android app driver, mobile-*-ios the iOS one.
- * Measured runnable counts: web-only 39/226, web+android 147, web+ios 51.
- */
-function capsFor(cell) {
-  if (cell.endsWith('-android')) return ['web', 'android'];
-  if (cell.endsWith('-ios')) return ['web', 'ios'];
-  return ['web'];
-}
 
 /**
  * WEB, APP, or CROSS-OVER?
@@ -259,7 +256,8 @@ function snapshot(runDir) {
       : undefined;
 
   // The matrix plan. `local` is the full device+browser fan-out.
-  const planned = allowedBrowsersFor(process.env.GAUNTLET_TARGET || 'local');
+  const target = process.env.GAUNTLET_TARGET || 'local';
+  const planned = allowedCellsFor(target);
 
   const reportDir = path.join(runDir, 'report');
   const artifacts = scanScenarioArtifacts(reportDir);
@@ -436,8 +434,52 @@ function snapshot(runDir) {
     // exists for native device cells.
     cellNames: planned,
     matrix: scenarioMatrix,
+    // WHICH ENVIRONMENT IS UNDER TEST. Operator 2026-08-01: "we also need to be
+    // able to see the environment under test. I.E. local or dev." A dashboard
+    // that looks identical for local and dev is how a green board gets read as
+    // a dev result when it was localhost all along.
+    target,
+    // THREE LISTS, each with only its own columns. Operator: "scenarios should
+    // be split up into 3 separate lists... first list, only - show only the
+    // apps. second list, web only, show only the browsers. third list, cross
+    // over, show the browsers used and device used for the app side."
+    //
+    // The lists line up with the cells because `phaseOf` and `classifyScenario`
+    // now speak the same vocabulary — app/web/cross. Under the old matrix every
+    // cell was a browser cell, so an APP scenario had nowhere to render but the
+    // browser columns, and the board showed `chrome·A 🤖 samsung·A 🤖 edge·A 🤖
+    // firefox·A` for work that runs on ONE phone.
+    phases: PHASES.map((phase) => {
+      const cells = planned.filter((c) => phaseOf(c) === phase);
+      const rows = scenarioMatrix.filter((r) => r.kind === phase);
+      const totals = rows.reduce(
+        (acc, r) => {
+          acc.pass += r.summary.pass;
+          acc.fail += r.summary.fail;
+          acc.skipped += r.summary.skipped;
+          acc.pending += r.summary.pending;
+          return acc;
+        },
+        { pass: 0, fail: 0, skipped: 0, pending: 0 },
+      );
+      return { phase, cells, scenarios: rows.length, totals, status: phaseStatus(totals) };
+    }),
     generatedAt: new Date().toISOString(),
   };
+}
+
+/**
+ * A phase's verdict from what its scenarios have actually reported.
+ *
+ * Ordered so the worst honest answer wins: a single fail makes the phase red no
+ * matter how much passed, and "green" requires that nothing is still pending —
+ * otherwise a phase reads as complete while most of its work has not run.
+ */
+function phaseStatus(totals) {
+  if (totals.fail > 0) return 'red';
+  if (totals.pending > 0) return totals.pass + totals.skipped > 0 ? 'running' : 'pending';
+  if (totals.pass + totals.skipped > 0) return 'green';
+  return 'pending';
 }
 
 const DASHBOARD = fs.readFileSync(path.join(__dirname, 'progress-dashboard.html'), 'utf8');

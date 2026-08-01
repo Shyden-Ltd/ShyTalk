@@ -123,17 +123,29 @@ function classifyCrashExit(err) {
 }
 
 /**
- * Maps a browser slug to the physical resource its cell contends for, so the parallel
- * driver can serialise same-resource cells while running different resources concurrently.
- * The matrix slug shape is `<browser>-<platform>` (e.g. `mobile-safari-ios`,
- * `mobile-chrome-android`) plus the native `ios`/`android` cells and bare desktop browsers.
- *   - anything containing `android` → the one Android device
- *   - anything containing `ios`     → the one iPhone
- *   - everything else (chromium/firefox/webkit/edge) → the Mac (desktop browsers)
- * Two iOS cells therefore never drive the same iPhone at once, while iOS + Android + Mac
- * all progress in parallel.
+ * Maps a cell to the physical resource it contends for, so the parallel driver can
+ * serialise same-resource cells while running different resources concurrently.
+ * Two iOS cells therefore never drive the same iPhone at once, while iOS + Android
+ * + Mac all progress in parallel.
+ *
+ * ANSWERS EXACTLY ONE QUESTION: "which hardware does this cell contend for?"
+ *
+ * It used to answer a second one by accident. The runner read this value to decide
+ * WHICH APP DRIVER TO ATTACH, and since `mobile-chrome-android` legitimately
+ * contends for the phone (Chrome for Android runs on it over CDP-over-adb), all
+ * four Android browser cells were handed the Android app driver too — 500 device
+ * scenario runs where 125 were needed. Owning the device says nothing about
+ * whether the APK should be launched. That question now lives in
+ * `matrix-cells.appDeviceFor()`, and nothing here answers it.
+ *
+ * Known cells come from the registry, which states the resource outright. The
+ * substring fallback survives only for callers that pass an ad-hoc slug — the
+ * dispatcher is generic and `runMatrix` accepts any browsers array — and it is a
+ * GUESS, which is why the matrix itself never relies on it.
  */
 function defaultResourceKey(browser) {
+  const { isKnownCell, resourceKeyFor } = require('./matrix-cells');
+  if (isKnownCell(browser)) return resourceKeyFor(browser);
   const b = String(browser).toLowerCase();
   if (b.includes('android')) return 'android';
   if (b.includes('ios')) return 'iphone';

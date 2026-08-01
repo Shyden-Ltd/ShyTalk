@@ -228,19 +228,33 @@ test('--dry-run --filter "   " (whitespace-only) exits 2', () => {
 // ── filter composition with --dry-run ────────────────────────────
 
 describe('--filter — composition with --dry-run', () => {
-  test('--dry-run --target local --filter android → only mobile-*-android cells', () => {
+  test('--dry-run --target local --filter android → every cell on the Android device', () => {
     const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
     expect(parsed.target).toBe('local');
-    // Order matches MOBILE_BROWSERS in browser-allowlist.js (Android slugs
-    // grouped first by registration order: chrome, samsung, edge, firefox).
+    // Six, not four. `app-android` (the APK alone) and `cross-android` (the APK
+    // plus a desktop browser) are now cells in their own right — previously the
+    // app had no cell and was bolted onto all four browser cells, so "filter to
+    // android" ran the app FOUR times and this assertion could not tell.
+    // Order is MATRIX_CELLS order: app phase, then web, then cross.
     expect(parsed.cells).toEqual([
+      'app-android',
       'mobile-chrome-android',
       'mobile-samsung-android',
       'mobile-edge-android',
       'mobile-firefox-android',
+      'cross-android',
     ]);
+  });
+
+  test('--filter android selects exactly the cells whose resource IS the phone', () => {
+    // Stated as the property rather than a list, so a new Android cell added
+    // without updating the filter shows up here instead of silently not running.
+    const { CELL_SLUGS, resourceKeyFor } = require('../../scripts/matrix-cells');
+    const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android']);
+    const cells = JSON.parse(r.stdout).cells;
+    expect(cells).toEqual(CELL_SLUGS.filter((c) => resourceKeyFor(c) === 'android'));
   });
 
   test('--dry-run --target local --filter chrom → matches chromium + mobile-chrome-*', () => {

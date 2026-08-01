@@ -431,6 +431,105 @@
         color: var(--fail);
         border-color: rgba(248, 81, 73, 0.4);
       }
+      /* The unit, spelled out next to the panel heading. */
+      .unit {
+        font-weight: 400;
+        font-size: 12px;
+        color: #6e7681;
+      }
+      /* Scenario-level tally, visually subordinate to the cell counters so the
+         two units read as different quantities rather than competing totals. */
+      .sub-stats {
+        margin-top: 6px;
+        padding-top: 8px;
+        border-top: 1px solid #21262d;
+        opacity: 0.95;
+      }
+      .sub-stats .stat b {
+        font-size: 18px;
+      }
+      b.warnable.bad {
+        color: #ff7b72;
+      }
+
+      /* Header: environment badge sits beside the run state. */
+      .hdr-right {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .badge.env {
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .badge.env-local {
+        background: rgba(88, 166, 255, 0.12);
+        border-color: rgba(88, 166, 255, 0.45);
+        color: #79c0ff;
+      }
+      /* dev is loud on purpose: it is the shared backend, and mistaking a local
+         run for a dev sign-off is the error this badge exists to prevent. */
+      .badge.env-dev {
+        background: rgba(210, 153, 34, 0.18);
+        border-color: rgba(210, 153, 34, 0.6);
+        color: #e3b341;
+      }
+      .badge.env-prod {
+        background: rgba(248, 81, 73, 0.18);
+        border-color: rgba(248, 81, 73, 0.6);
+        color: #ff7b72;
+      }
+      .badge.env-unknown {
+        opacity: 0.7;
+      }
+
+      /* Three phase lists, in run order: app, then web, then cross-over. */
+      .phase {
+        margin: 0 0 22px;
+      }
+      .phase h3 {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 8px;
+        font-size: 15px;
+        position: sticky;
+        top: 0;
+        background: #0d1117;
+        padding: 6px 0;
+        z-index: 2;
+      }
+      .phase-count {
+        font-size: 12px;
+        font-weight: 400;
+        color: #8b949e;
+      }
+      .phase-blurb {
+        font-size: 12px;
+        font-weight: 400;
+        color: #6e7681;
+        font-style: italic;
+      }
+      .phase-empty {
+        color: #6e7681;
+        font-size: 13px;
+        margin: 0 0 6px;
+      }
+      /* A left rule per phase so the three lists stay visually distinct while
+         scrolling one long column. */
+      .phase-app {
+        border-left: 3px solid rgba(63, 185, 80, 0.35);
+        padding-left: 12px;
+      }
+      .phase-web {
+        border-left: 3px solid rgba(88, 166, 255, 0.35);
+        padding-left: 12px;
+      }
+      .phase-cross {
+        border-left: 3px solid rgba(210, 153, 34, 0.4);
+        padding-left: 12px;
+      }
     </style>
   </head>
   <body>
@@ -439,27 +538,64 @@
         <h1>ShyTalk Gauntlet</h1>
         <div class="sub" id="sub">connecting…</div>
       </div>
-      <div class="badge no-run" id="state">—</div>
+      <div class="hdr-right">
+        <!--
+          WHICH ENVIRONMENT IS UNDER TEST. Operator 2026-08-01: "we also need to
+          be able to see the environment under test. I.E. local or dev." A board
+          that looks identical for local and dev is how a green result gets read
+          as a dev sign-off when it was localhost the whole time. `dev` is
+          styled loudly on purpose — it is the one that touches shared state.
+        -->
+        <div class="badge env env-local" id="env" title="Environment under test">—</div>
+        <div class="badge no-run" id="state">—</div>
+      </div>
     </header>
 
     <div class="alert" id="alert"></div>
     <div class="conn" id="conn"></div>
 
     <div class="panel">
+      <!--
+        THE UNIT IS PART OF THE NUMBER. Operator 2026-08-01: "i still see many
+        red crosses (failures? but with a figure of 0 failures in the
+        summary???)"
+
+        Both numbers were right and together they lied. These counters count
+        CELLS — how many of the matrix's cells have finished — while the grid
+        below counts SCENARIO x CELL results. On the killed run that read
+        "0 failed" beside 112 visible crosses: no cell had finished failing
+        (2 were stalled, 6 pending) while 112 individual scenario results had
+        already come back red. An unlabelled "failed" invites the reader to
+        assume whichever unit they were already thinking about.
+      -->
+      <h2>Cells <span class="unit">— one per browser / device in the matrix</span></h2>
       <div class="bar">
         <i class="p" id="barPass" style="width: 0%"></i
         ><i class="f" id="barFail" style="width: 0%"></i>
       </div>
       <div class="stats">
-        <div class="stat"><b id="cPass">0</b><span>passed</span></div>
-        <div class="stat"><b id="cFail">0</b><span>failed</span></div>
-        <div class="stat"><b id="cSkip">0</b><span>skipped</span></div>
-        <div class="stat"><b id="cRun">0</b><span>running</span></div>
-        <div class="stat"><b id="cStall">0</b><span>stalled</span></div>
-        <div class="stat"><b id="cPend">0</b><span>to&nbsp;do</span></div>
+        <div class="stat"><b id="cPass">0</b><span>cells&nbsp;passed</span></div>
+        <div class="stat"><b id="cFail">0</b><span>cells&nbsp;failed</span></div>
+        <div class="stat"><b id="cSkip">0</b><span>cells&nbsp;skipped</span></div>
+        <div class="stat"><b id="cRun">0</b><span>cells&nbsp;running</span></div>
+        <div class="stat"><b id="cStall">0</b><span>cells&nbsp;stalled</span></div>
+        <div class="stat"><b id="cPend">0</b><span>cells&nbsp;to&nbsp;do</span></div>
         <div class="stat"><b id="cPct">0%</b><span>complete</span></div>
         <div class="stat"><b id="cElapsed">—</b><span>elapsed</span></div>
         <div class="stat"><b id="cScen">0</b><span>scenarios&nbsp;run</span></div>
+      </div>
+      <!--
+        The scenario-level tally, right next to the cell-level one, so the two
+        units are visibly different quantities instead of one ambiguous word.
+      -->
+      <div class="stats sub-stats">
+        <div class="stat"><b id="rPass">0</b><span>scenario&nbsp;results&nbsp;passed</span></div>
+        <div class="stat">
+          <b id="rFail" class="warnable">0</b><span>scenario&nbsp;results&nbsp;failed</span>
+        </div>
+        <div class="stat">
+          <b id="rScen">0</b><span>scenarios&nbsp;with&nbsp;a&nbsp;failure</span>
+        </div>
       </div>
     </div>
 
@@ -484,13 +620,21 @@
           <span class="ic pending">○</span> queued <span class="ic skipped">⊘</span> skipped
           <span class="ic na">–</span> n/a — this cell cannot run it
         </div>
+        <!--
+          THREE LISTS, each showing only the columns that can run its scenarios.
+          Operator 2026-08-01: "scenarios should be split up into 3 separate
+          lists... first list, only - show only the apps. second list, web only,
+          show only the browsers. third list, cross over, show the browsers used
+          and device used for the app side."
+
+          The single combined grid rendered app scenarios under `chrome·A 🤖
+          samsung·A 🤖 edge·A 🤖 firefox·A` — four browser columns for work that
+          runs on ONE phone. That was not a display bug: the matrix really did
+          bolt the app driver onto all four browser cells. Fixing the cells is
+          what makes these lists possible.
+        -->
         <div class="scroll" id="sScroll">
-          <table class="grid">
-            <thead>
-              <tr id="gHead"></tr>
-            </thead>
-            <tbody id="gRows"></tbody>
-          </table>
+          <div id="phaseLists"></div>
         </div>
       </details>
     </div>
@@ -547,6 +691,11 @@
       // One glyph per cell. Short, stable labels so 12 columns fit on screen
       // and each stays recognisable at a glance.
       const CELL_ICON = {
+        // App cells — the APK itself, on one device each.
+        'app-android': '🤖',
+        'app-ios': '🍎',
+        // Browser cells. The mobile ones run a browser ON the device, which is
+        // why they still contend for it — but they do NOT drive the app.
         chromium: '🌐',
         firefox: '🦊',
         webkit: '🧭',
@@ -559,103 +708,122 @@
         'mobile-chrome-ios': '🍎',
         'mobile-firefox-ios': '🍎',
         'mobile-edge-ios': '🍎',
+        // Cross-over — a desktop browser AND a phone, held by one cell.
+        'cross-android': '🌐🤖',
+        'cross-ios': '🌐🍎',
       };
       const shortCell = (c) =>
         c
+          .replace('app-android', 'Android app')
+          .replace('app-ios', 'iOS app')
+          .replace('cross-android', 'chrome + Android')
+          .replace('cross-ios', 'chrome + iOS')
           .replace('mobile-', '')
           .replace('-android', '·A')
           .replace('-ios', '·i')
           .replace('chromium', 'chrome');
 
-      let headBuilt = '';
-
-      // Operator: "it needs to be very clear if a scenario is web scenario, app
-      // scenario or a scenario that crosses over between web and app."
-      // Colour AND word AND glyph — never colour alone, because a red/green
-      // grid already owns colour and a third meaning for it would be unreadable.
-      const KIND_BADGE = {
-        web: {
-          text: 'WEB',
-          glyph: '🖥',
-          title: 'Web scenario — runs on every browser, desktop and device',
+      const PHASE_META = {
+        app: {
+          title: 'App',
+          glyph: '📱',
+          blurb: 'the native app alone, one cell per device',
         },
-        app: { text: 'APP', glyph: '📱', title: 'App scenario — runs only on the device(s) shown' },
+        web: {
+          title: 'Web',
+          glyph: '🖥',
+          blurb: 'browsers alone — desktop, and browsers running on the phones',
+        },
         cross: {
-          text: 'WEB+APP',
+          title: 'Cross-over',
           glyph: '🔗',
-          title: 'Cross-over — needs a browser AND a device in the same journey',
+          blurb: 'one cell holding a desktop browser AND a device at the same time',
         },
       };
-      function kindBadge(r) {
-        const k = KIND_BADGE[r.kind];
-        if (!k) return '';
-        const plats = (r.platforms || []).length ? ' ' + r.platforms.join('+') : '';
+
+      // Phases run app → web → cross. Showing the gate state makes "web is green"
+      // readable as "web is green but the app phase already failed", which is
+      // the distinction the default `report` gate exists to preserve.
+      const PHASE_STATUS = {
+        green: { glyph: '✅', label: 'all green' },
+        red: { glyph: '❌', label: 'has failures' },
+        running: { glyph: '⏳', label: 'in progress' },
+        pending: { glyph: '○', label: 'not started' },
+      };
+
+      // The per-row WEB / APP / WEB+APP badge is gone: every row in a phase list
+      // has that phase's kind by construction, so repeating it on all 226 rows
+      // was noise. The kind now lives once, in the list's own heading.
+
+      /** One result glyph. Distinct SHAPE per state, never colour alone. */
+      function resultCell(cell, state) {
+        const st = state || 'pending';
+        const glyph =
+          st === 'pass'
+            ? '●'
+            : st === 'fail'
+              ? '✕'
+              : st === 'skipped'
+                ? '⊘'
+                : st === 'na'
+                  ? '–'
+                  : '○';
+        const label =
+          st === 'na'
+            ? 'not applicable — this cell cannot run this scenario'
+            : st === 'pending'
+              ? 'queued'
+              : st;
         return (
-          '<span class="kind kind-' +
-          esc(r.kind) +
+          '<td><span class="ic ' +
+          st +
           '" title="' +
-          esc(k.title + plats) +
+          esc(cell) +
+          ': ' +
+          label +
           '">' +
-          k.glyph +
-          ' ' +
-          esc(k.text + plats) +
-          '</span> '
+          glyph +
+          '</span></td>'
         );
       }
 
-      function renderGrid(s) {
-        const cells = s.cellNames || [];
-        const rows = s.matrix || [];
-        const k = s.scenarioKinds;
-        if (k) {
-          $('sKinds').innerHTML =
-            '<span class="kind kind-web">🖥 WEB ' +
-            k.web +
-            '</span>' +
-            '<span class="kind kind-app">📱 APP ' +
-            k.app +
-            '</span>' +
-            '<span class="kind kind-cross">🔗 WEB+APP ' +
-            k.cross +
-            '</span>';
-        }
+      /**
+       * One list per phase, each with ONLY the columns that can run its
+       * scenarios.
+       *
+       * The per-phase `summary` is recomputed from THIS list's cells rather than
+       * reusing `row.summary`, which counts across the whole matrix. Reusing it
+       * would make an app row look mostly "n/a" because twelve browser cells
+       * cannot run it — a true statement about the matrix and a useless one
+       * about the app.
+       */
+      function renderPhaseList(phase, cells, rows) {
+        const meta = PHASE_META[phase] || { title: phase, glyph: '▫', blurb: '' };
+        const head =
+          '<th>#</th><th>Scenario</th><th>Feature</th>' +
+          cells
+            .map(
+              (c) =>
+                '<th title="' +
+                esc(c) +
+                '">' +
+                (CELL_ICON[c] || '▫') +
+                '<br>' +
+                esc(shortCell(c)) +
+                '</th>',
+            )
+            .join('');
 
-        const headKey = cells.join('|');
-        if (headKey !== headBuilt) {
-          $('gHead').innerHTML =
-            '<th>#</th><th>Scenario</th><th>Feature</th>' +
-            cells
-              .map(
-                (c) =>
-                  '<th title="' +
-                  esc(c) +
-                  '">' +
-                  (CELL_ICON[c] || '▫') +
-                  '<br>' +
-                  esc(shortCell(c)) +
-                  '</th>',
-              )
-              .join('');
-          headBuilt = headKey;
-        }
-
-        const resolved = rows.filter(
-          (r) =>
-            cells.length - (r.summary.na || 0) > 0 &&
-            r.summary.pending < cells.length - (r.summary.na || 0),
-        ).length;
-        $('sSummary').textContent =
-          'Scenario detail — ' + resolved + ' of ' + rows.length + ' scenarios started';
-
-        $('gRows').innerHTML = rows
+        const body = rows
           .map((r) => {
-            const runnable = cells.length - (r.summary.na || 0);
-            const started = runnable > 0 && r.summary.pending < runnable;
-            const done = runnable > 0 && r.summary.pending === 0;
-            const cls = started && !done ? ' class="active"' : '';
+            const mine = cells.map((c) => r.results[c] || 'pending');
+            const runnable = mine.filter((st) => st !== 'na').length;
+            const pending = mine.filter((st) => st === 'pending').length;
+            const started = runnable > 0 && pending < runnable;
+            const done = runnable > 0 && pending === 0;
             return (
               '<tr' +
-              cls +
+              (started && !done ? ' class="active"' : '') +
               ' data-started="' +
               (started ? 1 : 0) +
               '"><td>' +
@@ -663,50 +831,84 @@
               '</td><td class="name" title="' +
               esc(r.scenario) +
               '">' +
-              kindBadge(r) +
               esc(r.scenario) +
               '</td><td class="file">' +
               esc(r.file.replace(/\.feature$/, '')) +
               '</td>' +
-              cells
-                .map((c) => {
-                  const st = r.results[c] || 'pending';
-                  // Distinct SHAPE per state, not just colour. Operator wants
-                  // pass / fail / queued unmistakable, and a grid read at a
-                  // glance must not depend on telling red from green.
-                  const glyph =
-                    st === 'pass'
-                      ? '●'
-                      : st === 'fail'
-                        ? '✕'
-                        : st === 'skipped'
-                          ? '⊘'
-                          : st === 'na'
-                            ? '–'
-                            : '○';
-                  const label =
-                    st === 'na'
-                      ? 'not applicable — this cell cannot run this scenario'
-                      : st === 'pending'
-                        ? 'queued'
-                        : st;
-                  return (
-                    '<td><span class="ic ' +
-                    st +
-                    '" title="' +
-                    esc(c) +
-                    ': ' +
-                    label +
-                    '">' +
-                    glyph +
-                    '</span></td>'
-                  );
-                })
-                .join('') +
+              cells.map((c, i) => resultCell(c, mine[i])).join('') +
               '</tr>'
             );
           })
           .join('');
+
+        return (
+          '<section class="phase phase-' +
+          esc(phase) +
+          '"><h3>' +
+          meta.glyph +
+          ' ' +
+          esc(meta.title) +
+          '<span class="phase-count">' +
+          rows.length +
+          ' scenario' +
+          (rows.length === 1 ? '' : 's') +
+          ' × ' +
+          cells.length +
+          ' cell' +
+          (cells.length === 1 ? '' : 's') +
+          '</span>' +
+          '<span class="phase-blurb">' +
+          esc(meta.blurb) +
+          '</span></h3>' +
+          (rows.length === 0 || cells.length === 0
+            ? '<p class="phase-empty">nothing in this phase for the current matrix</p>'
+            : '<table class="grid"><thead><tr>' +
+              head +
+              '</tr></thead><tbody>' +
+              body +
+              '</tbody></table>') +
+          '</section>'
+        );
+      }
+
+      function renderGrid(s) {
+        const rows = s.matrix || [];
+        const k = s.scenarioKinds;
+        if (k) {
+          $('sKinds').innerHTML =
+            '<span class="kind kind-app">📱 APP ' +
+            k.app +
+            '</span>' +
+            '<span class="kind kind-web">🖥 WEB ' +
+            k.web +
+            '</span>' +
+            '<span class="kind kind-cross">🔗 WEB+APP ' +
+            k.cross +
+            '</span>';
+        }
+
+        // Phase order comes from the server, which reads it from matrix-cells.
+        // Hard-coding it here would be a second place for the app-first rule to
+        // live, and therefore a second place for it to drift.
+        const phases = s.phases || [];
+        $('phaseLists').innerHTML = phases
+          .map((p) =>
+            renderPhaseList(
+              p.phase,
+              p.cells,
+              rows.filter((r) => r.kind === p.phase),
+            ),
+          )
+          .join('');
+
+        const started = rows.filter((r) => {
+          const cells = (phases.find((p) => p.phase === r.kind) || { cells: [] }).cells;
+          const mine = cells.map((c) => r.results[c] || 'pending');
+          const runnable = mine.filter((st) => st !== 'na').length;
+          return runnable > 0 && mine.filter((st) => st === 'pending').length < runnable;
+        }).length;
+        $('sSummary').textContent =
+          'Scenario detail — ' + started + ' of ' + rows.length + ' scenarios started';
 
         autoScroll();
       }
@@ -786,6 +988,18 @@
       function render(s) {
         $('state').className = 'badge ' + s.state;
         $('state').textContent = s.state === 'no-run' ? 'no run' : s.state;
+        // Environment under test. Rendered even when unknown — a blank badge
+        // that quietly disappears would leave the operator guessing, which is
+        // the situation this was added to end.
+        const target = s.target || 'unknown';
+        $('env').className = 'badge env env-' + target;
+        $('env').textContent = target === 'unknown' ? 'env ?' : target;
+        $('env').title =
+          target === 'local'
+            ? 'Environment under test: LOCAL — Firebase emulators, LiveKit Docker, nothing shared'
+            : target === 'dev'
+              ? 'Environment under test: DEV — the shared shytalk-dev backend. Results here affect other people.'
+              : 'Environment under test: ' + target;
         $('sub').textContent = s.runId ? `${s.runId} · ${s.runDir}` : 'no gauntlet run found yet';
 
         const c = s.counts || { passed: 0, failed: 0, running: 0, pending: 0, total: 0 };
@@ -795,6 +1009,26 @@
         $('cRun').textContent = c.running;
         $('cStall').textContent = c.stalled || 0;
         $('cScen').textContent = s.scenariosDone || 0;
+
+        // Scenario-level tally, counted from the SAME grid the operator is
+        // looking at — so the number and the crosses can never disagree. Derived
+        // here rather than served separately for exactly that reason.
+        const rows = s.matrix || [];
+        let rPass = 0;
+        let rFail = 0;
+        let rowsWithFail = 0;
+        for (const r of rows) {
+          const sum = r.summary || {};
+          rPass += sum.pass || 0;
+          rFail += sum.fail || 0;
+          if ((sum.fail || 0) > 0) rowsWithFail += 1;
+        }
+        $('rPass').textContent = rPass;
+        $('rFail').textContent = rFail;
+        $('rScen').textContent = rowsWithFail;
+        // Red only when there is something red to report, so a clean run does
+        // not carry a permanently alarming zero.
+        $('rFail').className = rFail > 0 ? 'warnable bad' : 'warnable';
 
         const stalledCells = (s.cells || []).filter((x) => x.state === 'stalled');
         const alert = $('alert');

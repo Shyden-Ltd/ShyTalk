@@ -17283,6 +17283,10 @@ function formatUsage() {
     '  --journey <name>          Run only the named journey (e.g. j01_signin_persona)',
     '  --cycle <n>               Cycle id for run grouping',
     '  --driver <kind>           Driver: stub | playwright | all',
+    '  --phase-gate <mode>       report (default) | stop. Phases run app -> web ->',
+    '                              cross. report runs every phase and names the one',
+    '                              that would have blocked; stop ends at the first',
+    '                              failing phase. Env: GAUNTLET_PHASE_GATE.',
     '  --browser <slug>          Specific cell: chromium | firefox | webkit | edge |',
     '                              mobile-chrome-android | mobile-firefox-android |',
     '                              mobile-edge-android | mobile-samsung-android |',
@@ -17423,6 +17427,10 @@ const PER_CELL_STRIP_FLAGS = new Set([
   '--retry',
   '--shard',
   '--bail-scope',
+  // Matrix-level: a per-cell subprocess runs ONE cell and has no phases to
+  // gate. Leaving it through would have each cell re-read a flag that only
+  // means something to the dispatcher.
+  '--phase-gate',
 ]);
 // Subset of PER_CELL_STRIP_FLAGS that consume the NEXT token as a
 // value. Every flag in PER_CELL_STRIP_FLAGS that is NOT in this set
@@ -17436,6 +17444,7 @@ const PER_CELL_VALUE_FLAGS = new Set([
   '--retry',
   '--shard',
   '--bail-scope',
+  '--phase-gate',
 ]);
 function stripPerCellFlags(sourceArgv) {
   const baseArgv = [];
@@ -17587,12 +17596,12 @@ function applyFilter(cells, filter) {
 // Defaults: target=local (matches the runner's existing default
 // behavior). --browser overrides the allowlist to that single cell.
 function formatDryRunJson(opts = {}) {
-  const { allowedBrowsersFor } = require('./browser-allowlist');
+  const { allowedCellsFor } = require('./matrix-cells');
   const target = opts.target !== undefined ? opts.target : 'local';
   // --browser is an explicit override: operator named the cell directly,
   // regardless of what the target's allowlist contains. This mirrors
   // the runner's existing dispatch behavior.
-  let cells = opts.browser ? [opts.browser] : allowedBrowsersFor(target);
+  let cells = opts.browser ? [opts.browser] : allowedCellsFor(target);
   if (opts.filter !== undefined) cells = applyFilter(cells, opts.filter);
   // --shard applied AFTER --filter so the shard slices the filtered set
   // (e.g. --filter android --shard 1/2 = first half of the android cells).
@@ -17646,6 +17655,10 @@ async function main() {
     else if (flat[i] === '--cycle') opts.cycle = parseInt(flat[++i], 10);
     else if (flat[i] === '--driver') opts.driver = flat[++i];
     else if (flat[i] === '--browser') opts.browser = flat[++i];
+    // --phase-gate report|stop. Default 'report' (run every phase, name the one
+    // that would have blocked) because gauntlet runs are unattended; 'stop' ends
+    // at the first failing phase for when someone is watching.
+    else if (flat[i] === '--phase-gate') opts.phaseGate = flat[++i];
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
     else if (flat[i] === '--parallel') opts.parallel = true;
@@ -17797,19 +17810,29 @@ async function main() {
   // tests can pin the matrix without subprocessing the runner. See that
   // module for the policy rationale (local = full matrix, dev =
   // chrome-on-Mac + chrome-on-Android, prod = chromium-only).
-  const { allowedBrowsersFor } = require('./browser-allowlist');
-  // `let` (not const) because --retry-failed below may filter this
-  // down to only the cells that failed in a previous report.
-  let allowed = allowedBrowsersFor(opts.target);
-  if (!allowed.includes(opts.browser)) {
-    console.error(
-      `--browser "${opts.browser}" is not allowed for --target "${opts.target}" — allowed: ${allowed.join(', ')}. The local matrix (full browser coverage) only applies to --target local; dev + prod stay Chromium-only by policy.`,
-    );
+  // The matrix runs CELLS, not browsers. Most cell slugs are a browser slug —
+  // `chromium` drives chromium — but `app-android` drives the APK with no
+  // browser at all, and `cross-android` drives chromium AND the APK together.
+  // Collapsing the two ideas into one list is what let a browser cell carry an
+  // app driver; see scripts/matrix-cells.js for the full account.
+  const { allowedCellsFor } = require('./matrix-cells');
+
+  // Target FIRST. An unknown target has no cell list, so checking the cell
+  // first reports `--browser "chromium" is not a cell for --target "typo" —
+  // allowed: ` — an empty list blaming the browser for the target's mistake.
+  // Diagnose the actual error, at the level it occurred.
+  if (!TARGETS[opts.target]) {
+    console.error(`Unknown target: ${opts.target}. Valid: ${Object.keys(TARGETS).join(', ')}`);
     process.exit(2);
   }
 
-  if (!TARGETS[opts.target]) {
-    console.error(`Unknown target: ${opts.target}. Valid: ${Object.keys(TARGETS).join(', ')}`);
+  // `let` (not const) because --retry-failed below may filter this
+  // down to only the cells that failed in a previous report.
+  let allowed = allowedCellsFor(opts.target);
+  if (!allowed.includes(opts.browser)) {
+    console.error(
+      `--browser "${opts.browser}" is not a cell for --target "${opts.target}" — allowed: ${allowed.join(', ')}. The local matrix (full browser coverage + both devices) only applies to --target local; dev collapses the browser fan-out to Chrome but keeps both devices; prod is a read-only chromium check.`,
+    );
     process.exit(2);
   }
 
@@ -17957,16 +17980,47 @@ async function main() {
       reportDir: opts.reportDir || null,
       cellLogs,
     });
-    const matrixResult = await runMatrix({
-      ...buildRunMatrixOptions({ allowed, opts }),
-      onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
-      onCellEnd: (cell) =>
-        console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
-      dispatchOne,
+    // Phases, in the order the operator asked for: the app, then the web, then
+    // the seam. ShyTalk is an app with a website attached, so a red app phase
+    // makes a green web phase uninteresting, and cross-over — which needs both
+    // halves working — is meaningless until each half is known good.
+    //
+    // The gate defaults to `report` (run everything, name what would have
+    // blocked) because these runs are unattended; `GAUNTLET_PHASE_GATE=stop`
+    // ends at the first failing phase for when someone is watching.
+    const { runPhases, formatPhaseSummary, aggregatePhaseResults } = require('./matrix-phases');
+    const phased = await runPhases({
+      cells: allowed,
+      gate: opts.phaseGate,
+      onPhase: (p) => {
+        if (p.stage === 'start') {
+          console.log(
+            `\n[phase] ▶ ${p.phase.toUpperCase()} — ${p.cells.length} cell(s): ${p.cells.join(', ')}` +
+              (p.pastRedGate ? '  (running past a red gate)' : ''),
+          );
+        } else if (p.stage === 'end') {
+          console.log(`[phase] ◀ ${p.phase.toUpperCase()}: ${p.outcome}`);
+        }
+      },
+      runPhase: async (phase, phaseCells) => {
+        const result = await runMatrix({
+          ...buildRunMatrixOptions({ allowed: phaseCells, opts }),
+          onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
+          onCellEnd: (cell) =>
+            console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
+          dispatchOne,
+        });
+        console.log(`\n[phase ${phase}]\n` + formatMatrixResult(result));
+        return result;
+      },
     });
+    // One aggregate result, so every downstream consumer (report writers, exit
+    // code) keeps the shape it already understands.
+    const matrixResult = aggregatePhaseResults(phased);
     // Always print the human-readable text table to stdout so the
     // operator gets immediate feedback regardless of --report-format.
     console.log('\n' + formatMatrixResult(matrixResult));
+    console.log(`[gate] ${formatPhaseSummary(phased)}`);
     if (opts.reportDir) {
       console.log(`[matrix] per-cell logs written to ${opts.reportDir}`);
     }
@@ -18029,7 +18083,12 @@ async function main() {
   const liveKitDriver = null;
   const testerDriver = null;
   let driverCleanup = async () => {};
-  if (opts.driver === 'playwright' || opts.driver === 'all') {
+  // Which browser this CELL launches — not the same thing as the cell's name.
+  // `cross-android` launches chromium; `app-android` launches nothing. An
+  // unknown slug (ad-hoc single-cell run) is taken at face value, as before.
+  const { isKnownCell: isCell, browserFor } = require('./matrix-cells');
+  const cellBrowser = isCell(opts.browser) ? browserFor(opts.browser) : opts.browser;
+  if ((opts.driver === 'playwright' || opts.driver === 'all') && cellBrowser !== null) {
     // Driver factory routing inside the playwright/all bucket:
     //   - desktop browsers (chromium/firefox/webkit/edge) → Playwright
     //     direct launch via web-playwright-driver.js
@@ -18041,20 +18100,20 @@ async function main() {
     // ctx.webDriver method namespace, so scenarios don't care which one
     // is active.
     const baseURL = TARGETS[opts.target].webBase || 'http://localhost:8888';
-    if (opts.browser === 'mobile-chrome-android') {
+    if (cellBrowser === 'mobile-chrome-android') {
       const {
         createMobileChromeAndroidDriver,
       } = require('./drivers/web-mobile-chrome-android-driver');
       webDriver = await createMobileChromeAndroidDriver({ baseURL });
-    } else if (opts.browser === 'mobile-samsung-android') {
+    } else if (cellBrowser === 'mobile-samsung-android') {
       const {
         createMobileSamsungAndroidDriver,
       } = require('./drivers/web-mobile-samsung-android-driver');
       webDriver = await createMobileSamsungAndroidDriver({ baseURL });
-    } else if (opts.browser === 'mobile-edge-android') {
+    } else if (cellBrowser === 'mobile-edge-android') {
       const { createMobileEdgeAndroidDriver } = require('./drivers/web-mobile-edge-android-driver');
       webDriver = await createMobileEdgeAndroidDriver({ baseURL });
-    } else if (opts.browser === 'mobile-firefox-android') {
+    } else if (cellBrowser === 'mobile-firefox-android') {
       // Firefox doesn't speak CDP; this driver spawns geckodriver and
       // uses W3C WebDriver over Marionette. See
       // web-mobile-firefox-android-driver.js for the operator setup.
@@ -18062,13 +18121,13 @@ async function main() {
         createMobileFirefoxAndroidDriver,
       } = require('./drivers/web-mobile-firefox-android-driver');
       webDriver = await createMobileFirefoxAndroidDriver({ baseURL });
-    } else if (opts.browser === 'mobile-safari-ios') {
+    } else if (cellBrowser === 'mobile-safari-ios') {
       const { createMobileSafariIosDriver } = require('./drivers/web-mobile-safari-ios-driver');
       webDriver = await createMobileSafariIosDriver({ baseURL });
     } else if (
-      opts.browser === 'mobile-chrome-ios' ||
-      opts.browser === 'mobile-firefox-ios' ||
-      opts.browser === 'mobile-edge-ios'
+      cellBrowser === 'mobile-chrome-ios' ||
+      cellBrowser === 'mobile-firefox-ios' ||
+      cellBrowser === 'mobile-edge-ios'
     ) {
       // Chrome/Firefox/Edge for iOS all use WebKit (App Store policy) so
       // they share a single driver module parameterised by the browser
@@ -18077,14 +18136,14 @@ async function main() {
       const { createMobileWebkitIosDriver } = require('./drivers/web-mobile-webkit-ios-driver');
       // Slug shape is `mobile-<browser>-ios` — strip the prefix/suffix
       // to get the browser key the driver expects ('chrome'|'firefox'|'edge').
-      const browserKey = opts.browser.replace(/^mobile-/, '').replace(/-ios$/, '');
+      const browserKey = cellBrowser.replace(/^mobile-/, '').replace(/-ios$/, '');
       webDriver = await createMobileWebkitIosDriver({ browser: browserKey, baseURL });
     } else {
       const { createWebDriver } = require('./drivers/web-playwright-driver');
       webDriver = await createWebDriver({
         baseURL,
         headless: !opts.headed,
-        browser: opts.browser,
+        browser: cellBrowser,
       });
     }
     const prevCleanup = driverCleanup;
@@ -18093,24 +18152,27 @@ async function main() {
       await webDriver.close();
     };
   }
-  // Which physical device THIS cell owns. `--driver=all` used to attach an
-  // Android driver to every cell, so all 12 cells drove the one phone —
-  // while matrix-dispatch grouped them by browser slug (chromium->mac,
-  // mobile-safari-ios->iphone) and ran them in parallel believing they touched
-  // different hardware. Measured 2026-08-01: two `uiautomator dump` processes
-  // deadlocked on one phone, and because the iOS cell was among those blocked,
-  // it never sent a command to Appium and its session died on the 60s New
-  // Command Timeout. The operator's "I never see the iPhone doing anything"
-  // and "the Android device is thrashing" were the same bug.
+  // Whose NATIVE APP does this cell drive? Asked of the cell registry, which
+  // states it outright, rather than inferred from the hardware the cell happens
+  // to occupy.
   //
-  // A cell with no --browser (a manual single-cell run) keeps the old
-  // attach-everything behaviour; only the matrix, which is where the
-  // contention exists, narrows.
-  const cellDevice = opts.browser
-    ? require('./matrix-dispatch').defaultResourceKey(opts.browser)
-    : null;
-  const mayDriveAndroid = cellDevice === null || cellDevice === 'android';
-  const mayDriveIos = cellDevice === null || cellDevice === 'iphone';
+  // Two rounds of this bug came from inferring it. First `--driver=all` attached
+  // an Android driver to every cell, so all 12 cells drove the one phone; that
+  // was narrowed to "the cell's own device" — which read the answer off
+  // `defaultResourceKey`, and `mobile-chrome-android` legitimately answers
+  // 'android' because Chrome for Android runs ON the phone. So all four Android
+  // BROWSER cells kept the app driver. Measured 2026-08-01: 125 device-scenario
+  // runs needed, 500 performed, 375 of them duplicate `uiautomator dump` calls
+  // contending for one phone. Operator: "why is the browser cell carrying the
+  // android app driver? that doesn't sound correct."
+  //
+  // A cell with no --browser (a manual single-cell run) has no registry entry
+  // and keeps the attach-everything behaviour: there is no matrix and therefore
+  // no contention, and narrowing there would break ad-hoc debugging.
+  const { isKnownCell, appDeviceFor } = require('./matrix-cells');
+  const cellAppDevice = isKnownCell(opts.browser) ? appDeviceFor(opts.browser) : undefined;
+  const mayDriveAndroid = cellAppDevice === undefined || cellAppDevice === 'android';
+  const mayDriveIos = cellAppDevice === undefined || cellAppDevice === 'ios';
   if ((opts.driver === 'adb' || opts.driver === 'all') && mayDriveAndroid) {
     try {
       const { createAndroidDriver } = require('./drivers/android-adb-driver');

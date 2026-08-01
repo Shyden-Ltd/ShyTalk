@@ -176,7 +176,24 @@ describe('--smoke — CLI integration', () => {
     // Invalid target rejected before any driver bootstrap.
     const r = runCli(['--smoke', '--target', 'staging-bogus']);
     expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/Unknown target|not allowed/);
+    expect(r.stderr).toMatch(/Unknown target/);
+  });
+
+  test('an unknown target is blamed on the TARGET, not on the browser', () => {
+    // This assertion used to read /Unknown target|not allowed/, which matched
+    // either message — so when the cell-allowlist check moved ahead of the
+    // target check, the runner started reporting
+    //   --browser "chromium" is not a cell for --target "typo" — allowed:
+    // an EMPTY allowed-list blaming the browser for the target's mistake, and
+    // the loose regex passed it. An alternation across two different diagnoses
+    // cannot tell you which one you got; that is not an assertion, it is a
+    // coin toss that always lands heads.
+    const r = runCli(['--smoke', '--target', 'staging-bogus']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/Unknown target: staging-bogus/);
+    expect(r.stderr).not.toMatch(/is not a cell/);
+    // The valid set is named, so the fix is visible at the point of failure.
+    expect(r.stderr).toMatch(/local/);
   });
 
   test('--smoke without --target uses default (dev) + reports cells via filter', () => {

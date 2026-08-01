@@ -239,20 +239,36 @@ describe('--shard — argument validation', () => {
 // ── --shard composition with --dry-run ──────────────────────────
 
 describe('--shard — composition with --dry-run', () => {
-  test('--dry-run --target local --shard 1/3 → first 4 cells', () => {
-    // local allowlist = 12 cells; shard 1/3 = cells[0:4]
+  test('--dry-run --target local --shard 1/3 → the first third of the matrix', () => {
+    // Derived from the registry, not a literal. This read "12 cells; shard 1/3
+    // = cells[0:4]" — a count that says nothing about WHICH cells, so adding
+    // the app phase silently changed what every shard covered while the
+    // assertion carried on passing on arithmetic alone.
+    const { CELL_SLUGS } = require('../../scripts/matrix-cells');
+    const { shardCells } = require(RUNNER_PATH);
     const r = runCli(['--dry-run', '--target', 'local', '--shard', '1/3']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
-    expect(parsed.cells).toHaveLength(4);
-    expect(parsed.cells[0]).toBe('chromium');
+    expect(parsed.cells).toEqual(shardCells(CELL_SLUGS, 1, 3));
+    expect(parsed.cells[0]).toBe(CELL_SLUGS[0]);
   });
 
-  test('--dry-run --target local --shard 3/3 → last 4 cells', () => {
-    const r = runCli(['--dry-run', '--target', 'local', '--shard', '3/3']);
-    expect(r.status).toBe(0);
-    const parsed = JSON.parse(r.stdout);
-    expect(parsed.cells).toHaveLength(4);
+  test('the three shards PARTITION the matrix — no cell lost, none run twice', () => {
+    // The property that matters. A count-based assertion cannot see a cell
+    // dropped from one shard and duplicated into another; sharding a device
+    // matrix wrongly means either untested coverage or a second cell fighting
+    // for the same phone.
+    // No shardCells here on purpose: this test asserts the PARTITION property
+    // against the runner's real output. Recomputing the expected slices with
+    // the same helper the runner uses would make it agree with itself.
+    const { CELL_SLUGS } = require('../../scripts/matrix-cells');
+    const shards = [1, 2, 3].map((i) => {
+      const r = runCli(['--dry-run', '--target', 'local', '--shard', `${i}/3`]);
+      expect(r.status).toBe(0);
+      return JSON.parse(r.stdout).cells;
+    });
+    expect(shards.flat()).toEqual(CELL_SLUGS);
+    expect(new Set(shards.flat()).size).toBe(CELL_SLUGS.length);
   });
 
   test('--dry-run --target prod --shard 1/3 → chromium only (single cell)', () => {
@@ -273,20 +289,41 @@ describe('--shard — composition with --dry-run', () => {
 
 describe('--shard — composition with --filter', () => {
   test('--filter applied FIRST, then --shard (intersection)', () => {
-    // --filter android gives 4 android cells; --shard 1/2 of those = first 2.
+    // "android" now matches six cells, not four: the four phone-browser cells
+    // plus app-android and cross-android, which is the point — filtering to the
+    // Android device should include the cells that actually drive its app.
+    const { CELL_SLUGS } = require('../../scripts/matrix-cells');
+    const { shardCells } = require(RUNNER_PATH);
+    const androidCells = CELL_SLUGS.filter((c) => c.includes('android'));
     const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android', '--shard', '1/2']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
-    expect(parsed.cells).toHaveLength(2);
+    expect(parsed.cells).toEqual(shardCells(androidCells, 1, 2));
     expect(parsed.cells.every((c) => c.includes('android'))).toBe(true);
   });
 
   test('--filter + --shard 2/2 → other half of filtered set', () => {
+    const { CELL_SLUGS } = require('../../scripts/matrix-cells');
+    const { shardCells } = require(RUNNER_PATH);
+    const androidCells = CELL_SLUGS.filter((c) => c.includes('android'));
     const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android', '--shard', '2/2']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
-    expect(parsed.cells).toHaveLength(2);
+    expect(parsed.cells).toEqual(shardCells(androidCells, 2, 2));
     expect(parsed.cells.every((c) => c.includes('android'))).toBe(true);
+  });
+
+  test('--filter android includes the cells that drive the Android APP', () => {
+    // The regression this file could not previously see. Under the old matrix
+    // "android" meant "the four mobile browser slugs", and those four each
+    // carried the app driver — so filtering to android happened to test the app
+    // four times. Now the app is its own cell and must be in the filtered set.
+    const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android']);
+    expect(r.status).toBe(0);
+    const cells = JSON.parse(r.stdout).cells;
+    expect(cells).toContain('app-android');
+    expect(cells).toContain('cross-android');
+    expect(cells).not.toContain('app-ios');
   });
 });
 
@@ -309,10 +346,12 @@ describe('--shard — composition with --matrix', () => {
     // Companion to the [shard] log test: --dry-run gives a JSON view
     // of the post-shard cells. Asserting on the JSON decouples the
     // cell-name check from the log-line wording.
+    const { CELL_SLUGS } = require('../../scripts/matrix-cells');
+    const { shardCells } = require(RUNNER_PATH);
     const r = runCli(['--dry-run', '--target', 'local', '--shard', '1/12']);
     expect(r.status).toBe(0);
     const parsed = JSON.parse(r.stdout);
-    expect(parsed.cells).toEqual(['chromium']);
+    expect(parsed.cells).toEqual(shardCells(CELL_SLUGS, 1, 12));
   });
 
   test('--matrix --shard with empty result → exits 0 "nothing to run"', () => {
