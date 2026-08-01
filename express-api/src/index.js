@@ -236,6 +236,8 @@ app.use('/api', portalRoutes);
 app.use('/api', require('./routes/config'));
 app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/economy'));
+// SHY-0267 — scheduled events with a roster of performers.
+app.use('/api', require('./routes/events'));
 app.use('/api', require('./routes/apple-notifications'));
 app.use('/api', require('./routes/livekit'));
 app.use('/api', require('./routes/reports'));
