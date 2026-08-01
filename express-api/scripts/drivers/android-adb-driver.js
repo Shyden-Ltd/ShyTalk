@@ -40,6 +40,7 @@ const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
 const { withDeviceLock } = require('./device-lock');
 const { resolveAdbPath } = require('./android-cdp-helpers');
 const { quoteAdbArgs, deviceShellArg } = require('./device-shell');
+const { createSurfaceBreaker } = require('./surface-circuit-breaker');
 const { createSubmitClock } = require('./render-timing');
 const { execBounds, describeExecFailure, DEFAULT_ADB_TIMEOUT_MS } = require('./device-io-timeout');
 const {
@@ -302,17 +303,34 @@ async function createAndroidDriver({ serial: preferred } = {}) {
    */
   const ADB_PATH = resolveAdbPath();
 
+  // Once the phone is provably gone — unplugged, adb server dead, USB
+  // re-enumerated — every remaining call costs its full timeout for nothing.
+  // The breaker abandons the cell with an attributable cause instead.
+  const surfaceBreaker = createSurfaceBreaker({ label: `android ${serial}` });
+  driver._surfaceBreaker = surfaceBreaker;
+
   function adb(args, { timeoutMs = DEFAULT_ADB_TIMEOUT_MS } = {}) {
+    if (surfaceBreaker.isOpen()) {
+      // Synchronous by necessity: adb() is called from sync code paths, so
+      // the breaker's async run() cannot wrap it. The check is the same.
+      throw new Error(
+        `[android ${serial}] surface is unreachable — ${surfaceBreaker.consecutiveFailures()} consecutive transport failures. Remaining work on this cell is abandoned rather than retried against a dead device.`,
+      );
+    }
     // Only the words after `shell` reach the device shell — see device-shell.js.
     const argv = quoteAdbArgs(args);
     try {
-      return execFileSync(ADB_PATH, ['-s', serial, ...argv], execBounds({ timeoutMs }));
+      const out = execFileSync(ADB_PATH, ['-s', serial, ...argv], execBounds({ timeoutMs }));
+      surfaceBreaker.recordSuccess();
+      return out;
     } catch (e) {
-      throw describeExecFailure(e, {
+      const described = describeExecFailure(e, {
         label: `android-driver ${serial}`,
         command: `adb ${args.join(' ')}`,
         timeoutMs,
       });
+      surfaceBreaker.recordFailure(described);
+      throw described;
     }
   }
   driver.adb = adb;

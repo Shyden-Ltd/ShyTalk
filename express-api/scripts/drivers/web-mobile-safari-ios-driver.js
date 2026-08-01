@@ -43,6 +43,7 @@
 
 const path = require('path');
 const { boundedFetch, SESSION_TIMEOUT_MS } = require('./device-io-timeout');
+const { createSurfaceBreaker } = require('./surface-circuit-breaker');
 
 // Reuse ios-appium-driver's selectUdid (already pinned in its tests).
 // This driver and that one share the same device-selection logic so
@@ -83,7 +84,13 @@ async function createMobileSafariIosDriver({
   // BOUNDED — see device-io-timeout.js. Appium calls here carried no
   // timeout, and Node's fetch waits forever, so a dead WebDriverAgent
   // session hung this cell until the two-hour cell timeout.
-  const fetchImpl = boundedFetch(rawFetch, { label: 'mobile-safari-ios' });
+  // Bounded AND breakered. The bound stops one call hanging forever; the
+  // breaker stops the CELL grinding through hundreds of 30-second timeouts
+  // once the surface is provably gone. Run 20260801-113726-local did exactly
+  // that after Appium destroyed the session.
+  const surfaceBreaker = createSurfaceBreaker({ label: 'mobile-safari-ios' });
+  const boundedRawFetch = boundedFetch(rawFetch, { label: 'mobile-safari-ios' });
+  const fetchImpl = (url, init) => surfaceBreaker.run(() => boundedRawFetch(url, init));
   // Cheap env validation FIRST, device probe second: a no-device
   // environment (CI, phone unplugged) must surface the missing env var,
   // not a misleading "no physical iPhone" for what is a config gap —
@@ -114,6 +121,18 @@ async function createMobileSafariIosDriver({
       capabilities: {
         alwaysMatch: {
           platformName: 'iOS',
+          // Appium DESTROYS a session after `newCommandTimeout` seconds with
+          // no command, and the default is SIXTY. A journey scenario routinely
+          // spends longer than that between device calls — it seeds Firestore,
+          // calls the API, waits on assertions — so the session was being
+          // killed mid-scenario through no fault of the device, and every call
+          // afterwards failed. Measured on run 20260801-113726-local: the iOS
+          // cell spent the rest of the run timing out at 30s per call against
+          // a session that no longer existed.
+          //
+          // 0 means "never expire": the cell owns the device for the whole
+          // run, and the driver's close() is what should end the session.
+          'appium:newCommandTimeout': 0,
           'appium:automationName': 'XCUITest',
           'appium:udid': udid,
           // No bundleId — instead use the magic `browserName` cap that

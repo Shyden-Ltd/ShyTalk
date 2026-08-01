@@ -51,6 +51,7 @@ const HELPER_FILES = new Set([
   'render-timing.js', // SHY-0259: submit→render clock, shared by both device drivers
   'device-io-timeout.js', // SHY-0259: I/O bounds shared by every device driver
   'device-shell.js', // SHY-0259: device-shell quoting; pure, so it is unit-testable without a phone
+  'surface-circuit-breaker.js', // SHY-0259: stops a cell grinding on a dead surface
 ]);
 
 function discoverDrivers() {

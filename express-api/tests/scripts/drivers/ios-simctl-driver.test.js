@@ -1,5 +1,33 @@
 jest.mock('child_process');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+
+/**
+ * The driver calls `execFileSync(file, argv)` — no shell (SHY-0259).
+ *
+ * These tests were written against a command STRING. The adapter derives that
+ * string from the REAL argv rather than modelling it, so an assertion still
+ * describes what actually runs. The binary path is normalised to its basename:
+ * where xcrun lives is an implementation detail, and pinning an absolute path
+ * would break on a different Xcode layout.
+ */
+const asCommand = (file, args) => [String(file).split('/').pop(), ...(args || [])].join(' ');
+
+const execSync = {
+  mockImplementation: (responder) =>
+    execFileSync.mockImplementation((file, args, opts) => responder(asCommand(file, args), opts)),
+  mockImplementationOnce: (responder) =>
+    execFileSync.mockImplementationOnce((file, args, opts) =>
+      responder(asCommand(file, args), opts),
+    ),
+  mockReturnValue: (v) => execFileSync.mockReturnValue(v),
+  mockReturnValueOnce: (v) => execFileSync.mockReturnValueOnce(v),
+  mockClear: () => execFileSync.mockClear(),
+  get mock() {
+    return {
+      calls: execFileSync.mock.calls.map((c) => [asCommand(c[0], c[1]), c[2]]),
+    };
+  },
+};
 
 const {
   createIosDriver,
@@ -23,7 +51,7 @@ describe('ios-simctl-driver — selectUdid', () => {
     execSync.mockReturnValueOnce('');
     const result = selectUdid('00000000-0000-0000-0000-000000000000');
     expect(result).toBe('00000000-0000-0000-0000-000000000000');
-    expect(execSync).toHaveBeenCalledTimes(1);
+    expect(execFileSync).toHaveBeenCalledTimes(1);
   });
 
   test('returns null when execSync throws even if preferred UDID is passed', () => {
@@ -88,7 +116,7 @@ describe('ios-simctl-driver — selectUdid', () => {
     // Even with preferred UDID, simctl is still called (selectUdid in this
     // module evaluates the booted list first then chooses preferred over
     // discovered) — pin the contract.
-    expect(execSync).toHaveBeenCalledTimes(1);
+    expect(execFileSync).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -386,10 +414,15 @@ describe('ios-simctl-driver — XCUI IPC methods', () => {
       await driver.iosTap('submit-btn');
       // The first execSync call after factory is the cmd-write; assert
       // payload was written.
-      const writeCmd = execSync.mock.calls[1][0];
+      // SHY-0259: the payload now goes in on STDIN instead of being embedded
+      // in a bash heredoc. That removes the hand-escaping of quotes — which
+      // was both an injection surface and a corruption risk for any payload
+      // containing one — so the assertion reads the input, not the command.
+      const [writeCmd, writeOpts] = execSync.mock.calls[1];
       expect(writeCmd).toContain('/tmp/qa-cmd.jsonl');
-      expect(writeCmd).toContain('"op":"tap"');
-      expect(writeCmd).toContain('"id":"submit-btn"');
+      const writePayload = String(writeOpts && writeOpts.input);
+      expect(writePayload).toContain('"op":"tap"');
+      expect(writePayload).toContain('"id":"submit-btn"');
     });
   });
 
@@ -408,10 +441,11 @@ describe('ios-simctl-driver — XCUI IPC methods', () => {
       const driver = await createIosDriver();
       queueXcuiCycle('{"ok":true}');
       await driver.iosTypeText('input-field', 'hello world');
-      const writeCmd = execSync.mock.calls[1][0];
-      expect(writeCmd).toContain('"op":"type"');
-      expect(writeCmd).toContain('"id":"input-field"');
-      expect(writeCmd).toContain('"text":"hello world"');
+      const [, writeOpts] = execSync.mock.calls[1];
+      const writePayload = String(writeOpts && writeOpts.input);
+      expect(writePayload).toContain('"op":"type"');
+      expect(writePayload).toContain('"id":"input-field"');
+      expect(writePayload).toContain('"text":"hello world"');
     });
 
     test('returns true on {ok: true} response', async () => {
@@ -449,9 +483,10 @@ describe('ios-simctl-driver — XCUI IPC methods', () => {
       const driver = await createIosDriver();
       queueXcuiCycle('{"ok":true,"data":"true"}');
       await driver.iosShowsText('hello');
-      const writeCmd = execSync.mock.calls[1][0];
-      expect(writeCmd).toContain('"op":"shows_text"');
-      expect(writeCmd).toContain('"text":"hello"');
+      const [, writeOpts] = execSync.mock.calls[1];
+      const writePayload = String(writeOpts && writeOpts.input);
+      expect(writePayload).toContain('"op":"shows_text"');
+      expect(writePayload).toContain('"text":"hello"');
     });
   });
 
@@ -475,9 +510,10 @@ describe('ios-simctl-driver — XCUI IPC methods', () => {
       const driver = await createIosDriver();
       queueXcuiCycle('{"ok":true,"data":"snap"}');
       await driver.iosUiDump();
-      const writeCmd = execSync.mock.calls[1][0];
-      expect(writeCmd).toContain('"op":"dump"');
-      expect(writeCmd).toContain('"id":"ui"');
+      const [, writeOpts] = execSync.mock.calls[1];
+      const writePayload = String(writeOpts && writeOpts.input);
+      expect(writePayload).toContain('"op":"dump"');
+      expect(writePayload).toContain('"id":"ui"');
     });
   });
 });
@@ -584,8 +620,13 @@ describe('ios-simctl-driver — simctl helper', () => {
     const driver = await createIosDriver();
     execSync.mockReturnValueOnce('output');
     driver.simctl(['list', 'devices', 'booted']);
-    const cmd = execSync.mock.calls[1][0];
-    expect(cmd).toBe("'xcrun' 'simctl' 'list' 'devices' 'booted'");
+    // SHY-0259: the single-quoting this used to assert existed ONLY to
+    // survive a host shell. There is no host shell now — execFileSync passes
+    // an argument array — so the args arrive verbatim and quoting them would
+    // make simctl look for a device literally named `'booted'`.
+    const [file, args] = execFileSync.mock.calls[1];
+    expect(String(file)).toMatch(/xcrun$/);
+    expect(args).toEqual(['simctl', 'list', 'devices', 'booted']);
   });
 
   test('returns stdout from execSync', async () => {

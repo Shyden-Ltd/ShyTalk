@@ -40,6 +40,8 @@
 const fs = require('fs');
 const net = require('net');
 const { spawn } = require('child_process');
+const { boundedFetch } = require('./device-io-timeout');
+const { createSurfaceBreaker } = require('./surface-circuit-breaker');
 
 const FIREFOX_ANDROID_PACKAGE = 'org.mozilla.firefox';
 const FIREFOX_ANDROID_ACTIVITY = 'org.mozilla.fenix.IntentReceiverActivity';
@@ -134,10 +136,19 @@ async function createMobileFirefoxAndroidDriver({
   baseURL = 'http://localhost:8888',
   geckodriverPath,
   spawnImpl = spawn,
-  fetchImpl = globalThis.fetch,
+  fetchImpl: rawFetch = globalThis.fetch,
   pickPort = () => pickFreePort(),
   waitForReady = waitForGeckodriverReady,
 } = {}) {
+  // BOUNDED + BREAKERED. geckodriver speaks HTTP exactly as Appium does, and
+  // this driver was MISSED in the first pass of the I/O-bound fix — an
+  // unbounded fetch here hangs a cell just as effectively. The meta-test in
+  // tests/unit/device-io-bounds-are-universal.unit.test.js exists so the next
+  // HTTP-speaking driver cannot be missed the same way.
+  const surfaceBreaker = createSurfaceBreaker({ label: 'mobile-firefox-android' });
+  const boundedRawFetch = boundedFetch(rawFetch, { label: 'mobile-firefox-android' });
+  const fetchImpl = (url, init) => surfaceBreaker.run(() => boundedRawFetch(url, init));
+
   const gecko = geckodriverPath || resolveGeckodriverPath();
   const port = await pickPort();
 

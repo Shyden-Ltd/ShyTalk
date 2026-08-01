@@ -166,6 +166,15 @@ async function createMobileSamsungAndroidDriver({
   };
 
   // SHY-0259 second pass: the shared web surface, on this driver's own page.
+  // A closed CDP page raises "Target page, context or browser has been
+  // closed" on EVERY subsequent call. Without a breaker the cell keeps
+  // asking — observed on run 20260801-113726-local, which spent the rest
+  // of its life re-proving a dead connection was dead.
+  const surfaceBreaker = require('./surface-circuit-breaker').createSurfaceBreaker({
+    label: 'mobile-samsung-android',
+  });
+  driver._surfaceBreaker = surfaceBreaker;
+
   require('./web-common-methods').attachCommonWebMethods(driver, {
     slug: 'mobile-samsung-android',
     baseURL,
@@ -174,10 +183,11 @@ async function createMobileSamsungAndroidDriver({
       await page.goto(String(u), { waitUntil: 'domcontentloaded' });
       return true;
     },
-    evaluate: async (src, arg) => {
-      const page = await pageFor('default');
-      return page.evaluate(new Function('return (' + src + ')')(), arg);
-    },
+    evaluate: async (src, arg) =>
+      surfaceBreaker.run(async () => {
+        const page = await pageFor('default');
+        return page.evaluate(new Function('return (' + src + ')')(), arg);
+      }),
   });
 
   return driver;

@@ -647,7 +647,15 @@ describe('createMobileFirefoxAndroidDriver — takeScreenshot delegation', () =>
       // Geckodriver listens on 127.0.0.1:<chosenPort>; we forced 4444 above.
       expect(args.appiumBaseUrl).toBe('http://127.0.0.1:4444');
       expect(args.sessionId).toBe('sess-ff-789');
-      expect(args.fetchImpl).toBe(fetchImpl);
+      // Not identity: the driver now wraps every geckodriver call in a
+      // timeout AND a circuit breaker (SHY-0259), and the screenshot path
+      // must inherit both — an unbounded screenshot hangs the cell just as
+      // effectively as an unbounded source dump. What matters is that the
+      // INJECTED fetch is the one ultimately called.
+      expect(typeof args.fetchImpl).toBe('function');
+      fetchImpl.mockClear();
+      await args.fetchImpl('http://127.0.0.1:4444/status');
+      expect(fetchImpl).toHaveBeenCalled();
       expect(args.outputDir).toBe('/tmp/firefox-report');
       expect(args.slug).toBe('mobile-firefox-android');
       expect(result).toEqual(['/mock/firefox.png']);

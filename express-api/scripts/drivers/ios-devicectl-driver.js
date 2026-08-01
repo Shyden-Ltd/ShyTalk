@@ -1,6 +1,7 @@
-/* eslint-disable sonarjs/no-os-command-from-path -- `xcrun` is the
-   Xcode command-line dispatcher; resolving via PATH is the standard
-   macOS pattern. Operator-installed; not user input. */
+/* The `sonarjs/no-os-command-from-path` suppression that used to sit here is
+   gone, and its absence is the point: every call now goes through
+   `execFileSync('/usr/bin/xcrun', argv)` — absolute path, no PATH search, no
+   shell. The rule stopped firing because the condition disappeared. */
 /**
  * iOS driver backed by `xcrun devicectl` — physical iPhone target.
  *
@@ -43,14 +44,22 @@
  *   - Foundation methods will land via subsequent PRs as
  *     `<feature>_*` testTag presence-checks against `iosUiDump()`.
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { execBounds } = require('./device-io-timeout');
+const { createSurfaceBreaker } = require('./surface-circuit-breaker');
 
 function selectUdid(preferredUdid) {
   if (preferredUdid) return preferredUdid;
   try {
-    const raw = execSync('xcrun devicectl list devices 2>/dev/null', {
-      encoding: 'utf8',
-    });
+    // Bounded + shell-free. `2>/dev/null` was shell redirection; stderr is
+    // discarded through stdio instead. Unbounded, a stale usbmuxd tunnel
+    // hangs driver construction before any scenario runs.
+    const raw = String(
+      execFileSync('/usr/bin/xcrun', ['devicectl', 'list', 'devices'], {
+        ...execBounds(),
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    );
     // devicectl output (Xcode 15+ / macOS 14+) emits the device list as
     // a fixed-width table:
     //   Name            Hostname                        Identifier                             State                Model
@@ -926,6 +935,10 @@ async function createIosDriver({ udid: preferred } = {}) {
 
     return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
   };
+
+  // Breakered to the same standard as every other device driver: once the
+  // device is provably gone, stop re-proving it.
+  driver._surfaceBreaker = createSurfaceBreaker({ label: `devicectl ${udid}` });
 
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */

@@ -1,5 +1,33 @@
 jest.mock('child_process');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+
+/**
+ * The driver calls `execFileSync(file, argv)` — no shell (SHY-0259).
+ *
+ * These tests were written against a command STRING. The adapter derives that
+ * string from the REAL argv rather than modelling it, so an assertion still
+ * describes what actually runs. The binary path is normalised to its basename:
+ * where xcrun lives is an implementation detail, and pinning an absolute path
+ * would break on a different Xcode layout.
+ */
+const asCommand = (file, args) => [String(file).split('/').pop(), ...(args || [])].join(' ');
+
+const execSync = {
+  mockImplementation: (responder) =>
+    execFileSync.mockImplementation((file, args, opts) => responder(asCommand(file, args), opts)),
+  mockImplementationOnce: (responder) =>
+    execFileSync.mockImplementationOnce((file, args, opts) =>
+      responder(asCommand(file, args), opts),
+    ),
+  mockReturnValue: (v) => execFileSync.mockReturnValue(v),
+  mockReturnValueOnce: (v) => execFileSync.mockReturnValueOnce(v),
+  mockClear: () => execFileSync.mockClear(),
+  get mock() {
+    return {
+      calls: execFileSync.mock.calls.map((c) => [asCommand(c[0], c[1]), c[2]]),
+    };
+  },
+};
 
 const {
   createIosDriver,
@@ -16,7 +44,7 @@ describe('ios-devicectl-driver — selectUdid', () => {
   test('honours preferred UDID without invoking devicectl', () => {
     const result = selectUdid('00008110-001A2B3C4D5E6F70');
     expect(result).toBe('00008110-001A2B3C4D5E6F70');
-    expect(execSync).not.toHaveBeenCalled();
+    expect(execFileSync).not.toHaveBeenCalled();
   });
 
   test('extracts UDID — legacy 8-16 format with "connected" state', () => {
@@ -109,7 +137,7 @@ describe('ios-devicectl-driver — createIosDriver factory', () => {
   test('honours preferred UDID without listing devices', async () => {
     const driver = await createIosDriver({ udid: 'PREFERRED-UDID-123' });
     expect(driver._udid).toBe('PREFERRED-UDID-123');
-    expect(execSync).not.toHaveBeenCalled();
+    expect(execFileSync).not.toHaveBeenCalled();
   });
 
   test('uses first connected device when no UDID preferred', async () => {

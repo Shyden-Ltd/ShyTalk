@@ -1,8 +1,9 @@
 /* eslint-disable no-console -- driver methods log diagnostics for the
    manual QA runner (operator-facing CLI), not application code. */
-/* eslint-disable sonarjs/no-os-command-from-path -- `xcrun` is the
-   Xcode command-line dispatcher; resolving via PATH is the standard
-   macOS pattern. Operator-installed; not user input. */
+/* The `sonarjs/no-os-command-from-path` suppression that used to sit here is
+   gone, and its absence is the point: every call now goes through
+   `execFileSync('/usr/bin/xcrun', argv)` — absolute path, no PATH search, no
+   shell. The rule stopped firing because the condition disappeared. */
 /**
  * iOS driver backed by `xcrun simctl`.
  *
@@ -30,12 +31,16 @@
  * UI interaction return false + log; methods that only need openurl
  * (e.g., navigate to a deep-link path) get real implementations now.
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+const { execBounds, describeExecFailure } = require('./device-io-timeout');
+const { createSurfaceBreaker } = require('./surface-circuit-breaker');
 
 function selectUdid(preferredUdid) {
   let raw;
   try {
-    raw = execSync('xcrun simctl list devices booted', { encoding: 'utf8' });
+    // Bounded + shell-free. Unbounded, a wedged CoreSimulator service hangs
+    // driver construction before a single scenario runs.
+    raw = execFileSync('/usr/bin/xcrun', ['simctl', 'list', 'devices', 'booted'], execBounds());
   } catch (_e) {
     return null;
   }
@@ -124,9 +129,33 @@ async function createIosDriver({ udid: preferred } = {}) {
   }
   const driver = { _udid: udid };
 
+  // Bounded + breakered + shell-free, to the same standard as the adb driver.
+  // Nothing loads this driver today, but an unbounded shell-string exec is a
+  // trap left armed for whoever wires it back in.
+  const surfaceBreaker = createSurfaceBreaker({ label: `simctl ${udid}` });
+  driver._surfaceBreaker = surfaceBreaker;
+
   function simctl(args) {
-    const cmd = ['xcrun', 'simctl', ...args].map((a) => `'${a}'`).join(' ');
-    return execSync(cmd, { encoding: 'utf8' });
+    if (surfaceBreaker.isOpen()) {
+      throw new Error(
+        `[simctl ${udid}] surface is unreachable — ${surfaceBreaker.consecutiveFailures()} consecutive transport failures; remaining work is abandoned rather than retried.`,
+      );
+    }
+    try {
+      // execFileSync + argument array: no shell, so the udid and any other
+      // value cannot be interpreted as shell syntax.
+      const out = execFileSync('/usr/bin/xcrun', ['simctl', ...args.map(String)], execBounds());
+      surfaceBreaker.recordSuccess();
+      return out;
+    } catch (e) {
+      const described = describeExecFailure(e, {
+        label: `simctl ${udid}`,
+        command: `xcrun simctl ${args.join(' ')}`,
+        timeoutMs: execBounds().timeout,
+      });
+      surfaceBreaker.recordFailure(described);
+      throw described;
+    }
   }
   driver.simctl = simctl;
 
@@ -152,9 +181,14 @@ async function createIosDriver({ udid: preferred } = {}) {
   // use UI navigation" rather than a generic openurl failure.
   driver.iosOpenScreen = async (screen) => {
     try {
-      const out = execSync(`xcrun simctl openurl '${udid}' 'shytalk://${screen}' 2>&1`, {
-        encoding: 'utf8',
-      });
+      // `2>&1` was shell redirection; stderr is captured directly instead so
+      // no shell is needed and the udid cannot be interpreted as syntax.
+      const out = String(
+        execFileSync('/usr/bin/xcrun', ['simctl', 'openurl', udid, `shytalk://${screen}`], {
+          ...execBounds(),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        }),
+      );
       if (/error 115|failed to open/i.test(out)) {
         console.error(
           `[ios-driver] iosOpenScreen(${screen}): shytalk:// scheme is not registered in Info.plist; ` +
@@ -191,9 +225,15 @@ async function createIosDriver({ udid: preferred } = {}) {
     const json = JSON.stringify(payload);
     // Write command file inside the simulator.
     try {
-      execSync(
-        `xcrun simctl spawn '${udid}' sh -c "cat > /tmp/qa-cmd.jsonl" <<<'${json.replace(/'/g, "'\\''")}'`,
-        { encoding: 'utf8', shell: '/bin/bash' },
+      // The payload goes in on STDIN rather than through a bash heredoc, so
+      // no host shell is involved and the JSON needs no escaping at all — the
+      // previous form hand-escaped quotes into a `<<<` string, which is both
+      // an injection surface and a corruption risk for any payload containing
+      // a quote.
+      execFileSync(
+        '/usr/bin/xcrun',
+        ['simctl', 'spawn', udid, 'sh', '-c', 'cat > /tmp/qa-cmd.jsonl'],
+        { ...execBounds(), input: json },
       );
     } catch (e) {
       console.error(`[ios-driver] failed to write qa-cmd.jsonl: ${e.message}`);
@@ -203,15 +243,22 @@ async function createIosDriver({ udid: preferred } = {}) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       try {
-        const out = execSync(
-          `xcrun simctl spawn '${udid}' sh -c "cat /tmp/qa-result.jsonl 2>/dev/null"`,
-          { encoding: 'utf8' },
+        const out = String(
+          execFileSync(
+            '/usr/bin/xcrun',
+            ['simctl', 'spawn', udid, 'sh', '-c', 'cat /tmp/qa-result.jsonl 2>/dev/null'],
+            execBounds(),
+          ),
         ).trim();
         if (out) {
           // Clear the result file so the next command's poll doesn't
           // see this one's payload again.
           try {
-            execSync(`xcrun simctl spawn '${udid}' sh -c "rm -f /tmp/qa-result.jsonl"`);
+            execFileSync(
+              '/usr/bin/xcrun',
+              ['simctl', 'spawn', udid, 'sh', '-c', 'rm -f /tmp/qa-result.jsonl'],
+              execBounds(),
+            );
           } catch (_) {
             /* ignore */
           }
