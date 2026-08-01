@@ -41,6 +41,12 @@ const HELPER_FILES = new Set([
   'ios-driver-loader.js',
   'driver-screenshot-helper.js',
   'ui-dump-retry.js', // SHY-0154: pure retry helper for androidUiDump — not a driver
+  // SHY-0259: pure helpers extracted so their logic can be tested without a
+  // device. They deliberately export functions, not a driver factory — the
+  // whole point of extracting them was to make them callable in isolation.
+  'device-lock.js', // cross-process device mutex
+  'ui-dump-query.js', // uiautomator dump queries
+  'ios-element-query.js', // XCUITest locator construction
 ]);
 
 function discoverDrivers() {

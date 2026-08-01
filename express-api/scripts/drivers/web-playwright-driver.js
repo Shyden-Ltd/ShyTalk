@@ -1584,45 +1584,55 @@ async function createWebDriver({
   };
 
   // ── fault injection ────────────────────────────────────────────────────
-  // Real route interception, so the app meets a genuine failure rather than a
-  // flag it was told to respect.
+  //
+  // Deliberately NOT request interception. Interception can fabricate a response, and
+  // a fabricated 500 is a mock however it is framed — the repo bans doubles
+  // outside unit tests, and the no-new-stubs ratchet correctly flagged an
+  // earlier version of this block that used route.fulfill().
+  //
+  // What is left induces the REAL condition through CDP network emulation, so
+  // the app meets genuine latency and a genuine dropped connection rather than
+  // a scripted reply it was told to believe.
 
-  driver.injectApiLatency = async (ms, urlFragment = '/api/') => {
+  driver.injectApiLatency = async (ms) => {
     const page = await pageFor('default');
-    await page.route(`**${urlFragment}**`, async (route) => {
-      await new Promise((r) => setTimeout(r, Number(ms) || 0));
-      await route.continue();
-    });
-    return true;
+    try {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Network.emulateNetworkConditions', {
+        offline: false,
+        latency: Number(ms) || 0,
+        downloadThroughput: -1,
+        uploadThroughput: -1,
+      });
+      return { supported: true, applied: true };
+    } catch (e) {
+      return {
+        supported: false,
+        applied: false,
+        why: `network emulation needs a CDP session (Chromium only): ${e.message}`,
+      };
+    }
   };
 
-  driver.injectApiFailureThenSuccess = async (urlFragment = '/api/', failStatus = 500) => {
-    const page = await pageFor('default');
-    let failed = false;
-    await page.route(`**${urlFragment}**`, async (route) => {
-      if (!failed) {
-        failed = true;
-        await route.fulfill({ status: Number(failStatus), body: '{"error":"injected"}' });
-        return;
-      }
-      await route.continue();
-    });
-    return true;
+  // A real drop: the connection genuinely fails, then genuinely recovers.
+  driver.simulateNetworkDropBeforeResponse = async (ms = 500) => {
+    const offline = await driver.webSetNetwork('offline');
+    if (!offline.supported) return offline;
+    await new Promise((r) => setTimeout(r, Number(ms) || 0));
+    await driver.webSetNetwork('online');
+    return { supported: true, applied: true };
   };
 
-  driver.simulateNetworkDropBeforeResponse = async (urlFragment = '/api/') => {
-    const page = await pageFor('default');
-    let dropped = false;
-    await page.route(`**${urlFragment}**`, async (route) => {
-      if (!dropped) {
-        dropped = true;
-        await route.abort('internetdisconnected');
-        return;
-      }
-      await route.continue();
-    });
-    return true;
-  };
+  // A server ERROR cannot be induced from the client without fabricating one,
+  // so this reports rather than pretends. The honest way to test 500-then-
+  // recover is a fault endpoint on the API itself; until that exists, a
+  // scenario relying on this is skipped with a reason instead of passing
+  // against a response the test wrote itself.
+  driver.injectApiFailureThenSuccess = async () => ({
+    supported: false,
+    applied: false,
+    why: 'a synthetic 5xx would be a fabricated response, not an induced failure; add a fault-injection endpoint to the API to test this for real',
+  });
 
   return driver;
 }
