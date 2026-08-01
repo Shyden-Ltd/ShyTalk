@@ -33,6 +33,7 @@ const { effectiveCohort, cohortFromClaim } = require('../utils/firebase-claims')
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 // `viewerIsBlocked` is already imported below with checkBlockRelationship.
 const { filterListByCohort } = require('../utils/cohort-filter');
+const { recordEventGift } = require('../utils/event-ledger');
 const log = require('../utils/log');
 const { verifyProductPurchase, verifySubscription } = require('../utils/playStore');
 const { verifyApplePurchase } = require('../utils/appleStore');
@@ -910,6 +911,18 @@ router.post('/economy/gift', async (req, res) => {
     // Room message if sender is in a room
     const currentRoomId = userField(sender, 'currentRoomId', 'current_room_id');
     if (currentRoomId) {
+      // If that room belongs to an EVENT, the gift is recorded against the
+      // performer who is on the seat right now rather than against whoever owns
+      // the room (SHY-0267). A no-op for ordinary rooms, and it never throws:
+      // the coins have already moved, and a ledger failure must not undo a gift
+      // that was paid for.
+      await recordEventGift({
+        roomId: currentRoomId,
+        senderId: uniqueId,
+        giftId,
+        coinValue: coinValue * quantity,
+        beanReward,
+      });
       const sName = userField(sender, 'displayName', 'display_name') || 'Someone';
       const rName = userField(recipient, 'displayName', 'display_name') || 'Someone';
       const qtyLabel = quantity > 1 ? `${quantity}x ` : '';

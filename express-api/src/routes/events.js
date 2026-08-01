@@ -22,6 +22,7 @@ const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
+const { summariseEvent } = require('../utils/event-ledger');
 const log = require('../utils/log');
 
 /** Only an event host may schedule. The userType is the product's own gate. */
@@ -465,6 +466,32 @@ router.post('/events/:eventId/demote', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     log.error('events', 'demote failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * The event's running totals.
+ *
+ * Readable by the host and by anyone on the roster. A performer's earnings are
+ * theirs; hiding the summary from them would make the split unverifiable by the
+ * person it pays.
+ */
+router.get('/events/:eventId/summary', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const snap = await db.doc(`events/${req.params.eventId}`).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Event not found' });
+
+    const event = snap.data();
+    if (event.hostId !== uniqueId && !(event.roster || []).includes(uniqueId)) {
+      return res.status(403).json({ error: 'Not your event' });
+    }
+
+    const summary = await summariseEvent(req.params.eventId);
+    res.json({ summary });
+  } catch (err) {
+    log.error('events', 'GET /events/:eventId/summary failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
