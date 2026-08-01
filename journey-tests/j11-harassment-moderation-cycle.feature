@@ -30,17 +30,17 @@ Feature: j11 — Full harassment moderation lifecycle
 
   @blocker @android-physical @ios-sim
   Scenario: Raul sends "offensive content #1" — message persisted, Nora's thread shows it
-    When Raul on Android sends "offensive content #1" to Nora
+    When Raul on the app sends "offensive content #1" to Nora
     Then within 3000ms the database has 1 entries in "messages" matching {senderId: 50000050, body: "offensive content #1"}
-    Then within 3000ms Nora's iOS Sim UI shows the message in the conversation thread
+    Then within 3000ms Nora's app UI shows the message in the conversation thread
 
   @blocker @ios-sim
   Scenario: Nora reports the offensive message with reason "Harassment"
     Given Raul has sent Nora "offensive content #1"
-    When Nora on iOS Sim long-presses the offensive message and taps "Report"
-    When Nora on iOS Sim selects reason "Harassment" and confirms
+    When Nora on the app long-presses the offensive message and taps "Report"
+    When Nora on the app selects reason "Harassment" and confirms
     Then within 3000ms the database has 1 entries in "reports" matching {reporterId: 50000051, reportedId: 50000050, reason: "Harassment"}
-    Then within 3000ms Nora's iOS Sim UI shows "Report submitted" toast
+    Then within 3000ms Nora's app UI shows "Report submitted" toast
 
   @blocker @browser-chromium
   Scenario: Greta sees Nora's report appear in the admin reports queue
@@ -61,14 +61,14 @@ Feature: j11 — Full harassment moderation lifecycle
   Scenario: Officia sends Nora a "moderation_action_taken" notice confirming the warning
     Given Greta has issued a warning to Raul on Nora's report
     Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 50000051, key: "moderation_action_taken"}
-    Then within 5000ms Nora's iOS Sim UI shows the system PM from Officia "Action taken on your report"
+    Then within 5000ms Nora's app UI shows the system PM from Officia "Action taken on your report"
 
   @blocker @android-physical
   Scenario: Raul's relaunched app shows the warning screen with the warning reason
     Given Raul has been issued a first-strike warning
-    When Raul on Android kills and relaunches the app
-    Then within 5000ms Raul's Android UI shows the warning screen with reason "First-strike harassment"
-    Then Raul's Android UI does not show "main_roomsTab"
+    When Raul on the app kills and relaunches the app
+    Then within 5000ms Raul's app UI shows the warning screen with reason "First-strike harassment"
+    Then Raul's app UI does not show "main_roomsTab"
 
   # KNOWN FAILURE — SHY-0097: warning-acknowledge does a client Firestore write
   # to the rules-protected `hasActiveWarning` field → DENIED → the flag never
@@ -78,9 +78,9 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker @android-physical @known-failure-SHY-0097
   Scenario: Raul acknowledges the warning — flag clears, rooms tab returns
     Given Raul is on the warning screen
-    When Raul on Android taps "warning_acknowledgeButton"
+    When Raul on the app taps "warning_acknowledgeButton"
     Then within 3000ms the database has document "users/50000050" with field "hasActiveWarning" equal to false
-    Then within 3000ms Raul's Android UI shows the element with tag "main_roomsTab"
+    Then within 3000ms Raul's app UI shows the element with tag "main_roomsTab"
 
   # ────────── Act 2: Re-offense → suspend ──────────
 
@@ -117,10 +117,10 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker @android-physical
   Scenario: Raul's Android shows the suspension screen with reason, end date, and appeal button
     Given Raul has been suspended for 3 days for "Repeat harassment"
-    Then within 5000ms Raul's Android UI shows the suspension screen
-    Then Raul's Android UI shows reason "Repeat harassment"
-    Then Raul's Android UI shows an end date 3 days from now
-    Then Raul's Android UI shows the appeal button
+    Then within 5000ms Raul's app UI shows the suspension screen
+    Then Raul's app UI shows reason "Repeat harassment"
+    Then Raul's app UI shows an end date 3 days from now
+    Then Raul's app UI shows the appeal button
 
   @blocker
   Scenario: Suspended Raul cannot create conversations or LiveKit tokens (403 on both)
@@ -135,10 +135,10 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker @android-physical
   Scenario: Raul submits an appeal from the suspension screen
     Given Raul is on the suspension screen with the appeal button visible
-    When Raul on Android types "I think this was a misunderstanding" into the appeal field
-    When Raul on Android taps "suspension_submitAppealButton"
+    When Raul on the app types "I think this was a misunderstanding" into the appeal field
+    When Raul on the app taps "suspension_submitAppealButton"
     Then within 3000ms the database has 1 entries in "suspensionAppeals" matching {userId: 50000050, text: "I think this was a misunderstanding"}
-    Then Raul's Android UI shows "Appeal submitted" + appeal status "pending"
+    Then Raul's app UI shows "Appeal submitted" + appeal status "pending"
 
   @blocker @browser-chromium
   Scenario: Greta reviews and lifts Raul's suspension via the appeals tab
@@ -153,18 +153,18 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker @android-physical @ios-sim
   Scenario: Raul force-refreshes and regains access; Officia confirms restoration to Nora
     Given Greta has lifted Raul's suspension
-    When Raul on Android force-refreshes the JWT
-    Then within 5000ms Raul's Android UI shows the element with tag "main_roomsTab"
-    Then Raul's Android UI no longer shows the suspension screen
+    When Raul on the app force-refreshes the JWT
+    Then within 5000ms Raul's app UI shows the element with tag "main_roomsTab"
+    Then Raul's app UI no longer shows the suspension screen
     Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 50000051, key: "moderation_user_restored"}
 
   @android-physical
   Scenario: Raul attempts to send a message while suspended — 403 + clear UI
     Given Raul is suspended until 2 days from now
-    When Raul on Android opens his conversation with Nora
-    Then Raul's Android UI shows "You are suspended — appeal to continue" banner
-    Then Raul's Android UI disables the message input
-    When Raul on Android attempts POST /api/messages
+    When Raul on the app opens his conversation with Nora
+    Then Raul's app UI shows "You are suspended — appeal to continue" banner
+    Then Raul's app UI disables the message input
+    When Raul on the app attempts POST /api/messages
     Then the response status is 403
 
   @ios-sim

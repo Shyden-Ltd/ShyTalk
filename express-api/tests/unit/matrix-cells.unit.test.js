@@ -48,7 +48,11 @@ const {
   isKnownCell,
 } = require('../../scripts/matrix-cells');
 const { readCorpus } = require('../../scripts/scenario-progress');
-const { requiredPlatforms, GATING_PLATFORMS } = require('../../scripts/scenario-surface');
+const {
+  requiredPlatforms,
+  GATING_PLATFORMS,
+  canRunScenario,
+} = require('../../scripts/scenario-surface');
 
 const JOURNEY_DIR = path.resolve(__dirname, '../../../journey-tests');
 
@@ -447,10 +451,15 @@ describe('cross-all — the 67 scenarios nothing could run', () => {
     expect(triPlatform.length).toBeGreaterThan(50);
 
     // Every one of them can now run somewhere.
+    //
+    // Asked through the REAL gate rather than by re-checking `caps.has(p)` here:
+    // the corpus's neutral `on the app` form is satisfied by EITHER phone, and a
+    // set-membership test cannot know that. A test carrying its own copy of the
+    // rule passes while the rule itself is wrong — which is how this assertion
+    // started failing the moment the corpus learned to say "on the app".
     const caps = new Set(capsFor('cross-all'));
     for (const s of triPlatform) {
-      const required = [...reqPlatforms(s.steps)].filter((p) => GATING_PLATFORMS.has(p));
-      expect(required.every((p) => caps.has(p))).toBe(true);
+      expect(canRunScenario(reqPlatforms(s.steps), caps).ok).toBe(true);
     }
   });
 

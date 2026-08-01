@@ -16,7 +16,7 @@ Feature: j05 — Alice's monetization day
     Given the local stack is healthy
     Given the device locale is "en"
     Given Alice [P-02] is signed in on Web Chromium with shyCoins=5000, beans=2000, gcs=100
-    Given Selma [P-15] is signed in on Android (the MC who receives the gift)
+    Given Selma [P-15] is signed in on the app (the MC who receives the gift)
     Given the package "coins-1000" exists with coinValue=1000 and price="$9.99"
     Given the gift "rose" costs 10 coins and awards 5 beans
     Given the gift "crown" costs 500 coins and awards 250 beans
@@ -64,14 +64,14 @@ Feature: j05 — Alice's monetization day
     Then the database has 1 entries in "users/50000080/transactions" matching {type: "GIFT_RECEIVED", amount: 250, giftId: "crown"}
     Then the database has 1 entries in "giftWalls/50000080/gifts" matching {giftId: "crown", senderId: 50000010}
 
-  @android-physical
+  @android-physical @ios-physical
   Scenario: Selma's Android shows the in-app gift notification and gift wall entry for the crown
     Given Alice has just sent Selma a crown
-    Then within 5000ms Selma's Android UI shows the in-app gift notification with sender "Alice" and gift "crown"
-    When Selma on Android opens her "gift_wall" screen
-    Then within 3000ms Selma's Android UI shows the new "crown" gift entry
+    Then within 5000ms Selma's app UI shows the in-app gift notification with sender "Alice" and gift "crown"
+    When Selma on the app opens her "gift_wall" screen
+    Then within 3000ms Selma's app UI shows the new "crown" gift entry
 
-  @manual @android-physical
+  @manual @android-physical @ios-physical
   Scenario: Selma's Android receives an FCM push for the crown gift
     Given Alice has just sent Selma a crown
     Then the tester sees an FCM push notification on Selma's Android device with body containing "Alice" and "crown"
@@ -92,9 +92,9 @@ Feature: j05 — Alice's monetization day
     Then the database has document "users/50000010" with field "shyCoins" equal to 6000 (only one credit)
     Then the database has 1 entries in "users/50000010/transactions" matching {productId: "coins-1000", receipt: "receipt-X"}
 
-  @android-physical
+  @android-physical @ios-physical
   Scenario: Alice on a 2nd device sees coins update in real-time
-    Given Alice is signed in on Web Chromium AND on Android physical with the same Firebase user
+    Given Alice is signed in on Web Chromium AND on the app physical with the same Firebase user
     Given Alice has shyCoins=5000
     When Alice on Web purchases "coins-1000" with sandbox receipt
-    Then within 3000ms Alice's Android UI shows "6,000" next to the ShyCoins icon (real-time Firestore listener)
+    Then within 3000ms Alice's app UI shows "6,000" next to the ShyCoins icon (real-time Firestore listener)

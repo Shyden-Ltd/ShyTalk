@@ -79,10 +79,33 @@ function platformOf(name) {
  */
 function referencedMethods(runnerSrc = fs.readFileSync(RUNNER_FILE, 'utf8')) {
   const byNamespace = {};
-  for (const m of runnerSrc.matchAll(/ctx\.([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)/g)) {
+  // COMMENTS ARE NOT REFERENCES. A doc comment explaining that matchers "used
+  // to reach for ctx.uiDriver.androidX" made the scanner demand a method called
+  // `androidX` — a name no driver will ever have, reported as a coverage gap.
+  // Prose about the code is not the code.
+  const code = runnerSrc
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      return !(t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'));
+    })
+    .join('\n');
+
+  for (const m of code.matchAll(/ctx\.([A-Za-z0-9_]+)\??\.([A-Za-z0-9_]+)/g)) {
     const [, ns, name] = m;
     if (!/^(uiDriver|webDriver|firebaseAdmin)$/.test(ns)) continue;
     (byNamespace[ns] = byNamespace[ns] || new Set()).add(name);
+  }
+
+  // `appMethod(ctx, 'TapUserCard')` is the platform-NEUTRAL call the matchers
+  // now make so a step can run on either phone. It is satisfied by whichever
+  // prefix the attached driver carries, so it is recorded under both — an
+  // Android-only implementation would leave the iPhone unable to run the step,
+  // which is the gap this whole report exists to surface.
+  for (const m of code.matchAll(/\bappMethod\(\s*ctx\s*,\s*'([A-Za-z0-9_]+)'\s*\)/g)) {
+    const set = (byNamespace.uiDriver = byNamespace.uiDriver || new Set());
+    set.add(`android${m[1]}`);
+    set.add(`ios${m[1]}`);
   }
   return byNamespace;
 }
@@ -113,6 +136,15 @@ function definedMethods(file) {
   if (src.includes('attachCommonWebMethods') && file !== 'web-common-methods.js') {
     for (const n of definedMethods('web-common-methods.js')) names.add(n);
   }
+  // Same for the shared APP surface. Both device drivers register it in a loop
+  // (`driver[`ios${name}`] = impl`), which no `driver.x =` scan can see — so
+  // without this every shared method reads as missing on both phones.
+  if (src.includes('createSharedAppMethods(')) {
+    const prefix = file.startsWith('ios') ? 'ios' : 'android';
+    for (const n of require('./drivers/app-ui-methods').SHARED_METHOD_NAMES) {
+      names.add(`${prefix}${n}`);
+    }
+  }
   return names;
 }
 
@@ -128,7 +160,9 @@ function definedMethods(file) {
 function declaredButUnimplemented(file) {
   const src = fs.readFileSync(path.join(DRIVERS_DIR, file), 'utf8');
   const declared = new Set();
-  for (const block of src.matchAll(/const\s+\w*METHOD_NAMES\s*=\s*\[([\s\S]*?)\];/g)) {
+  for (const block of src.matchAll(
+    /const\s+\w*METHOD_NAMES\s*=\s*\[([\s\S]*?)\n\](?:\.sort\(\))?;/g,
+  )) {
     for (const m of block[1].matchAll(/'([A-Za-z0-9_]+)'/g)) declared.add(m[1]);
   }
   const defined = definedMethods(file);

@@ -15,8 +15,8 @@ Feature: j08 — Vexa's cross-cohort probing
 
   Background:
     Given the local stack is healthy
-    Given Vexa [P-07] is signed in on Web Chromium AND on Android (same Firebase user)
-    Given Marcus [P-04] is signed in on Android at the "discovery" screen
+    Given Vexa [P-07] is signed in on Web Chromium AND on the app (same Firebase user)
+    Given Marcus [P-04] is signed in on the app at the "discovery" screen
     Given Vexa has no prior interactions with Marcus
 
   # The original 31-step "Vexa probes every cross-cohort surface from Web"
@@ -81,28 +81,28 @@ Feature: j08 — Vexa's cross-cohort probing
     Then no FCM payload is sent to Marcus's tokens
     Then the dispatcher audit log records "skipped" with reason "cohort_mismatch"
 
-  @blocker @android-physical @cross-cohort
+  @blocker @android-physical @ios-physical @cross-cohort
   Scenario: Marcus's device never sees a signal from any of Vexa's probing attempts
     Given Vexa has made all 9 cross-cohort probing attempts above
-    Then Marcus's Android UI does not show any in-app banner from Vexa
-    Then Marcus's Android UI does not show any new follower notification
+    Then Marcus's app UI does not show any in-app banner from Vexa
+    Then Marcus's app UI does not show any new follower notification
     Then the database has document "users/60000010" with field "followerIds" not containing 50000040
 
-  @blocker @android-physical @cross-cohort
+  @blocker @android-physical @ios-physical @cross-cohort
   Scenario: Same probes from Vexa's Android — parity with Web (no platform-specific gap)
-    Given Vexa is signed in on Android (same Firebase identity as Web)
-    When Vexa on Android searches "Marcus" in discovery
-    Then Vexa's Android UI shows "No results found"
-    When Vexa on Android attempts profile deep-link "/profile/60000010"
-    Then Vexa's Android UI shows "User not found"
-    When Vexa on Android attempts to follow Marcus via the profile screen (via deep-link error path)
+    Given Vexa is signed in on the app (same Firebase identity as Web)
+    When Vexa on the app searches "Marcus" in discovery
+    Then Vexa's app UI shows "No results found"
+    When Vexa on the app attempts profile deep-link "/profile/60000010"
+    Then Vexa's app UI shows "User not found"
+    When Vexa on the app attempts to follow Marcus via the profile screen (via deep-link error path)
     Then the request returns status 404
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
 
   @blocker @cross-cohort
   Scenario: Reverse direction — Marcus (minor) probing Vexa (adult) — same wall
-    When Marcus on Android searches "Vexa" in discovery
-    Then Marcus's Android UI shows "No results found"
+    When Marcus on the app searches "Vexa" in discovery
+    Then Marcus's app UI shows "No results found"
     When POST /api/users/follow with targetUniqueId=50000040 as Marcus
     Then the response status is 404
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 60000010, targetUniqueId: 50000040}
@@ -120,7 +120,7 @@ Feature: j08 — Vexa's cross-cohort probing
   @blocker @regression @cross-cohort osa17-pr9-p2p-coin
   Scenario: Cross-cohort P2P coin transfer is refused with no balance movement
     Given Vexa on Web has shyCoins=1000
-    Given Marcus on Android has shyCoins=10
+    Given Marcus on the app has shyCoins=10
     When Vexa on Web POSTs /api/economy/transfer-coins with recipient=60000010 and amount=100
     Then the response status is 404
     Then the database has document "users/50000040" with field "shyCoins" equal to 1000
@@ -137,7 +137,7 @@ Feature: j08 — Vexa's cross-cohort probing
   Scenario: Pre-OSA cross-cohort conversation is frozen and renders banner on both ends
     Given a conversation "c1" exists with participantIds=[50000040, 60000010] created before the OSA migration
     Given the conversation doc "conversations/c1" has field "frozenAtMigration" equal to true (set by migration)
-    Given Vexa on Web locale=en, Marcus on Android locale=en
+    Given Vexa on Web locale=en, Marcus on the app locale=en
     When Vexa on Web opens "/conversations/c1"
     Then within 3000ms Vexa's Web UI shows the frozen-banner element with text from key "age_seg_frozen_conversation_banner"
     Then Vexa's Web UI does not show the message-input field
@@ -145,13 +145,13 @@ Feature: j08 — Vexa's cross-cohort probing
     When Vexa on Web attempts POST /api/conversations/c1/messages with body {"text": "hello"}
     Then the response status is 403
     Then no document is created in "conversations/c1/messages"
-    Then within 3000ms Marcus's Android UI opens conversation "c1" shows the frozen-banner element with text from key "age_seg_frozen_conversation_banner"
-    Then Marcus's Android UI does not show the message-input field
+    Then within 3000ms Marcus's app UI opens conversation "c1" shows the frozen-banner element with text from key "age_seg_frozen_conversation_banner"
+    Then Marcus's app UI does not show the message-input field
 
   @regression @cross-cohort osa17-pr8-frozen-banner-locale
   Scenario: Frozen banner renders in recipient locale (Japanese)
     Given the conversation "c2" between Hayato (post-flip minor, locale=ja) and Alice (adult, locale=en) is frozen
-    When Hayato on Android opens "/conversations/c2"
-    Then within 3000ms Hayato's Android UI shows the frozen-banner element with the Japanese age_seg_frozen_conversation_banner string
+    When Hayato on the app opens "/conversations/c2"
+    Then within 3000ms Hayato's app UI shows the frozen-banner element with the Japanese age_seg_frozen_conversation_banner string
     When Alice on Web opens "/conversations/c2"
     Then within 3000ms Alice's Web UI shows the frozen-banner element with the English age_seg_frozen_conversation_banner string

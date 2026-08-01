@@ -41,16 +41,16 @@ Feature: j14 — Ines on Slow 3G + intermittent loss
     When Ines on Web restores the network to "Slow 3G"
     Then within 10000ms Ines's Web UI shows the message with "sent" indicator
     Then within 15000ms the database has 1 entries in "messages" matching {senderId: 50000061, body: "queued message"}
-    Then Theo's Android UI shows the message in the conversation
+    Then Theo's app UI shows the message in the conversation
 
   @ios-sim
   Scenario: Voice room reconnection after network drop
-    Given Ines [P-11] is on iOS Sim joined to voice room "r1" with mic open
+    Given Ines [P-11] is on the app joined to voice room "r1" with mic open
     When Ines's iOS Sim network drops for 10 seconds
-    Then within 5000ms Ines's iOS Sim UI shows a "Reconnecting..." banner
-    Then Ines's iOS Sim UI is still in the room (does not navigate away)
+    Then within 5000ms Ines's app UI shows a "Reconnecting..." banner
+    Then Ines's app UI is still in the room (does not navigate away)
     When Ines's iOS Sim network restores
-    Then within 10000ms Ines's iOS Sim UI shows the room normally (no banner)
+    Then within 10000ms Ines's app UI shows the room normally (no banner)
     Then within 10000ms Ines's LiveKit track for room "r1" is republished
 
   @browser-chromium
@@ -70,10 +70,10 @@ Feature: j14 — Ines on Slow 3G + intermittent loss
     Then the network log shows 3 attempts to /api/economy/balance
 
   @ios-sim
-  Scenario: 30% packet loss on iOS Sim — voice room audio is still intelligible (@manual)
-    Given Ines is on iOS Sim joined to room "r1" seated with mic open
+  Scenario: 30% packet loss on the app — voice room audio is still intelligible (@manual)
+    Given Ines is on the app joined to room "r1" seated with mic open
     Given Network Link Conditioner injects 30% packet loss
     @manual
     Then the tester hears Ines's audio with occasional dropouts but recognizable speech
-    Then Ines's iOS Sim UI shows a "Poor connection" indicator
+    Then Ines's app UI shows a "Poor connection" indicator
     Then within 15000ms Ines's LiveKit track is not disconnected (does not drop below the reconnect threshold)

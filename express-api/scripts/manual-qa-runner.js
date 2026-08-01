@@ -87,6 +87,45 @@ const TARGETS = {
  * caller path so CodeQL's data-flow analysis doesn't trace
  * `process.env[...]` (sensitive source) into any console.error site.
  */
+/**
+ * Resolve an app-driver method by its UNPREFIXED name.
+ *
+ * WHY. Every matcher used to reach for `ctx.uiDriver.androidX` by name, so a
+ * step could only ever run on the phone whose prefix was hard-coded — which is
+ * why 87 scenarios said "on Android" and the iPhone ran none of them. The
+ * corpus now says "on the app" and this decides which phone that means: the one
+ * the cell actually attached.
+ *
+ * Order is deliberate. `app*` first (the neutral surface), then the platform
+ * prefixes. In a cell holding BOTH phones the Android driver wins for a neutral
+ * step, and full two-phone coverage comes from the dedicated app-android and
+ * app-ios cells rather than from running one step twice.
+ *
+ * Returns undefined when nothing implements it, so the caller's existing
+ * "not configured" guard still fires and still names what is missing.
+ */
+function appMethod(ctx, name) {
+  const d = ctx && ctx.uiDriver;
+  if (!d) return undefined;
+  return d[`app${name}`] || d[`android${name}`] || d[`ios${name}`];
+}
+
+/**
+ * Normalise a captured platform phrase to its canonical name.
+ *
+ * "the app" / "app" mean whichever phone this cell owns, so they resolve to the
+ * attached driver's platform rather than to a fixed one. A handler branching on
+ * `=== 'Android'` keeps working unchanged.
+ */
+function canonicalPlatform(captured, ctx) {
+  const raw = String(captured || '').trim();
+  if (raw !== 'the app' && raw !== 'app') return raw;
+  const d = ctx && ctx.uiDriver;
+  if (d && typeof d.androidUiDump === 'function') return 'Android';
+  if (d && typeof d.iosUiDump === 'function') return 'iOS Sim';
+  return 'Android';
+}
+
 function readFirebaseApiKey(target) {
   const cfg = TARGETS[target];
   if (!cfg) return undefined;
@@ -1490,7 +1529,7 @@ const matchers = [
     //      ctx.sessions[name] so downstream API/Firestore-admin steps
     //      use the correct identity. This is the same path the catch-
     //      all does.
-    //   2. Device-side: ctx.uiDriver.androidPersonaSignIn — drives the
+    //   2. Device-side: appMethod(ctx, 'PersonaSignIn') — drives the
     //      app through the persona picker (visible on local + dev per
     //      PR #882), waits for main_roomsTab, then taps the requested
     //      tab. Without this, the device's app sits on the sign-in
@@ -1503,7 +1542,7 @@ const matchers = [
     // warning is logged to stderr so the operator notices the missing
     // device-side context.
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on Android physical at the "([^"]+)" tab$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (?:the app|Android) physical at the "([^"]+)" tab$/,
     async handler(m, ctx) {
       const name = m[1];
       const personaId = m[2];
@@ -1557,16 +1596,16 @@ const matchers = [
       // a warning to stderr but still return ok so REST-only assertions
       // pass; the downstream UI-action steps will surface their own
       // "ctx.uiDriver not configured" finding cleanly.
-      if (!ctx.uiDriver?.androidPersonaSignIn) {
+      if (!appMethod(ctx, 'PersonaSignIn')) {
         console.error(
-          `[runner] "${name} is signed in on Android physical at ${tab} tab" — server-side sign-in done but no androidPersonaSignIn driver; device APP not driven through picker. Wire --driver adb (or --driver all) to enable.`,
+          `[runner] "${name} is signed in on (?:the app|Android physical) at ${tab} tab" — server-side sign-in done but no androidPersonaSignIn driver; device APP not driven through picker. Wire --driver adb (or --driver all) to enable.`,
         );
         return { ok: true };
       }
       try {
         // Pass ctx.target as the 3rd arg so the driver picks the right
         // applicationIdSuffix (local → .local, dev → .dev, prod → bare).
-        await ctx.uiDriver.androidPersonaSignIn(personaId, tab, ctx.target);
+        await appMethod(ctx, 'PersonaSignIn')(personaId, tab, ctx.target);
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e.message };
@@ -1592,7 +1631,7 @@ const matchers = [
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in on\s+(\w+(?:\s+\w+){0,2})\s+with device locale\s+([a-z]{2}(?:-[A-Z]{2})?)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const locale = m[4];
       const personas = loadPersonas();
       const p = personas.get(name);
@@ -1773,16 +1812,11 @@ const matchers = [
       // requires it) + the "on Android" platform + driver presence, so web /
       // iOS / driver-less runs are unaffected. (operator 2026-06-14: fill the
       // gaps, remove the fakes — [[feedback-no-stubs-mocks-fakes-real-only]].)
-      if (
-        m[2] &&
-        /\bon Android\b/.test(m[0]) &&
-        ctx.uiDriver &&
-        ctx.uiDriver.androidPersonaSignIn
-      ) {
+      if (m[2] && /\bon Android\b/.test(m[0]) && ctx.uiDriver && appMethod(ctx, 'PersonaSignIn')) {
         const tabMatch = m[0].match(/at the "([^"]+)" (?:screen|tab)/);
         const tab = tabMatch ? tabMatch[1] : 'rooms';
         try {
-          const signedIn = await ctx.uiDriver.androidPersonaSignIn(m[2], tab, ctx.target);
+          const signedIn = await appMethod(ctx, 'PersonaSignIn')(m[2], tab, ctx.target);
           if (signedIn === false) {
             return {
               ok: false,
@@ -2755,7 +2789,7 @@ const matchers = [
     // "Android" in the step text is descriptive — JWTs are platform-agnostic.
     // The runner doesn't enforce that the persona is on Android.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android JWT custom claim "([^"]+)" equals "([^"]+)"$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android) JWT custom claim "([^"]+)" equals "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
       const claim = m[3];
@@ -2845,7 +2879,7 @@ const matchers = [
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on\s+(\w+(?:\s+\w+){0,2})\s+with the app installed but no Firebase session$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       ctx.sessions.delete(name);
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       ctx.personaPlatforms.set(name, platform);
@@ -2872,7 +2906,7 @@ const matchers = [
     async handler(m, ctx) {
       const name = m[1];
       const personaId = m[2];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const locale = m[4];
       const expectedUid = parseInt(m[5], 10);
       const personas = loadPersonas();
@@ -2939,7 +2973,7 @@ const matchers = [
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on\s+(\w+(?:\s+\w+){0,2})\s+with Chrome DevTools network throttling set to\s+"([^"]+)"(?:\s+\([^)]*\))?$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const throttle = m[4];
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       ctx.personaPlatforms.set(name, platform);
@@ -2963,7 +2997,7 @@ const matchers = [
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on\s+(\w+(?:\s+\w+){0,2})\s+at\s+"([^"]+)"(?:\s+with no Firebase session)?$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const urlPath = m[4];
       const clearSession = m[0].endsWith('with no Firebase session');
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
@@ -3122,7 +3156,7 @@ const matchers = [
     pattern:
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (\w+(?:\s+\w+){0,2}) UI shows the element with tag "([^"]+)"$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const tag = m[4];
       if (!ctx.uiDriver) {
         return {
@@ -3131,10 +3165,13 @@ const matchers = [
         };
       }
       if (platform.startsWith('Android')) {
-        if (!ctx.uiDriver.androidUiDump) {
-          return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+        if (!appMethod(ctx, 'UiDump')) {
+          return {
+            ok: false,
+            error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+          };
         }
-        const dump = await ctx.uiDriver.androidUiDump();
+        const dump = await appMethod(ctx, 'UiDump')();
         const shortMatch = dump.includes(`resource-id="${tag}"`);
         const qualifiedMatch = dump.includes(`:id/${tag}"`);
         if (!shortMatch && !qualifiedMatch) {
@@ -3177,7 +3214,7 @@ const matchers = [
     pattern:
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (\w+(?:\s+\w+){0,2}) UI does not show the element with tag "([^"]+)"$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const tag = m[4];
       if (!ctx.uiDriver) {
         return {
@@ -3186,10 +3223,13 @@ const matchers = [
         };
       }
       if (platform.startsWith('Android')) {
-        if (!ctx.uiDriver.androidUiDump) {
-          return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+        if (!appMethod(ctx, 'UiDump')) {
+          return {
+            ok: false,
+            error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+          };
         }
-        const dump = await ctx.uiDriver.androidUiDump();
+        const dump = await appMethod(ctx, 'UiDump')();
         const shortMatch = dump.includes(`resource-id="${tag}"`);
         const qualifiedMatch = dump.includes(`:id/${tag}"`);
         if (shortMatch || qualifiedMatch) {
@@ -3226,7 +3266,7 @@ const matchers = [
   {
     // Android tap on element with the given resource-id tag. Reads the UI
     // dump, locates the element's bounds=`[x1,y1][x2,y2]` attribute,
-    // computes the centre, and calls ctx.uiDriver.androidTap(x, y).
+    // computes the centre, and calls appMethod(ctx, 'Tap')(x, y).
     //
     // Tag matching accepts the same short OR fully-qualified shapes as
     // the "shows the element with tag" matcher above. Bounds extraction
@@ -3242,7 +3282,7 @@ const matchers = [
     // (Pre-2026-06-01 the local entry point was the `dev_sign_in`
     // button, which has since been removed; aliases now point straight
     // at `persona_picker_open`.)
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+taps "([^"]+)"$/,
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+taps "([^"]+)"$/,
     async handler(m, ctx) {
       const rawTag = m[3];
       const ANDROID_LOCAL_TAG_ALIASES = {
@@ -3262,13 +3302,13 @@ const matchers = [
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (tag=${tag})` };
       }
-      if (!ctx.uiDriver.androidUiDump || !ctx.uiDriver.androidTap) {
+      if (!appMethod(ctx, 'UiDump') || !appMethod(ctx, 'Tap')) {
         return {
           ok: false,
           error: 'ctx.uiDriver requires both androidUiDump and androidTap',
         };
       }
-      const dump = await ctx.uiDriver.androidUiDump();
+      const dump = await appMethod(ctx, 'UiDump')();
       // Find the node by resource-id (short OR fully-qualified), capturing
       // the bounds attribute on the SAME node. The element opens with `<node`
       // and the resource-id appears as an attribute; bounds is also an
@@ -3296,7 +3336,7 @@ const matchers = [
       const y2 = parseInt(match[4] || match[8], 10);
       const cx = Math.floor((x1 + x2) / 2);
       const cy = Math.floor((y1 + y2) / 2);
-      await ctx.uiDriver.androidTap(cx, cy);
+      await appMethod(ctx, 'Tap')(cx, cy);
       return { ok: true };
     },
   },
@@ -3305,26 +3345,27 @@ const matchers = [
     // Locates the field's bounds, taps the centre to focus, then dispatches
     // text via androidTypeText. Tap-then-type ordering is load-bearing —
     // adb's `input text` writes to whichever element has IME focus.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+types "([^"]+)" into "([^"]+)"$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+types "([^"]+)" into "([^"]+)"$/,
     async handler(m, ctx) {
       const text = m[3];
       const tag = m[4];
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (tag=${tag})` };
       }
-      if (!ctx.uiDriver.androidUiDump || !ctx.uiDriver.androidTap) {
+      if (!appMethod(ctx, 'UiDump') || !appMethod(ctx, 'Tap')) {
         return {
           ok: false,
           error: 'ctx.uiDriver requires both androidUiDump and androidTap',
         };
       }
-      if (!ctx.uiDriver.androidTypeText) {
+      if (!appMethod(ctx, 'TypeText')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidTypeText not configured',
+          error: `the app driver has no TypeText (looked for appTypeText / androidTypeText / iosTypeText)`,
         };
       }
-      const dump = await ctx.uiDriver.androidUiDump();
+      const dump = await appMethod(ctx, 'UiDump')();
       const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       // Bidirectional regex: bounds may precede or follow resource-id on the
       // same <node>. Same shape as the tap matcher — see comment above for
@@ -3349,8 +3390,8 @@ const matchers = [
       const y2 = parseInt(match[4] || match[8], 10);
       const cx = Math.floor((x1 + x2) / 2);
       const cy = Math.floor((y1 + y2) / 2);
-      await ctx.uiDriver.androidTap(cx, cy);
-      await ctx.uiDriver.androidTypeText(text);
+      await appMethod(ctx, 'Tap')(cx, cy);
+      await appMethod(ctx, 'TypeText')(text);
       return { ok: true };
     },
   },
@@ -3370,16 +3411,19 @@ const matchers = [
     // nested quantifiers. Input is author-controlled (feature files), not
     // untrusted user data. Safe.
     // eslint-disable-next-line sonarjs/slow-regex
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android UI shows "([^"]+)"(?:\s+.+)?$/,
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android) UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (expected text=${expected})` };
       }
-      if (!ctx.uiDriver.androidUiDump) {
-        return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+      if (!appMethod(ctx, 'UiDump')) {
+        return {
+          ok: false,
+          error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+        };
       }
-      const dump = await ctx.uiDriver.androidUiDump();
+      const dump = await appMethod(ctx, 'UiDump')();
       // Look for exact attribute value on EITHER text= or content-desc=.
       // String.includes with the full attribute fragment is sufficient — no
       // regex needed because the test author's text is opaque to attribute
@@ -3396,12 +3440,12 @@ const matchers = [
     },
   },
   {
-    // Android navigation. Thin matcher — delegates to ctx.uiDriver.androidOpenScreen(name).
+    // Android navigation. Thin matcher — delegates to appMethod(ctx, 'OpenScreen')(name).
     // Accepts both "screen" and "tab" as the noun because the corpus uses
     // them interchangeably (pm/rooms tab vs discovery/wallet screen).
     // Driver implementation chooses between adb deeplink and UI-tap nav.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+opens (?:the|his|her|their) "([^"]+)" (?:screen|tab)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+opens (?:the|his|her|their) "([^"]+)" (?:screen|tab)$/,
     async handler(m, ctx) {
       const screenName = m[3];
       if (!ctx.uiDriver) {
@@ -3410,13 +3454,13 @@ const matchers = [
           error: `UI step requires ctx.uiDriver (screen=${screenName})`,
         };
       }
-      if (!ctx.uiDriver.androidOpenScreen) {
+      if (!appMethod(ctx, 'OpenScreen')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidOpenScreen not configured',
+          error: `the app driver has no OpenScreen (looked for appOpenScreen / androidOpenScreen / iosOpenScreen)`,
         };
       }
-      await ctx.uiDriver.androidOpenScreen(screenName);
+      await appMethod(ctx, 'OpenScreen')(screenName);
       return { ok: true };
     },
   },
@@ -3426,7 +3470,7 @@ const matchers = [
     // driver owns coordinate lookup from the accessibility dump. Less
     // parsing logic in the matcher = more flexibility for the driver to
     // adapt to xcrun simctl's evolving output format.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on iOS Sim\s+taps "([^"]+)"$/,
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|iOS Sim)\s+taps "([^"]+)"$/,
     async handler(m, ctx) {
       const tag = m[3];
       if (!ctx.uiDriver) {
@@ -3444,7 +3488,7 @@ const matchers = [
     // `iosOpenScreen(name)`. Accepts both "screen" and "tab" as the noun,
     // matching the corpus phrasings.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on iOS Sim\s+opens (?:the|his|her|their) "([^"]+)" (?:screen|tab)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|iOS Sim)\s+opens (?:the|his|her|their) "([^"]+)" (?:screen|tab)$/,
     async handler(m, ctx) {
       const screenName = m[3];
       if (!ctx.uiDriver) {
@@ -3473,7 +3517,7 @@ const matchers = [
     // Trailing descriptive text accepted (e.g. ` toast`, ` banner`) and
     // ignored — matches the corpus phrasings without forcing rewrites.
     // eslint-disable-next-line sonarjs/slow-regex
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s iOS Sim UI shows "([^"]+)"(?:\s+.+)?$/,
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|iOS Sim) UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
       if (!ctx.uiDriver) {
@@ -3498,7 +3542,8 @@ const matchers = [
     // iOS Sim type-into-element. Delegates entirely to
     // `iosTypeText(tag, text)` — driver owns identifier→coordinate
     // lookup and the focus-then-type sequence. Less parsing in matcher.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on iOS Sim\s+types "([^"]+)" into "([^"]+)"$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|iOS Sim)\s+types "([^"]+)" into "([^"]+)"$/,
     async handler(m, ctx) {
       const text = m[3];
       const tag = m[4];
@@ -3516,7 +3561,7 @@ const matchers = [
     // iOS Sim type-into-search-field. Active-screen search — driver decides
     // which search field. Parallel to Wake 32's androidSearchIn(null, text).
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on iOS Sim\s+types "([^"]+)" into the search field$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|iOS Sim)\s+types "([^"]+)" into the search field$/,
     async handler(m, ctx) {
       const text = m[3];
       if (!ctx.uiDriver) {
@@ -3739,7 +3784,7 @@ const matchers = [
     // text, not a resource-id. Driver locates the event-invite card AND
     // the named action button within it.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+taps "([^"]+)" on the event invite$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+taps "([^"]+)" on the event invite$/,
     async handler(m, ctx) {
       const name = m[1];
       const action = m[3];
@@ -3749,13 +3794,13 @@ const matchers = [
           error: `UI step requires ctx.uiDriver (${name} taps "${action}" on event invite)`,
         };
       }
-      if (!ctx.uiDriver.androidTapEventInviteAction) {
+      if (!appMethod(ctx, 'TapEventInviteAction')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidTapEventInviteAction not configured',
+          error: `the app driver has no TapEventInviteAction (looked for appTapEventInviteAction / androidTapEventInviteAction / iosTapEventInviteAction)`,
         };
       }
-      await ctx.uiDriver.androidTapEventInviteAction(name, action);
+      await appMethod(ctx, 'TapEventInviteAction')(name, action);
       return { ok: true };
     },
   },
@@ -3840,9 +3885,9 @@ const matchers = [
     // so the bare `Web` alternative doesn't greedily eat the `Chromium`/
     // `Safari` discriminator. Same trick used elsewhere in this file.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows (?:the )?([A-Z][a-z]+) translation of "([^"]+)"(?: in the page heading)?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows (?:the )?([A-Z][a-z]+) translation of "([^"]+)"(?: in the page heading)?$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const localeName = m[4];
       const englishKey = m[5];
       const LOCALE_NAME_TO_CODE = {
@@ -3900,10 +3945,13 @@ const matchers = [
             error: `Android step requires ctx.uiDriver (translation of "${englishKey}")`,
           };
         }
-        if (!ctx.uiDriver.androidShowsTranslationOf) {
-          return { ok: false, error: 'ctx.uiDriver.androidShowsTranslationOf not configured' };
+        if (!appMethod(ctx, 'ShowsTranslationOf')) {
+          return {
+            ok: false,
+            error: `the app driver has no ShowsTranslationOf (looked for appShowsTranslationOf / androidShowsTranslationOf / iosShowsTranslationOf)`,
+          };
         }
-        const ok = await ctx.uiDriver.androidShowsTranslationOf(code, englishKey);
+        const ok = await appMethod(ctx, 'ShowsTranslationOf')(code, englishKey);
         if (!ok) {
           return {
             ok: false,
@@ -3935,6 +3983,50 @@ const matchers = [
     },
   },
   {
+    // UI PRESENCE of a person, with the optional "(P-NN, cohort)" annotation
+    // the corpus writes when it wants the reader to know who that is.
+    //
+    // The annotation is OPTIONAL because `stripStepAnnotation` removes it before
+    // matching. Requiring it made the pattern unmatchable — which is how the
+    // first version of this fix silently failed to fix anything.
+    //
+    // PRE-EXISTING GAP, not one introduced by the app-neutral flip: the absence
+    // form below has existed for months and the presence form never did, so
+    // `Marcus's UI shows Officia (P-19, official)` matched nothing and the step
+    // was recorded as an unknown step rather than an assertion. A corpus line
+    // that asserts nothing is worse than no line — it reads as coverage.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+)(?:\s*\(P-\d{2}, (?:minor|adult|official)\))?$/,
+    async handler(m, ctx) {
+      const platform = canonicalPlatform(m[3], ctx);
+      const target = m[4];
+      let dump;
+      if (platform.startsWith('Web')) {
+        if (!ctx.webDriver?.webUiDump) {
+          return { ok: false, error: 'ctx.webDriver.webUiDump not configured' };
+        }
+        dump = await ctx.webDriver.webUiDump();
+      } else if (!appMethod(ctx, 'UiDump')) {
+        return {
+          ok: false,
+          error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+        };
+      } else {
+        dump = await appMethod(ctx, 'UiDump')();
+      }
+      // An EMPTY dump is not a pass. The screen may simply not have rendered,
+      // and `''.includes(x)` is false either way — so the two are separated
+      // here and the unreadable case says so.
+      if (!dump) {
+        return { ok: false, error: `${platform} UI dump was empty — cannot confirm "${target}"` };
+      }
+      if (!String(dump).includes(target)) {
+        return { ok: false, error: `${platform} UI should show "${target}" but the dump does not` };
+      }
+      return { ok: true };
+    },
+  },
+  {
     // UI absence of person. Substring check on the dump per platform.
     // Also covers "does not show <Name>'s [lesson ]room" — if the name
     // is absent from the dump, the name's room can't be either, so this
@@ -3944,9 +4036,9 @@ const matchers = [
     // Message-input absence is NOT this matcher (lowercase `the` doesn't
     // match the [A-Z] capture for the target name, so the two are disjoint).
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show ([A-Z][a-z]+)(?:'s (?:lesson )?room)?(?: anywhere)?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show ([A-Z][a-z]+)(?:'s (?:lesson )?room)?(?: anywhere)?$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const target = m[4];
       let dump;
       if (platform.startsWith('Web')) {
@@ -3955,10 +4047,13 @@ const matchers = [
         }
         dump = await ctx.webDriver.webUiDump();
       } else if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidUiDump) {
-          return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+        if (!appMethod(ctx, 'UiDump')) {
+          return {
+            ok: false,
+            error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+          };
         }
-        dump = await ctx.uiDriver.androidUiDump();
+        dump = await appMethod(ctx, 'UiDump')();
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosUiDump) {
           return { ok: false, error: 'ctx.uiDriver.iosUiDump not configured' };
@@ -3982,9 +4077,9 @@ const matchers = [
     // rendered. Step asserts the field is NOT shown (returns ok when the
     // driver returns falsy).
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show the message-input field$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show the message-input field$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       let shown;
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webShowsMessageInput) {
@@ -3992,10 +4087,13 @@ const matchers = [
         }
         shown = await ctx.webDriver.webShowsMessageInput();
       } else if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsMessageInput) {
-          return { ok: false, error: 'ctx.uiDriver.androidShowsMessageInput not configured' };
+        if (!appMethod(ctx, 'ShowsMessageInput')) {
+          return {
+            ok: false,
+            error: `the app driver has no ShowsMessageInput (looked for appShowsMessageInput / androidShowsMessageInput / iosShowsMessageInput)`,
+          };
         }
-        shown = await ctx.uiDriver.androidShowsMessageInput();
+        shown = await appMethod(ctx, 'ShowsMessageInput')();
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosShowsMessageInput) {
           return { ok: false, error: 'ctx.uiDriver.iosShowsMessageInput not configured' };
@@ -4018,10 +4116,10 @@ const matchers = [
     // Drivers decide whether to pull-to-refresh (mobile) or invoke a
     // refresh button / location reload (web).
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+refreshes the rooms list$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+refreshes the rooms list$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webRefreshRoomsList) {
           return { ok: false, error: 'ctx.webDriver.webRefreshRoomsList not configured' };
@@ -4032,10 +4130,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidRefreshRoomsList) {
-          return { ok: false, error: 'ctx.uiDriver.androidRefreshRoomsList not configured' };
+        if (!appMethod(ctx, 'RefreshRoomsList')) {
+          return {
+            ok: false,
+            error: `the app driver has no RefreshRoomsList (looked for appRefreshRoomsList / androidRefreshRoomsList / iosRefreshRoomsList)`,
+          };
         }
-        await ctx.uiDriver.androidRefreshRoomsList();
+        await appMethod(ctx, 'RefreshRoomsList')();
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4053,9 +4154,9 @@ const matchers = [
     // "taps <Owner>'s room [card]" (owner name passed). The driver method
     // accepts an optional owner name and figures out which card to tap.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+taps (?:the room card|([A-Z][a-z]+)'s room(?: card)?)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+taps (?:the room card|([A-Z][a-z]+)'s room(?: card)?)$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const owner = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webTapRoomCard) {
@@ -4065,10 +4166,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTapRoomCard) {
-          return { ok: false, error: 'ctx.uiDriver.androidTapRoomCard not configured' };
+        if (!appMethod(ctx, 'TapRoomCard')) {
+          return {
+            ok: false,
+            error: `the app driver has no TapRoomCard (looked for appTapRoomCard / androidTapRoomCard / iosTapRoomCard)`,
+          };
         }
-        await ctx.uiDriver.androidTapRoomCard(owner);
+        await appMethod(ctx, 'TapRoomCard')(owner);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4143,40 +4247,47 @@ const matchers = [
     // Matchers stay thin.
     //
     // Two phrasings:
-    //   `<P> on Android searches "X" in <screen>` → screen-scoped
-    //   `<P> on Android types "X" into the search field` → active-screen
+    //   `<P> on (?:the app|Android) searches "X" in <screen>` → screen-scoped
+    //   `<P> on (?:the app|Android) types "X" into the search field` → active-screen
     //
     // The "types ... into the search field" form does not collide with the
     // existing `types "X" into "Y"` resource-id matcher because the former
     // expects literal `the search field` after `into ` and the latter
     // expects an opening `"`.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+searches "([^"]+)" in (\w+)$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+searches "([^"]+)" in (\w+)$/,
     async handler(m, ctx) {
       const text = m[3];
       const screen = m[4];
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (search in ${screen})` };
       }
-      if (!ctx.uiDriver.androidSearchIn) {
-        return { ok: false, error: 'ctx.uiDriver.androidSearchIn not configured' };
+      if (!appMethod(ctx, 'SearchIn')) {
+        return {
+          ok: false,
+          error: `the app driver has no SearchIn (looked for appSearchIn / androidSearchIn / iosSearchIn)`,
+        };
       }
-      await ctx.uiDriver.androidSearchIn(screen, text);
+      await appMethod(ctx, 'SearchIn')(screen, text);
       return { ok: true };
     },
   },
   {
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+types "([^"]+)" into the search field$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+types "([^"]+)" into the search field$/,
     async handler(m, ctx) {
       const text = m[3];
       if (!ctx.uiDriver) {
         return { ok: false, error: 'UI step requires ctx.uiDriver (search field)' };
       }
-      if (!ctx.uiDriver.androidSearchIn) {
-        return { ok: false, error: 'ctx.uiDriver.androidSearchIn not configured' };
+      if (!appMethod(ctx, 'SearchIn')) {
+        return {
+          ok: false,
+          error: `the app driver has no SearchIn (looked for appSearchIn / androidSearchIn / iosSearchIn)`,
+        };
       }
       // null screen = "active screen" — driver decides which search field.
-      await ctx.uiDriver.androidSearchIn(null, text);
+      await appMethod(ctx, 'SearchIn')(null, text);
       return { ok: true };
     },
   },
@@ -4192,46 +4303,53 @@ const matchers = [
     // Persona name is passed to the driver for logging/scoping. The
     // driver implementation may use it (e.g. re-auth on relaunch) or
     // ignore it.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+kills and relaunches the app$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+kills and relaunches the app$/,
     async handler(m, ctx) {
       const name = m[1];
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (kill+relaunch for ${name})` };
       }
-      if (!ctx.uiDriver.androidKillAndRelaunch) {
-        return { ok: false, error: 'ctx.uiDriver.androidKillAndRelaunch not configured' };
+      if (!appMethod(ctx, 'KillAndRelaunch')) {
+        return {
+          ok: false,
+          error: `the app driver has no KillAndRelaunch (looked for appKillAndRelaunch / androidKillAndRelaunch / iosKillAndRelaunch)`,
+        };
       }
-      await ctx.uiDriver.androidKillAndRelaunch(name, ctx.target);
+      await appMethod(ctx, 'KillAndRelaunch')(name, ctx.target);
       return { ok: true };
     },
   },
   {
-    // `<P> on Android performs any authenticated API call` — fires off an
+    // `<P> on (?:the app|Android) performs any authenticated API call` — fires off an
     // arbitrary authenticated request (driver picks a known-cheap endpoint
     // like GET /api/health-with-auth). Used in j06 to demonstrate that a
     // cohort-flipped session still authenticates against the API surface
     // — distinct from "issues new JWT" which is the SDK-level flow.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+performs any authenticated API call$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+performs any authenticated API call$/,
     async handler(m, ctx) {
       const name = m[1];
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (auth call for ${name})` };
       }
-      if (!ctx.uiDriver.androidPerformAuthenticatedCall) {
-        return { ok: false, error: 'ctx.uiDriver.androidPerformAuthenticatedCall not configured' };
+      if (!appMethod(ctx, 'PerformAuthenticatedCall')) {
+        return {
+          ok: false,
+          error: `the app driver has no PerformAuthenticatedCall (looked for appPerformAuthenticatedCall / androidPerformAuthenticatedCall / iosPerformAuthenticatedCall)`,
+        };
       }
-      await ctx.uiDriver.androidPerformAuthenticatedCall(name);
+      await appMethod(ctx, 'PerformAuthenticatedCall')(name);
       return { ok: true };
     },
   },
   {
-    // `<P> on Android force-refreshes via securetoken endpoint` — explicit
+    // `<P> on (?:the app|Android) force-refreshes via securetoken endpoint` — explicit
     // POST to securetoken.googleapis.com/v1/token with refresh_token to get
     // a fresh idToken. Used when the test needs to verify Firebase Auth's
     // server-side token-refresh path picks up updated custom claims.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+force-refreshes via securetoken endpoint$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+force-refreshes via securetoken endpoint$/,
     async handler(m, ctx) {
       const name = m[1];
       if (!ctx.uiDriver) {
@@ -4240,32 +4358,36 @@ const matchers = [
           error: `UI step requires ctx.uiDriver (securetoken refresh for ${name})`,
         };
       }
-      if (!ctx.uiDriver.androidForceRefreshSecureToken) {
+      if (!appMethod(ctx, 'ForceRefreshSecureToken')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidForceRefreshSecureToken not configured',
+          error: `the app driver has no ForceRefreshSecureToken (looked for appForceRefreshSecureToken / androidForceRefreshSecureToken / iosForceRefreshSecureToken)`,
         };
       }
-      await ctx.uiDriver.androidForceRefreshSecureToken(name);
+      await appMethod(ctx, 'ForceRefreshSecureToken')(name);
       return { ok: true };
     },
   },
   {
-    // `<P> on Android force-refreshes the JWT` — calls Firebase Auth client
+    // `<P> on (?:the app|Android) force-refreshes the JWT` — calls Firebase Auth client
     // SDK's getIdToken(true), which uses the cached refresh token to issue
     // a new idToken via the SDK's internal refresh flow. Different from
     // securetoken-endpoint (REST-level) in that this exercises the SDK's
     // cache + retry logic.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+force-refreshes the JWT$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+force-refreshes the JWT$/,
     async handler(m, ctx) {
       const name = m[1];
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (JWT refresh for ${name})` };
       }
-      if (!ctx.uiDriver.androidForceRefreshJwt) {
-        return { ok: false, error: 'ctx.uiDriver.androidForceRefreshJwt not configured' };
+      if (!appMethod(ctx, 'ForceRefreshJwt')) {
+        return {
+          ok: false,
+          error: `the app driver has no ForceRefreshJwt (looked for appForceRefreshJwt / androidForceRefreshJwt / iosForceRefreshJwt)`,
+        };
       }
-      await ctx.uiDriver.androidForceRefreshJwt(name);
+      await appMethod(ctx, 'ForceRefreshJwt')(name);
       return { ok: true };
     },
   },
@@ -4279,7 +4401,7 @@ const matchers = [
     // the active chat thread. Driver locates the latest message bubble
     // by widget hierarchy or by the recyclerview's last visible item.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+long-presses the message and taps "([^"]+)"$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+long-presses the message and taps "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
       const menuItem = m[3];
@@ -4289,18 +4411,18 @@ const matchers = [
           error: `UI step requires ctx.uiDriver (long-press for ${name}, menu="${menuItem}")`,
         };
       }
-      if (!ctx.uiDriver.androidLongPressMessageAndTap) {
+      if (!appMethod(ctx, 'LongPressMessageAndTap')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidLongPressMessageAndTap not configured',
+          error: `the app driver has no LongPressMessageAndTap (looked for appLongPressMessageAndTap / androidLongPressMessageAndTap / iosLongPressMessageAndTap)`,
         };
       }
-      await ctx.uiDriver.androidLongPressMessageAndTap(name, menuItem);
+      await appMethod(ctx, 'LongPressMessageAndTap')(name, menuItem);
       return { ok: true };
     },
   },
   {
-    // `<P> on Android sends "X" to <Y>` — send a text message (or simple
+    // `<P> on (?:the app|Android) sends "X" to <Y>` — send a text message (or simple
     // gift identifier) to recipient Y. Composite delegated to single
     // driver method `androidSendMessageTo(persona, recipient, content)`.
     // Driver owns: open conversation with Y (or start new), focus the
@@ -4309,7 +4431,8 @@ const matchers = [
     // Simple shape only — does NOT match `sends "X" (10 coins) to Y`
     // (mid-text parens prevent the trailing recipient capture) or
     // `sends "X" gift to Y`. Those variants get separate matchers.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+sends "([^"]+)" to ([A-Z][a-z]+)$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+sends "([^"]+)" to ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const name = m[1];
       const content = m[3];
@@ -4320,21 +4443,25 @@ const matchers = [
           error: `UI step requires ctx.uiDriver (send "${content}" from ${name} to ${recipient})`,
         };
       }
-      if (!ctx.uiDriver.androidSendMessageTo) {
-        return { ok: false, error: 'ctx.uiDriver.androidSendMessageTo not configured' };
+      if (!appMethod(ctx, 'SendMessageTo')) {
+        return {
+          ok: false,
+          error: `the app driver has no SendMessageTo (looked for appSendMessageTo / androidSendMessageTo / iosSendMessageTo)`,
+        };
       }
-      await ctx.uiDriver.androidSendMessageTo(name, recipient, content);
+      await appMethod(ctx, 'SendMessageTo')(name, recipient, content);
       return { ok: true };
     },
   },
   {
-    // `<P> on Android taps <Y>'s user card` — tap a user-card UI element
+    // `<P> on (?:the app|Android) taps <Y>'s user card` — tap a user-card UI element
     // identified by display name rather than resource-id. Driver locates
     // the card via the recyclerview's children + display-name match.
     //
     // Doesn't collide with the existing `taps "X"` (quoted resource-id)
     // matcher because this form is unquoted. Regression-guarded.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+taps ([A-Z][a-z]+)'s user card$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android)\s+taps ([A-Z][a-z]+)'s user card$/,
     async handler(m, ctx) {
       const name = m[1];
       const target = m[3];
@@ -4344,10 +4471,13 @@ const matchers = [
           error: `UI step requires ctx.uiDriver (${name} taps ${target}'s user card)`,
         };
       }
-      if (!ctx.uiDriver.androidTapUserCard) {
-        return { ok: false, error: 'ctx.uiDriver.androidTapUserCard not configured' };
+      if (!appMethod(ctx, 'TapUserCard')) {
+        return {
+          ok: false,
+          error: `the app driver has no TapUserCard (looked for appTapUserCard / androidTapUserCard / iosTapUserCard)`,
+        };
       }
-      await ctx.uiDriver.androidTapUserCard(name, target);
+      await appMethod(ctx, 'TapUserCard')(name, target);
       return { ok: true };
     },
   },
@@ -4429,7 +4559,7 @@ const matchers = [
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on\s+(\w+(?:\s+\w+){0,2})$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       ctx.personaPlatforms.set(name, platform);
       return { ok: true };
@@ -4446,7 +4576,7 @@ const matchers = [
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on\s+(\w+(?:\s+\w+){0,2})\s+signed in at the "([^"]+)" (?:tab|screen)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const urlPath = m[4];
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       if (!ctx.personaPaths) ctx.personaPaths = new Map();
@@ -4555,9 +4685,9 @@ const matchers = [
     // press a "Confirm" button, tap an OK dialog button, or hit Enter —
     // implementation detail behind the abstraction.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+confirms$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+confirms$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webConfirm) {
           return { ok: false, error: 'ctx.webDriver.webConfirm not configured' };
@@ -4566,10 +4696,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidConfirm) {
-          return { ok: false, error: 'ctx.uiDriver.androidConfirm not configured' };
+        if (!appMethod(ctx, 'Confirm')) {
+          return {
+            ok: false,
+            error: `the app driver has no Confirm (looked for appConfirm / androidConfirm / iosConfirm)`,
+          };
         }
-        await ctx.uiDriver.androidConfirm();
+        await appMethod(ctx, 'Confirm')();
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4590,9 +4723,9 @@ const matchers = [
     // this amount, and the catalog-seed matcher (Wake 45) ensures the
     // gift's actual cost matches what the scenario asserts.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+sends "([^"]+)" \((\d+) coins\) to ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+sends "([^"]+)" \((\d+) coins\) to ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const giftName = m[3];
       const cost = parseInt(m[4], 10);
       const recipient = m[5];
@@ -4604,10 +4737,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidSendGift) {
-          return { ok: false, error: 'ctx.uiDriver.androidSendGift not configured' };
+        if (!appMethod(ctx, 'SendGift')) {
+          return {
+            ok: false,
+            error: `the app driver has no SendGift (looked for appSendGift / androidSendGift / iosSendGift)`,
+          };
         }
-        await ctx.uiDriver.androidSendGift(giftName, cost, recipient);
+        await appMethod(ctx, 'SendGift')(giftName, cost, recipient);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4625,16 +4761,19 @@ const matchers = [
     // iOS Sim (j02) use this; the picker tag is the resource-id / a11y
     // identifier the driver uses to locate the picker widget. Cross-
     // platform dispatch — Web variant not in the corpus.
-    pattern: /^([A-Z][a-z]+)\s+on (Android|iOS Sim)\s+picks DOB "([^"]+)" in "([^"]+)"$/,
+    pattern: /^([A-Z][a-z]+)\s+on (the app|Android|iOS Sim)\s+picks DOB "([^"]+)" in "([^"]+)"$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const dob = m[3];
       const pickerTag = m[4];
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidPickDOB) {
-          return { ok: false, error: 'ctx.uiDriver.androidPickDOB not configured' };
+        if (!appMethod(ctx, 'PickDOB')) {
+          return {
+            ok: false,
+            error: `the app driver has no PickDOB (looked for appPickDOB / androidPickDOB / iosPickDOB)`,
+          };
         }
-        await ctx.uiDriver.androidPickDOB(dob, pickerTag);
+        await appMethod(ctx, 'PickDOB')(dob, pickerTag);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4652,13 +4791,16 @@ const matchers = [
     // The value is one of "passport"/"driver-license"/"national-id"
     // per the production picker — but the matcher accepts any quoted
     // string so future picker entries don't require a runner change.
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+picks ID type "([^"]+)"$/,
+    pattern: /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+picks ID type "([^"]+)"$/,
     async handler(m, ctx) {
       const idType = m[2];
-      if (!ctx.uiDriver?.androidPickIdType) {
-        return { ok: false, error: 'ctx.uiDriver.androidPickIdType not configured' };
+      if (!appMethod(ctx, 'PickIdType')) {
+        return {
+          ok: false,
+          error: `the app driver has no PickIdType (looked for appPickIdType / androidPickIdType / iosPickIdType)`,
+        };
       }
-      await ctx.uiDriver.androidPickIdType(idType);
+      await appMethod(ctx, 'PickIdType')(idType);
       return { ok: true };
     },
   },
@@ -4666,13 +4808,17 @@ const matchers = [
     // Android: select test image from gallery (j01 age verification —
     // upload of ID photo). Driver mocks the image picker to return the
     // named test fixture file from app/src/androidTest/assets/.
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+selects test image "([^"]+)" from the gallery$/,
+    pattern:
+      /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+selects test image "([^"]+)" from the gallery$/,
     async handler(m, ctx) {
       const filename = m[2];
-      if (!ctx.uiDriver?.androidSelectGalleryImage) {
-        return { ok: false, error: 'ctx.uiDriver.androidSelectGalleryImage not configured' };
+      if (!appMethod(ctx, 'SelectGalleryImage')) {
+        return {
+          ok: false,
+          error: `the app driver has no SelectGalleryImage (looked for appSelectGalleryImage / androidSelectGalleryImage / iosSelectGalleryImage)`,
+        };
       }
-      await ctx.uiDriver.androidSelectGalleryImage(filename);
+      await appMethod(ctx, 'SelectGalleryImage')(filename);
       return { ok: true };
     },
   },
@@ -4682,13 +4828,17 @@ const matchers = [
     // scenario doesn't care about intermediate state. Driver chains
     // androidPickDOB(dob, "signup_dobPicker") + accepts both legal
     // checkboxes + taps Continue.
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+signs up with DOB "([^"]+)" and accepts legal$/,
+    pattern:
+      /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+signs up with DOB "([^"]+)" and accepts legal$/,
     async handler(m, ctx) {
       const dob = m[2];
-      if (!ctx.uiDriver?.androidSignupWithDOB) {
-        return { ok: false, error: 'ctx.uiDriver.androidSignupWithDOB not configured' };
+      if (!appMethod(ctx, 'SignupWithDOB')) {
+        return {
+          ok: false,
+          error: `the app driver has no SignupWithDOB (looked for appSignupWithDOB / androidSignupWithDOB / iosSignupWithDOB)`,
+        };
       }
-      await ctx.uiDriver.androidSignupWithDOB(dob);
+      await appMethod(ctx, 'SignupWithDOB')(dob);
       return { ok: true };
     },
   },
@@ -4758,13 +4908,16 @@ const matchers = [
     // both work uniformly. The handler does substring containment on
     // androidUiDump — looking for the resolved text anywhere.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android UI shows the "([^"]+)" reward animation$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android) UI shows the "([^"]+)" reward animation$/,
     async handler(m, ctx) {
       const expected = m[3];
-      if (!ctx.uiDriver?.androidUiDump) {
-        return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+      if (!appMethod(ctx, 'UiDump')) {
+        return {
+          ok: false,
+          error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+        };
       }
-      const dump = await ctx.uiDriver.androidUiDump();
+      const dump = await appMethod(ctx, 'UiDump')();
       if (!dump.includes(expected)) {
         return {
           ok: false,
@@ -4781,12 +4934,15 @@ const matchers = [
     // appears nowhere as a content-desc. Quoted-attribute substring
     // matching mirrors how the tag matcher (line 1715) works.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android UI shows main tabs but PM tab is hidden$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android) UI shows main tabs but PM tab is hidden$/,
     async handler(_m, ctx) {
-      if (!ctx.uiDriver?.androidUiDump) {
-        return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+      if (!appMethod(ctx, 'UiDump')) {
+        return {
+          ok: false,
+          error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+        };
       }
-      const dump = await ctx.uiDriver.androidUiDump();
+      const dump = await appMethod(ctx, 'UiDump')();
       const mainTabs = ['discover', 'wallet', 'profile'];
       const missing = mainTabs.filter((t) => !dump.includes(`content-desc="${t}"`));
       if (missing.length > 0) {
@@ -4805,15 +4961,18 @@ const matchers = [
     // assert the navigation succeeded, only that the deep link was
     // dispatched. A follow-up step asserts the resulting UI state.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Android|iOS Sim)\s+attempts to navigate to "([^"]+)" via deep link$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (the app|Android|iOS Sim)\s+attempts to navigate to "([^"]+)" via deep link$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const url = m[4];
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidOpenDeepLink) {
-          return { ok: false, error: 'ctx.uiDriver.androidOpenDeepLink not configured' };
+        if (!appMethod(ctx, 'OpenDeepLink')) {
+          return {
+            ok: false,
+            error: `the app driver has no OpenDeepLink (looked for appOpenDeepLink / androidOpenDeepLink / iosOpenDeepLink)`,
+          };
         }
-        await ctx.uiDriver.androidOpenDeepLink(url);
+        await appMethod(ctx, 'OpenDeepLink')(url);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4854,14 +5013,18 @@ const matchers = [
     // gift wheel/grid AND selects the recipient from the contact list.
     // Single matcher because the corpus uses the composite form when
     // intermediate steps aren't relevant.
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+selects gift "([^"]+)" and recipient "([^"]+)"$/,
+    pattern:
+      /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+selects gift "([^"]+)" and recipient "([^"]+)"$/,
     async handler(m, ctx) {
       const giftName = m[2];
       const recipient = m[3];
-      if (!ctx.uiDriver?.androidSelectGiftRecipient) {
-        return { ok: false, error: 'ctx.uiDriver.androidSelectGiftRecipient not configured' };
+      if (!appMethod(ctx, 'SelectGiftRecipient')) {
+        return {
+          ok: false,
+          error: `the app driver has no SelectGiftRecipient (looked for appSelectGiftRecipient / androidSelectGiftRecipient / iosSelectGiftRecipient)`,
+        };
       }
-      await ctx.uiDriver.androidSelectGiftRecipient(giftName, recipient);
+      await appMethod(ctx, 'SelectGiftRecipient')(giftName, recipient);
       return { ok: true };
     },
   },
@@ -4872,9 +5035,9 @@ const matchers = [
     // which interpolates from process.env), but Android/iOS Sim variants
     // accepted for symmetry.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+types "([^"]+)" \+ "([^"]+)" and submits$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+types "([^"]+)" \+ "([^"]+)" and submits$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const email = m[3];
       const password = m[4];
       if (platform.startsWith('Web')) {
@@ -4885,10 +5048,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTypeAndSubmit) {
-          return { ok: false, error: 'ctx.uiDriver.androidTypeAndSubmit not configured' };
+        if (!appMethod(ctx, 'TypeAndSubmit')) {
+          return {
+            ok: false,
+            error: `the app driver has no TypeAndSubmit (looked for appTypeAndSubmit / androidTypeAndSubmit / iosTypeAndSubmit)`,
+          };
         }
-        await ctx.uiDriver.androidTypeAndSubmit(email, password);
+        await appMethod(ctx, 'TypeAndSubmit')(email, password);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -4908,10 +5074,10 @@ const matchers = [
     // / iOS use route names ("age_verification"), Web uses path or
     // top-level component names.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+is on the "([^"]+)" screen$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+is on the "([^"]+)" screen$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const screenName = m[4];
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       if (!ctx.personaPaths) ctx.personaPaths = new Map();
@@ -4930,9 +5096,9 @@ const matchers = [
     //
     // Same alternation order as elsewhere: longest Web variants first.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s displayName(?: "([^"]+)")?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s displayName(?: "([^"]+)")?$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const target = m[4];
       const explicit = m[6];
       let expected = explicit;
@@ -4954,10 +5120,13 @@ const matchers = [
         }
         dump = await ctx.webDriver.webUiDump();
       } else if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidUiDump) {
-          return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+        if (!appMethod(ctx, 'UiDump')) {
+          return {
+            ok: false,
+            error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+          };
         }
-        dump = await ctx.uiDriver.androidUiDump();
+        dump = await appMethod(ctx, 'UiDump')();
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosUiDump) {
           return { ok: false, error: 'ctx.uiDriver.iosUiDump not configured' };
@@ -4982,9 +5151,9 @@ const matchers = [
     // names that the corpus author specifically quoted to mark as a UI
     // string rather than a persona reference.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show "([^"]+)"$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show "([^"]+)"$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const target = m[4];
       let dump;
       if (platform.startsWith('Web')) {
@@ -4993,10 +5162,13 @@ const matchers = [
         }
         dump = await ctx.webDriver.webUiDump();
       } else if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidUiDump) {
-          return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+        if (!appMethod(ctx, 'UiDump')) {
+          return {
+            ok: false,
+            error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+          };
         }
-        dump = await ctx.uiDriver.androidUiDump();
+        dump = await appMethod(ctx, 'UiDump')();
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosUiDump) {
           return { ok: false, error: 'ctx.uiDriver.iosUiDump not configured' };
@@ -5021,9 +5193,9 @@ const matchers = [
     // "the \"claim\" button"). Driver receives the bare name and decides
     // which selector to use.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+taps the (\w+) button$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+taps the (\w+) button$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const buttonName = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webTapNamedButton) {
@@ -5033,10 +5205,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTapNamedButton) {
-          return { ok: false, error: 'ctx.uiDriver.androidTapNamedButton not configured' };
+        if (!appMethod(ctx, 'TapNamedButton')) {
+          return {
+            ok: false,
+            error: `the app driver has no TapNamedButton (looked for appTapNamedButton / androidTapNamedButton / iosTapNamedButton)`,
+          };
         }
-        await ctx.uiDriver.androidTapNamedButton(buttonName);
+        await appMethod(ctx, 'TapNamedButton')(buttonName);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -5056,9 +5231,9 @@ const matchers = [
     // Both verbs route to the same driver method — the lexical
     // difference is corpus-author preference, not a behavior split.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+(?:accepts|checks) both legal checkboxes and continues$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+(?:accepts|checks) both legal checkboxes and continues$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webAcceptLegalAndContinue) {
           return { ok: false, error: 'ctx.webDriver.webAcceptLegalAndContinue not configured' };
@@ -5067,10 +5242,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidAcceptLegalAndContinue) {
-          return { ok: false, error: 'ctx.uiDriver.androidAcceptLegalAndContinue not configured' };
+        if (!appMethod(ctx, 'AcceptLegalAndContinue')) {
+          return {
+            ok: false,
+            error: `the app driver has no AcceptLegalAndContinue (looked for appAcceptLegalAndContinue / androidAcceptLegalAndContinue / iosAcceptLegalAndContinue)`,
+          };
         }
-        await ctx.uiDriver.androidAcceptLegalAndContinue();
+        await appMethod(ctx, 'AcceptLegalAndContinue')();
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -5089,7 +5267,7 @@ const matchers = [
     // matcher to handle two j02 corpus patterns:
     //   - "Alice is on Web Chromium signed in (cross-cohort adult)"
     //     [mid-step annotation, no trailing screen]
-    //   - "Marcus is on Android signed in (same-cohort minor) at the
+    //   - "Marcus is on (?:the app|Android) signed in (same-cohort minor) at the
     //     \"discovery\" screen" [both annotation and trailing screen]
     // The annotation is a hint to the human reader, not a directive to
     // the runner — we capture and discard it. Wake-45's no-annotation
@@ -5099,7 +5277,7 @@ const matchers = [
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on\s+(\w+(?:\s+\w+){0,2})\s+signed in(?:\s+\([^)]*\))?(?:\s+at the "([^"]+)" (?:tab|screen))?$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const urlPath = m[4];
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       if (!ctx.personaPaths) ctx.personaPaths = new Map();
@@ -5207,9 +5385,9 @@ const matchers = [
     // matched as a literal suffix, not consumed into the item-text
     // capture group.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows (.+?) in the (\w+) list$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows (.+?) in the (\w+) list$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const itemText = m[4];
       const listType = m[5];
       let dump;
@@ -5219,10 +5397,13 @@ const matchers = [
         }
         dump = await ctx.webDriver.webUiDump();
       } else if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidUiDump) {
-          return { ok: false, error: 'ctx.uiDriver.androidUiDump not configured' };
+        if (!appMethod(ctx, 'UiDump')) {
+          return {
+            ok: false,
+            error: `the app driver has no UiDump (looked for appUiDump / androidUiDump / iosUiDump)`,
+          };
         }
-        dump = await ctx.uiDriver.androidUiDump();
+        dump = await appMethod(ctx, 'UiDump')();
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosUiDump) {
           return { ok: false, error: 'ctx.uiDriver.iosUiDump not configured' };
@@ -5328,9 +5509,9 @@ const matchers = [
     // User card tap (discovery/profile-list variant of Wake 44's
     // room-card matcher). Platform-dispatch.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+taps ([A-Z][a-z]+)'s user card$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+taps ([A-Z][a-z]+)'s user card$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const owner = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webTapUserCard) {
@@ -5340,10 +5521,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTapUserCard) {
-          return { ok: false, error: 'ctx.uiDriver.androidTapUserCard not configured' };
+        if (!appMethod(ctx, 'TapUserCard')) {
+          return {
+            ok: false,
+            error: `the app driver has no TapUserCard (looked for appTapUserCard / androidTapUserCard / iosTapUserCard)`,
+          };
         }
-        await ctx.uiDriver.androidTapUserCard(owner);
+        await appMethod(ctx, 'TapUserCard')(owner);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -5500,15 +5684,18 @@ const matchers = [
     // Relaunches the app and signs in (Android + iOS Sim). Composite —
     // driver kills the process, restarts it, and signs in with the
     // persona's stored credentials (no UI typing in the runner).
-    pattern: /^([A-Z][a-z]+)\s+on (Android|iOS Sim)\s+relaunches the app and signs in$/,
+    pattern: /^([A-Z][a-z]+)\s+on (the app|Android|iOS Sim)\s+relaunches the app and signs in$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidRelaunchAndSignIn) {
-          return { ok: false, error: 'ctx.uiDriver.androidRelaunchAndSignIn not configured' };
+        if (!appMethod(ctx, 'RelaunchAndSignIn')) {
+          return {
+            ok: false,
+            error: `the app driver has no RelaunchAndSignIn (looked for appRelaunchAndSignIn / androidRelaunchAndSignIn / iosRelaunchAndSignIn)`,
+          };
         }
-        await ctx.uiDriver.androidRelaunchAndSignIn(name);
+        await appMethod(ctx, 'RelaunchAndSignIn')(name);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -5527,7 +5714,7 @@ const matchers = [
     // expected locale. Driver verifies both presence AND that the
     // banner text matches the locale-specific copy.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Android|iOS Sim) UI shows the in-app banner about the cohort change in ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (app|Android|iOS Sim) UI shows the in-app banner about the cohort change in ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const LOCALE_NAME_TO_CODE = {
         Arabic: 'ar',
@@ -5551,20 +5738,20 @@ const matchers = [
         Vietnamese: 'vi',
         Chinese: 'zh',
       };
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const localeName = m[4];
       const code = LOCALE_NAME_TO_CODE[localeName];
       if (!code) {
         return { ok: false, error: `unknown locale name "${localeName}"` };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsCohortChangeBanner) {
+        if (!appMethod(ctx, 'ShowsCohortChangeBanner')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidShowsCohortChangeBanner not configured',
+            error: `the app driver has no ShowsCohortChangeBanner (looked for appShowsCohortChangeBanner / androidShowsCohortChangeBanner / iosShowsCohortChangeBanner)`,
           };
         }
-        const ok = await ctx.uiDriver.androidShowsCohortChangeBanner(code);
+        const ok = await appMethod(ctx, 'ShowsCohortChangeBanner')(code);
         if (!ok) {
           return {
             ok: false,
@@ -5710,16 +5897,19 @@ const matchers = [
     //   "renders the placeholder \"X\" in that slot"           (j02)
     // Both reduce to driver call (placeholderName, slotHint).
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Android|iOS Sim) UI renders the (?:"([^"]+)" placeholder|placeholder "([^"]+)") in (that|both) slots?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (app|Android|iOS Sim) UI renders the (?:"([^"]+)" placeholder|placeholder "([^"]+)") in (that|both) slots?$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const placeholderName = m[4] || m[5];
       const slotHint = m[6];
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsPlaceholder) {
-          return { ok: false, error: 'ctx.uiDriver.androidShowsPlaceholder not configured' };
+        if (!appMethod(ctx, 'ShowsPlaceholder')) {
+          return {
+            ok: false,
+            error: `the app driver has no ShowsPlaceholder (looked for appShowsPlaceholder / androidShowsPlaceholder / iosShowsPlaceholder)`,
+          };
         }
-        const ok = await ctx.uiDriver.androidShowsPlaceholder(placeholderName, slotHint);
+        const ok = await appMethod(ctx, 'ShowsPlaceholder')(placeholderName, slotHint);
         if (!ok) {
           return {
             ok: false,
@@ -5750,16 +5940,19 @@ const matchers = [
     // currently "official" only but matcher accepts any single-word
     // badge for future expansion.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Android|iOS Sim) UI shows the new PM from ([A-Z][a-z]+) with the (\w+) badge$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (app|Android|iOS Sim) UI shows the new PM from ([A-Z][a-z]+) with the (\w+) badge$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const sender = m[4];
       const badge = m[5];
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsPmWithBadge) {
-          return { ok: false, error: 'ctx.uiDriver.androidShowsPmWithBadge not configured' };
+        if (!appMethod(ctx, 'ShowsPmWithBadge')) {
+          return {
+            ok: false,
+            error: `the app driver has no ShowsPmWithBadge (looked for appShowsPmWithBadge / androidShowsPmWithBadge / iosShowsPmWithBadge)`,
+          };
         }
-        const ok = await ctx.uiDriver.androidShowsPmWithBadge(sender, badge);
+        const ok = await appMethod(ctx, 'ShowsPmWithBadge')(sender, badge);
         if (!ok) {
           return {
             ok: false,
@@ -5790,9 +5983,9 @@ const matchers = [
     // from Wake 45's pronoun-screen matcher because the noun is "list"
     // not "screen".
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+opens (?:his|her|their) (followers|following) list$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+opens (?:his|her|their) (followers|following) list$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const listName = m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webOpenListView) {
@@ -5802,10 +5995,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidOpenListView) {
-          return { ok: false, error: 'ctx.uiDriver.androidOpenListView not configured' };
+        if (!appMethod(ctx, 'OpenListView')) {
+          return {
+            ok: false,
+            error: `the app driver has no OpenListView (looked for appOpenListView / androidOpenListView / iosOpenListView)`,
+          };
         }
-        await ctx.uiDriver.androidOpenListView(listName);
+        await appMethod(ctx, 'OpenListView')(listName);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -6098,13 +6294,16 @@ const matchers = [
     // "selects test image from gallery"). Driver mocks the image picker
     // to return a fixture of approximately the requested size — used to
     // exercise size-limit code paths (e.g. 15MB rejected, 5MB accepted).
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+picks a (\d+)MB test image$/,
+    pattern: /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+picks a (\d+)MB test image$/,
     async handler(m, ctx) {
       const sizeMB = parseInt(m[2], 10);
-      if (!ctx.uiDriver?.androidPickTestImageBySize) {
-        return { ok: false, error: 'ctx.uiDriver.androidPickTestImageBySize not configured' };
+      if (!appMethod(ctx, 'PickTestImageBySize')) {
+        return {
+          ok: false,
+          error: `the app driver has no PickTestImageBySize (looked for appPickTestImageBySize / androidPickTestImageBySize / iosPickTestImageBySize)`,
+        };
       }
-      await ctx.uiDriver.androidPickTestImageBySize(sizeMB);
+      await appMethod(ctx, 'PickTestImageBySize')(sizeMB);
       return { ok: true };
     },
   },
@@ -6308,14 +6507,17 @@ const matchers = [
     // Regex linear: `.+$` greedy + anchored to end-of-string. Input
     // is author-controlled (feature files). Safe.
     // eslint-disable-next-line sonarjs/slow-regex
-    pattern: /^([A-Z][a-z]+)\s+on Android POSTs (\/api\/[\w/-]+)(?:\s+(.+))?$/,
+    pattern: /^([A-Z][a-z]+)\s+on (?:the app|Android) POSTs (\/api\/[\w/-]+)(?:\s+(.+))?$/,
     async handler(m, ctx) {
       const endpoint = m[2];
       const rest = m[3] || '';
-      if (!ctx.uiDriver?.androidApiPost) {
-        return { ok: false, error: 'ctx.uiDriver.androidApiPost not configured' };
+      if (!appMethod(ctx, 'ApiPost')) {
+        return {
+          ok: false,
+          error: `the app driver has no ApiPost (looked for appApiPost / androidApiPost / iosApiPost)`,
+        };
       }
-      await ctx.uiDriver.androidApiPost(endpoint, rest);
+      await appMethod(ctx, 'ApiPost')(endpoint, rest);
       return { ok: true };
     },
   },
@@ -6326,13 +6528,16 @@ const matchers = [
     // parens after "purchase". Driver re-submits the most recent
     // purchase request using the same receipt ID.
     pattern:
-      /^([A-Z][a-z]+)\s+on Android retries the same purchase(?:\s+\([^()]*\))?\s+once network restores$/,
+      /^([A-Z][a-z]+)\s+on (?:the app|Android) retries the same purchase(?:\s+\([^()]*\))?\s+once network restores$/,
     async handler(m, ctx) {
       const name = m[1];
-      if (!ctx.uiDriver?.androidRetrySamePurchase) {
-        return { ok: false, error: 'ctx.uiDriver.androidRetrySamePurchase not configured' };
+      if (!appMethod(ctx, 'RetrySamePurchase')) {
+        return {
+          ok: false,
+          error: `the app driver has no RetrySamePurchase (looked for appRetrySamePurchase / androidRetrySamePurchase / iosRetrySamePurchase)`,
+        };
       }
-      await ctx.uiDriver.androidRetrySamePurchase(name);
+      await appMethod(ctx, 'RetrySamePurchase')(name);
       return { ok: true };
     },
   },
@@ -6439,10 +6644,10 @@ const matchers = [
     // Different verb order from Wake 45/50's "is on X signed in".
     // Records persona platform + path on the tracking maps.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in on\s+(Web Chromium|Web Safari|Web|Android|iOS Sim)\s+at "([^"]+)"$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in on\s+(Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+at "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const urlPath = m[4];
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       if (!ctx.personaPaths) ctx.personaPaths = new Map();
@@ -6561,9 +6766,9 @@ const matchers = [
     // descriptive annotation stripped by Wake 30. Platform-dispatch;
     // driver verifies the stats panel is rendered for the target user.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s stats$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s stats$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const target = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webShowsStatsForUser) {
@@ -6574,10 +6779,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsStatsForUser) {
-          return { ok: false, error: 'ctx.uiDriver.androidShowsStatsForUser not configured' };
+        if (!appMethod(ctx, 'ShowsStatsForUser')) {
+          return {
+            ok: false,
+            error: `the app driver has no ShowsStatsForUser (looked for appShowsStatsForUser / androidShowsStatsForUser / iosShowsStatsForUser)`,
+          };
         }
-        const ok = await ctx.uiDriver.androidShowsStatsForUser(target);
+        const ok = await appMethod(ctx, 'ShowsStatsForUser')(target);
         if (!ok) return { ok: false, error: `Android UI did not show stats for ${target}` };
         return { ok: true };
       }
@@ -6597,16 +6805,17 @@ const matchers = [
     // Driver opens the followed-users picker AND selects the named
     // entry. Currently Android only — corpus doesn't have Web/iOS
     // variants of this exact phrasing.
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+selects "([^"]+)" from the followed-users picker$/,
+    pattern:
+      /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+selects "([^"]+)" from the followed-users picker$/,
     async handler(m, ctx) {
       const target = m[2];
-      if (!ctx.uiDriver?.androidSelectFromFollowedPicker) {
+      if (!appMethod(ctx, 'SelectFromFollowedPicker')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidSelectFromFollowedPicker not configured',
+          error: `the app driver has no SelectFromFollowedPicker (looked for appSelectFromFollowedPicker / androidSelectFromFollowedPicker / iosSelectFromFollowedPicker)`,
         };
       }
-      await ctx.uiDriver.androidSelectFromFollowedPicker(target);
+      await appMethod(ctx, 'SelectFromFollowedPicker')(target);
       return { ok: true };
     },
   },
@@ -6615,9 +6824,9 @@ const matchers = [
     // Driver verifies the persona's current screen is the conversation
     // thread AND the other party is the named target. Platform-dispatch.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI navigates to the conversation thread screen with ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI navigates to the conversation thread screen with ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const target = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webIsOnConversationWith) {
@@ -6628,10 +6837,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidIsOnConversationWith) {
-          return { ok: false, error: 'ctx.uiDriver.androidIsOnConversationWith not configured' };
+        if (!appMethod(ctx, 'IsOnConversationWith')) {
+          return {
+            ok: false,
+            error: `the app driver has no IsOnConversationWith (looked for appIsOnConversationWith / androidIsOnConversationWith / iosIsOnConversationWith)`,
+          };
         }
-        const ok = await ctx.uiDriver.androidIsOnConversationWith(target);
+        const ok = await appMethod(ctx, 'IsOnConversationWith')(target);
         if (!ok) return { ok: false, error: `Android UI is not on conversation with ${target}` };
         return { ok: true };
       }
@@ -6651,9 +6863,9 @@ const matchers = [
     // driver navigates to the existing conversation thread with the
     // named target user.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+opens the conversation with ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+opens the conversation with ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webOpenConversation) {
@@ -6663,10 +6875,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidOpenConversation) {
-          return { ok: false, error: 'ctx.uiDriver.androidOpenConversation not configured' };
+        if (!appMethod(ctx, 'OpenConversation')) {
+          return {
+            ok: false,
+            error: `the app driver has no OpenConversation (looked for appOpenConversation / androidOpenConversation / iosOpenConversation)`,
+          };
         }
-        await ctx.uiDriver.androidOpenConversation(target);
+        await appMethod(ctx, 'OpenConversation')(target);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -6691,7 +6906,7 @@ const matchers = [
       /^the tester sees an FCM push notification on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android device|iOS device) with body containing "([^"]+)"(?: and "([^"]+)")?$/,
     async handler(m, ctx) {
       const recipient = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const fragments = [m[3]];
       if (m[4]) fragments.push(m[4]);
       if (!ctx.webDriver?.seesFcmPushOnPlatform) {
@@ -6712,9 +6927,9 @@ const matchers = [
     // Driver targets the platform's conversation input element and
     // types the given body. No submit — separate step for that.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+types "([^"]+)" into the conversation input$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+types "([^"]+)" into the conversation input$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const body = m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webTypeIntoConversationInput) {
@@ -6727,13 +6942,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTypeIntoConversationInput) {
+        if (!appMethod(ctx, 'TypeIntoConversationInput')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidTypeIntoConversationInput not configured',
+            error: `the app driver has no TypeIntoConversationInput (looked for appTypeIntoConversationInput / androidTypeIntoConversationInput / iosTypeIntoConversationInput)`,
           };
         }
-        await ctx.uiDriver.androidTypeIntoConversationInput(body);
+        await appMethod(ctx, 'TypeIntoConversationInput')(body);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -6818,9 +7033,9 @@ const matchers = [
     // Edit-body-and-confirms composite (j07 PM edit flow). Driver opens
     // the edit modal, replaces the body, taps confirm. Platform-dispatch.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+changes the body to "([^"]+)" and confirms$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+changes the body to "([^"]+)" and confirms$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const newBody = m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webEditBodyAndConfirm) {
@@ -6830,13 +7045,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidEditBodyAndConfirm) {
+        if (!appMethod(ctx, 'EditBodyAndConfirm')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidEditBodyAndConfirm not configured',
+            error: `the app driver has no EditBodyAndConfirm (looked for appEditBodyAndConfirm / androidEditBodyAndConfirm / iosEditBodyAndConfirm)`,
           };
         }
-        await ctx.uiDriver.androidEditBodyAndConfirm(newBody);
+        await appMethod(ctx, 'EditBodyAndConfirm')(newBody);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -6986,9 +7201,9 @@ const matchers = [
     // dispatch; driver returns truthy iff a banner from the named
     // sender is currently rendered. Truthy = banner present = fail.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show any in-app banner from ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show any in-app banner from ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const sender = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webShowsBannerFromUser) {
@@ -7001,13 +7216,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsBannerFromUser) {
+        if (!appMethod(ctx, 'ShowsBannerFromUser')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidShowsBannerFromUser not configured',
+            error: `the app driver has no ShowsBannerFromUser (looked for appShowsBannerFromUser / androidShowsBannerFromUser / iosShowsBannerFromUser)`,
           };
         }
-        const shown = await ctx.uiDriver.androidShowsBannerFromUser(sender);
+        const shown = await appMethod(ctx, 'ShowsBannerFromUser')(sender);
         if (shown) {
           return { ok: false, error: `Android UI shows an in-app banner from "${sender}"` };
         }
@@ -7035,13 +7250,13 @@ const matchers = [
     async handler(m, ctx) {
       const target = m[2];
       const apiPath = m[3];
-      if (!ctx.uiDriver?.androidAttemptStartConversation) {
+      if (!appMethod(ctx, 'AttemptStartConversation')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidAttemptStartConversation not configured',
+          error: `the app driver has no AttemptStartConversation (looked for appAttemptStartConversation / androidAttemptStartConversation / iosAttemptStartConversation)`,
         };
       }
-      const result = await ctx.uiDriver.androidAttemptStartConversation(target, apiPath);
+      const result = await appMethod(ctx, 'AttemptStartConversation')(target, apiPath);
       // Store result on ctx so the bare "the request returns status N"
       // assertion can read it downstream.
       if (result && typeof result.status === 'number') {
@@ -7055,9 +7270,9 @@ const matchers = [
     // party-anchored banner — this is a generic "no NEW follower
     // notification" with NO specific source persona.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show any new follower notification$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show any new follower notification$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webShowsNewFollowerNotification) {
           return {
@@ -7072,13 +7287,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsNewFollowerNotification) {
+        if (!appMethod(ctx, 'ShowsNewFollowerNotification')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidShowsNewFollowerNotification not configured',
+            error: `the app driver has no ShowsNewFollowerNotification (looked for appShowsNewFollowerNotification / androidShowsNewFollowerNotification / iosShowsNewFollowerNotification)`,
           };
         }
-        const shown = await ctx.uiDriver.androidShowsNewFollowerNotification();
+        const shown = await appMethod(ctx, 'ShowsNewFollowerNotification')();
         if (shown) {
           return { ok: false, error: 'Android UI shows a new follower notification' };
         }
@@ -7105,18 +7320,19 @@ const matchers = [
     // deep-link intent (adb am start -d <url> on Android, xcrun simctl
     // openurl on iOS). Doesn't assert resulting UI state — a follow-up
     // step does that.
-    pattern: /^([A-Z][a-z]+)\s+on (Android|iOS Sim)\s+attempts profile deep-link "([^"]+)"$/,
+    pattern:
+      /^([A-Z][a-z]+)\s+on (the app|Android|iOS Sim)\s+attempts profile deep-link "([^"]+)"$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const url = m[3];
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidAttemptProfileDeepLink) {
+        if (!appMethod(ctx, 'AttemptProfileDeepLink')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidAttemptProfileDeepLink not configured',
+            error: `the app driver has no AttemptProfileDeepLink (looked for appAttemptProfileDeepLink / androidAttemptProfileDeepLink / iosAttemptProfileDeepLink)`,
           };
         }
-        await ctx.uiDriver.androidAttemptProfileDeepLink(url);
+        await appMethod(ctx, 'AttemptProfileDeepLink')(url);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -7138,16 +7354,16 @@ const matchers = [
     // Driver taps the follow button on the currently-rendered profile
     // screen.
     pattern:
-      /^([A-Z][a-z]+)\s+on Android\s+attempts to follow ([A-Z][a-z]+) via the profile screen$/,
+      /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+attempts to follow ([A-Z][a-z]+) via the profile screen$/,
     async handler(m, ctx) {
       const target = m[2];
-      if (!ctx.uiDriver?.androidAttemptFollowViaProfile) {
+      if (!appMethod(ctx, 'AttemptFollowViaProfile')) {
         return {
           ok: false,
-          error: 'ctx.uiDriver.androidAttemptFollowViaProfile not configured',
+          error: `the app driver has no AttemptFollowViaProfile (looked for appAttemptFollowViaProfile / androidAttemptFollowViaProfile / iosAttemptFollowViaProfile)`,
         };
       }
-      await ctx.uiDriver.androidAttemptFollowViaProfile(target);
+      await appMethod(ctx, 'AttemptFollowViaProfile')(target);
       return { ok: true };
     },
   },
@@ -7211,9 +7427,9 @@ const matchers = [
     // returns truthy iff any user with the "adult" cohort is currently
     // rendered in the UI. Platform-dispatch.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show any adult-cohort visitor$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show any adult-cohort visitor$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webShowsAdultCohortVisitor) {
           return {
@@ -7226,13 +7442,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsAdultCohortVisitor) {
+        if (!appMethod(ctx, 'ShowsAdultCohortVisitor')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidShowsAdultCohortVisitor not configured',
+            error: `the app driver has no ShowsAdultCohortVisitor (looked for appShowsAdultCohortVisitor / androidShowsAdultCohortVisitor / iosShowsAdultCohortVisitor)`,
           };
         }
-        const shown = await ctx.uiDriver.androidShowsAdultCohortVisitor();
+        const shown = await appMethod(ctx, 'ShowsAdultCohortVisitor')();
         if (shown) return { ok: false, error: 'Android UI shows an adult-cohort visitor' };
         return { ok: true };
       }
@@ -7397,14 +7613,17 @@ const matchers = [
     // Create. Single matcher for the full composite because the corpus
     // uses it that way (intermediate steps not load-bearing).
     pattern:
-      /^([A-Z][a-z]+)\s+on Android types title "([^"]+)" and chooses (public|private) visibility$/,
+      /^([A-Z][a-z]+)\s+on (?:the app|Android) types title "([^"]+)" and chooses (public|private) visibility$/,
     async handler(m, ctx) {
       const title = m[2];
       const visibility = m[3];
-      if (!ctx.uiDriver?.androidCreateRoomComposite) {
-        return { ok: false, error: 'ctx.uiDriver.androidCreateRoomComposite not configured' };
+      if (!appMethod(ctx, 'CreateRoomComposite')) {
+        return {
+          ok: false,
+          error: `the app driver has no CreateRoomComposite (looked for appCreateRoomComposite / androidCreateRoomComposite / iosCreateRoomComposite)`,
+        };
       }
-      await ctx.uiDriver.androidCreateRoomComposite(title, visibility);
+      await appMethod(ctx, 'CreateRoomComposite')(title, visibility);
       return { ok: true };
     },
   },
@@ -7413,9 +7632,9 @@ const matchers = [
     // POST <api>". Driver receives the endpoint (null for bare). Returns
     // the token string (truthy = ok). Platform-dispatch.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+receives a LiveKit token(?: in response from POST (\/api\/[\w/-]+))?$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+receives a LiveKit token(?: in response from POST (\/api\/[\w/-]+))?$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const endpoint = m[3] || null;
       let token;
       if (platform.startsWith('Web')) {
@@ -7424,13 +7643,13 @@ const matchers = [
         }
         token = await ctx.webDriver.webReceiveLiveKitToken(endpoint);
       } else if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidReceiveLiveKitToken) {
+        if (!appMethod(ctx, 'ReceiveLiveKitToken')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidReceiveLiveKitToken not configured',
+            error: `the app driver has no ReceiveLiveKitToken (looked for appReceiveLiveKitToken / androidReceiveLiveKitToken / iosReceiveLiveKitToken)`,
           };
         }
-        token = await ctx.uiDriver.androidReceiveLiveKitToken(endpoint);
+        token = await appMethod(ctx, 'ReceiveLiveKitToken')(endpoint);
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosReceiveLiveKitToken) {
           return { ok: false, error: 'ctx.uiDriver.iosReceiveLiveKitToken not configured' };
@@ -7450,17 +7669,20 @@ const matchers = [
     // "(by himself)"). Driver returns { occupied, total } for the
     // currently-rendered seat grid. Matcher asserts both numbers.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the seat grid with (\d+) of (\d+) seats occupied$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the seat grid with (\d+) of (\d+) seats occupied$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const expectedOccupied = parseInt(m[4], 10);
       const expectedTotal = parseInt(m[5], 10);
       let state;
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidSeatGridState) {
-          return { ok: false, error: 'ctx.uiDriver.androidSeatGridState not configured' };
+        if (!appMethod(ctx, 'SeatGridState')) {
+          return {
+            ok: false,
+            error: `the app driver has no SeatGridState (looked for appSeatGridState / androidSeatGridState / iosSeatGridState)`,
+          };
         }
-        state = await ctx.uiDriver.androidSeatGridState();
+        state = await appMethod(ctx, 'SeatGridState')();
       } else if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosSeatGridState) {
           return { ok: false, error: 'ctx.uiDriver.iosSeatGridState not configured' };
@@ -7488,9 +7710,9 @@ const matchers = [
     // the room most-recently created or referenced — driver maintains
     // that state. Optional " again" suffix passed as boolean.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+taps the same room( again)?$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+taps the same room( again)?$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const isAgain = !!m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webTapSameRoom) {
@@ -7500,10 +7722,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTapSameRoom) {
-          return { ok: false, error: 'ctx.uiDriver.androidTapSameRoom not configured' };
+        if (!appMethod(ctx, 'TapSameRoom')) {
+          return {
+            ok: false,
+            error: `the app driver has no TapSameRoom (looked for appTapSameRoom / androidTapSameRoom / iosTapSameRoom)`,
+          };
         }
-        await ctx.uiDriver.androidTapSameRoom(isAgain);
+        await appMethod(ctx, 'TapSameRoom')(isAgain);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -7522,14 +7747,18 @@ const matchers = [
     // Driver contract is `(host, requester)` — matches Wake 86's
     // canonical "approves" phrasing at line 9753 to keep both step
     // forms consistent under the same driver method.
-    pattern: /^([A-Z][a-z]+)\s+on Android\s+taps approve on ([A-Z][a-z]+)'s seat request$/,
+    pattern:
+      /^([A-Z][a-z]+)\s+on (?:the app|Android)\s+taps approve on ([A-Z][a-z]+)'s seat request$/,
     async handler(m, ctx) {
       const host = m[1];
       const requester = m[2];
-      if (!ctx.uiDriver?.androidApproveSeatRequest) {
-        return { ok: false, error: 'ctx.uiDriver.androidApproveSeatRequest not configured' };
+      if (!appMethod(ctx, 'ApproveSeatRequest')) {
+        return {
+          ok: false,
+          error: `the app driver has no ApproveSeatRequest (looked for appApproveSeatRequest / androidApproveSeatRequest / iosApproveSeatRequest)`,
+        };
       }
-      await ctx.uiDriver.androidApproveSeatRequest(host, requester);
+      await appMethod(ctx, 'ApproveSeatRequest')(host, requester);
       return { ok: true };
     },
   },
@@ -7543,10 +7772,13 @@ const matchers = [
     async handler(m, ctx) {
       const target = m[2];
       const apiPath = m[3];
-      if (!ctx.uiDriver?.androidAttemptBlock) {
-        return { ok: false, error: 'ctx.uiDriver.androidAttemptBlock not configured' };
+      if (!appMethod(ctx, 'AttemptBlock')) {
+        return {
+          ok: false,
+          error: `the app driver has no AttemptBlock (looked for appAttemptBlock / androidAttemptBlock / iosAttemptBlock)`,
+        };
       }
-      const result = await ctx.uiDriver.androidAttemptBlock(target, apiPath);
+      const result = await appMethod(ctx, 'AttemptBlock')(target, apiPath);
       if (result && typeof result.status === 'number') {
         ctx.lastResponse = { status: result.status, body: result.body || null, path: apiPath };
       }
@@ -7667,9 +7899,9 @@ const matchers = [
     // this one matches `... confirms in the dialog`. Different driver
     // method because dialogs use different selectors than inline buttons.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+confirms in the dialog$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+confirms in the dialog$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webConfirmDialog) {
           return { ok: false, error: 'ctx.webDriver.webConfirmDialog not configured' };
@@ -7678,10 +7910,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidConfirmDialog) {
-          return { ok: false, error: 'ctx.uiDriver.androidConfirmDialog not configured' };
+        if (!appMethod(ctx, 'ConfirmDialog')) {
+          return {
+            ok: false,
+            error: `the app driver has no ConfirmDialog (looked for appConfirmDialog / androidConfirmDialog / iosConfirmDialog)`,
+          };
         }
-        await ctx.uiDriver.androidConfirmDialog();
+        await appMethod(ctx, 'ConfirmDialog')();
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -7698,13 +7933,16 @@ const matchers = [
     // Long-press on target person's seat (j09 host kick-from-seat).
     // Driver locates the seat element by target name and performs a
     // long-press gesture (held tap).
-    pattern: /^([A-Z][a-z]+)\s+on Android long-presses ([A-Z][a-z]+)'s seat$/,
+    pattern: /^([A-Z][a-z]+)\s+on (?:the app|Android) long-presses ([A-Z][a-z]+)'s seat$/,
     async handler(m, ctx) {
       const target = m[2];
-      if (!ctx.uiDriver?.androidLongPressSeat) {
-        return { ok: false, error: 'ctx.uiDriver.androidLongPressSeat not configured' };
+      if (!appMethod(ctx, 'LongPressSeat')) {
+        return {
+          ok: false,
+          error: `the app driver has no LongPressSeat (looked for appLongPressSeat / androidLongPressSeat / iosLongPressSeat)`,
+        };
       }
-      await ctx.uiDriver.androidLongPressSeat(target);
+      await appMethod(ctx, 'LongPressSeat')(target);
       return { ok: true };
     },
   },
@@ -7740,16 +7978,19 @@ const matchers = [
     // a network outage for the named persona for the named duration.
     // Outage clears automatically after the duration — scenarios that
     // need the outage to persist past the duration must re-arm.
-    pattern: /^([A-Z][a-z]+)'s (Android|iOS Sim) network drops for (\d+) seconds$/,
+    pattern: /^([A-Z][a-z]+)'s (app|Android|iOS Sim) network drops for (\d+) seconds$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const seconds = parseInt(m[3], 10);
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidNetworkDropFor) {
-          return { ok: false, error: 'ctx.uiDriver.androidNetworkDropFor not configured' };
+        if (!appMethod(ctx, 'NetworkDropFor')) {
+          return {
+            ok: false,
+            error: `the app driver has no NetworkDropFor (looked for appNetworkDropFor / androidNetworkDropFor / iosNetworkDropFor)`,
+          };
         }
-        await ctx.uiDriver.androidNetworkDropFor(name, seconds);
+        await appMethod(ctx, 'NetworkDropFor')(name, seconds);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -7791,7 +8032,7 @@ const matchers = [
     // Wake 64's auto-id form, this matcher takes an explicit room ID
     // from the corpus author.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+created (?:an? )?(adult|minor)-cohort room "([^"]+)"$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+created (?:an? )?(adult|minor)-cohort room "([^"]+)"$/,
     async handler(m, ctx) {
       const ownerName = m[1];
       const cohort = m[3];
@@ -7841,9 +8082,9 @@ const matchers = [
     // matches a NAMED button with explicit "the X button" suffix.
     // Driver returns truthy iff the named button is currently rendered.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show the "([^"]+)" button$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show the "([^"]+)" button$/,
     async handler(m, ctx) {
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const buttonName = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webShowsNamedButton) {
@@ -7856,13 +8097,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsNamedButton) {
+        if (!appMethod(ctx, 'ShowsNamedButton')) {
           return {
             ok: false,
-            error: 'ctx.uiDriver.androidShowsNamedButton not configured',
+            error: `the app driver has no ShowsNamedButton (looked for appShowsNamedButton / androidShowsNamedButton / iosShowsNamedButton)`,
           };
         }
-        const shown = await ctx.uiDriver.androidShowsNamedButton(buttonName);
+        const shown = await appMethod(ctx, 'ShowsNamedButton')(buttonName);
         if (shown) {
           return { ok: false, error: `Android UI shows "${buttonName}" button but should not` };
         }
@@ -7889,7 +8130,7 @@ const matchers = [
     // association in ctx.personaLocales so later assertions can branch on
     // locale without re-parsing the Given step.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) locale=([a-z]{2}(?:-[A-Z]{2})?), ([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) locale=([a-z]{2}(?:-[A-Z]{2})?)$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) locale=([a-z]{2}(?:-[A-Z]{2})?), ([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) locale=([a-z]{2}(?:-[A-Z]{2})?)$/,
     async handler(m, ctx) {
       const a = { name: m[1], platform: m[2], locale: m[3] };
       const b = { name: m[4], platform: m[5], locale: m[6] };
@@ -7943,11 +8184,11 @@ const matchers = [
     // The trailing `(real microphone)` annotation in j09:65 is stripped
     // by stripStepAnnotation before this matcher runs.
     pattern:
-      /^the tester hears ([A-Z][a-z]+)'s audio on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) device$/,
+      /^the tester hears ([A-Z][a-z]+)'s audio on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) device$/,
     async handler(m, ctx) {
       const fromName = m[1];
       const onName = m[2];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (!ctx.testerDriver?.confirmHearsAudio) {
         return {
           ok: false,
@@ -7974,9 +8215,9 @@ const matchers = [
     // call per platform — keeps the matcher contract narrow and lets
     // each driver decide how to introspect its UI stack.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the "([^"]+)" tab with no navigation to the (\w+) screen$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the "([^"]+)" tab with no navigation to the (\w+) screen$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const tab = m[3];
       const screen = m[4];
       if (platform.startsWith('Web')) {
@@ -7993,10 +8234,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidShowsTabWithNoNavTo) {
-          return { ok: false, error: 'ctx.uiDriver.androidShowsTabWithNoNavTo not configured' };
+        if (!appMethod(ctx, 'ShowsTabWithNoNavTo')) {
+          return {
+            ok: false,
+            error: `the app driver has no ShowsTabWithNoNavTo (looked for appShowsTabWithNoNavTo / androidShowsTabWithNoNavTo / iosShowsTabWithNoNavTo)`,
+          };
         }
-        const ok = await ctx.uiDriver.androidShowsTabWithNoNavTo(tab, screen);
+        const ok = await appMethod(ctx, 'ShowsTabWithNoNavTo')(tab, screen);
         if (!ok) {
           return {
             ok: false,
@@ -8113,10 +8357,11 @@ const matchers = [
     // to" matchers (navigate-via-deep-link, start-a-conversation, follow,
     // block) all sit ABOVE this in the array — first-match-wins keeps them
     // narrowly scoped while this catches the remainder.
-    pattern: /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) attempts to (.+)$/,
+    pattern:
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) attempts to (.+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const action = m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webAttemptAction) {
@@ -8129,10 +8374,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidAttemptAction) {
-          return { ok: false, error: 'ctx.uiDriver.androidAttemptAction not configured' };
+        if (!appMethod(ctx, 'AttemptAction')) {
+          return {
+            ok: false,
+            error: `the app driver has no AttemptAction (looked for appAttemptAction / androidAttemptAction / iosAttemptAction)`,
+          };
         }
-        const result = await ctx.uiDriver.androidAttemptAction(name, action);
+        const result = await appMethod(ctx, 'AttemptAction')(name, action);
         if (result === false || result?.ok === false) {
           return { ok: false, error: `android action "${action}" failed for ${name}` };
         }
@@ -8157,10 +8405,10 @@ const matchers = [
     // Driver returns the current reason text; matcher does exact string
     // compare so a typo (corpus vs. live UI) surfaces in the error.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the warning reason "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the warning reason "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const expected = m[3];
       const methodName =
         platform === 'Android'
@@ -8190,10 +8438,10 @@ const matchers = [
     // reward", "splash"); driver maps via Compose semantics on Android
     // or Inspector tags on iOS.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the ([\w ]+) image$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the ([\w ]+) image$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const imageName = m[3].trim();
       const methodName =
         platform === 'Android'
@@ -8220,10 +8468,10 @@ const matchers = [
     // test tag) and the `"X" button` matcher (which requires quotes +
     // "button" suffix) — those run first via first-match-wins.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show the ([\w ]+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show the ([\w ]+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const nounPhrase = m[3].trim();
       const methodName =
         platform === 'Android'
@@ -8289,10 +8537,10 @@ const matchers = [
     // room card`). Earlier specific matchers fire first via first-match-
     // wins; this catches the bare verbs.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+taps ([a-z][\w-]*)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+taps ([a-z][\w-]*)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const verb = m[4];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webTapBareVerb) {
@@ -8302,10 +8550,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTapBareVerb) {
-          return { ok: false, error: 'ctx.uiDriver.androidTapBareVerb not configured' };
+        if (!appMethod(ctx, 'TapBareVerb')) {
+          return {
+            ok: false,
+            error: `the app driver has no TapBareVerb (looked for appTapBareVerb / androidTapBareVerb / iosTapBareVerb)`,
+          };
         }
-        await ctx.uiDriver.androidTapBareVerb(name, verb);
+        await appMethod(ctx, 'TapBareVerb')(name, verb);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -8324,10 +8575,10 @@ const matchers = [
     // `room\s+` prefix and optional trailing `\s+card`. The boolean
     // `isRoomCard` flag tells the driver which UI element to target.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+taps the (room\s+)?"([^"]+)"(\s+card)?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+taps the (room\s+)?"([^"]+)"(\s+card)?$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const isRoomPrefix = !!m[4];
       const targetId = m[5];
       const isCardSuffix = !!m[6];
@@ -8341,10 +8592,13 @@ const matchers = [
         return { ok: true };
       }
       if (platform === 'Android') {
-        if (!ctx.uiDriver?.androidTapQuotedTarget) {
-          return { ok: false, error: 'ctx.uiDriver.androidTapQuotedTarget not configured' };
+        if (!appMethod(ctx, 'TapQuotedTarget')) {
+          return {
+            ok: false,
+            error: `the app driver has no TapQuotedTarget (looked for appTapQuotedTarget / androidTapQuotedTarget / iosTapQuotedTarget)`,
+          };
         }
-        await ctx.uiDriver.androidTapQuotedTarget(name, targetId, isRoomCard);
+        await appMethod(ctx, 'TapQuotedTarget')(name, targetId, isRoomCard);
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -8447,10 +8701,10 @@ const matchers = [
     // Driver returns current displayed state; matcher does exact string
     // compare so a typo (corpus vs UI) surfaces in the error.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI mic indicator shows "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI mic indicator shows "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const expected = m[3];
       const methodName =
         platform === 'Android'
@@ -8475,13 +8729,13 @@ const matchers = [
   },
   {
     // Wake 69 — persona-cohort-room state-seed (abstract, no room id).
-    // j10:94 — `Marcus [P-04] is on iOS Sim seated in a minor-cohort room with mic open`.
+    // j10:94 — `Marcus [P-04] is on (?:the app|iOS Sim) seated in a minor-cohort room with mic open`.
     // Differs from the older `is in voice room "X" with mic <state>` matcher
     // because there's NO room id — the author is saying "any minor-cohort
     // room is fine, just make one." Handler synthesises a room id, writes
     // cohort + mic state + seat assignment in a single doc.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+seated in an? ([\w-]+)-cohort room with mic (open|muted)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+seated in an? ([\w-]+)-cohort room with mic (open|muted)$/,
     async handler(m, ctx) {
       const name = m[1];
       const cohort = m[4];
@@ -8509,14 +8763,14 @@ const matchers = [
   },
   {
     // Wake 69 — long-press + tap composite gesture.
-    // j11:31 — `Nora on iOS Sim long-presses the offensive message and taps "Report"`.
+    // j11:31 — `Nora on (?:the app|iOS Sim) long-presses the offensive message and taps "Report"`.
     // Two-step gesture (long-press to open context menu, then tap a named
     // menu item). One matcher keeps the corpus author's intent atomic.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+long-presses the offensive message and taps "([^"]+)"$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+long-presses the offensive message and taps "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const action = m[3];
       const methodName =
         platform === 'Android'
@@ -8541,14 +8795,14 @@ const matchers = [
   },
   {
     // Wake 69 — selects reason "<text>" and confirms.
-    // j11:32 — `Nora on iOS Sim selects reason "Harassment" and confirms`.
+    // j11:32 — `Nora on (?:the app|iOS Sim) selects reason "Harassment" and confirms`.
     // Picker-then-confirm composite. Reusable for report-reason, block-
     // reason, delete-reason flows.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+selects reason "([^"]+)" and confirms$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+selects reason "([^"]+)" and confirms$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const reason = m[3];
       const methodName =
         platform === 'Android'
@@ -8591,17 +8845,17 @@ const matchers = [
   },
   {
     // Wake 69 — UI shows the <name> <kind> (positive).
-    // j11:86 — `Raul's Android UI shows the appeal button`.
+    // j11:86 — `Raul's (?:app|Android) UI shows the appeal button`.
     // Positive complement to Wake 65's quoted-button negative matcher.
     // The terminal `<kind>` (button|screen|banner|dialog|panel|tab)
     // distinguishes this from `shows the X image` (Wake 67) and
     // `shows the element with tag "X"` (existing). Earlier specific
     // matchers (warning reason, element with tag) still fire first.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the ([\w ]+) (button|screen|banner|dialog|panel|tab)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the ([\w ]+) (button|screen|banner|dialog|panel|tab)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const noun = m[3].trim();
       const kind = m[4];
       const methodName =
@@ -8667,14 +8921,14 @@ const matchers = [
   },
   {
     // Wake 70 — "<Name> on <Plat> reports it for "<reason>"".
-    // j11:34 — `Nora on iOS Sim reports it for "Harassment"`. "It" is the
+    // j11:34 — `Nora on (?:the app|iOS Sim) reports it for "Harassment"`. "It" is the
     // contextually-selected entity (message or user the persona just
     // long-pressed). Driver wires the reason into the open report flow.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+reports it for "([^"]+)"$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+reports it for "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const reason = m[3];
       const methodName =
         platform === 'Android'
@@ -8724,14 +8978,14 @@ const matchers = [
   },
   {
     // Wake 70 — UI shows reason "<text>" (bare positive, no "warning").
-    // j11:51 — `Raul's Android UI shows reason "Repeat harassment"`. The
+    // j11:51 — `Raul's (?:app|Android) UI shows reason "Repeat harassment"`. The
     // suspension screen displays the suspension reason. Distinct from Wake
     // 67's `shows the warning reason "X"` (has `the` and `warning`).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows reason "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows reason "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const expected = m[3];
       const methodName =
         platform === 'Android'
@@ -8756,15 +9010,15 @@ const matchers = [
   },
   {
     // Wake 70 — UI shows an end date N days from now (relative-date).
-    // j11:60 — `Raul's Android UI shows an end date 3 days from now`.
+    // j11:60 — `Raul's (?:app|Android) UI shows an end date 3 days from now`.
     // Driver returns the displayed end-date in milliseconds; matcher
     // accepts a 24h tolerance (date may be rendered as start-of-day or
     // now+Nd exactly, both acceptable).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows an end date (\d+) days from now$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows an end date (\d+) days from now$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const days = parseInt(m[3], 10);
       const methodName =
         platform === 'Android'
@@ -8837,12 +9091,12 @@ const matchers = [
   },
   {
     // Wake 71 — "<Name> on <Plat> attempts POST <path>" (bare, no body).
-    // j11:96 — `Raul on Android attempts POST /api/messages`. Sibling of
+    // j11:96 — `Raul on (?:the app|Android) attempts POST /api/messages`. Sibling of
     // the existing `attempts POST <path> with body <json>` matcher; this
     // variant tests the API's rejection of bodyless POSTs (e.g., suspended
     // user attempting to send a message).
     pattern:
-      /^([A-Z][a-z]+)(?:\s+on\s+(?:Web Chromium|Web Safari|Web|Android|iOS Sim))?\s+attempts POST\s+(\/api\/[\w/-]+)$/,
+      /^([A-Z][a-z]+)(?:\s+on\s+(?:Web Chromium|Web Safari|Web|the app|Android|iOS Sim))?\s+attempts POST\s+(\/api\/[\w/-]+)$/,
     async handler(m, ctx) {
       const name = m[1];
       const apiPath = m[2];
@@ -8876,10 +9130,10 @@ const matchers = [
     // any other named field. First-match-wins keeps the search-specific
     // matchers winning for their form.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+types "([^"]*)" into the (\w+) field$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+types "([^"]*)" into the (\w+) field$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const text = m[3];
       const fieldName = m[4];
       const methodName =
@@ -8899,15 +9153,15 @@ const matchers = [
   },
   {
     // Wake 71 — UI no longer shows the <name> <kind>.
-    // j11:88 — `Raul's Android UI no longer shows the suspension screen`.
+    // j11:88 — `Raul's (?:app|Android) UI no longer shows the suspension screen`.
     // Semantic-equivalent of `does not show the X` phrased as a state
     // change. Reuses the same driver method as Wake 69's positive-form
     // (just with inverted assertion).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI no longer shows the ([\w ]+) (button|screen|banner|dialog|panel|tab)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI no longer shows the ([\w ]+) (button|screen|banner|dialog|panel|tab)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const noun = m[3].trim();
       const kind = m[4];
       const methodName =
@@ -9029,10 +9283,10 @@ const matchers = [
     // and the named other persona. Driver resolves the conv id from the
     // persona pair and navigates.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+opens (?:his|her|their) conversation with ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+opens (?:his|her|their) conversation with ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const otherName = m[3];
       const methodName =
         platform === 'Android'
@@ -9393,10 +9647,10 @@ const matchers = [
     // a missing translation. The "X" is a sample key; the driver uses
     // it to detect the sentinel format.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not show any raw i18n key like "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not show any raw i18n key like "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const sampleKey = m[3];
       const methodName =
         platform === 'Android'
@@ -9424,10 +9678,10 @@ const matchers = [
     // j13:13 — RTL layout verification. Driver returns current alignment
     // for the named field.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the (\w+) field aligned (left|right|center)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the (\w+) field aligned (left|right|center)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const fieldName = m[3];
       const expected = m[4];
       const methodName = platform.startsWith('Web')
@@ -9455,10 +9709,10 @@ const matchers = [
     // j13:18 — verify named English labels render in the persona's locale.
     // Driver receives the persona, target language, and parsed label list.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows (\w+) labels for ((?:"[^"]+"(?:,\s*)?)+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows (\w+) labels for ((?:"[^"]+"(?:,\s*)?)+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const language = m[3];
       const labelList = m[4];
       const labels = [...labelList.matchAll(/"([^"]+)"/g)].map((mm) => mm[1]);
@@ -9487,10 +9741,10 @@ const matchers = [
     // separator". j13:31 — driver checks the rendered balance string uses
     // the locale's correct separator.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the balance with locale-appropriate thousands separator$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the balance with locale-appropriate thousands separator$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webBalanceUsesLocaleSeparator'
         : platform === 'Android'
@@ -9512,16 +9766,19 @@ const matchers = [
     },
   },
   {
-    // Wake 75 — "<Name>'s Android UI layoutDirection is <RTL|LTR>".
+    // Wake 75 — "<Name>'s (?:app|Android) UI layoutDirection is <RTL|LTR>".
     // j13:39 — Android-specific layoutDirection attribute. Driver
     // introspects the root view's layoutDirection.
-    pattern: /^([A-Z][a-z]+)'s Android UI layoutDirection is (RTL|LTR)$/,
+    pattern: /^([A-Z][a-z]+)'s (?:app|Android) UI layoutDirection is (RTL|LTR)$/,
     async handler(m, ctx) {
       const expected = m[2];
-      if (!ctx.uiDriver?.androidGetLayoutDirection) {
-        return { ok: false, error: 'ctx.uiDriver.androidGetLayoutDirection not configured' };
+      if (!appMethod(ctx, 'GetLayoutDirection')) {
+        return {
+          ok: false,
+          error: `the app driver has no GetLayoutDirection (looked for appGetLayoutDirection / androidGetLayoutDirection / iosGetLayoutDirection)`,
+        };
       }
-      const actual = await ctx.uiDriver.androidGetLayoutDirection();
+      const actual = await appMethod(ctx, 'GetLayoutDirection')();
       if (actual !== expected) {
         return {
           ok: false,
@@ -9557,10 +9814,10 @@ const matchers = [
     // j13:27 + j13:71 — two corpus shapes share one matcher via optional
     // `(?:an? )?` article. Sends a gift (vs a message) — separate UI flow.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+sends (?:an? )?"([^"]+)" gift to ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+sends (?:an? )?"([^"]+)" gift to ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const giftName = m[3];
       const recipient = m[4];
       const methodName = platform.startsWith('Web')
@@ -9616,10 +9873,10 @@ const matchers = [
     // is in the named language. Driver receives empty labels array as
     // the discriminator.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows (\w+) labels$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows (\w+) labels$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const language = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsLocaleLabels'
@@ -9685,10 +9942,10 @@ const matchers = [
     // j13:60 — meta state-seed. Instructs runner to navigate N screens
     // and collect all rendered strings into ctx.scannedStrings.
     pattern:
-      /^the test runner scans all rendered strings on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI across (\d+) screens$/,
+      /^the test runner scans all rendered strings on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI across (\d+) screens$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const screens = parseInt(m[3], 10);
       const methodName = platform.startsWith('Web')
         ? 'webScanAllRenderedStrings'
@@ -9739,10 +9996,10 @@ const matchers = [
     // CDP `Network.emulateNetworkConditions` (Web) or equivalent for the
     // named profile (Slow 3G, Fast 3G, 4G, Offline, WiFi).
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) opens "([^"]+)" on (Slow 3G|Fast 3G|4G|Offline|WiFi)$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) opens "([^"]+)" on (Slow 3G|Fast 3G|4G|Offline|WiFi)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const urlPath = m[3];
       const profile = m[4];
       const methodName = platform.startsWith('Web')
@@ -9817,10 +10074,10 @@ const matchers = [
     // `types "X" into the search field` (different target field) and
     // `sends "X" gift to Y` (gift flow). Targets the message input.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) types "([^"]+)" and taps send$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) types "([^"]+)" and taps send$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const text = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webTypeAndSend'
@@ -9967,10 +10224,10 @@ const matchers = [
     // j14:41 — assert the most-recently-sent message (from a sibling
     // persona's perspective) appears in the currently-open conversation.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the message in the conversation$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the message in the conversation$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsLastMessage'
         : platform === 'Android'
@@ -9996,10 +10253,10 @@ const matchers = [
     // j14:79 — named-indicator presence assertion. Distinct from `<X>
     // button` / `<X> tab` matchers (different terminal kind word).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a "([^"]+)" indicator$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a "([^"]+)" indicator$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const indicatorName = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsNamedIndicator'
@@ -10025,10 +10282,10 @@ const matchers = [
     // Wake 79 — "<Name> on <Plat> picks template "<X>" and title "<Y>"".
     // j15:25 — composite room-creation: select template + name room.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) picks template "([^"]+)" and title "([^"]+)"$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) picks template "([^"]+)" and title "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const template = m[3];
       const title = m[4];
       const methodName = platform.startsWith('Web')
@@ -10056,10 +10313,10 @@ const matchers = [
     // j15:32 — app tab refresh (vs Web Admin refresh which has its own
     // matcher at line ~3163).
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) refreshes the "([^"]+)" tab$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) refreshes the "([^"]+)" tab$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const tab = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webRefreshTab'
@@ -10083,10 +10340,10 @@ const matchers = [
     // j15:42 — two-step composite gift-modal flow: pick gift, pick
     // recipient.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) selects "([^"]+)" and recipient "([^"]+)"$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) selects "([^"]+)" and recipient "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const gift = m[3];
       const recipient = m[4];
       const methodName = platform.startsWith('Web')
@@ -10113,10 +10370,10 @@ const matchers = [
     // Wake 79 — "<Name>'s <Plat> UI shows the "<X>" tier badge on the
     // room card". j15:36 — asserts the tier-badge text on a room card.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the "([^"]+)" tier badge on the room card$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the "([^"]+)" tier badge on the room card$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const tier = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsTierBadge'
@@ -10179,9 +10436,9 @@ const matchers = [
     // j10:79 — bridges back to j10 tail. Driver returns current seat
     // state (available/occupied/reserved).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows (?:his|her|their) seat as (available|occupied|reserved)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows (?:his|her|their) seat as (available|occupied|reserved)$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const expected = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webGetSeatState'
@@ -10209,7 +10466,7 @@ const matchers = [
     // AND <Z>'s <Plat> speakers`. Two-listener extension of Wake 66's
     // tester-hears matcher. Manual-only.
     pattern:
-      /^the tester hears ([A-Z][a-z]+)'s voice on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) speakers AND ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) speakers$/,
+      /^the tester hears ([A-Z][a-z]+)'s voice on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) speakers AND ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) speakers$/,
     async handler(m, ctx) {
       const speaker = m[1];
       const listenerA = { name: m[2], platform: m[3] };
@@ -10249,10 +10506,10 @@ const matchers = [
     // Wake 80 — "<Name> on <Plat> taps the gift icon in the room".
     // j15:41 — composite: open the gift modal from within a voice room.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) taps the gift icon in the room$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps the gift icon in the room$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webTapGiftIconInRoom'
         : platform === 'Android'
@@ -10695,10 +10952,10 @@ const matchers = [
     // total (corpus-bug detector), (b) driver returns the same total
     // (UI-drift detector).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows total beans earned this session = \(([\d\s+]+)\) = (\d+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows total beans earned this session = \(([\d\s+]+)\) = (\d+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const addendsExpr = m[3];
       const claimedTotal = parseInt(m[4], 10);
       const addends = addendsExpr.split('+').map((s) => parseInt(s.trim(), 10));
@@ -10734,10 +10991,10 @@ const matchers = [
     // j17:19 — `<Name> is also paired on <Plat> (same Firebase identity)
     // for <purpose>`. Records on ctx.pairedPlatforms.
     pattern:
-      /^([A-Z][a-z]+) is also paired on (Web Chromium|Web Safari|Web|Android|iOS Sim) \(same Firebase identity\) for (\w+)$/,
+      /^([A-Z][a-z]+) is also paired on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) \(same Firebase identity\) for (\w+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const purpose = m[3];
       if (!ctx.pairedPlatforms) ctx.pairedPlatforms = new Map();
       ctx.pairedPlatforms.set(name, { platform, purpose });
@@ -10749,10 +11006,11 @@ const matchers = [
     // j17:28 — `<Name> on <Plat> fills in: language "zh", level
     // "Beginner", title "Intro to Mandarin tones"`. Parses kv-list:
     // `<key> "<value>", <key> "<value>", ...`.
-    pattern: /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) fills in: (.+)$/,
+    pattern:
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) fills in: (.+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const kvText = m[3];
       // Parse `<key> "<value>"(, <key> "<value>")*` into a plain object.
       // The `[^"]*` quoted-value capture is bounded by `"` on both sides,
@@ -10786,10 +11044,10 @@ const matchers = [
     // j17:33 — `<Name> on <Plat> taps "<X>" on the <noun> card`. Driver
     // receives persona, button text, card type.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) taps "([^"]+)" on the (\w+) card$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps "([^"]+)" on the (\w+) card$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const buttonText = m[3];
       const cardType = m[4];
       const methodName = platform.startsWith('Web')
@@ -10818,10 +11076,10 @@ const matchers = [
     // with recipient "<Y>"`. Combines Wake 79's two-step gift modal
     // with Wake 80's gift-icon-in-room opener.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) taps the gift icon and selects "([^"]+)" with recipient "([^"]+)"$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps the gift icon and selects "([^"]+)" with recipient "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const gift = m[3];
       const recipient = m[4];
       const methodName = platform.startsWith('Web')
@@ -11034,10 +11292,10 @@ const matchers = [
     // "<X>"". j18:32. Driver verifies a PM thread with the named sender
     // appears in the persona's inbox.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a new PM thread with sender "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a new PM thread with sender "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const sender = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsNewPmThreadWithSender'
@@ -11174,10 +11432,10 @@ const matchers = [
     // Wake 83 — "<Name> on <Plat> taps "<X>" on his/her/their event-host
     // home". j16:43 — tap with contextual-location annotation.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) taps "([^"]+)" on (?:his|her|their) event-host home$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps "([^"]+)" on (?:his|her|their) event-host home$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const buttonText = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webTapOnEventHostHome'
@@ -11203,10 +11461,10 @@ const matchers = [
     // Wake 83 — "<Name>'s <Plat> UI shows the roster panel with <Other>
     // listed as "<status>"". j16:50 — composite roster assertion.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the roster panel with ([A-Z][a-z]+) listed as "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the roster panel with ([A-Z][a-z]+) listed as "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const otherName = m[3];
       const status = m[4];
       const methodName = platform.startsWith('Web')
@@ -11239,10 +11497,13 @@ const matchers = [
     async handler(m, ctx) {
       const name = m[1];
       const tab = m[3];
-      if (!ctx.uiDriver?.androidOpenTab) {
-        return { ok: false, error: 'ctx.uiDriver.androidOpenTab not configured' };
+      if (!appMethod(ctx, 'OpenTab')) {
+        return {
+          ok: false,
+          error: `the app driver has no OpenTab (looked for appOpenTab / androidOpenTab / iosOpenTab)`,
+        };
       }
-      const ok = await ctx.uiDriver.androidOpenTab(name, tab);
+      const ok = await appMethod(ctx, 'OpenTab')(name, tab);
       if (!ok) {
         return { ok: false, error: `${name}: open "${tab}" tab did not complete` };
       }
@@ -11254,10 +11515,10 @@ const matchers = [
     // j10:63 — positive-persistence variant of Wake 69's `UI shows the
     // X <kind>`. Reuses the same driver — `still` is just author wording.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI still shows the ([\w ]+) (button|screen|banner|dialog|panel|tab)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI still shows the ([\w ]+) (button|screen|banner|dialog|panel|tab)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const noun = m[3].trim();
       const kind = m[4];
       const methodName = platform.startsWith('Web')
@@ -11285,9 +11546,9 @@ const matchers = [
     // j10:62 — bare negative-nav assertion. Driver returns truthy iff
     // a navigation occurred since the last snapshot.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does not navigate away$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does not navigate away$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webDidNavigate'
         : platform === 'Android'
@@ -11309,10 +11570,10 @@ const matchers = [
     // Wake 84 — "<Name>'s <Plat> UI does NOT navigate back into room
     // "<X>" automatically". j10:72.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI does NOT navigate back into room "([^"]+)" automatically$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI does NOT navigate back into room "([^"]+)" automatically$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const roomId = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webDidAutoRejoinRoom'
@@ -11339,10 +11600,10 @@ const matchers = [
     // <indicator> indicator". j10:28 — composite: room screen + indicator
     // state in one step.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the room screen with ([\w-]+) indicator$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the room screen with ([\w-]+) indicator$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const indicator = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsRoomScreenWithIndicator'
@@ -11368,10 +11629,10 @@ const matchers = [
     // Wake 84 — "<Name>'s <Plat> UI is still in the room". j14:67 —
     // bare persistence assertion.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI is still in the room$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI is still in the room$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webIsStillInRoom'
         : platform === 'Android'
@@ -11393,10 +11654,10 @@ const matchers = [
     // Wake 84 — "<Name>'s <Plat> network restores". j14:70 — bare
     // network-event step (no profile — driver decides what "restores"
     // means based on prior state).
-    pattern: /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) network restores$/,
+    pattern: /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) network restores$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webNetworkRestores'
         : platform === 'Android'
@@ -11419,7 +11680,7 @@ const matchers = [
     // with mic <state>" (state-seed, non-seated). j14:46. Writes
     // participantIds + micStates (no seat assignment).
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+(?:is\s+)?on (?:Web Chromium|Web Safari|Web|Android|iOS Sim)\s+(?:is\s+)?joined to voice room "([^"]+)" with mic (open|muted)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+(?:is\s+)?on (?:Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+(?:is\s+)?joined to voice room "([^"]+)" with mic (open|muted)$/,
     async handler(m, ctx) {
       const name = m[1];
       const roomId = m[3];
@@ -11447,7 +11708,7 @@ const matchers = [
     // <state>" (state-seed, seated). j14:62. Writes participantIds +
     // seats[] + micStates.
     pattern:
-      /^([A-Z][a-z]+)\s+(?:is\s+)?on (?:Web Chromium|Web Safari|Web|Android|iOS Sim)\s+joined to room "([^"]+)" seated with mic (open|muted)$/,
+      /^([A-Z][a-z]+)\s+(?:is\s+)?on (?:Web Chromium|Web Safari|Web|the app|Android|iOS Sim)\s+joined to room "([^"]+)" seated with mic (open|muted)$/,
     async handler(m, ctx) {
       const name = m[1];
       const roomId = m[2];
@@ -11509,10 +11770,10 @@ const matchers = [
     // occupied + "<X>" badge". j15:34 — composite: room screen + seat-
     // occupied + named tier badge.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the room screen with host seat occupied \+ "([^"]+)" badge$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the room screen with host seat occupied \+ "([^"]+)" badge$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const badge = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsRoomScreenWithHostBadge'
@@ -11543,7 +11804,7 @@ const matchers = [
       /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|iOS Sim) sends "([^"]+)" to ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const item = m[3];
       const recipient = m[4];
       const methodName = platform.startsWith('Web') ? 'webSendItemTo' : 'iosSendItemTo';
@@ -11614,10 +11875,10 @@ const matchers = [
   {
     // Wake 86 — "<Name> on <Plat> taps "<X>" in the roster panel". j16:51.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) taps "([^"]+)" in the roster panel$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps "([^"]+)" in the roster panel$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const buttonText = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webTapInRosterPanel'
@@ -11643,10 +11904,10 @@ const matchers = [
     // Wake 86 — "<Name>'s <Plat> UI shows the classroom room screen with
     // "<X>" badge on the host seat". j17:35.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the classroom room screen with "([^"]+)" badge on the host seat$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the classroom room screen with "([^"]+)" badge on the host seat$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const badge = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsClassroomWithHostBadge'
@@ -11672,10 +11933,10 @@ const matchers = [
     // Wake 86 — "<Name>'s <Plat> UI shows <Other>'s "<X>" room card".
     // j17:40 — possessive room-card assertion: viewer + owner + title.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s "([^"]+)" room card$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s "([^"]+)" room card$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const owner = m[3];
       const title = m[4];
       const methodName = platform.startsWith('Web')
@@ -11701,10 +11962,10 @@ const matchers = [
   {
     // Wake 86 — "<Name> on <Plat> approves <Other>'s seat request". j17:51.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) approves ([A-Z][a-z]+)'s seat request$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) approves ([A-Z][a-z]+)'s seat request$/,
     async handler(m, ctx) {
       const host = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const requester = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webApproveSeatRequest'
@@ -11751,10 +12012,10 @@ const matchers = [
     // sequence taps atomically (avoid race where partial-rating gets
     // submitted by a flaky scroll).
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) selects (\d+) stars? and submits feedback "([^"]*)"$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) selects (\d+) stars? and submits feedback "([^"]*)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const stars = Number(m[3]);
       const feedback = m[4];
       const methodName = platform.startsWith('Web')
@@ -11783,10 +12044,10 @@ const matchers = [
     // iff the named chart component is rendered; bin-level value checks
     // belong in a separate Wake (would need a different step phrasing).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a chart of beans earned per week$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a chart of beans earned per week$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsBeansPerWeekChart'
         : platform === 'Android'
@@ -11834,10 +12095,10 @@ const matchers = [
     // Action only — no follow-up assertion (the next Then-step covers
     // the post-refresh state).
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) refreshes the language rail$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) refreshes the language rail$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webRefreshLanguageRail'
         : platform === 'Android'
@@ -11932,7 +12193,7 @@ const matchers = [
     // scenario asserts cohort-specific behaviour by labelling the actor,
     // and downstream cohort-gated steps should believe the label.
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s*\((minor|adult)\)\s+is signed in on\s+(Web Chromium|Web Safari|Web|Android|iOS Sim)$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s*\((minor|adult)\)\s+is signed in on\s+(Web Chromium|Web Safari|Web|the app|Android|iOS Sim)$/,
     async handler(m, ctx) {
       const name = m[1];
       const pCode = m[2];
@@ -11991,10 +12252,10 @@ const matchers = [
     // verbatim so it can dispatch to the right slot ("on the sender
     // avatar", "with Arabic label", etc.).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the official badge(?: (.+))?$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the official badge(?: (.+))?$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const suffix = m[3] || '';
       const methodName = platform.startsWith('Web')
         ? 'webShowsOfficialBadge'
@@ -12022,10 +12283,10 @@ const matchers = [
     // sequences both atomically so the test can't observe a half-open
     // state (would be a race against profile-modal animation).
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) opens ([A-Z][a-z]+)'s profile and taps "([^"]+)"$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) opens ([A-Z][a-z]+)'s profile and taps "([^"]+)"$/,
     async handler(m, ctx) {
       const actor = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const button = m[4];
       const methodName = platform.startsWith('Web')
@@ -12054,10 +12315,10 @@ const matchers = [
     // PM, inbox, ...) → other's profile. Source word tells the driver
     // which entry-point gesture to use.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) opens ([A-Z][a-z]+)'s profile from the (\w+)$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) opens ([A-Z][a-z]+)'s profile from the (\w+)$/,
     async handler(m, ctx) {
       const actor = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const source = m[4];
       const methodName = platform.startsWith('Web')
@@ -12156,10 +12417,10 @@ const matchers = [
     // English fallback). The static language-name → BCP-47-code map
     // covers the 20 supported locales.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows non-empty ([A-Z][a-z]+) text for section (\d+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows non-empty ([A-Z][a-z]+) text for section (\d+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const langName = m[3];
       const section = Number(m[4]);
       const LOCALE_NAME_TO_CODE = {
@@ -12215,10 +12476,10 @@ const matchers = [
     // future "disables the comment input" / "gift input" don't need a
     // new matcher.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI disables the (\w+) input$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI disables the (\w+) input$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const inputName = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webDisablesInput'
@@ -12247,10 +12508,10 @@ const matchers = [
     // (the "with the text" suffix is rhetorical — there's no assertion
     // on a specific string).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows ([A-Z][a-z]+)'s appeal with the text$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows ([A-Z][a-z]+)'s appeal with the text$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webAdminShowsAppealText'
@@ -12310,10 +12571,10 @@ const matchers = [
     // search, and taps control X within it. Lazy `(.+?)` is bounded by
     // the literal " from the " so backtracking can't explode.
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) taps the ([^"]+?) from the (.+)$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps the ([^"]+?) from the (.+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const source = m[4];
       const methodName = platform.startsWith('Web')
@@ -12614,10 +12875,10 @@ const matchers = [
     // must render in the named language, not the user's locale
     // fallback. Driver receives (name, BCP-47 code).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the welcome PM body in ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the welcome PM body in ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const langName = m[3];
       const LOCALE_NAME_TO_CODE = {
         Arabic: 'ar',
@@ -12698,11 +12959,11 @@ const matchers = [
     // not end-anchored so stripStepAnnotation leaves it; cohort tag
     // is informational here (sign-in happened earlier).
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s*\((?:minor|adult)\)\s+opens the (\w+) tab on (Web Chromium|Web Safari|Web|Android|iOS Sim)$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s*\((?:minor|adult)\)\s+opens the (\w+) tab on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim)$/,
     async handler(m, ctx) {
       const name = m[1];
       const tab = m[3];
-      const platform = m[4];
+      const platform = canonicalPlatform(m[4], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webOpensTab'
         : platform === 'Android'
@@ -12730,10 +12991,10 @@ const matchers = [
     // stores them on ctx.lastTableEntries so the next "each entry
     // shows <fields>" step can verify field presence.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows a table of recent (\w+(?:\s+\w+){0,2})$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows a table of recent (\w+(?:\s+\w+){0,2})$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const noun = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webAdminShowsTableOf'
@@ -12791,10 +13052,10 @@ const matchers = [
     // amounts". j15:35. Bare list-presence + per-row-amount assertion;
     // driver returns true only when both conditions hold.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the list of contributors with amounts$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the list of contributors with amounts$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsContributorsList'
         : platform === 'Android'
@@ -12821,10 +13082,10 @@ const matchers = [
     // active PM thread DOM has `dir="rtl"` (or "ltr") so the layout
     // flips correctly for RTL locales.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the PM thread with document direction "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the PM thread with document direction "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const direction = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsPmThreadDirection'
@@ -12874,11 +13135,11 @@ const matchers = [
     // a preceding step). Runner treats it as a normal Then; if THIS
     // condition holds within the timeout, the alternate is satisfied.
     pattern:
-      /^OR within (\d+)ms ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a "([^"]+)" toast and navigates back to "([^"]+)"$/,
+      /^OR within (\d+)ms ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a "([^"]+)" toast and navigates back to "([^"]+)"$/,
     async handler(m, ctx) {
       const timeout = Number(m[1]);
       const name = m[2];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const toast = m[4];
       const route = m[5];
       const methodName = platform.startsWith('Web')
@@ -12930,7 +13191,7 @@ const matchers = [
     // conditions (mic/AV negotiation, host detection, LiveKit token
     // exhaustion).
     pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) and ([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|Android|iOS Sim) both join the event room$/,
+      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) and ([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) both join the event room$/,
     async handler(m, ctx) {
       const name1 = m[1];
       const plat1 = m[2];
@@ -12963,11 +13224,11 @@ const matchers = [
     // Uses ctx.testerDriver — established in Wake 80's multi-listener
     // variants for audio probes that bypass UI.
     pattern:
-      /^the tester hears ([A-Z][a-z]+)'s voice on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) speakers$/,
+      /^the tester hears ([A-Z][a-z]+)'s voice on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) speakers$/,
     async handler(m, ctx) {
       const speaker = m[1];
       const listener = m[2];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       if (!ctx.testerDriver?.hearsVoiceOnListener) {
         return { ok: false, error: 'ctx.testerDriver.hearsVoiceOnListener not configured' };
       }
@@ -12988,10 +13249,10 @@ const matchers = [
     // totals on the paired session against ctx.lastTotals (set by a
     // prior step that recorded the primary session's totals).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI \(paired session\) also shows the same totals$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI \(paired session\) also shows the same totals$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       if (!ctx.lastTotals) {
         return {
           ok: false,
@@ -13024,7 +13285,7 @@ const matchers = [
     // on the other's listener device. Both directions checked; both
     // must pass.
     pattern:
-      /^the tester hears ([A-Z][a-z]+) on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) speakers AND ([A-Z][a-z]+) on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) speakers$/,
+      /^the tester hears ([A-Z][a-z]+) on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) speakers AND ([A-Z][a-z]+) on ([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) speakers$/,
     async handler(m, ctx) {
       const speaker1 = m[1];
       const listener1 = m[2];
@@ -13299,7 +13560,7 @@ const matchers = [
     // session + room ownership + mic/seat state. Plants a `rooms/<X>`
     // doc with hostUid + initial participantIds containing the host.
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (Web Chromium|Web Safari|Web|Android|iOS Sim) and hosting voice room "([^"]+)" with mic open \+ seated$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) and hosting voice room "([^"]+)" with mic open \+ seated$/,
     async handler(m, ctx) {
       const name = m[1];
       const pCode = m[2];
@@ -13332,7 +13593,7 @@ const matchers = [
     // persona's uniqueId to the room's participantIds (without
     // seating). Assumes the room doc already exists.
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (Web Chromium|Web Safari|Web|Android|iOS Sim) and joined to "([^"]+)" as a non-seated participant$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) and joined to "([^"]+)" as a non-seated participant$/,
     async handler(m, ctx) {
       const name = m[1];
       const pCode = m[2];
@@ -13435,10 +13696,10 @@ const matchers = [
     // (e.g., "3G", "Edge"). Records on ctx.pairedPlatforms so the
     // driver can apply the network condition.
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is also paired on (Web Chromium|Web Safari|Web|Android|iOS Sim) with Network Link Conditioner "([^"]+)" preset$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is also paired on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) with Network Link Conditioner "([^"]+)" preset$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[3];
+      const platform = canonicalPlatform(m[3], ctx);
       const preset = m[4];
       if (!ctx.pairedPlatforms) ctx.pairedPlatforms = new Map();
       ctx.pairedPlatforms.set(name, { platform, networkPreset: preset });
@@ -13452,10 +13713,10 @@ const matchers = [
     // session (no separate Firebase auth) and records the paired
     // platform.
     pattern:
-      /^([A-Z][a-z]+) is also signed in on (Web Chromium|Web Safari|Web|Android|iOS Sim) \(same Firebase identity\) for hosting$/,
+      /^([A-Z][a-z]+) is also signed in on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) \(same Firebase identity\) for hosting$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const personas = loadPersonas();
       const p = personas.get(name);
       if (!p) return { ok: false, error: `persona "${name}" not in registry` };
@@ -13500,7 +13761,7 @@ const matchers = [
     // `[^()]+?` excludes parens inside the with-clause. The optional
     // `(?:\s+\([^)]*\))?` here absorbs the annotation paren.
     pattern:
-      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (Web Chromium|Web Safari|Web|Android|iOS Sim) with cohort=(\w+)(?:\s+\([^)]*\))?\s+and locale=([a-z]{2}(?:-[A-Z]{2})?)$/,
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) with cohort=(\w+)(?:\s+\([^)]*\))?\s+and locale=([a-z]{2}(?:-[A-Z]{2})?)$/,
     async handler(m, ctx) {
       const name = m[1];
       const pCode = m[2];
@@ -13524,10 +13785,10 @@ const matchers = [
     // Wake 97 — "<Name>'s <Plat> UI shows <Other>'s user card". j07.
     // Inner step under `within Nms`. Bare user-card-visibility check.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s user card$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s user card$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsUserCard'
@@ -13564,10 +13825,10 @@ const matchers = [
     // Wake 97 — "<Name>'s <Plat> UI shows the warning banner overlay on
     // top of the room". j10. Specific cohort-warning overlay assertion.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the warning banner overlay on top of the room$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the warning banner overlay on top of the room$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsRoomWarningBanner'
         : platform === 'Android'
@@ -13627,10 +13888,10 @@ const matchers = [
     // Wake 97 — "<Name>'s <Plat> UI shows skeleton placeholders for
     // user cards". j14. Low-bandwidth loading-state assertion.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows skeleton placeholders for user cards$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows skeleton placeholders for user cards$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsUserCardSkeletons'
         : platform === 'Android'
@@ -13656,10 +13917,10 @@ const matchers = [
     // Generic banner-text assertion (sibling of Wake 30's toast
     // matcher; banners persist while toasts auto-dismiss).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a "([^"]+)" banner$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a "([^"]+)" banner$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const banner = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsBanner'
@@ -13708,10 +13969,10 @@ const matchers = [
     // Likes, etc.) shows a +N increment. Driver receives (name, n,
     // label). j01/j02/j07 hits.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a \+(\d+) in the "([^"]+)" count$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a \+(\d+) in the "([^"]+)" count$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const delta = Number(m[3]);
       const label = m[4];
       const methodName = platform.startsWith('Web')
@@ -13741,10 +14002,10 @@ const matchers = [
     // {target=X, status=Y}". Driver receives (viewer, n, targetId,
     // status).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows (\d+) row for "([^"]+)" with status "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows (\d+) row for "([^"]+)" with status "([^"]+)"$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const count = Number(m[3]);
       const targetId = m[4];
       const status = m[5];
@@ -13859,10 +14120,10 @@ const matchers = [
     // displayName "<X>"]`. j01/j02 discovery list. Optional displayName
     // suffix lets the driver also verify the rendered string.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+) in the results(?: with displayName "([^"]+)")?$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+) in the results(?: with displayName "([^"]+)")?$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const displayName = m[4] || null;
       const methodName = platform.startsWith('Web')
@@ -13901,10 +14162,10 @@ const matchers = [
     // phrasing (two verbs in one step). Driver parses suffix to decide
     // which form (text-from-key / locale-string).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI (?:opens conversation "([^"]+)" )?shows the frozen-banner element (.+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI (?:opens conversation "([^"]+)" )?shows the frozen-banner element (.+)$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const convId = m[3] || null;
       const suffix = m[4];
       const methodName = platform.startsWith('Web')
@@ -13933,10 +14194,10 @@ const matchers = [
     // expected post-navigation state (host seat occupied / non-seated
     // participant) — driver dispatches based on the trailing context.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI navigates to the room screen (.+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI navigates to the room screen (.+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const suffix = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webNavigatesToRoomScreen'
@@ -13962,10 +14223,10 @@ const matchers = [
     // Wake 99 — `<Name>'s <Plat> UI shows a "<X>" gift from <Other>`.
     // j01 gift-receipt notification on recipient's view.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a "([^"]+)" gift from ([A-Z][a-z]+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a "([^"]+)" gift from ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const recipient = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const giftId = m[3];
       const sender = m[4];
       const methodName = platform.startsWith('Web')
@@ -13992,10 +14253,10 @@ const matchers = [
     // Wake 99 — "<Name>'s <Plat> UI shows only minor-cohort users in
     // the rankings". j02 cohort-filtered rankings list.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows only minor-cohort users in the rankings$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows only minor-cohort users in the rankings$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsOnlyMinorCohortInRankings'
         : platform === 'Android'
@@ -14020,10 +14281,10 @@ const matchers = [
     // Wake 99 — `<Name>'s <Plat> UI navigates to "<Path>"`. j03+ post-
     // sign-in navigation assertion. Driver receives (name, path).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI navigates to "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI navigates to "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const route = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webNavigatesToPath'
@@ -14063,10 +14324,10 @@ const matchers = [
     // Wake 100 — `<Name>'s <Plat> UI navigates back to the "<X>" tab`.
     // j09, 2 corpus rows. Post-room-exit navigation back to a named tab.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI navigates back to the "([^"]+)" tab$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI navigates back to the "([^"]+)" tab$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const tab = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webNavigatesBackToTab'
@@ -14093,10 +14354,10 @@ const matchers = [
     // [with <suffix>]`. j07, 2 corpus rows. <noun>: message/reply.
     // Optional trailing context (e.g., "with timestamp + sent indicator").
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the (\w+) in the thread(?: (.+))?$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the (\w+) in the thread(?: (.+))?$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const noun = m[3];
       const suffix = m[4] || '';
       const methodName = platform.startsWith('Web')
@@ -14123,10 +14384,10 @@ const matchers = [
     // Wake 100 — `<Name>'s <Plat> UI shows the new "<X>" gift entry`.
     // j05 gift-log entry on recipient view.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the new "([^"]+)" gift entry$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the new "([^"]+)" gift entry$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const giftId = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsNewGiftEntry'
@@ -14153,10 +14414,10 @@ const matchers = [
     // with sender "<X>" and gift "<Y>"`. j05 — toast/banner when a gift
     // is received in real time.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the in-app gift notification with sender "([^"]+)" and gift "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the in-app gift notification with sender "([^"]+)" and gift "([^"]+)"$/,
     async handler(m, ctx) {
       const recipient = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const sender = m[3];
       const giftId = m[4];
       const methodName = platform.startsWith('Web')
@@ -14184,10 +14445,10 @@ const matchers = [
     // the top N". j05 leaderboard rank visibility. Pronoun is purely
     // grammatical, not captured.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows (?:her|his|their) own rank in the top (\d+)$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows (?:her|his|their) own rank in the top (\d+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const topN = Number(m[3]);
       const methodName = platform.startsWith('Web')
         ? 'webShowsOwnRankInTop'
@@ -14215,10 +14476,10 @@ const matchers = [
     // (not a fresh API fetch). The balance can include commas (e.g.,
     // "5,000") so it's captured as a string, not a number.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the new "([^"]+)" balance via Firestore listener$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the new "([^"]+)" balance via Firestore listener$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const balance = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsBalanceViaListener'
@@ -14245,10 +14506,10 @@ const matchers = [
     // indicator". j09 (mic-on) / j10 (mic-off). Generic per-seat
     // indicator assertion; <X> describes the indicator type.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s seat with ([\w-]+) indicator$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+)'s seat with ([\w-]+) indicator$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const indicator = m[4];
       const methodName = platform.startsWith('Web')
@@ -14275,10 +14536,10 @@ const matchers = [
     // Wake 101 — "<Name>'s <Plat> UI navigates to the warning screen".
     // j10 first half. Second half (relaunch) uses a different verb.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI navigates to the warning screen$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI navigates to the warning screen$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webNavigatesToWarningScreen'
         : platform === 'Android'
@@ -14304,10 +14565,10 @@ const matchers = [
     // next launch". j10 — verifies persistence of the warning gate
     // across app relaunch.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the warning screen again on next launch$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the warning screen again on next launch$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsWarningScreenOnRelaunch'
         : platform === 'Android'
@@ -14335,10 +14596,10 @@ const matchers = [
     // dispatch logic (the alternative is in the test plan author's
     // mental model, not the runner's).
     pattern:
-      /^(?:either )?([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI is still in the room (.+)$/,
+      /^(?:either )?([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI is still in the room (.+)$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const suffix = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webIsStillInRoom'
@@ -14365,10 +14626,10 @@ const matchers = [
     // with "<X>" + approve/deny`. j09 — host receives notification
     // when a participant requests a seat.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a seat-request notification with "([^"]+)" \+ approve\/deny$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a seat-request notification with "([^"]+)" \+ approve\/deny$/,
     async handler(m, ctx) {
       const host = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const requester = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsSeatRequestNotification'
@@ -14394,10 +14655,10 @@ const matchers = [
     // Wake 101 — `<Name>'s <Plat> UI seat indicator transitions from
     // "<X>" to "<Y>"`. j09 — visual state transition assertion.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI seat indicator transitions from "([^"]+)" to "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI seat indicator transitions from "([^"]+)" to "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const from = m[3];
       const to = m[4];
       const methodName = platform.startsWith('Web')
@@ -14445,10 +14706,10 @@ const matchers = [
     // Wake 102 — `<Name>'s <Plat> UI replaces follow button with "<X>"`.
     // j07 — UI element swap after follow action completes.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI replaces follow button with "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI replaces follow button with "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const buttonId = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webReplacesFollowButton'
@@ -14475,10 +14736,10 @@ const matchers = [
     // <Other> highlighted as unread". j07 — recipient's inbox shows
     // new unread conversation from sender.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a new conversation with ([A-Z][a-z]+) highlighted as unread$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a new conversation with ([A-Z][a-z]+) highlighted as unread$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const other = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsNewUnreadConversation'
@@ -14505,10 +14766,10 @@ const matchers = [
     // seat grid". j09 — specific seat-position assertion on the visual
     // grid.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows ([A-Z][a-z]+) in seat (\d+) of the seat grid$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows ([A-Z][a-z]+) in seat (\d+) of the seat grid$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const seatNum = Number(m[4]);
       const methodName = platform.startsWith('Web')
@@ -14557,10 +14818,10 @@ const matchers = [
     // Wake 102 — `<Name>'s <Plat> UI shows the system PM from Officia
     // "<X>"`. j11 — recipient sees a moderation-outcome system PM.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the system PM from Officia "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the system PM from Officia "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const subject = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsSystemPmFromOfficia'
@@ -14586,10 +14847,10 @@ const matchers = [
     // Wake 102 — `<Name>'s <Plat> UI shows the warning screen with
     // reason "<X>"`. j11 — punished user sees moderation reason.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the warning screen with reason "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the warning screen with reason "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const reason = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsWarningScreenWithReason'
@@ -14615,10 +14876,10 @@ const matchers = [
     // Wake 103 — "<Name>'s <Plat> UI navigates to <Other>'s profile
     // screen". j07 — profile-tap navigation.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI navigates to ([A-Z][a-z]+)'s profile screen$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI navigates to ([A-Z][a-z]+)'s profile screen$/,
     async handler(m, ctx) {
       const actor = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const target = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webNavigatesToProfileScreen'
@@ -14645,10 +14906,10 @@ const matchers = [
     // stalkers/profile-visits counter`. j07 — profile-visit count
     // increment. Specific phrasing (not a generic `<X>` count badge).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a \+(\d+) in the stalkers\/profile-visits counter$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a \+(\d+) in the stalkers\/profile-visits counter$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const delta = Number(m[3]);
       const methodName = platform.startsWith('Web')
         ? 'webShowsStalkersDelta'
@@ -14674,10 +14935,10 @@ const matchers = [
     // Wake 103 — `<Name>'s <Plat> UI shows the edited body "<X>" with
     // an "<Y>" tag`. j07 — message-edit indicator on the recipient view.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the edited body "([^"]+)" with an "([^"]+)" tag$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the edited body "([^"]+)" with an "([^"]+)" tag$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const body = m[3];
       const tag = m[4];
       const methodName = platform.startsWith('Web')
@@ -14705,10 +14966,10 @@ const matchers = [
     // participants list". j09 — confirms a participant is visible in
     // multiple session views.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI also shows ([A-Z][a-z]+) in the participants list$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI also shows ([A-Z][a-z]+) in the participants list$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const other = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webAlsoShowsInParticipantsList'
@@ -14734,10 +14995,10 @@ const matchers = [
     // Wake 103 — `<Name>'s <Plat> UI shows mic icon as "<X>"`. j09 —
     // mic-state indicator (open/closed/muted).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows mic icon as "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows mic icon as "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const state = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webShowsMicIconAs'
@@ -14763,10 +15024,10 @@ const matchers = [
     // Wake 103 — "<Name>'s <Plat> UI shows the room-closed summary
     // panel". j09 — post-room-close summary view.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the room-closed summary panel$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the room-closed summary panel$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsRoomClosedSummary'
         : platform === 'Android'
@@ -14792,10 +15053,10 @@ const matchers = [
     // back to "<Y>"`. j10 — toast + nav (no timeout prefix, distinct
     // from Wake 93's OR-within variant).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows a "([^"]+)" toast and navigates back to "([^"]+)"$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows a "([^"]+)" toast and navigates back to "([^"]+)"$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const toast = m[3];
       const route = m[4];
       const methodName = platform.startsWith('Web')
@@ -14915,10 +15176,10 @@ const matchers = [
     // table". j12 — generic admin table row-count assertion. Distinct
     // from Wake 98's "row for X with status Y" — this is plain count.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows (\d+) rows in the (\w+(?:[ -]\w+)?) table$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows (\d+) rows in the (\w+(?:[ -]\w+)?) table$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const count = Number(m[3]);
       const tableName = m[4];
       const methodName = platform.startsWith('Web')
@@ -14946,10 +15207,10 @@ const matchers = [
     // j04 — negative assertion after force-eject. Sibling of Wake 101's
     // "is still in the room <suffix>" matcher.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI is no longer in the voice room$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI is no longer in the voice room$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webIsNoLongerInVoiceRoom'
         : platform === 'Android'
@@ -14975,10 +15236,10 @@ const matchers = [
     // j10 — opposite of "is still in but unable to interact" — actor
     // is unaffected by the mid-room warning event.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI continues normally in the room$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI continues normally in the room$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webContinuesNormallyInRoom'
         : platform === 'Android'
@@ -15005,10 +15266,10 @@ const matchers = [
     // (not the WAKE-100 generic in-thread variant, which has a noun
     // capture; this is "the message" specifically).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the message in the conversation thread$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the message in the conversation thread$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsMessageInConversationThread'
         : platform === 'Android'
@@ -15033,10 +15294,10 @@ const matchers = [
     // Wake 105 — "<Name>'s <Plat> Admin UI shows the new report in
     // the queue". j11 — admin sees a freshly-filed report.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows the new report in the queue$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows the new report in the queue$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webAdminShowsNewReportInQueue'
         : platform === 'Android'
@@ -15062,10 +15323,10 @@ const matchers = [
     // message". j11 — sequential corpus-specific assertion (after
     // a first message; this is the next one).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) UI shows the second offensive message$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the second offensive message$/,
     async handler(m, ctx) {
       const name = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const methodName = platform.startsWith('Web')
         ? 'webShowsSecondOffensiveMessage'
         : platform === 'Android'
@@ -15091,10 +15352,10 @@ const matchers = [
     // counters: N reports, N verifications, N appeals". j12 — admin
     // landing page counters. Driver receives (viewer, {reports, verifications, appeals}).
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows the dashboard with counters: (\d+) reports, (\d+) verifications, (\d+) appeals$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows the dashboard with counters: (\d+) reports, (\d+) verifications, (\d+) appeals$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const reports = Number(m[3]);
       const verifications = Number(m[4]);
       const appeals = Number(m[5]);
@@ -15252,10 +15513,10 @@ const matchers = [
     // Wake 106 — `<Name>'s <Plat> Admin UI shows the "<X>" stat`. j12
     // — named-stat visibility on the admin dashboard.
     pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|Android|iOS Sim) Admin UI shows the "([^"]+)" stat$/,
+      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) Admin UI shows the "([^"]+)" stat$/,
     async handler(m, ctx) {
       const viewer = m[1];
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const statName = m[3];
       const methodName = platform.startsWith('Web')
         ? 'webAdminShowsStat'
@@ -16186,15 +16447,18 @@ const matchers = [
   // whole matrix run gets misattributed to the product.
   {
     // "Adam [P-01] has the local-flavor APK installed on Android"
-    // "…dev-flavor APK installed on Android with DEV_QA_PERSONAS_PASSWORD env var baked in"
+    // "…dev-flavor APK installed on (?:the app|Android) with DEV_QA_PERSONAS_PASSWORD env var baked in"
     // "…prod-flavor APK installed with DEV_QA_PERSONAS_PASSWORD accidentally set"
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? has the (local|dev|prod)-flavor APK installed(?: on Android)?(?: with DEV_QA_PERSONAS_PASSWORD (env var baked in|accidentally set))?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? has the (local|dev|prod)-flavor APK installed(?: on (?:the app|Android))?(?: with DEV_QA_PERSONAS_PASSWORD (env var baked in|accidentally set))?$/,
     async handler(m, ctx) {
       const [, name, , flavor, passwordClause] = m;
       const driver = ctx.uiDriver;
       if (!driver?.androidIsFlavorInstalled) {
-        return { ok: false, error: 'ctx.uiDriver.androidIsFlavorInstalled not configured' };
+        return {
+          ok: false,
+          error: `the app driver has no IsFlavorInstalled (looked for appIsFlavorInstalled / androidIsFlavorInstalled / iosIsFlavorInstalled)`,
+        };
       }
       try {
         if (!(await driver.androidIsFlavorInstalled(flavor))) {
@@ -16225,9 +16489,9 @@ const matchers = [
     },
   },
   {
-    // "Adam [P-01] has the local-flavor IPA installed on iPhone"
+    // "Adam [P-01] has the local-flavor IPA installed on (?:iPhone|iOS|the app)"
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? has the (local|dev|prod)-flavor IPA installed on iPhone$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? has the (local|dev|prod)-flavor IPA installed on (?:iPhone|iOS|the app)$/,
     async handler(m, ctx) {
       const [, name, , flavor] = m;
       const driver = ctx.uiDriver;
@@ -16278,9 +16542,9 @@ const matchers = [
     },
   },
   {
-    // "Adam on Android opens the app for the first time"
+    // "Adam on (?:the app|Android) opens the app for the first time"
     // "Adam on iPhone opens the app for the first time"
-    pattern: /^([A-Z][a-z]+) on (Android|iPhone) opens the app for the first time$/,
+    pattern: /^([A-Z][a-z]+) on (the app|Android|iPhone) opens the app for the first time$/,
     async handler(m, ctx) {
       const [, name, platform] = m;
       const driver = ctx.uiDriver;
@@ -16331,11 +16595,11 @@ const matchers = [
     },
   },
   {
-    // "Adam's Android UI is still on the sign-in screen" — a NEGATIVE
+    // "Adam's (?:app|Android) UI is still on the sign-in screen" — a NEGATIVE
     // assertion: the tap must not have navigated anywhere.
-    pattern: /^([A-Z][a-z]+)'s (Android|iOS|iPhone) UI is still on the sign-in screen$/,
+    pattern: /^([A-Z][a-z]+)'s (app|Android|iOS|iPhone) UI is still on the sign-in screen$/,
     async handler(m, ctx) {
-      const platform = m[2];
+      const platform = canonicalPlatform(m[2], ctx);
       const driver = ctx.uiDriver;
       const dumpMethod = platform === 'Android' ? 'androidUiDump' : 'iosUiDump';
       if (!driver?.[dumpMethod]) {

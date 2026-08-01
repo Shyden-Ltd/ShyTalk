@@ -16,7 +16,7 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
   Background:
     Given the local stack is healthy
     Given the device locale is "ja"
-    Given Hayato [P-06] is signed in on Android with cohort=adult (DOB=2007-01-01 in users doc)
+    Given Hayato [P-06] is signed in on the app with cohort=adult (DOB=2007-01-01 in users doc)
     Given Hayato has followingIds=[50000010, 50000060] (two adult follows)
     Given Hayato has shyCoins=100 and ageVerified=false
     Given Hayato submitted an ageVerificationSubmission with status="PENDING" and an ID image showing DOB=2011-05-12
@@ -26,11 +26,11 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
   # scenarios sharing the Background DOB-mismatch seed. Each scenario establishes
   # its precondition via setup-style `Given` so it can run in isolation. Full
   # journey coverage preserved across the downgrade pipeline + UI collapse.
-  @blocker @android-physical
+  @blocker @android-physical @ios-physical
   Scenario: Hayato's initial state is adult with adult follows and an unverified age
     Then the database has document "users/50000030" with field "cohort" equal to "adult"
     Then the database has document "users/50000030" with field "followingIds" containing 50000010
-    Then Hayato's Android UI shows the element with tag "main_messagesTab"
+    Then Hayato's app UI shows the element with tag "main_messagesTab"
 
   @blocker @browser-chromium
   Scenario: Greta reviews Hayato's age-verification submission and sees the parsed DOB
@@ -58,34 +58,34 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
     Then the PM body is the Japanese translation of the age_down template
     Then the PM is from Officia (uniqueId=1, userType=SHYTALK_OFFICIAL)
 
-  @blocker @android-physical
+  @blocker @android-physical @ios-physical
   Scenario: Hayato's session is invalidated; refreshed JWT shows cohort=minor
     Given Hayato has been downgraded to cohort=minor by Greta
     Then within 5000ms the Firebase Auth session for Hayato has revokeRefreshTokens timestamp updated
-    When Hayato on Android performs any authenticated API call
+    When Hayato on the app performs any authenticated API call
     Then the response has status 401 or signals "auth/user-token-expired"
-    When Hayato on Android force-refreshes via securetoken endpoint
-    Then Hayato's Android JWT custom claim "cohort" equals "minor"
+    When Hayato on the app force-refreshes via securetoken endpoint
+    Then Hayato's app JWT custom claim "cohort" equals "minor"
 
-  @blocker @android-physical
+  @blocker @android-physical @ios-physical
   Scenario: Hayato's relaunched app shows minor-cohort UX with the Officia notice
     Given Hayato has been downgraded to cohort=minor and has the Officia age-down PM in his inbox
-    When Hayato on Android relaunches the app and signs in
-    Then within 5000ms Hayato's Android UI does not show the element with tag "main_messagesTab"
-    Then Hayato's Android UI does not show the element with tag "wallet_buyCoinsButton"
-    Then Hayato's Android UI shows the in-app banner about the cohort change in Japanese
-    Then Hayato's Android UI shows the new PM from Officia with the official badge
+    When Hayato on the app relaunches the app and signs in
+    Then within 5000ms Hayato's app UI does not show the element with tag "main_messagesTab"
+    Then Hayato's app UI does not show the element with tag "wallet_buyCoinsButton"
+    Then Hayato's app UI shows the in-app banner about the cohort change in Japanese
+    Then Hayato's app UI shows the new PM from Officia with the official badge
 
-  @blocker @android-physical @cross-cohort
+  @blocker @android-physical @ios-physical @cross-cohort
   Scenario: Stale adult follows are hidden from both sides (defence-in-depth — followingIds preserved for reversal)
     Given Hayato has been downgraded to cohort=minor with followingIds still containing 50000010 + 50000060
-    When Hayato on Android opens the "following" screen
-    Then Hayato's Android UI does not show Alice (P-02, adult)
-    Then Hayato's Android UI does not show Theo (P-10, adult)
-    Then Hayato's Android UI renders the "age_seg_user_unavailable" placeholder in both slots
+    When Hayato on the app opens the "following" screen
+    Then Hayato's app UI does not show Alice (P-02, adult)
+    Then Hayato's app UI does not show Theo (P-10, adult)
+    Then Hayato's app UI renders the "age_seg_user_unavailable" placeholder in both slots
     Then the database has document "users/50000030" with field "followingIds" still containing [50000010, 50000060]
-    When Theo on Android opens his followers list
-    Then within 5000ms Theo's Android UI does not show Hayato
+    When Theo on the app opens his followers list
+    Then within 5000ms Theo's app UI does not show Hayato
     Then the database has document "users/50000060" with field "followerIds" still containing 50000030
 
   @blocker
@@ -93,18 +93,18 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
     Given Hayato has been downgraded to cohort=minor with his pre-downgrade shyCoins=100
     Then the database has document "users/50000030" with field "shyCoins" equal to 100
 
-  @android-physical
+  @android-physical @ios-physical
   Scenario: Hayato in a voice room when the downgrade hits → ejected immediately
     Given Hayato is in voice room "r1" (an adult-cohort room) with mic open
     When Greta on Web Admin executes the age-down flow
-    Then within 5000ms Hayato's Android UI is no longer in the voice room
+    Then within 5000ms Hayato's app UI is no longer in the voice room
     Then within 5000ms Hayato's LiveKit track for "r1" is disconnected
     Then the database does not have field "participantIds" containing 50000030 on any room
 
   @blocker
   Scenario: Officia system PM is unblockable (minor must still receive system PMs)
     Given Hayato received the age-down system PM from Officia
-    When Hayato on Android attempts to block Officia (uniqueId=1) via /api/users/block
+    When Hayato on the app attempts to block Officia (uniqueId=1) via /api/users/block
     Then the response status is 400
     Then the response body contains "Cannot block ShyTalk Official account"
     Then the database does not have document "users/50000030" with field "blockedIds" containing 1

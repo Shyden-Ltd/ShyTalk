@@ -36,10 +36,10 @@ Feature: j19 — OSA migration steady state, as users experience it
   # Observable as: neither side can still see the other in their own lists.
   @blocker @regression @cross-cohort osa17-pr6-migration-following-edges
   Scenario: A minor no longer sees the adult he followed before the migration
-    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
-    When Marcus on Android opens the "profile" screen
-    Then Marcus's Android UI does not show Alice (P-02, adult)
-    Then Marcus's Android UI does not show Theo (P-10, adult)
+    Given Marcus [P-04] is on the app signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on the app opens the "profile" screen
+    Then Marcus's app UI does not show Alice (P-02, adult)
+    Then Marcus's app UI does not show Theo (P-10, adult)
 
   @blocker @regression @cross-cohort osa17-pr6-migration-follower-edges
   Scenario: An adult no longer sees the minor who followed her before the migration
@@ -52,49 +52,49 @@ Feature: j19 — OSA migration steady state, as users experience it
   # Observable as: a minor's room list offers nothing an adult is sitting in.
   @blocker @regression @cross-cohort osa17-pr7-migration-mixed-rooms-closed
   Scenario: A minor browsing rooms is never offered one an adult is in
-    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
-    When Marcus on Android opens the "rooms" screen
-    Then Marcus's Android UI does not show Theo (P-10, adult)
-    Then Marcus's Android UI does not show Alice (P-02, adult)
+    Given Marcus [P-04] is on the app signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on the app opens the "rooms" screen
+    Then Marcus's app UI does not show Theo (P-10, adult)
+    Then Marcus's app UI does not show Alice (P-02, adult)
 
   # Fill-3a (continued) — a room the migration closed must explain itself to
   # its host rather than silently vanish. A disappearance reads as a bug and
   # generates support load; an explained closure does not.
   @regression @cross-cohort osa17-pr7-migration-closed-rooms-tagged
   Scenario: The host of a room the migration closed is told why it closed
-    Given Theo [P-10] is on Android signed in (adult host) at the "rooms" screen
-    When Theo on Android opens the "rooms" screen
-    Then Theo's Android UI shows the element with tag "room_closed_notice"
-    Then Theo's Android UI does not show the element with tag "room_rejoin_button"
+    Given Theo [P-10] is on the app signed in (adult host) at the "rooms" screen
+    When Theo on the app opens the "rooms" screen
+    Then Theo's app UI shows the element with tag "room_closed_notice"
+    Then Theo's app UI does not show the element with tag "room_rejoin_button"
 
   # Fill-4 — cross-cohort conversations were frozen, not deleted: history stays
   # readable, but nothing new can be sent. Observable at the composer.
   @blocker @regression @cross-cohort osa17-pr8-migration-frozen-conversations
   Scenario: A minor can read an old cross-cohort chat but cannot add to it
-    Given Hayato [P-06] is on Android signed in (downgraded minor) at the "discovery" screen
-    When Hayato on Android opens the "pm" screen
-    Then Hayato's Android UI shows the element with tag "pm_frozen_notice"
-    Then Hayato's Android UI does not show the element with tag "pm_send_button"
+    Given Hayato [P-06] is on the app signed in (downgraded minor) at the "discovery" screen
+    When Hayato on the app opens the "pm" screen
+    Then Hayato's app UI shows the element with tag "pm_frozen_notice"
+    Then Hayato's app UI does not show the element with tag "pm_send_button"
 
   # Idempotency as a user would notice it: the migration has already run, so
   # nothing a person can see may change on a second pass. Expressed as the
   # stability of the screens above rather than as a script's change count.
   @regression @cross-cohort osa17-migration-idempotent
   Scenario: A minor's view is unchanged after relaunching the app post-migration
-    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
-    When Marcus on Android kills and relaunches the app
-    When Marcus on Android opens the "discovery" screen
-    Then Marcus's Android UI does not show Alice (P-02, adult)
-    Then Marcus's Android UI does not show Theo (P-10, adult)
+    Given Marcus [P-04] is on the app signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on the app kills and relaunches the app
+    When Marcus on the app opens the "discovery" screen
+    Then Marcus's app UI does not show Alice (P-02, adult)
+    Then Marcus's app UI does not show Theo (P-10, adult)
 
   # Sanity — Officia (SHYTALK_OFFICIAL) is exempt from cohort gating, so the
   # migration must NOT have cut her links. Observable as: a minor and an adult
   # can both still see her.
   @regression @cross-cohort osa17-migration-official-exempt
   Scenario: The official account is still visible to a minor on the app
-    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
-    When Marcus on Android opens the "discovery" screen
-    Then Marcus's Android UI shows Officia (P-19, official)
+    Given Marcus [P-04] is on the app signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on the app opens the "discovery" screen
+    Then Marcus's app UI shows Officia (P-19, official)
 
   @regression @cross-cohort osa17-migration-official-exempt-web
   Scenario: The official account is still visible to an adult on the web

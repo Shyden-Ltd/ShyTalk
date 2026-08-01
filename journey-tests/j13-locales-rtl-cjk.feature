@@ -61,13 +61,13 @@ Feature: j13 — Layla + Kenji multi-locale full flow
     Then Layla's Web UI shows non-empty Arabic text for section 11 (pp_s11_h, pp_s11_p1..p6)
 
   @blocker @android-emulator @locale-rtl
-  Scenario: Layla on Android emulator — parity check of RTL rendering
-    Given Layla is signed in on Android emulator with device locale ar
-    When Layla on Android opens the "discovery" screen
-    Then within 3000ms Layla's Android UI shows the Arabic translation of "Discover"
-    Then Layla's Android UI layoutDirection is RTL (Compose `LayoutDirection.Rtl`)
-    When Layla on Android opens the "wallet" screen
-    Then Layla's Android UI shows the Arabic translation of "Wallet"
+  Scenario: Layla on the app emulator — parity check of RTL rendering
+    Given Layla is signed in on the app emulator with device locale ar
+    When Layla on the app opens the "discovery" screen
+    Then within 3000ms Layla's app UI shows the Arabic translation of "Discover"
+    Then Layla's app UI layoutDirection is RTL (Compose `LayoutDirection.Rtl`)
+    When Layla on the app opens the "wallet" screen
+    Then Layla's app UI shows the Arabic translation of "Wallet"
     Then no string is missing translation (no fallback to English-only resource for ar)
 
   @blocker @browser-webkit @locale-cjk
@@ -89,10 +89,10 @@ Feature: j13 — Layla + Kenji multi-locale full flow
     Then Kenji's Web UI shows Japanese translation of "Notifications"
 
   @ios-sim @locale-cjk
-  Scenario: Kenji on iOS Sim — parity check of CJK rendering
-    Given Kenji is signed in on iOS Sim with device locale ja
-    When Kenji on iOS Sim opens the "discovery" screen
-    Then within 3000ms Kenji's iOS Sim UI shows the Japanese translation of "Discover"
+  Scenario: Kenji on the app — parity check of CJK rendering
+    Given Kenji is signed in on the app with device locale ja
+    When Kenji on the app opens the "discovery" screen
+    Then within 3000ms Kenji's app UI shows the Japanese translation of "Discover"
     Then no rendered character is the replacement glyph U+FFFD
 
   @browser-chromium

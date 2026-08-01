@@ -46,18 +46,18 @@ Feature: j17 — Bao's Mandarin lesson + Yuki the student
     Then within 5000ms the database has 1 entries in "lessons" matching {teacherId: 50000090, language: "zh", title: "Intro to Mandarin tones"}
 
   @android-physical @unimplemented
-  Scenario: Bao starts the scheduled lesson on Android, opening a Classroom room
+  Scenario: Bao starts the scheduled lesson on the app, opening a Classroom room
     Given Bao has scheduled a Mandarin lesson "Intro to Mandarin tones"
-    When Bao on Android taps "Start lesson" on the lesson card
+    When Bao on the app taps "Start lesson" on the lesson card
     Then within 5000ms the database has 1 entries in "rooms" matching {hostId: 50000090, lessonId: any, template: "Classroom", state: "OPEN"}
-    Then Bao's Android UI shows the classroom room screen with "Teacher" badge on the host seat
+    Then Bao's app UI shows the classroom room screen with "Teacher" badge on the host seat
 
   @ios-sim @unimplemented
   Scenario: Yuki discovers Bao's open lesson via the language-learning rail
     Given Bao has an OPEN Mandarin lesson room "Intro to Mandarin tones"
-    When Yuki on iOS Sim opens the "home" tab
-    Then within 5000ms Yuki's iOS Sim UI shows the "Learn Mandarin" rail
-    Then Yuki's iOS Sim UI shows Bao's "Intro to Mandarin tones" room card
+    When Yuki on the app opens the "home" tab
+    Then within 5000ms Yuki's app UI shows the "Learn Mandarin" rail
+    Then Yuki's app UI shows Bao's "Intro to Mandarin tones" room card
     Then the card shows the "Teacher" badge + language flag
 
   @ios-sim @android-physical @unimplemented
@@ -83,7 +83,7 @@ Feature: j17 — Bao's Mandarin lesson + Yuki the student
   @ios-sim @unimplemented
   Scenario: Yuki tips Bao with a rose gift (10 coins → 5 beans split for teacher)
     Given Yuki is a participant in Bao's lesson room
-    When Yuki on iOS Sim taps the gift icon and selects "rose" with recipient "Bao"
+    When Yuki on the app taps the gift icon and selects "rose" with recipient "Bao"
     Then within 3000ms the database has document "users/50000091" with field "shyCoins" equal to 290
     Then within 3000ms the database has document "users/50000090" with field "beans" equal to 3005
     Then within 3000ms the database has 1 entries in "giftWalls/50000090/gifts" matching {giftId: "rose", senderId: 50000091}
@@ -91,19 +91,19 @@ Feature: j17 — Bao's Mandarin lesson + Yuki the student
   @ios-sim @unimplemented
   Scenario: Yuki follows Bao for future lessons (graph mirrors)
     Given Yuki is a participant in Bao's lesson room
-    When Yuki on iOS Sim opens Bao's profile from the room
-    When Yuki on iOS Sim taps "profile_followButton"
+    When Yuki on the app opens Bao's profile from the room
+    When Yuki on the app taps "profile_followButton"
     Then within 3000ms the database has document "users/50000091" with field "followingIds" containing 50000090
     Then within 3000ms the database has document "users/50000090" with field "followerIds" containing 50000091
 
   @android-physical @ios-sim @unimplemented
   Scenario: Bao closes the lesson — both UIs show summary, completion timestamp on lesson doc
     Given Bao's lesson room is OPEN with Yuki as a participant
-    When Bao on Android taps "End lesson"
+    When Bao on the app taps "End lesson"
     Then within 5000ms the database has document "rooms/{roomId}" with field "state" equal to "CLOSED"
     Then within 5000ms the database has document "lessons/{lessonId}" with field "completedAt" greater than 0
-    Then within 5000ms Bao's Android UI shows the lesson summary: 1 student, 5 beans earned
-    Then within 5000ms Yuki's iOS Sim UI shows the lesson-closed screen with a "Rate this lesson" prompt
+    Then within 5000ms Bao's app UI shows the lesson summary: 1 student, 5 beans earned
+    Then within 5000ms Yuki's app UI shows the lesson-closed screen with a "Rate this lesson" prompt
 
   @ios-sim @android-physical @unimplemented
   Scenario: Yuki rates the closed lesson 5 stars and Bao's teaching dashboard updates
@@ -121,13 +121,13 @@ Feature: j17 — Bao's Mandarin lesson + Yuki the student
   @ios-sim @unimplemented
   Scenario: Yuki's iOS Sim shows the language rail localized to her locale (ja)
     Given Yuki's locale is ja
-    When Yuki on iOS Sim opens the "home" tab
-    Then within 3000ms Yuki's iOS Sim UI shows the rail header in Japanese ("中国語を学ぶ" or locale-appropriate)
+    When Yuki on the app opens the "home" tab
+    Then within 3000ms Yuki's app UI shows the rail header in Japanese ("中国語を学ぶ" or locale-appropriate)
     Then the rail shows lessons tagged for language "zh"
 
   @browser-chromium @cross-cohort @unimplemented
   Scenario: Minor student joining an adult-cohort teacher's room — gated
-    Given Marcus [P-04] (minor) opens the home tab on Android
-    When Marcus on Android refreshes the language rail
-    Then Marcus's Android UI does not show Bao's lesson room (Bao is in adult cohort)
+    Given Marcus [P-04] (minor) opens the home tab on the app
+    When Marcus on the app refreshes the language rail
+    Then Marcus's app UI does not show Bao's lesson room (Bao is in adult cohort)
     Then the response from /api/rooms/featured?cohort=minor does not include the lesson

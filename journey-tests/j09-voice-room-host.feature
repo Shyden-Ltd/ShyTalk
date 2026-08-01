@@ -26,13 +26,13 @@ Feature: j09 — Theo hosts a public voice room
   # audio check now its own scenario.
   @blocker @android-physical
   Scenario: Theo creates a public voice room with himself in the host seat
-    When Theo on Android taps "main_createRoomFab"
-    When Theo on Android types title "Theo's Test Room" and chooses public visibility
-    When Theo on Android taps "createRoom_confirmButton"
+    When Theo on the app taps "main_createRoomFab"
+    When Theo on the app types title "Theo's Test Room" and chooses public visibility
+    When Theo on the app taps "createRoom_confirmButton"
     Then within 5000ms the database has 1 entries in "rooms" matching {hostId: 50000060, title: "Theo's Test Room", state: "OPEN", visibility: "public"}
-    Then Theo on Android receives a LiveKit token in response from POST /api/livekit/token
-    Then within 3000ms Theo's Android UI navigates to the room screen with host seat occupied
-    Then Theo's Android UI shows the seat grid with 1 of 8 seats occupied (by himself)
+    Then Theo on the app receives a LiveKit token in response from POST /api/livekit/token
+    Then within 3000ms Theo's app UI navigates to the room screen with host seat occupied
+    Then Theo's app UI shows the seat grid with 1 of 8 seats occupied (by himself)
 
   @blocker @android-physical @browser-chromium
   Scenario: Alice (Web) discovers and joins Theo's public room
@@ -43,7 +43,7 @@ Feature: j09 — Theo hosts a public voice room
     Then within 5000ms the database has document "rooms/{roomId}" with field "participantIds" containing 50000010
     Then Alice on Web receives a LiveKit token
     Then within 3000ms Alice's Web UI navigates to the room screen as a non-seated participant
-    Then within 3000ms Theo's Android UI shows Alice in the participants list
+    Then within 3000ms Theo's app UI shows Alice in the participants list
 
   @blocker @android-physical @browser-chromium @ios-sim
   Scenario: Ines (iOS Sim) joins the room — prior participants see her appear
@@ -63,9 +63,9 @@ Feature: j09 — Theo hosts a public voice room
   @blocker @android-physical @browser-chromium @ios-sim
   Scenario: Theo approves Ines's seat — seat occupied + LiveKit publish enabled
     Given Ines has a PENDING seat request in Theo's room
-    When Theo on Android taps approve on Ines's seat request
+    When Theo on the app taps approve on Ines's seat request
     Then within 3000ms the database has document "rooms/{roomId}" with field "seats[1].userId" equal to 50000061
-    Then within 3000ms Ines's iOS Sim UI seat indicator transitions from "request pending" to "seated"
+    Then within 3000ms Ines's app UI seat indicator transitions from "request pending" to "seated"
     Then within 3000ms Alice's Web UI shows Ines in seat 2 of the seat grid
     Then within 3000ms Ines's LiveKit track for room {roomId} has publish permission enabled
 
@@ -85,26 +85,26 @@ Feature: j09 — Theo hosts a public voice room
   @blocker @android-physical @ios-sim
   Scenario: Theo kicks Ines — participant removed, kickedIds entry, "you were kicked" UI
     Given Ines is seated and unmuted in Theo's room
-    When Theo on Android long-presses Ines's seat
-    When Theo on Android taps "Kick"
+    When Theo on the app long-presses Ines's seat
+    When Theo on the app taps "Kick"
     Then within 3000ms the database has document "rooms/{roomId}" with field "participantIds" not containing 50000061
     Then within 3000ms the database has 1 entries in "rooms/{roomId}/kickedIds" matching {userId: 50000061}
-    Then within 5000ms Ines's iOS Sim UI navigates back to the "rooms" tab
+    Then within 5000ms Ines's app UI navigates back to the "rooms" tab
     Then within 5000ms Ines's LiveKit track for room {roomId} is disconnected
-    Then Ines's iOS Sim UI shows "You were kicked from this room"
+    Then Ines's app UI shows "You were kicked from this room"
 
   @blocker @ios-sim
   Scenario: Ines cannot rejoin Theo's room — 403 + kicked banner remains
     Given Ines has been kicked from Theo's room
-    When Ines on iOS Sim taps the same room again
+    When Ines on the app taps the same room again
     Then the response status is 403
-    Then Ines's iOS Sim UI shows "You were kicked from this room"
+    Then Ines's app UI shows "You were kicked from this room"
 
   @blocker @android-physical @browser-chromium
   Scenario: Theo closes the room — state=CLOSED, Alice's UI shows the summary, tracks disconnect
     Given Theo's room "Theo's Test Room" is OPEN with Alice as a participant
-    When Theo on Android taps the "room_endRoomButton"
-    When Theo on Android confirms in the dialog
+    When Theo on the app taps the "room_endRoomButton"
+    When Theo on the app confirms in the dialog
     Then within 5000ms the database has document "rooms/{roomId}" with field "state" equal to "CLOSED"
     Then within 5000ms Alice's Web UI navigates back to the "rooms" tab
     Then within 5000ms Alice's Web UI shows the room-closed summary panel
@@ -113,15 +113,15 @@ Feature: j09 — Theo hosts a public voice room
   @android-physical @browser-chromium @cross-cohort
   Scenario: Same-cohort gate on join — minor cannot join an adult host's room
     Given Theo created a public adult-cohort room
-    When Marcus on Android taps the room card
+    When Marcus on the app taps the room card
     Then the response status from /api/livekit/token is 404
-    Then Marcus's Android UI shows the "rooms" tab with no navigation to the room screen
+    Then Marcus's app UI shows the "rooms" tab with no navigation to the room screen
     Then the database has document "rooms/{roomId}" with field "participantIds" not containing 60000010
 
   @android-physical
   Scenario: Host disconnects unexpectedly — room auto-closes after grace period
     Given Theo created a room and has 2 joiners
-    When Theo's Android network drops for 30 seconds
+    When Theo's app network drops for 30 seconds
     Then within 30000ms the database has document "rooms/{roomId}" with field "state" equal to "CLOSED"
     Then each joiner's UI navigates back to the rooms tab with "Host disconnected" toast
 
@@ -131,15 +131,15 @@ Feature: j09 — Theo hosts a public voice room
   # the room's cohort tag.
   @regression @cross-cohort osa17-pr7-livekit-token-cohort-claim
   Scenario: LiveKit access token contains cohort claim matching the room
-    Given Theo on Android created an adult-cohort room "ra1"
-    Given Marcus [P-04] is signed in on Android
+    Given Theo on the app created an adult-cohort room "ra1"
+    Given Marcus [P-04] is signed in on the app
     Given no prior segregationEvents exist between "60000010" and "ra1"
     When Alice on Web POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 200
     Then the response body has field "token" of type "string"
     Then the decoded JWT payload has field "metadata.cohort" equal to "adult"
     Then the decoded JWT payload has field "video.room" equal to "ra1"
-    When Marcus on Android POSTs /api/livekit/token with roomName="ra1"
+    When Marcus on the app POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 404
     Then the response body does not include a token
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: "60000010", targetUniqueId: "ra1"}
