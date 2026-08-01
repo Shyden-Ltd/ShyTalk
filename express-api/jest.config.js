@@ -38,6 +38,11 @@ module.exports = {
   // outside express-api — does NOT transform any express source files.
   // NOTE: adding `transform` overrides Jest's default babel-jest for ALL
   // .js files, so we re-add babel-jest as the fallback for non-matching paths.
+  // uuid@14 is ESM-only and Jest's CJS registry cannot load it, which took the
+  // whole moderation-Givens suite down at import (SHY-0264). Everything in
+  // node_modules stays untransformed EXCEPT uuid — transforming the whole tree
+  // would cost far more wall-clock than the bug it fixes.
+  transformIgnorePatterns: ['/node_modules/(?!uuid/)'],
   transform: {
     'public[\\\\/]js[\\\\/]core[\\\\/].*\\.js$': '<rootDir>/tests/client-core/esm-transform.js',
     '\\.js$': 'babel-jest',
