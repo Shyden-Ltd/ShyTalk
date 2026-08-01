@@ -28,6 +28,10 @@ const { generateId, now, todayStr, yesterdayStr } = require('../utils/helpers');
 const { requireAdmin, isLiveAdmin } = require('../middleware/auth');
 const { requireSameCohort } = require('../middleware/sameCohort');
 const { effectiveCohort, cohortFromClaim } = require('../utils/firebase-claims');
+// SHY-0266 — gift notifications. Lazily used at the end of a successful gift;
+// see `notifyGiftRecipient` for why the failure path is deliberately silent.
+const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
+// `viewerIsBlocked` is already imported below with checkBlockRelationship.
 const { filterListByCohort } = require('../utils/cohort-filter');
 const log = require('../utils/log');
 const { verifyProductPurchase, verifySubscription } = require('../utils/playStore');
@@ -778,6 +782,47 @@ router.post('/economy/gacha', async (req, res) => {
 });
 
 // ── Send gift from backpack ──
+/**
+ * Tell a recipient they were gifted (SHY-0266).
+ *
+ * NEVER THROWS. The coins have already moved and the transaction is written by
+ * the time this runs, so a failure here must not turn a completed, paid-for
+ * gift into a 500 — losing the gift is a far worse bug than missing the banner.
+ * Errors are logged and swallowed, and a test makes FCM throw to prove it.
+ *
+ * A BLOCK IS NOT A DELIVERY CHANNEL. Gifting someone who has blocked you must
+ * not put your name on their screen; otherwise a gift becomes a way to contact
+ * someone who has refused contact. Cross-cohort dispatch is already refused
+ * inside `sendFcmToTokens`.
+ *
+ * The payload carries WHO sent WHAT and nothing else — no balances, no totals.
+ * A notification is delivered to a device that may be unlocked on a table.
+ */
+async function notifyGiftRecipient({ recipient, recipientId, senderId, senderName, giftName }) {
+  try {
+    if (!recipient || String(senderId) === String(recipientId)) return;
+    if (viewerIsBlocked(senderId, recipient)) return;
+    const tokens = recipient.fcmTokens || recipient.fcm_tokens || [];
+    if (!tokens.length) return;
+
+    const invalid = await sendFcmToTokens(
+      tokens,
+      {
+        type: 'GIFT',
+        senderId: String(senderId),
+        senderName: String(senderName || ''),
+        giftName: String(giftName || ''),
+      },
+      { senderUniqueId: senderId, recipientUniqueId: recipientId },
+    );
+    if (invalid && invalid.length > 0) await cleanupInvalidTokens(invalid, recipientId);
+    log.info('economy', 'gift notification dispatched', { recipientId, giftName });
+  } catch (err) {
+    // Deliberately swallowed. See the note above.
+    log.error('economy', 'gift notification failed', { recipientId, error: err.message });
+  }
+}
+
 router.post('/economy/gift', async (req, res) => {
   try {
     const uniqueId = req.auth.uniqueId;
@@ -938,6 +983,14 @@ router.post('/economy/gift', async (req, res) => {
 
     // Update gift rankings incrementally
     await updateGiftRankings(recipientId, giftId, quantity, recipientCohort);
+
+    await notifyGiftRecipient({
+      recipient,
+      recipientId,
+      senderId: uniqueId,
+      senderName: userField(sender, 'displayName', 'display_name') || '',
+      giftName: gift.name,
+    });
 
     res.json({ success: true, beanReward, giftName: gift.name, quantity });
   } catch (err) {
