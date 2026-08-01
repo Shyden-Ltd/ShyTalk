@@ -22757,7 +22757,12 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows <Other>\'s user card"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+    // The persona NAME is resolved to its uniqueId before the driver is called.
+    // The card is tagged `userCard_<uniqueId>` and a display name is neither
+    // unique nor stable — a room alias replaces it on screen — so the id is the
+    // only identity the card reliably carries. Passing the name meant the
+    // assertion could only ever ask "is a card open".
+    expect(spy).toHaveBeenCalledWith('Adam', 50000010);
   });
 
   test('driver returns false → fail', async () => {
@@ -22790,7 +22795,12 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows <Other>\'s user card"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+    // The persona NAME is resolved to its uniqueId before the driver is called.
+    // The card is tagged `userCard_<uniqueId>` and a display name is neither
+    // unique nor stable — a room alias replaces it on screen — so the id is the
+    // only identity the card reliably carries. Passing the name meant the
+    // assertion could only ever ask "is a card open".
+    expect(spy).toHaveBeenCalledWith('Adam', 50000010);
   });
 
   test('iOS Sim driver returns false → fail', async () => {
@@ -22823,7 +22833,12 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows <Other>\'s user card"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+    // The persona NAME is resolved to its uniqueId before the driver is called.
+    // The card is tagged `userCard_<uniqueId>` and a display name is neither
+    // unique nor stable — a room alias replaces it on screen — so the id is the
+    // only identity the card reliably carries. Passing the name meant the
+    // assertion could only ever ask "is a card open".
+    expect(spy).toHaveBeenCalledWith('Adam', 50000010);
   });
 
   test('Web driver returns false → fail', async () => {
@@ -22856,7 +22871,12 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows <Other>\'s user card"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+    // The persona NAME is resolved to its uniqueId before the driver is called.
+    // The card is tagged `userCard_<uniqueId>` and a display name is neither
+    // unique nor stable — a room alias replaces it on screen — so the id is the
+    // only identity the card reliably carries. Passing the name meant the
+    // assertion could only ever ask "is a card open".
+    expect(spy).toHaveBeenCalledWith('Adam', 50000010);
   });
 
   test('Web Chromium driver returns false → fail', async () => {
@@ -22889,7 +22909,12 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows <Other>\'s user card"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+    // The persona NAME is resolved to its uniqueId before the driver is called.
+    // The card is tagged `userCard_<uniqueId>` and a display name is neither
+    // unique nor stable — a room alias replaces it on screen — so the id is the
+    // only identity the card reliably carries. Passing the name meant the
+    // assertion could only ever ask "is a card open".
+    expect(spy).toHaveBeenCalledWith('Adam', 50000010);
   });
 
   test('Web Safari driver returns false → fail', async () => {
@@ -23818,7 +23843,9 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Mia', 'Marcus', null);
+    // Resolved to the registry uniqueId: the result row is tagged
+    // `newMessage_result_<uniqueId>`, and a display name identifies nobody.
+    expect(spy).toHaveBeenCalledWith('Mia', 60000010, null);
   });
 
   test('with displayName suffix', async () => {
@@ -23832,7 +23859,7 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Adam', 'Alice', 'Alice (P-02 adult power)');
+    expect(spy).toHaveBeenCalledWith('Adam', 50000010, 'Alice (P-02 adult power)');
   });
 
   test('driver missing → fail', async () => {
@@ -23885,18 +23912,18 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', null);
+    expect(spy).toHaveBeenCalledWith('Alice', 60000010, null);
   });
 
   test('Web driver returns false → fail', async () => {
     const spy = jest.fn(async () => false);
     const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -23906,7 +23933,7 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
   test('Web driver missing → fail', async () => {
     const ctx = makeCtx();
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -23918,18 +23945,18 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web Chromium UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web Chromium UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', null);
+    expect(spy).toHaveBeenCalledWith('Alice', 60000010, null);
   });
 
   test('Web Chromium driver returns false → fail', async () => {
     const spy = jest.fn(async () => false);
     const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web Chromium UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web Chromium UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -23939,7 +23966,7 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
   test('Web Chromium driver missing → fail', async () => {
     const ctx = makeCtx();
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web Chromium UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web Chromium UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -23951,18 +23978,18 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web Safari UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web Safari UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', null);
+    expect(spy).toHaveBeenCalledWith('Alice', 60000010, null);
   });
 
   test('Web Safari driver returns false → fail', async () => {
     const spy = jest.fn(async () => false);
     const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web Safari UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web Safari UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(false);
@@ -23972,7 +23999,7 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
   test('Web Safari driver missing → fail', async () => {
     const ctx = makeCtx();
     const r = await executeStep(
-      { kind: 'Then', text: "Alice's Web Safari UI shows Bob in the results" },
+      { kind: 'Then', text: "Alice's Web Safari UI shows Marcus in the results" },
       ctx,
     );
     expect(r.ok).toBe(false);

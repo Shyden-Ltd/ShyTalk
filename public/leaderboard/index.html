@@ -11,6 +11,9 @@
     <title>ShyTalk — Leaderboard</title>
     <link rel="stylesheet" href="/portal/portal.css" />
     <link rel="stylesheet" href="leaderboard.css" />
+    <!-- data-language-selector-styles sentinel: CSP forbids 'unsafe-inline'
+         here, so language-selector.js must skip its inline-style injection. -->
+    <link rel="stylesheet" href="/css/language-selector.css" data-language-selector-styles />
     <noscript
       >This page requires JavaScript to function. Please enable JavaScript in your browser
       settings.</noscript
@@ -107,6 +110,9 @@
       integrity="sha384-I1LYojsZ5RM1cOda44Z2h42Qa6YfsQ1XkXxREnhp4ueYBR/4d1pG1K+NZM537Vsj"
       crossorigin="anonymous"
     ></script>
+    <!-- language-selector.js before the page script, so ?lang= is resolved
+         before anything renders (SHY-0181 convention). -->
+    <script src="/js/language-selector.js"></script>
     <script src="/portal/config.js"></script>
     <script src="leaderboard.js"></script>
   </body>

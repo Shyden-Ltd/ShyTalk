@@ -72,20 +72,24 @@ beforeEach(async () => {
 });
 
 /**
- * A sender holding the gift in their BACKPACK.
+ * A sender with coins.
  *
- * `/economy/gift` transfers an owned item — it does not buy one — so seeding
- * coins alone yields 402 "Insufficient items in backpack". Found by the tests
- * rather than by reading, which is the right order.
+ * Exercised through `/economy/gift-direct` rather than `/economy/gift`.
+ * The latter transfers an item out of the sender's BACKPACK, and
+ * `tests/cron/backpackCleanup.test.js` legitimately wipes that whole collection
+ * group in its beforeEach — the cron it tests is global, so it cannot scope the
+ * wipe to a prefix. Seeding a backpack item here would therefore be deleted by a
+ * concurrent worker mid-test. The isolation guard caught exactly that.
+ *
+ * Both routes dispatch the same notification, so the coin path covers it without
+ * sharing a collection another suite must clear.
  */
 async function sender(coins = 5000) {
-  const minted = await mintRealUser({
+  return mintRealUser({
     uniqueId: `${P}-alice`,
     cohort: 'adult',
     extraUserData: { cohort: 'adult', shyCoins: coins, displayName: 'Alice' },
   });
-  await db.doc(`users/${P}-alice/backpack/crown`).set({ giftId: 'crown', quantity: 10 });
-  return minted;
 }
 
 describe('the recipient is told', () => {
@@ -94,7 +98,7 @@ describe('the recipient is told', () => {
     const selma = await seedRecipient({ key: 'selma' });
 
     const res = await request(app)
-      .post('/api/economy/gift')
+      .post('/api/economy/gift-direct')
       .set('Authorization', `Bearer ${alice.idToken}`)
       .send({ recipientId: selma, giftId: 'crown', quantity: 1 });
 
@@ -113,7 +117,7 @@ describe('the recipient is told', () => {
     const selma = await seedRecipient({ key: 'notokens', tokens: [] });
 
     const res = await request(app)
-      .post('/api/economy/gift')
+      .post('/api/economy/gift-direct')
       .set('Authorization', `Bearer ${alice.idToken}`)
       .send({ recipientId: selma, giftId: 'crown', quantity: 1 });
 
@@ -130,7 +134,7 @@ describe('a notification is not a delivery channel', () => {
     const selma = await seedRecipient({ key: 'blocked', blocked: [`${P}-alice`] });
 
     await request(app)
-      .post('/api/economy/gift')
+      .post('/api/economy/gift-direct')
       .set('Authorization', `Bearer ${alice.idToken}`)
       .send({ recipientId: selma, giftId: 'crown', quantity: 1 });
 
@@ -142,7 +146,7 @@ describe('a notification is not a delivery channel', () => {
     const selma = await seedRecipient({ key: 'privacy' });
 
     await request(app)
-      .post('/api/economy/gift')
+      .post('/api/economy/gift-direct')
       .set('Authorization', `Bearer ${alice.idToken}`)
       .send({ recipientId: selma, giftId: 'crown', quantity: 1 });
 
@@ -169,7 +173,7 @@ describe('the gift survives the notification failing', () => {
       const selma = await seedRecipient({ key: 'pushfail' });
 
       const res = await request(app)
-        .post('/api/economy/gift')
+        .post('/api/economy/gift-direct')
         .set('Authorization', `Bearer ${alice.idToken}`)
         .send({ recipientId: selma, giftId: 'crown', quantity: 1 });
 

@@ -165,3 +165,14 @@ activity to adults who cannot otherwise see them.
 ## Notes (running log)
 
 - **2026-08-01** — Created while closing the app-testing gaps in SHY-0259. Discovered the corpus has asserted this feature since j05 was authored while no story, route, page or screen ever existed: the test was written and the implementation never followed. Filed at the operator's instruction that "if the tests are there then that means the feature should have been built already".
+
+- **2026-08-02** — The `/leaderboard` PAGE TESTS ARE DEFERRED, not lost. They are parked at `.project/deferred/leaderboard.spec.ts.deferred` (8 assertions, all passing when run) because they use `page.route` to stub the API, and `check-no-new-stubs` correctly refuses to let that debt grow: the repo's rule is real-only outside unit locations, and the escape hatch requires operator approval which was not available.
+
+  **What they cover, and why it should not stay uncovered:** the three states a leaderboard must never confuse — EMPTY (nobody has gifted), ERROR (the request failed), UNRANKED (the caller has gifted nothing) — plus display-name XSS and the endless-spinner bug the tests themselves found.
+
+  **The right fix, in preference order:**
+  1. Extract the page's state selection + row rendering into a pure module and unit-test it in `tests/unit/` — no stubbing needed, and it is genuinely unit-testable logic. Keep Playwright for a real-stack signed-in happy path.
+  2. Or drive the real API with a real persona on the local stack, and induce the error states for real.
+  3. Or an operator-approved exception to add the file to `scripts/no-stubs-baseline.json`.
+
+  Option 1 is the honest one and is small. Until then the endpoint is covered by 14 real-emulator tests and the page is not.

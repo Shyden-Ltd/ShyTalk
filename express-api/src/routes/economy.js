@@ -1157,6 +1157,17 @@ router.post('/economy/gift-direct', async (req, res) => {
     // Update gift rankings incrementally
     await updateGiftRankings(recipientId, giftId, quantity, recipientCohort);
 
+    // A recipient must be told whichever way the gift was sent. Notifying only
+    // the backpack route would mean a gift bought with coins arrives silently —
+    // the same "nobody saw it" failure, reachable by a different button.
+    await notifyGiftRecipient({
+      recipient,
+      recipientId,
+      senderId: uniqueId,
+      senderName: userField(sender, 'displayName', 'display_name') || '',
+      giftName: gift.name,
+    });
+
     res.json({ success: true, beanReward, giftName: gift.name, coinsSpent: totalCost, quantity });
   } catch (err) {
     log.error('economy', 'POST /economy/gift-direct failed', { error: err.message });
