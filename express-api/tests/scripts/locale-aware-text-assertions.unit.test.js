@@ -158,3 +158,56 @@ describe('the iOS text check matches the REAL dump format', () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe('CROSS-OVER cells get the locale checks too', () => {
+  // Operator 2026-08-03, revising the original scope: the multi-locale pass must
+  // cover cross-over as well, "as the coverage is mostly on the crossovers".
+  //
+  // That is measured, not felt — of 228 corpus scenarios, 165 (72%) need BOTH
+  // surfaces and only 28 are app-only. Excluding cross would have left the
+  // language checks running against the smallest slice of the corpus.
+  //
+  // A cross cell is one with a browser AND app devices (matrix-cells.js
+  // `phaseOf`), so it drives both drivers and runs these same matchers. Nothing
+  // gates locale by phase — this test is what keeps it that way, because the
+  // coupling would be easy to add later and silent when it happened.
+  const crossCtx = (appText, webText, locale) => ({
+    locale,
+    uiDriver: { androidUiDump: async () => `<node text="${appText}" resource-id="x" />` },
+    webDriver: { webUiDump: async () => `<div>${webText}</div>` },
+  });
+
+  it('the APP assertion in a cross cell asserts the translation', async () => {
+    const ctx = crossCtx('เหรียญไม่พอ.', 'irrelevant', 'th');
+    const r = await executeStep(
+      { kind: 'Then', text: 'Adam\'s app UI shows "Not enough coins"' },
+      ctx,
+    );
+    expect(r).toEqual({ ok: true });
+  });
+
+  it('the WEB assertion in the SAME cell asserts the translation', async () => {
+    const ctx = crossCtx('irrelevant', 'เหรียญไม่พอ.', 'th');
+    const r = await executeStep(
+      { kind: 'Then', text: 'Adam\'s Web UI shows "Not enough coins"' },
+      ctx,
+    );
+    expect(r).toEqual({ ok: true });
+  });
+
+  it('an English screen on EITHER surface fails a Thai cross run', async () => {
+    // The whole point: a cross-over journey where one surface was never
+    // translated must not go green because the other one was.
+    const appEnglish = crossCtx('Not enough coins', 'เหรียญไม่พอ.', 'th');
+    const webEnglish = crossCtx('เหรียญไม่พอ.', 'Not enough coins', 'th');
+    const a = await executeStep(
+      { kind: 'Then', text: 'Adam\'s app UI shows "Not enough coins"' },
+      appEnglish,
+    );
+    const w = await executeStep(
+      { kind: 'Then', text: 'Adam\'s Web UI shows "Not enough coins"' },
+      webEnglish,
+    );
+    expect([a.ok, w.ok]).toEqual([false, false]);
+  });
+});

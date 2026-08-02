@@ -51,6 +51,25 @@ same scenario, which the totals cannot show at all.
   and `warning` screen assertions answered false about screens that were on the
   device.
 
+### Locale work — ALL THREE PHASES, cross-over included
+
+SCOPE REVISED by the operator 2026-08-03: the 5 MVP locales (en/zh/id/vi/th)
+apply to app, web AND cross-over. The earlier "not cross-over" exclusion is
+WITHDRAWN, and it was the right call — measured, cross-over is where the
+coverage actually lives:
+
+    228 scenarios:  app-only 28 | web-only 35 | BOTH 165 (72%) | neither 0
+
+Excluding cross would have run the language checks against the smallest slice of
+the corpus. Only three journeys are purely web (j03 lapsed-returning, j12 admin
+daily routine, j13 locales/RTL) and they are genuinely web-surface concerns.
+
+Nothing in code ever enforced the exclusion — `localisedExpectation` is called by
+the Android, iOS and Web text matchers with no phase check, and a cross cell
+(browser AND app devices, per `phaseOf`) runs those same matchers. A test now
+pins it, including the case that matters most: a cross-over journey where ONE
+surface was never translated must not go green because the other was.
+
 ### Locale work (operator's 5-language requirement)
 
 Foundation + wiring done: `ctx.locale` — previously written by five matchers and
