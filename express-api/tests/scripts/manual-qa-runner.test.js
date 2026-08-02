@@ -17339,21 +17339,75 @@ describe('Wake 80 — "<Name>\'s room "<X>" is OPEN" (possessive variant)', () =
     expect(r.ok).toBe(true);
   });
 
-  test('mismatched state → fail', async () => {
-    const db = makeStatefulFakeDb({ 'rooms/r1': { state: 'CLOSED' } });
+  // These two asserted the READ-ONLY behaviour: mismatched state -> fail, no
+  // such room -> fail. Changed 2026-08-02, deliberately.
+  //
+  // The handler read `ctx.db.doc('rooms/' + quoted)`, treating the quoted
+  // string as a DOCUMENT ID. The corpus passes a TITLE, so j15's
+  //
+  //     Given Selma's room "Selma's Saturday Sing-along" is OPEN
+  //
+  // reported `rooms/Selma's Saturday Sing-along does not exist` about a room
+  // that existed under its generated id with exactly that title — three
+  // failures a run, and the scenarios it gates never ran.
+  //
+  // It is now routed through `ensureRoomForHost`, the same helper its sibling
+  // `<Name>'s public room "<X>" is OPEN` already uses, which derives the id
+  // from the title. That makes it a real SETUP Given, which is what the family
+  // comment in the runner says these are for: a subscenario runs in isolation,
+  // and a read-only check cannot deliver that when the creating scenario failed.
+  //
+  // Safe ONLY because the phrasing is a Given everywhere it appears — handlers
+  // get `(m, ctx)` and cannot see the step keyword, so this same matcher would
+  // answer a `Then` by fabricating the state it was asked to verify.
+  // `corpus-room-state-givens.unit.test.js` pins that precondition. (The stale
+  // comment above this block cited "j15:67 Then …"; that line is a gift
+  // animation assertion today — the corpus moved on and the comment did not.)
+  test('ENSURES the state when the room already exists in another one', async () => {
+    const db = makeStatefulFakeDb({ 'rooms/theo-s-test-room': { state: 'CLOSED' } });
     const ctx = makeCtx({ db });
-    const r = await executeStep({ kind: 'Then', text: 'Theo\'s room "r1" is OPEN' }, ctx);
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/OPEN/);
-    expect(r.error).toMatch(/CLOSED/);
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect((await db.doc('rooms/theo-s-test-room').get()).data().state).toBe('OPEN');
   });
 
-  test('no such room → fail', async () => {
+  test('CREATES the room when it does not exist — the isolation a Given owes', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db });
-    const r = await executeStep({ kind: 'Then', text: 'Theo\'s room "r1" is OPEN' }, ctx);
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const doc = (await db.doc('rooms/theo-s-test-room').get()).data();
+    expect(doc.state).toBe('OPEN');
+  });
+
+  test('the quoted string is a TITLE, not a document id — the actual defect', async () => {
+    // The regression guard. A doc-id lookup would key on the raw title and miss
+    // the room entirely, which is exactly what j15 hit.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    await executeStep(
+      { kind: 'Given', text: 'Selma\'s room "Selma\'s Saturday Sing-along" is OPEN' },
+      ctx,
+    );
+    const slugged = await db.doc('rooms/selma-s-saturday-sing-along').get();
+    const rawTitle = await db.doc("rooms/Selma's Saturday Sing-along").get();
+    expect(slugged.exists).toBe(true);
+    expect(rawTitle.exists).toBe(false);
+    expect(slugged.data().title).toBe("Selma's Saturday Sing-along");
+  });
+
+  test('an unknown persona still fails loudly rather than seeding a stranger', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep({ kind: 'Given', text: 'Zebediah\'s room "x" is OPEN' }, ctx);
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/r1|does not exist/);
+    expect(r.error).toMatch(/persona/i);
   });
 });
 

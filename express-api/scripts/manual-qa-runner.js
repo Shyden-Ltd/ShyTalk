@@ -10627,23 +10627,35 @@ const matchers = [
     // Wake 80 — "<Name>'s room "<X>" is OPEN" (possessive variant).
     // j15:67 — possessive form of Wake 68's `the room "<X>" is still
     // OPEN`. Same Firestore check, different scoping intent.
+    // The quoted string is a TITLE, not a document id. This read
+    // `ctx.db.doc('rooms/' + m[2])`, so j15's
+    //
+    //     Given Selma's room "Selma's Saturday Sing-along" is OPEN
+    //
+    // looked for a document literally named `Selma's Saturday Sing-along` and
+    // reported `rooms/Selma's Saturday Sing-along does not exist` about a room
+    // that existed under its generated id with exactly that title. Three
+    // failures per run, and the scenario it gates never ran.
+    //
+    // Routed through `ensureRoomForHost` — the same helper its sibling
+    // `<Name>'s public room "<X>" is OPEN` already uses, which derives the id
+    // from the title. That also makes it a real SETUP Given: the family comment
+    // above says these exist so a subscenario "runs in isolation", which a
+    // read-only assertion cannot deliver when the creating scenario failed.
+    //
+    // ENSURING is only safe because this phrasing is a Given everywhere it
+    // appears — handlers receive `(m, ctx)` and cannot see the step keyword, so
+    // the same matcher would answer a `Then` by fabricating the state it was
+    // asked to verify. `corpus-room-state-givens.unit.test.js` pins that.
     pattern: /^([A-Z][a-z]+)'s room "([^"]+)" is (OPEN|CLOSED|FROZEN)$/,
     async handler(m, ctx) {
-      const roomId = m[2];
-      const expected = m[3];
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
-      const snap = await ctx.db.doc(`rooms/${roomId}`).get();
-      if (!snap.exists) {
-        return { ok: false, error: `rooms/${roomId} does not exist` };
+      try {
+        await ensureRoomForHost(ctx, m[1], { title: m[2], state: m[3] });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
       }
-      const actual = snap.data().state;
-      if (actual !== expected) {
-        return {
-          ok: false,
-          error: `room state mismatch: expected ${expected}, actual ${actual}`,
-        };
-      }
-      return { ok: true };
     },
   },
   // ── Room-state setup Givens (j09 phase-scoped scenarios) ──
