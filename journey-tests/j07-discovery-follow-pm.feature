@@ -51,7 +51,7 @@ Feature: j07 — Adam discovers + messages Alice
   Scenario: Adam creates a DIRECT conversation with Alice from the followed-users picker
     Given Adam is following Alice
     When Adam on the app opens the "pm" tab
-    When Adam on the app taps "pm_newConversationButton"
+    When Adam on the app taps "main_newMessageFab"
     When Adam on the app selects "Alice" from the followed-users picker
     Then within 3000ms the database has 1 entries in "conversations" matching {participantIds: [<sorted>], type: "DIRECT"}
     Then Adam's app UI navigates to the conversation thread screen with Alice
@@ -59,7 +59,7 @@ Feature: j07 — Adam discovers + messages Alice
   @blocker @android-physical @ios-physical
   Scenario: Adam sends a first PM — message persisted + thread shows it with timestamp
     Given Adam has an open DIRECT conversation thread with Alice
-    When Adam on the app types "hello, alice — first PM from a new adult" into "conversation_inputField"
+    When Adam on the app types "hello, alice — first PM from a new adult" into "privateChat_messageInput"
     When Adam on the app taps "conversation_sendButton"
     Then within 3000ms the database has 1 entries in "messages" matching {senderId: {adamId}, conversationId: <id>, body: "hello, alice — first PM from a new adult"}
     Then within 2000ms Adam's app UI shows the message in the thread with timestamp + sent indicator

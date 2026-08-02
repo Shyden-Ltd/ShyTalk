@@ -35,14 +35,14 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Local-flavor sign-in screen renders both OAuth buttons
     Given Adam [P-01] has the local-flavor APK installed on Android
     When Adam on the app opens the app for the first time
-    Then within 5000ms Adam's app UI shows the element with tag "google_sign_in_button"
-    Then Adam's app UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's app UI shows the element with tag "signIn_googleButton"
+    Then Adam's app UI shows the element with tag "signIn_appleButton"
 
   @blocker @android-physical @local-flavor
   Scenario: Local-flavor Google tap shows "not available on local environment"
     Given Adam [P-01] has the local-flavor APK installed on Android
     Given Adam is on the sign-in screen
-    When Adam on the app taps "google_sign_in_button"
+    When Adam on the app taps "signIn_googleButton"
     Then within 3000ms Adam's app UI shows the snackbar text from key "sign_in_not_available_on_local"
     Then Adam's app UI is still on the sign-in screen
     Then no Firebase Auth session is created for Adam
@@ -51,7 +51,7 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Local-flavor Apple tap shows "not available on local environment"
     Given Adam [P-01] has the local-flavor APK installed on Android
     Given Adam is on the sign-in screen
-    When Adam on the app taps "apple_sign_in_button"
+    When Adam on the app taps "signIn_appleButton"
     Then within 3000ms Adam's app UI shows the snackbar text from key "sign_in_not_available_on_local"
     Then Adam's app UI is still on the sign-in screen
     Then no Firebase Auth session is created for Adam
@@ -68,14 +68,14 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Dev-flavor sign-in screen renders both OAuth buttons
     Given Adam [P-01] has the dev-flavor APK installed on Android
     When Adam on the app opens the app for the first time
-    Then within 5000ms Adam's app UI shows the element with tag "google_sign_in_button"
-    Then Adam's app UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's app UI shows the element with tag "signIn_googleButton"
+    Then Adam's app UI shows the element with tag "signIn_appleButton"
 
   @blocker @manual @android-physical @dev-flavor
   Scenario: Dev-flavor Google tap kicks off real OAuth flow
     Given Adam [P-01] has the dev-flavor APK installed on Android
     Given Adam is on the sign-in screen
-    When Adam on the app taps "google_sign_in_button"
+    When Adam on the app taps "signIn_googleButton"
     Then within 5000ms Adam's app UI shows the Google CredentialManager bottom-sheet
     # @manual continuation — the tester selects a real Google account; runner
     # cannot drive the system-level CredentialManager flow
@@ -84,7 +84,7 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Dev-flavor Apple tap kicks off real ASAuthorizationController flow
     Given Adam [P-01] has the dev-flavor IPA installed on iOS
     Given Adam is on the sign-in screen
-    When Adam on the app taps "apple_sign_in_button"
+    When Adam on the app taps "signIn_appleButton"
     Then within 5000ms Adam's app UI shows the iOS Apple ID confirmation sheet
     # @manual continuation — tester confirms; runner cannot drive iOS system sheets
 
@@ -100,14 +100,14 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Prod-flavor sign-in screen renders both OAuth buttons
     Given Adam [P-01] has the prod-flavor APK installed on Android
     When Adam on the app opens the app for the first time
-    Then within 5000ms Adam's app UI shows the element with tag "google_sign_in_button"
-    Then Adam's app UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's app UI shows the element with tag "signIn_googleButton"
+    Then Adam's app UI shows the element with tag "signIn_appleButton"
 
   @blocker @manual @android-physical @prod-flavor
   Scenario: Prod-flavor Google tap kicks off real OAuth flow
     Given Adam [P-01] has the prod-flavor APK installed on Android
     Given Adam is on the sign-in screen
-    When Adam on the app taps "google_sign_in_button"
+    When Adam on the app taps "signIn_googleButton"
     Then within 5000ms Adam's app UI shows the Google CredentialManager bottom-sheet
     # @manual continuation — system sheet is operator-driven
 
@@ -115,7 +115,7 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Prod-flavor Apple tap kicks off real ASAuthorizationController flow
     Given Adam [P-01] has the prod-flavor IPA installed on iOS
     Given Adam is on the sign-in screen
-    When Adam on the app taps "apple_sign_in_button"
+    When Adam on the app taps "signIn_appleButton"
     Then within 5000ms Adam's app UI shows the iOS Apple ID confirmation sheet
     # @manual continuation — operator confirms
 
@@ -149,15 +149,15 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Local-flavor iPhone parity — both OAuth buttons visible
     Given Adam [P-01] has the local-flavor IPA installed on iOS
     When Adam on the app opens the app for the first time
-    Then within 5000ms Adam's app UI shows the element with tag "google_sign_in_button"
-    Then Adam's app UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's app UI shows the element with tag "signIn_googleButton"
+    Then Adam's app UI shows the element with tag "signIn_appleButton"
 
   @blocker @ios-physical @prod-flavor
   Scenario: Prod-flavor iPhone parity — both OAuth buttons visible + no dev affordances
     Given Adam [P-01] has the prod-flavor IPA installed on iOS
     When Adam on the app opens the app for the first time
-    Then within 5000ms Adam's app UI shows the element with tag "google_sign_in_button"
-    Then Adam's app UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's app UI shows the element with tag "signIn_googleButton"
+    Then Adam's app UI shows the element with tag "signIn_appleButton"
     Then Adam's app UI does not show the element with tag "dev_sign_in"
     Then Adam's app UI does not show the element with tag "persona_picker_open"
 
@@ -165,14 +165,14 @@ Feature: j20 — Sign-in screen environment matrix
   Scenario: Local-flavor Web parity — both OAuth buttons visible
     Given Adam [P-01] visits the local-flavor web app in Chromium
     When Adam on Web opens "/login.html"
-    Then within 5000ms Adam's Web UI shows the element with tag "google_sign_in_button"
-    Then Adam's Web UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's Web UI shows the element with tag "signIn_googleButton"
+    Then Adam's Web UI shows the element with tag "signIn_appleButton"
 
   @blocker @browser-chromium @prod-flavor
   Scenario: Prod-flavor Web parity — both OAuth buttons visible + no dev affordances
     Given Adam [P-01] visits the prod-flavor web app in Chromium
     When Adam on Web opens "/login.html"
-    Then within 5000ms Adam's Web UI shows the element with tag "google_sign_in_button"
-    Then Adam's Web UI shows the element with tag "apple_sign_in_button"
+    Then within 5000ms Adam's Web UI shows the element with tag "signIn_googleButton"
+    Then Adam's Web UI shows the element with tag "signIn_appleButton"
     Then Adam's Web UI does not show the element with tag "dev_sign_in"
     Then Adam's Web UI does not show the element with tag "persona_picker_open"

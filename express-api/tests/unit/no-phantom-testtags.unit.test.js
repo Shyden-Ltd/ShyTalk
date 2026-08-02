@@ -174,18 +174,14 @@ const KNOWN_PHANTOM_TAGS = [
   // through; each is classified, because the class determines the fix and
   // guessing it is how `rooms_refresh` got wrongly called unbuilt for months.
   //
-  // DRIFT — the product renders this control under a different name. Fix is a
-  // corpus edit, and it will make ~14 currently-phantom findings into real
-  // assertions. Deliberately NOT done in the same change as this guard: the
-  // matrix parses `journey-tests/` at cell start, so editing the corpus during
-  // a live run gives different cells different contracts.
-  'google_sign_in_button', //   → signIn_googleButton  (seen in a real device dump)
-  'apple_sign_in_button', //    → signIn_appleButton   (seen in a real device dump)
-  'conversation_inputField', // → privateChat_messageInput
-  'pm_frozen_notice', //        → privateChat_pmLockedNotice
-  'pm_newConversationButton', //→ main_newMessageFab
-  'room_closed_notice', //      → roomClosedSummary_panel
-  'wallet_sendGiftButton', //   → gift_send
+  // DRIFT — all six FIXED 2026-08-02 by renaming in the corpus, each verified
+  // against the Compose source that renders it rather than by name similarity:
+  //   google_sign_in_button    → signIn_googleButton      GoogleSignInButton.kt
+  //   apple_sign_in_button     → signIn_appleButton       AppleSignInButton.kt
+  //   conversation_inputField  → privateChat_messageInput PrivateChatScreen.kt
+  //   pm_frozen_notice         → privateChat_pmLockedNotice
+  //   pm_newConversationButton → main_newMessageFab       (onNavigateToNewMessage)
+  //   room_closed_notice       → roomClosedSummary_panel  RoomClosedSummaryPanel.kt
   //
   // UNTAGGED — the FEATURE exists, the control just carries no testTag. Fix is
   // one line of Compose, not a corpus edit. Verified by searching for the
@@ -204,6 +200,16 @@ const KNOWN_PHANTOM_TAGS = [
   // ZERO files under shared/src/commonMain; the event-host feature that does
   // exist is `eventHost_*` and has no scheduling UI. The honest fix is
   // `@unimplemented` on the scenario or deleting the step, NOT a testTag.
+  //
+  // `wallet_sendGiftButton` was on the DRIFT list until it was checked properly.
+  // It is not a rename: j01 walks wallet → send-gift → confirm, and the only
+  // gift-send control in the app is `gift_send` inside BackpackSheet.kt, which
+  // is a ROOM feature. The wallet screen has no gift entry at all
+  // (wallet_balance / wallet_buyCoinsButton / wallet_transactionsButton). j05
+  // runs the same flow on WEB via `/wallet#send-gift`, so the app is the side
+  // that lacks it. Renaming it to gift_send would have made the scenario lie
+  // about which flow it exercises.
+  'wallet_sendGiftButton',
   'schedule_newEventButton',
   'scheduleEvent_confirmButton',
   'schedule_newLessonButton',

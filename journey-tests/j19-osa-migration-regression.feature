@@ -64,7 +64,7 @@ Feature: j19 — OSA migration steady state, as users experience it
   Scenario: The host of a room the migration closed is told why it closed
     Given Theo [P-10] is on the app signed in (adult host) at the "rooms" screen
     When Theo on the app opens the "rooms" screen
-    Then Theo's app UI shows the element with tag "room_closed_notice"
+    Then Theo's app UI shows the element with tag "roomClosedSummary_panel"
     Then Theo's app UI does not show the element with tag "room_rejoin_button"
 
   # Fill-4 — cross-cohort conversations were frozen, not deleted: history stays
@@ -73,7 +73,7 @@ Feature: j19 — OSA migration steady state, as users experience it
   Scenario: A minor can read an old cross-cohort chat but cannot add to it
     Given Hayato [P-06] is on the app signed in (downgraded minor) at the "discovery" screen
     When Hayato on the app opens the "pm" screen
-    Then Hayato's app UI shows the element with tag "pm_frozen_notice"
+    Then Hayato's app UI shows the element with tag "privateChat_pmLockedNotice"
     Then Hayato's app UI does not show the element with tag "pm_send_button"
 
   # Idempotency as a user would notice it: the migration has already run, so
