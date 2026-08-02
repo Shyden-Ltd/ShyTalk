@@ -220,6 +220,32 @@ browse other profiles, which the current wholesale-path regexes would not
 prevent. Verify the requested id equals the caller's own `uniqueId`, fail
 closed.
 
+## PRODUCT FINDING — `segregationEvents` stores ids as STRINGS, the rest of the schema uses numbers
+
+Three findings a run on j02/j08 read as "the product failed to write a
+cross-cohort audit row". It writes one. The assertion cannot see it:
+
+    sameCohort.js         sourceUniqueId: String(req.auth.uniqueId)
+                          targetUniqueId: String(targetUniqueId)
+    corpus predicate      {sourceUniqueId: 50000040, targetUniqueId: 60000010}
+    comparison            doc[k] === v          -> "50000040" !== 50000040
+
+I started to make the predicate coerce numeric strings, and BACKED IT OUT. An
+existing test seeds both types deliberately —
+
+    { action: 'blocked', sourceId: 50000010 },
+    { action: 'blocked', sourceId: '50000010' },  // wrong type — should NOT match
+
+— and expects exactly one match. That contract is right and the coercion would
+have masked the real defect: one collection holding the same logical id in a
+different type from every other makes cross-collection queries a trap, and this
+is an OSA audit trail.
+
+**The fix is a product decision, not a harness one** — either normalise
+`segregationEvents` to numeric ids (with a migration for existing rows) or
+change the schema everywhere deliberately. Left for the operator because it has
+migration implications and was found at 03:20 unsupervised.
+
 ## Known-real findings still open
 
 1. `firestore.rules:74` does `int(uniqueId)` on a `users/<firebaseUid>` doc id
