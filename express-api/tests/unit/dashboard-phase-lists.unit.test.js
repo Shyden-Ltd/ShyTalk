@@ -153,11 +153,13 @@ describe('three lists, each with only its own columns', () => {
   it('a phase with no results yet is pending, not green', () => {
     // Reporting an un-run phase as green is the failure mode that makes the
     // whole board untrustworthy.
-    for (const p of s.phases) {
-      if (p.totals.pass + p.totals.fail + p.totals.skipped === 0) {
-        expect(p.status).toBe('pending');
-      }
-    }
+    // Collected, then compared once. Inside an `if` this asserted nothing
+    // whenever every phase happened to have results — green by not running,
+    // which is precisely the failure mode the test is named for.
+    const empty = s.phases.filter((p) => p.totals.pass + p.totals.fail + p.totals.skipped === 0);
+    expect(empty.filter((p) => p.status !== 'pending')).toEqual([]);
+    // The fixture must actually contain an un-run phase, or this proves nothing.
+    expect(empty.length).toBeGreaterThan(0);
   });
 });
 

@@ -48,16 +48,29 @@ afterAll(async () => {
   if (driver) await driver.close();
 }, 30000);
 
+/**
+ * Every live test asserts the server is up FIRST, unconditionally.
+ *
+ * This used to read `if (!up) throw` inside each test body. The behaviour was
+ * right — refusing to pass without exercising the real surface — but a branch
+ * in a test body is indistinguishable from a guard that silently skips, and the
+ * silently-passing-test detector counts it as one. `requireLiveServer()` makes
+ * the same assertion with no branch: it always runs, and it always fails loudly
+ * when the surface is absent.
+ */
+function requireLiveServer() {
+  expect(
+    up ||
+      `local web server not serving at ${BASE} — start it with local/start.sh. ` +
+        `Refusing to pass without exercising the real surface.`,
+  ).toBe(true);
+}
+
 const itLive = (name, fn, timeout) =>
   test(
     name,
     async () => {
-      if (!up) {
-        throw new Error(
-          `local web server not serving at ${BASE} — start it with local/start.sh. ` +
-            `Refusing to pass without exercising the real surface.`,
-        );
-      }
+      requireLiveServer();
       await fn();
     },
     timeout || 30000,

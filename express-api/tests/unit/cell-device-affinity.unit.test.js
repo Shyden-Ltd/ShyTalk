@@ -110,11 +110,24 @@ describe('the whole local matrix', () => {
     // grouping key). A cell driving both phones has one grouping key and two
     // locks; checking the key alone would call that a violation.
     const { resourcesFor } = require('../../scripts/matrix-cells');
+    // Built as a LIST and compared once, rather than asserted inside an `if`.
+    // A guarded assertion passes by not running: if `affinity` ever returned
+    // false for everything, the loop below would assert nothing at all and the
+    // test would still be green.
+    const unlocked = [];
+    let appCells = 0;
     for (const cell of CELL_SLUGS) {
       const a = affinity(cell);
-      if (a.android) expect(resourcesFor(cell)).toContain('android');
-      if (a.ios) expect(resourcesFor(cell)).toContain('iphone');
+      if (!a.android && !a.ios) continue;
+      appCells += 1;
+      const locks = resourcesFor(cell);
+      if (a.android && !locks.includes('android'))
+        unlocked.push(`${cell} drives android, locks ${locks}`);
+      if (a.ios && !locks.includes('iphone')) unlocked.push(`${cell} drives ios, locks ${locks}`);
     }
+    expect(unlocked).toEqual([]);
+    // And prove the loop had something to check.
+    expect(appCells).toBeGreaterThan(0);
   });
 
   it('only the tri-platform cell claims BOTH physical devices', () => {

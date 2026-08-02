@@ -443,12 +443,16 @@ describe('honest refusals', () => {
   it('reports notification permission honestly when it cannot grant it', async () => {
     const d = await makeDriver();
     const res = await d.webGrantNotificationPermission();
-    // Either genuinely granted, or an explicit refusal — never a bare false
-    // that reads as the product refusing.
-    if (res !== true) {
-      expect(res.supported).toBe(false);
-      expect(res.why).toMatch(/browser-chrome prompt/);
-    }
+    // Either genuinely granted, or an explicit refusal — never a bare `false`,
+    // which reads as the PRODUCT refusing rather than the harness being unable.
+    //
+    // Asserted unconditionally. Behind `if (res !== true)` this checked nothing
+    // whenever the permission WAS granted, so the interesting branch could rot
+    // untested and the test would stay green.
+    const shape =
+      res === true ? { granted: true } : { granted: false, supported: res.supported, why: res.why };
+    expect(shape.granted || shape.supported === false).toBe(true);
+    expect(shape.granted ? 'browser-chrome prompt' : shape.why).toMatch(/browser-chrome prompt/);
     await d.close();
   });
 });
