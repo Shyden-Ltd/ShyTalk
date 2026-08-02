@@ -112,6 +112,18 @@ function selectSerial(preferredSerial) {
  */
 function classifyAndroidAuthState(dumpXml) {
   const x = String(dumpXml || '');
+  // Suspension is checked FIRST because SignInScreen checks it first: it
+  // renders SuspensionScreen before the ban, warning and error branches, so a
+  // dump carrying more than one gate must be read as the hardest.
+  //
+  // The screen has carried `suspension_title` (plus appeal field, submit and
+  // sign-out) all along — nothing read them, so a suspended user classified as
+  // `unknown`, whose contract is "never act". Confirmed on the device once the
+  // suspended persona could finally reach the screen at all: "Account Suspended
+  // | Reason: Repeat harassment | Your suspension will end in: 2 DAY 21…".
+  if (x.includes('suspension_title') || x.includes('suspension_submitAppealButton')) {
+    return 'suspended';
+  }
   if (x.includes('warning_acknowledgeButton')) return 'warning';
   // DegradedModeScreen.kt — shown when the backend is unreachable, which on a
   // device whose reverse tunnels have dropped is every single launch. Ranked
@@ -3270,7 +3282,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     //
     // `picker` and `unknown` still throw. Those mean the credential did NOT
     // work, and that has to stay loud — the guard is narrowed, not removed.
-    const GATED_BUT_AUTHENTICATED = new Set(['warning']);
+    // `suspended` joins `warning` for the same reason: j11 asserts the app
+    // shows the suspension screen with reason, end date and appeal button, so
+    // landing there IS the scenario succeeding. The credential worked; the
+    // product then put a harder gate above main.
+    const GATED_BUT_AUTHENTICATED = new Set(['warning', 'suspended']);
     if (GATED_BUT_AUTHENTICATED.has(postState)) {
       console.error(
         `[android-driver] ${personaId} signed in and landed on the "${postState}" gate — ` +

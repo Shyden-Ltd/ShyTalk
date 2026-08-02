@@ -68,6 +68,7 @@ function createProbeApp() {
   app.get('/api/users/:id', (req, res) => res.json({ ok: true, id: req.params.id }));
   app.get('/api/users/:id/followers', (req, res) => res.json({ ok: true, via: 'followers' }));
   app.post('/api/users/:id/appeal', (req, res) => res.json({ ok: true, via: 'appeal' }));
+  app.post('/api/users/sign-in', (req, res) => res.json({ found: true, suspended: true }));
   app.post('/api/probe/sensitive', (req, res) => res.json({ ok: true }));
   return app;
 }
@@ -130,6 +131,23 @@ describe('a suspended user can read their OWN user doc', () => {
   it('still blocks every other suspended request', async () => {
     const res = await request(app).post('/api/probe/sensitive').set(suspended.headers).send({});
     expect(res.status).toBe(403);
+  });
+
+  it('lets a suspended user reach POST /users/sign-in — it is identity, not capability', async () => {
+    // THE ROOT BLOCKER of the whole chain, and the one that hid the others.
+    //
+    // `/users/sign-in` is the FIRST call the app makes, and the route is already
+    // suspension-aware: it returns `{ found: true, suspended: true }` WITHOUT
+    // updating firebaseUid or minting claims — a response added deliberately by
+    // the Phase-2A audit so a suspended user learns their status without gaining
+    // any capability.
+    //
+    // The middleware 403'd before that route could run, so the designed response
+    // was unreachable and the app fell back to "Unable to Connect". Exempting
+    // the gate here is safe precisely BECAUSE the route is the real guard — it
+    // grants a suspended caller nothing.
+    const res = await request(app).post('/api/users/sign-in').set(suspended.headers).send({});
+    expect(res.status).not.toBe(403);
   });
 
   it('keeps the appeal endpoint reachable — the right this exists to serve', async () => {

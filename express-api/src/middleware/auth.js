@@ -293,6 +293,15 @@ function isOwnUserDocRead(req, uniqueId) {
 function isSuspensionExemptPath(req, uniqueId) {
   if (isOwnUserDocRead(req, uniqueId)) return true;
   return (
+    // IDENTITY RESOLUTION, not a capability — and the FIRST call the app makes,
+    // which is why blocking it hid every other symptom behind "Unable to
+    // Connect". The route is already suspension-aware: it returns
+    // `{ found: true, suspended: true }` and deliberately does NOT update
+    // firebaseUid or mint custom claims for a suspended caller (Phase-2A audit
+    // M5, which fixed the opposite bug — suspended users being granted claims
+    // before this gate ran). Exempting the gate is safe precisely BECAUSE the
+    // route is the real guard: it hands a suspended caller nothing but the news.
+    (req.method === 'POST' && req.path === '/users/sign-in') ||
     /^\/users\/[^/]+\/appeal$/.test(req.path) ||
     /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
     /^\/users\/[^/]+\/delete$/.test(req.path) ||

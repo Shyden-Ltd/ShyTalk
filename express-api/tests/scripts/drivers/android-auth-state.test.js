@@ -180,6 +180,26 @@ describe('classifyAndroidAuthState — degraded mode', () => {
     expect(classifyAndroidAuthState(dump)).toBe('degraded');
   });
 
+  test('the SUSPENSION screen classifies as "suspended", not unknown', () => {
+    // Proven on the device 2026-08-02 once the suspended user could finally
+    // reach it: "Account Suspended | Reason: Repeat harassment | Your
+    // suspension will end in: 2 DAY 21…". The screen has carried
+    // `suspension_title` all along; nothing read it, so the harness called the
+    // screen `unknown` — the verdict whose contract is "never act".
+    expect(classifyAndroidAuthState('<node resource-id="com.x:id/suspension_title"/>')).toBe(
+      'suspended',
+    );
+  });
+
+  test('suspension outranks warning — SignInScreen checks isSuspended FIRST', () => {
+    // Mirrors the product: SignInScreen renders SuspensionScreen before the ban
+    // and warning branches, so a dump carrying both must not be read as the
+    // lesser gate.
+    const dump =
+      '<node resource-id="a/warning_acknowledgeButton"/><node resource-id="a/suspension_title"/>';
+    expect(classifyAndroidAuthState(dump)).toBe('suspended');
+  });
+
   test('a moderation warning still outranks degraded', () => {
     // Warning is the more specific gate and has its own acknowledge flow.
     const dump =
