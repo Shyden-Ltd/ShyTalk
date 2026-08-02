@@ -3517,7 +3517,13 @@ const matchers = [
     // eslint-disable-next-line sonarjs/slow-regex
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android) UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
-      const expected = m[3];
+      // The corpus writes English; the RUN may be in any of the 5 MVP locales.
+      // Resolved English -> string key -> the locale's shipped translation, so a
+      // Thai run asserts the Thai string and an app still rendering English
+      // FAILS — which is the defect the multi-locale pass exists to find.
+      // Anything with no key (numbers, room names, text the scenario typed) is
+      // asserted literally. See expectedTextForLocale.
+      const expected = localisedExpectation(m[3], ctx);
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (expected text=${expected})` };
       }
@@ -3623,7 +3629,9 @@ const matchers = [
     // eslint-disable-next-line sonarjs/slow-regex
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|iOS Sim) UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
-      const expected = m[3];
+      // Same locale resolution as the Android matcher — the multi-locale pass
+      // covers BOTH phones.
+      const expected = localisedExpectation(m[3], ctx);
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (iOS text=${expected})` };
       }
@@ -3631,12 +3639,29 @@ const matchers = [
         return { ok: false, error: 'ctx.uiDriver.iosUiDump not configured' };
       }
       const dump = await ctx.uiDriver.iosUiDump();
-      const labelHit = dump.includes(`"label":"${expected}"`);
-      const valueHit = dump.includes(`"value":"${expected}"`);
-      if (!labelHit && !valueHit) {
+      // The real dump is XML — `label="ShyTalk"` — as captured in
+      // tests/scripts/drivers/fixtures/ios-dump-signin.xml and encoded in
+      // IOS_GRAMMAR. This checked `"label":"…"`, a JSON shape WDA does not emit
+      // here, so the assertion could never pass on a device: every
+      // `<persona>'s app UI shows "text"` step dispatched to iOS was failing on
+      // the format, not the product. The error message even quoted the XML form
+      // while the check used the JSON one, which is why reading it did not give
+      // the game away.
+      //
+      // EXACT attribute equality, mirroring the Android matcher — deliberately
+      // NOT the grammar's `hasText`, which is a SUBSTRING match. An existing
+      // test pins "save" must not match "save as draft", and that contract is
+      // right: a toast assertion satisfied by a longer string containing it
+      // would pass on the wrong message. (It was passing for the wrong reason
+      // before — JSON input never matched anything at all.)
+      //
+      // `name` is checked alongside label/value because an iOS element with no
+      // accessibility id repeats its visible text there.
+      const hit = ['label', 'value', 'name'].some((attr) => dump.includes(`${attr}="${expected}"`));
+      if (!hit) {
         return {
           ok: false,
-          error: `iOS UI dump has no label="${expected}" or value="${expected}"`,
+          error: `iOS UI dump has no label/value/name equal to "${expected}"`,
         };
       }
       return { ok: true };
@@ -4298,7 +4323,9 @@ const matchers = [
     // eslint-disable-next-line sonarjs/slow-regex
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Web UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
-      const expected = m[3];
+      // The web phase repeats in all 5 MVP locales too, so the expectation
+      // follows the run locale here as well.
+      const expected = localisedExpectation(m[3], ctx);
       if (!ctx.webDriver) {
         return { ok: false, error: `Web step requires ctx.webDriver (text=${expected})` };
       }
@@ -16813,6 +16840,32 @@ function stripStepAnnotation(text) {
  * is left unresolved rather than blanked — inventing an id would let an
  * assertion pass against a user that does not exist.
  */
+/**
+ * What a text assertion should look for, given the locale this run is in.
+ *
+ * `ctx.locale` was written by five matchers and read by NOTHING — this reads it.
+ * The corpus writes English literals, so repeating a journey in Thai without
+ * translating the expectation would fail every text assertion for a reason that
+ * has nothing to do with the product.
+ *
+ * A missing translation is left as the English text rather than silently
+ * skipped: the assertion then fails against a screen that cannot show it, which
+ * is the honest outcome — an untranslated string in a shipped locale is a REAL
+ * defect and must not be smoothed over.
+ */
+function localisedExpectation(text, ctx) {
+  const locale = ctx?.locale;
+  if (!locale || locale === 'en') return text;
+  try {
+    const { expectedTextForLocale } = require('./drivers/app-ui-methods');
+    return expectedTextForLocale(text, locale).text;
+  } catch {
+    // The resolver is harness code; if it cannot load, assert the literal rather
+    // than crashing a whole cell over a translation lookup.
+    return text;
+  }
+}
+
 function seedPersonaIdVars(scenarioVars, created = null) {
   if (!scenarioVars || typeof scenarioVars.set !== 'function') return;
   const put = (name, id) => {

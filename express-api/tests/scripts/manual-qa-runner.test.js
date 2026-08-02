@@ -5830,9 +5830,15 @@ describe('iOS Sim open-screen matcher (When <P> on iOS Sim opens the "X" screen)
 });
 
 describe('iOS Sim text-content assertion (Then <P>\'s iOS Sim UI shows "X")', () => {
-  test('matches a "label":"..." attribute in JSON dump', async () => {
+  // Dumps rewritten from JSON to XML 2026-08-03. `iosUiDump` returns Appium's
+  // /source, which for XCUITest is the XML page source — see the real capture in
+  // fixtures/ios-dump-signin.xml. The matcher was reading `"label":"…"`, a shape
+  // the device never emits, so every iOS text assertion failed on FORMAT rather
+  // than on the product. These tests agreed with the mistake, which is why it
+  // survived: the harness and its tests shared one wrong picture of the device.
+  test('matches a label="..." attribute in the XML dump', async () => {
     const dump =
-      '{"children":[{"identifier":"banner","label":"You must be 18 or older to use this feature"}]}';
+      '<XCUIElementTypeStaticText name="banner" label="You must be 18 or older to use this feature" />';
     const ctx = makeCtx({ uiDriver: { iosUiDump: jest.fn(async () => dump) } });
     const r = await executeStep(
       {
@@ -5844,8 +5850,8 @@ describe('iOS Sim text-content assertion (Then <P>\'s iOS Sim UI shows "X")', ()
     expect(r.ok).toBe(true);
   });
 
-  test('matches a "value":"..." attribute when label is absent', async () => {
-    const dump = '{"children":[{"identifier":"toast","value":"Report submitted"}]}';
+  test('matches a value="..." attribute when label is absent', async () => {
+    const dump = '<XCUIElementTypeStaticText name="toast" value="Report submitted" />';
     const ctx = makeCtx({ uiDriver: { iosUiDump: jest.fn(async () => dump) } });
     const r = await executeStep(
       { kind: 'Then', text: 'Nora\'s iOS Sim UI shows "Report submitted"' },
@@ -5855,14 +5861,14 @@ describe('iOS Sim text-content assertion (Then <P>\'s iOS Sim UI shows "X")', ()
   });
 
   test('substring rejection: "save" must not match "save as draft"', async () => {
-    const dump = '{"children":[{"label":"save as draft"}]}';
+    const dump = '<XCUIElementTypeButton label="save as draft" />';
     const ctx = makeCtx({ uiDriver: { iosUiDump: jest.fn(async () => dump) } });
     const r = await executeStep({ kind: 'Then', text: 'Mia\'s iOS Sim UI shows "save"' }, ctx);
     expect(r.ok).toBe(false);
   });
 
   test('trailing descriptive context allowed (e.g. ` toast`)', async () => {
-    const dump = '{"children":[{"label":"Report submitted"}]}';
+    const dump = '<XCUIElementTypeStaticText label="Report submitted" />';
     const ctx = makeCtx({ uiDriver: { iosUiDump: jest.fn(async () => dump) } });
     const r = await executeStep(
       { kind: 'Then', text: 'Nora\'s iOS Sim UI shows "Report submitted" toast' },
