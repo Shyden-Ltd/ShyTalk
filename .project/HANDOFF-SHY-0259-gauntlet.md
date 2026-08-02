@@ -4,106 +4,139 @@ Branch: `story/SHY-0245-eradicate-test-sleeps` · nothing pushed (no-push-during
 
 ## Operator's current directive
 
-**Fix the APP cells first. Then WEB-only. Then the cross-overs.** Do not chase all
-three at once.
+**Fix the APP cells first. Then WEB-only. Then the cross-overs.** Do not chase
+all three at once.
 
-The runner already supports this: phases are `app -> web -> cross`
-(`scripts/matrix-phases.js`), and `--phase-gate stop` halts at the first phase
-with failures instead of running everything. Use it.
+This is now the launcher's DEFAULT, not something to remember: `run.sh` passes
+`--phase-gate=stop`, so a run halts at the first phase with failures instead of
+spending hours on web and cross cells whose app-side foundation is known broken.
+Override with `RUN_JOURNEYS_PHASE_GATE=report`.
 
-## Where the gauntlet stands
+## Live run
 
-Two full runs, both stopped by me:
+`20260802-134434-local`, launched 13:44. Both devices passed the driveability
+health check. Status: `bash ~/.claude/skills/run-journeys/run.sh status`.
+Dashboard: `node express-api/scripts/gauntlet/progress-server.js --open`.
 
-| run | result | why |
+Do NOT poll it — one snapshot per explicit ask, per the run-journeys contract.
+
+## Sign-in is 3x faster — 79s -> 26s
+
+This was the reason the app phase read as stalled. It was never stalled; at 79s
+a scenario, 118 app-android scenarios spend 2.6 HOURS in sign-in alone.
+
+| | wall | dumps |
 |---|---|---|
-| `20260802-081518-local` | PASS=0 all 4 cells, ~500 findings | my surface-gate regression + no working app reset |
-| `20260802-112750-local` | 3 result lines in 30 min | sign-in cost, see below |
+| baseline | 79,295ms | 30 |
+| + reset reordered, settings chain collapsed | 55,157ms | 18 |
+| + gate-loop double-dumps removed | 41,566ms | 12 |
+| + session drop moved AHEAD of first classify | **25,760ms** | **8** |
 
-**The second run was never stalled — it was slow.** Measured directly:
+**A `uiautomator` dump costs a FIXED ~2,228ms and nothing makes it cheaper.**
+Measured: 2,155ms compressed vs 2,167ms uncompressed; 2,171ms on the home screen
+vs 2,125ms inside ShyTalk; **1,092ms even with no arguments**, printing only its
+usage text. It is per-invocation process startup — an `app_process` VM plus a
+fresh UiAutomation bind, every time. Do not go looking for a flag. The only
+lever is issuing fewer dumps, and the only way past that is a resident agent
+(an instrumented APK / Appium's UiAutomator2 server), which nobody has built.
 
-```
-androidPersonaSignIn('P-10', 'rooms', 'local')  ->  true in 79 SECONDS
-```
+Cheap probe if you ever need one: `dumpsys activity activities | grep
+topResumedActivity` is **77ms**. Useless for auth state though — ShyTalk is
+single-Activity Compose, so focus cannot tell the picker from main.
 
-79s x 118 scenarios on app-android is 2.6 hours of sign-in alone. That is the
-number to attack next, and it is the whole reason the app phase looks dead.
-Where the 79s goes has NOT been measured yet — do that before optimising.
+What was actually wrong, all three the same shape (information read, then
+thrown away):
 
-Note `androidPersonaSignIn(personaId, tab, target = 'dev')` — the target
-defaults to **dev**. A direct call without it drives `com.shyden.shytalk.dev`
-and the reproduction is meaningless. Always pass `'local'`.
+1. **The reset chain ran backwards.** An ~18s UI sign-out chain went first;
+   a 437ms deterministic session drop was the last resort, because two comments
+   in the driver claimed `run-as` was denied on the CPH2653. **It is not.** It
+   lists and deletes the Firebase Auth prefs and the app comes up on the picker.
+   `pm clear` genuinely is refused there; that stays last.
+2. **Two boots to reach one picker.** Boot, classify, discover signed-in, drop
+   the session, boot again. The drop now precedes the first classification.
+3. **Every tap re-dumped a screen a wait had just dumped.** `waitForDump()` now
+   returns the dump that satisfied the predicate; `tapWhenVisible` and a
+   `providedDump` argument let callers act on what they already read.
 
-## Fixed this session (all committed)
+(3) is also a **correctness** fix: the persona picker verified a row was inside
+the list's clipping rect in one dump, then tapped coordinates parsed from a
+different, later one — so the check that exists to stop taps landing on the
+backdrop was made against a screen that was not the one being tapped.
 
-- **Surface gate stopped recognising its own signal** — my regression. Matchers
-  moved to the neutral `appMethod` resolver, so their failure message became
-  "the app driver has no X" and `blamedDriver` no longer matched it. Steps that
-  should have SKIPPED became FAILURES. This caused most of run 1's 500 findings.
-  Fixed in `scenario-surface.js`; 7 regression tests, including the case that
-  must NOT skip.
-- **App reset had no working last resort.** `pm clear` is refused on the OnePlus
-  CPH2653 (SecurityException, no CLEAR_APP_USER_DATA). Added a `run-as` drop of
-  the two Firebase Auth prefs files, which works and is gentler (legal
-  acceptance survives).
-- **`androidSignOut` failure was swallowed by `catch {}`** — now recorded and
-  reported as `sign-out: <reason>; reset: <reason>`.
-- **4 silently-passing test defects -> 0** (the launcher refuses to start
-  otherwise). All GUARD-IF: assertions behind an `if` pass by not running.
-- **Dashboard run discovery** — four bugs; now finds `/tmp/run-journeys-<id>`
-  with no arguments. Running on <http://localhost:4310>.
+Nothing was removed. `run-as` needs a debuggable build, so a release APK (j20's
+prod-flavor scenarios) still reaches the picker via the UI chain, and a test
+pins that path.
 
-## Do NOT re-do these
+## Traps that cost time today — do NOT re-learn these
 
-- **`advancePastLaunchGates` must NOT tap the warning gate.** I added that
-  branch; two existing tests correctly refused it, one citing a prior review
-  finding. Acknowledging a warning is a stateful product action that records
-  acceptance server-side — `androidSignOut` owns it. The separation is correct.
-- **iOS freshness probe:** testTag literals do NOT survive into the Kotlin/Native
-  binary — tags that shipped months ago also read 0 under `strings`. Judge
-  freshness on TYPE names (`EventHostScreen`, `EventInviteBanner`).
-- **Auth emulator project is `demo-shytalk`**, not `shytalk-local`. Querying the
-  wrong one reports 0 users and sends you chasing a non-problem. It has ~895.
+- **`local/start.sh` REINSTALLS the app on the phone**, built for the emulator
+  host `10.0.2.2`, which a real device cannot route. Its own banner says
+  `Installed on: CPH2653`. After EVERY `stop.sh && start.sh`:
+  `./gradlew installLocalDebug -PlocalHost=localhost` + re-assert `adb reverse`.
+  The failure is silent: logcat shows `FirebaseAuth: Logging in as …` with no
+  result line, and the picker dialog just stays open.
+- **A stale session presents as "Unable to Connect".** After an emulator
+  restart the signed-in user no longer exists, its calls fail, and
+  `AuthViewModel` reports that as connectivity (it only sets
+  `isBackendUnreachable` while authenticated — so Retry cannot help). Both host
+  AND device could reach every port throughout. Cure: drop the stored session.
+- **`GET /emulator/v1/projects/<p>/accounts` is DELETE-only** and answers
+  `{"message":"Method GET not allowed"}`. Grepping that for `email` counts 0 and
+  reads exactly like an empty emulator. Real count:
+  `POST /identitytoolkit.googleapis.com/v1/projects/<p>/accounts:query` with
+  `Authorization: Bearer owner` — it said **793**, and 895 after seeding.
+- **`androidPersonaSignIn(personaId, tab, target = 'dev')`** — the target
+  defaults to **dev**. A direct call without it drives `com.shyden.shytalk.dev`
+  and the reproduction is meaningless. Always pass `'local'`.
+- **P-12 renders as "Adam (P-01 adult new)"** — a pre-existing seed-data
+  discrepancy, NOT a sign-in bug. The UID authenticated is 90000001, which IS
+  P-12's `uniqueId` in `provision-test-personas.js`; only `displayName` is
+  wrong. The unmodified driver does the identical thing. P-09, P-10, P-11 and
+  P-19 all resolve correctly. Worth a ticket; not a driver defect.
 
-## Known-real findings still open (from run 1, not yet triaged)
+## Also do NOT re-do
 
-1. A Firestore listener queries `users/<firebaseUid>`; `firestore.rules:74` does
-   `int(uniqueId)` on the doc id and returns PERMISSION_DENIED on every sign-in.
-   Also a direct-backend-access violation (clients must go via Express).
-2. 38 findings of the shape `collection "X" had 0 entries matching predicate` —
-   likely real product/seed gaps, unexamined.
+- **`advancePastLaunchGates` must NOT tap the warning gate.** Two existing tests
+  correctly refuse it, one citing a prior review finding. Acknowledging a
+  warning records acceptance server-side — `androidSignOut` owns it.
+- **iOS freshness probe:** testTag literals do NOT survive into the
+  Kotlin/Native binary — tags that shipped months ago also read 0 under
+  `strings`. Judge freshness on TYPE names (`EventHostScreen`).
+- **Auth emulator project is `demo-shytalk`**, not `shytalk-local`.
+
+## Emulator degradation is real and it lies
+
+A full `npm test` left 14 suites failing (95 tests). All 14 passed after
+`stop.sh && start.sh` — **proven by re-running, not assumed**. The tell is
+duration: `journey-moderation-seed-givens` 454s, `admin-audit-log-completeness`
+321s, `rotateLogs` 210s. Zero of the 14 referenced the driver.
+
+`stop.sh` now genuinely stops (verify by process age:
+`ps -eo pid,etime -ax | grep [f]irestore` — 17s old means it really restarted).
+
+## Known-real findings still open
+
+1. `firestore.rules:74` does `int(uniqueId)` on a `users/<firebaseUid>` doc id
+   and returns PERMISSION_DENIED. Also a direct-backend-access violation.
+2. 38 findings shaped `collection "X" had 0 entries matching predicate` —
+   unexamined.
 3. `STEP_NOT_IMPLEMENTED` x14.
-4. j20 prod-flavor scenarios need `./gradlew installProdRelease -PlocalHost=localhost`
-   (all three flavours coexist; nothing needs uninstalling).
+4. j20 prod-flavor scenarios need `./gradlew installProdRelease -PlocalHost=localhost`.
+5. P-12 display-name / seed mismatch (above).
 
 ## Restart recipe
 
 ```bash
-# stack (stop.sh now verifies + sweeps ports; a "restart" that reuses a wedged
-# emulator is the failure this fixed)
 bash local/stop.sh && bash local/start.sh
-
-# devices — both must carry THIS branch's build
-./gradlew installLocalDebug -PlocalHost=localhost
-adb reverse tcp:3000 tcp:3000 && adb reverse tcp:7880 tcp:7880 && adb reverse tcp:9000 tcp:9000
-# iOS: see reference-ios-local-device-build-recipe memory (LOCAL_HOST=<mac LAN ip>)
-
-# app phase only
-bash ~/.claude/skills/run-journeys/run.sh launch local
-node express-api/scripts/gauntlet/progress-server.js --open
+./gradlew installLocalDebug -PlocalHost=localhost      # start.sh's build is emulator-targeted
+for p in 3000 7880 9000 8080 9099 9002; do adb reverse tcp:$p tcp:$p; done
+bash ~/.claude/skills/run-journeys/run.sh launch local  # seeds + health-checks + phase-gates
 ```
 
-If the Android app is stuck signed-in, drop the session (pm clear will NOT work):
+If the app is stuck signed-in or on "Unable to Connect" (`pm clear` will NOT work):
 
 ```bash
 adb shell am force-stop com.shyden.shytalk.local
 adb shell run-as com.shyden.shytalk.local rm -f 'shared_prefs/com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml'
 adb shell run-as com.shyden.shytalk.local rm -f 'shared_prefs/com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml'
 ```
-
-## Emulator health
-
-It degrades after roughly one full `npm test` run: the rules endpoint starts
-returning 500 and suites fail in bulk while passing in isolation. Check age with
-`ps -eo pid,etime,rss | grep [c]loud-firestore-emulator` — if `etime` predates
-your restart, it never died.
