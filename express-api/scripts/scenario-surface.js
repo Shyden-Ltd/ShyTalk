@@ -221,10 +221,23 @@ function methodPlatform(error) {
 }
 
 /** Human reason recorded on the skipped scenario, so the skip is never mysterious. */
-function skipReason(missing = []) {
-  return missing.length
-    ? `surface not available on this cell — needs ${missing.join(' + ')}`
-    : 'surface not available on this cell — the step needs a device UI driver';
+function skipReason(missing = [], driver = null) {
+  if (missing.length) return `surface not available on this cell — needs ${missing.join(' + ')}`;
+  // NAME THE DRIVER THAT WAS ACTUALLY ABSENT.
+  //
+  // `missing` only ever holds GATING_PLATFORMS, and `web` is deliberately not
+  // one — so every web scenario skipped on an app cell arrived here with an
+  // empty set and got "the step needs a device UI driver", on a cell whose
+  // device UI driver was present and working.
+  //
+  // Measured on run 20260803-011547-local: 70 of app-android's 111 skips carried
+  // that message. The skips were CORRECT (an app cell drives no browser); the
+  // explanation sent the reader hunting a device problem that did not exist,
+  // which is worse than no explanation because it looks like one.
+  if (driver === 'webDriver') {
+    return 'surface not available on this cell — needs a browser, and this cell drives none';
+  }
+  return 'surface not available on this cell — the step needs a device UI driver';
 }
 
 /**

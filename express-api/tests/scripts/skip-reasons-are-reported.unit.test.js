@@ -116,3 +116,31 @@ describe('the report summary no longer blames @manual for every skip', () => {
     expect(out).toMatch(/2 × surface not available on this cell — needs Web/);
   });
 });
+
+describe('the reason names the driver that was actually absent', () => {
+  const { skipReason } = require('../../scripts/scenario-surface');
+
+  it('a web-only gap says BROWSER, not device UI driver', () => {
+    // `missing` only ever holds GATING_PLATFORMS and `web` is deliberately not
+    // one, so every web scenario skipped on an app cell arrived with an empty
+    // set. Measured on run 20260803-011547-local: 70 of app-android's 111 skips
+    // said "the step needs a device UI driver" — on a cell whose device UI
+    // driver was present and working. The skips were right; the explanation
+    // sent the reader hunting a problem that did not exist, which is worse than
+    // silence because it looks like an answer.
+    expect(skipReason([], 'webDriver')).toMatch(/needs a browser/);
+    expect(skipReason([], 'webDriver')).not.toMatch(/device UI driver/);
+  });
+
+  it('a named platform still wins over the driver', () => {
+    // The specific statement is the better one whenever it exists.
+    expect(skipReason(['ios'], 'uiDriver')).toBe('surface not available on this cell — needs ios');
+  });
+
+  it('falls back to the generic reason when nothing more precise is known', () => {
+    // Still says SOMETHING. A skip with no explanation is the state this whole
+    // change exists to remove.
+    expect(skipReason([], 'uiDriver')).toMatch(/device UI driver/);
+    expect(skipReason([])).toMatch(/device UI driver/);
+  });
+});

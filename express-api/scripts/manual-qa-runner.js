@@ -40,6 +40,7 @@ const { rejectUnknownField } = require('./product-field-registry');
 const {
   requiredPlatforms,
   isSurfaceUnavailable,
+  blamedDriver,
   skipReason,
   GATING_PLATFORMS,
 } = require('./scenario-surface');
@@ -16843,7 +16844,10 @@ async function runScenario(scenario, parsed, ctx) {
     // red, or the backlog it tracks becomes invisible.
     if (!result.ok && isSurfaceUnavailable(result.error, ctx, step)) {
       const missing = [...requiredPlatforms([step])].filter((p) => GATING_PLATFORMS.has(p));
-      const reason = skipReason(missing);
+      // The blamed driver is passed so a web-only gap is named as one — see
+      // skipReason. Without it every web scenario skipped on an app cell claimed
+      // to need a device UI driver the cell already had.
+      const reason = skipReason(missing, blamedDriver(result.error));
       stepResults.push({ step, result: { ok: true, skipped: true, reason } });
       break;
     }
