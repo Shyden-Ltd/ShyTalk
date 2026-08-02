@@ -16853,6 +16853,47 @@ async function runScenario(scenario, parsed, ctx) {
   return stepResults;
 }
 
+/**
+ * One scenario's line in the per-cell log.
+ *
+ * A SKIP carries WHY. The reason was computed by `skipReason()`, attached to the
+ * scenario report, and then dropped at both output points — the log printed a
+ * bare `SKIP <file> :: <scenario>` and the JSON report's cells carry only
+ * browser/outcome/duration. So on 2026-08-02 the app-android cell skipped 110 of
+ * 228 scenarios and recorded not one reason for any of them.
+ *
+ * That is the difference between an auditable half of the corpus and an opaque
+ * one. A legitimate skip ("this cell has no browser") and a wrong one (a step
+ * misread as needing a surface it does not) print identically, so nobody can
+ * tell how much of the run is genuinely not-applicable and how much is coverage
+ * quietly going missing. SKIP is the one status nobody investigates, which is
+ * exactly why it has to say what it did.
+ */
+function formatScenarioLine(fileName, s) {
+  const marker = s.status === 'pass' ? 'OK' : s.status === 'fail' ? 'FAIL' : 'SKIP';
+  const why = marker === 'SKIP' && s.reason ? ` — ${s.reason}` : '';
+  return `${marker} ${fileName} :: ${s.scenario}${why}`;
+}
+
+/**
+ * How many scenarios skipped, grouped by reason.
+ *
+ * The per-scenario lines make one skip explicable; this makes the SHAPE of a
+ * cell's skipping visible at a glance, so "half the corpus needs a browser this
+ * cell does not have" is distinguishable from a long tail of different causes.
+ */
+function summariseSkips(scenarioReports = []) {
+  const counts = new Map();
+  for (const s of scenarioReports) {
+    if (s.status !== 'skipped') continue;
+    const key = s.reason || s.skippedBy || 'no reason recorded';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([reason, count]) => ({ reason, count }));
+}
+
 // ── Top-level run ───────────────────────────────────────────────────
 
 async function runFeatureFile(filePath, ctx) {
@@ -17544,9 +17585,15 @@ function formatReport(allFindings, allScenarioReports, target, cycleNumber) {
   lines.push('');
   lines.push(`Target: ${target}`);
   lines.push(`Scenarios run: ${allScenarioReports.filter((s) => s.status !== 'skipped').length}`);
-  lines.push(
-    `Skipped (@manual): ${allScenarioReports.filter((s) => s.status === 'skipped').length}`,
-  );
+  // Was labelled "Skipped (@manual)", which attributed EVERY skip to that tag.
+  // Most are the surface gate — on 2026-08-02 the app-android cell skipped 110
+  // of 228 and the report called all of them @manual, so a number worth
+  // investigating read as a handful of deliberately-manual scenarios.
+  const skipped = allScenarioReports.filter((s) => s.status === 'skipped');
+  lines.push(`Skipped: ${skipped.length}`);
+  for (const { reason, count } of summariseSkips(allScenarioReports)) {
+    lines.push(`  - ${count} × ${reason}`);
+  }
   lines.push(`Findings: ${allFindings.length}`);
   lines.push('');
 
@@ -18691,8 +18738,7 @@ async function main() {
     allFindings.push(...findings);
     allScenarioReports.push(...scenarioReports);
     for (const s of scenarioReports) {
-      const marker = s.status === 'pass' ? 'OK' : s.status === 'fail' ? 'FAIL' : 'SKIP';
-      console.log(`  ${marker} ${path.basename(f)} :: ${s.scenario}`);
+      console.log(`  ${formatScenarioLine(path.basename(f), s)}`);
       // Live per-scenario progress for the gauntlet dashboard (SHY-0263).
       // Append-only and never throws — the per-cell log is written once at
       // cell end, and native device cells emit no screenshot artifacts, so
@@ -18745,6 +18791,8 @@ async function main() {
 module.exports = {
   parseGherkin,
   classifySeverity,
+  formatScenarioLine,
+  summariseSkips,
   matchers,
   // Exported for scripts/check-journey-step-coverage.js, which must decide
   // "would this step resolve?" using the SAME normalisation executeStep
