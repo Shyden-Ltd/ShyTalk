@@ -8249,10 +8249,10 @@ describe('In-app banner about cohort change in <locale>', () => {
 
 describe('Balance comparison Given (X has shyCoins OP N [after explanation])', () => {
   test('"Adam has shyCoins >= 10" verifies user doc field', async () => {
-    // Adam (P-01, ephemeral) uniqueId is 90000001 per EPHEMERAL_PERSONAS.
+    // Adam (P-01, ephemeral) uniqueId is 90000002 per EPHEMERAL_PERSONAS.
     // The trailing "after daily reward + a +100 admin top-up" has no
     // parens so Wake 30 doesn't strip it — matcher must tolerate it.
-    const db = makeStatefulFakeDb({ 'users/90000001': { shyCoins: 110 } });
+    const db = makeStatefulFakeDb({ 'users/90000002': { shyCoins: 110 } });
     const ctx = makeCtx({ db });
     const r = await executeStep(
       {
@@ -9623,17 +9623,17 @@ describe('Past-tense PM state Given', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    // Adam P-01 ephemeral uniqueId=90000001, Alice P-02 uniqueId=50000010
-    // Sorted-join: 50000010_90000001 (digits compared char-by-char)
-    const convId = '50000010_90000001';
+    // Adam P-01 ephemeral uniqueId=90000002, Alice P-02 uniqueId=50000010
+    // Sorted-join: 50000010_90000002 (digits compared char-by-char)
+    const convId = '50000010_90000002';
     const convWrite = db.writes.find((w) => w.path === `conversations/${convId}`);
     expect(convWrite).toBeDefined();
-    expect(convWrite.data.participantIds).toEqual([90000001, 50000010]);
+    expect(convWrite.data.participantIds).toEqual([90000002, 50000010]);
     const msgWrite = db.writes.find((w) => w.path.startsWith(`conversations/${convId}/messages/`));
     expect(msgWrite).toBeDefined();
     expect(msgWrite.data).toMatchObject({
       text: 'tpyo here',
-      senderId: 90000001,
+      senderId: 90000002,
       recipientId: 50000010,
       type: 'TEXT',
     });
@@ -10752,9 +10752,9 @@ describe('Monetization setup Givens (j05 phase-scoped scenario setup)', () => {
 // ─── Adam's first-day setup Givens (j01 phase-scoped scenarios) ─────
 describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () => {
   // Adam is an EPHEMERAL persona (P-01 in EPHEMERAL_PERSONAS,
-  // uniqueId 90000001). loadPersonas() merges ephemerals so the
+  // uniqueId 90000002). loadPersonas() merges ephemerals so the
   // matcher resolves persona via `personas.get('Adam')`.
-  const ADAM_UNIQUE_ID = 90000001;
+  const ADAM_UNIQUE_ID = 90000002;
   const greta = require('../../scripts/provision-test-personas').personas.find(
     (p) => p.id === 'P-12',
   );
@@ -10866,7 +10866,7 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
 describe('j07 follow + conversation setup Givens (Adam discovery → PM)', () => {
   const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
   const alice = PERSONAS.find((p) => p.id === 'P-02');
-  const ADAM_UNIQUE_ID = 90000001; // ephemeral P-01
+  const ADAM_UNIQUE_ID = 90000002; // ephemeral P-01
 
   test('"<persona> is following <other>" — adds follower→followee + mirror in followerIds', async () => {
     const db = makeStatefulFakeDb({});
@@ -11097,7 +11097,7 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
     // Adam's j01 phrasing should NOT match Mia's j02 phrasing matcher
     // (it must hit the j01 pattern, not the j02 pattern, even though
     // both end up calling seedSignedUpUser).
-    const ADAM_UNIQUE_ID = 90000001;
+    const ADAM_UNIQUE_ID = 90000002;
     const r = await executeStep(
       { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
       ctx,
@@ -17760,8 +17760,8 @@ describe('Wake 82 — "<Name> was just age-verified by admin (cohort flipped fro
   // Past-tense state-seed: writes cohort + ageVerificationFlippedAt
   // timestamp.
   test('writes the post-flip cohort, and no phantom timestamp', async () => {
-    // Adam = P-01 = 90000001 (ephemeral)
-    const db = makeStatefulFakeDb({ 'users/90000001': {} });
+    // Adam = P-01 = 90000002 (ephemeral)
+    const db = makeStatefulFakeDb({ 'users/90000002': {} });
     const ctx = makeCtx({ db });
     const r = await executeStep(
       {
@@ -17771,13 +17771,13 @@ describe('Wake 82 — "<Name> was just age-verified by admin (cohort flipped fro
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['users/90000001'].cohort).toBe('adult');
+    expect(db._docs['users/90000002'].cohort).toBe('adult');
     // `ageVerificationFlippedAt` used to be written here and bracketed by
     // before/after timestamps. Nothing in the product writes or reads such a
     // field: the flip is evidenced by the cohort change itself and by the
     // auditLog row the approve route writes, both of which the product does
     // read. Timing a write nobody reads proved only that Date.now() works.
-    expect(db._docs['users/90000001'].ageVerificationFlippedAt).toBeUndefined();
+    expect(db._docs['users/90000002'].ageVerificationFlippedAt).toBeUndefined();
   });
 
   test('different persona name', async () => {
@@ -17837,12 +17837,12 @@ describe('"the <name> webhook fires sendSystemPm with key="<X>" recipient=<Y>"',
       ctx,
     );
     expect(r.ok).toBe(true);
-    // Adam P-01 uniqueId=90000001. Sorted-join with SHYTALK_SYSTEM:
-    // "90000001_SHYTALK_SYSTEM" (lex-sort: digits < uppercase letters).
-    const convId = '90000001_SHYTALK_SYSTEM';
+    // Adam P-01 uniqueId=90000002. Sorted-join with SHYTALK_SYSTEM:
+    // "90000002_SHYTALK_SYSTEM" (lex-sort: digits < uppercase letters).
+    const convId = '90000002_SHYTALK_SYSTEM';
     const convWrite = db.writes.find((w) => w.path === `conversations/${convId}`);
     expect(convWrite).toBeDefined();
-    expect(convWrite.data.participantIds).toEqual([90000001, 'SHYTALK_SYSTEM']);
+    expect(convWrite.data.participantIds).toEqual([90000002, 'SHYTALK_SYSTEM']);
     const msgWrite = db.writes.find((w) => w.path.startsWith(`conversations/${convId}/messages/`));
     expect(msgWrite).toBeDefined();
     expect(msgWrite.data).toMatchObject({
@@ -18048,15 +18048,15 @@ describe('Wake 83 — "<Name> [P-NN] is signed in as a non-admin user"', () => {
   // Predicate state-seed for admin-permission tests. Sets isAdmin=false
   // on the persona's user doc.
   test('writes isAdmin=false', async () => {
-    // Adam = P-01 = 90000001 (ephemeral)
-    const db = makeStatefulFakeDb({ 'users/90000001': {} });
+    // Adam = P-01 = 90000002 (ephemeral)
+    const db = makeStatefulFakeDb({ 'users/90000002': {} });
     const ctx = makeCtx({ db });
     const r = await executeStep(
       { kind: 'Given', text: 'Adam [P-01] is signed in as a non-admin user' },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['users/90000001'].isAdmin).toBe(false);
+    expect(db._docs['users/90000002'].isAdmin).toBe(false);
   });
 
   test('different persona', async () => {
@@ -19465,7 +19465,7 @@ describe('Wake 87 — "<Name> received a system PM from <Other>" (state-seed)', 
   test('writes message doc with sender + recipient', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db });
-    // Adam = P-01 = 90000001, Officia (j18 system) is at uniqueId 1
+    // Adam = P-01 = 90000002, Officia (j18 system) is at uniqueId 1
     const r = await executeStep(
       { kind: 'Given', text: 'Adam received a system PM from Officia' },
       ctx,
@@ -19474,7 +19474,7 @@ describe('Wake 87 — "<Name> received a system PM from <Other>" (state-seed)', 
     const messageKeys = Object.keys(db._docs).filter((k) => k.startsWith('messages/'));
     expect(messageKeys).toHaveLength(1);
     const message = db._docs[messageKeys[0]];
-    expect(message.recipientId).toBe(90000001);
+    expect(message.recipientId).toBe(90000002);
     expect(message.senderName).toBe('Officia');
   });
 
@@ -20984,7 +20984,7 @@ describe('Wake 90 — "the recipient is <Name>" (assertion on last sendSystemPm)
   // sendSystemPm matcher) and asserts the recipient name matches.
   test('matching recipient → ok', async () => {
     const ctx = makeCtx();
-    ctx.lastSentSystemPm = { recipientName: 'Adam', recipientId: 90000001 };
+    ctx.lastSentSystemPm = { recipientName: 'Adam', recipientId: 90000002 };
     const r = await executeStep({ kind: 'Then', text: 'the recipient is Adam' }, ctx);
     expect(r.ok).toBe(true);
   });
@@ -22037,7 +22037,7 @@ describe('Wake 94 — "the PM body contains the raw key OR an English placeholde
       trigger: 'test harness',
       key: 'totally_made_up_key',
       recipientName: 'Adam',
-      recipientId: 90000001,
+      recipientId: 90000002,
     };
     const r = await executeStep(
       { kind: 'Then', text: 'the PM body contains the raw key OR an English placeholder' },
@@ -22050,7 +22050,7 @@ describe('Wake 94 — "the PM body contains the raw key OR an English placeholde
   test('no fallback visible → fail', async () => {
     const spy = jest.fn(async () => false);
     const ctx = makeCtx({ webDriver: { webPmBodyShowsRawKeyOrPlaceholder: spy } });
-    ctx.lastSentSystemPm = { key: 'X', recipientName: 'Adam', recipientId: 90000001 };
+    ctx.lastSentSystemPm = { key: 'X', recipientName: 'Adam', recipientId: 90000002 };
     const r = await executeStep(
       { kind: 'Then', text: 'the PM body contains the raw key OR an English placeholder' },
       ctx,

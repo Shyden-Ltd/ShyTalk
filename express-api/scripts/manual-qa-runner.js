@@ -249,7 +249,11 @@ function classifySeverity(scenarioTags) {
 const EPHEMERAL_PERSONAS = [
   {
     id: 'P-01',
-    uniqueId: 90000001,
+    // 90000001 belongs to P-12 Greta, the ADMIN, and the corpus hard-codes it as
+    // `adminId` in j01/j04/j06/j10. Sharing it made Adam and Greta the same
+    // `users/90000001` document, so whichever seeded last won — silently
+    // stripping admin rights or granting them to a brand-new signup.
+    uniqueId: 90000002,
     email: 'adam-ephemeral@shytalk.dev.test',
     displayName: 'Adam (P-01 adult new)',
     cohort: 'adult',
@@ -706,9 +710,12 @@ async function seedSignedUpUser(ctx, personaName, opts = {}) {
   await ctx.db.doc(`users/${persona.uniqueId}`).set(fields, { merge: true });
   // Expose {newUniqueId} interpolation variable (j01 uses this in
   // assertions like `database has document "users/{newUniqueId}"`).
-  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
-    ctx.scenarioVars.set('newUniqueId', String(persona.uniqueId));
-  }
+  // Also registers {<name>Id}: newUniqueId is one slot, so a scenario creating
+  // two ephemeral personas could only ever refer to one of them.
+  seedPersonaIdVars(ctx.scenarioVars, {
+    name: String(persona.displayName || '').split(/s+/)[0],
+    uniqueId: persona.uniqueId,
+  });
   return { fields };
 }
 
@@ -16784,6 +16791,47 @@ function stripStepAnnotation(text) {
 // UPPER_SNAKE_CASE (env-var convention), fall back to process.env. Lower-
 // case names like `{coins}` are NEVER resolved from env — guards against
 // leaking arbitrary process environment into step text.
+/**
+ * Seed `{<persona>Id}` placeholders into a scenario's variable map.
+ *
+ * The corpus uses them seven times across j07 and j18 —
+ * `matching {participantIds: [1, {adamId}]}` — and nothing set them, so the
+ * predicate parser refused with "unresolved placeholder {adamId}". That refusal
+ * is correct (comparing against the literal braces would fail later as a
+ * confusing value mismatch), but it left j18 blocked on its first assertion.
+ * `{ts}` already sets the precedent for an auto-populated placeholder.
+ *
+ * Called twice, for the two places a persona id can come from:
+ *   - at scenario start with no argument, seeding the 16 PROVISIONED personas
+ *     from the registry;
+ *   - when an EPHEMERAL persona (Adam P-01, Mia P-03) is created, which is the
+ *     only moment its id exists. `newUniqueId` is a single slot and could never
+ *     serve a scenario using two of them.
+ *
+ * Never overwrites a value already present: an id captured during THIS run is
+ * what actually happened, and must beat a registry default. And an unknown name
+ * is left unresolved rather than blanked — inventing an id would let an
+ * assertion pass against a user that does not exist.
+ */
+function seedPersonaIdVars(scenarioVars, created = null) {
+  if (!scenarioVars || typeof scenarioVars.set !== 'function') return;
+  const put = (name, id) => {
+    const key = `${String(name).toLowerCase()}Id`;
+    if (!scenarioVars.has(key)) scenarioVars.set(key, String(id));
+  };
+  if (created) {
+    // A creation is authoritative for that persona, so it REPLACES.
+    const key = `${String(created.name).toLowerCase()}Id`;
+    scenarioVars.set(key, String(created.uniqueId));
+    scenarioVars.set('newUniqueId', String(created.uniqueId));
+    return;
+  }
+  for (const [name, p] of loadPersonas()) {
+    if (/^P-\d+$/.test(name) || !p?.uniqueId) continue;
+    put(name, p.uniqueId);
+  }
+}
+
 function interpolateScenarioVars(text, scenarioVars) {
   return text.replace(/\{(\w+)\}/g, (match, name) => {
     if (scenarioVars && scenarioVars.has(name)) return scenarioVars.get(name);
@@ -16837,6 +16885,8 @@ async function runScenario(scenario, parsed, ctx) {
   // means "scenario start time". Auto-populating it here lets scenarios
   // use the placeholder without writing a separate capture step.
   ctx.scenarioVars.set('ts', String(ctx.scenarioStartTime));
+  // {<persona>Id} for every provisioned persona — see seedPersonaIdVars.
+  seedPersonaIdVars(ctx.scenarioVars);
   ctx.locale = 'en';
 
   const allSteps = [...(parsed.background?.steps || []), ...scenario.steps];
@@ -18815,6 +18865,7 @@ async function main() {
 module.exports = {
   parseGherkin,
   classifySeverity,
+  seedPersonaIdVars,
   formatScenarioLine,
   summariseSkips,
   matchers,
