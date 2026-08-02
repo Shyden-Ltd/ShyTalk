@@ -448,6 +448,18 @@ function createSharedAppMethods({
       const n = str(noun);
       const k = str(kind);
       if (!n || !k) return false;
+      // A SCREEN is answered from SCREEN_MARKERS, which lists several anchors
+      // each. NOUN_KIND_TAGS maps one noun to ONE tag, so every screen the
+      // corpus names but that map lacked answered false — the report said
+      // "does not show the suspension screen" about a screen that was on the
+      // device. Multiple anchors also survive a partial render: a toolbar can
+      // be drawn while the body still loads, and a single-anchor check would
+      // call that "not on screen".
+      if (k.toLowerCase() === 'screen') {
+        const markers = SCREEN_MARKERS[n.toLowerCase()];
+        if (!markers) return false;
+        return onScreen(markers);
+      }
       const tag = NOUN_KIND_TAGS[`${n.toLowerCase()}::${k.toLowerCase()}`];
       if (!tag) return false;
       const d = await dump();

@@ -499,6 +499,43 @@ describe('blank arguments never match everything', () => {
     iosDump: inode({ tag: 'userCard_50000010', label: 'Alice' }),
   });
 
+  // "shows the <noun> screen" resolved ONLY through NOUN_KIND_TAGS, a
+  // single-tag map that had one entry. So every screen the corpus names but
+  // that map does not — `suspension`, `legal acceptance` — answered false, and
+  // the report said "Android UI does not show the suspension screen" about a
+  // screen that was demonstrably on the device (proven by hand on the OnePlus:
+  // "Account Suspended | Reason: Repeat harassment | …").
+  //
+  // SCREEN_MARKERS already exists for exactly this and lists SEVERAL anchors per
+  // screen, which is the right shape — a toolbar can be drawn while the body is
+  // still loading, and a single-anchor check would call that "not on screen".
+  test.each([
+    ['suspension', 'suspension_title'],
+    ['suspension', 'suspension_submitAppealButton'],
+    ['legal acceptance', 'legal_acceptTermsCheckbox'],
+    ['legal acceptance', 'legal_continueButton'],
+    ['warning', 'warning_acknowledgeButton'],
+  ])('the %s screen is recognised by %s', async (noun, anchor) => {
+    const p = pair({ androidDump: anode({ tag: anchor }), iosDump: inode({ tag: anchor }) });
+    await bothAnswer(p, 'ShowsNamedKind', ['Raul', noun, 'screen'], true);
+  });
+
+  test('a named screen is NOT reported when none of its anchors is present', async () => {
+    const p = pair({
+      androidDump: anode({ tag: 'main_roomsTab' }),
+      iosDump: inode({ tag: 'main_roomsTab' }),
+    });
+    await bothAnswer(p, 'ShowsNamedKind', ['Raul', 'suspension', 'screen'], false);
+  });
+
+  test('an unknown screen name still answers false rather than throwing', async () => {
+    const p = pair({
+      androidDump: anode({ tag: 'suspension_title' }),
+      iosDump: inode({ tag: 'suspension_title' }),
+    });
+    await bothAnswer(p, 'ShowsNamedKind', ['Raul', 'nonexistent', 'screen'], false);
+  });
+
   test.each([
     ['ShowsUserCard', ['Alice', '']],
     ['ShowsUserCard', ['Alice', null]],

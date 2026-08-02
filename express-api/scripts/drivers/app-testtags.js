@@ -23,6 +23,26 @@ const SCREEN_MARKERS = {
   // that "not in the room".
   room: ['room_seatGrid', 'room_roomName', 'room_backButton'],
   warning: ['warning_title', 'warning_communityStandardsLink', 'warning_acknowledgeButton'],
+  // The moderation gate ABOVE warning. j11 asserts the app shows it "with
+  // reason, end date, and appeal button", and it was reported absent while
+  // demonstrably on the device — nothing had ever mapped the screen name, so
+  // the assertion answered false about a screen it never looked for.
+  suspension: [
+    'suspension_title',
+    'suspension_appealField',
+    'suspension_submitAppealButton',
+    'suspension_signOutButton',
+  ],
+  // Reached on a fresh install and after any data clear. Its checkboxes are
+  // declared as `checkboxTestTag = "..."` parameters rather than modifier calls,
+  // which is also why a tag scan looking only for `testTag("…")` missed them.
+  'legal acceptance': [
+    'legal_acceptTermsCheckbox',
+    'legal_acceptPrivacyCheckbox',
+    'legal_acceptCommunityCheckbox',
+    'legal_acceptCyberBullyingCheckbox',
+    'legal_continueButton',
+  ],
   profile: [
     'profile_displayName',
     'profile_walletButton',
