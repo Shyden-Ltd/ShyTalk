@@ -47,6 +47,10 @@ describe('real fields are allowed', () => {
     ['blockedUserIds', 'users', 'read by block-check'],
     ['ownerId', 'rooms', 'read by routes/rooms.js'],
     ['participantIds', 'rooms', 'the room roster'],
+    // Written by /events/roster/add and READ by /events/mine, which returns it
+    // so the scheduling form pre-fills from the host's standing team. It was on
+    // the phantom list until 2026-08-02 because nothing used it.
+    ['teamRoster', 'users', "the host's standing team"],
   ])('%s on %s (%s)', (field, collection) => {
     expect(rejectUnknownField(field, { collection })).toBeNull();
   });
@@ -55,7 +59,6 @@ describe('real fields are allowed', () => {
 describe('phantom fields are rejected', () => {
   it.each([
     ['isUnblockable', 'users'],
-    ['teamRoster', 'users'],
     ['definitelyNotAFieldXyz', 'users'],
   ])('%s on %s', (field, collection) => {
     expect(rejectUnknownField(field, { collection })).toMatch(/appears nowhere in the product/);

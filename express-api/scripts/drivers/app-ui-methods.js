@@ -35,6 +35,7 @@ const fs = require('fs');
 const path = require('path');
 
 const {
+  EVENT_CONTROL_TAGS,
   SCREEN_MARKERS,
   TABLE_TAGS,
   INPUT_TAGS,
@@ -706,6 +707,95 @@ function createSharedAppMethods({
       if (!Number.isFinite(secs) || secs < 0) return false;
       if (!dropNetwork) unsupported('NetworkDropFor', 'network control');
       return dropNetwork(secs);
+    },
+
+    // ── Events (SHY-0267, j16) ─────────────────────────────────────────────
+    //
+    // Every one of these names the PERSON or the NUMBER the step is about. The
+    // event host screen tags its controls per member precisely so that "Tariq
+    // taps Promote Selma" cannot be satisfied by promoting whoever rendered
+    // first — which is the failure a generic `promoteButton` tag would allow.
+    TapEventControl: async (_viewer, control) => {
+      const key = str(control);
+      if (!key) return false;
+      const tag = EVENT_CONTROL_TAGS[key.toLowerCase()];
+      if (!tag) return false;
+      return tapByTag(tag);
+    },
+    PromoteFromRoster: async (_host, target) => {
+      const who = str(target === null || target === undefined ? null : String(target));
+      if (!who) return false;
+      // By id first (the tag the screen renders), then by the row bearing the
+      // name — the corpus writes people's names, the UI keys on their id.
+      if (await tapByTag(`eventHost_promote_${who}`)) return true;
+      const d = await dump();
+      const centre = q.centreOfTagPrefixWithText(d, 'eventHost_promote_', who);
+      if (!centre) return false;
+      if (!tapAt) unsupported('PromoteFromRoster', 'a coordinate tap');
+      return tapAt(centre.cx, centre.cy);
+    },
+    DemoteFromRoster: async (_host, target) => {
+      const who = str(target === null || target === undefined ? null : String(target));
+      if (!who) return false;
+      if (await tapByTag(`eventHost_demote_${who}`)) return true;
+      const d = await dump();
+      const centre = q.centreOfTagPrefixWithText(d, 'eventHost_demote_', who);
+      if (!centre) return false;
+      if (!tapAt) unsupported('DemoteFromRoster', 'a coordinate tap');
+      return tapAt(centre.cx, centre.cy);
+    },
+    ShowsRosterMemberAs: async (_viewer, target, expected) => {
+      const who = str(target === null || target === undefined ? null : String(target));
+      const state = str(expected);
+      if (!who || !state) return false;
+      const d = await dump();
+      if (!d || !q.hasTag(d, 'eventHost_rosterPanel')) return false;
+      // THEIR row, showing THAT answer. A panel-only check would pass while the
+      // one member who declined sat there unnoticed.
+      return q.hasTagPrefixWithText(d, `eventHost_rosterStatus_${who}`, state.toLowerCase());
+    },
+    ShowsEventTotals: async (_viewer, gifts, coins, beans, topContributor) => {
+      const d = await dump();
+      if (!d || !q.hasTag(d, 'eventHost_totals')) return false;
+      // Each number against ITS OWN element. "510 appears somewhere on screen"
+      // is satisfied by the coin total when the assertion was about beans.
+      const pairs = [
+        ['eventHost_giftCount', gifts],
+        ['eventHost_coinTotal', coins],
+        ['eventHost_beanTotal', beans],
+      ];
+      for (const [tag, value] of pairs) {
+        if (value === undefined || value === null || value === '') continue;
+        if (!q.hasTagPrefixWithText(d, tag, String(value))) return false;
+      }
+      const top = str(topContributor);
+      return top ? q.hasTagPrefixWithText(d, 'eventHost_topContributor', top) : true;
+    },
+    ShowsEventSummaryPanel: async (_viewer, performer) => {
+      const d = await dump();
+      if (!d || !q.hasTag(d, 'eventSummary_panel')) return false;
+      // When the step names a performer, their line must be there — the
+      // per-performer breakdown IS the panel's reason to exist, and a panel
+      // showing only a grand total would pass a presence-only check.
+      const who = str(performer === null || performer === undefined ? null : String(performer));
+      return who ? q.hasTagPrefix(d, `eventSummary_performer_${who}`) : true;
+    },
+    ShowsOwnEventEarnings: async (_viewer, beans) => {
+      const d = await dump();
+      if (!d) return false;
+      if (!q.hasTag(d, 'eventSummary_myEarnings')) return false;
+      // The NUMBER. "You have an earnings line" is not what the performer
+      // opened the screen to find out.
+      const amount = beans === undefined || beans === null ? null : String(beans);
+      return amount ? q.hasTagPrefixWithText(d, 'eventSummary_myBeans', amount) : true;
+    },
+    ShowsEventInviteBanner: async (_viewer, hostName) => {
+      const d = await dump();
+      if (!d || !q.hasTagPrefix(d, 'inviteBanner_')) return false;
+      const who = str(hostName);
+      // The banner says whose event it is. One that names the wrong host sends
+      // the performer to the wrong show.
+      return who ? q.hasTagPrefixWithText(d, 'inviteBanner_text_', who) : true;
     },
 
     // ── Composites ─────────────────────────────────────────────────────────

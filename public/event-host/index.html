@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <meta name="theme-color" content="#0f0d15" />
+    <!-- A host's roster names real people: never indexed. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="ShyTalk — schedule and run your events." />
+    <title>ShyTalk — Event host</title>
+    <link rel="stylesheet" href="/portal/portal.css" />
+    <link rel="stylesheet" href="event-host.css" />
+    <!-- data-language-selector-styles sentinel: CSP forbids 'unsafe-inline'
+         here, so language-selector.js must skip its inline-style injection. -->
+    <link rel="stylesheet" href="/css/language-selector.css" data-language-selector-styles />
+    <noscript
+      >This page requires JavaScript to function. Please enable JavaScript in your browser
+      settings.</noscript
+    >
+  </head>
+  <body>
+    <main id="events-app" data-testid="eventHost_panel">
+      <!-- Loading -->
+      <section id="ev-loading" class="portal-section portal-section--narrow" aria-label="Loading">
+        <div class="spinner" role="status">
+          <span class="sr-only">Loading...</span>
+        </div>
+      </section>
+
+      <!-- Signed out -->
+      <section id="ev-signin" class="portal-section portal-section--narrow" hidden>
+        <div class="portal-card">
+          <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+          <p class="portal-subtitle">Sign in to manage your events</p>
+          <a class="btn" href="/portal/">Sign in</a>
+        </div>
+      </section>
+
+      <!--
+        ERROR is a state of its own, distinct from "you have no events". An
+        empty list rendered after a failed request tells the host something
+        false about their own schedule, and gives them no reason to retry.
+      -->
+      <section id="ev-error" class="portal-section portal-section--narrow" hidden>
+        <div class="portal-card">
+          <h1>Events unavailable</h1>
+          <p id="ev-error-detail">We couldn't load your events just now.</p>
+          <button type="button" id="ev-retry" class="btn">Try again</button>
+        </div>
+      </section>
+
+      <!-- Panel -->
+      <section id="ev-panel" class="portal-section" hidden>
+        <div class="portal-card">
+          <h1>Event host</h1>
+
+          <button type="button" id="schedule_newEventButton" class="btn">Schedule an event</button>
+
+          <!-- The scheduling form, hidden until asked for. -->
+          <form id="ev-form" class="ev-form" hidden>
+            <label class="ev-label" for="scheduleEvent_title">Title</label>
+            <input
+              type="text"
+              id="scheduleEvent_title"
+              name="title"
+              class="ev-input"
+              autocomplete="off"
+              required
+            />
+
+            <label class="ev-label" for="scheduleEvent_startsAt">Starts at</label>
+            <input
+              type="datetime-local"
+              id="scheduleEvent_startsAt"
+              name="startsAt"
+              class="ev-input"
+              required
+            />
+
+            <label class="ev-label" for="scheduleEvent_durationMin">Duration (minutes)</label>
+            <input
+              type="number"
+              id="scheduleEvent_durationMin"
+              name="durationMin"
+              class="ev-input"
+              min="1"
+              max="480"
+              value="60"
+              required
+            />
+
+            <label class="ev-label" for="scheduleEvent_roster">
+              Roster (comma-separated member ids)
+            </label>
+            <input
+              type="text"
+              id="scheduleEvent_roster"
+              name="roster"
+              class="ev-input"
+              autocomplete="off"
+            />
+
+            <button type="submit" id="scheduleEvent_confirmButton" class="btn">
+              Schedule event
+            </button>
+            <p id="scheduleEvent_error" class="ev-error" hidden></p>
+          </form>
+
+          <h2>Your events</h2>
+          <!-- An empty state that SAYS it is empty; a blank panel is
+               indistinguishable from one that failed to render. -->
+          <p id="ev-empty" class="ev-empty" hidden>You have no events scheduled.</p>
+          <ul id="ev-list" class="ev-list"></ul>
+
+          <!-- Roster answers for the selected event: who accepted, who did not. -->
+          <section id="ev-roster-panel" class="ev-roster" hidden>
+            <h2>Roster</h2>
+            <ul id="ev-roster-list" class="ev-list"></ul>
+          </section>
+
+          <!-- Live totals, mirroring what the host sees on the app. -->
+          <section id="ev-totals" class="ev-totals" hidden>
+            <h2>Event totals</h2>
+            <p><span id="eventHost_giftCount">0</span> gifts</p>
+            <p><span id="eventHost_coinTotal">0</span> coins</p>
+            <p><span id="eventHost_beanTotal">0</span> beans</p>
+            <p id="eventHost_topContributorRow" hidden>
+              Top contributor: <span id="eventHost_topContributor"></span>
+            </p>
+          </section>
+
+          <!-- The closing recap the audience and performers also see. -->
+          <section id="eventSummary_panel" class="ev-summary" hidden>
+            <h2>Event closed</h2>
+            <p id="eventSummary_totals"></p>
+            <ul id="eventSummary_performers" class="ev-list"></ul>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <!--
+  Version pinned to 10.14.1 to match /portal — two Firebase versions in one
+  origin share a global namespace and the second to load wins.
+-->
+    <script
+      src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"
+      integrity="sha384-ZaR6mWzmJtrRibZ1Vm7SoHFr8OXjyAuGAXalGDKqbxFT18oi/z+oZLIRFkpeNor1"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"
+      integrity="sha384-I1LYojsZ5RM1cOda44Z2h42Qa6YfsQ1XkXxREnhp4ueYBR/4d1pG1K+NZM537Vsj"
+      crossorigin="anonymous"
+    ></script>
+    <!-- language-selector.js before the page script, so ?lang= is resolved
+         before anything renders (SHY-0181 convention). -->
+    <script src="/js/language-selector.js"></script>
+    <script src="/portal/config.js"></script>
+    <script src="event-host.js"></script>
+  </body>
+</html>

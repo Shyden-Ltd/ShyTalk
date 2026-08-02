@@ -1,0 +1,94 @@
+/* SHY-0267 — event host panel. Builds on /portal/portal.css for the shell. */
+
+.ev-form {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.ev-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+
+.ev-input {
+  width: 100%;
+  /* border-box so a 100%-wide input does not overflow its 16px padding on a
+     narrow phone — mobile-first, and the host schedules from wherever they are. */
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+}
+
+.ev-input:focus-visible {
+  outline: 2px solid #7c5cff;
+  outline-offset: 1px;
+}
+
+.ev-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+
+.ev-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ev-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ev-empty,
+.ev-error {
+  margin-top: 12px;
+  opacity: 0.85;
+}
+
+.ev-error {
+  color: #ff8f8f;
+}
+
+.ev-totals,
+.ev-summary,
+.ev-roster {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn--small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Respect a reduced-motion preference: the spinner in the shell is the only
+   animation on this page, and a host who has asked for stillness should get it. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

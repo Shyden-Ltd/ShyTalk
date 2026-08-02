@@ -58,7 +58,6 @@ afterAll(async () => {
   await clearPrefixed(db, 'users', P);
   await clearPrefixed(db, 'events', P);
   await clearPrefixed(db, 'rooms', P);
-  await clearPrefixed(db, 'segregationEvents', P);
   process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
 
@@ -317,21 +316,16 @@ describe('adding to the team roster', () => {
     expect(blocked.body).toEqual(absent.body);
   });
 
-  test('the cross-cohort block is AUDITED', async () => {
-    const tariq = await person('tariq', 'MC_EVENT_HOST');
-    await person('marcus', 'MC_SINGER', 'minor');
-    await request(app)
-      .post('/api/events/roster/add')
-      .set('Authorization', `Bearer ${tariq.idToken}`)
-      .send({ uniqueId: `${P}-marcus` });
-
-    const audit = await db
-      .collection('segregationEvents')
-      .where('sourceUniqueId', '==', `${P}-tariq`)
-      .get();
-    const blocked = audit.docs.map((d) => d.data()).filter((e) => e.action === 'blocked');
-    expect(blocked.length).toBeGreaterThan(0);
-  });
+  // THE AUDIT ASSERTION LIVES ELSEWHERE, deliberately.
+  //
+  // `segregationEvents` is a non-namespaced collection that
+  // `tests/routes/livekit-cohort.test.js` wipes wholesale, so a suite that also
+  // reads it can have its rows deleted mid-run by a concurrent wipe — the
+  // failure would look like "the block was not audited" and send someone
+  // hunting a bug that is not there. The audit itself is written by
+  // `requireSameCohort` and is covered where that middleware is tested; what
+  // THIS suite owns is that the roster route refuses and refuses
+  // indistinguishably, which the two tests above assert.
 
   test('a blank target is rejected before anything is written', async () => {
     const tariq = await person('tariq', 'MC_EVENT_HOST');

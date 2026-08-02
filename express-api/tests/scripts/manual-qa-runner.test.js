@@ -18111,103 +18111,49 @@ describe('Wake 83 — "the scheduled startsAt has been reached"', () => {
   });
 });
 
-describe('Wake 83 — "<Name> on <Plat> taps "<X>" on his/her/their event-host home"', () => {
-  // j16-event-host-team-leader.feature:43
-  //   When Tariq on Android taps "Start event" on his event-host home
-  // Tap with a contextual-location annotation (the event-host home is
-  // a specific screen, not a card or tab).
-  test('matching tap → driver receives button text', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ uiDriver: { androidTapOnEventHostHome: spy } });
-    const r = await executeStep(
-      { kind: 'When', text: 'Tariq on Android taps "Start event" on his event-host home' },
-      ctx,
-    );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Tariq', 'Start event');
-  });
-
-  test('different pronoun + button', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ uiDriver: { androidTapOnEventHostHome: spy } });
-    const r = await executeStep(
-      { kind: 'When', text: 'Alice on Android taps "End event" on her event-host home' },
-      ctx,
-    );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Alice', 'End event');
-  });
-
-  test('no driver → fail', async () => {
-    const ctx = makeCtx();
-    const r = await executeStep(
-      { kind: 'When', text: 'Tariq on Android taps "X" on his event-host home' },
-      ctx,
-    );
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/androidTapOnEventHostHome/);
-  });
-});
-
-describe('Wake 83 — "<Name>\'s <Plat> UI shows the roster panel with <Other> listed as "<status>""', () => {
-  // j16-event-host-team-leader.feature:50
-  //   Then Tariq's Android UI shows the roster panel with Selma listed as "waiting"
-  // Composite roster-assertion: persona + status. Driver verifies the
-  // roster panel contains a row for the named persona with the named
-  // status.
-  test('matching listing → ok', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ uiDriver: { androidShowsRosterEntry: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Tariq\'s Android UI shows the roster panel with Selma listed as "waiting"',
+describe('the roster panel names each member AND their answer', () => {
+  // REPLACES the retired "Wake 83" block, which dispatched to
+  // `androidShowsRosterPanelWith`-family methods that exist on NO driver — so
+  // every one of these steps returned "not configured" and j16 stayed tagged
+  // @unimplemented. The real assertion reads the per-member status the
+  // event-host screen renders.
+  test('a matching listing passes', async () => {
+    const seen = [];
+    const uiDriver = {
+      androidUiDump: async () => '<node/>',
+      androidShowsRosterMemberAs: async (...args) => {
+        seen.push(args);
+        return true;
       },
-      ctx,
+    };
+    const res = await executeStep(
+      { text: 'Tariq\'s app UI shows the roster panel with Selma listed as "waiting"' },
+      { uiDriver },
     );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Tariq', 'Selma', 'waiting');
+    expect(res.ok).toBe(true);
+    expect(seen[0]).toEqual(['Tariq', 'Selma', 'waiting']);
   });
 
-  test('different status', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ uiDriver: { androidShowsRosterEntry: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Tariq\'s Android UI shows the roster panel with Selma listed as "performing"',
-      },
-      ctx,
+  test('the driver refusing is a FAILURE, naming who and what', async () => {
+    const uiDriver = {
+      androidUiDump: async () => '<node/>',
+      androidShowsRosterMemberAs: async () => false,
+    };
+    const res = await executeStep(
+      { text: 'Tariq\'s app UI shows the roster panel with Selma listed as "waiting"' },
+      { uiDriver },
     );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Tariq', 'Selma', 'performing');
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain('Selma');
+    expect(res.error).toContain('waiting');
   });
 
-  test('driver returns false → fail', async () => {
-    const spy = jest.fn(async () => false);
-    const ctx = makeCtx({ uiDriver: { androidShowsRosterEntry: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Tariq\'s Android UI shows the roster panel with Selma listed as "waiting"',
-      },
-      ctx,
+  test('no driver is refused rather than silently passing', async () => {
+    const res = await executeStep(
+      { text: 'Tariq\'s app UI shows the roster panel with Selma listed as "waiting"' },
+      {},
     );
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/Selma|waiting/);
-  });
-
-  test('no driver → fail', async () => {
-    const ctx = makeCtx();
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Tariq\'s Android UI shows the roster panel with Selma listed as "X"',
-      },
-      ctx,
-    );
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/androidShowsRosterEntry/);
+    expect(res.ok).toBe(false);
   });
 });
 
@@ -18752,43 +18698,6 @@ describe('Wake 86 — "<Name> scheduled an event including <Other>" (state-seed)
     );
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/db/);
-  });
-});
-
-describe('Wake 86 — "<Name> on <Plat> taps "<X>" in the roster panel"', () => {
-  // j16-event-host-team-leader.feature:51
-  //   When Tariq on Android taps "Promote Selma" in the roster panel
-  // Roster-panel tap with named button (e.g., "Promote X").
-  test('matching tap → driver receives button text', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ uiDriver: { androidTapInRosterPanel: spy } });
-    const r = await executeStep(
-      { kind: 'When', text: 'Tariq on Android taps "Promote Selma" in the roster panel' },
-      ctx,
-    );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Tariq', 'Promote Selma');
-  });
-
-  test('different button', async () => {
-    const spy = jest.fn(async () => true);
-    const ctx = makeCtx({ uiDriver: { androidTapInRosterPanel: spy } });
-    const r = await executeStep(
-      { kind: 'When', text: 'Tariq on Android taps "Remove" in the roster panel' },
-      ctx,
-    );
-    expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Tariq', 'Remove');
-  });
-
-  test('no driver → fail', async () => {
-    const ctx = makeCtx();
-    const r = await executeStep(
-      { kind: 'When', text: 'Tariq on Android taps "X" in the roster panel' },
-      ctx,
-    );
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/androidTapInRosterPanel/);
   });
 });
 

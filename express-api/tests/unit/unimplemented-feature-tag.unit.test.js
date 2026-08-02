@@ -74,8 +74,16 @@ describe('the corpus uses the tag where the feature is genuinely absent', () => 
   const path = require('path');
   const CORPUS = path.resolve(__dirname, '../../../journey-tests');
 
-  /** Feature files whose subject does not exist in the product. */
-  const UNBUILT = ['j16-event-host-team-leader.feature', 'j17-teacher-classroom.feature'];
+  /**
+   * Feature files whose subject does not exist in the product.
+   *
+   * SHRINK-ONLY. j16 left this list on 2026-08-02 when the event-host feature
+   * shipped — routes, a Compose screen for both phones, and the web panel. The
+   * list shrinking is the point: a tag that never comes off is a feature nobody
+   * ever builds, and the ratchet below is what makes removing it a deliberate,
+   * visible act rather than something that quietly never happens.
+   */
+  const UNBUILT = ['j17-teacher-classroom.feature'];
 
   it.each(UNBUILT)('%s marks its scenarios @unimplemented', (file) => {
     const src = fs.readFileSync(path.join(CORPUS, file), 'utf8');
@@ -86,6 +94,15 @@ describe('the corpus uses the tag where the feature is genuinely absent', () => 
     expect(scenarios).toBeGreaterThan(0);
     // Every scenario in the file, since the whole feature is absent.
     expect(tagged).toBeGreaterThanOrEqual(scenarios);
+  });
+
+  it('j16 no longer carries the tag, because the feature was BUILT', () => {
+    // The inverse of the check above, pinned by name. Re-tagging j16 would
+    // silently stop testing a shipped feature, which is the failure this whole
+    // story is about wearing a different hat.
+    const src = fs.readFileSync(path.join(CORPUS, 'j16-event-host-team-leader.feature'), 'utf8');
+    expect(src).not.toContain('@unimplemented');
+    expect((src.match(/^[ \t]*Scenario:/gm) || []).length).toBeGreaterThan(0);
   });
 
   it('does not mark scenarios for features that DO exist', () => {

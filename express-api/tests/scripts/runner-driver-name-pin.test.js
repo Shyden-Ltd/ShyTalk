@@ -83,7 +83,7 @@ describe('manual-qa-runner — driver-name error-message pin', () => {
     expect(offendingLineNumbers).toEqual([]);
   });
 
-  test('dispatch and driverName line counts match, and total is at least 110', () => {
+  test('dispatch and driverName line counts match, and total is at least 105', () => {
     // 1:1 ratio pins the invariant: any new dispatch handler that
     // forgets driverName, or any driverName declaration orphaned from
     // its dispatch, breaks this count.
@@ -93,7 +93,12 @@ describe('manual-qa-runner — driver-name error-message pin', () => {
     // Sanity: at least the 110 handlers that existed when PR #815 landed.
     // If this drops, a handler was removed; if it grows past 110, new
     // handlers were added (expected — just update the bound).
-    expect(dispatchCount).toBeGreaterThanOrEqual(110);
+    // 110 -> 105 on 2026-08-02. Three matchers were RETIRED, not lost: they
+    // dispatched to `androidTapOnEventHostHome`-family methods that exist on no
+    // driver, so every step reaching them returned "not configured". Their
+    // replacements assert against the tags the event-host screen now renders and
+    // use the platform-neutral `appMethod` resolver, which is not this pattern.
+    expect(dispatchCount).toBeGreaterThanOrEqual(105);
   });
 
   test('every fixed-error-template occurrence is paired with a driverName declaration in the same handler block', () => {

@@ -277,7 +277,14 @@ router.get('/events/mine', async (req, res) => {
             String(a.eventId).localeCompare(String(b.eventId)),
         );
 
-    res.json({ hosting: open(hosted), performing: open(rostered) });
+    // The caller's standing team travels with the list, so the scheduling form
+    // can pre-fill from it. Without this read `teamRoster` would be a field the
+    // product WRITES and never uses — which passes every write test and helps
+    // nobody, and is exactly what the phantom-field registry exists to catch.
+    const me = await db.doc(`users/${uniqueId}`).get();
+    const teamRoster = me.exists ? me.data().teamRoster || [] : [];
+
+    res.json({ hosting: open(hosted), performing: open(rostered), teamRoster });
   } catch (err) {
     log.error('events', 'list mine failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });

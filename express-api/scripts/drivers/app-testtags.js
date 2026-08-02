@@ -53,6 +53,23 @@ const PATH_TAGS = {
   '/settings': 'securitySettingsScreen',
 };
 
+/**
+ * Event-host controls, by the words the corpus uses for them.
+ *
+ * The screen tags Start and End separately because they are not the same act:
+ * one opens a room to an audience, the other retires it and freezes what
+ * everybody earned.
+ */
+const EVENT_CONTROL_TAGS = {
+  'start event': 'eventHost_startButton',
+  start: 'eventHost_startButton',
+  'end event': 'eventHost_endEventButton',
+  end: 'eventHost_endEventButton',
+  'schedule event': 'scheduleEvent_confirmButton',
+  'new event': 'schedule_newEventButton',
+  'event-room link': 'inviteBanner_eventRoomLink',
+};
+
 const TABLE_TAGS = { reports: 'reportReview_list' };
 const INPUT_TAGS = { chat: 'room_chatInput' };
 const NOUN_KIND_TAGS = { 'appeal::button': 'suspension_submitAppealButton' };
@@ -132,6 +149,7 @@ function navTabCandidates(tab) {
 }
 
 module.exports = {
+  EVENT_CONTROL_TAGS,
   SCREEN_MARKERS,
   ROUTE_ANCHORS,
   PATH_TAGS,

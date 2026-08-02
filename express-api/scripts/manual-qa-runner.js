@@ -1372,6 +1372,102 @@ async function latestReportAgainst(ctx, reportedName) {
  * with ^ and $ so accidental substring matches don't hide bugs.
  */
 const matchers = [
+  // ── Events (SHY-0267, j16) ──────────────────────────────────────────────
+  //
+  // Declared FIRST so a specific event phrasing is never swallowed by the
+  // generic `taps "X"` matcher, which would treat "End event" as a resource-id
+  // and find nothing. Within the block, promote/demote precede the general
+  // control matcher for the same reason.
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android|iOS)\s+taps "[Pp]romote ([A-Z][a-z]+)"(?: in the roster panel)?$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'PromoteFromRoster');
+      if (!fn) return { ok: false, error: 'the app driver has no PromoteFromRoster' };
+      const ok = await fn(m[1], m[3]);
+      return ok ? { ok: true } : { ok: false, error: `could not promote ${m[3]} from the roster` };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android|iOS)\s+taps "[Dd]emote ([A-Z][a-z]+)"(?: in the roster panel)?$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'DemoteFromRoster');
+      if (!fn) return { ok: false, error: 'the app driver has no DemoteFromRoster' };
+      const ok = await fn(m[1], m[3]);
+      return ok ? { ok: true } : { ok: false, error: `could not demote ${m[3]} from the roster` };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (?:the app|Android|iOS)\s+taps "(Start event|End event|Schedule event|New event)"(?: on (?:his|her|their) event-host home)?$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'TapEventControl');
+      if (!fn) return { ok: false, error: 'the app driver has no TapEventControl' };
+      const ok = await fn(m[1], m[3]);
+      return ok ? { ok: true } : { ok: false, error: `could not tap "${m[3]}"` };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android|iOS) UI shows the roster panel with ([A-Z][a-z]+) listed as "([^"]+)"$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'ShowsRosterMemberAs');
+      if (!fn) return { ok: false, error: 'the app driver has no ShowsRosterMemberAs' };
+      const ok = await fn(m[1], m[3], m[4]);
+      return ok
+        ? { ok: true }
+        : { ok: false, error: `roster panel did not list ${m[3]} as "${m[4]}"` };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android|iOS) UI shows event-level totals: (\d+) gifts?, (\d+) coins?, (\d+) beans?(?:, top contributor ([A-Z][a-z]+))?$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'ShowsEventTotals');
+      if (!fn) return { ok: false, error: 'the app driver has no ShowsEventTotals' };
+      const ok = await fn(m[1], m[3], m[4], m[5], m[6]);
+      return ok
+        ? { ok: true }
+        : {
+            ok: false,
+            error: `event totals did not read ${m[3]} gifts / ${m[4]} coins / ${m[5]} beans`,
+          };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android|iOS) UI shows the event summary panel(?:[:,].*)?$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'ShowsEventSummaryPanel');
+      if (!fn) return { ok: false, error: 'the app driver has no ShowsEventSummaryPanel' };
+      const ok = await fn(m[1]);
+      return ok ? { ok: true } : { ok: false, error: 'the event summary panel was not shown' };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android|iOS) UI shows (?:his|her|their) individual earnings for this event \((\d+) beans?\)$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'ShowsOwnEventEarnings');
+      if (!fn) return { ok: false, error: 'the app driver has no ShowsOwnEventEarnings' };
+      const ok = await fn(m[1], m[3]);
+      return ok ? { ok: true } : { ok: false, error: `own earnings did not read ${m[3]} beans` };
+    },
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s (?:app|Android|iOS) UI shows an in-app banner "You are scheduled in ([A-Z][a-z]+)'s event"$/,
+    async handler(m, ctx) {
+      const fn = appMethod(ctx, 'ShowsEventInviteBanner');
+      if (!fn) return { ok: false, error: 'the app driver has no ShowsEventInviteBanner' };
+      const ok = await fn(m[1], m[3]);
+      return ok
+        ? { ok: true }
+        : { ok: false, error: `no invite banner naming ${m[3]} as the host` };
+    },
+  },
+
   // ── Meta-matchers (compose over other matchers) ──
   {
     // Polling wrapper. Re-runs the inner step every ~50ms until it returns
@@ -11428,65 +11524,16 @@ const matchers = [
       return { ok: true };
     },
   },
-  {
-    // Wake 83 — "<Name> on <Plat> taps "<X>" on his/her/their event-host
-    // home". j16:43 — tap with contextual-location annotation.
-    pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps "([^"]+)" on (?:his|her|their) event-host home$/,
-    async handler(m, ctx) {
-      const name = m[1];
-      const platform = canonicalPlatform(m[2], ctx);
-      const buttonText = m[3];
-      const methodName = platform.startsWith('Web')
-        ? 'webTapOnEventHostHome'
-        : platform === 'Android'
-          ? 'androidTapOnEventHostHome'
-          : 'iosTapOnEventHostHome';
-      const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
-      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
-      if (!driver?.[methodName]) {
-        return { ok: false, error: `${driverName}.${methodName} not configured` };
-      }
-      const ok = await driver[methodName](name, buttonText);
-      if (!ok) {
-        return {
-          ok: false,
-          error: `${name}: tap "${buttonText}" on event-host home did not complete`,
-        };
-      }
-      return { ok: true };
-    },
-  },
-  {
-    // Wake 83 — "<Name>'s <Plat> UI shows the roster panel with <Other>
-    // listed as "<status>"". j16:50 — composite roster assertion.
-    pattern:
-      /^([A-Z][a-z]+)'s (Web Chromium|Web Safari|Web|app|Android|iOS Sim) UI shows the roster panel with ([A-Z][a-z]+) listed as "([^"]+)"$/,
-    async handler(m, ctx) {
-      const name = m[1];
-      const platform = canonicalPlatform(m[2], ctx);
-      const otherName = m[3];
-      const status = m[4];
-      const methodName = platform.startsWith('Web')
-        ? 'webShowsRosterEntry'
-        : platform === 'Android'
-          ? 'androidShowsRosterEntry'
-          : 'iosShowsRosterEntry';
-      const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
-      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
-      if (!driver?.[methodName]) {
-        return { ok: false, error: `${driverName}.${methodName} not configured` };
-      }
-      const shown = await driver[methodName](name, otherName, status);
-      if (!shown) {
-        return {
-          ok: false,
-          error: `${platform} UI does not show ${otherName} listed as "${status}" in the roster panel`,
-        };
-      }
-      return { ok: true };
-    },
-  },
+  // RETIRED: this matcher dispatched to `androidTapOnEventHostHome`-family methods that exist on
+  // NO driver, so every one of these steps returned "not configured" — a
+  // harness gap reported as a step failure, which is why j16 was tagged
+  // @unimplemented. The real implementations are declared at the top of this
+  // table and assert against the tags the event-host screen renders.
+  // RETIRED: this matcher dispatched to `old roster-panel matcher`-family methods that exist on
+  // NO driver, so every one of these steps returned "not configured" — a
+  // harness gap reported as a step failure, which is why j16 was tagged
+  // @unimplemented. The real implementations are declared at the top of this
+  // table and assert against the tags the event-host screen renders.
   {
     // Wake 83 — "<Name> [P-NN] (annotation) opens the "<X>" tab".
     // j15:75, j15:80 — persona-annotated tab navigation. The mid-step
@@ -11872,34 +11919,11 @@ const matchers = [
       return { ok: true };
     },
   },
-  {
-    // Wake 86 — "<Name> on <Plat> taps "<X>" in the roster panel". j16:51.
-    pattern:
-      /^([A-Z][a-z]+) on (Web Chromium|Web Safari|Web|the app|Android|iOS Sim) taps "([^"]+)" in the roster panel$/,
-    async handler(m, ctx) {
-      const name = m[1];
-      const platform = canonicalPlatform(m[2], ctx);
-      const buttonText = m[3];
-      const methodName = platform.startsWith('Web')
-        ? 'webTapInRosterPanel'
-        : platform === 'Android'
-          ? 'androidTapInRosterPanel'
-          : 'iosTapInRosterPanel';
-      const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
-      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
-      if (!driver?.[methodName]) {
-        return { ok: false, error: `${driverName}.${methodName} not configured` };
-      }
-      const ok = await driver[methodName](name, buttonText);
-      if (!ok) {
-        return {
-          ok: false,
-          error: `${name}: tap "${buttonText}" in roster panel did not complete`,
-        };
-      }
-      return { ok: true };
-    },
-  },
+  // RETIRED: this matcher dispatched to `androidTapInRosterPanel`-family methods that exist on
+  // NO driver, so every one of these steps returned "not configured" — a
+  // harness gap reported as a step failure, which is why j16 was tagged
+  // @unimplemented. The real implementations are declared at the top of this
+  // table and assert against the tags the event-host screen renders.
   {
     // Wake 86 — "<Name>'s <Plat> UI shows the classroom room screen with
     // "<X>" badge on the host seat". j17:35.
