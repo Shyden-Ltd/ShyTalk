@@ -206,13 +206,31 @@ describe('GET /api/users/:uniqueId response contract', () => {
   });
 
   it('response strips sensitive PII fields', async () => {
+    // `createApp()` authenticates AS 10000001, so this is a SELF view.
+    //
+    // dateOfBirth moved out of this list on 2026-08-02: it is not PII the owner
+    // must be shielded from, and once EPIC-0006 moved the app's own-profile read
+    // onto this endpoint, stripping it silently broke the nav graph, which
+    // routes on whether a DOB is on file. The fields below ARE withheld from
+    // everyone including the owner — credentials, push tokens and auth
+    // identifiers have no client use at all.
     const app = createApp();
     const res = await request(app).get('/api/users/10000001');
-    expect('dateOfBirth' in res.body).toBe(false);
     expect('pinHash' in res.body).toBe(false);
     expect('fcmTokens' in res.body).toBe(false);
     expect('firebaseUid' in res.body).toBe(false);
     expect('email' in res.body).toBe(false);
+  });
+
+  it('response keeps dateOfBirth for the OWNER and withholds it from everyone else', async () => {
+    // The contract stripSensitiveFields actually exists for. Same assertion pair
+    // as tests/routes/users.test.js, restated here because this file is the
+    // response-shape contract other clients read.
+    const own = await request(createApp()).get('/api/users/10000001');
+    expect(own.body.dateOfBirth).toBeDefined();
+
+    const other = await request(createApp(10000002)).get('/api/users/10000001');
+    expect('dateOfBirth' in other.body).toBe(false);
   });
 
   it('response strips identifier from providers', async () => {
