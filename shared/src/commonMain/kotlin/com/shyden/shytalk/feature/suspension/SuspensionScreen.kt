@@ -160,6 +160,12 @@ fun SuspensionScreen(
                         style = MaterialTheme.typography.bodyLarge,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // j11 asserts the suspension reason the user is shown.
+                        // The screen carried tags for its title, appeal field,
+                        // submit and sign-out, but not for the one piece of text
+                        // the scenario is actually about, so the assertion had no
+                        // anchor to read.
+                        modifier = Modifier.testTag("suspension_reason"),
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                 }

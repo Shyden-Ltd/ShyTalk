@@ -520,6 +520,46 @@ describe('blank arguments never match everything', () => {
     await bothAnswer(p, 'ShowsNamedKind', ['Raul', noun, 'screen'], true);
   });
 
+  test('the displayed reason is the reason ALONE, not the localised label', async () => {
+    // j11's matcher compares EXACTLY: `shows reason "Repeat harassment"` against
+    // whatever this returns. The screen renders `suspension_reason`, which is
+    // "Reason: %s" in English, so returning the raw text would never match.
+    const p = pair({
+      androidDump: anode({ tag: 'suspension_reason', text: 'Reason: Repeat harassment' }),
+      iosDump: inode({ tag: 'suspension_reason', label: 'Reason: Repeat harassment' }),
+    });
+    await bothAnswer(p, 'GetDisplayedReason', ['Raul'], 'Repeat harassment');
+  });
+
+  test('a reason containing its own colon survives intact', async () => {
+    // Split on the FIRST colon only. A greedy split would return "repeat" and
+    // the mismatch would read as a product defect.
+    const p = pair({
+      androidDump: anode({ tag: 'suspension_reason', text: 'Reason: Harassment: repeat' }),
+      iosDump: inode({ tag: 'suspension_reason', label: 'Reason: Harassment: repeat' }),
+    });
+    await bothAnswer(p, 'GetDisplayedReason', ['Raul'], 'Harassment: repeat');
+  });
+
+  test('an unlabelled reason is returned as-is', async () => {
+    // Not every locale uses a "Label: value" shape, and some have no label.
+    const p = pair({
+      androidDump: anode({ tag: 'suspension_reason', text: 'Repeat harassment' }),
+      iosDump: inode({ tag: 'suspension_reason', label: 'Repeat harassment' }),
+    });
+    await bothAnswer(p, 'GetDisplayedReason', ['Raul'], 'Repeat harassment');
+  });
+
+  test('no reason element answers null, NOT an empty string', async () => {
+    // "the screen has no reason field" and "the field is blank" are different
+    // defects; collapsing them would hide the first.
+    const p = pair({
+      androidDump: anode({ tag: 'main_roomsTab' }),
+      iosDump: inode({ tag: 'main_roomsTab' }),
+    });
+    await bothAnswer(p, 'GetDisplayedReason', ['Raul'], null);
+  });
+
   test('a named screen is NOT reported when none of its anchors is present', async () => {
     const p = pair({
       androidDump: anode({ tag: 'main_roomsTab' }),

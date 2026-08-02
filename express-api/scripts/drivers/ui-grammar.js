@@ -168,6 +168,27 @@ function createDumpQueries(grammar) {
     return null;
   };
 
+  /**
+   * The TEXT of the first element with this exact tag, or null.
+   *
+   * `hasText` answers "is this string anywhere on screen", which cannot serve an
+   * assertion about what ONE element says — a scenario checking a suspension
+   * reason would pass on the same words appearing in a banner behind it. Reading
+   * the element named by the tag is the difference between "the screen mentions
+   * this" and "this control displays this".
+   *
+   * null when the tag is absent, distinct from '' for a present-but-empty
+   * element: "no such control" and "the control is blank" are different defects.
+   */
+  const textOfTag = (dump, tag) => {
+    if (!tag) return null;
+    const rx = grammar.tagRx(tag);
+    for (const el of elements(dump)) {
+      if (rx.test(el)) return grammar.textOf(el);
+    }
+    return null;
+  };
+
   /** Centre of the first element whose tag starts with `prefix`, or null. */
   const centreOfTagPrefix = (dump, prefix) => {
     const [el] = elementsWithTagPrefix(dump, prefix);
@@ -242,6 +263,7 @@ function createDumpQueries(grammar) {
     elementWithTagPrefixAndText,
     hasTagPrefixWithText,
     centreOfTag,
+    textOfTag,
     centreOfTagPrefix,
     centreOfTagPrefixWithText,
     centreOfText,

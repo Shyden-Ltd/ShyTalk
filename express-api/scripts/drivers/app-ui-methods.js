@@ -202,6 +202,30 @@ function createSharedAppMethods({
       // real defect, and a screen-only check would pass it.
       return SCREEN_MARKERS.warning.some((m) => q.hasTag(d, m)) && q.hasText(d, wanted);
     },
+    /**
+     * The moderation reason the screen is DISPLAYING, or null.
+     *
+     * j11 asserts `Raul's app UI shows reason "Repeat harassment"` and the
+     * matcher compares this EXACTLY, so it has to return the reason alone.
+     *
+     * The screen renders a localised template — `suspension_reason` is
+     * "Reason: %s" in English — and the label is stripped rather than matched,
+     * because hard-coding "Reason: " would break the moment the run is in one of
+     * the other 19 locales. Splitting on the first colon keeps a reason that
+     * itself contains one ("Harassment: repeat") intact.
+     *
+     * null when the element is absent, which the caller must not confuse with an
+     * empty reason: "the screen has no reason field" and "the field is blank"
+     * are different defects, and the matcher reports the mismatch either way.
+     */
+    GetDisplayedReason: async (_viewer) => {
+      const d = await dump();
+      if (!d) return null;
+      const raw = q.textOfTag(d, 'suspension_reason') ?? q.textOfTag(d, 'warning_title');
+      if (raw === null || raw === undefined) return null;
+      const colon = String(raw).indexOf(':');
+      return (colon === -1 ? String(raw) : String(raw).slice(colon + 1)).trim();
+    },
     ShowsRoute: async (route) => {
       const tag = resolveRouteTag(route);
       if (!tag) return false;
