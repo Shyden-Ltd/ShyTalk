@@ -87,6 +87,66 @@ function localisedString(key, locale) {
   return value;
 }
 
+/**
+ * English UI text -> its string key, built from the shipped `values/strings.xml`.
+ *
+ * The corpus asserts English literals (`UI shows "Not enough coins"`). To check
+ * the SAME journey in Thai, the expected text has to become the Thai string the
+ * app actually ships — which means going back through the key.
+ */
+let englishIndex = null;
+function keyForEnglishText(text) {
+  if (!text) return null;
+  if (!englishIndex) {
+    englishIndex = new Map();
+    try {
+      const xml = fs.readFileSync(path.join(RESOURCES, 'values', 'strings.xml'), 'utf8');
+      for (const m of xml.matchAll(/<string name="([^"]+)">([\s\S]*?)<\/string>/g)) {
+        const value = m[2].split("\\'").join("'").trim();
+        // FIRST key wins. Several keys share a value ("OK", "Cancel"), and any
+        // of them yields the same translation, so the collision is harmless —
+        // but picking non-deterministically would make a failure irreproducible.
+        if (value && !englishIndex.has(value)) englishIndex.set(value, m[1]);
+      }
+    } catch {
+      englishIndex = new Map();
+    }
+  }
+  return englishIndex.get(String(text).trim()) || null;
+}
+
+/**
+ * What a text assertion should expect when the journey runs in `locale`.
+ *
+ * Returns `{ text, translated, key }`, or `{ missing: true }` when the string IS
+ * translatable but has no entry for this locale — a REAL finding (an untranslated
+ * string in a shipped locale) that the caller must surface rather than swallow.
+ *
+ * NOT everything is translatable, and pretending otherwise would make this
+ * useless. The corpus asserts data as well as chrome — `"6,000"`, a room named
+ * `"Theo's Test Room"`, a message the scenario itself typed — and none of that
+ * belongs in a string bundle. Measured across the corpus: 22 text literals, of
+ * which only 2 are UI chrome with a key. So an unresolvable literal is passed
+ * through UNCHANGED rather than reported: a guard that cried wolf on every room
+ * name would be deleted within a week, and it would be right to delete it.
+ *
+ * The consequence is deliberate and worth naming: this verifies translations for
+ * assertions that name a shipped string, and cannot verify what the corpus
+ * phrases as data. Widening that coverage is a corpus job — asserting a string
+ * KEY instead of an English sentence — not something to fake here.
+ */
+function expectedTextForLocale(text, locale) {
+  const wanted = typeof text === 'string' ? text.trim() : '';
+  if (!wanted || !locale || locale === 'en') return { text: wanted, translated: false, key: null };
+  const key = keyForEnglishText(wanted);
+  if (!key) return { text: wanted, translated: false, key: null };
+  const localised = localisedString(key, locale);
+  if (localised === null || localised === undefined) {
+    return { text: wanted, translated: false, key, missing: true };
+  }
+  return { text: localised, translated: true, key };
+}
+
 /** A non-blank string, or null. Blank arguments must never match everything. */
 const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
@@ -974,4 +1034,10 @@ const SHARED_METHOD_NAMES = Object.keys(
   }),
 ).sort();
 
-module.exports = { createSharedAppMethods, SHARED_METHOD_NAMES };
+module.exports = {
+  createSharedAppMethods,
+  SHARED_METHOD_NAMES,
+  expectedTextForLocale,
+  keyForEnglishText,
+  localisedString,
+};
