@@ -114,6 +114,43 @@ duration: `journey-moderation-seed-givens` 454s, `admin-audit-log-completeness`
 `stop.sh` now genuinely stops (verify by process age:
 `ps -eo pid,etime -ax | grep [f]irestore` — 17s old means it really restarted).
 
+## PRODUCT DEFECT — a suspended user is told to check their internet connection
+
+Found 2026-08-02 from the 8 remaining app-android sign-in failures, all P-08
+(the persona j11 suspends), all classified `degraded`.
+
+    SignInScreen renders SuspensionScreen when uiState.isSuspended.
+    AuthViewModel.resolveProfileState learns isSuspended from
+      userRepository.getUser(userId)  ->  GET /users/:id
+    auth.js isSuspensionExemptPath() does NOT list that path
+      ->  403 'Account suspended'
+      ->  getUser returns Resource.Error
+      ->  the else branch sets isBackendUnreachable = true
+      ->  "Unable to Connect. Please check your internet connection."
+
+So the only way the app can DISCOVER it is suspended is an endpoint that
+suspension blocks. The user gets a misleading network error, and j11's
+"Raul's Android shows the suspension screen with reason, end date, and appeal
+button" cannot pass.
+
+**The sharp part is the appeal.** `isSuspensionExemptPath` deliberately keeps
+`/users/:id/appeal` and `POST /appeals` reachable while suspended — the policy
+intends appeal rights to survive suspension. But the button that calls them
+lives on a screen the app can never render. The policy is defeated by the
+discovery path, which matters beyond UX given the OSA appeal-rights review
+already open in [[project-gdpr-export-osa17-legal-review]].
+
+Server already has a channel that works: `/portal/me` IS suspension-exempt and
+answers with an explicit `isSuspended` payload. The app does not use it here.
+
+**Fix direction (NOT yet implemented — needs care + emulator tests):** prefer a
+SERVER-side self-scoped exemption so every client is fixed at once with no app
+release, rather than a client change that ships three times. It must be
+SELF-ONLY — a blanket exemption on `GET /users/:id` would let a suspended user
+browse other profiles, which the current wholesale-path regexes would not
+prevent. Verify the requested id equals the caller's own `uniqueId`, fail
+closed.
+
 ## Known-real findings still open
 
 1. `firestore.rules:74` does `int(uniqueId)` on a `users/<firebaseUid>` doc id
