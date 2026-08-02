@@ -54,6 +54,22 @@ function productTags() {
       // the stable part is what a driver can match on.
       tags.add(m[1].replace(/\$\{[^}]*\}/g, '').replace(/\$\w+/g, ''));
     }
+    // A tag PASSED INTO a shared composable is still a rendered tag. The four
+    // legal checkboxes are declared `checkboxTestTag = "legal_acceptTermsCheckbox"`
+    // and applied inside the shared row, so the call-form scan above never saw
+    // them — and a first version of the corpus check below duly reported four
+    // perfectly real, on-screen controls as phantom. The driver classifies live
+    // devices off `legal_acceptTermsCheckbox` every run, which is exactly the
+    // contradiction that gives this away: measure the code, not one of its
+    // shapes.
+    // The identifier is matched as ONE unambiguous token and the
+    // "…TestTag"-ness decided in JS. Writing it as `[A-Za-z]*[Tt]estTag[A-Za-z]*`
+    // puts two unbounded quantifiers either side of the literal, which can split
+    // a long identifier many ways — sonarjs/slow-regex flags it, correctly.
+    for (const m of src.matchAll(/\b([A-Za-z][A-Za-z0-9]*)\s*=\s*"([^"]+)"/g)) {
+      if (!/testtag$/i.test(m[1])) continue;
+      tags.add(m[2].replace(/\$\{[^}]*\}/g, '').replace(/\$\w+/g, ''));
+    }
     // A tag chosen by a CONDITIONAL is still a rendered tag. One control can do
     // two jobs — the private-chat send button becomes `pm_confirmEdit` while an
     // edit is in flight — and a pattern that only understood a bare literal
@@ -148,6 +164,62 @@ const KNOWN_PHANTOM_TAGS = [
   'signin_signUpLink',
   'signup_dobPicker',
   'wallet_retryPurchase',
+
+  // ── Found 2026-08-02 by the CORPUS scan below, which is new. ────────────────
+  //
+  // These were never invisible to the run — 14 of them failed on
+  // 20260802-134434-local — but nothing STOPPED more being added, because the
+  // driver-side scan above cannot see a tag that only exists as a step
+  // argument. They are frozen here so the door is shut while they are worked
+  // through; each is classified, because the class determines the fix and
+  // guessing it is how `rooms_refresh` got wrongly called unbuilt for months.
+  //
+  // DRIFT — the product renders this control under a different name. Fix is a
+  // corpus edit, and it will make ~14 currently-phantom findings into real
+  // assertions. Deliberately NOT done in the same change as this guard: the
+  // matrix parses `journey-tests/` at cell start, so editing the corpus during
+  // a live run gives different cells different contracts.
+  'google_sign_in_button', //   → signIn_googleButton  (seen in a real device dump)
+  'apple_sign_in_button', //    → signIn_appleButton   (seen in a real device dump)
+  'conversation_inputField', // → privateChat_messageInput
+  'pm_frozen_notice', //        → privateChat_pmLockedNotice
+  'pm_newConversationButton', //→ main_newMessageFab
+  'room_closed_notice', //      → roomClosedSummary_panel
+  'wallet_sendGiftButton', //   → gift_send
+  //
+  // UNTAGGED — the FEATURE exists, the control just carries no testTag. Fix is
+  // one line of Compose, not a corpus edit. Verified by searching for the
+  // screens rather than the tags: Gacha is mentioned in 26 shared/src files and
+  // AgeVerification in 9, so "the tag is missing" and "the feature is missing"
+  // are very different statements here.
+  'gacha_pull3Button',
+  'main_gachaTab',
+  'profile_ageVerificationEntry',
+  'ageVerification_submitButton',
+  'sendGift_confirmButton',
+  'pm_send_button',
+  'room_rejoin_button',
+  //
+  // UNBUILT — no such screen. `ScheduleEvent`, `Lesson` and `Classroom` match
+  // ZERO files under shared/src/commonMain; the event-host feature that does
+  // exist is `eventHost_*` and has no scheduling UI. The honest fix is
+  // `@unimplemented` on the scenario or deleting the step, NOT a testTag.
+  'schedule_newEventButton',
+  'scheduleEvent_confirmButton',
+  'schedule_newLessonButton',
+  'scheduleLesson_confirmButton',
+  'signup_emailField',
+  'signup_passwordField',
+  'signup_createAccountButton',
+  //
+  // CORRECT BY ABSENCE — j20 asserts these are NOT shown, and they are not.
+  // The single-account "Dev Sign-In" shortcut was removed 2026-06-01 (see
+  // BuildVariant.isDevAffordancesVisible); `reject_and_dob_down` is an admin
+  // ACTION name that reached a UI-tag step by mistake. Both still belong on
+  // this list: a negative assertion against a tag that exists nowhere passes
+  // without testing anything, which is the j02 age-verification trap.
+  'dev_sign_in',
+  'reject_and_dob_down',
 ];
 
 describe('the scan is real', () => {
@@ -182,6 +254,74 @@ describe('the scan is real', () => {
   });
 });
 
+/**
+ * Tags the CORPUS names, which no driver file ever mentions.
+ *
+ * This is the hole the driver-side scan above could not see. A step like
+ *
+ *     When Adam on the app taps "pm_newConversationButton"
+ *
+ * carries the tag as DATA into a generic matcher, so it appears in no `.js`
+ * file and `tagsUsedByName()` is blind to it. Measured on run
+ * 20260802-134434-local: 14 of the app phase's findings were corpus tags the
+ * product has never rendered — `google_sign_in_button` (the app renders
+ * `signIn_googleButton`), `conversation_inputField` (it is
+ * `privateChat_messageInput`), and so on.
+ *
+ * Worse than failing: j02 asserts a minor "does NOT show
+ * profile_ageVerificationEntry". A tag that exists NOWHERE can never show, so
+ * that scenario passes without testing anything.
+ *
+ * CONSERVATIVE ON PURPOSE. `taps "X"` is overloaded — the driver falls back to
+ * tapping visible TEXT, so `taps "Kick"` is a label, not a tag. Only the
+ * unambiguous `with tag "X"` form is taken as-is; the overloaded forms are
+ * accepted only when the literal looks like this codebase's tag convention
+ * (lowercase start, an underscore). A guard that cries wolf gets deleted — the
+ * note above `tagsUsedByName` was written after exactly that happened.
+ */
+function tagsUsedByCorpus() {
+  const CORPUS = path.join(REPO, 'journey-tests');
+  const found = new Map();
+  const add = (tag, file) => {
+    if (!found.has(tag)) found.set(tag, new Set());
+    found.get(tag).add(file);
+  };
+  const looksLikeTag = (s) => /^[a-z][A-Za-z0-9]*_[A-Za-z0-9_]+$/.test(s);
+  for (const f of fs.readdirSync(CORPUS).filter((n) => n.endsWith('.feature'))) {
+    const src = fs.readFileSync(path.join(CORPUS, f), 'utf8');
+    // Unambiguous: the step names the thing as a tag.
+    for (const m of src.matchAll(/\bwith tag "([^"]+)"/g)) add(m[1], f);
+    // Overloaded forms — only when it looks like a tag rather than a label.
+    for (const m of src.matchAll(/\btaps "([^"]+)"/g)) {
+      if (looksLikeTag(m[1])) add(m[1], f);
+    }
+    for (const m of src.matchAll(/\binto "([^"]+)"/g)) {
+      if (looksLikeTag(m[1])) add(m[1], f);
+    }
+  }
+  return found;
+}
+
+describe('the corpus names no tag the product never renders', () => {
+  it('reads a substantial corpus tag inventory', () => {
+    // Calibration. If the extraction silently stopped matching — a step-phrasing
+    // change, a reformat — an empty set would make the check below pass while
+    // testing nothing, which is the exact failure mode it exists to catch.
+    expect(tagsUsedByCorpus().size).toBeGreaterThan(30);
+  });
+
+  it('no corpus tag is absent from the product', () => {
+    const offenders = [...tagsUsedByCorpus().entries()]
+      .filter(([tag]) => !renderedByProduct(tag))
+      .filter(([tag]) => !KNOWN_PHANTOM_TAGS.includes(tag))
+      .map(([tag, files]) => `${tag} (${[...files].join(', ')})`)
+      .sort();
+    expect({ corpusTagsTheProductNeverRenders: offenders }).toEqual({
+      corpusTagsTheProductNeverRenders: [],
+    });
+  });
+});
+
 describe('the phantom-tag debt may only shrink', () => {
   it('no NEW driver tag is absent from the product', () => {
     const offenders = [...tagsUsedByName().entries()]
@@ -195,7 +335,12 @@ describe('the phantom-tag debt may only shrink', () => {
   });
 
   it('the frozen list contains nothing already fixed', () => {
-    const used = tagsUsedByName();
+    // The staleness check has to span the SAME universe as the debt list, or it
+    // reports every entry from the source it does not know about as "already
+    // fixed" — which is how a shrink-only list gets emptied by accident. When
+    // the corpus scan was added, all 23 of its entries looked stale to a check
+    // that only read driver source.
+    const used = new Set([...tagsUsedByName().keys(), ...tagsUsedByCorpus().keys()]);
     const stale = KNOWN_PHANTOM_TAGS.filter((t) => !used.has(t) || renderedByProduct(t));
     expect({ alreadyFixedButStillListed: stale }).toEqual({ alreadyFixedButStillListed: [] });
   });
