@@ -2261,26 +2261,21 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
-  const NOUN_KIND_TAGS = {
-    'appeal::button': 'suspension_submitAppealButton',
-  };
-  driver.androidShowsNamedKind = async (_name, noun, kind) => {
-    if (!noun || !noun.trim()) return false;
-    if (!kind || !kind.trim()) return false;
-    const key = `${noun.toLowerCase()}::${kind.toLowerCase()}`;
-    const tag = NOUN_KIND_TAGS[key];
-    if (!tag) return false;
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-    // Defense-in-depth: regex-escape the tag value before interpolation,
-    // consistent with TABLE_TAGS / PATH_TAGS / ROW_COUNT_TABLE_TAGS /
-    // SURFACE_TARGET_TAGS. The single mapped entry is `[A-Za-z_]`-only
-    // today, but future map values could contain regex metacharacters.
-    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
-    return tagRx.test(dump);
-  };
+  // `androidShowsNamedKind` was defined HERE, with its own copy of a
+  // one-entry NOUN_KIND_TAGS. Deleted 2026-08-02 so the SHARED implementation
+  // registers instead.
+  //
+  // The local copy was a silent shadow: both drivers install the shared surface
+  // with `if (typeof driver[...] === 'function') continue;`, so a method defined
+  // here wins and nothing records that a shared implementation was discarded.
+  // The shared version had been taught to resolve a screen through
+  // SCREEN_MARKERS so j11's "shows the suspension screen" could pass — it went
+  // green in the shared unit tests and STILL failed on the device, because this
+  // copy answered from a map that had never heard of `suspension`.
+  //
+  // Android shadowed 86 of 104 shared methods when that was measured. See
+  // tests/scripts/drivers/shared-method-shadowing.unit.test.js, which freezes
+  // the rest so the count can only fall.
 
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme

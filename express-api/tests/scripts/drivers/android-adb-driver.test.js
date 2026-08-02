@@ -11104,17 +11104,37 @@ describe('android-adb-driver — androidShowsNamedKind', () => {
     expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
   });
 
-  test('unmapped composite "suspension::screen" → false (FAIL-loud)', async () => {
-    // Even though the suspension flow exists in SuspensionScreen.kt,
-    // there's no SCREEN-level testTag mapped yet — FAIL-loud rather
-    // than silently presence-checking against any suspension_* tag.
+  // This asserted `suspension::screen` → false, and its comment said why:
+  // "there's no SCREEN-level testTag mapped yet — FAIL-loud rather than
+  // silently presence-checking against any suspension_* tag". That was the
+  // right call at the time; refusing to guess beats a fabricated pass.
+  //
+  // The precondition changed on 2026-08-02. The screen IS mapped now, in
+  // SCREEN_MARKERS, as four NAMED anchors — not the `suspension_*` wildcard the
+  // old comment was guarding against, so the original caution is still honoured.
+  // j11 asserts "shows the suspension screen with reason, end date, and appeal
+  // button" and the screen was verified rendering on the OnePlus, so answering
+  // false was reporting a real screen as absent.
+  test('the mapped "suspension::screen" is recognised from a named anchor', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
         '<node resource-id="com.shyden.shytalk.local:id/suspension_appealField" />',
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNamedKind('Raul', 'suspension', 'screen')).toBe(false);
+    expect(await driver.androidShowsNamedKind('Raul', 'suspension', 'screen')).toBe(true);
+  });
+
+  test('a genuinely unmapped screen still answers false (FAIL-loud)', async () => {
+    // The principle the old test existed for, re-pinned with a noun nothing
+    // maps. "I do not know how to check this" must never read as "checked".
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_appealField" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'tarot', 'screen')).toBe(false);
   });
 
   test('unmapped composite "warning::banner" → false (FAIL-loud)', async () => {
