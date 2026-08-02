@@ -2,6 +2,28 @@
 
 Branch: `story/SHY-0245-eradicate-test-sleeps` · nothing pushed (no-push-during-gauntlet).
 
+## THE BIGGEST STRUCTURAL FINDING — read this first
+
+**Android shadowed 86 of the 104 shared app methods. iOS shadows 10.**
+
+Both drivers install the shared surface with
+
+    for (const [name, impl] of Object.entries(sharedMethods)) {
+      if (typeof driver[`android${name}`] === 'function') continue;   // <-- here
+      driver[`android${name}`] = impl;
+    }
+
+so a driver-local definition WINS and nothing records that a shared
+implementation was discarded. A fix to `app-ui-methods.js` therefore has roughly
+a one-in-six chance of never running on Android — and it cost real time on
+2026-08-02: `ShowsNamedKind` was taught to resolve screens through
+SCREEN_MARKERS, went green in the shared unit tests, and still failed on the
+device because android-adb-driver.js had its own copy.
+
+Frozen in `tests/scripts/drivers/shared-method-shadowing.unit.test.js`
+(shrink-only). Before fixing anything in `app-ui-methods.js`, CHECK THAT LIST —
+if the method is on it, the Android copy is what actually runs.
+
 ## Operator's current directive
 
 **Fix the APP cells first. Then WEB-only. Then the cross-overs.** Do not chase
@@ -11,6 +33,53 @@ This is now the launcher's DEFAULT, not something to remember: `run.sh` passes
 `--phase-gate=stop`, so a run halts at the first phase with failures instead of
 spending hours on web and cross cells whose app-side foundation is known broken.
 Override with `RUN_JOURNEYS_PHASE_GATE=report`.
+
+## Where the numbers actually are (app-android, first pass of 228)
+
+| run | OK | FAIL | SKIP |
+|---|---|---|---|
+| 1 | 15 | 115 | 98 |
+| 5 | 15 | 103 | 110 |
+| 6 | 16 | 102 | 110 |
+| 7 | 16 | 102 | 110 |
+
+Be honest about this shape: **FAIL falls while SKIP rises and OK barely moves.**
+Most of what has been fixed removed FALSE failures — phantom tags, a sign-in
+helper vetoing legitimate gates, a matcher answering false about screens it never
+looked for. Those convert failures into honest results, not into passes. A
+failure converted to a SKIP looks like progress in the FAIL column while testing
+exactly as little as before; the skip mechanism is what now caps OK, and it is
+the next thing worth attacking.
+
+Run 7's android was numerically identical to run 6 but its COMPOSITION changed:
+the suspension-screen assertion started passing and the failure moved one step
+later, to the missing `androidGetDisplayedReason`. That is progress the totals
+cannot show.
+
+## The suspended-persona chain, fixed end to end (2026-08-02/03)
+
+Every link had to be found by following the app's own logcat rather than
+reasoning about which call must be failing. Each fix revealed the next:
+
+1. `POST /users/sign-in` was not suspension-exempt, so the middleware 403'd
+   before the route could run. The route was ALREADY suspension-aware —
+   `{ found: true, suspended: true }`, no claims minted — so exempting the gate
+   is safe because the route is the real guard.
+2. `GET /users/:id` was not exempt either (self-only carve-out added,
+   value-compared, GET-only).
+3. The app did not CALL either one — both platforms read Firestore directly, and
+   a suspension revokes the session that authorises the read. Migrated to the
+   API (EPIC-0006; direct-backend debt 34 -> 33).
+4. `stripSensitiveFields` removed `cohort`/`dateOfBirth` from the SELF view, so
+   the migration would have silently dropped the fields AuthViewModel routes on.
+5. `classifyAndroidAuthState` did not know the suspension screen -> `unknown` ->
+   "never act". Ranked above `warning`, matching SignInScreen's own order.
+6. `ShowsNamedKind` resolved screens through a one-entry map — and its Android
+   copy shadowed the fix (see above).
+7. `GetDisplayedReason` existed on no driver, and the reason text had no tag.
+
+Device-proven: `P-08 signIn -> true`, `state: suspended`, appeal button present,
+"Account Suspended | Reason: Repeat harassment | … 2 DAY 21…".
 
 ## Live run
 
