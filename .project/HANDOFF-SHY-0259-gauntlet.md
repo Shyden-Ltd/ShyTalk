@@ -2,6 +2,71 @@
 
 Branch: `story/SHY-0245-eradicate-test-sleeps` · nothing pushed (no-push-during-gauntlet).
 
+## OVERNIGHT 2026-08-02/03 — what changed while the operator slept
+
+Nothing pushed. Everything committed on `story/SHY-0245-eradicate-test-sleeps`.
+
+**Read the settled counts CORRECTLY.** The retry pass REWRITES `<cell>.log`, so
+`total=228` does not mean the cell finished. Read only once the `DONE`/`FAIL`
+sentinel exists AND the pid is gone. I misreported "OK 15 -> 17" twice from
+mid-flight reads; the truth is app-android has been FLAT at OK=16 since run 6:
+
+| settled run | android OK | FAIL | SKIP | ios OK | FAIL | SKIP |
+|---|---|---|---|---|---|---|
+| 6-10 | 16 | 101-102 | 110-111 | 13 | 122 | 93 |
+
+Most of what was fixed removed FALSE failures — which converts them into honest
+results, not into passes. Several fixes also move a failure one step LATER in the
+same scenario, which the totals cannot show at all.
+
+### Product / data defects found (need operator decisions)
+
+1. **Adam and Greta were the same user.** `uniqueId 90000001` belonged to BOTH
+   registry P-12 Greta (the ADMIN) and ephemeral P-01 Adam, so they shared one
+   `users/90000001` document and whichever seeded last won — silently stripping
+   admin rights or granting them to a brand-new signup. FIXED (Adam -> 90000002)
+   plus a shrink-only guard. This was visible for a day as "signing in as P-12
+   shows Adam", which reads like a display bug.
+2. **A suspended user was told to check their internet connection.** Full chain
+   fixed (see below); the appeal button was unreachable.
+3. **`segregationEvents` stores ids as STRINGS** while the rest of the schema
+   uses numbers — NOT fixed, needs a migration decision. See its section below.
+
+### Harness defects found (all fixed)
+
+- **Android shadowed 86 of 104 shared methods** — a fix to `app-ui-methods.js`
+  has a one-in-six chance of never running on Android. Frozen, shrink-only.
+- **The iOS text assertion could never pass on a device.** It checked
+  `"label":"…"` (JSON); `iosUiDump` returns Appium /source, which is XML. Three
+  existing tests fed it JSON, so harness and tests shared one wrong picture.
+- **110 skips a cell with no reason recorded**, and the summary blamed
+  `@manual` for all of them. Now itemised; 67 were web scenarios on an app cell
+  and were being described as missing a device driver the cell already had.
+- **`ApiPost` discarded its response**, so `Then the response status is 400`
+  reported "no prior request — When step missing?" about a `When` sitting right
+  above it.
+- **`{adamId}`-style placeholders were never populated** (7 corpus uses).
+- **A room Given looked up a TITLE as a document id.**
+- **`ShowsNamedKind` resolved screens through a one-entry map**, so `suspension`
+  and `warning` screen assertions answered false about screens that were on the
+  device.
+
+### Locale work (operator's 5-language requirement)
+
+Foundation + wiring done: `ctx.locale` — previously written by five matchers and
+read by NOTHING — now drives all three text matchers, resolving English -> string
+key -> the locale's shipped translation. A Thai run showing English now FAILS.
+All five MVP bundles verified at 841 strings each.
+
+TWO THINGS NEED THE OPERATOR:
+
+- **Coverage is thin.** Of 22 corpus text literals only 2 name a shipped UI
+  string; the rest are data (`"6,000"`, room names, typed messages) and are
+  asserted literally. Real translation coverage needs the corpus to assert
+  string KEYS rather than English sentences.
+- **Runtime.** App+web at 5 locales is roughly a working night per full pass,
+  and the app cells are at OK=16/228. Recommend getting English green first.
+
 ## THE BIGGEST STRUCTURAL FINDING — read this first
 
 **Android shadowed 86 of the 104 shared app methods. iOS shadows 10.**
