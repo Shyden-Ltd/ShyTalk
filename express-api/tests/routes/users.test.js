@@ -853,7 +853,16 @@ describe('GET /api/users/:uniqueId', () => {
     expect(res.body).not.toHaveProperty('email');
   });
 
-  test('strips dateOfBirth from response', async () => {
+  // SPLIT 2026-08-02. This asserted "strips dateOfBirth" against a SELF view
+  // (caller 10000001 fetching 10000001), so it pinned the field as hidden from
+  // its own owner. That was harmless while the app read its profile straight
+  // from Firestore, and became wrong when EPIC-0006 moved that read onto this
+  // endpoint: AuthViewModel routes on whether a DOB is on file, so stripping it
+  // from the owner silently mis-routes them.
+  //
+  // The contract stripSensitiveFields actually exists for — not leaking one
+  // user's DOB to ANOTHER — is unchanged and is now asserted directly below.
+  test('keeps dateOfBirth for the OWNER — the client routes on it', async () => {
     getDoc.mockResolvedValueOnce({
       uniqueId: 10000001,
       displayName: 'Alice',
@@ -863,6 +872,22 @@ describe('GET /api/users/:uniqueId', () => {
     const app = createApp('firebase-uid-A', 10000001);
     const res = await request(app).get('/api/users/10000001').expect(200);
 
+    expect(res.body.dateOfBirth).toBe('2000-01-15');
+  });
+
+  test('strips dateOfBirth when viewing SOMEONE ELSE', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000002,
+      displayName: 'Bob',
+      dateOfBirth: '2000-01-15',
+      cohort: 'adult',
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000002');
+
+    // Either the cross-cohort gate hides them (404) or the profile comes back
+    // stripped — never a 200 that carries someone else's date of birth.
     expect(res.body).not.toHaveProperty('dateOfBirth');
   });
 

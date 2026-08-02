@@ -66,11 +66,18 @@ class IosUserRepositoryImpl(
 
     // ── Read methods ────────────────────────────────────────────────
 
+    // Server-authorized (EPIC-0006) — the mirror of Android's
+    // UserRepositoryImpl.getUser, and for the same reason. Reading this
+    // straight from Firestore made the app unable to learn its own moderation
+    // state: a suspension REVOKES the session, the direct read then fails, and
+    // AuthViewModel — which cannot tell a moderation verdict from a dead
+    // network — showed the suspended user "Unable to Connect".
+    //
+    // The endpoint keeps `cohort` and `dateOfBirth` for a SELF view and strips
+    // them for anyone else, so the fields AuthViewModel routes on survive.
     override suspend fun getUser(userId: String): Resource<User> =
         firebaseCall("Failed to get user") {
-            val doc = firestore.collection("users").document(userId).get()
-            if (!doc.exists) throw Exception("User not found")
-            docToUser(doc, userId)
+            User.fromMap(api.get("/api/users/$userId").toAnyMap(), userId)
         }
 
     override suspend fun userExists(userId: String): Resource<Boolean> =
@@ -263,6 +270,46 @@ class IosUserRepositoryImpl(
             is Set<*> -> JsonArray(v.map { toJsonElement(it) })
 
             else -> JsonPrimitive(v.toString())
+        }
+
+    /**
+     * The reverse of [toJsonElement] — an API response shaped the way
+     * `User.fromMap` expects a Firestore document.
+     *
+     * Android gets this from `JSONObject.toMap()` in core/util/JsonExt.kt; iOS
+     * had only the forward direction, because until EPIC-0006 moved the profile
+     * read onto the API every model here came from a `DocumentSnapshot`.
+     *
+     * The Int-to-Long normalisation is not cosmetic. `User.fromMap` casts
+     * numeric fields to `Long` because that is what the Firestore SDK hands
+     * back, so a JSON `42` arriving as `Int` would fail the cast and silently
+     * null the field — the same normalisation Android's helper documents.
+     * Whole numbers therefore become Long, and only genuinely fractional values
+     * stay Double.
+     */
+    private fun JsonElement.toAnyValue(): Any? =
+        when (this) {
+            is JsonNull -> null
+
+            is JsonObject -> toAnyMap()
+
+            is JsonArray -> map { it.toAnyValue() }
+
+            is JsonPrimitive -> {
+                if (isString) {
+                    content
+                } else {
+                    content.toLongOrNull()
+                        ?: content.toDoubleOrNull()
+                        ?: content.toBooleanStrictOrNull()
+                        ?: content
+                }
+            }
+        }
+
+    private fun JsonObject.toAnyMap(): Map<String, Any?> =
+        entries.associate { (k, v) ->
+            k to v.toAnyValue()
         }
 
     override suspend fun updateDisplayName(

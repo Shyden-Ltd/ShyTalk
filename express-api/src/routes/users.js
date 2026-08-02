@@ -68,8 +68,32 @@ const PREFIX_UPPER_SENTINEL = '\uf8ff';
  *
  * Mutates and returns the input for compactness inside `.map` chains.
  */
-function stripSensitiveFields(user) {
+function stripSensitiveFields(user, { isSelf = false } = {}) {
   if (!user || typeof user !== 'object') return user;
+  // `cohort` and `dateOfBirth` are stripped to stop ONE USER LEARNING ANOTHER'S
+  // — the OSA cross-cohort hiding contract. Neither is a secret from its owner,
+  // and the owner's client needs both: AuthViewModel sets
+  // `resolvedCohort = user.effectiveCohort`, and the nav graph routes on whether
+  // a DOB is on file.
+  //
+  // This mattered the moment the app's own-profile read moved off direct
+  // Firestore and onto this endpoint (EPIC-0006, forced by the suspended-user
+  // defect — a suspended session cannot read Firestore, so the app could never
+  // learn it was suspended). Without the carve-out that migration silently
+  // drops the caller's own cohort, and cohort decides which half of a
+  // minors-facing app someone sees. A loud failure would be recoverable; this
+  // would just quietly mis-route people.
+  //
+  // `isSelf` is the same flag the caller already computes to bypass the
+  // cross-cohort gate and the block-list check — no new trust is introduced.
+  // The strike counters below stay stripped even for self: the app has never
+  // read them, so opening them "while we are here" would be an unreviewed
+  // disclosure riding along with a targeted fix.
+  if (!isSelf) {
+    delete user.cohort;
+    delete user.cohortOverride;
+    delete user.dateOfBirth;
+  }
   delete user.gcsScore;
   delete user.gcsLastDeductionAt;
   delete user.gcsDisplayScore;
@@ -80,12 +104,9 @@ function stripSensitiveFields(user) {
   delete user.fcmTokens;
   delete user.firebaseUid;
   delete user.email;
-  delete user.dateOfBirth;
   delete user.deletionScheduledAt;
   delete user.deletionReason;
   delete user.deletionExecuteAt;
-  delete user.cohort;
-  delete user.cohortOverride;
   if (Array.isArray(user.providers)) {
     user.providers = user.providers.map(({ identifier: _identifier, ...rest }) => rest);
   }
@@ -509,7 +530,7 @@ router.get('/users/search', async (req, res) => {
       if (!isSelf && viewerIsBlocked(req.auth.uniqueId, target)) {
         return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
       }
-      stripSensitiveFields(target);
+      stripSensitiveFields(target, { isSelf });
       return res.json({ users: [target] });
     }
 
@@ -558,7 +579,7 @@ router.get('/users/:uniqueId', async (req, res) => {
 
     // Strip admin-only / PII / deletion / cohort fields. Single source of
     // truth shared with /users/discover and /users/search.
-    stripSensitiveFields(user);
+    stripSensitiveFields(user, { isSelf });
 
     res.json(user);
   } catch (err) {

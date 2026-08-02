@@ -107,12 +107,24 @@ class UserRepositoryImpl(
 
     // ---- Read methods (unchanged — all use Firestore SDK) ----
 
-    // Read from Firestore (offline cache replaces in-memory LRU cache)
+    // Server-authorized (EPIC-0006). This read used to go straight to Firestore,
+    // and that made the app unable to learn its own moderation state: a
+    // suspension REVOKES the session (j11 "session revoked"), the direct read
+    // then fails, and AuthViewModel — which cannot tell a moderation verdict
+    // from a dead network — set isBackendUnreachable and showed the suspended
+    // user "Unable to Connect. Please check your internet connection."
+    //
+    // Self-defeating by construction: the state the client most needs to read is
+    // the one that removes its ability to read. The API answers a suspended
+    // caller's own profile (auth.js isOwnUserDocRead), so the suspension screen
+    // — and the appeal button on it — becomes reachable.
+    //
+    // The endpoint keeps `cohort` and `dateOfBirth` for a SELF view and strips
+    // them for anyone else, so this migration does not quietly drop the fields
+    // AuthViewModel routes on. See stripSensitiveFields in routes/users.js.
     override suspend fun getUser(userId: String): Resource<User> =
         firebaseCall("Failed to get user") {
-            val doc = firestore.document("users/$userId").get().await()
-            val data = doc.data ?: throw Exception("User not found")
-            User.fromMap(data, userId)
+            User.fromMap(api.get("/api/users/$userId").toMap(), userId)
         }
 
     override suspend fun userExists(userId: String): Resource<Boolean> =
