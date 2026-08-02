@@ -150,6 +150,36 @@ describe('classifyAndroidAuthState — degraded mode', () => {
     expect(classifyAndroidAuthState(dump)).toBe('degraded');
   });
 
+  test("the sign-in screen's OWN unreachable state is degraded, not unknown", () => {
+    // There are TWO backend-unreachable screens, and the classifier only knew
+    // one. `SignInScreen.kt` renders its own "Unable to Connect" with a
+    // `signIn_retryConnection` button — no `degraded_*` tag anywhere on it — so
+    // it fell through to `unknown`, whose documented contract is "never acts".
+    //
+    // Observed 2026-08-02: the gauntlet's pre-flight refused to start with
+    // "the Android app is not on a sign-in-capable screen", and every recovery
+    // path declined to touch it because `unknown` means wait-and-re-dump.
+    //
+    // What actually puts the app there is a STALE SESSION, not a network fault.
+    // AuthViewModel.retryConnection() only sets isBackendUnreachable while
+    // `authRepository.isAuthenticated`; after an emulator restart the signed-in
+    // user no longer exists, so its calls fail and the app reports the failure
+    // as connectivity. Both device and host could reach :3000 (HTTP 200) the
+    // whole time.
+    expect(classifyAndroidAuthState('<node resource-id="com.x:id/signIn_retryConnection"/>')).toBe(
+      'degraded',
+    );
+  });
+
+  test('degraded outranks picker when the sign-in screen shows its error', () => {
+    // The retry screen IS the sign-in screen, so `signIn_googleButton` can be
+    // in the same tree. Classifying that as `picker` would send the driver
+    // tapping `persona_picker_open` on a screen that cannot open a dialog.
+    const dump =
+      '<node resource-id="a/signIn_googleButton"/><node resource-id="a/signIn_retryConnection"/>';
+    expect(classifyAndroidAuthState(dump)).toBe('degraded');
+  });
+
   test('a moderation warning still outranks degraded', () => {
     // Warning is the more specific gate and has its own acknowledge flow.
     const dump =

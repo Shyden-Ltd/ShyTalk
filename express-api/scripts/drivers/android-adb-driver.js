@@ -119,7 +119,30 @@ function classifyAndroidAuthState(dumpXml) {
   // may be perfectly valid, but nothing below the gate is reachable until it is
   // cleared. Cost a whole cell on 2026-08-01 by classifying as 'unknown', whose
   // contract is "never act" — 1 pass then 29 identical failures.
-  if (x.includes('degraded_acknowledgeButton') || x.includes('degraded_title')) return 'degraded';
+  // TWO screens mean "the backend is unreachable", and only one of them carries
+  // a `degraded_*` tag. SignInScreen.kt renders its own "Unable to Connect" with
+  // `signIn_retryConnection`, which fell through to `unknown` — the one verdict
+  // whose contract is "never act". The gauntlet pre-flight then refused to
+  // start, and nothing could recover the device, because every caller was
+  // waiting for a screen it had already been shown.
+  //
+  // Ranked above `picker` deliberately: this IS the sign-in screen, so
+  // `signIn_googleButton` sits in the same tree, and reading it as `picker`
+  // sends the driver tapping `persona_picker_open` on a screen whose dialog
+  // cannot open.
+  //
+  // What actually produces it is usually a STALE SESSION rather than a network
+  // fault — AuthViewModel only sets isBackendUnreachable while authenticated, so
+  // after an emulator restart the signed-in user is gone and its failing calls
+  // are reported as connectivity. The cure is dropping the stored session, which
+  // androidPersonaSignIn now does before it classifies anything.
+  if (
+    x.includes('degraded_acknowledgeButton') ||
+    x.includes('degraded_title') ||
+    x.includes('signIn_retryConnection')
+  ) {
+    return 'degraded';
+  }
   if (x.includes('splash_continueButton')) return 'splash';
   if (x.includes('legal_continueButton') || x.includes('legal_acceptTermsCheckbox')) {
     return 'legal_gate';
@@ -2729,9 +2752,16 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // The bounded loop is still the backstop: if the tunnels genuinely cannot
       // be restored, this exits with the missing ports named rather than
       // retrying forever.
+      //
+      // The two unreachable screens carry DIFFERENT buttons — the dedicated
+      // degraded screen has `degraded_acknowledgeButton`, the sign-in screen's
+      // own error state has `signIn_retryConnection` — so both are tried. A tap
+      // on the one that is absent is a no-op returning false, not a failure.
       if (state === 'degraded') {
         ensureReverseTunnels();
-        await driver.androidTapByTag('degraded_acknowledgeButton', dump);
+        for (const tag of ['degraded_acknowledgeButton', 'signIn_retryConnection']) {
+          if (await driver.androidTapByTag(tag, dump)) break;
+        }
         await new Promise((r) => setTimeout(r, 1200)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
