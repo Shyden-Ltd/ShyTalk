@@ -518,9 +518,16 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // Returns true if found+tapped, false otherwise. Single-call replacement
   // for the dump+regex+tap dance many matchers do; future matchers should
   // call this instead of duplicating the logic.
-  driver.androidTapByTag = async (tag) => {
+  //
+  // `providedDump` lets a caller that ALREADY read the screen tap from that
+  // same read. `advancePastLaunchGates` is the motivating case: it dumps,
+  // classifies, and then taps the gate button it just saw — paying a second
+  // 2,228ms dump on every iteration to re-find an element it had in hand.
+  // Omitting the argument keeps the original behaviour for the ~100 matchers
+  // that have no dump of their own.
+  driver.androidTapByTag = async (tag, providedDump) => {
     try {
-      const dump = await driver.androidUiDump();
+      const dump = providedDump === undefined ? await driver.androidUiDump() : providedDump;
       const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       const re = new RegExp(
@@ -2546,24 +2553,77 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // depends on Firebase network latency + Compose layout passes; a
   // fixed setTimeout would either over-wait (slow tests) or under-wait
   // (flake on slow runs).
-  async function waitForTag(tag, timeoutMs, pollMs = 200) {
+  /**
+   * Poll dumps until one satisfies `predicate`, and RETURN THAT DUMP.
+   *
+   * The single polling loop behind waitForTag, tapWhenVisible and the persona
+   * picker's scroll loop. Returning the dump rather than a boolean is the whole
+   * point: a caller that waited for something on screen almost always needs to
+   * act on it, and discarding the dump forced a second one at 2,228ms a piece.
+   *
+   * Returns null if the deadline passes.
+   */
+  async function waitForDump(predicate, timeoutMs, pollMs = 200) {
     const deadline = Date.now() + timeoutMs;
-    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`resource-id="(?:[^"]*:id/)?${escTag}"`);
     while (Date.now() < deadline) {
+      let dump = '';
       try {
-        const dump = await driver.androidUiDump();
-        if (re.test(dump)) return true;
+        dump = await driver.androidUiDump();
       } catch {
         // Transient dump failures are tolerated within the wait window.
       }
+      if (dump && predicate(dump)) return dump;
       // Poll interval inside a poll-until-true loop: it exits the instant the condition
       // holds, so it is correct at any machine speed — the same reasoning the guard
       // already applies to shell polls.
       await new Promise((r) => setTimeout(r, pollMs)); // sleep-ok: poll interval, exits on condition
     }
-    return false;
+    return null;
   }
+  driver._waitForDump = waitForDump;
+
+  /** Regex matching a resource-id in either the short or fully-qualified shape. */
+  function tagRegex(tag, withBounds = false) {
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(
+      `resource-id="(?:[^"]*:id/)?${escTag}"` +
+        (withBounds ? `[^<]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"` : ''),
+    );
+  }
+
+  async function waitForTag(tag, timeoutMs, pollMs = 200) {
+    const re = tagRegex(tag);
+    return (await waitForDump((d) => re.test(d), timeoutMs, pollMs)) !== null;
+  }
+
+  /**
+   * Wait for a tag, then tap it using the bounds from the SAME dump.
+   *
+   * `waitForTag(X)` followed by `androidTapByTag(X)` costs two dumps for one
+   * tap: the wait polls until X appears, discards the dump, and the tap dumps
+   * again for bounds that were already in it. A dump is 2,228ms on the OnePlus
+   * CPH2653 — fixed `uiautomator` process-spawn cost, unaffected by screen or
+   * flags — so every one of those pairs threw away 2.2 seconds to re-learn
+   * something it had just been told.
+   *
+   * Returns `{ appeared, tapped }` rather than a bare boolean so the caller can
+   * still say WHICH failed. Collapsing them to `false` would let "the screen
+   * never rendered" and "the tap did not land" share one error message, and
+   * those have completely different causes.
+   *
+   * Not a cache: the bounds come from the dump that actually observed the tag,
+   * so there is no window in which a stale screen can be tapped.
+   */
+  async function tapWhenVisible(tag, timeoutMs, pollMs = 200) {
+    const re = tagRegex(tag, true);
+    const dump = await waitForDump((d) => re.test(d), timeoutMs, pollMs);
+    if (!dump) return { appeared: false, tapped: false };
+    const m = re.exec(dump);
+    const cx = Math.round((Number(m[1]) + Number(m[3])) / 2);
+    const cy = Math.round((Number(m[2]) + Number(m[4])) / 2);
+    return { appeared: true, tapped: await driver.androidTap(cx, cy) };
+  }
+  driver._tapWhenVisible = tapWhenVisible;
 
   // j09 + every-journey Background: "<persona> is signed in on Android
   // physical at the <tab> tab". Drives the device APP through the
@@ -2590,12 +2650,19 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // testTag (e.g. the daily-reward popup's "Later"). Resolves the text
   // node's bounds from a fresh UI dump and taps its centre. Returns false
   // if the text is not present.
-  async function tapByVisibleText(text) {
-    let dump;
-    try {
-      dump = await driver.androidUiDump();
-    } catch {
-      return false;
+  async function tapByVisibleText(text, providedDump) {
+    // Callers that already hold a dump pass it. Every caller here found the
+    // element's TEXT in a dump and then called this, which dumped again for the
+    // element's BOUNDS — the same wait-then-re-read pair the settings chain had,
+    // at the same 2,228ms. `advancePastLaunchGates` pays it on every iteration
+    // that sees a launch popup, so it compounded across the whole gate loop.
+    let dump = providedDump;
+    if (dump === undefined) {
+      try {
+        dump = await driver.androidUiDump();
+      } catch {
+        return false;
+      }
     }
     const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const m =
@@ -2623,7 +2690,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       return false;
     }
     if (!/Claim Today|Daily Reward/i.test(dump)) return false;
-    const tapped = await tapByVisibleText('Later');
+    const tapped = await tapByVisibleText('Later', dump);
     if (tapped) await new Promise((r) => setTimeout(r, 800)); // sleep-ok: device settle after dismissing the daily-reward popup
     return tapped;
   }
@@ -2646,7 +2713,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       const state = classifyAndroidAuthState(dump);
       if (state === 'splash') {
-        await driver.androidTapByTag('splash_continueButton');
+        await driver.androidTapByTag('splash_continueButton', dump);
         await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
@@ -2664,7 +2731,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // retrying forever.
       if (state === 'degraded') {
         ensureReverseTunnels();
-        await driver.androidTapByTag('degraded_acknowledgeButton');
+        await driver.androidTapByTag('degraded_acknowledgeButton', dump);
         await new Promise((r) => setTimeout(r, 1200)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
@@ -2681,13 +2748,13 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // genuinely fresh install, which is why nothing handled it.
       if (state === 'legal_gate') {
         const boxes = [...new Set([...dump.matchAll(/legal_accept\w*Checkbox/g)].map((m) => m[0]))];
-        for (const box of boxes) await driver.androidTapByTag(box);
-        await driver.androidTapByTag('legal_continueButton');
+        for (const box of boxes) await driver.androidTapByTag(box, dump);
+        await driver.androidTapByTag('legal_continueButton', dump);
         await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
       if (/Claim Today|Daily Reward/i.test(dump)) {
-        await tapByVisibleText('Later');
+        await tapByVisibleText('Later', dump);
         await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
@@ -2697,12 +2764,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // operator-side device reconfig (grant the overlay permission once, or
       // enable adb security settings) is the locale-robust fix.
       if (/Display over other apps/i.test(dump)) {
-        await tapByVisibleText('Not now');
+        await tapByVisibleText('Not now', dump);
         await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
       if (dump.includes('permission_allow_foreground_only_button')) {
-        await driver.androidTapByTag('permission_allow_foreground_only_button');
+        await driver.androidTapByTag('permission_allow_foreground_only_button', dump);
         await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
@@ -2721,6 +2788,52 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
   }
   driver._advancePastLaunchGates = advancePastLaunchGates;
+
+  /**
+   * Delete the app's stored Firebase session — the cheap, deterministic way to
+   * make the NEXT launch come up signed out.
+   *
+   * Removing the two Firebase Auth preference files is enough: the app then
+   * boots to the persona picker. It is GENTLER than `pm clear` — legal
+   * acceptance and the app's own prefs survive, so the launch-gate loop has
+   * nothing to re-clear — and two orders of magnitude cheaper than driving the
+   * UI sign-out chain (~200ms of adb versus ~18 seconds of dumps).
+   *
+   * Requires a debuggable build. On a release APK `run-as` exits 1 with
+   * "unknown package"; that is reported, and the caller falls back.
+   *
+   * The caller must have force-stopped the app already, and does the launching
+   * itself — a launch failure has its own actionable error naming the package
+   * and build flavour, which belongs at the call site.
+   *
+   * Returns a NOTE, never a verdict. Whether the app actually came up
+   * signed-out is decided by classifying the screen, not by these exit codes:
+   * `rm -f` exits 0 on a file that was already absent, so a successful `rm`
+   * proves the command ran, not that a session was there to remove.
+   */
+  function dropStoredSession(pkg) {
+    const SESSION_PREFS = [
+      'shared_prefs/com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml',
+      'shared_prefs/com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml',
+    ];
+    let ok = 0;
+    let firstError = '';
+    for (const file of SESSION_PREFS) {
+      // One file per call: the device shell does NOT expand a glob passed
+      // through `run-as`, and a wildcard silently removes nothing while
+      // reporting success.
+      try {
+        adb(['shell', 'run-as', pkg, 'rm', '-f', file]);
+        ok += 1;
+      } catch (e) {
+        if (!firstError) firstError = String(e.message).slice(0, 120);
+      }
+    }
+    return ok === SESSION_PREFS.length
+      ? `session drop: rm ok for ${ok}/${SESSION_PREFS.length} prefs`
+      : `session drop: rm ok for ${ok}/${SESSION_PREFS.length} prefs (${firstError || 'no error recorded'})`;
+  }
+  driver._dropStoredSession = dropStoredSession;
 
   // Real in-app sign-out — the ONLY reliable signed-out reset on a physical
   // device (`pm clear` → SecurityException, `run-as rm` → Permission denied
@@ -2777,24 +2890,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     await dismissDailyRewardIfPresent();
     await driver.androidTapByTag('main_profileTab');
     await new Promise((r) => setTimeout(r, 800)); // sleep-ok: device settle — no host-queryable signal between an input event and the redraw
-    if (!(await waitForTag('main_settingsButton', 4000))) {
+    // Each of these WAS a waitForTag + androidTapByTag pair — two dumps, one
+    // tap, 2.2s of the second dump spent re-reading bounds the first already
+    // carried. tapWhenVisible taps from the dump that found the tag.
+    const settingsBtn = await tapWhenVisible('main_settingsButton', 4000);
+    if (!settingsBtn.appeared) {
       throw new Error(
         `androidSignOut: "main_settingsButton" not visible after tapping main_profileTab — cannot reach settings (observed state: ${await dumpState()}). The app may be on a fresh-install gate (legal/onboarding) rather than main.`,
       );
     }
-    await driver.androidTapByTag('main_settingsButton');
-    if (!(await waitForTag('settings_signOutButton', 5000))) {
+    const signOutBtn = await tapWhenVisible('settings_signOutButton', 5000);
+    if (!signOutBtn.appeared) {
       throw new Error(
         'androidSignOut: "settings_signOutButton" never appeared after opening settings — the settings screen did not render or the testTag drifted.',
       );
     }
-    await driver.androidTapByTag('settings_signOutButton');
-    if (!(await waitForTag('settings_signOutConfirmButton', 4000))) {
+    const confirmBtn = await tapWhenVisible('settings_signOutConfirmButton', 4000);
+    if (!confirmBtn.appeared) {
       throw new Error(
         'androidSignOut: sign-out confirmation dialog ("settings_signOutConfirmButton") never appeared after tapping settings_signOutButton.',
       );
     }
-    await driver.androidTapByTag('settings_signOutConfirmButton');
     if (!(await waitForTag('persona_picker_open', 8000))) {
       throw new Error(
         `androidSignOut: confirmed sign-out but "persona_picker_open" never returned within 8s (observed state: ${await dumpState()}) — sign-out may have failed or landed on a legal/onboarding gate.`,
@@ -2823,18 +2939,25 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // dev → .dev, prod → bare (no suffix). Mirrors the
     // applicationIdSuffix config at app/build.gradle.kts lines 43/132.
     const pkg = PACKAGE_BY_TARGET[target] || PACKAGE_BY_TARGET.dev;
-    // Force-stop FIRST so each call starts from a cold app PROCESS state
-    // (process isolation only). NOTE: force-stop does NOT clear the Firebase
-    // session — the app can relaunch already signed-in or on a moderation
-    // gate. The Step 0b classifier below (advancePastLaunchGates +
-    // androidSignOut when signed-in/warning) is what actually guarantees a
-    // picker-reachable sign-in-screen start. Errors are non-fatal — the
-    // package may not be running, that's fine.
+    // Force-stop, then drop the stored session, then launch — in that order, so
+    // the app comes up SIGNED OUT on its first and only boot.
+    //
+    // It used to boot, classify, and only then reset. Measured 2026-08-02: the
+    // classification cost four dumps — a whole boot through the splash gate,
+    // ~9 seconds — and then, having learnt the app was signed in, the reset
+    // rebooted it anyway. Two boots to reach one picker. Dropping the session
+    // up front costs ~200ms when it turns out to be unnecessary and saves the
+    // second boot whenever it is not, which in a matrix is every scenario after
+    // the first.
+    //
+    // force-stop must precede the delete: a live process rewrites its prefs on
+    // the way down, restoring the session we just removed.
     try {
       adb(['shell', 'am', 'force-stop', pkg]);
     } catch {
       // Ignored — force-stop on a non-running package is a no-op.
     }
+    let resetNote = dropStoredSession(pkg);
     try {
       // monkey -p <pkg> -c LAUNCHER 1 fires the registered launcher
       // intent regardless of which activity is currently focused — works
@@ -2876,15 +2999,39 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // it drops legal acceptance too, which the launch-gate loop then has to
     // re-clear — but it is DETERMINISTIC, and a harness that cannot guarantee a
     // signed-out start can only ever run its first scenario.
+    // THE RESET CHAIN, ORDERED BY COST.
+    //
+    // It used to run backwards. The ~18-second UI sign-out chain went first and
+    // the ~200ms session delete was the LAST resort, because the driver
+    // believed `run-as` was denied on the OnePlus CPH2653 — a claim this file
+    // asserted in two places. It is not true. Measured 2026-08-02 on that exact
+    // device: `run-as <pkg> ls shared_prefs/` lists the Firebase Auth prefs,
+    // `rm -f` removes them, and the app then launches classified `picker`.
+    //
+    //   force-stop 99ms + 2 x rm 96ms + monkey 242ms            =  437ms
+    //   the UI chain: 4 taps, each behind a wait, ~8 dumps      =  ~18s
+    //
+    // So the delete moved into Step 0 above, ahead of any classification, and
+    // the UI chain became the fallback it should always have been. NOTHING is
+    // removed: `run-as` needs a debuggable build, so a release APK (j20's
+    // prod-flavor scenarios) still reaches the picker through the chain below.
+    //
+    // Putting the deterministic path first is also the more correct shape for a
+    // SETUP step. Reaching a signed-out app should not depend on the product's
+    // own sign-out flow working — scenarios that TEST sign-out call
+    // androidSignOut directly, and they still do.
     let launchState = await advancePastLaunchGates();
     let signOutNote = 'not attempted';
+
+    // FALLBACK: the real in-app sign-out. Reached when the session delete could
+    // not be performed (non-debuggable build) or did not take effect.
     if (launchState !== 'picker') {
       try {
         await driver.androidSignOut();
         signOutNote = 'ran';
       } catch (e) {
         // Non-fatal — sign-out navigates Profile → Settings, which is exactly
-        // what an unclassifiable screen may not offer, and the reset below does
+        // what an unclassifiable screen may not offer, and `pm clear` below does
         // not depend on the UI being where we expect.
         //
         // BUT THE REASON IS KEPT. A bare `catch {}` was here, and it hid the
@@ -2898,64 +3045,22 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       launchState = await advancePastLaunchGates();
     }
-    // Last resort: drop the app's stored session outright. NOT available on
-    // every device — the OnePlus CPH2653 refuses it:
-    //   SecurityException: PID … does not have permission CLEAR_APP_USER_DATA
-    // A bare `catch {}` here hid that entirely, so the error below claimed a
-    // "reset attempt" that the OS had rejected. Whether it ran is reported.
-    let resetNote = 'not attempted';
+
+    // LAST RESORT: wipe the app's data outright. Heaviest of the three — it
+    // drops legal acceptance too, which the launch-gate loop then has to
+    // re-clear — and NOT available on every device: the OnePlus CPH2653 refuses
+    // it with `SecurityException: PID … does not have permission
+    // CLEAR_APP_USER_DATA`. A bare `catch {}` here once hid that entirely, so
+    // the error below claimed a "reset attempt" the OS had rejected.
     if (launchState !== 'picker') {
       try {
         adb(['shell', 'pm', 'clear', pkg]);
         adb(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
         await new Promise((r) => setTimeout(r, 3000)); // sleep-ok: cold start after pm clear
         launchState = await advancePastLaunchGates();
-        resetNote = 'pm clear ran';
+        resetNote = `${resetNote}; pm clear ran`;
       } catch (e) {
-        resetNote = `pm clear unavailable on this device (${String(e.message).slice(0, 120)})`;
-      }
-    }
-
-    // SECOND-LAST RESORT: drop just the Firebase session, via `run-as`.
-    //
-    // This exists because `pm clear` is REFUSED on the OnePlus CPH2653
-    // (SecurityException: no CLEAR_APP_USER_DATA), and until now that left the
-    // reset chain with nowhere to go. Measured 2026-08-02: the app was left
-    // signed in on an Official Warning screen by a j11 scenario, every later
-    // persona sign-in failed to find the picker, and the run finished 3 hours
-    // with PASS=0 on all four cells — ~60 sign-in failures cascading into the
-    // rest.
-    //
-    // A debuggable build always permits `run-as`, and deleting the two Firebase
-    // Auth preference files is enough: the app then boots signed-out to the
-    // picker. It is also GENTLER than `pm clear` — legal acceptance survives,
-    // so the launch-gate loop has nothing to re-clear.
-    if (launchState !== 'picker') {
-      const SESSION_PREFS = [
-        'shared_prefs/com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml',
-        'shared_prefs/com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml',
-      ];
-      try {
-        adb(['shell', 'am', 'force-stop', pkg]);
-        let removed = 0;
-        for (const file of SESSION_PREFS) {
-          // One file per call: the device shell does NOT expand a glob passed
-          // through `run-as`, and a wildcard silently removes nothing while
-          // reporting success.
-          try {
-            adb(['shell', 'run-as', pkg, 'rm', '-f', file]);
-            removed += 1;
-          } catch {
-            // A file that is already absent is not a failure — the session may
-            // have been cleared by an earlier attempt in the same run.
-          }
-        }
-        adb(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
-        await new Promise((r) => setTimeout(r, 3000)); // sleep-ok: cold start after the session drop
-        launchState = await advancePastLaunchGates();
-        resetNote = `${resetNote}; run-as session drop removed ${removed}/${SESSION_PREFS.length} prefs`;
-      } catch (e) {
-        resetNote = `${resetNote}; run-as session drop failed (${String(e.message).slice(0, 100)})`;
+        resetNote = `${resetNote}; pm clear unavailable on this device (${String(e.message).slice(0, 120)})`;
       }
     }
 
@@ -3000,8 +3105,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // requires scrolling).
     const containerTag = 'persona_picker_list';
     const rowTag = `persona_row_${personaId}`;
-    const dialogReady = await waitForTag(containerTag, 5000);
-    if (!dialogReady) {
+    // Keep the dump that proved the dialog is open — the scroll loop below
+    // starts from it instead of paying for an identical one.
+    const containerRe = tagRegex(containerTag);
+    const dialogDump = await waitForDump((d) => containerRe.test(d), 5000);
+    if (!dialogDump) {
       throw new Error(
         `androidPersonaSignIn: picker dialog never showed "${containerTag}" within 5s — testTags may not be exposed via testTagsAsResourceId, or the dialog didn't render. Verify exposeTestTagsToPlatformDumps() is applied to the dialog content.`,
       );
@@ -3022,7 +3130,18 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     //
     // Solution: loop until the row is BOTH in the dump AND fully
     // inside the picker_list's visible rect. Swipe up if either fails.
-    function rowFullyVisible(dump) {
+    // Returns the row's TAP POINT when it is fully visible, else null.
+    //
+    // It used to return a boolean and the caller then called
+    // androidTapByTag(rowTag), which dumped AGAIN for bounds this function had
+    // already parsed. That was not only a wasted 2.2s dump — it quietly voided
+    // the guarantee this check exists to provide. The visibility verdict was
+    // made against one dump and the tap coordinates came from a different,
+    // later one; if the LazyColumn settled even slightly between them, the tap
+    // landed at bounds nobody had checked against the clipping rect. Returning
+    // the point makes the verified dump and the tapped coordinates the same
+    // observation.
+    function rowTapPoint(dump) {
       const escRow = rowTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const escContainer = containerTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const rowMatch = new RegExp(
@@ -3031,29 +3150,29 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       const listMatch = new RegExp(
         `resource-id="(?:[^"]*:id/)?${escContainer}"[^/]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
       ).exec(dump);
-      if (!rowMatch || !listMatch) return false;
+      if (!rowMatch || !listMatch) return null;
       // y2 (row's bottom) must be <= list's y2 (list's bottom) AND
       // y1 (row's top) must be >= list's y1 (list's top).
       const rowY1 = Number(rowMatch[2]);
       const rowY2 = Number(rowMatch[4]);
       const listY1 = Number(listMatch[2]);
       const listY2 = Number(listMatch[4]);
-      return rowY1 >= listY1 && rowY2 <= listY2;
+      if (rowY1 < listY1 || rowY2 > listY2) return null;
+      return {
+        x: Math.round((Number(rowMatch[1]) + Number(rowMatch[3])) / 2),
+        y: Math.round((rowY1 + rowY2) / 2),
+      };
     }
-    let visible = false;
+    // Seed the loop with the dump that already proved the dialog is open, so
+    // the first visibility check costs nothing. Re-dumping here would be the
+    // same wait-then-re-read pair as everywhere else.
+    let dump = dialogDump;
+    let point;
     let swipes = 0;
     const MAX_SWIPES = 15;
-    while (!visible && swipes < MAX_SWIPES) {
-      let dump = '';
-      try {
-        dump = await driver.androidUiDump();
-      } catch {
-        // Transient dump failures are tolerated within the wait window.
-      }
-      if (rowFullyVisible(dump)) {
-        visible = true;
-        break;
-      }
+    for (;;) {
+      point = rowTapPoint(dump);
+      if (point || swipes >= MAX_SWIPES) break;
       // Swipe up inside the picker to scroll the list DOWN. y range
       // 1800→1000 stays inside the list bounds for typical phone
       // viewports (list bottom ~2200+, top ~800+).
@@ -3067,16 +3186,21 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // Settle for the LazyColumn to lay out the new viewport.
       await new Promise((r) => setTimeout(r, 400)); // sleep-ok: device settle after a swipe, for the LazyColumn to lay out
       swipes++;
+      dump = '';
+      try {
+        dump = await driver.androidUiDump();
+      } catch {
+        // Transient dump failures are tolerated within the wait window.
+      }
     }
-    if (!visible) {
+    if (!point) {
       throw new Error(
         `androidPersonaSignIn: "${rowTag}" never became fully visible inside the picker list after ${MAX_SWIPES} scroll attempts — persona may not be in the dev personas registry (provision-test-personas.js), or the list is shorter than expected.`,
       );
     }
-    // Step 3: tap the persona row. By this point the row's full
-    // height is inside the visible clipping rect, so androidTapByTag's
-    // bounds-center calculation lands inside the clickable area.
-    const picked = await driver.androidTapByTag(rowTag);
+    // Step 3: tap the persona row at the point verified against the clipping
+    // rect in the very dump that verified it.
+    const picked = await driver.androidTap(point.x, point.y);
     if (!picked) {
       throw new Error(
         `androidPersonaSignIn: tap on "${rowTag}" failed despite dialog showing the row fully visible — UI dump may be racing the tap`,

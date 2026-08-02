@@ -13185,6 +13185,236 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
   });
 });
 
+/**
+ * Sign-in COST. The gauntlet's app phase is throughput-bound, not logic-bound.
+ *
+ * Measured 2026-08-02 on the OnePlus CPH2653 against the local build:
+ *
+ *   androidPersonaSignIn('P-10','rooms','local')  ->  true in 79,295ms
+ *   30 uiautomator dumps, 66,852ms of it (84%), 2,228ms each
+ *
+ * At 79s a scenario, the 118 app-android scenarios spend 2.6 HOURS in sign-in
+ * alone, which is why the app phase reads as stalled rather than slow.
+ *
+ * A dump costs what it costs — `uiautomator` is a shell command that boots an
+ * app_process VM and binds a fresh UiAutomation on EVERY invocation. Measured:
+ * ~2,150ms on the home screen and ~2,150ms inside ShyTalk, and 1,092ms even
+ * when invoked with no arguments so it only prints its usage text. It is fixed
+ * startup cost, not idle-waiting, so no flag makes it cheaper (`--compressed`
+ * is within noise of uncompressed) and the ONLY lever is issuing fewer of them.
+ *
+ * These tests hold the two structural wastes closed:
+ *
+ *   1. The reset chain ran BACKWARDS. An ~18s UI sign-out chain went first and
+ *      a 437ms deterministic session drop was the last resort — because the
+ *      driver believed `run-as` was denied on this device. It is not: it lists
+ *      and deletes the two Firebase Auth prefs, and the app relaunches on the
+ *      picker. Measured cost of the whole drop: force-stop 99ms + 2 rm 96ms +
+ *      launch 242ms.
+ *   2. Every tap re-dumped a screen a wait had JUST dumped. `waitForTag(X)`
+ *      polls until X appears, throws the dump away, and `androidTapByTag(X)`
+ *      dumps again for the bounds that were in it. Two dumps, one tap, 2.2s
+ *      wasted each time.
+ *
+ * The fixtures are a SCREEN STATE MACHINE, not a fixed dump sequence. A fixed
+ * sequence encodes the dump count it was written against, so it would break the
+ * moment the count changed — and changing the count is the entire point.
+ */
+describe('android-adb-driver — sign-in cost', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Bounds are chosen so every tag's CENTRE is unique — the mock only sees
+  // `input tap X Y`, so the coordinate is the only way to know which element
+  // the driver believed it was tapping.
+  const SCREENS = {
+    main: () =>
+      dumpWithId('main_roomsTab', '[400,1900][600,2000]') +
+      dumpWithId('main_profileTab', '[100,1900][300,2000]'),
+    profile: () =>
+      dumpWithId('main_profileTab', '[100,1900][300,2000]') +
+      dumpWithId('main_settingsButton', '[900,100][1000,200]'),
+    settings: () => dumpWithId('settings_signOutButton', '[100,600][500,700]'),
+    confirm: () => dumpWithId('settings_signOutConfirmButton', '[600,1200][900,1300]'),
+    picker: () => dumpWithId('persona_picker_open', '[100,500][400,600]'),
+    dialog: () =>
+      dumpWithId('persona_picker_list', '[200,800][1200,2200]') +
+      dumpWithId('persona_row_P-10', '[100,900][800,1000]'),
+  };
+  const TAP = {
+    '200 1950': { from: 'main', to: 'profile', tag: 'main_profileTab' },
+    '950 150': { from: 'profile', to: 'settings', tag: 'main_settingsButton' },
+    '300 650': { from: 'settings', to: 'confirm', tag: 'settings_signOutButton' },
+    '750 1250': { from: 'confirm', to: 'picker', tag: 'settings_signOutConfirmButton' },
+    '250 550': { from: 'picker', to: 'dialog', tag: 'persona_picker_open' },
+    '450 950': { from: 'dialog', to: 'main', tag: 'persona_row_P-10' },
+  };
+
+  /**
+   * Drive a real screen graph rather than a scripted list of dumps.
+   *
+   * `runAsPermitted: false` reproduces a non-debuggable build (a release APK),
+   * where `run-as` exits 1 — the case that must still reach the picker via the
+   * UI chain. On the device a denied run-as prints "run-as: unknown package"
+   * and exits 1, which surfaces here as a throw from execFileSync.
+   */
+  function deviceAt(initial, { runAsPermitted = true } = {}) {
+    const seen = { taps: [], dumps: 0, runAs: 0, order: [] };
+    let screen = initial;
+    let sessionOnDevice = initial !== 'picker';
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        seen.dumps += 1;
+        return '';
+      }
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) return (SCREENS[screen] || SCREENS.main)();
+      if (cmd.includes("'input' 'tap'")) {
+        // Pull the two coordinates straight out of the rendered argv. Splitting
+        // and stripping quotes by hand tripped the "do not re-implement
+        // deviceShellArg" guard — a blunt fragment match, but the regex is the
+        // better read anyway: it names the shape it expects instead of
+        // dismantling the string.
+        const [, x, y] = /'input' 'tap' '?(\d+)'? '?(\d+)'?/.exec(cmd) || [];
+        const move = TAP[`${x} ${y}`];
+        seen.taps.push(move ? move.tag : `stray(${x},${y})`);
+        seen.order.push(move ? `tap:${move.tag}` : `tap:stray(${x},${y})`);
+        // A tap on an element that is not on the CURRENT screen changes
+        // nothing — the same thing a real blind tap does.
+        if (move && move.from === screen) screen = move.to;
+        return '';
+      }
+      if (cmd.includes("'run-as'")) {
+        seen.runAs += 1;
+        seen.order.push('run-as');
+        if (!runAsPermitted) throw new Error('run-as: unknown package: com.shyden.shytalk.local');
+        if (cmd.includes("'rm'")) sessionOnDevice = false;
+        return '';
+      }
+      if (cmd.includes("'monkey'")) {
+        seen.order.push('launch');
+        screen = sessionOnDevice ? 'main' : 'picker';
+        return '';
+      }
+      if (cmd.includes("'pm' 'clear'")) {
+        seen.order.push('pm-clear');
+        throw new Error('SecurityException: PID does not have permission CLEAR_APP_USER_DATA');
+      }
+      return '';
+    });
+    return seen;
+  }
+
+  test('a signed-in app is reset by the 437ms session drop, NOT the 18s UI chain', async () => {
+    // The app relaunches signed-in — force-stop does not clear a Firebase
+    // session — so SOMETHING has to sign it out before the picker is reachable.
+    const seen = deviceAt('main');
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+
+    // The settings chain is the expensive path. Reaching the picker without it
+    // is the whole saving: 4 taps, each preceded by a wait, ~18s of dumps.
+    expect(seen.taps).not.toContain('main_profileTab');
+    expect(seen.taps).not.toContain('settings_signOutButton');
+    expect(seen.runAs).toBeGreaterThan(0);
+  });
+
+  test('the cheap path is tried FIRST — not after the UI chain has already paid', async () => {
+    // Ordering is the finding. Both paths reach the picker, so a test that only
+    // checked the end state would pass with the slow one still running first.
+    const seen = deviceAt('main');
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    await promise;
+    const firstRunAs = seen.order.indexOf('run-as');
+    const firstChainTap = seen.order.indexOf('tap:main_profileTab');
+    expect(firstRunAs).toBeGreaterThanOrEqual(0);
+    if (firstChainTap >= 0) expect(firstRunAs).toBeLessThan(firstChainTap);
+  });
+
+  test('a non-debuggable build (run-as denied) STILL reaches the picker via the UI chain', async () => {
+    // The capability that must not be lost. A release APK has no `run-as`, and
+    // j20 runs prod-flavor scenarios — deleting the UI chain would strand them.
+    const seen = deviceAt('main', { runAsPermitted: false });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+    expect(seen.taps).toContain('main_profileTab');
+    expect(seen.taps).toContain('settings_signOutConfirmButton');
+  });
+
+  test('androidSignOut spends at most 7 dumps — a tap after a wait must not re-dump', async () => {
+    // Ten dumps today: classify, daily-reward probe, then FIVE wait/tap pairs
+    // that each dump twice for one tap. The bounds are already in the dump the
+    // wait just read; dumping again for them costs 2.2s and learns nothing.
+    //
+    // Seven is the count with the three settings-chain pairs collapsed. Asserted
+    // as an upper bound so a future extra dump reopens the finding.
+    const seen = deviceAt('main');
+    const driver = await createAndroidDriver();
+    const promise = driver.androidSignOut();
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+    expect(seen.dumps).toBeLessThanOrEqual(7);
+  });
+
+  test('the whole sign-in spends at most 8 dumps — 30 is 66 seconds of device time', async () => {
+    // The headline number. Thirty dumps at 2,228ms is 66.9s of the measured
+    // 79.3s. Eight is what the flow needs once the session drop happens before
+    // the first classification and no tap re-dumps a screen a wait just read.
+    const seen = deviceAt('main');
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+    expect(seen.dumps).toBeLessThanOrEqual(8);
+  });
+
+  test('the app is booted ONCE, not classified-then-reset-then-booted again', async () => {
+    // This replaced an earlier test of mine that asserted an app already on the
+    // picker "pays for no reset at all". That test pinned the MECHANISM (skip
+    // the reset) when what matters is the GOAL (do not pay for two boots), and
+    // the mechanism it pinned was the expensive one: classifying first cost
+    // four dumps — a full app boot through the splash gate — and then, on
+    // finding the app signed in, the session drop rebooted it anyway. Nine
+    // seconds to learn something a 200ms file delete makes true unconditionally.
+    //
+    // So the drop moved AHEAD of the first classification. It costs ~200ms when
+    // it turns out to be unnecessary, and saves an entire boot whenever it is
+    // not — which, in a matrix, is every scenario after the first.
+    const seen = deviceAt('main');
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+    expect(seen.order.filter((o) => o === 'launch')).toHaveLength(1);
+    // And the drop precedes that single launch, so the app comes up signed-out
+    // the first time rather than being reset after the fact.
+    expect(seen.order.indexOf('run-as')).toBeLessThan(seen.order.indexOf('launch'));
+  });
+
+  test('an app already on the picker still signs in with no UI reset chain', async () => {
+    // The unconditional drop must not disturb an already-signed-out app: no
+    // settings chain, no pm clear, just the two picker taps.
+    const seen = deviceAt('picker');
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+    expect(seen.taps).toEqual(['persona_picker_open', 'persona_row_P-10']);
+    expect(seen.order).not.toContain('pm-clear');
+  });
+});
+
 describe('android-adb-driver — androidConfirmDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
