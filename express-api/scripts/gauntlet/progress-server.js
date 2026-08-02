@@ -90,18 +90,108 @@ const arg = (flag, fallback) => {
   return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
 
-/** Newest run directory, or null when none exists yet. */
-function latestRunDir() {
+/**
+ * Newest run directory from EITHER launcher, or null when none exists yet.
+ *
+ * There are two, and they write to different places:
+ *
+ *   gauntlet.sh          /tmp/shytalk-gauntlet/<name>
+ *   /run-journeys skill  /tmp/run-journeys-<runId>
+ *
+ * This looked only in the first, so a dashboard started with no arguments during
+ * a `/run-journeys` matrix rendered an empty shell — a live multi-hour run with
+ * a viewer insisting nothing was happening. The operator had to know to pass
+ * `--run-dir`, which is precisely the knowledge a default should carry.
+ *
+ * A directory counts as a run because it CONTAINS A `log`, not because of its
+ * name. Both launchers write one, and /tmp is full of other people's
+ * directories — returning one of those would make the dashboard render a
+ * confident view of something unrelated. Keying on the path shape would also
+ * mean re-fixing this the next time a run lands somewhere new.
+ *
+ * Neither source wins by being special, only by being NEWER: a finished
+ * gauntlet.sh run from yesterday must not hide the matrix running right now.
+ */
+// `/tmp` literally, NOT `os.tmpdir()`. On macOS os.tmpdir() is the per-user
+// `/var/folders/**/T` directory, while run.sh writes `/tmp/run-journeys-<id>`
+// as a hard-coded path — so the default looked in the wrong place entirely and
+// auto-discovery silently fell back to whatever gauntlet.sh had left behind.
+const RUN_JOURNEYS_TMP = process.env.RUN_JOURNEYS_TMP || '/tmp';
+const RUN_JOURNEYS_PREFIX = 'run-journeys-';
+
+function candidateRunDirs() {
+  const found = [];
+
+  // 1. gauntlet.sh — every child of its tmp root.
   try {
-    const entries = fs
-      .readdirSync(GAUNTLET_TMP, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && e.name !== 'latest')
-      .map((e) => path.join(GAUNTLET_TMP, e.name))
-      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-    return entries[0] || null;
+    for (const e of fs.readdirSync(GAUNTLET_TMP, { withFileTypes: true })) {
+      if (e.isDirectory() && e.name !== 'latest') found.push(path.join(GAUNTLET_TMP, e.name));
+    }
   } catch {
-    return null;
+    // No gauntlet.sh runs on this machine yet — not an error.
   }
+
+  // 2. /run-journeys — siblings in tmp, matched by prefix.
+  try {
+    for (const e of fs.readdirSync(RUN_JOURNEYS_TMP, { withFileTypes: true })) {
+      if (!e.name.startsWith(RUN_JOURNEYS_PREFIX)) continue;
+      found.push(path.join(RUN_JOURNEYS_TMP, e.name));
+    }
+  } catch {
+    // Unreadable tmp — fall through to whatever source 1 found.
+  }
+
+  return found;
+}
+
+/**
+ * Real directories, each appearing ONCE.
+ *
+ * `/run-journeys` maintains `run-journeys-latest -> run-journeys-<id>`, so the
+ * same run is reachable by two names. Returning the symlink makes the dashboard
+ * report the run id as "latest"; returning both makes one run look like two.
+ *
+ * Resolved with `realpathSync` and de-duplicated rather than excluded by name or
+ * by `isDirectory()`. Both of those "worked" only by accident: mutation-testing
+ * showed that removing either changed no test outcome, because the surviving
+ * check happened to cover the case and the tie between a symlink and its target
+ * was then broken by readdir ORDER. A guard that passes on luck is not a guard —
+ * collapsing the two paths to one is correct by construction.
+ */
+function resolveRuns(dirs) {
+  const byRealPath = new Map();
+  for (const dir of dirs) {
+    try {
+      const real = fs.realpathSync(dir);
+      if (!fs.statSync(real).isDirectory()) continue;
+      if (!byRealPath.has(real)) byRealPath.set(real, real);
+    } catch {
+      // Vanished between readdir and stat — a finished run being cleaned up.
+    }
+  }
+  return [...byRealPath.values()];
+}
+
+function latestRunDir() {
+  // Ranked by the LOG's mtime, not the directory's.
+  //
+  // A live run appends to `log` continuously but writes its per-cell output into
+  // `report/`, and a child write does not touch the parent's mtime — so the
+  // directory looks frozen at creation time for the entire run. Ranking by it
+  // put a FINISHED run from the previous day ahead of the matrix running right
+  // now, which is the exact opposite of what a progress dashboard is for.
+  const runs = resolveRuns(candidateRunDirs())
+    .map((dir) => {
+      try {
+        return { dir, at: fs.statSync(path.join(dir, 'log')).mtimeMs };
+      } catch {
+        // No log — not a run. /tmp is full of other people's directories.
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.at - a.at);
+  return runs.length ? runs[0].dir : null;
 }
 
 const readFile = (p) => {
@@ -562,7 +652,16 @@ function main() {
   server.listen(port, '127.0.0.1', () => {
     const url = `http://127.0.0.1:${port}`;
     console.log(`[gauntlet-ui] dashboard on ${url}`);
-    console.log(`[gauntlet-ui] watching ${fixedRunDir || GAUNTLET_TMP}`);
+    // Report the RUN, not the search root. This printed `GAUNTLET_TMP` — one of
+    // two places it looks, and not the one it had just chosen — so the banner
+    // named a directory the dashboard was not showing. Saying "no run found yet"
+    // out loud also beats an empty page with a confident path under it.
+    const watching = fixedRunDir || latestRunDir();
+    console.log(
+      watching
+        ? `[gauntlet-ui] watching ${watching}`
+        : `[gauntlet-ui] no run found yet in ${GAUNTLET_TMP} or ${RUN_JOURNEYS_TMP}/${RUN_JOURNEYS_PREFIX}* — will pick one up as soon as it starts`,
+    );
     if (process.argv.includes('--open')) {
       try {
         execFileSync('/usr/bin/open', [url], { stdio: 'ignore' });
