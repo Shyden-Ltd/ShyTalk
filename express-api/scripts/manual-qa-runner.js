@@ -6614,7 +6614,27 @@ const matchers = [
           error: `the app driver has no ApiPost (looked for appApiPost / androidApiPost / iosApiPost)`,
         };
       }
-      await appMethod(ctx, 'ApiPost')(endpoint, rest);
+      // RECORD what came back. The call really is made — `androidApiPost` runs
+      // curl ON THE DEVICE and returns the HTTP status — and this used to
+      // discard it, so `ctx.lastResponse` was never set and the very next line
+      // of the scenario ("Then the response status is 400") failed with "no
+      // prior request — When step missing?". Four findings a run wore that
+      // message, pointing the reader at the feature file instead of here.
+      const result = await appMethod(ctx, 'ApiPost')(endpoint, rest);
+      const status = typeof result === 'number' ? result : (result?.status ?? null);
+      // 0 is NOT a response: `deviceCurl` returns it when the adb call itself
+      // fails. Recording it would let `the response status is 0` pass while
+      // nothing ever reached the server — a fabricated result, worse than the
+      // failure it replaces. The stale value is cleared for the same reason: a
+      // previous scenario's 200 must not answer this one's assertion.
+      if (!status) {
+        ctx.lastResponse = null;
+        return {
+          ok: false,
+          error: `POST ${endpoint} did not reach the server from the device — no status came back (device HTTP client failed, not a product response)`,
+        };
+      }
+      ctx.lastResponse = { status, body: null, persona: m[1], path: endpoint };
       return { ok: true };
     },
   },
