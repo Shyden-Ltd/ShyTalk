@@ -516,6 +516,90 @@ describe('ios-appium-driver — iosPersonaSignIn', () => {
       /ephemeral personas P-01\/P-03 sign up via the prod flow/,
     );
   });
+
+  /**
+   * A fetch mock that answers per TAG, which is exactly how the driver asks:
+   * `waitForTag` POSTs {using:'accessibility id', value:<tag>} to /element and
+   * keys only on `r.ok`. So "which tags are on screen" is the whole fixture.
+   */
+  function fetchWithTags(present) {
+    const onScreen = new Set(present);
+    const clicked = [];
+    const impl = jest.fn(async (url, opts) => {
+      const ok = (value) => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ value }),
+        text: async () => '',
+      });
+      if (url.endsWith('/session') && opts.method === 'POST') return ok({ sessionId: 'sid-gate' });
+      if (url.endsWith('/element') && opts.method === 'POST') {
+        const tag = JSON.parse(opts.body).value;
+        if (!onScreen.has(tag)) {
+          return {
+            ok: false,
+            status: 404,
+            json: async () => ({}),
+            text: async () => 'no such element',
+          };
+        }
+        return ok({ ELEMENT: tag, 'element-6066-11e4-a52e-4f735466cecf': tag });
+      }
+      const click = /\/element\/([^/]+)\/click$/.exec(url);
+      if (click) clicked.push(decodeURIComponent(click[1]));
+      return ok('');
+    });
+    impl.clicked = clicked;
+    return impl;
+  }
+
+  test('a persona with an active warning SIGNS IN — the gate is not a sign-in failure', async () => {
+    // 30 of app-ios's 123 failures on run 20260802-134434-local were
+    // "iosPersonaSignIn: never reached main screen". Same defect as the Android
+    // driver had: the helper demanded main and treated a moderation gate as a
+    // failed sign-in, while j11 explicitly requires that gate ("Raul's app UI
+    // does not show main_roomsTab"). Authentication succeeded; which screen the
+    // product shows afterwards is the scenario's business to assert.
+    const fetchImpl = fetchWithTags([
+      'persona_picker_open',
+      'persona_picker_list',
+      'persona_row_P-10',
+      'warning_acknowledgeButton',
+    ]);
+    const driver = await createIosDriver({ wdaTeamId: 'T', fetchImpl });
+    // Fake timers so the driver's 5s dialog wait + 10s main wait don't burn
+    // real seconds — the same reason the Android driver tests use them.
+    jest.useFakeTimers();
+    try {
+      const promise = driver.iosPersonaSignIn('P-10', 'rooms');
+      await jest.advanceTimersByTimeAsync(30000);
+      await expect(promise).resolves.toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+    // Acknowledging a warning records acceptance server-side — a sign-in helper
+    // must never do it silently.
+    expect(fetchImpl.clicked).not.toContain('warning_acknowledgeButton');
+  });
+
+  test('a sign-in that never authenticated STILL throws — the guard is not gone', async () => {
+    // No main, no gate: the credential did not work, and that must stay loud.
+    const fetchImpl = fetchWithTags([
+      'persona_picker_open',
+      'persona_picker_list',
+      'persona_row_P-10',
+    ]);
+    const driver = await createIosDriver({ wdaTeamId: 'T', fetchImpl });
+    jest.useFakeTimers();
+    try {
+      const promise = driver.iosPersonaSignIn('P-10', 'rooms');
+      promise.catch(() => {});
+      await jest.advanceTimersByTimeAsync(30000);
+      await expect(promise).rejects.toThrow(/never reached main screen/);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('ios-appium-driver — close', () => {

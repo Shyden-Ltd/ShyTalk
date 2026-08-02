@@ -3246,9 +3246,42 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // re-shows the same per-launch gates as Step 0b, so reuse the gate-advancer
     // (with extra headroom for the Firebase sign-in roundtrip).
     const postState = await advancePastLaunchGates(16);
+    // A MODERATION GATE IS NOT A SIGN-IN FAILURE.
+    //
+    // This demanded `signed_in` and so reported 18 of app-android's 115
+    // failures on run 20260802-134434-local — every one of them P-08 Raul,
+    // "expected the main screen but classified warning".
+    //
+    // The warning was not contamination. j11 puts it there on purpose ("Greta
+    // issues a first-strike warning to Raul"), and the scenario immediately
+    // after it reads:
+    //
+    //   Then within 5000ms Raul's app UI shows the warning screen with reason …
+    //   Then Raul's app UI does not show "main_roomsTab"
+    //
+    // The corpus REQUIRES the state this was calling a failure. Authentication
+    // succeeded — the credential worked, the session exists — and the product
+    // then showed a gate. Which screen it chooses is the scenario's business to
+    // assert, not this helper's to veto.
+    //
+    // Clearing the gate here would be worse than failing: acknowledging a
+    // warning records acceptance server-side, which is precisely why
+    // advancePastLaunchGates is forbidden from tapping it.
+    //
+    // `picker` and `unknown` still throw. Those mean the credential did NOT
+    // work, and that has to stay loud — the guard is narrowed, not removed.
+    const GATED_BUT_AUTHENTICATED = new Set(['warning']);
+    if (GATED_BUT_AUTHENTICATED.has(postState)) {
+      console.error(
+        `[android-driver] ${personaId} signed in and landed on the "${postState}" gate — ` +
+          `not navigating to the "${tab}" tab, because the gate is above it. ` +
+          `A scenario that needs the main screen will fail on its own assertion.`,
+      );
+      return true;
+    }
     if (postState !== 'signed_in') {
       throw new Error(
-        `androidPersonaSignIn: after picking ${personaId}, expected the main screen but classified "${postState}" within the gate-advance budget — Firebase sign-in may have failed, or a warning/legal gate intercepted (check device logcat).`,
+        `androidPersonaSignIn: after picking ${personaId}, expected the main screen but classified "${postState}" within the gate-advance budget — Firebase sign-in may have failed, or a legal/connection gate intercepted (check device logcat).`,
       );
     }
     // Step 5: if the requested tab is not "rooms" (default landing),

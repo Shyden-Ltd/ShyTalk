@@ -13245,6 +13245,9 @@ describe('android-adb-driver — sign-in cost', () => {
     dialog: () =>
       dumpWithId('persona_picker_list', '[200,800][1200,2200]') +
       dumpWithId('persona_row_P-10', '[100,900][800,1000]'),
+    // A moderation gate shown AFTER a successful sign-in. Deliberately carries
+    // no main_* tag — j11 asserts `does not show "main_roomsTab"` on it.
+    warning: () => dumpWithId('warning_acknowledgeButton', '[100,1500][1000,1600]'),
   };
   const TAP = {
     '200 1950': { from: 'main', to: 'profile', tag: 'main_profileTab' },
@@ -13263,9 +13266,12 @@ describe('android-adb-driver — sign-in cost', () => {
    * UI chain. On the device a denied run-as prints "run-as: unknown package"
    * and exits 1, which surfaces here as a throw from execFileSync.
    */
-  function deviceAt(initial, { runAsPermitted = true } = {}) {
+  function deviceAt(initial, { runAsPermitted = true, afterPick = 'main' } = {}) {
     const seen = { taps: [], dumps: 0, runAs: 0, order: [] };
     let screen = initial;
+    // Where picking the persona row lands. A persona with an active moderation
+    // warning lands on the gate, not on main — that is the product working.
+    TAP['450 950'].to = afterPick;
     let sessionOnDevice = initial !== 'picker';
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
@@ -13400,6 +13406,50 @@ describe('android-adb-driver — sign-in cost', () => {
     // And the drop precedes that single launch, so the app comes up signed-out
     // the first time rather than being reset after the fact.
     expect(seen.order.indexOf('run-as')).toBeLessThan(seen.order.indexOf('launch'));
+  });
+
+  test('a persona with an active warning SIGNS IN — the gate is not a sign-in failure', async () => {
+    // 18 of app-android's 115 failures on run 20260802-134434-local, every one
+    // of them P-08 Raul:
+    //
+    //   androidPersonaSignIn: after picking P-08, expected the main screen but
+    //   classified "warning" within the gate-advance budget
+    //
+    // The warning is not contamination — j11 PUTS it there ("Greta issues a
+    // first-strike warning to Raul"), and the very next scenario reads:
+    //
+    //   Scenario: Raul's relaunched app shows the warning screen with the reason
+    //     Then within 5000ms Raul's app UI shows the warning screen ...
+    //     Then Raul's app UI does not show "main_roomsTab"
+    //
+    // So the corpus REQUIRES the state this helper was calling a failure.
+    // Authentication succeeded; the product then showed a gate. Which screen
+    // the product chooses is the scenario's business to assert, not the
+    // sign-in helper's to veto.
+    //
+    // Clearing it here would be worse than failing: acknowledging a warning is
+    // a stateful product action that records acceptance server-side, which is
+    // exactly why advancePastLaunchGates is forbidden from tapping it.
+    const seen = deviceAt('picker', { afterPick: 'warning' });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(await promise).toBe(true);
+    // And it must NOT try to clear the gate on its way past.
+    expect(seen.taps).not.toContain('warning_acknowledgeButton');
+  });
+
+  test('a sign-in that never authenticated STILL throws — the guard is not gone', async () => {
+    // The other half. Accepting the warning gate must not turn this into a
+    // helper that accepts anything: a persona tap that leaves the app on the
+    // picker means the credential did not work, and that has to stay loud.
+    const seen = deviceAt('picker', { afterPick: 'picker' });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    promise.catch(() => {});
+    await jest.advanceTimersByTimeAsync(60000);
+    await expect(promise).rejects.toThrow(/expected the main screen but classified/);
+    expect(seen.taps).toContain('persona_row_P-10');
   });
 
   test('an app already on the picker still signs in with no UI reset chain', async () => {

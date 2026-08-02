@@ -589,6 +589,27 @@ async function createIosDriver({
     // Step 3: wait for main_roomsTab.
     const signedIn = await waitForTag('main_roomsTab', 10000);
     if (!signedIn) {
+      // A MODERATION GATE IS NOT A SIGN-IN FAILURE — the same defect the
+      // Android driver had. 30 of app-ios's 123 failures on run
+      // 20260802-134434-local were "never reached main screen", while j11
+      // explicitly REQUIRES that screen not to be main:
+      //
+      //   Then within 5000ms Raul's app UI shows the warning screen with reason …
+      //   Then Raul's app UI does not show "main_roomsTab"
+      //
+      // Authentication succeeded; the product then put a gate above main.
+      // Which screen it chose is the scenario's business to assert.
+      //
+      // The gate is NOT cleared here: acknowledging a warning records
+      // acceptance server-side, so a passive sign-in helper must never do it.
+      if (await waitForTag('warning_acknowledgeButton', 2000)) {
+        console.error(
+          `[ios-driver] ${personaId} signed in and landed on the moderation warning gate — ` +
+            `not navigating to the "${tab}" tab, because the gate is above it. ` +
+            `A scenario that needs the main screen will fail on its own assertion.`,
+        );
+        return true;
+      }
       throw new Error(
         `iosPersonaSignIn: never reached main screen ("main_roomsTab") within 10s of picking ${personaId} — Firebase sign-in may have failed (check Console.app for the device) or main nav testTag has drifted.`,
       );
