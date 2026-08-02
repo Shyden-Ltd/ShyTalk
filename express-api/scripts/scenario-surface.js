@@ -147,9 +147,29 @@ function isMissingUiDriver(error) {
 const DRIVER_BLAME =
   /(?:requires\s+ctx\.(uiDriver|webDriver)\b|\bctx\.(uiDriver|webDriver)\.[A-Za-z0-9_]+\s+not configured)/;
 
+/**
+ * The PLATFORM-NEUTRAL form, e.g. "the app driver has no TapUserCard".
+ *
+ * Matchers now resolve app methods through `appMethod(ctx, 'X')`, which tries
+ * `appX` then `androidX` then `iosX` — so its failure message names no single
+ * platform, and the `ctx.uiDriver.androidX not configured` shape above no longer
+ * appears for those steps.
+ *
+ * THIS IS WHY IT IS HERE. When the message changed and this file was not
+ * updated, every step a cell could not perform stopped being SKIPPED and became
+ * a FAILURE. Measured 2026-08-02: a full matrix run finished with PASS=0 on all
+ * four cells and ~500 findings, the great majority of them cells being marked
+ * down for surfaces they never had.
+ */
+const NEUTRAL_APP_BLAME = /\bthe app driver has no [A-Za-z0-9_]+/;
+
 function blamedDriver(error) {
-  const m = DRIVER_BLAME.exec(String(error || ''));
-  return m ? m[1] || m[2] : null;
+  const text = String(error || '');
+  const m = DRIVER_BLAME.exec(text);
+  if (m) return m[1] || m[2];
+  // The neutral form always blames the device-UI driver — that is the only
+  // driver `appMethod` ever resolves against.
+  return NEUTRAL_APP_BLAME.test(text) ? 'uiDriver' : null;
 }
 
 /**
@@ -162,10 +182,25 @@ function blamedDriver(error) {
  * 45 blaming `webDriver` (which chromium DOES have — genuine gaps, keep them
  * red; they are SHY-0259's backlog and hiding them would erase it).
  */
-function isSurfaceUnavailable(error, ctx = {}) {
+function isSurfaceUnavailable(error, ctx = {}, step = null) {
   const driver = blamedDriver(error);
   if (!driver) return false;
   if (!ctx[driver]) return true;
+
+  // Neutral-form failure with a uiDriver present: the driver exists but is for
+  // the WRONG PHONE. The message names no platform, so the STEP is asked
+  // instead — `has the local-flavor APK installed on Android` needs android, and
+  // an iPhone cell that cannot supply it is a surface mismatch, not framework
+  // debt. Without the step this fell through to `return false` and the cell was
+  // failed for a scenario it was never able to run.
+  if (driver === 'uiDriver' && step && NEUTRAL_APP_BLAME.test(String(error || ''))) {
+    // Asked through canRunScenario, NOT by set membership: `app` is satisfied by
+    // EITHER phone, so `caps.has('app')` is false on both and a membership test
+    // would skip every neutral step on every cell — halving the app corpus
+    // again, silently, in the name of fixing it.
+    const needed = requiredPlatforms([step]);
+    if (needed.size && !canRunScenario(needed, cellCapabilities(ctx)).ok) return true;
+  }
 
   // The driver OBJECT exists but may not drive the platform the method belongs
   // to. On mobile-safari-ios, ctx.uiDriver is the iOS driver, so

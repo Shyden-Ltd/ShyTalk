@@ -454,3 +454,64 @@ describe('"on the app" — platform-neutral app steps', () => {
     expect([...requiredPlatforms([step('Adam sees the appearance settings')])]).toEqual([]);
   });
 });
+
+describe('the PLATFORM-NEUTRAL failure message is still a skip signal', () => {
+  const { blamedDriver, isSurfaceUnavailable } = require('../../scripts/scenario-surface');
+
+  // THE REGRESSION THIS PINS, in full, because it cost a three-hour run.
+  //
+  // Matchers used to fail with `ctx.uiDriver.androidX not configured`, and this
+  // gate recognised that shape and turned it into a SKIP on a cell that has no
+  // Android. When the matchers moved to the platform-neutral `appMethod`
+  // resolver their message became "the app driver has no X" — which this file
+  // did not know, so `blamedDriver` returned null, `isSurfaceUnavailable`
+  // returned false, and every step a cell could not perform became a FAILURE
+  // instead of a skip.
+  //
+  // Measured 2026-08-02: a full matrix run finished PASS=0 on all four cells
+  // with ~500 findings, the great majority of them cells being marked down for
+  // surfaces they never had. The product was not the subject of that report.
+  const NEUTRAL =
+    'the app driver has no IsFlavorInstalled (looked for appIsFlavorInstalled / androidIsFlavorInstalled / iosIsFlavorInstalled)';
+  const androidStep = { text: 'Adam [P-01] has the local-flavor APK installed on Android' };
+  const iosCell = { uiDriver: { iosUiDump: () => '' } };
+  const androidCell = { uiDriver: { androidUiDump: () => '' } };
+  const webCell = { webDriver: {} };
+
+  it('blames the device-UI driver, which is the only one appMethod resolves against', () => {
+    expect(blamedDriver(NEUTRAL)).toBe('uiDriver');
+  });
+
+  it('an iPhone cell SKIPS an Android-only step rather than failing it', () => {
+    expect(isSurfaceUnavailable(NEUTRAL, iosCell, androidStep)).toBe(true);
+  });
+
+  it('a web cell skips it too — it has no device driver at all', () => {
+    expect(isSurfaceUnavailable(NEUTRAL, webCell, androidStep)).toBe(true);
+  });
+
+  it('the ANDROID cell still FAILS — there the missing method is real debt', () => {
+    // The half that matters most. If this became a skip, SHY-0259's driver
+    // backlog would vanish from every report and stop being worked.
+    expect(isSurfaceUnavailable(NEUTRAL, androidCell, androidStep)).toBe(false);
+  });
+
+  it('a platform-NEUTRAL step on a cell with a phone is not skipped', () => {
+    // "on the app" is satisfied by either phone, so an iPhone cell must attempt
+    // it — skipping would quietly halve the app corpus again.
+    const neutralStep = { text: 'Adam on the app taps "main_roomsTab"' };
+    expect(isSurfaceUnavailable(NEUTRAL, iosCell, neutralStep)).toBe(false);
+  });
+
+  it('without the step it cannot tell, and does NOT guess a skip', () => {
+    // A guessed skip is worse than a failure: it hides a cell that is broken.
+    expect(isSurfaceUnavailable(NEUTRAL, iosCell)).toBe(false);
+  });
+
+  it('the OLD message shape still works — this is an addition, not a swap', () => {
+    expect(blamedDriver('ctx.uiDriver.androidOpenScreen not configured')).toBe('uiDriver');
+    expect(isSurfaceUnavailable('ctx.uiDriver.androidOpenScreen not configured', iosCell)).toBe(
+      true,
+    );
+  });
+});

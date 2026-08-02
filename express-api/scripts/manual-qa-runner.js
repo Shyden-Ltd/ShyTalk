@@ -16829,7 +16829,7 @@ async function runScenario(scenario, parsed, ctx) {
     // almost identical to a missing driver OBJECT and means the opposite: on a
     // cell that owns that driver it is framework debt (SHY-0259) and must stay
     // red, or the backlog it tracks becomes invisible.
-    if (!result.ok && isSurfaceUnavailable(result.error, ctx)) {
+    if (!result.ok && isSurfaceUnavailable(result.error, ctx, step)) {
       const missing = [...requiredPlatforms([step])].filter((p) => GATING_PLATFORMS.has(p));
       const reason = skipReason(missing);
       stepResults.push({ step, result: { ok: true, skipped: true, reason } });

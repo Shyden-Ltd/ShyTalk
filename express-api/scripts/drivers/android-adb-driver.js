@@ -2905,6 +2905,49 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
     }
 
+    // SECOND-LAST RESORT: drop just the Firebase session, via `run-as`.
+    //
+    // This exists because `pm clear` is REFUSED on the OnePlus CPH2653
+    // (SecurityException: no CLEAR_APP_USER_DATA), and until now that left the
+    // reset chain with nowhere to go. Measured 2026-08-02: the app was left
+    // signed in on an Official Warning screen by a j11 scenario, every later
+    // persona sign-in failed to find the picker, and the run finished 3 hours
+    // with PASS=0 on all four cells — ~60 sign-in failures cascading into the
+    // rest.
+    //
+    // A debuggable build always permits `run-as`, and deleting the two Firebase
+    // Auth preference files is enough: the app then boots signed-out to the
+    // picker. It is also GENTLER than `pm clear` — legal acceptance survives,
+    // so the launch-gate loop has nothing to re-clear.
+    if (launchState !== 'picker') {
+      const SESSION_PREFS = [
+        'shared_prefs/com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml',
+        'shared_prefs/com.google.firebase.auth.api.crypto.W0RFRkFVTFRd+MTowOmFuZHJvaWQ6MA.xml',
+      ];
+      try {
+        adb(['shell', 'am', 'force-stop', pkg]);
+        let removed = 0;
+        for (const file of SESSION_PREFS) {
+          // One file per call: the device shell does NOT expand a glob passed
+          // through `run-as`, and a wildcard silently removes nothing while
+          // reporting success.
+          try {
+            adb(['shell', 'run-as', pkg, 'rm', '-f', file]);
+            removed += 1;
+          } catch {
+            // A file that is already absent is not a failure — the session may
+            // have been cleared by an earlier attempt in the same run.
+          }
+        }
+        adb(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
+        await new Promise((r) => setTimeout(r, 3000)); // sleep-ok: cold start after the session drop
+        launchState = await advancePastLaunchGates();
+        resetNote = `${resetNote}; run-as session drop removed ${removed}/${SESSION_PREFS.length} prefs`;
+      } catch (e) {
+        resetNote = `${resetNote}; run-as session drop failed (${String(e.message).slice(0, 100)})`;
+      }
+    }
+
     // Step 1: tap `persona_picker_open` on the sign-in screen.
     // Available on local + dev (PR #882); on prod the button is
     // hidden so this will return false → actionable error.
