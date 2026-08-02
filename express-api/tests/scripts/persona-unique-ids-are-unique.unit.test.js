@@ -26,22 +26,75 @@ const fs = require('fs');
 
 const { personas } = require('../../scripts/provision-test-personas');
 
-/** The ephemeral set, read from the runner's source (it is not exported). */
-function ephemeralPersonas() {
+/**
+ * The ephemeral set, read from the runner's source (it is not exported).
+ *
+ * Entry-by-entry rather than one regex across the whole block. The first version
+ * used `id: '(P-\d+)',\s*uniqueId: (\d+)` and I then added an explanatory
+ * comment between those two lines in the runner — `\s*` does not span a comment,
+ * so the extraction silently stopped seeing P-01, THE VERY PERSONA THAT HAD
+ * COLLIDED. The guard would have gone on passing while watching a set with the
+ * offender removed from it.
+ *
+ * `entryCount()` below is what makes that impossible to repeat: it counts the
+ * entries independently, and the test asserts the two agree.
+ */
+function ephemeralBlock() {
   const src = fs.readFileSync(path.resolve(__dirname, '../../scripts/manual-qa-runner.js'), 'utf8');
-  const start = src.indexOf('const EPHEMERAL_PERSONAS');
-  const block = src.slice(start, src.indexOf('function loadPersonas'));
-  return [
-    ...block.matchAll(/id: '(P-\d+)',\s*uniqueId: (\d+),[\s\S]*?displayName: '([^']+)'/g),
-  ].map((m) => ({ id: m[1], uniqueId: Number(m[2]), displayName: m[3] }));
+  return src.slice(src.indexOf('const EPHEMERAL_PERSONAS'), src.indexOf('function loadPersonas'));
+}
+
+/** How many entries the block declares, counted independently of the parse. */
+function entryCount() {
+  return (ephemeralBlock().match(/id: 'P-\d+'/g) || []).length;
+}
+
+function ephemeralPersonas() {
+  const block = ephemeralBlock();
+  // Split on the id line, then read each entry's own fields. Comments, blank
+  // lines and reordered properties inside an entry cannot hide it.
+  return [...block.matchAll(/id: '(P-\d+)'/g)].map((m, i, all) => {
+    const from = m.index;
+    const to = i + 1 < all.length ? all[i + 1].index : block.length;
+    const entry = block.slice(from, to);
+    const uid = /uniqueId:\s*(\d+)/.exec(entry);
+    const name = /displayName:\s*'([^']+)'/.exec(entry);
+    return {
+      id: m[1],
+      uniqueId: uid ? Number(uid[1]) : null,
+      displayName: name ? name[1] : '(no displayName)',
+    };
+  });
 }
 
 describe('the scan is real', () => {
   it('reads both persona sets', () => {
-    // Calibration: an empty read would make the collision check vacuous, which
-    // is exactly how this went unnoticed.
     expect(personas.length).toBeGreaterThan(10);
     expect(ephemeralPersonas().length).toBeGreaterThan(0);
+  });
+
+  it('extracts EVERY ephemeral entry the block declares', () => {
+    // The calibration that matters, and the one that was missing. A
+    // `length > 0` check passed while the parse silently dropped P-01 — the
+    // exact persona that had collided — because a comment landed between its
+    // `id:` and `uniqueId:` lines. Counting the entries independently is what
+    // turns "the scan found something" into "the scan found everything".
+    expect(ephemeralPersonas().length).toBe(entryCount());
+  });
+
+  it('every extracted persona has a usable id', () => {
+    // A null uniqueId would drop out of the collision map and hide a clash just
+    // as effectively as not being parsed at all.
+    for (const p of ephemeralPersonas()) {
+      expect({ id: p.id, uniqueId: p.uniqueId }).toEqual({
+        id: p.id,
+        uniqueId: expect.any(Number),
+      });
+    }
+  });
+
+  it('sees P-01 specifically — the entry a comment once hid', () => {
+    expect(ephemeralPersonas().map((p) => p.id)).toContain('P-01');
   });
 });
 
