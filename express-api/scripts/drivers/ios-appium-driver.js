@@ -602,13 +602,25 @@ async function createIosDriver({
       //
       // The gate is NOT cleared here: acknowledging a warning records
       // acceptance server-side, so a passive sign-in helper must never do it.
-      if (await waitForTag('warning_acknowledgeButton', 2000)) {
-        console.error(
-          `[ios-driver] ${personaId} signed in and landed on the moderation warning gate — ` +
-            `not navigating to the "${tab}" tab, because the gate is above it. ` +
-            `A scenario that needs the main screen will fail on its own assertion.`,
-        );
-        return true;
+      // BOTH moderation gates, in the order SignInScreen renders them —
+      // suspension is checked before warning there, and it is the harder state.
+      //
+      // Only the warning was handled at first, and 30 of app-ios's failures on
+      // run 20260802-214908-local were still "never reached main screen":
+      // P-08, the persona these journeys use, is SUSPENDED by j11, so iOS kept
+      // throwing on a gate the Android driver already accepted.
+      for (const [gate, anchor] of [
+        ['suspension', 'suspension_title'],
+        ['moderation warning', 'warning_acknowledgeButton'],
+      ]) {
+        if (await waitForTag(anchor, 2000)) {
+          console.error(
+            `[ios-driver] ${personaId} signed in and landed on the ${gate} gate — ` +
+              `not navigating to the "${tab}" tab, because the gate is above it. ` +
+              `A scenario that needs the main screen will fail on its own assertion.`,
+          );
+          return true;
+        }
       }
       throw new Error(
         `iosPersonaSignIn: never reached main screen ("main_roomsTab") within 10s of picking ${personaId} — Firebase sign-in may have failed (check Console.app for the device) or main nav testTag has drifted.`,

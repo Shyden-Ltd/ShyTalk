@@ -582,6 +582,35 @@ describe('ios-appium-driver — iosPersonaSignIn', () => {
     expect(fetchImpl.clicked).not.toContain('warning_acknowledgeButton');
   });
 
+  test('a SUSPENDED persona signs in — the harder gate is accepted too', async () => {
+    // 30 of app-ios's failures on run 20260802-214908-local were still
+    // "never reached main screen". The warning gate had been taught here, the
+    // SUSPENSION screen had not — and P-08, the persona these journeys use, is
+    // suspended by j11, so iOS kept throwing on a gate Android already accepted.
+    //
+    // Same reasoning as the warning: authentication succeeded and the product
+    // put a harder gate above main. j11 asserts the app SHOWS that screen.
+    const fetchImpl = fetchWithTags([
+      'persona_picker_open',
+      'persona_picker_list',
+      'persona_row_P-10',
+      'suspension_title',
+    ]);
+    const driver = await createIosDriver({ wdaTeamId: 'T', fetchImpl });
+    jest.useFakeTimers();
+    try {
+      const promise = driver.iosPersonaSignIn('P-10', 'rooms');
+      await jest.advanceTimersByTimeAsync(30000);
+      await expect(promise).resolves.toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+    // A suspension must never be dismissed by a setup helper — the appeal state
+    // is the scenario's subject.
+    expect(fetchImpl.clicked).not.toContain('suspension_submitAppealButton');
+    expect(fetchImpl.clicked).not.toContain('suspension_signOutButton');
+  });
+
   test('a sign-in that never authenticated STILL throws — the guard is not gone', async () => {
     // No main, no gate: the credential did not work, and that must stay loud.
     const fetchImpl = fetchWithTags([
