@@ -2877,13 +2877,24 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // re-clear — but it is DETERMINISTIC, and a harness that cannot guarantee a
     // signed-out start can only ever run its first scenario.
     let launchState = await advancePastLaunchGates();
+    let signOutNote = 'not attempted';
     if (launchState !== 'picker') {
       try {
         await driver.androidSignOut();
-      } catch {
-        // Non-fatal: sign-out navigates Profile → Settings, which is exactly
-        // what an unclassifiable screen may not offer. The reset below is the
-        // fallback that does not depend on the UI being where we expect.
+        signOutNote = 'ran';
+      } catch (e) {
+        // Non-fatal — sign-out navigates Profile → Settings, which is exactly
+        // what an unclassifiable screen may not offer, and the reset below does
+        // not depend on the UI being where we expect.
+        //
+        // BUT THE REASON IS KEPT. A bare `catch {}` was here, and it hid the
+        // only explanation of why the expensive reset chain was being entered
+        // at all: androidSignOut OWNS the moderation-warning gate (acknowledge,
+        // then the settings chain), so when it fails, the run silently paid ~40
+        // seconds per scenario to work around something it could name. Measured
+        // 2026-08-02: the app-android cell produced 3 result lines in 30
+        // minutes and nothing in the log said why.
+        signOutNote = `failed: ${String(e.message).slice(0, 160)}`;
       }
       launchState = await advancePastLaunchGates();
     }
@@ -2968,7 +2979,8 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       throw new Error(
         `androidPersonaSignIn: could not reach the persona picker on ShyTalk ${target}. ` +
-          `Observed state after sign-out + reset attempts: "${launchState}" (reset: ${resetNote}). ` +
+          `Observed state after sign-out + reset attempts: "${launchState}" ` +
+          `(sign-out: ${signOutNote}; reset: ${resetNote}). ` +
           `testTags currently on screen: ${onScreen}. ` +
           `Reverse tunnels missing at start of sign-in: ` +
           `${missingTunnels.length ? missingTunnels.join(', ') : 'none'}. ` +
