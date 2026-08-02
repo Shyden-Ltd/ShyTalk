@@ -182,12 +182,36 @@ describe('suspension exemption paths', () => {
     expect(res.body.success).toBe(true);
   });
 
-  test('blocks suspended user from GET /users/:uniqueId', async () => {
+  // POLICY CHANGED 2026-08-02, deliberately — this test used to assert 403 on
+  // the caller's OWN id.
+  //
+  // The old rule sounded right ("a suspended user cannot read profiles") but its
+  // effect contradicted the rule two tests above: `GET /users/<self>` is how a
+  // client DISCOVERS it is suspended, so blocking it meant the app never learnt
+  // to render the suspension screen — and the appeal button lives on that
+  // screen. The appeal exemption protected a control nobody could reach.
+  //
+  // Observed on the app-android gauntlet cell: the suspended persona sat on
+  // "Unable to Connect. Please check your internet connection." with full
+  // connectivity, because a 403 here is indistinguishable from a dead network.
+  test('allows a suspended user to GET their OWN /users/:uniqueId — how the app learns it is suspended', async () => {
     mockUser('suspended-user-get', 10000052, true);
 
     const app = createApp();
     await request(app)
       .get('/api/users/10000052')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(200);
+  });
+
+  test('still blocks a suspended user from GET /users/:uniqueId of SOMEONE ELSE', async () => {
+    // The boundary the old test was really protecting, kept intact. Profile
+    // browsing is what suspension removes; self-status is not browsing.
+    mockUser('suspended-user-get-other', 10000052, true);
+
+    const app = createApp();
+    await request(app)
+      .get('/api/users/10000099')
       .set('Authorization', 'Bearer valid-token')
       .expect(403);
   });

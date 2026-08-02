@@ -198,7 +198,7 @@ async function authMiddleware(req, res, next) {
     // Check suspension (only if user exists)
     const isSuspended = await checkSuspension(uniqueId);
 
-    if (isSuspended && !isSuspensionExemptPath(req)) {
+    if (isSuspended && !isSuspensionExemptPath(req, uniqueId)) {
       return res.status(403).json({ error: 'Account suspended' });
     }
 
@@ -254,10 +254,44 @@ async function authMiddleware(req, res, next) {
 }
 
 /**
+ * Does this request read the caller's OWN user document?
+ *
+ * `GET /users/<callerUniqueId>` and nothing else — not a sub-path, not a write.
+ * Compared as a VALUE: a `startsWith` would let `/users/691000010` through for
+ * caller `69100001` and hand over a different account.
+ *
+ * Separate from the wholesale patterns below because this one HAS to be
+ * self-scoped. Those match any id (`/^\/users\/[^/]+\/delete$/`) and leave
+ * ownership to the route, which is fine for `delete` and `appeal` — endpoints
+ * that only ever act on the caller. `GET /users/:id` serves OTHER PEOPLE'S
+ * PROFILES, so the same treatment would restore exactly the browsing that
+ * suspension exists to remove.
+ */
+function isOwnUserDocRead(req, uniqueId) {
+  if (req.method !== 'GET') return false;
+  if (uniqueId === undefined || uniqueId === null || uniqueId === '') return false;
+  const m = /^\/users\/([^/]+)$/.exec(req.path);
+  return !!m && m[1] === String(uniqueId);
+}
+
+/**
  * Paths a SUSPENDED user may still reach: the appeal flow plus the
  * account-deletion / GDPR-export rights that suspension must not remove.
+ *
+ * Plus a read of their OWN user doc, which is how a client DISCOVERS the
+ * suspension at all. Without it the app called `GET /users/:id`, got this
+ * gate's 403, and — having no way to tell a moderation verdict from a dead
+ * network — showed "Unable to Connect. Please check your internet connection."
+ * to a suspended user with full connectivity (found on the app-android gauntlet
+ * cell, 2026-08-02; every remaining sign-in failure was the suspended persona).
+ *
+ * That made the appeal exemption directly below self-defeating: `/appeal` stayed
+ * reachable, but the button that calls it lives on the suspension screen, and
+ * the app could never learn to render it. Fixed here rather than in the client
+ * so Android, iOS and web are all repaired without an app release.
  */
-function isSuspensionExemptPath(req) {
+function isSuspensionExemptPath(req, uniqueId) {
+  if (isOwnUserDocRead(req, uniqueId)) return true;
   return (
     /^\/users\/[^/]+\/appeal$/.test(req.path) ||
     /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
@@ -297,6 +331,12 @@ function isSuspensionExemptPath(req) {
  */
 function isBanExemptPath(req) {
   if (req.path === '/portal/me') return false;
+  // No uniqueId passed ON PURPOSE, and the omission is load-bearing rather than
+  // incidental: `isOwnUserDocRead` returns false without one, so the own-doc
+  // read that a SUSPENDED user needs is NOT inherited by a banned one. A ban
+  // needs no such channel — the gate's own 403 (`code: 'banned'` + reason +
+  // expiresAt) IS the ban notice, exactly as `/portal/me` is subtracted above
+  // for the same reason.
   return (
     isSuspensionExemptPath(req) || req.path === '/device-info' || req.path === '/devices/lock-check'
   );
