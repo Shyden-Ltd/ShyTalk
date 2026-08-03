@@ -211,6 +211,23 @@ describe('unescapeXml', () => {
     const samples = ["Driver's license", 'a & b < c > d', '\u201cquoted\u201d', 'plain text', ''];
     samples.forEach((s) => expect(unescapeXml(escapeXml(s))).toBe(s));
   });
+
+  test('decodes the apostrophe and quote entities on read', () => {
+    // SHY-0271: the English corpus carried `&apos;`. Without this, that string
+    // reached the translator raw and `escapeXml` then turned its `&` into
+    // `&amp;`, writing `&amp;apos;` into all 20 locale files — the shipped
+    // escape defect, one layer up.
+    const { unescapeXml } = loadScript();
+    expect(unescapeXml('You&apos;re on the latest version.')).toBe("You're on the latest version.");
+    expect(unescapeXml('a &quot;quoted&quot; word')).toBe('a "quoted" word');
+  });
+
+  test('does NOT over-decode an already-escaped ampersand entity', () => {
+    // Ordering guard: `&amp;` must be decoded LAST, so `&amp;apos;` becomes the
+    // literal text `&apos;` rather than collapsing straight to an apostrophe.
+    const { unescapeXml } = loadScript();
+    expect(unescapeXml('&amp;apos;')).toBe('&apos;');
+  });
 });
 
 // ─── readEnglishStrings ───────────────────────────────────────────

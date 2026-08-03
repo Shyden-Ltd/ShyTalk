@@ -227,3 +227,16 @@ ratchet clean.
   runtime test, which disproved the worry that 57 `\uXXXX` were live defects, and added
   placeholder parity, which found 8 genuine `String.format` crashes across 6 locales that had
   been shipping unnoticed.
+- **2026-08-04 02:5x BST** — Second review round found the SAME defect in its entity form:
+  `unescapeXml` did not decode `&apos;`, while `escapeXml` re-escapes `&`, so the next
+  translation run would have written `&amp;apos;` — which DOES render literally — into all 20
+  locales. Six English strings carried `&apos;`. Fixed the decode (ordered before `&amp;`, which
+  stays last), normalised the six, and added a corpus rule that only `&amp;`/`&lt;`/`&gt;` may
+  appear. Settled the render question on the device rather than reasoning about it, the same way
+  `\uXXXX` was settled: **Compose DOES decode entities**, so `&apos;` was not itself visible —
+  but `&amp;apos;` would have been.
+  Also closed: the sweep now shares its walk with its own guard (the guard used to do a private
+  walk and stayed green if the sweep shrank), covers the Explanation step it previously skipped,
+  and the parity test now uses the shared parser instead of a second private regex.
+
+Reviewed-up-to: (this commit)

@@ -488,7 +488,7 @@
     <string name="check_for_updates">Check for Updates</string>
     <string name="clear_cache_with_size">Clear Cache (%1$s)</string>
     <string name="up_to_date">Up to Date</string>
-    <string name="up_to_date_description">You&apos;re on the latest version.</string>
+    <string name="up_to_date_description">You're on the latest version.</string>
     <string name="update_available">Update Available</string>
     <string name="update_available_description">Version %1$s is available.</string>
     <string name="update_available_soft">A new version (%1$s) of ShyTalk is available.</string>
@@ -531,11 +531,11 @@
 
     <!-- Settings - Privacy page -->
     <string name="hide_following_list">Hide Following List</string>
-    <string name="hide_following_description">Others won&apos;t see who you follow. Followers are always visible.</string>
+    <string name="hide_following_description">Others won't see who you follow. Followers are always visible.</string>
     <string name="hide_online_status">Hide Online Status</string>
-    <string name="hide_online_status_description">Others won&apos;t see when you&apos;re online.</string>
+    <string name="hide_online_status_description">Others won't see when you're online.</string>
     <string name="hide_age">Hide Age</string>
-    <string name="hide_age_description">Others won&apos;t see your age on your profile.</string>
+    <string name="hide_age_description">Others won't see your age on your profile.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="everyone">Everyone</string>
@@ -562,10 +562,10 @@
     <string name="end">End</string>
     <string name="room_alerts">Room Alerts</string>
     <string name="self_destruct_countdown">Self-Destruct Countdown</string>
-    <string name="self_destruct_description">Play a voice announcement when a room&apos;s 5-minute self-destruct timer starts or stops.</string>
+    <string name="self_destruct_description">Play a voice announcement when a room's 5-minute self-destruct timer starts or stops.</string>
 
     <!-- Settings - Permissions page -->
-    <string name="notifications_permission_description">Receive alerts when you&apos;re in a live room in the background.</string>
+    <string name="notifications_permission_description">Receive alerts when you're in a live room in the background.</string>
     <string name="overlay_permission_description">Show a floating bubble when you leave a voice room, so you can quickly return.</string>
     <string name="microphone">Microphone</string>
     <string name="microphone_description">Required for voice chat in rooms.</string>

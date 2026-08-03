@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.util.Locale
 
 /**
  * SHY-0271 — every string resource, resolved through the REAL Compose
@@ -36,6 +37,15 @@ class StringResourceContentTest {
             Res.allStringResources.mapValues { (_, res) -> getString(res) }
         }
 
+    /** Which locale this run actually verified — a green result is otherwise ambiguous. */
+    private val resolvedLocale: String get() = Locale.getDefault().toLanguageTag()
+
+    private companion object {
+        // Hoisted: constructing this inside a filter recompiles it once per string.
+        val MARKUP = Regex("</?(?:div|span|p|br|b|i|html|body)\\b", RegexOption.IGNORE_CASE)
+        val ENTITY = Regex("&[a-zA-Z#][a-zA-Z0-9]*;")
+    }
+
     @Test
     fun theWholeCorpusWasActuallyResolved() {
         // Vacuous-pass guard. An empty or truncated map would make every
@@ -63,17 +73,32 @@ class StringResourceContentTest {
                 .filterValues { it.contains('\\') }
                 .map { (key, value) -> "$key = $value" }
                 .sorted()
-        assertEquals(emptyList<String>(), offenders)
+        assertEquals("resolved locale: $resolvedLocale", emptyList<String>(), offenders)
     }
 
     @Test
     fun noStringResourceIsBlankOrLeaksMarkup() {
         val offenders =
             resolveAll()
-                .filterValues { value ->
-                    value.isBlank() || Regex("</?(?:div|span|p|br|b|i|html|body)\\b", RegexOption.IGNORE_CASE).containsMatchIn(value)
-                }.map { (key, value) -> "$key = $value" }
+                .filterValues { it.isBlank() || MARKUP.containsMatchIn(it) }
+                .map { (key, value) -> "$key = $value" }
                 .sorted()
-        assertEquals(emptyList<String>(), offenders)
+        assertEquals("resolved locale: $resolvedLocale", emptyList<String>(), offenders)
+    }
+
+    @Test
+    fun noStringResourceRendersAnUndecodedEntity() {
+        // Settles for entities what this file already settled for backslashes:
+        // does Compose decode `&amp;` and friends, or do they reach the screen?
+        // Four locales legitimately contain `&amp;` in their terms copy, so if
+        // CMP decodes entities this passes and proves it; if it does not, it
+        // has caught `Terms &amp; Conditions` shipping. Either answer is worth
+        // knowing, and neither can be settled by reading the files.
+        val offenders =
+            resolveAll()
+                .filterValues { ENTITY.containsMatchIn(it) }
+                .map { (key, value) -> "$key = $value" }
+                .sorted()
+        assertEquals("resolved locale: $resolvedLocale", emptyList<String>(), offenders)
     }
 }

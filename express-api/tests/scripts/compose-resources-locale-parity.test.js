@@ -26,16 +26,14 @@ const path = require('node:path');
 // SHY-0271: the locale set is declared ONCE, in the shared helper. Three
 // files used to keep private copies; the divergence is how a discovered set
 // could quietly lose a locale.
-const { RESOURCES_DIR, ALL_LOCALES } = require('../_helpers/compose-locales');
+const { RESOURCES_DIR, ALL_LOCALES, readLocaleStrings } = require('../_helpers/compose-locales');
 
+// SHY-0271: one parser for one corpus. This file used to keep a second regex,
+// and two regexes over the same files can disagree — the parity one matched a
+// self-closing `<string name="x"/>` that the content guard did not, so a key
+// could be "present" to one check and invisible to the other.
 function readKeys(localeDir) {
-  const xmlPath = path.join(RESOURCES_DIR, localeDir, 'strings.xml');
-  const content = fs.readFileSync(xmlPath, 'utf-8');
-  const keys = new Set();
-  for (const match of content.matchAll(/<string name="([^"]+)"/g)) {
-    keys.add(match[1]);
-  }
-  return keys;
+  return new Set(readLocaleStrings(localeDir).entries.map((e) => e.name));
 }
 
 describe('Compose strings.xml locale parity', () => {

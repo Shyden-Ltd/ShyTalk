@@ -199,15 +199,56 @@ class AgeVerificationSubmitScreenTest {
     /** Set by [showPickMethodStep] so a test can drive the flow past PickImage. */
     private lateinit var pickMethodVm: AgeVerificationSubmitViewModel
 
-    /** Advances to the PickMethod step, where the three ID buttons live. */
-    private fun showPickMethodStep() {
+    /** Renders the screen on its FIRST step (Explanation). */
+    private fun renderScreen() {
         pickMethodVm = AgeVerificationSubmitViewModel(fakeRepo, isPreviewBuild = true)
         composeTestRule.setContent {
             MaterialTheme {
                 AgeVerificationSubmitScreen(onClose = {}, viewModel = pickMethodVm)
             }
         }
+    }
+
+    /** Advances to the PickMethod step, where the three ID buttons live. */
+    private fun showPickMethodStep() {
+        renderScreen()
         composeTestRule.onNodeWithTag(TAG_AGE_VERIF_CONTINUE).performClick()
+    }
+
+    /**
+     * Walks the flow and collects every user-readable string at each step.
+     *
+     * Deliberately shared by the sweep AND its guard (SHY-0271). An earlier
+     * version had the guard perform its own private walk, which meant deleting
+     * the sweep's steps left the guard green — a guard that does not guard the
+     * thing it is named after.
+     *
+     * Returns the strings seen and how many steps were actually visited.
+     */
+    private fun sweepEveryStep(): Pair<List<String>, Int> {
+        val seen = mutableListOf<String>()
+        var steps = 0
+
+        renderScreen() // Explanation — previously skipped entirely
+        seen += visibleStrings()
+        steps++
+
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_CONTINUE).performClick()
+        composeTestRule.waitForIdle()
+        seen += visibleStrings() // PickMethod
+        steps++
+
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_METHOD_PASSPORT).performClick()
+        composeTestRule.waitForIdle()
+        seen += visibleStrings() // PickImage
+        steps++
+
+        pickMethodVm.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+        composeTestRule.waitForIdle()
+        seen += visibleStrings() // Confirm
+        steps++
+
+        return seen.distinct() to steps
     }
 
     @Test
@@ -262,40 +303,20 @@ class AgeVerificationSubmitScreenTest {
 
     @Test
     fun noRenderedTextOnAnyStepCarriesAnEscapeSequence() {
-        // The general form of the same defect. Walks EVERY step of the flow —
-        // an earlier version only rendered PickMethod and so covered about a
-        // third of the screen's copy while being named after the whole of it.
-        showPickMethodStep()
-        val offenders = mutableListOf<String>()
-        offenders += visibleStrings().filter(::carriesEscape)
-
-        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_METHOD_PASSPORT).performClick()
-        composeTestRule.waitForIdle()
-        offenders += visibleStrings().filter(::carriesEscape) // PickImage
-
-        pickMethodVm.setImage(byteArrayOf(0x01), ContentType.Jpeg)
-        composeTestRule.waitForIdle()
-        offenders += visibleStrings().filter(::carriesEscape) // Confirm
-
-        pickMethodVm.back()
-        composeTestRule.waitForIdle()
-        offenders += visibleStrings().filter(::carriesEscape)
-
-        assertEquals(emptyList<String>(), offenders.distinct().sorted())
+        // The general form of the defect, across the whole flow rather than
+        // one screen of it.
+        val (seen, _) = sweepEveryStep()
+        assertEquals(emptyList<String>(), seen.filter(::carriesEscape).sorted())
     }
 
     @Test
-    fun theSweepCoversMoreThanASingleStep() {
-        // Guards the walk itself. If a future edit collapses the test back to
-        // one step, the copy it stops covering would vanish silently — the
-        // sweep would still pass, on less. Pins that the flow actually moves.
-        showPickMethodStep()
-        val atPickMethod = visibleStrings()
-        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_METHOD_PASSPORT).performClick()
-        composeTestRule.waitForIdle()
-        val atPickImage = visibleStrings()
-        assertTrue("the flow did not advance — the sweep would cover one step", atPickImage != atPickMethod)
-        assertTrue("no strings were read at all", atPickMethod.isNotEmpty() && atPickImage.isNotEmpty())
+    fun theSweepReallyVisitsEveryStepItClaims() {
+        // Guards the SWEEP, by calling the same walk it calls. If a future edit
+        // collapses the walk to one step, the copy it stops covering would
+        // vanish silently and the sweep would still pass — on less.
+        val (seen, steps) = sweepEveryStep()
+        assertEquals("the walk did not visit every step", 4, steps)
+        assertTrue("no strings were read at all", seen.size > 5)
     }
 
     @Test
