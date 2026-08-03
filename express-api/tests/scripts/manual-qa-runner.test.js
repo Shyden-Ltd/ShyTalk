@@ -10729,11 +10729,12 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     // User-doc seeded with minor default
     const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
     expect(user.cohort).toBe('minor');
-    // usersAcceptedPolicies entry written with current versions
-    const policies = db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`];
-    expect(policies).toBeDefined();
-    expect(policies.privacyVersion).toBeGreaterThan(0);
-    expect(policies.termsVersion).toBeGreaterThan(0);
+    // Acceptance is recorded on the USER doc. The retired
+    // `usersAcceptedPolicies` collection this used to assert was written by
+    // this seed and read back only by corpus assertions written to match it
+    // (SHY-0268 phantom-path audit).
+    expect(user.acceptedLegalVersion).toBeGreaterThan(0);
+    expect(user.legalAcceptedAt).toBeGreaterThan(0);
   });
 
   test('"<persona> has just been approved to cohort=adult by <admin>" — flips cohort + writes audit row', async () => {
@@ -10769,7 +10770,7 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     expect(user.cohort).toBe('adult');
     expect(user.isAgeVerified).toBe(true);
     // Policies accepted
-    expect(db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`]).toBeDefined();
+    expect(db._docs[`users/${ADAM_UNIQUE_ID}`].acceptedLegalVersion).toBeGreaterThan(0);
     // No audit row — this Given is the COMPOSE form (precondition for
     // a later scenario that doesn't care about the audit).
     const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
@@ -10973,11 +10974,10 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
     const user = db._docs[`users/${MIA_UNIQUE_ID}`];
     expect(user.cohort).toBe('minor');
     expect(user.isAgeVerified).toBe(false);
-    // usersAcceptedPolicies entry written with current versions.
-    const policies = db._docs[`usersAcceptedPolicies/${MIA_UNIQUE_ID}`];
-    expect(policies).toBeDefined();
-    expect(policies.privacyVersion).toBeGreaterThan(0);
-    expect(policies.termsVersion).toBeGreaterThan(0);
+    // Acceptance is recorded on the USER doc (SHY-0268 phantom-path audit —
+    // the `usersAcceptedPolicies` collection was retired).
+    expect(user.acceptedLegalVersion).toBeGreaterThan(0);
+    expect(user.legalAcceptedAt).toBeGreaterThan(0);
   });
 
   test('"<persona> has just signed up as a minor" — unknown persona → actionable error', async () => {
@@ -11010,19 +11010,19 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
     expect(r.error).toMatch(/ctx\.db not initialised/);
   });
 
-  test('"Mia has accepted legal as a minor" — re-running is idempotent (no duplicate policies row)', async () => {
+  test('"Mia has accepted legal as a minor" — re-running is idempotent (merges the user doc)', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db, scenarioVars: new Map() });
     const r1 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
     expect(r1.ok).toBe(true);
     const r2 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
     expect(r2.ok).toBe(true);
-    // Only ONE usersAcceptedPolicies entry — re-running merges the same
-    // doc, doesn't create a duplicate.
-    const policies = Object.entries(db._docs).filter(([k]) =>
-      k.startsWith('usersAcceptedPolicies/'),
-    );
-    expect(policies).toHaveLength(1);
+    // Acceptance lives on the user doc, so re-running merges into the SAME
+    // document rather than creating a second record. Previously asserted
+    // against the retired `usersAcceptedPolicies` collection.
+    const users = Object.entries(db._docs).filter(([k]) => /^users\/[^/]+$/.test(k));
+    expect(users).toHaveLength(1);
+    expect(users[0][1].acceptedLegalVersion).toBeGreaterThan(0);
   });
 
   test('Mia matcher does NOT collide with Adam matcher (j01) — different cohort phrasing routes correctly', async () => {

@@ -47,7 +47,7 @@ Feature: j03 — Lena's lapsed return
     Given Lena has just signed in after 45 days with accepted privacy v2 (current is v4)
     When Lena on Web checks both legal checkboxes and continues
     Then within 5000ms the database has document "users/50000020" with field "acceptedLegalVersion" equal to 4
-    Then the database has document "users/50000020" with field "acceptedLegalVersion" equal to 4
+    Then the database has document "users/50000020" with field "legalAcceptedAt" greater than 0
 
   @blocker @browser-chromium @locale
   Scenario: A long lapse is announced as a reset streak, in the member's language
@@ -89,7 +89,7 @@ Feature: j03 — Lena's lapsed return
     Given Lena is on the legal acceptance screen
     When Lena on Web closes the modal via the X button without checking boxes
     Then Lena's Web UI does not show the element with tag "main_roomsTab"
-    Then the database does not have a new "usersAcceptedPolicies/50000020" with version 4
+    Then the database has document "users/50000020" with field "acceptedLegalVersion" equal to 2
 
   @browser-chromium @perf-budget:3000
   Scenario: Lena's sign-in completes within 3s on a cold session

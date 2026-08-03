@@ -100,8 +100,15 @@ function assertedCollections() {
     lines.forEach((line, i) => {
       // Prose steps ("no doc has any entry in "followingIds" whose ...") name
       // a FIELD, not a collection. Only the database-assertion forms count.
-      if (!/the database has .*(?:document|entries in|entry in) "/.test(line)) return;
-      for (const m of line.matchAll(/(?:document|entries in|entry in) "([^"]+)"/g)) {
+      // Every phrasing the corpus uses to name a Firestore path. Anchored on
+      // the VERB rather than on "any quoted string", because a step's quoted
+      // field VALUES ("CLOSED", "DIRECT") are not paths. The negative forms
+      // matter: `does not have a new "usersAcceptedPolicies/..."` kept a
+      // retired collection alive after the positive forms were cleaned up.
+      const PATH_FORMS =
+        /(?:document|entries in|entry in|is created in|does not have a new) "([^"]+)"/g;
+      if (!/\bthe database\b/.test(line)) return;
+      for (const m of line.matchAll(PATH_FORMS)) {
         let raw = m[1];
         // A star-prefixed path is a collection-group assertion; the target is
         // the collection name itself, wherever it is nested.

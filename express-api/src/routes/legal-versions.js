@@ -5,10 +5,16 @@
  *
  * Returns the current numeric version of each legal document. Public:
  * the sign-up screen needs these versions BEFORE the user authenticates
- * to know which version they're accepting. The user-side acceptance
- * record (usersAcceptedPolicies/<uid>) stores the version-at-acceptance
- * so a returning user whose accepted version is < current is gated
- * through a re-acceptance flow (see j03 lapsed-returning journey).
+ * to know which version they're accepting. The version-at-acceptance is
+ * stored as `acceptedLegalVersion` on the USER doc (allowlisted by the
+ * profile-update route, which stamps `legalAcceptedAt` server-side), plus
+ * device preferences for the pre-sign-in case. A returning user whose
+ * accepted version is < current is gated through a re-acceptance flow
+ * (see j03 lapsed-returning journey).
+ *
+ * NOT `usersAcceptedPolicies/<uid>` — that collection was retired. This
+ * comment still named it, which is how the journey corpus came to assert a
+ * collection nothing writes (SHY-0268 phantom-path audit).
  *
  * Versions are hardcoded here rather than stored in Firestore because:
  *   - they bump infrequently (legal review cadence, not user-driven)

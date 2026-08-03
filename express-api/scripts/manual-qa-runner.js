@@ -663,19 +663,24 @@ async function seedSignedUpUser(ctx, personaName, opts = {}) {
 }
 
 async function seedAcceptedPolicies(ctx, personaName, opts = {}) {
-  // Writes usersAcceptedPolicies/<uniqueId> with the current accepted
-  // privacy + terms versions. j01 uses this as the "Adam has accepted
-  // legal" precondition.
+  // Legal acceptance is stored as fields on the USER doc — the Express
+  // profile route allowlists `acceptedLegalVersion` and stamps
+  // `legalAcceptedAt` server-side — plus device prefs for the pre-sign-in
+  // case. The separate `usersAcceptedPolicies` collection this seed used to
+  // write was retired; nothing read it back except the corpus assertions
+  // that were written to match this seed (SHY-0268 phantom-path audit).
   const personas = loadPersonas();
   const persona = personas.get(personaName);
   if (!persona?.uniqueId) {
     throw new Error(`persona "${personaName}" not in registry`);
   }
-  await ctx.db.doc(`usersAcceptedPolicies/${persona.uniqueId}`).set({
-    privacyVersion: opts.privacyVersion || 4,
-    termsVersion: opts.termsVersion || 4,
-    acceptedAt: Date.now(),
-  });
+  await ctx.db.doc(`users/${persona.uniqueId}`).set(
+    {
+      acceptedLegalVersion: opts.privacyVersion || opts.acceptedLegalVersion || 4,
+      legalAcceptedAt: Date.now(),
+    },
+    { merge: true },
+  );
   return { uniqueId: persona.uniqueId };
 }
 
