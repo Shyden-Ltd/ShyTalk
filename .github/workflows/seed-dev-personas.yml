@@ -25,17 +25,25 @@ on:
         default: dev
         required: false
     secrets:
-      # Declared with the EXACT repo-level secret names so `secrets: inherit`
-      # from the caller (deploy-dev.yml) forwards by name, AND actionlint
-      # static-checks the references inside this workflow against the same
-      # declared names. Using camelCase aliases here instead would force a
-      # named-mapping in every caller; the inherit path is simpler.
+      # Declared with the EXACT repo-level secret names (see
+      # .github/known-secrets.yml) so `secrets: inherit` from the caller
+      # forwards by name, AND actionlint static-checks the `secrets.X`
+      # references inside this workflow against the same declared names.
+      #
+      # DELIBERATELY `required: false` (SHY-0269). A required workflow_call
+      # secret is validated BEFORE the job starts: GitHub fails the call
+      # with zero steps and zero logs, and the reason ("Secret X is
+      # required, but not provided while calling") only ever appears as a
+      # check-run annotation. That is how this job stayed broken across
+      # five dev deploys without anyone noticing. Optional here + an
+      # explicit preflight step below means a missing secret fails IN THE
+      # RUN LOG, naming the secret.
       FIREBASE_SERVICE_ACCOUNT_DEV:
         description: 'Firebase service account JSON for the dev project'
-        required: true
-      PERSONAS_PASSWORD_DEV:
-        description: 'Shared seeded-persona password'
-        required: true
+        required: false
+      DEV_QA_PERSONAS_PASSWORD:
+        description: 'Shared seeded-persona password (canonical name since SHY-0136)'
+        required: false
 
   workflow_dispatch:
     inputs:
@@ -67,6 +75,24 @@ jobs:
     # Auth quota throttling without letting a stuck run idle forever.
     timeout-minutes: 10
     steps:
+      # SHY-0269 — runs BEFORE checkout so a misconfigured repo fails in
+      # two seconds with an actionable message rather than an empty job.
+      - name: Verify required secrets are present
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
+          PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${SA_JSON:-}" ] || missing="$missing FIREBASE_SERVICE_ACCOUNT_DEV"
+          [ -n "${PERSONAS_PASSWORD:-}" ] || missing="$missing DEV_QA_PERSONAS_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error title=Dev persona seeding cannot run::Missing repository secret(s):$missing. Set them in Settings > Secrets and variables > Actions, and make sure the name matches .github/known-secrets.yml. Seeded personas (P-02..P-19) are NOT refreshed until this is fixed."
+            echo "Missing repository secret(s):$missing" >&2
+            exit 1
+          fi
+          echo "Both required secrets are present."
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - uses: ./.github/actions/setup-node
@@ -108,10 +134,10 @@ jobs:
         with:
           # For workflow_call, secrets are forwarded by the caller via
           # `secrets:` block; for workflow_dispatch, they resolve from
-          # the repo-level GitHub Actions secrets (PERSONAS_PASSWORD_DEV,
-          # FIREBASE_SERVICE_ACCOUNT_DEV). Both paths land in the same
-          # `secrets.X` references at this scope.
+          # the repo-level GitHub Actions secrets (DEV_QA_PERSONAS_PASSWORD,
+          # FIREBASE_SERVICE_ACCOUNT_DEV — see .github/known-secrets.yml).
+          # Both paths land in the same `secrets.X` references at this scope.
           service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
           firebase-project: ${{ steps.target-values.outputs.firebase-project }}
-          personas-password: ${{ secrets.PERSONAS_PASSWORD_DEV }}
+          personas-password: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
           database-url: ${{ steps.target-values.outputs.database-url }}

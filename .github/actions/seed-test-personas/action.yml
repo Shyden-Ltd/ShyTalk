@@ -72,4 +72,16 @@ runs:
         # dev Express host. In CI the secrets are exported as env vars
         # directly (PERSONAS_PASSWORD, GOOGLE_APPLICATION_CREDENTIALS,
         # FIREBASE_PROJECT_ID all set above), so dotenv adds nothing.
-        node scripts/provision-test-personas.js
+        # SHY-0269: exit 0 is NOT evidence the seeding happened. The
+        # script's last line on a complete run is `PROVISION_ALL_OK
+        # count=N`; assert it, so a future early-return path (or a script
+        # that no-ops because the persona list came back empty) reports
+        # failure instead of a green job over an unseeded project.
+        # `set -o pipefail` is already in effect, so a non-zero exit from
+        # node still fails despite the pipe.
+        node scripts/provision-test-personas.js | tee /tmp/seed-personas.log
+        if ! grep -q 'PROVISION_ALL_OK' /tmp/seed-personas.log; then
+          echo "::error title=Dev persona seeding did not complete::provision-test-personas.js exited 0 but never printed PROVISION_ALL_OK — no personas were provisioned. Seeded personas (P-02..P-19) are stale."
+          exit 1
+        fi
+        echo "Seeded: $(grep -o 'PROVISION_ALL_OK count=[0-9]*' /tmp/seed-personas.log)"

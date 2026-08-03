@@ -112,21 +112,41 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     expect(SEED_WORKFLOW).toMatch(/^ {2}workflow_dispatch:$/m);
   });
 
-  test('workflow_call declares the secrets it needs (caller forwards via `secrets: inherit`)', () => {
-    // Declared with the EXACT repo-level secret names so actionlint can
-    // type-check the `secrets.X` references inside the workflow AND so
-    // `secrets: inherit` from the caller forwards by name without needing
-    // an explicit per-secret mapping. Names match the repo's GitHub
-    // Actions secrets settings.
+  test('workflow_call declares the CANONICAL repo secret names', () => {
+    // SHY-0269: this test previously asserted `PERSONAS_PASSWORD_DEV:` and
+    // its comment claimed the names matched the repo's Actions settings.
+    // They did not — SHY-0136 renamed the secret to
+    // DEV_QA_PERSONAS_PASSWORD and this workflow was left behind, so the
+    // pin locked in the defect instead of catching it. The inventory
+    // cross-check in workflow-secrets-inventory.test.js is the real guard;
+    // this is the named pin for the one that actually broke.
     expect(SEED_WORKFLOW).toContain('FIREBASE_SERVICE_ACCOUNT_DEV:');
-    expect(SEED_WORKFLOW).toContain('PERSONAS_PASSWORD_DEV:');
-    // Both must be required so a future caller that forgets to forward
-    // them fails at workflow_call validation rather than at runtime.
+    expect(SEED_WORKFLOW).toContain('DEV_QA_PERSONAS_PASSWORD:');
+    expect(SEED_WORKFLOW).not.toContain('PERSONAS_PASSWORD_DEV');
+  });
+
+  test('workflow_call secrets are NOT `required: true` — so a missing one fails IN A STEP, with logs', () => {
+    // A `required: true` workflow_call secret is validated BEFORE the job
+    // starts. GitHub then fails the call with zero steps and zero logs;
+    // the reason exists only as a check-run annotation. That is precisely
+    // how dev persona seeding stayed broken for ~18 days across 5 deploys.
+    // Declaring them optional lets the job start and fail in an explicit
+    // preflight step, where the reason lands in the run log.
     const callIdx = SEED_WORKFLOW.indexOf('workflow_call:');
     const dispatchIdx = SEED_WORKFLOW.indexOf('workflow_dispatch:');
     const callBlock = SEED_WORKFLOW.slice(callIdx, dispatchIdx);
-    expect(callBlock).toMatch(/FIREBASE_SERVICE_ACCOUNT_DEV:[\s\S]{1,200}required: true/);
-    expect(callBlock).toMatch(/PERSONAS_PASSWORD_DEV:[\s\S]{1,200}required: true/);
+    expect(callBlock).not.toMatch(/required: true/);
+  });
+
+  test('a preflight step names every missing secret via ::error:: before doing any work', () => {
+    expect(SEED_WORKFLOW).toMatch(/Verify required secrets/i);
+    expect(SEED_WORKFLOW).toContain('::error');
+    // The message must name the secrets, or the log is as useless as the
+    // annotation was.
+    const preflightIdx = SEED_WORKFLOW.search(/Verify required secrets/i);
+    const preflight = SEED_WORKFLOW.slice(preflightIdx, preflightIdx + 1600);
+    expect(preflight).toContain('DEV_QA_PERSONAS_PASSWORD');
+    expect(preflight).toContain('FIREBASE_SERVICE_ACCOUNT_DEV');
   });
 
   test('declares a `target` input on both triggers with `dev` as the only allowed value', () => {
@@ -310,6 +330,42 @@ describe('seed-test-personas composite action — interface (unchanged by refact
     expect(installIdx).toBeGreaterThan(cdIdx);
     expect(nodeIdx).toBeGreaterThan(installIdx);
     expect(lines[installIdx]).toContain('--omit=dev');
-    expect(lines[nodeIdx]).toMatch(/^\s*node\s+scripts\/provision-test-personas\.js\s*$/);
+    // Anchored on the INVOCATION, not the whole line: SHY-0269 appends
+    // `| tee /tmp/seed-personas.log` so the run can be checked for the
+    // script's PROVISION_ALL_OK completion marker. The contract this test
+    // owns is ordering (cd → npm ci → node) and the absence of a dotenv
+    // preload — pinning the trailing `$` also pinned "no output capture",
+    // which was never the point.
+    expect(lines[nodeIdx]).toMatch(/^\s*node\s+scripts\/provision-test-personas\.js(\s|$)/);
+    expect(lines[nodeIdx]).not.toContain('dotenv');
+  });
+});
+
+// ── SHY-0269: the outcome must be visible without opening a job ────────
+
+describe('seed outcome reporting (SHY-0269 — silent failure is the real defect)', () => {
+  test('deploy-dev.yml reports the seed outcome to the run summary even when it fails or is skipped', () => {
+    // Five of the last eight dev deploys had a failing seed job; one had a
+    // SKIPPED seed job while the run went green. Both are invisible unless
+    // someone expands the job list, so the outcome is written to
+    // $GITHUB_STEP_SUMMARY by a job that always() runs.
+    expect(DEPLOY_DEV).toMatch(/seed-personas-report|Seed Personas Report/);
+    const idx = DEPLOY_DEV.search(/seed-personas-report:/);
+    expect(idx).toBeGreaterThan(-1);
+    const job = DEPLOY_DEV.slice(idx, idx + 2200);
+    expect(job).toMatch(/if:\s*always\(\)/);
+    expect(job).toContain('GITHUB_STEP_SUMMARY');
+    // It must distinguish all three outcomes — a report that only knows
+    // "success" reproduces the silence for the skipped case.
+    expect(job).toMatch(/skipped/i);
+    expect(job).toMatch(/failure/i);
+    expect(job).toMatch(/success/i);
+  });
+
+  test('the seed action proves the provision actually ran (exit 0 is not evidence)', () => {
+    // provision-test-personas.js prints `PROVISION_ALL_OK count=N` as its
+    // final line. Asserting on it means a script that silently no-ops, or
+    // exits early on a path that forgets to fail, cannot report success.
+    expect(SEED_ACTION).toContain('PROVISION_ALL_OK');
   });
 });
