@@ -1,8 +1,12 @@
 package com.shyden.shytalk.feature.ageverification
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -14,6 +18,7 @@ import com.shyden.shytalk.data.repository.AgeVerificationRepository
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.ContentType
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.IdMethod
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.UploadHandle
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -185,5 +190,66 @@ class AgeVerificationSubmitScreenTest {
         composeTestRule
             .onNodeWithTag(TAG_AGE_VERIF_TEST_ENV_WARNING)
             .assertIsDisplayed()
+    }
+
+    // ─── Rendered CONTENT of the method buttons (SHY-0271) ─────────────
+
+    /** Advances to the PickMethod step, where the three ID buttons live. */
+    private fun showPickMethodStep() {
+        composeTestRule.setContent {
+            MaterialTheme {
+                AgeVerificationSubmitScreen(
+                    onClose = {},
+                    viewModel = AgeVerificationSubmitViewModel(fakeRepo, isPreviewBuild = true),
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_CONTINUE).performClick()
+    }
+
+    @Test
+    fun methodButtonsRenderTheirLabels_notJustTheirTags() {
+        // The operator read `Driver\'s license` — backslash and all — off this
+        // screen, and it had shipped. Every test above CLICKS these buttons by
+        // tag and none reads them, so a corrupt label passed the whole suite.
+        //
+        // `\'` is ANDROID XML escaping; Compose Multiplatform's
+        // `composeResources` does not unescape it, so it reaches the screen
+        // verbatim. Asserting the tag proves a button exists; only asserting
+        // the TEXT proves it says the right thing.
+        showPickMethodStep()
+        mapOf(
+            TAG_AGE_VERIF_METHOD_PASSPORT to "Passport",
+            TAG_AGE_VERIF_METHOD_DRIVERS to "Driver's license",
+            TAG_AGE_VERIF_METHOD_NATIONAL to "National ID card",
+        ).forEach { (tag, label) ->
+            // Compose merges a clickable's descendants, so the Button's node
+            // carries its child Text — the same node the click tests use.
+            composeTestRule.onNodeWithTag(tag).assertTextEquals(label)
+        }
+    }
+
+    @Test
+    fun noRenderedTextOnThisScreenCarriesAnEscapeSequence() {
+        // The general form of the same defect: a stray backslash anywhere in
+        // the copy. Catches every future string on this screen, in whichever
+        // locale the device is running, without naming them one by one.
+        showPickMethodStep()
+        val offenders =
+            composeTestRule
+                .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty() }
+                .map { it.text }
+                .filter { it.contains('\\') }
+        assertEquals(emptyList<String>(), offenders)
+    }
+
+    @Test
+    fun theEscapeSweepCanActuallyFail() {
+        // Mutation guard: a sweep that cannot detect its own target is exactly
+        // how this shipped. Proves the predicate fires on the real defect.
+        val corrupt = listOf("Passport", "Driver\\'s license")
+        assertEquals(listOf("Driver\\'s license"), corrupt.filter { it.contains('\\') })
     }
 }

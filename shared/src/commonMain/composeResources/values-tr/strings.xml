@@ -106,7 +106,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="show_original">Orijinali göster</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="translation_limit_reached">Günlük sınıra ulaşıldı. Sınırsız çeviri için SuperShy\'ye yükseltin.</string>
+    <string name="translation_limit_reached">Günlük sınıra ulaşıldı. Sınırsız çeviri için SuperShy'ye yükseltin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="auto_translate">Otomatik çeviri</string>
     <!-- google-translated 2026-05-04 -->
@@ -160,7 +160,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="speakers_count">%1$d/%2$d hoparlör</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="tap_plus_to_create">Bir tane oluşturmak için +\'ya dokunun</string>
+    <string name="tap_plus_to_create">Bir tane oluşturmak için +'ya dokunun</string>
     <!-- google-translated 2026-05-04 -->
     <string name="visitors_count">%1$d ziyaretçi</string>
 
@@ -258,7 +258,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="block_user">Kullanıcıyı Engelle</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="block_user_confirm">%1$s\'ı engellemek istediğinizden emin misiniz?</string>
+    <string name="block_user_confirm">%1$s'ı engellemek istediğinizden emin misiniz?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="close_room">Odayı Kapat</string>
     <!-- google-translated 2026-05-04 -->
@@ -284,7 +284,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="kick_user">Kullanıcıyı At</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="kick_user_confirm">%1$s\'ı odadan atmak istediğinizden emin misiniz? Tekrar katılamayacaklar.</string>
+    <string name="kick_user_confirm">%1$s'ı odadan atmak istediğinizden emin misiniz? Tekrar katılamayacaklar.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="leave_room">Odadan Ayrıl</string>
     <!-- google-translated 2026-05-04 -->
@@ -370,7 +370,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="room_closed">Oda Kapalı</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="room_closing_no_super_shy">Oda sahibinin Super Shy\'si yok, dolayısıyla bu oda yakında kapanacak.</string>
+    <string name="room_closing_no_super_shy">Oda sahibinin Super Shy'si yok, dolayısıyla bu oda yakında kapanacak.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="room_closing_in">%1$d:%2$s içinde oda kapanıyor</string>
     <!-- google-translated 2026-05-04 -->
@@ -611,7 +611,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_review">Rapor İncelemesi</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_user">%1$s\'ı bildirin</string>
+    <string name="report_user">%1$s'ı bildirin</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_user_prompt">Bu kullanıcıyı neden rapor ediyorsunuz?</string>
     <!-- google-translated 2026-05-04 -->
@@ -685,7 +685,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_action_perm_suspension">Kalıcı Askıya Alma</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_action_pm_ban">Başbakan\'dan yasaklama</string>
+    <string name="report_action_pm_ban">Başbakan'dan yasaklama</string>
 
     <!-- Messaging - report details -->
     <!-- google-translated 2026-05-04 -->
@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Ayrıntılar: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Mesaj: \"%1$s\"</string>
+    <string name="report_message_prefix">Mesaj: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Muhabir: %1$s | Bildirildi: %2$s</string>
 
@@ -765,7 +765,7 @@
 
     <!-- Economy -->
     <!-- google-translated 2026-05-04 -->
-    <string name="bean_redeem_description">1 fasulye = 1 jeton. %10 bonus için 2.000\'den fazla para kullanın!</string>
+    <string name="bean_redeem_description">1 fasulye = 1 jeton. %10 bonus için 2.000'den fazla para kullanın!</string>
     <!-- google-translated 2026-05-04 -->
     <string name="bonus_coins">+%1$d bonus</string>
     <!-- google-translated 2026-05-04 -->
@@ -853,7 +853,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_claim_backpack">Almak için dokunun; sırt çantanıza eklendi</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="testing_mode_super_shy">Test modu — gerçek para alınmaz. Süper Utangaç\'ı anında etkinleştirmek için bir plana dokunun.</string>
+    <string name="testing_mode_super_shy">Test modu — gerçek para alınmaz. Süper Utangaç'ı anında etkinleştirmek için bir plana dokunun.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tier_label">Seviye: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -881,7 +881,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="terms_and_conditions">Şartlar ve Koşullar</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="welcome_to_shytalk">ShyTalk\'a hoş geldiniz</string>
+    <string name="welcome_to_shytalk">ShyTalk'a hoş geldiniz</string>
 
     <!-- Auth -->
     <!-- google-translated 2026-05-04 -->
@@ -993,7 +993,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Bize Ulaşın</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="shyden_ltd_brand">ShyTalk, 71-75 Shelton Street, Covent Garden, Londra, WC2H 9JQ, Birleşik Krallık adresinde bulunan Shyden Ltd\'nin (Şirket No. 17110487) bir markasıdır.</string>
+    <string name="shyden_ltd_brand">ShyTalk, 71-75 Shelton Street, Covent Garden, Londra, WC2H 9JQ, Birleşik Krallık adresinde bulunan Shyden Ltd'nin (Şirket No. 17110487) bir markasıdır.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="delete_account">Hesabı Sil</string>
     <!-- google-translated 2026-05-04 -->
@@ -1025,7 +1025,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="display_over_other_apps">Diğer uygulamaların üzerinde görüntüle</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="display_over_other_apps_description">Ses odasından çıktığınızda ShyTalk\'un yüzen bir baloncuk göstermesine izin verin, böylece hızlı bir şekilde geri dönebilirsiniz.</string>
+    <string name="display_over_other_apps_description">Ses odasından çıktığınızda ShyTalk'un yüzen bir baloncuk göstermesine izin verin, böylece hızlı bir şekilde geri dönebilirsiniz.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="dnd_end_time">DND Bitiş Zamanı</string>
     <!-- google-translated 2026-05-04 -->
@@ -1049,7 +1049,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="unlink">Bağlantıyı kaldır</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="unlink_provider_confirm">%1$s\'ın bağlantısı kaldırılsın mı?</string>
+    <string name="unlink_provider_confirm">%1$s'ın bağlantısı kaldırılsın mı?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unlink_provider_description">Bu hesabı daha sonra yeniden bağlayabilirsiniz ancak tekrar doğrulamanız gerekecektir.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1280,7 +1280,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Bağlantı Kurulamıyor</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="unblock_confirm">%1$s\'ın engellemesi kaldırılsın mı?</string>
+    <string name="unblock_confirm">%1$s'ın engellemesi kaldırılsın mı?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unblock_description">Profilinizi tekrar görüntüleyebilecekler.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1292,15 +1292,15 @@
     <!-- google-translated 2026-05-04 -->
     <string name="update_available_description">%1$s sürümü mevcut.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_available_soft">ShyTalk\'un yeni bir sürümü (%1$s) mevcut.</string>
+    <string name="update_available_soft">ShyTalk'un yeni bir sürümü (%1$s) mevcut.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="update_now">Şimdi Güncelle</string>
     <!-- google-translated 2026-05-04 -->
     <string name="update_required">Güncelleme Gerekli</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_required_description">ShyTalk\'un yeni bir sürümü mevcut. Uygulamayı kullanmaya devam etmek için lütfen güncelleyin.</string>
+    <string name="update_required_description">ShyTalk'un yeni bir sürümü mevcut. Uygulamayı kullanmaya devam etmek için lütfen güncelleyin.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_open_store_failed">Uygulama mağazası otomatik olarak açılamıyor. Lütfen ShyTalk\'u cihazınızın uygulama mağazasından manuel olarak güncelleyin.</string>
+    <string name="update_open_store_failed">Uygulama mağazası otomatik olarak açılamıyor. Lütfen ShyTalk'u cihazınızın uygulama mağazasından manuel olarak güncelleyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="view_community_standards">Topluluk Standartlarını Görüntüle</string>
     <!-- google-translated 2026-05-04 -->
@@ -1331,7 +1331,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="send_gift_header">%1$dx %2$s gönder</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="send_gift_header_multiple">%1$dx %2$s\'yi %3$d kullanıcıya gönderin</string>
+    <string name="send_gift_header_multiple">%1$dx %2$s'yi %3$d kullanıcıya gönderin</string>
     <!-- google-translated 2026-05-04 -->
     <string name="owner_away_banner">Sahibi uzakta - Oda %1$s içinde kapanıyor</string>
     <!-- google-translated 2026-05-04 -->
@@ -1349,7 +1349,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="video_too_large">Video yüklenemeyecek kadar büyük. Lütfen daha kısa bir klip kullanın.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="file_too_large">Dosya çok büyük. Maksimum boyut 10 MB\'tır.</string>
+    <string name="file_too_large">Dosya çok büyük. Maksimum boyut 10 MB'tır.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="this_user">bu kullanıcı</string>
 
@@ -1367,9 +1367,9 @@
 
     <!-- Broadcast Banner -->
     <!-- google-translated 2026-05-04 -->
-    <string name="broadcast_gacha_win">%1$s, Lucky Spin\'den %2$s%3$s%4$s kazandı!</string>
+    <string name="broadcast_gacha_win">%1$s, Lucky Spin'den %2$s%3$s%4$s kazandı!</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="broadcast_gift_sent">%1$s, %2$s%3$s%4$s\'yi %5$s\'ye gönderdi!</string>
+    <string name="broadcast_gift_sent">%1$s, %2$s%3$s%4$s'yi %5$s'ye gönderdi!</string>
 
     <!-- google-translated 2026-05-04 -->
     <string name="play_effect">Çalma Efekti</string>
@@ -1384,9 +1384,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="network_banned_title">Ağ Yasaklandı</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="device_banned_description">Bu cihazın ShyTalk\'u kullanması yasaklandı.</string>
+    <string name="device_banned_description">Bu cihazın ShyTalk'u kullanması yasaklandı.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="network_banned_description">Ağınızın ShyTalk\'u kullanması yasaklandı. Farklı bir ağdan bağlanmayı deneyin.</string>
+    <string name="network_banned_description">Ağınızın ShyTalk'u kullanması yasaklandı. Farklı bir ağdan bağlanmayı deneyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="full_screen_photo">Tam ekran fotoğraf</string>
     <!-- google-translated 2026-05-04 -->
@@ -1419,12 +1419,12 @@
     <!-- google-translated 2026-05-04 -->
     <string name="english_language">İngilizce</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="google_sign_in_failed">Google\'da oturum açma başarısız oldu</string>
+    <string name="google_sign_in_failed">Google'da oturum açma başarısız oldu</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="apple_sign_in_failed">Apple\'da Oturum Açma başarısız oldu</string>
+    <string name="apple_sign_in_failed">Apple'da Oturum Açma başarısız oldu</string>
     <string name="sign_in_not_available_on_local">Yerel ortamda oturum açma kullanılamıyor</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="sign_in_with_apple">Apple\'la oturum açın</string>
+    <string name="sign_in_with_apple">Apple'la oturum açın</string>
     <!-- google-translated 2026-05-04 -->
     <string name="send_link">Bağlantıyı Gönder</string>
     <!-- google-translated 2026-05-04 -->
@@ -1434,21 +1434,21 @@
     <!-- google-translated 2026-05-04 -->
     <string name="use_different_email">Farklı bir e-posta kullanın</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="email_link_paste_hint">E-postanızdaki bağlantıyı açın, ardından geri gelip Bağlantıyı Yapıştır\'a dokunun.</string>
+    <string name="email_link_paste_hint">E-postanızdaki bağlantıyı açın, ardından geri gelip Bağlantıyı Yapıştır'a dokunun.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_invalid_email_link">Bu geçerli bir oturum açma bağlantısına benzemiyor. Lütfen e-postanızdaki bağlantının tamamını yapıştırın.</string>
 
     <!-- PIN & Security -->
     <!-- google-translated 2026-05-04 -->
-    <string name="enter_pin">PIN\'inizi girin</string>
+    <string name="enter_pin">PIN'inizi girin</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_mismatch">PIN\'ler eşleşmiyor. Tekrar deneyin.</string>
+    <string name="pin_mismatch">PIN'ler eşleşmiyor. Tekrar deneyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_locked">Çok fazla deneme. %1$d dakika sonra tekrar deneyin.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_locked_reauth">Hesap kilitlendi. PIN\'inizi sıfırlamak için lütfen tekrar oturum açın.</string>
+    <string name="pin_locked_reauth">Hesap kilitlendi. PIN'inizi sıfırlamak için lütfen tekrar oturum açın.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="reset_pin">PIN\'i sıfırla</string>
+    <string name="reset_pin">PIN'i sıfırla</string>
     <!-- google-translated 2026-05-04 -->
     <string name="account_locked">Hesap Kilitlendi</string>
     <!-- google-translated 2026-05-04 -->
@@ -1498,7 +1498,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_biometric_unavailable">Bu cihazda kullanılamıyor</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_reset_pin">PIN\'i sıfırla</string>
+    <string name="security_reset_pin">PIN'i sıfırla</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Yeni bir PIN belirlemek için kimliğinizi doğrulayın</string>
     <string name="security_set_pin">PIN belirle</string>
@@ -1542,11 +1542,11 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_create_title">PIN oluştur</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_confirm_title">PIN\'inizi onaylayın</string>
+    <string name="pin_confirm_title">PIN'inizi onaylayın</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_enable_biometric_title">Biyometrik giriş etkinleştirilsin mi?</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_enable_biometric_desc">ShyTalk\'un kilidini hızlı bir şekilde açmak için parmak izinizi veya yüzünüzü kullanın.</string>
+    <string name="pin_enable_biometric_desc">ShyTalk'un kilidini hızlı bir şekilde açmak için parmak izinizi veya yüzünüzü kullanın.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_enable">Olanak vermek</string>
     <!-- google-translated 2026-05-04 -->
@@ -1572,7 +1572,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_title">Kimliğinizi doğrulayın</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verify_subtitle">Devam etmek için PIN\'inizi girin</string>
+    <string name="pin_verify_subtitle">Devam etmek için PIN'inizi girin</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verifying">Doğrulanıyor\u2026</string>
     <!-- google-translated 2026-05-04 -->
@@ -1589,7 +1589,7 @@
     <string name="pin_delete">Silmek</string>
     <!-- Biometric -->
     <!-- google-translated 2026-05-04 -->
-    <string name="biometric_unlock_title">ShyTalk\'un kilidini aç</string>
+    <string name="biometric_unlock_title">ShyTalk'un kilidini aç</string>
     <!-- google-translated 2026-05-04 -->
     <string name="biometric_unlock_desc">Kilidi açmak için parmak izinizi veya yüzünüzü kullanın</string>
     <!-- google-translated 2026-05-04 -->
@@ -1723,9 +1723,9 @@
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Rapor çözümlendi ancak bazı işlemler tamamlanmadı. Yönetici web panelini kontrol edin ve gerektiğinde yeniden deneyin.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_relationship_removed_pm">%1$s ile takip bağlantınız, ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak kaldırıldı.\n\nBu otomatiktir; ikinizin de yaptığı hiçbir şeyi yansıtmıyor ve orijinal bağlantı buradan geri yüklenemez.\n\nAdını tanımıyorsanız bu yalnızca geçmişteki bir bağlantının düzeltildiği anlamına gelir.</string>
+    <string name="age_seg_relationship_removed_pm">%1$s ile takip bağlantınız, ShyTalk'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak kaldırıldı.\n\nBu otomatiktir; ikinizin de yaptığı hiçbir şeyi yansıtmıyor ve orijinal bağlantı buradan geri yüklenemez.\n\nAdını tanımıyorsanız bu yalnızca geçmişteki bir bağlantının düzeltildiği anlamına gelir.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_room_removed_pm">ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak %1$s\'den çıkarıldınız.\n\nBu otomatiktir ve yaptığınız hiçbir şeyi yansıtmaz. Oda gayet iyi; yeni düzenlemeye göre sizi burada tutamayız.\n\nHer zamanki gibi başka odalar oluşturabilir veya başka odalara katılabilirsiniz.</string>
+    <string name="age_seg_room_removed_pm">ShyTalk'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak %1$s'den çıkarıldınız.\n\nBu otomatiktir ve yaptığınız hiçbir şeyi yansıtmaz. Oda gayet iyi; yeni düzenlemeye göre sizi burada tutamayız.\n\nHer zamanki gibi başka odalar oluşturabilir veya başka odalara katılabilirsiniz.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_unavailable">Kullanılamıyor</string>
     <!-- google-translated 2026-05-15 -->
@@ -1735,9 +1735,9 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_cross_cohort_blocked_toast">Bu işlem hesabınızda kullanılamıyor.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_thread_hidden_pm">%1$s ile olan ileti diziniz korundu ancak ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak devam edemiyor.\n\nBu otomatiktir; daha önce gönderdiğiniz hiçbir şey kaybolmaz. Bu mesaj dizisinde yeni mesaj alışverişi yapılamaz ancak yine de her zamanki çevrenizdeki kişilerle yeni sohbetler başlatabilirsiniz.</string>
+    <string name="age_seg_thread_hidden_pm">%1$s ile olan ileti diziniz korundu ancak ShyTalk'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak devam edemiyor.\n\nBu otomatiktir; daha önce gönderdiğiniz hiçbir şey kaybolmaz. Bu mesaj dizisinde yeni mesaj alışverişi yapılamaz ancak yine de her zamanki çevrenizdeki kişilerle yeni sohbetler başlatabilirsiniz.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_group_frozen_banner">ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişiklik nedeniyle bu grup yeni üyeleri veya mesajları kabul edemez.</string>
+    <string name="age_seg_group_frozen_banner">ShyTalk'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişiklik nedeniyle bu grup yeni üyeleri veya mesajları kabul edemez.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_up_welcome_pm">Hoş geldiniz — hesabınız daha geniş ShyTalk çevresine taşındı.\n\nBundan sonra keşiflerde ve listelerde daha fazla kişi görmeye başlayacaksınız. Hesabınız daha küçük bir çevredeyken düzenlenen önceki bağlantılar otomatik olarak geri yüklenemez, ancak takip etmek istediğiniz kişileri yeniden ekleyebilirsiniz.</string>
     <!-- google-translated 2026-05-15 -->

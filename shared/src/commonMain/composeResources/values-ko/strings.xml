@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">세부정보: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">메시지: \"%1$s\"</string>
+    <string name="report_message_prefix">메시지: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">기자: %1$s | 보고됨: %2$s</string>
 

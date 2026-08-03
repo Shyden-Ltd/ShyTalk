@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">विवरण: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">संदेश: \"%1$s\"</string>
+    <string name="report_message_prefix">संदेश: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">रिपोर्टर: %1$s | रिपोर्ट: %2$s</string>
 

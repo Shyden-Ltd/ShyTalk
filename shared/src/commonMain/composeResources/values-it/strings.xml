@@ -186,7 +186,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="following_count">Seguito (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="following_list_private">L\'elenco che segue di questo utente è privato</string>
+    <string name="following_list_private">L'elenco che segue di questo utente è privato</string>
     <!-- google-translated 2026-05-04 -->
     <string name="get_super_shy">Diventa super timido</string>
     <!-- google-translated 2026-05-04 -->
@@ -282,7 +282,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="kick">Calcio</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="kick_user">Caccia l\'utente</string>
+    <string name="kick_user">Caccia l'utente</string>
     <!-- google-translated 2026-05-04 -->
     <string name="kick_user_confirm">Sei sicuro di voler espellere %1$s dalla stanza? Non potranno ricongiungersi.</string>
     <!-- google-translated 2026-05-04 -->
@@ -384,7 +384,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seat_swap_with">Posto %1$d (scambia con %2$s)</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="set_alias">Imposta l\'alias</string>
+    <string name="set_alias">Imposta l'alias</string>
     <!-- google-translated 2026-05-04 -->
     <string name="set_alias_description">Imposta un alias personale per %1$s. Solo tu lo vedrai.</string>
     <!-- google-translated 2026-05-04 -->
@@ -448,7 +448,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="action_cannot_be_undone">QUESTA AZIONE NON PUÒ ESSERE ANNULLATA.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="confirm_send">Conferma l\'invio</string>
+    <string name="confirm_send">Conferma l'invio</string>
     <!-- google-translated 2026-05-04 -->
     <string name="from_backpack_items">Dallo zaino: %1$d articoli</string>
     <!-- google-translated 2026-05-04 -->
@@ -501,7 +501,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="delete_conversation">Elimina conversazione</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="delete_conversation_warning">Ciò rimuoverà la conversazione dal tuo elenco. I messaggi vengono conservati e riappariranno se l\'altra persona ti invia nuovamente un messaggio.</string>
+    <string name="delete_conversation_warning">Ciò rimuoverà la conversazione dal tuo elenco. I messaggi vengono conservati e riappariranno se l'altra persona ti invia nuovamente un messaggio.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description_label">Descrizione</string>
     <!-- google-translated 2026-05-04 -->
@@ -561,11 +561,11 @@
     <!-- google-translated 2026-05-04 -->
     <string name="muted">Disattivato</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="muted_for_hours_minutes">L\'audio è disattivato per %1$dh %2$dm</string>
+    <string name="muted_for_hours_minutes">L'audio è disattivato per %1$dh %2$dm</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="muted_for_minutes">L\'audio è disattivato per %1$dm</string>
+    <string name="muted_for_minutes">L'audio è disattivato per %1$dm</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="muted_indefinitely">L\'audio è disattivato</string>
+    <string name="muted_indefinitely">L'audio è disattivato</string>
     <!-- google-translated 2026-05-04 -->
     <string name="new_group">Nuovo gruppo</string>
     <!-- google-translated 2026-05-04 -->
@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Dettagli: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Messaggio: \"%1$s\"</string>
+    <string name="report_message_prefix">Messaggio: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Reporter: %1$s | Segnalato: %2$s</string>
 
@@ -719,7 +719,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="perm_who_can_delete_messages">Chi può eliminare i messaggi</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="perm_who_can_mute_members">Chi può disattivare l\'audio dei membri</string>
+    <string name="perm_who_can_mute_members">Chi può disattivare l'audio dei membri</string>
     <!-- google-translated 2026-05-04 -->
     <string name="perm_who_can_remove_members">Chi può rimuovere i membri</string>
 
@@ -845,7 +845,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="per_month">al mese</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="per_year">all\'anno</string>
+    <string name="per_year">all'anno</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy">Super timido</string>
     <!-- google-translated 2026-05-04 -->
@@ -895,7 +895,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="account_restricted">Conto limitato</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="account_suspended_description">L\'account di questo utente è stato sospeso.</string>
+    <string name="account_suspended_description">L'account di questo utente è stato sospeso.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="account_suspended_label">Conto sospeso</string>
     <!-- google-translated 2026-05-04 -->
@@ -945,7 +945,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Sei stato bloccato da questo utente</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="blocked_by_user_in_room_description">Un utente in questa stanza ti ha bloccato. Potresti avere un\'esperienza limitata. Entra comunque?</string>
+    <string name="blocked_by_user_in_room_description">Un utente in questa stanza ti ha bloccato. Potresti avere un'esperienza limitata. Entra comunque?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_user_in_room">Utente bloccato nella stanza</string>
     <!-- google-translated 2026-05-04 -->
@@ -957,7 +957,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="cache_cleared">Cache cancellata</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="cache_cleared_description">La cache dell\'app è stata cancellata.</string>
+    <string name="cache_cleared_description">La cache dell'app è stata cancellata.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="cannot_enter_room">Impossibile entrare nella stanza</string>
     <!-- google-translated 2026-05-04 -->
@@ -967,7 +967,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="checking_for_updates">Controllo aggiornamenti…</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="choose_another_room">Scegli un\'altra stanza</string>
+    <string name="choose_another_room">Scegli un'altra stanza</string>
     <!-- google-translated 2026-05-04 -->
     <string name="clear">Chiaro</string>
     <!-- google-translated 2026-05-04 -->
@@ -997,15 +997,15 @@
     <!-- google-translated 2026-05-04 -->
     <string name="delete_account">Elimina account</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="delete_account_description">Il tuo account e tutti i dati verranno eliminati definitivamente dopo il periodo di grazia. Puoi annullare l\'accesso effettuando l\'accesso prima di tale data.</string>
+    <string name="delete_account_description">Il tuo account e tutti i dati verranno eliminati definitivamente dopo il periodo di grazia. Puoi annullare l'accesso effettuando l'accesso prima di tale data.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="delete_account_scheduled">È prevista l\'eliminazione del tuo account il %1$s. Desideri annullare?</string>
+    <string name="delete_account_scheduled">È prevista l'eliminazione del tuo account il %1$s. Desideri annullare?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="delete_account_cancel">Annulla eliminazione</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="delete_account_continue">Continuare con l\'eliminazione</string>
+    <string name="delete_account_continue">Continuare con l'eliminazione</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="delete_account_success">È stata programmata l\'eliminazione del tuo account.</string>
+    <string name="delete_account_success">È stata programmata l'eliminazione del tuo account.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="delete_account_pin_required">Verifica la tua identità per eliminare il tuo account</string>
     <!-- google-translated 2026-05-04 -->
@@ -1074,19 +1074,19 @@
     <!-- google-translated 2026-05-04 -->
     <string name="enable_dnd">Abilita Non disturbare</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="enable_dnd_description">Silenzia tutte le notifiche PM durante l\'orario pianificato.</string>
+    <string name="enable_dnd_description">Silenzia tutte le notifiche PM durante l'orario pianificato.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="end">FINE</string>
     <!-- google-translated 2026-05-04 -->
     <string name="enter">Entra</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_block_user">Impossibile bloccare l\'utente</string>
+    <string name="error_block_user">Impossibile bloccare l'utente</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_check_updates">Impossibile controllare gli aggiornamenti</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_could_not_submit_report">Impossibile inviare il rapporto</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_follow_user">Impossibile seguire l\'utente</string>
+    <string name="error_follow_user">Impossibile seguire l'utente</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_load_user_data">Impossibile caricare i dati utente</string>
     <!-- google-translated 2026-05-04 -->
@@ -1114,9 +1114,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="error_title">Errore</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_unblock_user">Impossibile sbloccare l\'utente</string>
+    <string name="error_unblock_user">Impossibile sbloccare l'utente</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_unfollow_user">Impossibile smettere di seguire l\'utente</string>
+    <string name="error_unfollow_user">Impossibile smettere di seguire l'utente</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_update_privacy">Impossibile aggiornare le impostazioni sulla privacy</string>
     <!-- google-translated 2026-05-04 -->
@@ -1208,7 +1208,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="room_alerts">Avvisi sulla stanza</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="self_destruct_countdown">Conto alla rovescia per l\'autodistruzione</string>
+    <string name="self_destruct_countdown">Conto alla rovescia per l'autodistruzione</string>
     <!-- google-translated 2026-05-04 -->
     <string name="self_destruct_description">Riproduci un annuncio vocale quando il timer di autodistruzione di 5 minuti di una stanza si avvia o si ferma.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1224,7 +1224,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_google">Accedi con Google</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="sign_in_with_email">Accedi con l\'e-mail</string>
+    <string name="sign_in_with_email">Accedi con l'e-mail</string>
     <!-- google-translated 2026-05-04 -->
     <string name="email_hint">Indirizzo e-mail</string>
     <!-- google-translated 2026-05-04 -->
@@ -1286,7 +1286,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="up_to_date">Aggiornato</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="up_to_date_description">Sei sull\'ultima versione.</string>
+    <string name="up_to_date_description">Sei sull'ultima versione.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="update_available">Aggiornamento disponibile</string>
     <!-- google-translated 2026-05-04 -->
@@ -1298,9 +1298,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="update_required">Aggiornamento richiesto</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_required_description">È disponibile una nuova versione di ShyTalk. Aggiorna per continuare a utilizzare l\'app.</string>
+    <string name="update_required_description">È disponibile una nuova versione di ShyTalk. Aggiorna per continuare a utilizzare l'app.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_open_store_failed">Impossibile aprire automaticamente l\'app store. Aggiorna ShyTalk manualmente dall\'app store del tuo dispositivo.</string>
+    <string name="update_open_store_failed">Impossibile aprire automaticamente l'app store. Aggiorna ShyTalk manualmente dall'app store del tuo dispositivo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="view_community_standards">Visualizza gli standard comunitari</string>
     <!-- google-translated 2026-05-04 -->
@@ -1311,7 +1311,7 @@
     <string name="wallet_with_balance">Portafoglio · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Violazioni continue potrebbero comportare la sospensione del tuo account.</string>
-    <string name="warning_acknowledge_failed">Impossibile rimuovere l\'avviso. Controlla la connessione e riprova.</string>
+    <string name="warning_acknowledge_failed">Impossibile rimuovere l'avviso. Controlla la connessione e riprova.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Il tuo account è stato esaminato ed è stato emesso un avviso.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1384,9 +1384,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="network_banned_title">Rete vietata</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="device_banned_description">A questo dispositivo è stato vietato l\'utilizzo di ShyTalk.</string>
+    <string name="device_banned_description">A questo dispositivo è stato vietato l'utilizzo di ShyTalk.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="network_banned_description">Alla tua rete è stato vietato l\'uso di ShyTalk. Prova a connetterti da una rete diversa.</string>
+    <string name="network_banned_description">Alla tua rete è stato vietato l'uso di ShyTalk. Prova a connetterti da una rete diversa.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="full_screen_photo">Foto a schermo intero</string>
     <!-- google-translated 2026-05-04 -->
@@ -1432,7 +1432,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="resend_link">Invia nuovamente</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="use_different_email">Utilizza un\'e-mail diversa</string>
+    <string name="use_different_email">Utilizza un'e-mail diversa</string>
     <!-- google-translated 2026-05-04 -->
     <string name="email_link_paste_hint">Apri il collegamento nella tua email, quindi torna indietro e tocca Incolla collegamento.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1465,7 +1465,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_pre_launch_title">ShyTalk non è ancora disponibile</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_pre_launch_message">ShyTalk non è stato ancora rilasciato. Per fare domanda per testare l\'applicazione, contattare Shyden. Il test è disponibile per gli utenti iOS e Android.</string>
+    <string name="starting_screen_pre_launch_message">ShyTalk non è stato ancora rilasciato. Per fare domanda per testare l'applicazione, contattare Shyden. Il test è disponibile per gli utenti iOS e Android.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_dismiss">Continuare</string>
     <!-- google-translated 2026-05-04 -->
@@ -1476,7 +1476,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Sicurezza</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_app_lock">Blocco dell\'app</string>
+    <string name="security_app_lock">Blocco dell'app</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_app_lock_desc">Richiedi PIN o biometrico per sbloccare</string>
     <!-- google-translated 2026-05-04 -->
@@ -1494,7 +1494,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_biometric_login">Accesso biometrico</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_biometric_desc">Usa l\'impronta digitale o il volto per sbloccare</string>
+    <string name="security_biometric_desc">Usa l'impronta digitale o il volto per sbloccare</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_biometric_unavailable">Non disponibile su questo dispositivo</string>
     <!-- google-translated 2026-05-04 -->
@@ -1507,7 +1507,7 @@
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
-    <string name="email_sign_in_title">Accedi con l\'e-mail</string>
+    <string name="email_sign_in_title">Accedi con l'e-mail</string>
     <!-- google-translated 2026-05-04 -->
     <string name="email_enter_address">Inserisci il tuo indirizzo email</string>
     <!-- google-translated 2026-05-04 -->
@@ -1544,7 +1544,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_confirm_title">Conferma il tuo PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_enable_biometric_title">Abilitare l\'accesso biometrico?</string>
+    <string name="pin_enable_biometric_title">Abilitare l'accesso biometrico?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_enable_biometric_desc">Usa la tua impronta digitale o il tuo volto per sbloccare rapidamente ShyTalk.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1591,7 +1591,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="biometric_unlock_title">Sblocca ShyTalk</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="biometric_unlock_desc">Usa l\'impronta digitale o il viso per sbloccare</string>
+    <string name="biometric_unlock_desc">Usa l'impronta digitale o il viso per sbloccare</string>
     <!-- google-translated 2026-05-04 -->
     <string name="biometric_sign_failed">Firma non riuscita</string>
     <!-- google-translated 2026-05-04 -->
@@ -1629,7 +1629,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="replace_room_title">Chiudere la stanza esistente?</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="replace_room_message">Hai già una stanza attiva. L\'apertura di una nuova stanza chiuderà quella esistente. Vuoi continuare?</string>
+    <string name="replace_room_message">Hai già una stanza attiva. L'apertura di una nuova stanza chiuderà quella esistente. Vuoi continuare?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="replace_room_confirm">Chiudi e creane uno nuovo</string>
 
@@ -1669,23 +1669,23 @@
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_explanation_title">Come funziona</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_explanation_body">Abbiamo bisogno della foto di un documento d\'identità rilasciato dal governo per confermare che hai almeno 18 anni. L\'immagine viene crittografata durante il transito, esaminata da un moderatore umano ed eliminata definitivamente non appena viene registrata una decisione, di solito entro 24 ore. Vengono conservati solo la data di nascita e l\'esito della verifica.</string>
+    <string name="age_verif_step_explanation_body">Abbiamo bisogno della foto di un documento d'identità rilasciato dal governo per confermare che hai almeno 18 anni. L'immagine viene crittografata durante il transito, esaminata da un moderatore umano ed eliminata definitivamente non appena viene registrata una decisione, di solito entro 24 ore. Vengono conservati solo la data di nascita e l'esito della verifica.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_explanation_continue">Capisco: continua</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_method_title">Quale documento?</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_method_body">Scegli il tipo di documento d\'identità che invierai. Il DOB sul documento deve corrispondere a quello sul tuo account.</string>
+    <string name="age_verif_step_method_body">Scegli il tipo di documento d'identità che invierai. Il DOB sul documento deve corrispondere a quello sul tuo account.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_method_passport">Passaporto</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_method_drivers_license">Patente di guida</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_method_national_id">Carta d\'identità nazionale</string>
+    <string name="age_verif_method_national_id">Carta d'identità nazionale</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_image_title">Aggiungi la foto</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_image_body">Scegli una foto nitida del documento d\'identità. Assicurati che la data di nascita sia completamente leggibile.</string>
+    <string name="age_verif_step_image_body">Scegli una foto nitida del documento d'identità. Assicurati che la data di nascita sia completamente leggibile.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_image_pick">Scegli la foto</string>
     <!-- google-translated 2026-05-04 -->
@@ -1695,7 +1695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_confirm_body">Una volta inviata, la foto viene inviata per la revisione. Riceverai un messaggio di sistema quando viene registrata una decisione.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_field_method">Tipo di documento d\'identità:</string>
+    <string name="age_verif_field_method">Tipo di documento d'identità:</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_field_photo">Foto:</string>
     <!-- google-translated 2026-05-04 -->
@@ -1739,7 +1739,7 @@
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_group_frozen_banner">Questo gruppo non può accettare nuovi membri o messaggi a seguito di una recente modifica al modo in cui ShyTalk organizza gli account.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_age_up_welcome_pm">Benvenuto: il tuo account è stato spostato nel circolo più ampio di ShyTalk.\n\nD\'ora in poi inizierai a vedere più persone nella scoperta e negli elenchi. Le connessioni precedenti che sono state riordinate mentre il tuo account era nella cerchia più piccola non possono essere ripristinate automaticamente, ma puoi aggiungere nuovamente chiunque desideri seguire.</string>
+    <string name="age_seg_age_up_welcome_pm">Benvenuto: il tuo account è stato spostato nel circolo più ampio di ShyTalk.\n\nD'ora in poi inizierai a vedere più persone nella scoperta e negli elenchi. Le connessioni precedenti che sono state riordinate mentre il tuo account era nella cerchia più piccola non possono essere ripristinate automaticamente, ma puoi aggiungere nuovamente chiunque desideri seguire.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_age_down_admin_pm">I dettagli del tuo account sono stati aggiornati dallo staff di ShyTalk. Di conseguenza, le persone e le stanze virtuali visibili per te sono state ristrette a una cerchia più piccola.\n\nSe ritieni che si tratti di un errore, contatta l\'assistenza e lo esamineremo.</string>
+    <string name="age_seg_age_down_admin_pm">I dettagli del tuo account sono stati aggiornati dallo staff di ShyTalk. Di conseguenza, le persone e le stanze virtuali visibili per te sono state ristrette a una cerchia più piccola.\n\nSe ritieni che si tratti di un errore, contatta l'assistenza e lo esamineremo.</string>
 </resources>

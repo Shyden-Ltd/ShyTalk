@@ -24,9 +24,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="edit">Modifier</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_generic">Quelque chose s\'est mal passé</string>
+    <string name="error_generic">Quelque chose s'est mal passé</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="got_it">J\'ai compris</string>
+    <string name="got_it">J'ai compris</string>
     <!-- google-translated 2026-05-04 -->
     <string name="learn_more">Apprendre encore plus</string>
     <!-- google-translated 2026-05-04 -->
@@ -38,7 +38,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="next">Suivant</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="ok">D\'ACCORD</string>
+    <string name="ok">D'ACCORD</string>
     <!-- google-translated 2026-05-04 -->
     <string name="retry">Réessayer</string>
     <!-- google-translated 2026-05-04 -->
@@ -104,7 +104,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="translated_from">Traduit de %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="show_original">Afficher l\'original</string>
+    <string name="show_original">Afficher l'original</string>
     <!-- google-translated 2026-05-04 -->
     <string name="translation_limit_reached">Limite quotidienne atteinte. Passez à SuperShy pour des traductions illimitées.</string>
     <!-- google-translated 2026-05-04 -->
@@ -112,7 +112,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="auto_translate_description">Traduisez automatiquement les messages entrants dans votre langue</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="translations_remaining">%1$d traductions restantes aujourd\'hui</string>
+    <string name="translations_remaining">%1$d traductions restantes aujourd'hui</string>
 
     <!-- Settings -->
     <!-- google-translated 2026-05-04 -->
@@ -168,7 +168,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connections">Relations</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="display_name">Nom d\'affichage</string>
+    <string name="display_name">Nom d'affichage</string>
     <!-- google-translated 2026-05-04 -->
     <string name="dob_privacy_note">Votre date de naissance est obligatoire mais vous pouvez masquer votre âge dans les paramètres de confidentialité.</string>
     <!-- google-translated 2026-05-04 -->
@@ -194,9 +194,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="gift_value_coins">Valeur : %1$d pièces</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="no_followers_yet">Pas encore d\'abonnés</string>
+    <string name="no_followers_yet">Pas encore d'abonnés</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="no_profile_visitors">Aucun visiteur de profil pour l\'instant</string>
+    <string name="no_profile_visitors">Aucun visiteur de profil pour l'instant</string>
     <!-- google-translated 2026-05-04 -->
     <string name="not_following_anyone">Je ne suis encore personne</string>
     <!-- google-translated 2026-05-04 -->
@@ -204,7 +204,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="profile">Profil</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="profile_setup_subtitle">Choisissez un nom d\'affichage et entrez votre date de naissance</string>
+    <string name="profile_setup_subtitle">Choisissez un nom d'affichage et entrez votre date de naissance</string>
     <!-- google-translated 2026-05-04 -->
     <string name="received_times">Reçu %1$d fois</string>
     <!-- google-translated 2026-05-04 -->
@@ -255,7 +255,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="ban">Interdire</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="block_user">Bloquer l\'utilisateur</string>
+    <string name="block_user">Bloquer l'utilisateur</string>
     <!-- google-translated 2026-05-04 -->
     <string name="block_user_confirm">Êtes-vous sûr de vouloir bloquer %1$s ?</string>
     <!-- google-translated 2026-05-04 -->
@@ -277,11 +277,11 @@
     <!-- google-translated 2026-05-04 -->
     <string name="hosts">Hôtes</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="invite_to_seat">Inviter à s\'asseoir</string>
+    <string name="invite_to_seat">Inviter à s'asseoir</string>
     <!-- google-translated 2026-05-04 -->
     <string name="kick">Coup</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="kick_user">Expulser l\'utilisateur</string>
+    <string name="kick_user">Expulser l'utilisateur</string>
     <!-- google-translated 2026-05-04 -->
     <string name="kick_user_confirm">Êtes-vous sûr de vouloir expulser %1$s de la pièce ? Ils ne pourront pas réintégrer.</string>
     <!-- google-translated 2026-05-04 -->
@@ -291,7 +291,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="lock_seating">Verrouillage des sièges</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="lock_seating_description">Seul le propriétaire peut inviter les utilisateurs à s\'asseoir</string>
+    <string name="lock_seating_description">Seul le propriétaire peut inviter les utilisateurs à s'asseoir</string>
     <!-- google-translated 2026-05-04 -->
     <string name="buy_coins">Acheter des pièces</string>
     <!-- google-translated 2026-05-04 -->
@@ -313,7 +313,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="prizes">Prix</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="skip_animation">PASSER L\'ANIMATION</string>
+    <string name="skip_animation">PASSER L'ANIMATION</string>
     <!-- google-translated 2026-05-04 -->
     <string name="spin">ROTATION</string>
     <!-- google-translated 2026-05-04 -->
@@ -353,7 +353,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="remove">Retirer</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="remove_as_host">Supprimer en tant qu\'hôte</string>
+    <string name="remove_as_host">Supprimer en tant qu'hôte</string>
     <!-- google-translated 2026-05-04 -->
     <string name="remove_from_room">Supprimer de la pièce</string>
     <!-- google-translated 2026-05-04 -->
@@ -369,7 +369,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="room_closed">Salle fermée</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="room_closing_no_super_shy">Le propriétaire de la salle n\'a pas Super Shy, donc cette salle fermera bientôt.</string>
+    <string name="room_closing_no_super_shy">Le propriétaire de la salle n'a pas Super Shy, donc cette salle fermera bientôt.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="room_closing_in">Fermeture de la salle dans %1$d :%2$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -413,7 +413,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="you_have_super_shy_room">Vous êtes super timide ! Ouvrez votre propre salle pour un maximum de %1$d heures de durée prolongée.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="get_super_shy_rooms">Devenez Super Shy pour profiter de salles qui durent jusqu\'à %1$d heures !</string>
+    <string name="get_super_shy_rooms">Devenez Super Shy pour profiter de salles qui durent jusqu'à %1$d heures !</string>
 
     <!-- Room - Notifications -->
     <!-- google-translated 2026-05-04 -->
@@ -431,7 +431,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seat_number">Siège %1$d</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="user_wants_to_sit">%1$s veut s\'asseoir</string>
+    <string name="user_wants_to_sit">%1$s veut s'asseoir</string>
 
     <!-- Room - Chat -->
     <!-- google-translated 2026-05-04 -->
@@ -447,7 +447,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="action_cannot_be_undone">CETTE ACTION NE PEUT ÊTRE ANNULÉE.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="confirm_send">Confirmer l\'envoi</string>
+    <string name="confirm_send">Confirmer l'envoi</string>
     <!-- google-translated 2026-05-04 -->
     <string name="from_backpack_items">Depuis le sac à dos : %1$d articles</string>
     <!-- google-translated 2026-05-04 -->
@@ -457,7 +457,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="send_all_includes">Cela inclut TOUS les %1$d articles parmi %2$d cadeaux différents.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="send_all_warning">Vous êtes sur le point d\'envoyer TOUT votre sac à dos à %1$s.</string>
+    <string name="send_all_warning">Vous êtes sur le point d'envoyer TOUT votre sac à dos à %1$s.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="send_everything_confirm">Je comprends, envoie tout</string>
     <!-- google-translated 2026-05-04 -->
@@ -482,7 +482,7 @@
     <string name="cant_message_user">Vous ne pouvez pas envoyer de message à cet utilisateur</string>
     <string name="group_frozen_banner">This group has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pm_locked_other_user_notice">Vous ne pouvez pas envoyer de message à cette personne car nous pensons qu\'elle a moins de 18 ans.</string>
+    <string name="pm_locked_other_user_notice">Vous ne pouvez pas envoyer de message à cette personne car nous pensons qu'elle a moins de 18 ans.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="chat">Chat</string>
     <!-- google-translated 2026-05-04 -->
@@ -492,7 +492,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="compressing">Compression...</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="conversation_start_hint">Démarrer une conversation à partir du\nprofil ou de la carte utilisateur d\'une personne dans un salon</string>
+    <string name="conversation_start_hint">Démarrer une conversation à partir du\nprofil ou de la carte utilisateur d'une personne dans un salon</string>
     <!-- google-translated 2026-05-04 -->
     <string name="create_group">Créer un groupe</string>
     <!-- google-translated 2026-05-04 -->
@@ -500,19 +500,19 @@
     <!-- google-translated 2026-05-04 -->
     <string name="delete_conversation">Supprimer la conversation</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="delete_conversation_warning">Cela supprimera la conversation de votre liste. Les messages sont conservés et réapparaîtront si l\'autre personne vous envoie à nouveau un message.</string>
+    <string name="delete_conversation_warning">Cela supprimera la conversation de votre liste. Les messages sont conservés et réapparaîtront si l'autre personne vous envoie à nouveau un message.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description_label">Description</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description_optional">Description (facultatif)</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="edit_history">Modifier l\'historique</string>
+    <string name="edit_history">Modifier l'historique</string>
     <!-- google-translated 2026-05-04 -->
     <string name="editing_message">Modification du message</string>
     <!-- google-translated 2026-05-04 -->
     <string name="evidence">Preuve</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="evidence_required">Au moins une capture d\'écran ou un enregistrement est requis.</string>
+    <string name="evidence_required">Au moins une capture d'écran ou un enregistrement est requis.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="general">Général</string>
     <!-- google-translated 2026-05-04 -->
@@ -552,7 +552,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="mod_notifications">Notifications de modules</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="move_to_front">Se déplacer vers l\'avant</string>
+    <string name="move_to_front">Se déplacer vers l'avant</string>
     <!-- google-translated 2026-05-04 -->
     <string name="mute_notifications">Notifications muettes</string>
     <!-- google-translated 2026-05-04 -->
@@ -582,7 +582,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="no_pending_reports">Aucun rapport en attente</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="no_stickers_yet">Pas encore d\'autocollants</string>
+    <string name="no_stickers_yet">Pas encore d'autocollants</string>
     <!-- google-translated 2026-05-04 -->
     <string name="no_users_found">Aucun utilisateur trouvé</string>
     <!-- google-translated 2026-05-04 -->
@@ -618,7 +618,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="result_count">%1$d résultat(s)</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="review_report">Rapport d\'examen</string>
+    <string name="review_report">Rapport d'examen</string>
     <!-- google-translated 2026-05-04 -->
     <string name="role_admin">Administrateur</string>
     <!-- google-translated 2026-05-04 -->
@@ -638,7 +638,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="search_people">Rechercher des personnes...</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="select_action">Sélectionnez l\'action :</string>
+    <string name="select_action">Sélectionnez l'action :</string>
     <!-- google-translated 2026-05-04 -->
     <string name="selected_count">%1$d sélectionné</string>
     <!-- google-translated 2026-05-04 -->
@@ -694,7 +694,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Détails : %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Message : \"%1$s\"</string>
+    <string name="report_message_prefix">Message : "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Journaliste : %1$s | Signalé : %2$s</string>
 
@@ -724,7 +724,7 @@
 
     <!-- Messaging - date separators -->
     <!-- google-translated 2026-05-04 -->
-    <string name="today">Aujourd\'hui</string>
+    <string name="today">Aujourd'hui</string>
     <!-- google-translated 2026-05-04 -->
     <string name="yesterday">Hier</string>
 
@@ -756,7 +756,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="milestone">Jalon</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="milestone_bonus">Bonus d\'étape !</string>
+    <string name="milestone_bonus">Bonus d'étape !</string>
     <!-- google-translated 2026-05-04 -->
     <string name="plus_coins">+%1$d pièces !</string>
     <!-- google-translated 2026-05-04 -->
@@ -802,7 +802,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="no_filtered_transactions">Aucune transaction %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="no_transactions_yet">Aucune transaction pour l\'instant</string>
+    <string name="no_transactions_yet">Aucune transaction pour l'instant</string>
     <!-- google-translated 2026-05-04 -->
     <string name="transaction_history">Historique des transactions</string>
     <!-- google-translated 2026-05-04 -->
@@ -812,13 +812,13 @@
 
     <!-- Super Shy -->
     <!-- google-translated 2026-05-04 -->
-    <string name="benefit_daily_bonus">+10 % de pièces de connexion quotidiennes (arrondies à l\'unité supérieure)</string>
+    <string name="benefit_daily_bonus">+10 % de pièces de connexion quotidiennes (arrondies à l'unité supérieure)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="benefit_extended_room">Durée de la chambre prolongée (12 heures)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="benefit_full_room">Salle complète de 8 places</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="benefit_gold_name">Nom d\'affichage en or partout</string>
+    <string name="benefit_gold_name">Nom d'affichage en or partout</string>
     <!-- google-translated 2026-05-04 -->
     <string name="benefit_profile_frame">Cadre profilé exclusif</string>
     <!-- google-translated 2026-05-04 -->
@@ -832,7 +832,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="claimed">Réclamé !</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="claimed_activate_backpack">Pour l\'activer, trouvez-le dans votre sac à dos lorsque vous êtes dans une salle de discussion.</string>
+    <string name="claimed_activate_backpack">Pour l'activer, trouvez-le dans votre sac à dos lorsque vous êtes dans une salle de discussion.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="claiming">Réclame…</string>
     <!-- google-translated 2026-05-04 -->
@@ -872,7 +872,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="cyber_bullying_policy">Politique sur la cyberintimidation</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="i_have_read_and_agree">J\'ai lu et j\'accepte le</string>
+    <string name="i_have_read_and_agree">J'ai lu et j'accepte le</string>
     <!-- google-translated 2026-05-04 -->
     <string name="privacy_policy">politique de confidentialité</string>
     <!-- google-translated 2026-05-04 -->
@@ -902,7 +902,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="active_hours_ago">Actif il y a %1$dh</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="active_just_now">Actif à l\'instant</string>
+    <string name="active_just_now">Actif à l'instant</string>
     <!-- google-translated 2026-05-04 -->
     <string name="active_long_ago">Actif il y a plus de 30 jours</string>
     <!-- google-translated 2026-05-04 -->
@@ -920,7 +920,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="appeal_submitted">Votre appel a été soumis et sera examiné. En cas de succès, votre suspension sera levée. Vous ne recevrez aucun autre retour sur votre appel et vous ne pourrez pas soumettre un autre appel.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="appeal_unsuccessful">Votre appel a été examiné et n\'a pas abouti. Vous ne pouvez pas soumettre un autre appel.</string>
+    <string name="appeal_unsuccessful">Votre appel a été examiné et n'a pas abouti. Vous ne pouvez pas soumettre un autre appel.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="ban_expires">Expire : %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -956,9 +956,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="cache_cleared">Cache vidé</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="cache_cleared_description">Le cache de l\'application a été vidé.</string>
+    <string name="cache_cleared_description">Le cache de l'application a été vidé.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="cannot_enter_room">Impossible d\'entrer dans la pièce</string>
+    <string name="cannot_enter_room">Impossible d'entrer dans la pièce</string>
     <!-- google-translated 2026-05-04 -->
     <string name="chat_display">Affichage du chat</string>
     <!-- google-translated 2026-05-04 -->
@@ -986,7 +986,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connection_trouble">ShyTalk a du mal à atteindre nos serveurs. Veuillez vérifier votre connexion Internet et réessayer.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Si vous avez besoin d\'aide, contactez shytalk.help@gmail.com</string>
+    <string name="contact_support_help">Si vous avez besoin d'aide, contactez shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_hint">Si le problème persiste, contactez shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,13 +1016,13 @@
     <!-- google-translated 2026-05-04 -->
     <string name="description">Description</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Cet appareil est déjà associé à un autre compte.\nUn seul compte est autorisé par appareil.\n\nPour obtenir de l\'aide, contactez shytalk.help@gmail.com</string>
+    <string name="device_locked_description">Cet appareil est déjà associé à un autre compte.\nUn seul compte est autorisé par appareil.\n\nPour obtenir de l'aide, contactez shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Appareil non pris en charge</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported_description">ShyTalk ne peut pas fonctionner sur des appareils rootés ou émulés. Veuillez utiliser un appareil non modifié.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="display_over_other_apps">Afficher sur d\'autres applications</string>
+    <string name="display_over_other_apps">Afficher sur d'autres applications</string>
     <!-- google-translated 2026-05-04 -->
     <string name="display_over_other_apps_description">Autorisez ShyTalk à afficher une bulle flottante lorsque vous quittez une salle vocale, afin que vous puissiez y revenir rapidement.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1078,13 +1078,13 @@
     <!-- google-translated 2026-05-04 -->
     <string name="enter">Entrer</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_block_user">Échec du blocage de l\'utilisateur</string>
+    <string name="error_block_user">Échec du blocage de l'utilisateur</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_check_updates">Échec de la vérification des mises à jour</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_could_not_submit_report">Impossible de soumettre le rapport</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_follow_user">Impossible de suivre l\'utilisateur</string>
+    <string name="error_follow_user">Impossible de suivre l'utilisateur</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_load_user_data">Échec du chargement des données utilisateur</string>
     <string name="error_load_users">Failed to load users</string>
@@ -1103,17 +1103,17 @@
     <!-- google-translated 2026-05-04 -->
     <string name="error_resolve_report">Échec de la résolution du rapport</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_save_dob">Échec de l\'enregistrement de la date de naissance</string>
+    <string name="error_save_dob">Échec de l'enregistrement de la date de naissance</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_submit_appeal">Échec de la soumission de l\'appel</string>
+    <string name="error_submit_appeal">Échec de la soumission de l'appel</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_submit_report">Échec de l\'envoi du rapport</string>
+    <string name="error_submit_report">Échec de l'envoi du rapport</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_title">Erreur</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_unblock_user">Échec du déblocage de l\'utilisateur</string>
+    <string name="error_unblock_user">Échec du déblocage de l'utilisateur</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="error_unfollow_user">Échec de la désabonnement de l\'utilisateur</string>
+    <string name="error_unfollow_user">Échec de la désabonnement de l'utilisateur</string>
     <!-- google-translated 2026-05-04 -->
     <string name="error_update_privacy">Échec de la mise à jour des paramètres de confidentialité</string>
     <!-- google-translated 2026-05-04 -->
@@ -1123,7 +1123,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="everyone">Tout le monde</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="hide_age">Masquer l\'âge</string>
+    <string name="hide_age">Masquer l'âge</string>
     <!-- google-translated 2026-05-04 -->
     <string name="hide_age_description">Les autres ne verront pas votre âge sur votre profil.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1137,7 +1137,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="i_understand">Je comprends</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="i_understand_and_accept">Je comprends et j\'accepte</string>
+    <string name="i_understand_and_accept">Je comprends et j'accepte</string>
     <!-- google-translated 2026-05-04 -->
     <string name="kick_reason">Raison : %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1167,7 +1167,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="no_one">Personne</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="not_allowed_to_enter">Vous n\'êtes pas autorisé à entrer dans cette pièce.</string>
+    <string name="not_allowed_to_enter">Vous n'êtes pas autorisé à entrer dans cette pièce.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="not_now">Pas maintenant</string>
     <!-- google-translated 2026-05-04 -->
@@ -1175,7 +1175,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="notification_sound">Son de notification</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="notification_sound_description">Jouez un son lorsqu\'un nouveau message arrive.</string>
+    <string name="notification_sound_description">Jouez un son lorsqu'un nouveau message arrive.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="notifications_permission_description">Recevez des alertes lorsque vous êtes dans une salle en direct en arrière-plan.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1191,13 +1191,13 @@
     <!-- google-translated 2026-05-04 -->
     <string name="private_messages">Messages privés</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="profile_not_available">Ce profil n\'est pas disponible</string>
+    <string name="profile_not_available">Ce profil n'est pas disponible</string>
     <!-- google-translated 2026-05-04 -->
     <string name="profile_not_found">Profil introuvable</string>
     <!-- google-translated 2026-05-04 -->
     <string name="removed_from_room">Supprimé de la salle</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_thank_you">Merci pour votre rapport. Nous l\'examinerons sous peu.</string>
+    <string name="report_thank_you">Merci pour votre rapport. Nous l'examinerons sous peu.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_user_generic">Signaler un utilisateur</string>
     <!-- google-translated 2026-05-04 -->
@@ -1205,9 +1205,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="room_alerts">Alertes de salle</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="self_destruct_countdown">Compte à rebours d\'autodestruction</string>
+    <string name="self_destruct_countdown">Compte à rebours d'autodestruction</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="self_destruct_description">Diffusez une annonce vocale lorsque la minuterie d\'autodestruction de 5 minutes d\'une pièce démarre ou s\'arrête.</string>
+    <string name="self_destruct_description">Diffusez une annonce vocale lorsque la minuterie d'autodestruction de 5 minutes d'une pièce démarre ou s'arrête.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="show_date_separators">Afficher les séparateurs de dates</string>
     <!-- google-translated 2026-05-04 -->
@@ -1257,7 +1257,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super timide ✦ À vie</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Pour obtenir de l\'aide, contactez shytalk.help@gmail.com</string>
+    <string name="support_contact">Pour obtenir de l'aide, contactez shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Fin : %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1295,9 +1295,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="update_required">Mise à jour requise</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_required_description">Une nouvelle version de ShyTalk est disponible. Veuillez mettre à jour pour continuer à utiliser l\'application.</string>
+    <string name="update_required_description">Une nouvelle version de ShyTalk est disponible. Veuillez mettre à jour pour continuer à utiliser l'application.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="update_open_store_failed">Impossible d\'ouvrir automatiquement l\'App Store. Veuillez mettre à jour ShyTalk manuellement à partir de la boutique d\'applications de votre appareil.</string>
+    <string name="update_open_store_failed">Impossible d'ouvrir automatiquement l'App Store. Veuillez mettre à jour ShyTalk manuellement à partir de la boutique d'applications de votre appareil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="view_community_standards">Afficher les normes de la communauté</string>
     <!-- google-translated 2026-05-04 -->
@@ -1308,7 +1308,7 @@
     <string name="wallet_with_balance">Portefeuille · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Des violations continues peuvent entraîner la suspension de votre compte.</string>
-    <string name="warning_acknowledge_failed">Impossible de lever l\'avertissement. Vérifiez votre connexion et réessayez.</string>
+    <string name="warning_acknowledge_failed">Impossible de lever l'avertissement. Vérifiez votre connexion et réessayez.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Votre compte a été examiné et un avertissement a été émis.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1316,7 +1316,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="who_can_message_description">Contrôlez qui peut vous envoyer des messages privés.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="who_can_message_me">Qui peut m\'envoyer un message</string>
+    <string name="who_can_message_me">Qui peut m'envoyer un message</string>
     <!-- google-translated 2026-05-04 -->
     <string name="you_were_banned">Vous avez été banni de cette pièce.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1334,7 +1334,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="messages_title">Messages</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="no_conversations_yet">Aucune conversation pour l\'instant</string>
+    <string name="no_conversations_yet">Aucune conversation pour l'instant</string>
     <!-- google-translated 2026-05-04 -->
     <string name="spin_again_with_cost">%1$s TOURNEZ ENCORE · 🪙%2$d</string>
     <!-- google-translated 2026-05-04 -->
@@ -1381,9 +1381,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="network_banned_title">Réseau interdit</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="device_banned_description">Cet appareil a été interdit d\'utiliser ShyTalk.</string>
+    <string name="device_banned_description">Cet appareil a été interdit d'utiliser ShyTalk.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="network_banned_description">Votre réseau a été interdit d\'utiliser ShyTalk. Essayez de vous connecter à partir d\'un autre réseau.</string>
+    <string name="network_banned_description">Votre réseau a été interdit d'utiliser ShyTalk. Essayez de vous connecter à partir d'un autre réseau.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="full_screen_photo">Photo plein écran</string>
     <!-- google-translated 2026-05-04 -->
@@ -1460,20 +1460,20 @@
     <string name="security">Sécurité</string>
     <!-- Starting Screens -->
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_pre_launch_title">ShyTalk n\'est pas encore disponible</string>
+    <string name="starting_screen_pre_launch_title">ShyTalk n'est pas encore disponible</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_pre_launch_message">ShyTalk n\'est pas encore sorti. Pour postuler pour tester l\'application, contactez Shyden. Les tests sont disponibles pour les utilisateurs iOS et Android.</string>
+    <string name="starting_screen_pre_launch_message">ShyTalk n'est pas encore sorti. Pour postuler pour tester l'application, contactez Shyden. Les tests sont disponibles pour les utilisateurs iOS et Android.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_dismiss">Continuer</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_police_duck_description">Illustration d\'avertissement</string>
+    <string name="starting_screen_police_duck_description">Illustration d'avertissement</string>
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_loading">Chargement\u2026</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Sécurité</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_app_lock">Verrouillage d\'application</string>
+    <string name="security_app_lock">Verrouillage d'application</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_app_lock_desc">Exiger un code PIN ou des données biométriques pour déverrouiller</string>
     <!-- google-translated 2026-05-04 -->
@@ -1491,7 +1491,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_biometric_login">Connexion biométrique</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_biometric_desc">Utilisez l\'empreinte digitale ou le visage pour déverrouiller</string>
+    <string name="security_biometric_desc">Utilisez l'empreinte digitale ou le visage pour déverrouiller</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_biometric_unavailable">Non disponible sur cet appareil</string>
     <!-- google-translated 2026-05-04 -->
@@ -1528,7 +1528,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="email_disposable_blocked">Les adresses e-mail jetables ne sont pas autorisées</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="email_send_failed">Échec de l\'envoi du code</string>
+    <string name="email_send_failed">Échec de l'envoi du code</string>
     <!-- google-translated 2026-05-04 -->
     <string name="email_enter_code">Entrez le code à 6 chiffres</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="signing_in_loading">Connexion\u2026</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
-    <string name="time_just_now">tout à l\' heure</string>
+    <string name="time_just_now">tout à l' heure</string>
     <!-- google-translated 2026-05-04 -->
     <string name="time_minutes_ago">Il y a %1$d minutes</string>
     <!-- google-translated 2026-05-04 -->
@@ -1615,7 +1615,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="time_minutes">%1$d minutes</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="time_less_than_minute">Moins d\'une minute</string>
+    <string name="time_less_than_minute">Moins d'une minute</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_dots_state">%1$d sur %2$d chiffres saisis</string>
     <!-- google-translated 2026-05-04 -->
@@ -1625,7 +1625,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="replace_room_title">Fermer la pièce existante ?</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="replace_room_message">Vous disposez déjà d\'une salle active. L’ouverture d’une nouvelle salle fermera celle existante. Voulez-vous continuer ?</string>
+    <string name="replace_room_message">Vous disposez déjà d'une salle active. L’ouverture d’une nouvelle salle fermera celle existante. Voulez-vous continuer ?</string>
     <!-- google-translated 2026-05-04 -->
     <string name="replace_room_confirm">Fermer et créer un nouveau</string>
 
@@ -1665,23 +1665,23 @@
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_explanation_title">Comment ça marche</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_explanation_body">Nous avons besoin d\'une photo d\'une pièce d\'identité émise par le gouvernement pour confirmer que vous avez au moins 18 ans. L\'image est cryptée pendant le transport, examinée par un modérateur humain et définitivement supprimée dès qu\'une décision est enregistrée, généralement dans les 24 heures. Seules la date de naissance et le résultat de la vérification sont conservés.</string>
+    <string name="age_verif_step_explanation_body">Nous avons besoin d'une photo d'une pièce d'identité émise par le gouvernement pour confirmer que vous avez au moins 18 ans. L'image est cryptée pendant le transport, examinée par un modérateur humain et définitivement supprimée dès qu'une décision est enregistrée, généralement dans les 24 heures. Seules la date de naissance et le résultat de la vérification sont conservés.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_explanation_continue">Je comprends — continuez</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_method_title">Quel document ?</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_method_body">Choisissez le type de pièce d\'identité que vous soumettrez. La date de naissance sur le document doit correspondre à celle de votre compte.</string>
+    <string name="age_verif_step_method_body">Choisissez le type de pièce d'identité que vous soumettrez. La date de naissance sur le document doit correspondre à celle de votre compte.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_method_passport">Passeport</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_method_drivers_license">Le permis de conduire</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_method_national_id">Carte d\'identité nationale</string>
+    <string name="age_verif_method_national_id">Carte d'identité nationale</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_image_title">Ajouter la photo</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_image_body">Choisissez une photo claire de la pièce d\'identité. Assurez-vous que la date de naissance est entièrement lisible.</string>
+    <string name="age_verif_step_image_body">Choisissez une photo claire de la pièce d'identité. Assurez-vous que la date de naissance est entièrement lisible.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_image_pick">Choisir une photo</string>
     <!-- google-translated 2026-05-04 -->
@@ -1689,9 +1689,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_confirm_title">Prêt à soumettre ?</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_confirm_body">Une fois soumise, la photo est envoyée pour examen. Vous recevrez un message système lorsqu\'une décision sera enregistrée.</string>
+    <string name="age_verif_step_confirm_body">Une fois soumise, la photo est envoyée pour examen. Vous recevrez un message système lorsqu'une décision sera enregistrée.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_field_method">Type d\'identification :</string>
+    <string name="age_verif_field_method">Type d'identification :</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_field_photo">Photo:</string>
     <!-- google-translated 2026-05-04 -->
@@ -1701,13 +1701,13 @@
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_submitted_title">Merci</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_step_submitted_body">Votre soumission est dans la file d\'attente. Nous vous enverrons un message ici lorsqu’une décision sera enregistrée.</string>
+    <string name="age_verif_step_submitted_body">Votre soumission est dans la file d'attente. Nous vous enverrons un message ici lorsqu’une décision sera enregistrée.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_step_submitted_done">Fait</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_back">Dos</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="age_verif_submit_error_no_method">Veuillez choisir un type d\'identification avant de soumettre.</string>
+    <string name="age_verif_submit_error_no_method">Veuillez choisir un type d'identification avant de soumettre.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_error_no_image">Veuillez ajouter une photo avant de soumettre.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1715,27 +1715,27 @@
     <!-- google-translated 2026-05-08 -->
     <string name="age_verif_test_env_label">Environnement de test</string>
     <!-- google-translated 2026-05-08 -->
-    <string name="age_verif_test_env_warning">Téléchargez n\'importe quelle image : il s\'agit d\'un environnement de test, les véritables identifiants ne sont pas requis et ne sont pas stockés à long terme.</string>
+    <string name="age_verif_test_env_warning">Téléchargez n'importe quelle image : il s'agit d'un environnement de test, les véritables identifiants ne sont pas requis et ne sont pas stockés à long terme.</string>
     <!-- google-translated 2026-05-09 -->
-    <string name="success_report_resolved_with_issues">Rapport résolu, mais certaines actions n\'ont pas abouti. Vérifiez le panneau Web d\'administration et réessayez si nécessaire.</string>
+    <string name="success_report_resolved_with_issues">Rapport résolu, mais certaines actions n'ont pas abouti. Vérifiez le panneau Web d'administration et réessayez si nécessaire.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_relationship_removed_pm">Votre lien de suivi avec %1$s a été supprimé dans le cadre d\'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nC\'est automatique ; cela ne reflète rien de ce que vous avez fait, et le lien d\'origine ne peut pas être restauré à partir d\'ici.\n\nSi vous ne reconnaissez pas le nom, cela signifie simplement qu\'une connexion passée a été corrigée.</string>
+    <string name="age_seg_relationship_removed_pm">Votre lien de suivi avec %1$s a été supprimé dans le cadre d'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nC'est automatique ; cela ne reflète rien de ce que vous avez fait, et le lien d'origine ne peut pas être restauré à partir d'ici.\n\nSi vous ne reconnaissez pas le nom, cela signifie simplement qu'une connexion passée a été corrigée.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_room_removed_pm">Vous avez été supprimé de %1$s dans le cadre d\'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nCela est automatique et ne reflète rien de ce que vous avez fait. La chambre elle-même est bien ; nous ne pouvons tout simplement pas vous y garder avec le nouvel arrangement.\n\nVous pouvez toujours créer ou rejoindre d\'autres salles de votre manière habituelle.</string>
+    <string name="age_seg_room_removed_pm">Vous avez été supprimé de %1$s dans le cadre d'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nCela est automatique et ne reflète rien de ce que vous avez fait. La chambre elle-même est bien ; nous ne pouvons tout simplement pas vous y garder avec le nouvel arrangement.\n\nVous pouvez toujours créer ou rejoindre d'autres salles de votre manière habituelle.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_unavailable">Indisponible</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_user_unavailable">Cet utilisateur n\'est pas disponible.</string>
+    <string name="age_seg_user_unavailable">Cet utilisateur n'est pas disponible.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_room_unavailable">Cette salle n\'est pas disponible.</string>
+    <string name="age_seg_room_unavailable">Cette salle n'est pas disponible.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_cross_cohort_blocked_toast">Cette action n\'est pas disponible pour votre compte.</string>
+    <string name="age_seg_cross_cohort_blocked_toast">Cette action n'est pas disponible pour votre compte.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_thread_hidden_pm">Votre fil de discussion avec %1$s a été conservé mais ne peut pas continuer, dans le cadre d\'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nC\'est automatique ; rien de ce que vous avez envoyé auparavant n’est perdu. Les nouveaux messages ne peuvent pas être échangés dans ce fil de discussion, mais vous pouvez toujours démarrer de nouvelles conversations avec des personnes de votre cercle habituel.</string>
+    <string name="age_seg_thread_hidden_pm">Votre fil de discussion avec %1$s a été conservé mais ne peut pas continuer, dans le cadre d'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nC'est automatique ; rien de ce que vous avez envoyé auparavant n’est perdu. Les nouveaux messages ne peuvent pas être échangés dans ce fil de discussion, mais vous pouvez toujours démarrer de nouvelles conversations avec des personnes de votre cercle habituel.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_group_frozen_banner">Ce groupe ne peut pas accepter de nouveaux membres ou de nouveaux messages suite à un changement récent dans la manière dont ShyTalk organise les comptes.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_up_welcome_pm">Bienvenue — votre compte a rejoint le cercle ShyTalk plus large.\n\nVous commencerez à voir plus de personnes dans les découvertes et les listes à partir de maintenant. Les connexions précédentes qui ont été rétablies alors que votre compte se trouvait dans le cercle plus petit ne peuvent pas être restaurées automatiquement, mais vous pouvez rajouter toute personne que vous souhaitez suivre.</string>
     <!-- google-translated 2026-05-15 -->
-    <string name="age_seg_age_down_admin_pm">Les détails de votre compte ont été mis à jour par le personnel de ShyTalk. Par conséquent, les personnes et les salles visibles ont été réduites à un cercle plus petit.\n\nSi vous pensez qu\'il s\'agit d\'une erreur, contactez l\'assistance et nous l\'examinerons.</string>
+    <string name="age_seg_age_down_admin_pm">Les détails de votre compte ont été mis à jour par le personnel de ShyTalk. Par conséquent, les personnes et les salles visibles ont été réduites à un cercle plus petit.\n\nSi vous pensez qu'il s'agit d'une erreur, contactez l'assistance et nous l'examinerons.</string>
 </resources>

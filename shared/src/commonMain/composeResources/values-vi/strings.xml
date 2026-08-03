@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Chi tiết: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Tin nhắn: \"%1$s\"</string>
+    <string name="report_message_prefix">Tin nhắn: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Phóng viên: %1$s | Đã báo cáo: %2$s</string>
 

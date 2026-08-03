@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">التفاصيل: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">الرسالة: \"%1$s\"</string>
+    <string name="report_message_prefix">الرسالة: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">المراسل: %1$s | تم الإبلاغ: %2$s</string>
 

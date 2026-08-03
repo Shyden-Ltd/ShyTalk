@@ -369,7 +369,7 @@
     <string name="report_reason_prefix">Reason: %1$s</string>
     <string name="report_type_prefix">Type: %1$s</string>
     <string name="report_details_prefix">Details: %1$s</string>
-    <string name="report_message_prefix">Message: \"%1$s\"</string>
+    <string name="report_message_prefix">Message: "%1$s"</string>
     <string name="report_reporter_reported">Reporter: %1$s | Reported: %2$s</string>
 
     <!-- Messaging - system message labels -->
@@ -608,7 +608,7 @@
     <string name="description">Description</string>
     <string name="report_user_generic">Report User</string>
     <string name="block_confirm">Block %1$s?</string>
-    <string name="block_description">They won\'t be able to view your profile.</string>
+    <string name="block_description">They won't be able to view your profile.</string>
 
     <!-- Room block warnings -->
     <string name="banned_from_room">Banned from Room</string>
@@ -683,11 +683,11 @@
     <string name="profile_not_available">This profile is not available</string>
     <string name="blocked_by_user">You have been blocked by this user</string>
     <string name="account_suspended_label">Account Suspended</string>
-    <string name="account_suspended_description">This user\'s account has been suspended.</string>
+    <string name="account_suspended_description">This user's account has been suspended.</string>
     <string name="closing">Closing...</string>
     <string name="connecting">Connecting...</string>
     <string name="voice_chat_unavailable">Voice chat is temporarily unavailable</string>
-    <string name="mic_permission_denied">Microphone permission denied. You won\'t be able to use voice chat.</string>
+    <string name="mic_permission_denied">Microphone permission denied. You won't be able to use voice chat.</string>
     <string name="replace_room_title">Close existing room?</string>
     <string name="replace_room_message">You already have an active room. Opening a new room will close your existing one. Do you want to continue?</string>
     <string name="replace_room_confirm">Close and create new</string>
@@ -697,7 +697,7 @@
     <string name="warning_reviewed">Your account has been reviewed and a warning has been issued.</string>
     <string name="warning_reviewed_for_reason">Your account has been reviewed for %1$s and a warning has been issued.</string>
     <string name="warning_consequence">Continued violations may result in suspension of your account.</string>
-    <string name="warning_acknowledge_failed">Couldn\'t clear your warning. Please check your connection and try again.</string>
+    <string name="warning_acknowledge_failed">Couldn't clear your warning. Please check your connection and try again.</string>
 
     <!-- Unsafe device -->
     <string name="device_not_supported">Device Not Supported</string>
@@ -843,7 +843,7 @@
 
     <!-- PIN & Security -->
     <string name="enter_pin">Enter your PIN</string>
-    <string name="pin_mismatch">PINs don\'t match. Try again.</string>
+    <string name="pin_mismatch">PINs don't match. Try again.</string>
     <string name="pin_locked">Too many attempts. Try again in %1$d minutes.</string>
     <string name="pin_locked_reauth">Account locked. Please sign in again to reset your PIN.</string>
     <string name="reset_pin">Reset PIN</string>
@@ -971,14 +971,14 @@
     <string name="age_verif_step_method_title">Which document?</string>
     <string name="age_verif_step_method_body">Pick the type of ID you will submit. The DOB on the document must match the one on your account.</string>
     <string name="age_verif_method_passport">Passport</string>
-    <string name="age_verif_method_drivers_license">Driver\'s license</string>
+    <string name="age_verif_method_drivers_license">Driver's license</string>
     <string name="age_verif_method_national_id">National ID card</string>
     <string name="age_verif_step_image_title">Add the photo</string>
     <string name="age_verif_step_image_body">Choose a clear photo of the ID. Make sure the date of birth is fully readable.</string>
     <string name="age_verif_step_image_pick">Choose photo</string>
     <string name="age_verif_step_image_replace">Replace photo</string>
     <string name="age_verif_step_confirm_title">Ready to submit?</string>
-    <string name="age_verif_step_confirm_body">Once submitted, the photo is sent for review. You\'ll get a system message when a decision is recorded.</string>
+    <string name="age_verif_step_confirm_body">Once submitted, the photo is sent for review. You'll get a system message when a decision is recorded.</string>
     <string name="age_verif_field_method">ID type:</string>
     <string name="age_verif_field_photo">Photo:</string>
     <string name="age_verif_photo_attached">attached</string>
@@ -994,10 +994,10 @@
     <string name="age_verif_test_env_warning">Upload any image — this is a test environment, real IDs are not required and not stored long-term.</string>
 
     <!-- UK OSA #17 PR 6: cohort-segregation relationship-removed system PM body. NOT REFERENCED by Kotlin/Swift code today — this entry is the canonical English source-of-truth for the copy that the Express migration script (express-api/scripts/migrate-segregation-relationships.js) currently hardcodes. PR 14 will add server-side locale awareness at PM-dispatch time and switch the migration to look this string up; the remaining 19 locale translations ship in PR 14 alongside that wiring. Copy is intentionally cohort-agnostic — "a recent change to how ShyTalk organises accounts" rather than "you are in different groups" — so the recipient cannot infer the counterparty's cohort. -->
-    <string name="age_seg_relationship_removed_pm">Your follow link with %1$s has been removed as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; it doesn\'t reflect anything either of you did, and the original link can\'t be restored from here.\n\nIf you don\'t recognise the name, this just means a past connection has been tidied up.</string>
+    <string name="age_seg_relationship_removed_pm">Your follow link with %1$s has been removed as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; it doesn't reflect anything either of you did, and the original link can't be restored from here.\n\nIf you don't recognise the name, this just means a past connection has been tidied up.</string>
 
     <!-- UK OSA #17 PR 7: cohort-segregation room-ejection system PM body. Sibling of age_seg_relationship_removed_pm — same English-only-in-this-PR contract; remaining 19 locales ship in PR 14 alongside server-side locale awareness. The %1$s placeholder is the (sanitised) room name. Copy reuses the load-bearing "a recent change to how ShyTalk organises accounts" phrase so the user-facing voice is consistent across PR 6 + PR 7 ejection paths. Cohort-agnostic by construction — see formatRoomEjectionPm test for the full denylist. -->
-    <string name="age_seg_room_removed_pm">You\'ve been removed from %1$s as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic and doesn\'t reflect anything you did. The room itself is fine; we just can\'t keep you in it under the new arrangement.\n\nYou can still create or join other rooms in your usual way.</string>
+    <string name="age_seg_room_removed_pm">You've been removed from %1$s as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic and doesn't reflect anything you did. The room itself is fine; we just can't keep you in it under the new arrangement.\n\nYou can still create or join other rooms in your usual way.</string>
 
     <!-- UK OSA #17 PR 12: cohort-segregation placeholder label used by Compose UI to render a generic "unavailable" tile when the cross-cohort filter (CrossCohortPolicy.PLACEHOLDER) drops an item from a list. English-only in this PR; remaining 19 locales ship in PR 14 with the locale-awareness sweep. Cohort-agnostic by construction — must never name "minor" / "adult" / age, since the placeholder is rendered to the OTHER cohort and would otherwise leak the dropped item's cohort. -->
     <string name="age_seg_unavailable">Unavailable</string>
@@ -1009,18 +1009,18 @@
     <string name="age_seg_room_unavailable">This room is unavailable.</string>
 
     <!-- UK OSA #17 PR 14: generic cross-cohort write-blocked toast surfaced for any same-cohort middleware rejection that doesn\'t have a more specific 404 cover (e.g., follow / gift / room join in flight when the viewer\'s cohort flips). Intentionally vague — does not reveal cohort boundary as the failure cause. -->
-    <string name="age_seg_cross_cohort_blocked_toast">This action isn\'t available for your account.</string>
+    <string name="age_seg_cross_cohort_blocked_toast">This action isn't available for your account.</string>
 
     <!-- UK OSA #17 PR 14: system PM dispatched when a cross-cohort 1:1 thread is hidden by the migration script (express-api/scripts/migrate-segregation-relationships.js line ~167). %1$s = sanitised counterparty display name. Same cohort-agnostic voice as age_seg_relationship_removed_pm — server-side locale lookup ships in a follow-up PR; this is the canonical English source-of-truth. -->
-    <string name="age_seg_thread_hidden_pm">Your thread with %1$s has been preserved but cannot continue, as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; nothing you sent before is lost. New messages can\'t be exchanged in this thread, but you can still start fresh conversations with people in your usual circle.</string>
+    <string name="age_seg_thread_hidden_pm">Your thread with %1$s has been preserved but cannot continue, as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; nothing you sent before is lost. New messages can't be exchanged in this thread, but you can still start fresh conversations with people in your usual circle.</string>
 
     <!-- UK OSA #17 PR 14: banner displayed inside a group conversation when the group has been frozen by the migration script for containing mixed-cohort members. Distinct from a PM — this is the in-conversation persistent banner shown to every remaining member. Brief, cohort-agnostic. -->
-    <string name="age_seg_group_frozen_banner">This group can\'t accept new members or messages following a recent change to how ShyTalk organises accounts.</string>
+    <string name="age_seg_group_frozen_banner">This group can't accept new members or messages following a recent change to how ShyTalk organises accounts.</string>
 
     <!-- UK OSA #17 PR 14: welcome system PM dispatched on the first sign-in after a user\'s minor→adult cohort flip (DOB-derived, lazy at sign-in via pm-lock-check.js). No reveal of WHY the cohort flipped — copy assumes the user knows their own birthday. -->
-    <string name="age_seg_age_up_welcome_pm">Welcome — your account has moved into the wider ShyTalk circle.\n\nYou\'ll start seeing more people in discovery and lists from now on. Previous connections that were tidied up while your account was in the smaller circle can\'t be restored automatically, but you can re-add anyone you\'d like to follow.</string>
+    <string name="age_seg_age_up_welcome_pm">Welcome — your account has moved into the wider ShyTalk circle.\n\nYou'll start seeing more people in discovery and lists from now on. Previous connections that were tidied up while your account was in the smaller circle can't be restored automatically, but you can re-add anyone you'd like to follow.</string>
 
     <!-- UK OSA #17 PR 14: system PM dispatched when an admin lowers a user\'s DOB through admin-age-verification.js and the resulting cohort flips downward (adult→minor). Distinct from age_up_welcome_pm — the user did not initiate this and may be surprised. Copy is plain-spoken about what changed (visibility scope) without naming "minor"; routes the user to support for disputes. -->
-    <string name="age_seg_age_down_admin_pm">Your account details have been updated by ShyTalk staff. As a result, the people and rooms visible to you have been narrowed to a smaller circle.\n\nIf you think this is a mistake, contact support and we\'ll review it.</string>
+    <string name="age_seg_age_down_admin_pm">Your account details have been updated by ShyTalk staff. As a result, the people and rooms visible to you have been narrowed to a smaller circle.\n\nIf you think this is a mistake, contact support and we'll review it.</string>
 
 </resources>

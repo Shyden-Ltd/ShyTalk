@@ -166,9 +166,9 @@
 
     <!-- Profile -->
     <!-- google-translated 2026-05-04 -->
-    <string name="connections">Зв\'язки</string>
+    <string name="connections">Зв'язки</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="display_name">Відображуване ім\'я</string>
+    <string name="display_name">Відображуване ім'я</string>
     <!-- google-translated 2026-05-04 -->
     <string name="dob_privacy_note">Потрібна ваша дата народження, але ви можете приховати свій вік у налаштуваннях конфіденційності.</string>
     <!-- google-translated 2026-05-04 -->
@@ -188,7 +188,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="following_list_private">Наступний список цього користувача є приватним</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="get_super_shy">Стань супер сором\'язливим</string>
+    <string name="get_super_shy">Стань супер сором'язливим</string>
     <!-- google-translated 2026-05-04 -->
     <string name="gift_wall">Подарункова стіна</string>
     <!-- google-translated 2026-05-04 -->
@@ -347,7 +347,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="owner">Власник</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="reason_optional">Причина (необов\'язково)</string>
+    <string name="reason_optional">Причина (необов'язково)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="reject">Відхиляти</string>
     <!-- google-translated 2026-05-04 -->
@@ -473,7 +473,7 @@
 
     <!-- Messaging -->
     <!-- google-translated 2026-05-04 -->
-    <string name="additional_details_optional">Додаткові відомості (необов\'язково)</string>
+    <string name="additional_details_optional">Додаткові відомості (необов'язково)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="all_admins_and_mods">Всі адміни та моди</string>
     <!-- google-translated 2026-05-04 -->
@@ -504,7 +504,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="description_label">опис</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="description_optional">Опис (необов\'язково)</string>
+    <string name="description_optional">Опис (необов'язково)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="edit_history">Історія редагування</string>
     <!-- google-translated 2026-05-04 -->
@@ -694,7 +694,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Подробиці: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Повідомлення: \"%1$s\"</string>
+    <string name="report_message_prefix">Повідомлення: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Репортер: %1$s | Повідомлено: %2$s</string>
 
@@ -848,7 +848,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy">Супер сором’язливий</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="super_shy_for_life">Ти супер сором\'язливий на все життя!</string>
+    <string name="super_shy_for_life">Ти супер сором'язливий на все життя!</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_claim_backpack">Натисніть, щоб отримати — додано у ваш рюкзак</string>
     <!-- google-translated 2026-05-04 -->
@@ -990,7 +990,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_hint">Якщо проблема не зникає, зверніться до shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="contact_us">Зв\'яжіться з нами</string>
+    <string name="contact_us">Зв'яжіться з нами</string>
     <!-- google-translated 2026-05-04 -->
     <string name="shyden_ltd_brand">ShyTalk є брендом компанії Shyden Ltd (номер компанії 17110487), 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, Сполучене Королівство.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1042,7 +1042,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="linked_accounts">Пов’язані облікові записи</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="linked">Пов\'язано</string>
+    <string name="linked">Пов'язано</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unlinked">Від’єднано</string>
     <!-- google-translated 2026-05-04 -->
@@ -1255,7 +1255,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="success_super_shy_activated">Super Shy активовано! +30 днів</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="super_shy_days">Супер сором\'язливий ✦ %1$dd</string>
+    <string name="super_shy_days">Супер сором'язливий ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Супер сором’язливий ✦ на все життя</string>
     <!-- google-translated 2026-05-04 -->
@@ -1310,7 +1310,7 @@
     <string name="wallet_with_balance">Гаманець · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Подальше порушення може призвести до призупинення дії вашого облікового запису.</string>
-    <string name="warning_acknowledge_failed">Не вдалося зняти попередження. Перевірте з\'єднання та повторіть спробу.</string>
+    <string name="warning_acknowledge_failed">Не вдалося зняти попередження. Перевірте з'єднання та повторіть спробу.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ваш обліковий запис переглянуто та винесено попередження.</string>
     <!-- google-translated 2026-05-04 -->
