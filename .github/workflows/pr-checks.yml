@@ -87,6 +87,14 @@ jobs:
               # and iOS pipelines, defeating the speedup.
               shared/src/iosMain/*) IOS_APP=true; APP=true ;;
               shared/src/androidMain/*) ANDROID_APP=true; APP=true ;;
+              # The locale corpus is guarded by Jest tests that live in
+              # express-api (locale-string-content, compose-resources-locale-
+              # parity), so BACKEND must be set for those to run at all —
+              # the same reasoning as the qa-runner drivers arm above.
+              # Without it a locale-only PR skipped `test-backend` entirely
+              # and the content guard ran only incidentally, inside the
+              # sonarcloud job's unfiltered suite (SHY-0271).
+              shared/src/commonMain/composeResources/*) ANDROID_APP=true; IOS_APP=true; APP=true; BACKEND=true ;;
               # commonMain et al affects every platform consumer of
               # the shared module. Setting both flags is the safe
               # conservative behaviour.

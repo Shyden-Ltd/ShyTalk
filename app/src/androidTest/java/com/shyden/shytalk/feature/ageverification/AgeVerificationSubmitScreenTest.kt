@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.AnnotatedString
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AgeVerificationRepository
@@ -19,6 +20,7 @@ import com.shyden.shytalk.data.repository.AgeVerificationRepository.ContentType
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.IdMethod
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.UploadHandle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -194,14 +196,15 @@ class AgeVerificationSubmitScreenTest {
 
     // ─── Rendered CONTENT of the method buttons (SHY-0271) ─────────────
 
+    /** Set by [showPickMethodStep] so a test can drive the flow past PickImage. */
+    private lateinit var pickMethodVm: AgeVerificationSubmitViewModel
+
     /** Advances to the PickMethod step, where the three ID buttons live. */
     private fun showPickMethodStep() {
+        pickMethodVm = AgeVerificationSubmitViewModel(fakeRepo, isPreviewBuild = true)
         composeTestRule.setContent {
             MaterialTheme {
-                AgeVerificationSubmitScreen(
-                    onClose = {},
-                    viewModel = AgeVerificationSubmitViewModel(fakeRepo, isPreviewBuild = true),
-                )
+                AgeVerificationSubmitScreen(onClose = {}, viewModel = pickMethodVm)
             }
         }
         composeTestRule.onNodeWithTag(TAG_AGE_VERIF_CONTINUE).performClick()
@@ -229,27 +232,83 @@ class AgeVerificationSubmitScreenTest {
         }
     }
 
-    @Test
-    fun noRenderedTextOnThisScreenCarriesAnEscapeSequence() {
-        // The general form of the same defect: a stray backslash anywhere in
-        // the copy. Catches every future string on this screen, in whichever
-        // locale the device is running, without naming them one by one.
-        showPickMethodStep()
-        val offenders =
+    /**
+     * Every user-readable string currently composed, from all three semantics
+     * properties a user can perceive.
+     *
+     * `ContentDescription` matters as much as `Text` here: the back control at
+     * `AgeVerificationSubmitScreen` carries its label only as a description, so
+     * a sweep over `Text` alone would let a corrupt string reach every TalkBack
+     * user unchallenged. `EditableText` is what a field's own contents live in.
+     */
+    private fun visibleStrings(): List<String> =
+        listOf(
+            SemanticsProperties.Text,
+            SemanticsProperties.EditableText,
+            SemanticsProperties.ContentDescription,
+        ).flatMap { key ->
             composeTestRule
-                .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true)
+                .onAllNodes(SemanticsMatcher.keyIsDefined(key), useUnmergedTree = true)
                 .fetchSemanticsNodes()
-                .flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty() }
-                .map { it.text }
-                .filter { it.contains('\\') }
-        assertEquals(emptyList<String>(), offenders)
+                .flatMap { node ->
+                    when (val v = node.config.getOrNull(key)) {
+                        is AnnotatedString -> listOf(v.text)
+                        is List<*> -> v.map { it.toString() }
+                        null -> emptyList()
+                        else -> listOf(v.toString())
+                    }
+                }
+        }
+
+    @Test
+    fun noRenderedTextOnAnyStepCarriesAnEscapeSequence() {
+        // The general form of the same defect. Walks EVERY step of the flow —
+        // an earlier version only rendered PickMethod and so covered about a
+        // third of the screen's copy while being named after the whole of it.
+        showPickMethodStep()
+        val offenders = mutableListOf<String>()
+        offenders += visibleStrings().filter(::carriesEscape)
+
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_METHOD_PASSPORT).performClick()
+        composeTestRule.waitForIdle()
+        offenders += visibleStrings().filter(::carriesEscape) // PickImage
+
+        pickMethodVm.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+        composeTestRule.waitForIdle()
+        offenders += visibleStrings().filter(::carriesEscape) // Confirm
+
+        pickMethodVm.back()
+        composeTestRule.waitForIdle()
+        offenders += visibleStrings().filter(::carriesEscape)
+
+        assertEquals(emptyList<String>(), offenders.distinct().sorted())
+    }
+
+    @Test
+    fun theSweepCoversMoreThanASingleStep() {
+        // Guards the walk itself. If a future edit collapses the test back to
+        // one step, the copy it stops covering would vanish silently — the
+        // sweep would still pass, on less. Pins that the flow actually moves.
+        showPickMethodStep()
+        val atPickMethod = visibleStrings()
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_METHOD_PASSPORT).performClick()
+        composeTestRule.waitForIdle()
+        val atPickImage = visibleStrings()
+        assertTrue("the flow did not advance — the sweep would cover one step", atPickImage != atPickMethod)
+        assertTrue("no strings were read at all", atPickMethod.isNotEmpty() && atPickImage.isNotEmpty())
     }
 
     @Test
     fun theEscapeSweepCanActuallyFail() {
-        // Mutation guard: a sweep that cannot detect its own target is exactly
-        // how this shipped. Proves the predicate fires on the real defect.
-        val corrupt = listOf("Passport", "Driver\\'s license")
-        assertEquals(listOf("Driver\\'s license"), corrupt.filter { it.contains('\\') })
+        // Mutation guard on the SHARED predicate used by the sweep above — not
+        // an inline copy of it. A guard with its own private copy stays green
+        // while the real rule is weakened, which proves only that Kotlin's
+        // `String.contains` works.
+        assertTrue(carriesEscape("Driver\\'s license"))
+        assertTrue(carriesEscape("an escaped \\\" quote"))
+        assertEquals(false, carriesEscape("Driver's license"))
     }
 }
+
+/** No user-facing copy in this app legitimately contains a backslash. */
+internal fun carriesEscape(s: String): Boolean = s.contains('\\')

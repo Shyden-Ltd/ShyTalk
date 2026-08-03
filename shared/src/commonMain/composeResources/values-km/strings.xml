@@ -1560,7 +1560,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">រូបភាពព្រមាន</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">កំពុងផ្ទុក\u2026</string>
+    <string name="starting_screen_loading">កំពុងផ្ទុក…</string>
 
     <!-- Security Settings Screen -->
     <!-- google-translated 2026-05-04 -->
@@ -1668,7 +1668,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">បញ្ចូលកូដ PIN របស់អ្នកដើម្បីបន្ត</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">កំពុងផ្ទៀងផ្ទាត់\u2026</string>
+    <string name="pin_verifying">កំពុងផ្ទៀងផ្ទាត់…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">កូដ PIN ខុស។ នៅសល់ការព្យាយាម %1$d ដង។</string>
     <!-- google-translated 2026-05-04 -->
@@ -1694,7 +1694,7 @@
 
     <!-- Sign-in loading states -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">ចូល\u2026</string>
+    <string name="signing_in_loading">ចូល…</string>
 
     <!-- Date/Time (DateUtils) -->
     <!-- google-translated 2026-05-04 -->

@@ -743,7 +743,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="day_sat">앉았다</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="day_streak">%1$일 연속</string>
+    <string name="day_streak">%1$d일 연속</string>
     <!-- google-translated 2026-05-04 -->
     <string name="day_sun">해</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">경고 그림</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">로드 중\u2026</string>
+    <string name="starting_screen_loading">로드 중…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">보안</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">계속하려면 PIN을 입력하세요.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">확인 중\u2026</string>
+    <string name="pin_verifying">확인 중…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN이 잘못되었습니다. %1$d회 시도 남았습니다.</string>
     <!-- google-translated 2026-05-04 -->

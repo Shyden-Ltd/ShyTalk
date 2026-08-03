@@ -1573,7 +1573,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Ange din PIN-kod för att fortsätta</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verifierar\u2026</string>
+    <string name="pin_verifying">Verifierar…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Fel PIN-kod. %1$d försök kvar.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1599,7 +1599,7 @@
     <string name="biometric_start_failed">Det gick inte att starta biometrisk verifiering</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Loggar in\u2026</string>
+    <string name="signing_in_loading">Loggar in…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">just nu</string>

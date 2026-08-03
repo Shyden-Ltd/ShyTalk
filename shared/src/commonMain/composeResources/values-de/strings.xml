@@ -1246,7 +1246,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="success_redeemed_beans">%1$s Bohnen eingelöst</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="success_redeemed_beans_bonus">%1$s Bohnen eingelöst (10 % % Bonus!)</string>
+    <string name="success_redeemed_beans_bonus">%1$s Bohnen eingelöst (10 %% Bonus!)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="success_report_resolved">Bericht gelöst</string>
     <!-- google-translated 2026-05-04 -->
@@ -1469,7 +1469,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Warnillustration</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Laden\u2026</string>
+    <string name="starting_screen_loading">Laden…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Sicherheit</string>
@@ -1572,7 +1572,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Geben Sie Ihre PIN ein, um fortzufahren</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verifizierung\u2026</string>
+    <string name="pin_verifying">Verifizierung…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Falsche PIN. Es verbleiben noch %1$d Versuche.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1598,7 +1598,7 @@
     <string name="biometric_start_failed">Die biometrische Überprüfung konnte nicht gestartet werden</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Anmelden\u2026</string>
+    <string name="signing_in_loading">Anmelden…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">soeben</string>

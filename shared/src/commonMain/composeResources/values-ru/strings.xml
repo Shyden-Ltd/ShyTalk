@@ -899,7 +899,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="account_suspended_label">Аккаунт заблокирован</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="active_days_ago">Активен %1$дд назад</string>
+    <string name="active_days_ago">Активен %1$dд назад</string>
     <!-- google-translated 2026-05-04 -->
     <string name="active_hours_ago">Активен %1$dh назад</string>
     <!-- google-translated 2026-05-04 -->
@@ -907,7 +907,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="active_long_ago">Активен более 30 дней назад</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="active_minutes_ago">Активен %1$дм назад</string>
+    <string name="active_minutes_ago">Активен %1$dм назад</string>
     <!-- google-translated 2026-05-04 -->
     <string name="allow">Позволять</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Предупреждающая иллюстрация</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Загрузка\u2026</string>
+    <string name="starting_screen_loading">Загрузка…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Безопасность</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Введите свой PIN-код, чтобы продолжить</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Проверка\u2026</string>
+    <string name="pin_verifying">Проверка…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Неправильный ПИН-код. Осталось %1$d попыток.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Не удалось начать биометрическую проверку.</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Вход\u2026</string>
+    <string name="signing_in_loading">Вход…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">прямо сейчас</string>

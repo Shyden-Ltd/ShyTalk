@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Inserisci il tuo PIN per continuare</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verifica\u2026</string>
+    <string name="pin_verifying">Verifica…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN sbagliato. %1$d tentativi rimanenti.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Impossibile avviare la verifica biometrica</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Accesso in corso\u2026</string>
+    <string name="signing_in_loading">Accesso in corso…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">proprio adesso</string>

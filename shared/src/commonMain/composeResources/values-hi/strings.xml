@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">चेतावनी चित्रण</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">लोड हो रहा है\u2026</string>
+    <string name="starting_screen_loading">लोड हो रहा है…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">सुरक्षा</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">जारी रखने के लिए अपना पिन दर्ज करें</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">सत्यापन किया जा रहा है\u2026</string>
+    <string name="pin_verifying">सत्यापन किया जा रहा है…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">ग़लत पिन. %1$d प्रयास शेष हैं.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">बायोमेट्रिक सत्यापन प्रारंभ नहीं हो सका</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">साइन इन हो रहा है\u2026</string>
+    <string name="signing_in_loading">साइन इन हो रहा है…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">बस अब</string>

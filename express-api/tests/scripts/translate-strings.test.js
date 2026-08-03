@@ -128,7 +128,7 @@ describe('upsertTranslation', () => {
     expect((result.match(/<string name="key">/g) || []).length).toBe(1);
   });
 
-  test('escapes XML-sensitive characters in translated value', () => {
+  test('escapes XML-sensitive characters but NOT the apostrophe', () => {
     const localePath = path.join(tmpDir, 'strings.xml');
     fs.writeFileSync(
       localePath,
@@ -140,7 +140,76 @@ describe('upsertTranslation', () => {
     const { upsertTranslation } = loadScript();
     upsertTranslation(localePath, 'key', `5 < 10 & it's true`, 'google');
     const result = fs.readFileSync(localePath, 'utf8');
-    expect(result).toContain("5 &lt; 10 &amp; it\\'s true");
+    // SHY-0271: this assertion used to demand `it\'s`, which made the suite
+    // GREEN on the exact defect the operator later read off the screen — the
+    // test pinned the bug as the contract. Compose Multiplatform does not
+    // unescape `\'`, so the backslash rendered.
+    expect(result).toContain("5 &lt; 10 &amp; it's true");
+    expect(result).not.toContain("\\'");
+  });
+});
+
+// ─── escapeXml / unescapeXml (SHY-0271) ───────────────────────────
+//
+// Both were exported "for testing" and neither had a single direct test. The
+// untested one wrote a visible backslash into 221 strings across 18 locales.
+
+describe('escapeXml', () => {
+  test('leaves an apostrophe alone', () => {
+    const { escapeXml } = loadScript();
+    expect(escapeXml("Driver's license")).toBe("Driver's license");
+  });
+
+  test('escapes the three characters XML actually requires', () => {
+    const { escapeXml } = loadScript();
+    expect(escapeXml('a & b < c > d')).toBe('a &amp; b &lt; c &gt; d');
+  });
+
+  test('leaves typographic quotes and ellipses alone', () => {
+    // The zh corpus carried `\u201c` / `\u201d`; escaping those is the same
+    // mistake wearing a different character.
+    const { escapeXml } = loadScript();
+    expect(escapeXml('\u201cquoted\u201d and\u2026')).toBe('\u201cquoted\u201d and\u2026');
+  });
+
+  test('handles the empty string', () => {
+    const { escapeXml } = loadScript();
+    expect(escapeXml('')).toBe('');
+  });
+
+  test('never emits a backslash, whatever it is given', () => {
+    // The general property. A future escape added to this function would have
+    // to break this test on its way to the screen.
+    const { escapeXml } = loadScript();
+    const samples = [
+      "it's",
+      'a & b',
+      '<tag>',
+      '\u201cq\u201d',
+      'plain',
+      "multiple ' apostrophes '",
+    ];
+    expect(samples.map(escapeXml).filter((v) => v.includes('\\'))).toEqual([]);
+  });
+});
+
+describe('unescapeXml', () => {
+  test('normalises a legacy escaped apostrophe on read', () => {
+    // Retained deliberately: the corpus was full of `\'` before SHY-0271, and
+    // reading one back must still yield a clean apostrophe.
+    const { unescapeXml } = loadScript();
+    expect(unescapeXml("Driver\\'s license")).toBe("Driver's license");
+  });
+
+  test('reverses the entity escapes', () => {
+    const { unescapeXml } = loadScript();
+    expect(unescapeXml('a &amp; b &lt; c &gt; d')).toBe('a & b < c > d');
+  });
+
+  test('round-trips with escapeXml', () => {
+    const { escapeXml, unescapeXml } = loadScript();
+    const samples = ["Driver's license", 'a & b < c > d', '\u201cquoted\u201d', 'plain text', ''];
+    samples.forEach((s) => expect(unescapeXml(escapeXml(s))).toBe(s));
   });
 });
 

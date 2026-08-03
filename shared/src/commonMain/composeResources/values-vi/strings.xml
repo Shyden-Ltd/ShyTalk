@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Minh họa cảnh báo</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Đang tải\u2026</string>
+    <string name="starting_screen_loading">Đang tải…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Bảo vệ</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Nhập mã PIN của bạn để tiếp tục</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Đang xác minh\u2026</string>
+    <string name="pin_verifying">Đang xác minh…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Mã PIN sai. Còn lại %1$d lần thử.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Không thể bắt đầu xác minh sinh trắc học</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Đang đăng nhập\u2026</string>
+    <string name="signing_in_loading">Đang đăng nhập…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">ngay bây giờ</string>

@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Ilustração de aviso</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Carregando\u2026</string>
+    <string name="starting_screen_loading">Carregando…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Segurança</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Digite seu PIN para continuar</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verificando\u2026</string>
+    <string name="pin_verifying">Verificando…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN errado. %1$d tentativas restantes.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Não foi possível iniciar a verificação biométrica</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Fazendo login\u2026</string>
+    <string name="signing_in_loading">Fazendo login…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">agora mesmo</string>

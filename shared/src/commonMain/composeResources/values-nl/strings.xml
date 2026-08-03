@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Waarschuwingsillustratie</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Laden\u2026</string>
+    <string name="starting_screen_loading">Laden…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Beveiliging</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Voer uw pincode in om door te gaan</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verifiëren\u2026</string>
+    <string name="pin_verifying">Verifiëren…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Verkeerde pincode. %1$d pogingen resterend.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Kan biometrische verificatie niet starten</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Aanmelden\u2026</string>
+    <string name="signing_in_loading">Aanmelden…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">zojuist</string>

@@ -857,7 +857,7 @@
     <string name="starting_screen_pre_launch_message">ShyTalk has not been released yet. To apply to test the application, contact Shyden. Testing is available for iOS and Android users.</string>
     <string name="starting_screen_dismiss">Continue</string>
     <string name="starting_screen_police_duck_description">Warning illustration</string>
-    <string name="starting_screen_loading">Loading\u2026</string>
+    <string name="starting_screen_loading">Loading…</string>
 
     <!-- Security Settings Screen -->
     <string name="security_title">Security</string>
@@ -915,7 +915,7 @@
     <!-- PIN Verify / Lock Screen -->
     <string name="pin_verify_title">Verify your identity</string>
     <string name="pin_verify_subtitle">Enter your PIN to continue</string>
-    <string name="pin_verifying">Verifying\u2026</string>
+    <string name="pin_verifying">Verifying…</string>
     <string name="pin_wrong_attempts">Wrong PIN. %1$d attempts remaining.</string>
     <string name="pin_account_locked">Account locked</string>
     <string name="pin_verify_failed">Verification failed</string>
@@ -929,7 +929,7 @@
     <string name="biometric_start_failed">Could not start biometric verification</string>
 
     <!-- Sign-in loading states -->
-    <string name="signing_in_loading">Signing in\u2026</string>
+    <string name="signing_in_loading">Signing in…</string>
 
     <!-- Date/Time (DateUtils) -->
     <string name="time_just_now">just now</string>

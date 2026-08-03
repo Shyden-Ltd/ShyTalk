@@ -1245,7 +1245,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="success_redeemed_beans">%1$s beans échangés</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="success_redeemed_beans_bonus">Beans %1$s échangés (bonus de 10 % !)</string>
+    <string name="success_redeemed_beans_bonus">Beans %1$s échangés (bonus de 10 %% !)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="success_report_resolved">Rapport résolu</string>
     <!-- google-translated 2026-05-04 -->
@@ -1468,7 +1468,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Illustration d'avertissement</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Chargement\u2026</string>
+    <string name="starting_screen_loading">Chargement…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Sécurité</string>
@@ -1571,7 +1571,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Entrez votre code PIN pour continuer</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Vérification\u2026</string>
+    <string name="pin_verifying">Vérification…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Mauvais code PIN. %1$d tentatives restantes.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1597,7 +1597,7 @@
     <string name="biometric_start_failed">Impossible de démarrer la vérification biométrique</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Connexion\u2026</string>
+    <string name="signing_in_loading">Connexion…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">tout à l' heure</string>

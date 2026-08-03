@@ -743,7 +743,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="day_sat">Duduk</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="day_streak">%1$hari berturut-turut</string>
+    <string name="day_streak">%1$d hari berturut-turut</string>
     <!-- google-translated 2026-05-04 -->
     <string name="day_sun">Matahari</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Ilustrasi peringatan</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Memuat\u2026</string>
+    <string name="starting_screen_loading">Memuat…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Keamanan</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Masukkan PIN Anda untuk melanjutkan</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Memverifikasi\u2026</string>
+    <string name="pin_verifying">Memverifikasi…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN salah. %1$d percobaan tersisa.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Tidak dapat memulai verifikasi biometrik</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Masuk\u2026</string>
+    <string name="signing_in_loading">Masuk…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">baru saja</string>

@@ -404,7 +404,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="user">مستخدم</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="user_id">المعرف: %1$د</string>
+    <string name="user_id">المعرف: %1$d</string>
     <!-- google-translated 2026-05-04 -->
     <string name="visitor_count">%1$d زائر (زائرين)</string>
     <!-- google-translated 2026-05-04 -->
@@ -430,7 +430,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="request_accepted">تم قبول طلبك!</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="seat_number">المقعد %1$د</string>
+    <string name="seat_number">المقعد %1$d</string>
     <!-- google-translated 2026-05-04 -->
     <string name="user_wants_to_sit">%1$s يريد الجلوس</string>
 
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">أدخل رقم التعريف الشخصي الخاص بك للمتابعة</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">التحقق\u2026</string>
+    <string name="pin_verifying">التحقق…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">رقم تعريف شخصي خاطئ. متبقي %1$d من المحاولات.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">تعذر بدء التحقق البيومتري</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">تسجيل الدخول\u2026</string>
+    <string name="signing_in_loading">تسجيل الدخول…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">الآن</string>

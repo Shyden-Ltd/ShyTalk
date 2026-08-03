@@ -23,39 +23,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const RESOURCES_DIR = path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  'shared',
-  'src',
-  'commonMain',
-  'composeResources',
-);
-
-const ALL_LOCALES = [
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'hi',
-  'id',
-  'it',
-  'ja',
-  'km',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
-  'th',
-  'tr',
-  'uk',
-  'vi',
-  'zh',
-];
+// SHY-0271: the locale set is declared ONCE, in the shared helper. Three
+// files used to keep private copies; the divergence is how a discovered set
+// could quietly lose a locale.
+const { RESOURCES_DIR, ALL_LOCALES } = require('../_helpers/compose-locales');
 
 function readKeys(localeDir) {
   const xmlPath = path.join(RESOURCES_DIR, localeDir, 'strings.xml');
