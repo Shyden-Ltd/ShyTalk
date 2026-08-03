@@ -1,6 +1,6 @@
 ---
 id: SHY-0269
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-03
 priority: P0
@@ -175,6 +175,9 @@ time since 2026-07-16.
 - **2026-08-03 08:0x BST** — Root cause read from the check-run annotation, not
   inferred. `git log -S` showed `PERSONAS_PASSWORD_DEV` unchanged in this
   workflow since 2026-05-29, so the repo secret was renamed under it.
+- **2026-08-03 12:4x BST** — Flipped to In Review. CI-config-only (no app, backend or
+  website runtime surface), so the device/browser gauntlet is not applicable; the fix is
+  additionally live-proven by a real dispatch that reached `PROVISION_ALL_OK count=17`.
 - The inventory check immediately found one further reference not backed by a
   configured secret — `SMOKE_FIREBASE_API_KEY` — which turned out to be a
   deliberate `|| DEV_FIREBASE_API_KEY` override with its own preflight. Modelled
