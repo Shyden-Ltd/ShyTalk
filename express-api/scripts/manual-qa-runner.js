@@ -1207,6 +1207,23 @@ const matchers = [
     },
   },
   {
+    // The block itself: clients write users/{id}.blockedUserIds directly —
+    // there is no Express endpoint to call. Performing the real client write
+    // is what lets the j18 "official account cannot be blocked" scenario FAIL
+    // honestly: nothing currently prevents it, and a skipped step would hide
+    // that behind a missing matcher instead.
+    pattern: /^([A-Z][a-z]+) on (?:Android|iOS|iOS Sim|Web) blocks the official account$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedBlock(ctx, m[1], 'Officia');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
     pattern: /^([A-Z][a-z]+) has blocked ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
@@ -6173,7 +6190,7 @@ const matchers = [
     // status } summary for the named endpoint at the named status code.
     // Used by j05 double-tap idempotency to verify exactly 1 of 2 taps
     // hit /api/economy/purchase with status 200.
-    pattern: /^exactly (\d+) requests? to (\/api\/[\w/-]+) succeeds with status (\d+)$/,
+    pattern: /^exactly (\d+) requests? to (\/api\/[\w/{}-]+) succeeds with status (\d+)$/,
     async handler(m, ctx) {
       const expectedCount = parseInt(m[1], 10);
       const endpoint = m[2];
@@ -6335,7 +6352,7 @@ const matchers = [
     // Regex linear: `.+$` greedy + anchored to end-of-string. Input
     // is author-controlled (feature files). Safe.
     // eslint-disable-next-line sonarjs/slow-regex
-    pattern: /^([A-Z][a-z]+)\s+on Android POSTs (\/api\/[\w/-]+)(?:\s+(.+))?$/,
+    pattern: /^([A-Z][a-z]+)\s+on Android POSTs (\/api\/[\w/{}-]+)(?:\s+(.+))?$/,
     async handler(m, ctx) {
       const endpoint = m[2];
       const rest = m[3] || '';
@@ -7057,7 +7074,7 @@ const matchers = [
     // when cohorts differ). Driver fires the API call and stores result
     // on ctx.lastResponse (the bare HTTP status matcher below reads it).
     pattern:
-      /^([A-Z][a-z]+)\s+on Android attempts to start a conversation with ([A-Z][a-z]+) via POST (\/api\/[\w/-]+)$/,
+      /^([A-Z][a-z]+)\s+on Android attempts to start a conversation with ([A-Z][a-z]+) via POST (\/api\/[\w/{}-]+)$/,
     async handler(m, ctx) {
       const target = m[2];
       const apiPath = m[3];
@@ -7335,7 +7352,7 @@ const matchers = [
     // minor side (60000010 Marcus) as target — matches the scenario
     // intent that EVERY concurrent attempt is the same cohort-violating
     // request and EVERY response must be blocked.
-    pattern: /^(\d+) cross-cohort follow attempts hit (\/api\/[\w/-]+) concurrently$/,
+    pattern: /^(\d+) cross-cohort follow attempts hit (\/api\/[\w/{}-]+) concurrently$/,
     async handler(m, ctx) {
       const count = parseInt(m[1], 10);
       const endpoint = m[2];
@@ -7440,7 +7457,7 @@ const matchers = [
     // POST <api>". Driver receives the endpoint (null for bare). Returns
     // the token string (truthy = ok). Platform-dispatch.
     pattern:
-      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+receives a LiveKit token(?: in response from POST (\/api\/[\w/-]+))?$/,
+      /^([A-Z][a-z]+)\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+receives a LiveKit token(?: in response from POST (\/api\/[\w/{}-]+))?$/,
     async handler(m, ctx) {
       const platform = m[2];
       const endpoint = m[3] || null;
@@ -7566,7 +7583,7 @@ const matchers = [
     // has mid-step parens — allow optional `\(...\)` after the target.
     // Driver stores result on ctx.lastResponse for downstream assertions.
     pattern:
-      /^([A-Z][a-z]+)\s+on Android attempts to block ([A-Z][a-z]+)(?:\s+\([^()]*\))?\s+via (\/api\/[\w/-]+)$/,
+      /^([A-Z][a-z]+)\s+on Android attempts to block ([A-Z][a-z]+)(?:\s+\([^()]*\))?\s+via (\/api\/[\w/{}-]+)$/,
     async handler(m, ctx) {
       const target = m[2];
       const apiPath = m[3];
@@ -7585,7 +7602,7 @@ const matchers = [
     // "the request returns status N" matcher because this one verifies
     // the response came from the NAMED endpoint. Reads ctx.lastResponse
     // and checks both status AND path match.
-    pattern: /^the response status from (\/api\/[\w/-]+) is (\d+)$/,
+    pattern: /^the response status from (\/api\/[\w/{}-]+) is (\d+)$/,
     async handler(m, ctx) {
       const expectedPath = m[1];
       const expectedStatus = parseInt(m[2], 10);
@@ -8086,7 +8103,7 @@ const matchers = [
     // Singular vs plural: the corpus uses "1 result" but "0 results" /
     // "5 results", so the trailing `s` is optional.
     pattern:
-      /^the response from (\/api\/[\w/-]+) as ([A-Z][a-z]+) has (\d+) results? and "([^"=]+)=([^"]+)" in every row$/,
+      /^the response from (\/api\/[\w/{}-]+) as ([A-Z][a-z]+) has (\d+) results? and "([^"=]+)=([^"]+)" in every row$/,
     async handler(m, ctx) {
       const expectedPath = m[1];
       const expectedCount = parseInt(m[3], 10);
@@ -8840,7 +8857,7 @@ const matchers = [
     // everything from the bearer token need no request body. Distinct
     // from existing `POST <path> with <kv-list> as <persona>` which
     // requires a `with <payload>` token.
-    pattern: /^POST\s+(\/api\/[\w/-]+)\s+as\s+([A-Z][a-z]+)$/,
+    pattern: /^POST\s+(\/api\/[\w/{}-]+)\s+as\s+([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const apiPath = m[1];
       const name = m[2];
@@ -8874,7 +8891,7 @@ const matchers = [
     // variant tests the API's rejection of bodyless POSTs (e.g., suspended
     // user attempting to send a message).
     pattern:
-      /^([A-Z][a-z]+)(?:\s+on\s+(?:Web Chromium|Web Safari|Web|Android|iOS Sim))?\s+attempts POST\s+(\/api\/[\w/-]+)$/,
+      /^([A-Z][a-z]+)(?:\s+on\s+(?:Web Chromium|Web Safari|Web|Android|iOS Sim))?\s+attempts POST\s+(\/api\/[\w/{}-]+)$/,
     async handler(m, ctx) {
       const name = m[1];
       const apiPath = m[2];
@@ -9883,7 +9900,7 @@ const matchers = [
   {
     // Wake 77 — "the network log shows N attempts to <path>".
     // j14:88 — retry-count assertion for fault-injection tests.
-    pattern: /^the network log shows (\d+) attempts to (\/api\/[\w/-]+)$/,
+    pattern: /^the network log shows (\d+) attempts to (\/api\/[\w/{}-]+)$/,
     async handler(m, ctx) {
       const expected = parseInt(m[1], 10);
       const apiPath = m[2];
@@ -9923,7 +9940,7 @@ const matchers = [
     // Wake 78 — "Express API <path> has a N second latency injected".
     // j14:96 — fault-injection state-seed. Driver enables server-side
     // latency for the named endpoint.
-    pattern: /^the Express API (\/api\/[\w/-]+) has a (\d+) second latency injected$/,
+    pattern: /^the Express API (\/api\/[\w/{}-]+) has a (\d+) second latency injected$/,
     async handler(m, ctx) {
       const apiPath = m[1];
       const seconds = parseInt(m[2], 10);
@@ -9944,7 +9961,7 @@ const matchers = [
     // Wake 78 — "Express API <path> fails twice with N, succeeds on Nth try".
     // j14:85 — fault-injection with retry-success pattern. Driver receives
     // path, failure status code, success ordinal (3rd, 4th, etc.).
-    pattern: /^the Express API (\/api\/[\w/-]+) fails twice with (\d+), succeeds on (\w+) try$/,
+    pattern: /^the Express API (\/api\/[\w/{}-]+) fails twice with (\d+), succeeds on (\w+) try$/,
     async handler(m, ctx) {
       const apiPath = m[1];
       const failureStatus = parseInt(m[2], 10);
@@ -10684,7 +10701,7 @@ const matchers = [
     // Wake 80 — "the response from <path>?<query> includes <Name>".
     // j15:62 — checks ctx.lastResponse.results[] for an entry matching
     // the named persona (by displayName or uniqueId).
-    pattern: /^the response from (\/api\/[\w/-]+)\?[\w=&-]+ includes ([A-Z][a-z]+)$/,
+    pattern: /^the response from (\/api\/[\w/{}-]+)\?[\w=&-]+ includes ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
       const apiPath = m[1];
       const name = m[2];

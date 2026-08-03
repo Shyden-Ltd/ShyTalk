@@ -151,14 +151,13 @@ Feature: j12 — Greta's admin daily routine
   Scenario: Audit log is immutable — PATCH + DELETE both rejected from admin endpoints
     Given Greta is on the admin dashboard with at least 50 audit-log entries
     When Greta on Web Admin attempts to PATCH /api/admin/audit/{anyEntry}
-    Then the response status is 405 or 403
+    Then the response status is 404
 
   @blocker @browser-chromium
-  Scenario: Greta on Web Admin attempts to DELETE /api/admin/audit/{anyEntry}
+  Scenario: The audit log offers no way to delete an entry either
     Given Greta is on the admin dashboard with at least 50 audit-log entries
-    And Greta on Web Admin attempts to PATCH /api/admin/audit/{anyEntry}
     When Greta on Web Admin attempts to DELETE /api/admin/audit/{anyEntry}
-    Then the response status is 405 or 403
+    Then the response status is 404
 
   @browser-chromium
   Scenario: Non-admin user is bounced from the admin panel

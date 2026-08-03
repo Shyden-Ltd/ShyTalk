@@ -116,15 +116,15 @@ Feature: j08 — Vexa's cross-cohort probing
     Then Marcus's Android UI shows "No results found"
 
   @blocker @cross-cohort
-  Scenario: POST /api/users/follow with targetUniqueId=50000040 as Marcus
+  Scenario: POST /api/users/50000040/follow as Marcus
     Given Marcus on Android searches "Vexa" in discovery
-    When POST /api/users/follow with targetUniqueId=50000040 as Marcus
+    When POST /api/users/50000040/follow as Marcus
     Then the response status is 404
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 60000010, targetUniqueId: 50000040}
 
   @cross-cohort @perf-budget:200
   Scenario: Audit row write does not slow the 404 response path noticeably
-    When 10 cross-cohort follow attempts hit /api/users/follow concurrently
+    When 10 cross-cohort follow attempts hit /api/users/{targetId}/follow concurrently
     Then each response status is 404
     Then each response p95 latency is less than 200ms
     Then 10 audit rows are written

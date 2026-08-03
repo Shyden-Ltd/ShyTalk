@@ -53,11 +53,17 @@ Feature: j18 — Officia's system PMs
     Then Adam's Android UI shows "Official" badge and a disabled block button
 
   @blocker @android-physical
-  Scenario: POST /api/users/block with targetUniqueId=1 as Adam
+  # GAP (SHY-0268 audit): "unblockable" has no enforcement point. Blocks are
+  # written straight to users/{id}.blockedUserIds by the clients — there is no
+  # Express endpoint to reject the call, and firestore.rules places no
+  # constraint on blockedUserIds at all. This scenario asserts the intended
+  # behaviour and is expected to FAIL until a guard exists; it is deliberately
+  # not weakened to match the current behaviour, because passing here would
+  # mean the official account is blockable.
+  Scenario: The official account cannot be blocked
     Given Adam received a system PM from Officia
-    And Adam on Android opens Officia's profile from the PM
-    When POST /api/users/block with targetUniqueId=1 as Adam
-    Then the response status is 400
+    When Adam on Android blocks the official account
+    Then the database has document "users/{adamId}" with field "blockedUserIds" not containing 1
     Then the response body contains "Cannot block ShyTalk Official account"
     Then the database does not have document "users/{adamId}" with field "blockedIds" containing 1
 

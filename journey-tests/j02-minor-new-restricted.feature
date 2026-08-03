@@ -97,7 +97,7 @@ Feature: j02 — Mia's restricted minor experience
   @blocker @ios-sim @cross-cohort
   Scenario: Mia's cross-cohort follow attempt at Alice returns 404 with an audit row
     Given Mia has accepted legal as a minor
-    When POST /api/users/follow with targetUniqueId=50000010 as Mia
+    When POST /api/users/50000010/follow as Mia
     Then the response status is 404
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", targetUniqueId: 50000010, sourceUniqueId: {newUniqueId}}
     Then Mia's iOS Sim UI does not show Alice anywhere
@@ -118,7 +118,7 @@ Feature: j02 — Mia's restricted minor experience
   @blocker @ios-sim @cross-cohort
   Scenario: Cross-cohort PM-creation attempt by minor is rejected
     Given Mia [P-03] is signed in on iOS Sim
-    When POST /api/conversations with targetUniqueId=50000010 as Mia
+    When POST /api/conversations/{convId}/messages with body {"text": "hi"} as Mia
     Then the response status is 404
     Then no conversation doc is created
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", targetUniqueId: 50000010}

@@ -142,7 +142,7 @@ Feature: j07 — Adam discovers + messages Alice
   @android-physical @cross-cohort
   Scenario: Adam attempts to PM a minor user — 404 wall + audit row + no conversation created
     Given Marcus (P-04, minor) exists
-    When Adam on Android attempts to start a conversation with Marcus via POST /api/conversations
+    When Adam on Android attempts to message Marcus via POST /api/conversations/{convId}/messages
     Then the response status is 404
     Then no conversation doc is created
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", targetUniqueId: 60000010}

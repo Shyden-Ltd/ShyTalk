@@ -129,13 +129,13 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker
   Scenario: Suspended Raul cannot create conversations or LiveKit tokens (403 on both)
     Given Raul is in a suspendedUntil state 3 days from now
-    When POST /api/conversations with body as Raul
+    When POST /api/conversations/{convId}/messages with body as Raul
     Then the response status is 403
 
   @blocker
   Scenario: POST /api/livekit/token as Raul
     Given Raul is in a suspendedUntil state 3 days from now
-    And POST /api/conversations with body as Raul
+    And POST /api/conversations/{convId}/messages with body as Raul
     When POST /api/livekit/token as Raul
     Then the response status is 403
 
@@ -179,10 +179,10 @@ Feature: j11 — Full harassment moderation lifecycle
     Then Raul's Android UI disables the message input
 
   @android-physical
-  Scenario: Raul on Android attempts POST /api/messages
+  Scenario: A suspended member cannot send a message
     Given Raul is suspended until 2 days from now
     And Raul on Android opens his conversation with Nora
-    When Raul on Android attempts POST /api/messages
+    When Raul on Android attempts POST /api/conversations/{convId}/messages
     Then the response status is 403
 
   @ios-sim
