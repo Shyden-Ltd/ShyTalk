@@ -31,7 +31,7 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker @android-physical @ios-sim
   Scenario: Raul sends "offensive content #1" — message persisted, Nora's thread shows it
     When Raul on Android sends "offensive content #1" to Nora
-    Then within 3000ms the database has 1 entries in "messages" matching {senderId: 50000050, body: "offensive content #1"}
+    Then within 3000ms the database has 1 entries in "*/messages" matching {senderId: 50000050, body: "offensive content #1"}
     Then within 3000ms Nora's iOS Sim UI shows the message in the conversation thread
 
   @blocker @ios-sim
@@ -60,7 +60,7 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker @ios-sim
   Scenario: Officia sends Nora a "moderation_action_taken" notice confirming the warning
     Given Greta has issued a warning to Raul on Nora's report
-    Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 50000051, key: "moderation_action_taken"}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {senderId: 1, recipientId: 50000051, key: "moderation_action_taken"}
     Then within 5000ms Nora's iOS Sim UI shows the system PM from Officia "Action taken on your report"
 
   @blocker @android-physical
@@ -169,7 +169,7 @@ Feature: j11 — Full harassment moderation lifecycle
     When Raul on Android force-refreshes the JWT
     Then within 5000ms Raul's Android UI shows the element with tag "main_roomsTab"
     Then Raul's Android UI no longer shows the suspension screen
-    Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 50000051, key: "moderation_user_restored"}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {senderId: 1, recipientId: 50000051, key: "moderation_user_restored"}
 
   @android-physical
   Scenario: Raul attempts to send a message while suspended — 403 + clear UI

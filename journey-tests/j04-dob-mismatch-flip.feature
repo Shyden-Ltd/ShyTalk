@@ -62,7 +62,7 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
   Scenario: Officia sends Hayato a Japanese-locale age-down PM
     Given Hayato has been downgraded to cohort=minor by Greta
     Then within 5000ms the database has 1 entries in "conversations" matching {participantIds: [1, 50000030]}
-    Then the database has 1 entries in "messages" with the system PM key "age_seg_age_down_admin_pm" addressed to 50000030
+    Then the database has 1 entries in "*/messages" with the system PM key "age_seg_age_down_admin_pm" addressed to 50000030
     Then the PM body is the Japanese translation of the age_down template
     Then the PM is from Officia (uniqueId=1, userType=SHYTALK_OFFICIAL)
 

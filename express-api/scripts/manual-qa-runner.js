@@ -477,11 +477,10 @@ async function ensureKickedFromRoom(ctx, roomId, personaName) {
   const data = snap.data() || {};
   const filteredParticipants = (data.participantIds || []).filter((id) => id !== persona.uniqueId);
   await roomRef.set({ participantIds: filteredParticipants }, { merge: true });
-  const kickDocId = `${persona.uniqueId}-${Date.now()}`;
-  await ctx.db.doc(`rooms/${roomId}/kickedIds/${kickDocId}`).set({
-    userId: persona.uniqueId,
-    kickedAt: Date.now(),
-  });
+  // No kick record is written: production has no such collection. The
+  // observable outcome is the participant leaving participantIds, which the
+  // corpus asserts directly. Seeding a `kickedIds` doc here only ever proved
+  // that the harness agreed with itself (SHY-0268 phantom-path audit).
 }
 
 // ─── Admin-moderation setup primitives (consumed by j04's downgrade
@@ -870,7 +869,10 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
     { merge: true },
   );
   const msgId = `${recipient.uniqueId}-${key}-${Date.now()}`;
-  await ctx.db.doc(`messages/${msgId}`).set({
+  // conversations/{id}/messages — the real path. This seed used to write a
+  // top-level `messages` collection that production never creates, which is
+  // how the corpus came to assert one (SHY-0268 phantom-path audit).
+  await ctx.db.doc(`conversations/${convId}/messages/${msgId}`).set({
     senderId: String(1),
     recipientId: String(recipient.uniqueId),
     conversationId: convId,
@@ -1008,6 +1010,28 @@ async function seedRoomClosed(ctx, hostName, opts = {}) {
     { merge: true },
   );
   return { roomId };
+}
+
+/**
+ * Resolve an asserted collection path to a Firestore query.
+ *
+ * A path prefixed with a star and a slash means "this subcollection wherever
+ * it lives", and maps to a collection-group query. DM messages live at
+ * conversations/{conversationId}/messages with an app-generated conversation
+ * id, so a journey cannot name the concrete parent — and the corpus
+ * previously papered over that by asserting a top-level `messages`
+ * collection that production has never written. The star form lets the
+ * assertion target the real nested collection instead of a fiction.
+ */
+function collectionOrGroup(ctx, colPath) {
+  if (colPath.startsWith('*/')) {
+    const name = colPath.slice(2);
+    if (name.includes('/')) {
+      throw new Error(`collection-group path "${colPath}" must name a single collection`);
+    }
+    return ctx.db.collectionGroup(name);
+  }
+  return ctx.db.collection(colPath);
 }
 
 // ── Step matchers ───────────────────────────────────────────────────
@@ -3084,7 +3108,7 @@ const matchers = [
       } catch (e) {
         return { ok: false, error: `predicate parse error: ${e.message}` };
       }
-      const snap = await ctx.db.collection(colPath).get();
+      const snap = await collectionOrGroup(ctx, colPath).get();
       const docs = (snap.docs || []).map((d) => d.data());
       const matching = docs.filter((doc) =>
         Object.entries(predicate).every(([k, v]) => doc[k] === v),

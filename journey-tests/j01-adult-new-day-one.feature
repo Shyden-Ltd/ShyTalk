@@ -55,7 +55,7 @@ Feature: j01 — Adam's first day
     When Adam on Android taps "legal_acceptPrivacyCheckbox"
     When Adam on Android taps "legal_acceptTermsCheckbox"
     When Adam on Android taps "legal_continueButton"
-    Then the database has document "usersAcceptedPolicies/{newUniqueId}" with field "privacyVersion" greater than 0
+    Then the database has document "users/{newUniqueId}" with field "acceptedLegalVersion" greater than 0
     Then within 3000ms Adam's Android UI shows the element with tag "main_roomsTab"
 
   @blocker @android-emulator

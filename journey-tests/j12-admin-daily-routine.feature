@@ -123,7 +123,7 @@ Feature: j12 — Greta's admin daily routine
     Given Greta is on the admin dashboard
     When Greta on Web Admin opens the "security" subtab
     When Greta on Web Admin taps "Ban device" and types deviceId="device-xyz" + reason "Repeated abuse"
-    Then within 3000ms the database has 1 entries in "adminDeviceBans" matching {deviceId: "device-xyz"}
+    Then within 3000ms the database has 1 entries in "deviceBans" matching {deviceId: "device-xyz"}
     Then the database has 1 entries in "auditLog" matching {action: "device.ban", targetDevice: "device-xyz"}
 
   @blocker @browser-chromium

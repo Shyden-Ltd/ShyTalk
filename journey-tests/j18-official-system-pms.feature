@@ -27,7 +27,7 @@ Feature: j18 — Officia's system PMs
     Given Adam was just age-verified by admin (cohort flipped from minor to adult)
     When the post-approval webhook fires sendSystemPm with key="age_seg_age_up_welcome_pm" recipient=Adam
     Then within 5000ms the database has 1 entries in "conversations" matching {participantIds: [1, {adamId}]}
-    Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: {adamId}, key: "age_seg_age_up_welcome_pm"}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {senderId: 1, recipientId: {adamId}, key: "age_seg_age_up_welcome_pm"}
     Then the message body is the English translation of the age-up template
 
   @blocker @android-physical
@@ -41,7 +41,7 @@ Feature: j18 — Officia's system PMs
   Scenario: Age-down PM is sent in Japanese (recipient locale) regardless of admin locale
     Given Hayato (locale=ja) is being downgraded by Greta (locale=en) via age verification
     When the rejection webhook fires sendSystemPm with key="age_seg_age_down_admin_pm" recipient=Hayato
-    Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 50000030, key: "age_seg_age_down_admin_pm"}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {senderId: 1, recipientId: 50000030, key: "age_seg_age_down_admin_pm"}
     Then the message body is the Japanese translation of the age-down template
     Then within 5000ms Hayato's Android UI shows the system PM with Japanese body
     Then Hayato's Android UI shows the official badge
@@ -65,14 +65,14 @@ Feature: j18 — Officia's system PMs
   Scenario: Officia can send to a minor user (cohort gate exemption for SHYTALK_OFFICIAL)
     Given Marcus [P-04] (minor) is signed in on Android
     When the policy-update broadcast fires sendSystemPm with key="policy_update_v4" recipient=Marcus
-    Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 60000010, key: "policy_update_v4"}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {senderId: 1, recipientId: 60000010, key: "policy_update_v4"}
     Then within 5000ms Marcus's Android UI shows the PM with the official badge
     Then no audit row records "blocked" with reason "cohort_mismatch" for this delivery (Officia is exempt)
 
   @browser-chromium @locale-rtl
   Scenario: System PM renders RTL for Arabic recipient
     When the suspension-notice flow fires sendSystemPm with key="moderation_suspension_notice" recipient=Layla
-    Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: 50000070, key: "moderation_suspension_notice"}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {senderId: 1, recipientId: 50000070, key: "moderation_suspension_notice"}
     Then within 5000ms Layla's Web UI shows the PM with body in Arabic
     Then Layla's Web UI shows the PM thread with document direction "rtl"
     Then Layla's Web UI shows the official badge with Arabic label

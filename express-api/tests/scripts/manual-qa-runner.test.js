@@ -10294,7 +10294,7 @@ describe('Room-state setup Givens (j09 phase-scoped scenario setup)', () => {
     expect(inesSeat.publishAllowed).toBe(true);
   });
 
-  test('"<persona> has been kicked from <host>\'s room" — removes from participantIds + adds kickedIds doc', async () => {
+  test('"<persona> has been kicked from <host>\'s room" — removes from participantIds and writes NO kick record', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db });
     // First add Ines as participant to prove the removal works.
@@ -10309,9 +10309,13 @@ describe('Room-state setup Givens (j09 phase-scoped scenario setup)', () => {
     expect(r.ok).toBe(true);
     const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
     expect(room.participantIds).not.toContain(ines.uniqueId);
+    // SHY-0268 phantom-path audit: this used to assert a `kickedIds`
+    // subcollection, but production writes no kick record anywhere — the
+    // collection existed ONLY in this seed and in the corpus assertion that
+    // read it back, so the journey proved the harness agreed with itself.
+    // Removal from participantIds is the real, observable outcome.
     const kicks = Object.entries(db._docs).filter(([k]) => k.includes('/kickedIds/'));
-    expect(kicks).toHaveLength(1);
-    expect(kicks[0][1].userId).toBe(ines.uniqueId);
+    expect(kicks).toHaveLength(0);
   });
 
   test('"<host>\'s room \\"<title>\\" is OPEN with <persona> as a participant" — combined seed', async () => {
@@ -10446,12 +10450,20 @@ describe('Admin-moderation setup Givens (j04 phase-scoped scenario setup)', () =
     expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
     // Conversation between Officia (uniqueId 1) and Hayato — String-coerced
     // per the production wire format.
-    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    // Conversation DOCS only — messages now live beneath them, so a bare
+    // startsWith would also match conversations/{id}/messages/{msgId}.
+    const convs = Object.entries(db._docs).filter(([k]) => /^conversations\/[^/]+$/.test(k));
     expect(convs).toHaveLength(1);
     const [, conv] = convs[0];
     expect(conv.participantIds).toEqual([String(1), String(hayato.uniqueId)]);
     // Message from Officia with the age_seg_age_down_admin_pm key
-    const msgs = Object.entries(db._docs).filter(([k]) => k.startsWith('messages/'));
+    // SHY-0268 phantom-path audit: the seed used to write a TOP-LEVEL
+    // `messages` collection. Production writes messages only at
+    // conversations/{conversationId}/messages — firestore.rules never matches
+    // a top-level one — so the old path proved nothing about production.
+    const msgs = Object.entries(db._docs).filter(([k]) =>
+      /^conversations\/[^/]+\/messages\//.test(k),
+    );
     expect(msgs).toHaveLength(1);
     const [, msg] = msgs[0];
     expect(msg.senderId).toBe(String(1));

@@ -46,8 +46,8 @@ Feature: j03 — Lena's lapsed return
   Scenario: Re-accepting records the current policy versions
     Given Lena has just signed in after 45 days with accepted privacy v2 (current is v4)
     When Lena on Web checks both legal checkboxes and continues
-    Then within 5000ms the database has document "usersAcceptedPolicies/50000020" with field "privacyVersion" equal to 4
-    Then the database has document "usersAcceptedPolicies/50000020" with field "termsVersion" equal to 4
+    Then within 5000ms the database has document "users/50000020" with field "acceptedLegalVersion" equal to 4
+    Then the database has document "users/50000020" with field "acceptedLegalVersion" equal to 4
 
   @blocker @browser-chromium @locale
   Scenario: A long lapse is announced as a reset streak, in the member's language

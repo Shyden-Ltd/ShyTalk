@@ -131,5 +131,5 @@ Feature: j10 — Admin warning lands during an active voice room
     Given Marcus [P-04] is on iOS Sim seated in a minor-cohort room with mic open
     When Greta on Web Admin issues a warning to Marcus
     Then within 5000ms Marcus's iOS Sim UI shows the warning screen
-    Then within 5000ms the database has document "minor-room/{roomId}" with field "seats[*].userId == 60000010" entry muted=true
+    Then within 5000ms Marcus's iOS Sim UI mic indicator shows "muted"
     Then within 5000ms Marcus's LiveKit publish for that room is disabled

@@ -40,7 +40,7 @@ Feature: j07 — Adam discovers + messages Alice
   @blocker @android-physical @browser-chromium
   Scenario: Adam's profile visit is recorded — Alice's stalkers counter ticks up
     Given Adam has just navigated to Alice's profile
-    Then within 5000ms the database has 1 entries in "profileVisits" matching {profileOwnerId: 50000010, visitorId: any}
+    Then within 5000ms the database has 1 entries in "users/50000010/stalkers" matching {}
     Then within 5000ms Alice's Web UI shows a +1 in the stalkers/profile-visits counter
 
   @blocker @android-physical @browser-chromium
@@ -66,7 +66,7 @@ Feature: j07 — Adam discovers + messages Alice
     Given Adam has an open DIRECT conversation thread with Alice
     When Adam on Android types "hello, alice — first PM from a new adult" into "conversation_inputField"
     When Adam on Android taps "conversation_sendButton"
-    Then within 3000ms the database has 1 entries in "messages" matching {senderId: {adamId}, conversationId: <id>, body: "hello, alice — first PM from a new adult"}
+    Then within 3000ms the database has 1 entries in "*/messages" matching {senderId: {adamId}, conversationId: <id>, body: "hello, alice — first PM from a new adult"}
     Then within 2000ms Adam's Android UI shows the message in the thread with timestamp + sent indicator
 
   @blocker @browser-chromium
@@ -81,7 +81,7 @@ Feature: j07 — Adam discovers + messages Alice
     And Alice on Web opens the "pm" tab
     When Alice on Web opens the conversation with Adam
     Then within 2000ms Alice's Web UI shows "hello, alice — first PM from a new adult"
-    Then within 5000ms the database has document "messages/<id>" with field "readBy" containing 50000010
+    Then within 5000ms the database has 1 entries in "*/messages" matching {readBy: 50000010}
 
   @manual @browser-chromium
   Scenario: Alice's Web receives an FCM push notification for Adam's message
@@ -92,13 +92,13 @@ Feature: j07 — Adam discovers + messages Alice
   Scenario: Alice replies — Adam sees the reply + both sides see read receipts
     Given Alice has read Adam's first message in the open thread
     When Alice on Web replies "hi adam, welcome to shytalk" in the conversation
-    Then within 3000ms the database has 1 entries in "messages" matching {senderId: 50000010, body: "hi adam, welcome to shytalk"}
+    Then within 3000ms the database has 1 entries in "*/messages" matching {senderId: 50000010, body: "hi adam, welcome to shytalk"}
     Then within 3000ms Adam's Android UI shows the reply in the thread
 
   @blocker @android-physical @browser-chromium
   Scenario: Both sides see a read receipt once the reply is opened
     Given Alice has replied to Adam and he has opened the thread
-    Then within 5000ms the database has document "messages/<reply-id>" with field "readBy" containing {adamId}
+    Then within 5000ms the database has 1 entries in "*/messages" matching {readBy: {adamId}}
     Then Adam's Android UI shows "read" indicator on his original message
     Then Alice's Web UI shows "read" indicator on her reply
 
@@ -107,15 +107,15 @@ Feature: j07 — Adam discovers + messages Alice
     Given Adam sent a message "tpyo here" to Alice
     When Adam on Android long-presses the message and taps "Edit"
     When Adam on Android changes the body to "typo here" and confirms
-    Then within 3000ms the database has document "messages/<id>" with field "body" equal to "typo here"
-    Then the database has document "messages/<id>" with field "editedAt" greater than 0
+    Then within 3000ms the database has 1 entries in "*/messages" matching {text: "typo here"}
+    Then the database has 1 entries in "*/messages" matching {edited: true}
     Then within 3000ms Alice's Web UI shows the edited body "typo here" with an "edited" tag
 
   @android-physical
   Scenario: Adam deletes a PM after the edit window — message replaced with tombstone
     Given Adam sent a message "secret" to Alice 30 minutes ago (past edit window)
     When Adam on Android long-presses the message and taps "Delete"
-    Then within 3000ms the database has document "messages/<id>" with field "deleted" equal to true
+    Then within 3000ms the database has 1 entries in "*/messages" matching {deleted: true}
     Then within 3000ms Adam's Android UI shows "Deleted message" tombstone
     Then within 3000ms Alice's Web UI shows "Deleted message" tombstone
 

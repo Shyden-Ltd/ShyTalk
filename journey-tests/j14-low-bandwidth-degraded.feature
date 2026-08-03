@@ -50,7 +50,7 @@ Feature: j14 — Ines on Slow 3G + intermittent loss
     And Ines has a message queued while offline
     When Ines on Web restores the network to "Slow 3G"
     Then within 10000ms Ines's Web UI shows the message with "sent" indicator
-    Then within 15000ms the database has 1 entries in "messages" matching {senderId: 50000061, body: "queued message"}
+    Then within 15000ms the database has 1 entries in "*/messages" matching {senderId: 50000061, body: "queued message"}
 
   @blocker @android-physical
   Scenario: A message queued offline reaches the other person once it sends

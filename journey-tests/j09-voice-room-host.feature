@@ -90,11 +90,10 @@ Feature: j09 — Theo hosts a public voice room
     Then the tester hears Ines's audio on Theo's Android device (real microphone)
 
   @blocker @android-physical @ios-sim
-  Scenario: Theo kicks Ines — participant removed, kickedIds entry, "you were kicked" UI
+  Scenario: Theo kicks Ines — participant removed and told why
     Given Ines is seated and unmuted in Theo's room
     When Theo on Android kicks Ines from the room
     Then within 3000ms the database has document "rooms/{roomId}" with field "participantIds" not containing 50000061
-    Then within 3000ms the database has 1 entries in "rooms/{roomId}/kickedIds" matching {userId: 50000061}
     Then within 5000ms Ines's iOS Sim UI navigates back to the "rooms" tab
     Then Ines's iOS Sim UI shows "You were kicked from this room"
 

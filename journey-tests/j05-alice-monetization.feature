@@ -50,7 +50,7 @@ Feature: j05 — Alice's monetization day
   @blocker @browser-chromium
   Scenario: A three-pull adds three gifts to the backpack
     Given Alice has just pulled the gacha 3 times
-    Then the database has 3 entries in "users/50000010/gifts" added since "{ts}"
+    Then the database has 3 entries in "users/50000010/backpack" added since "{ts}"
 
   @blocker @browser-chromium
   Scenario: Alice sends a crown to Selma — atomic coins-to-beans transfer with both transactions
