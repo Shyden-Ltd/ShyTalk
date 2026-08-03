@@ -151,12 +151,44 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     if (pidValue !== undefined) fs.writeFileSync(path.join(dir, 'pid'), `${pidValue}\n`);
     return dir;
   }
-  function runStop(id) {
+  function stopOnce(id) {
     return spawnSync('/bin/bash', [MATRIX, 'stop', id], {
       encoding: 'utf8',
       timeout: 20000,
       env: { ...process.env, GAUNTLET_TMP: tmpRoot, PATH: NO_ADB_PATH },
     });
+  }
+
+  /**
+   * cmd_stop's final verification is deliberately GLOBAL: any surviving
+   * `manual-qa-runner`-matching process means "not clean", whichever run
+   * spawned it (the sibling exit-1 test below pins exactly that). That design
+   * is right for the gauntlet and wrong for a parallel Jest run — roughly
+   * fifteen sibling suites invoke `manual-qa-runner.js` transiently, and one
+   * of them being alive at the instant cmd_stop samples made this file fail
+   * intermittently under full-suite load while passing in isolation.
+   *
+   * So: retry ONLY when the reported leftovers are foreign. If cmd_stop names
+   * a pid this file spawned, that is a genuine reaping regression and is
+   * returned immediately — the tolerance cannot mask the thing under test.
+   */
+  function runStop(id, { tolerateForeignRunners = true } = {}) {
+    let r = stopOnce(id);
+    if (!tolerateForeignRunners) return r;
+    for (let attempt = 0; attempt < 25 && r.status !== 0; attempt += 1) {
+      // `pgrep -fl` prints "<pid> <command...>". Parsed by splitting rather
+      // than with a leading-whitespace regex, which linted as super-linear.
+      const leftoverPids = (r.stderr || '')
+        .split('\n')
+        .map((line) => line.trim().split(' ')[0])
+        .filter((tok) => tok !== '' && [...tok].every((ch) => ch >= '0' && ch <= '9'));
+      if (leftoverPids.length === 0) return r; // failed for some other reason
+      const ours = new Set(spawned.map((c) => String(c.pid)));
+      if (leftoverPids.some((pid) => ours.has(pid))) return r; // OUR fixture survived
+      spawnSync('/bin/sleep', ['0.2']); // foreign sibling process — let it exit
+      r = stopOnce(id);
+    }
+    return r;
   }
 
   test('clean run (dead pid, no live runners) → exit 0 and reports "0 runners remain"', () => {
@@ -217,7 +249,9 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     expect(seen()).not.toBe(''); // fixture is live + pgrep-visible
 
     makeRun('leftover-xyz', deadPid());
-    const r = runStop('leftover-xyz');
+    // Explicitly NO foreign-runner tolerance: this test WANTS the failure, and
+    // retrying would be retrying for the outcome it is asserting against.
+    const r = runStop('leftover-xyz', { tolerateForeignRunners: false });
 
     expect(r.status).not.toBe(0); // honest failure, not a false success
     expect(r.stderr).toMatch(/STILL alive/);
