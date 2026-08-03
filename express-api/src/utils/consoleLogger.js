@@ -11,7 +11,11 @@
  *   - Falls back to source "express-api"
  */
 
-/* eslint-disable no-console */
+/* eslint-disable no-console --
+ * This module IS the console sink: it is the one place allowed to call
+ * console.* directly, because everything else routes through it. Disabling
+ * the rule anywhere else would be the smell; disabling it here is the point.
+ */
 
 const logger = require('./loggerInstance');
 
