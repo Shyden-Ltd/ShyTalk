@@ -162,6 +162,73 @@ describe('SHY-0127 Gate 1 — story must be In Review before merge', () => {
     expect(run(dir, { IS_DRAFT: 'true' }).code).toBe(0);
   });
 
+  // ── SHY-0268: a cross-cutting sweep must not be held hostage by every
+  // story file it incidentally reformats ──────────────────────────────────
+  //
+  // The gate's purpose is "the story THIS PR implements must be In Review".
+  // It approximated that with "any modified story file", which held for one
+  // story per PR — until a corpus-wide Gherkin reformat touched 194 story
+  // `.md` bodies at once. Requiring 194 unrelated Draft stories to be flipped
+  // to In Review would be a lie about all of them, so the sweep could never
+  // merge. Scope the requirement to the PR's OWN story (from the branch name)
+  // plus any story whose status line the PR actually changed.
+
+  test('a body-only edit to an unrelated Draft story does not block the PR', () => {
+    const dir = makeRepoBase(
+      (d) => {
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0268-own.md'), story('In Review'));
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0111-other.md'), story('Draft'));
+      },
+      (d) => {
+        // The PR's own story gets real work; the other is only reformatted.
+        fs.appendFileSync(path.join(d, '.project/stories/SHY-0268-own.md'), '\nwork\n');
+        fs.appendFileSync(path.join(d, '.project/stories/SHY-0111-other.md'), '\nreformatted\n');
+      },
+    );
+    const r = run(dir, { HEAD_REF: 'story/SHY-0268-own' });
+    expect(r.code).toBe(0);
+  });
+
+  test("the PR's OWN story is still required to be In Review", () => {
+    const dir = makeRepoBase(
+      (d) =>
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0268-own.md'), story('In Progress')),
+      (d) => fs.appendFileSync(path.join(d, '.project/stories/SHY-0268-own.md'), '\nwork\n'),
+    );
+    const r = run(dir, { HEAD_REF: 'story/SHY-0268-own' });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/SHY-0268-own/);
+  });
+
+  test("changing another story's STATUS still requires it to be ready", () => {
+    // Editing a status line is a lifecycle claim about that story, not
+    // incidental formatting — so it stays gated even on a sweep.
+    const dir = makeRepoBase(
+      (d) => {
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0268-own.md'), story('In Review'));
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0111-other.md'), story('Draft'));
+      },
+      (d) => {
+        fs.appendFileSync(path.join(d, '.project/stories/SHY-0268-own.md'), '\nwork\n');
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0111-other.md'), story('In Progress'));
+      },
+    );
+    const r = run(dir, { HEAD_REF: 'story/SHY-0268-own' });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toMatch(/SHY-0111-other/);
+  });
+
+  test('without a story branch name, every modified story is still gated', () => {
+    // Dependabot and infra PRs have no story branch; the original, broader
+    // rule remains their behaviour rather than silently loosening.
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(path.join(d, '.project/stories/SHY-0111-other.md'), story('Draft')),
+      (d) => fs.appendFileSync(path.join(d, '.project/stories/SHY-0111-other.md'), '\nx\n'),
+    );
+    const r = run(dir, { HEAD_REF: 'dependabot/npm_and_yarn/foo' });
+    expect(r.code).toBe(1);
+  });
+
   test('FAILS when one of several diffed stories is not In Review', () => {
     const dir = makeRepo((d) => {
       fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('In Review'));

@@ -452,6 +452,10 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           IS_DRAFT: ${{ github.event.pull_request.draft }}
+          # SHY-0268: names the story this PR implements, so a cross-cutting
+          # sweep that reformats other story bodies is not required to flip
+          # every one of them to In Review.
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: node scripts/check-pr-story-status.js
 
   gate:
