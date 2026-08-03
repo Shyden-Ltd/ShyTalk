@@ -309,8 +309,20 @@ router.patch('/rooms/:roomId/seats/:seatIndex/mute', async (req, res) => {
     const seat = (room.seats || {})[String(seatIndex)] || {};
     if (!seat.userId) return { status: 409, body: { error: 'Seat is empty' } };
     if (isMuted) {
-      // Force-mute: moderator gate (owner/host, not owner/other-host, not already muted).
-      if (!canForceMute(room, callerId, seatIndex)) {
+      // SELF-mute is always allowed (SHY-0272). You may always silence your own
+      // microphone — it is your own device's input, and refusing is a privacy
+      // failure, not a permission decision.
+      //
+      // This branch used to send every mute through `canForceMute`, which
+      // answers a different question: "may this MODERATOR silence that
+      // person?" For a caller acting on their own seat it answers `false` in
+      // every role — the owner is protected by "never the owner", a host may
+      // only mute non-hosts, and a member is neither. So nobody could mute
+      // themselves at all, in any room. The unmute branch below already asked
+      // the right question; this one never did.
+      //
+      // Force-muting SOMEONE ELSE still goes through the moderator gate.
+      if (String(seat.userId) !== callerId && !canForceMute(room, callerId, seatIndex)) {
         return { status: 403, body: { error: 'Not allowed to mute this seat' } };
       }
     } else if (String(seat.userId) !== callerId) {

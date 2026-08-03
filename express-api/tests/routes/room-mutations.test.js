@@ -547,6 +547,107 @@ describe('PATCH /api/rooms/:roomId/seats/:seatIndex/mute', () => {
     );
   });
 
+  // ── Self-mute (SHY-0272) ──────────────────────────────────────────
+  //
+  // Reported from a real device: "the mic is stuck open and cannot be
+  // muted/unmuted". Muting your OWN microphone was routed through the
+  // FORCE-mute moderator gate, which is written to answer a different
+  // question — "may this moderator silence that person?" — and answers `false`
+  // for every caller acting on their own seat:
+  //
+  //   owner  → `canForceMute` refuses outright when the seat's occupant is the
+  //            owner ("never the owner"), so an owner can never mute themselves
+  //   host   → a host may only mute non-hosts, and they are a host
+  //   member → neither OWNER nor HOST, so the final `return false`
+  //
+  // So NOBODY could mute themselves, in any room, in any role. The unmute
+  // branch already asked the right question (are you the occupant?); the mute
+  // branch never did. Nothing covered self-mute, which is why it shipped.
+
+  test('200 an attendee mutes their OWN seat', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(88))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.4.isMuted': true }),
+    );
+  });
+
+  test('200 the OWNER mutes their own seat', async () => {
+    // The "never the owner" rule exists so nobody else can silence the owner.
+    // It must not stop the owner silencing themselves.
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 0: { userId: '1', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(1))
+      .patch('/api/rooms/room-1/seats/0/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.0.isMuted': true }),
+    );
+  });
+
+  test('200 a host mutes their own seat', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          hostIds: ['10'],
+          seats: { 4: { userId: '10', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(10))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+  });
+
+  test('a member can still not force-mute SOMEONE ELSE', async () => {
+    // The counterpart the fix must not break: allowing self-mute must not turn
+    // into allowing anyone to silence anyone.
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(99))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('an attendee can still not force-mute the OWNER', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 0: { userId: '1', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(88))
+      .patch('/api/rooms/room-1/seats/0/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('self-mute is refused in a CLOSED room', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          state: 'CLOSED',
+          seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(88))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(409);
+  });
+
   test('403 when a non-occupant tries to unmute someone', async () => {
     mockTxnGet.mockResolvedValue(
       snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: true } } })),

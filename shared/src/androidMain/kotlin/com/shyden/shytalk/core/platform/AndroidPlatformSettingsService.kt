@@ -137,14 +137,27 @@ class AndroidPlatformSettingsService(
         return Settings.canDrawOverlays(context)
     }
 
-    override fun hasPermission(permission: String): Boolean {
+    override fun hasPermission(permission: AppPermission): Boolean {
         val context = ctx ?: return false
-        // Bluetooth permission only exists on Android 12+
-        if (permission == Manifest.permission.BLUETOOTH_CONNECT &&
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-        ) {
+        // BLUETOOTH_CONNECT only exists on Android 12+; below that the
+        // capability is covered by install-time permissions.
+        if (permission == AppPermission.BLUETOOTH && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             return true
         }
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(context, permission.androidPermission()) ==
+            PackageManager.PERMISSION_GRANTED
     }
 }
+
+/**
+ * The Android constant for a platform-neutral [AppPermission] (SHY-0272).
+ *
+ * Kept as a separate, pure function so the mapping is testable on the host JVM
+ * without a device — the previous string pass-through had no test at all, and
+ * silently denied every microphone check as a result.
+ */
+internal fun AppPermission.androidPermission(): String =
+    when (this) {
+        AppPermission.MICROPHONE -> Manifest.permission.RECORD_AUDIO
+        AppPermission.BLUETOOTH -> Manifest.permission.BLUETOOTH_CONNECT
+    }

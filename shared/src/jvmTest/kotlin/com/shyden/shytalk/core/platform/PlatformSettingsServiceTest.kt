@@ -38,8 +38,14 @@ class PlatformSettingsServiceTest {
     }
 
     @Test
-    fun `hasPermission returns false on jvm`() {
-        assertFalse(service.hasPermission("android.permission.RECORD_AUDIO"))
+    fun `hasPermission returns false on jvm for every permission`() {
+        // SHY-0272: this used to pass a raw Android constant STRING. It could
+        // never have caught the real defect — the JVM stub returns false
+        // whatever it is handed, so the assertion held equally for
+        // "android.permission.RECORD_AUDIO", "microphone", or nonsense. The
+        // signature now takes an enum, and this iterates every case so a new
+        // permission cannot be added without the JVM target answering for it.
+        AppPermission.entries.forEach { assertFalse(service.hasPermission(it)) }
     }
 
     @Test

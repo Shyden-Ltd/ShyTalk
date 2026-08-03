@@ -74,7 +74,13 @@ fun ChatPanel(
     userMap: Map<String, User>,
     _isOwnerOrHost: Boolean = false,
     isVoiceUnavailable: Boolean = false,
-    onToggleMic: (Int) -> Unit = {},
+    // Deliberately NOT defaulted (SHY-0272): muting your own microphone is a
+    // privacy control. A `= {}` default lets a host mount this panel and ship a
+    // mic button that silently does nothing — which is exactly the outage this
+    // story fixes, arrived at by a different route. Without a default the
+    // compiler makes every call site wire it. Same reasoning as the
+    // age-verification CTA in SHY-0268.
+    onToggleMic: (Int) -> Unit,
     onSendMessage: (String) -> Unit,
     onTapUser: (String) -> Unit,
     onInviteUser: (String, String) -> Unit,

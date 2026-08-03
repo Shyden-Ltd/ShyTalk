@@ -57,6 +57,7 @@ import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
+import com.shyden.shytalk.core.platform.AppPermission
 import com.shyden.shytalk.core.platform.PlatformImagePicker
 import com.shyden.shytalk.core.platform.PlatformMultiImagePicker
 import com.shyden.shytalk.core.platform.PlatformSettingsService
@@ -727,7 +728,7 @@ fun RoomScreen(
                                 _isOwnerOrHost = isOwnerOrHost,
                                 isVoiceUnavailable = uiState.isVoiceUnavailable,
                                 onToggleMic = { seatIndex ->
-                                    if (platformSettings.hasPermission("microphone")) {
+                                    if (platformSettings.hasPermission(AppPermission.MICROPHONE)) {
                                         viewModel.toggleSelfMute(seatIndex)
                                     }
                                 },
