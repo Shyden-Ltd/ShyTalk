@@ -42,15 +42,26 @@ With no presence ever recorded, the room read as empty. On dev that ends in the 
 closed within seconds; the fix removes the denials and the room stays open (measured
 before/after on the same device, below).
 
-**What is proven vs what is inferred.** Proven: the denials were real, the fix removes them,
-and the room then stays open. Inferred: the exact closing path. The same denials occur
-LOCALLY — 85 local rooms, zero presence nodes — yet local rooms stay open indefinitely
-(a local room from this session was still ACTIVE hours later). So denied presence is
-necessary but not sufficient, and something dev-only completes the chain. The device log
-shows the likely completer: `setValue at /ownerLeft/{roomId} failed: Permission denied`
-alongside `connectionMonitor: state=DISCONNECTED`, i.e. the arm/cancel of the owner-left
-signal is also broken, and the server-side owner-left handler acts on it. That path is
-tracked separately rather than asserted here.
+**The closing path, established end to end in the source.** Entering a room arms an
+owner-left signal, and `RtdbPresenceService.armOwnerLeftSignal` deliberately writes
+`ownerLeft/{roomId}` IMMEDIATELY — its own comment explains why: the entry must exist before
+the `onDisconnect` arms, so the arm itself fires the server's `child_added` listener, which
+is expected to re-check and NOOP because the owner is obviously present.
+
+That re-check is the hinge. `owner-left-orchestrator.js:169` calls
+`presenceChecker(roomId, preRoom.ownerId)` — keyed by uniqueId, exactly where the client
+writes presence — and `owner-left-handler.js:48` returns NOOP only `if (ownerStillPresent)`.
+With presence denied there is nothing to find, so `ownerStillPresent` is false, and the
+handler's documented branch for "ACTIVE and no non-owner seated" is to **close the room
+immediately**. Hence ~2.4s: the round trip of arm → listener → re-check → transaction.
+
+The fix closes the loop: presence writes land, the re-check finds the owner, the handler
+NOOPs, and the room stays open — which is precisely what the before/after measurement shows.
+
+Local escapes this because the signal path never completes there — 85 local rooms carry zero
+presence nodes and no room ever closed, so the listener is not acting on local rooms at all.
+Why the path does not complete locally is genuinely open, and is the reason a local run gave
+false confidence.
 
 The uniqueId is the correct key, not a client bug: `ActiveRoomManager` computes
 `absentUsers = participantIds - presentUserIds - currentUserId`, and `participantIds` are
@@ -168,6 +179,11 @@ self-owned) and to leave the identity contract to the new file.
   `OWNER_AWAY` plus a 5-minute grace) and a coincidental `delay(2600)` in RoomScreen (that is
   the gacha win animation). Root cause read from device logs, not inferred.
 - **2026-08-03 16:0x BST** — Rules deployed to dev; before/after measured on the same device.
+- **2026-08-03 22:4x BST** — Traced the closing path to source and upgraded it from inferred
+  to established: arm writes `ownerLeft` immediately (by design), the server re-checks
+  presence by uniqueId (`owner-left-orchestrator.js:169`), and NOOPs only if present
+  (`owner-left-handler.js:48`); with presence denied it takes the "ACTIVE, no non-owner
+  seated → close immediately" branch. The 2.4s is that round trip.
 - **2026-08-03 22:3x BST** — Re-examined the causal claim rather than leaving it tidy. The
   first write-up said the emulator "was not enforcing these rules"; that is NOT established.
   The emulator loads them and enforces them for authenticated clients (proved by allowing an
