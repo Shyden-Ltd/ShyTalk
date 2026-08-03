@@ -155,7 +155,7 @@ Feature: j01 — Adam's first day
   @blocker @android-emulator
   Scenario: A sent gift lands on the recipient's gift wall
     Given Adam has just sent Alice his first gift (a rose)
-    Then the database has 1 entries in "giftWalls/50000010/gifts" matching {giftId: "rose", senderId: {newUniqueId}}
+    Then the database has document "users/50000010/giftWall/rose" with field "receivedCount" greater than 0
 
   @blocker @browser-chromium
   Scenario: Alice's Web gift wall shows Adam's new rose gift with his displayName

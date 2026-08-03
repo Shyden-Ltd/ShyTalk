@@ -880,6 +880,136 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   return { convId, msgId };
 }
 
+// ── SHY-0268 sweep: state-describing Given seeds ────────────────────
+//
+// The Gherkin sweep replaced carried-forward mutations with preconditions
+// ("Nora has blocked Raul" rather than replaying the block). Replaying a
+// mutation as setup double-charges coins and duplicates audit rows, breaking
+// the very assertions the scenario makes.
+//
+// Every seed below mirrors the REAL production write — path and field shape
+// read from express-api/src at implementation time, not invented:
+//   gift wall   users/{recipientId}/giftWall/{giftId}
+//               { giftId, receivedCount, senders: [{ senderId, sendCount, lastSentAt }] }
+//               (economy.js updateGiftWall)
+//   transaction users/{userId}/transactions/{txId}   (economy.js writeTransaction)
+//   block       users/{uniqueId}.blockedUserIds: number[]   (utils/block-check.js)
+//   messages    conversations/{conversationId}/messages/{messageId}
+//               (routes/conversations.js — there is no top-level `messages`
+//               collection; firestore.rules only ever matches it nested)
+
+function personaOrThrow(name) {
+  const persona = loadPersonas().get(name);
+  if (!persona?.uniqueId) throw new Error(`persona "${name}" not in registry`);
+  return persona;
+}
+
+/**
+ * Mirror of the gift-send write path: sender coins down, recipient beans up,
+ * a transaction on each side, and the recipient's gift-wall entry.
+ */
+async function seedGiftSent(ctx, senderName, recipientName, giftId, opts = {}) {
+  const sender = personaOrThrow(senderName);
+  const recipient = personaOrThrow(recipientName);
+  const cost = opts.cost ?? 10;
+  const beans = opts.beans ?? Math.floor(cost / 2);
+  const timestamp = Date.now();
+
+  const senderRef = ctx.db.doc(`users/${sender.uniqueId}`);
+  const recipientRef = ctx.db.doc(`users/${recipient.uniqueId}`);
+  const senderSnap = await senderRef.get();
+  const recipientSnap = await recipientRef.get();
+  const senderCoins = (senderSnap.exists ? senderSnap.data()?.shyCoins : 0) ?? 0;
+  const recipientBeans = (recipientSnap.exists ? recipientSnap.data()?.beans : 0) ?? 0;
+
+  await senderRef.set({ shyCoins: Math.max(0, senderCoins - cost) }, { merge: true });
+  await recipientRef.set({ beans: recipientBeans + beans }, { merge: true });
+
+  const sentTxId = `${sender.uniqueId}-gift-sent-${timestamp}`;
+  const recvTxId = `${recipient.uniqueId}-gift-recv-${timestamp}`;
+  await ctx.db.doc(`users/${sender.uniqueId}/transactions/${sentTxId}`).set({
+    id: sentTxId,
+    type: 'GIFT_SENT',
+    amount: -cost,
+    currency: 'COINS',
+    balanceAfter: Math.max(0, senderCoins - cost),
+    giftId,
+    recipientId: recipient.uniqueId,
+    quantity: 1,
+    timestamp,
+  });
+  await ctx.db.doc(`users/${recipient.uniqueId}/transactions/${recvTxId}`).set({
+    id: recvTxId,
+    type: 'GIFT_RECEIVED',
+    amount: beans,
+    currency: 'BEANS',
+    balanceAfter: recipientBeans + beans,
+    giftId,
+    senderId: sender.uniqueId,
+    quantity: 1,
+    timestamp,
+  });
+
+  const wallRef = ctx.db.doc(`users/${recipient.uniqueId}/giftWall/${giftId}`);
+  const wallSnap = await wallRef.get();
+  const prior = wallSnap.exists ? wallSnap.data() : null;
+  const senders = (prior?.senders || []).filter((e) => e.senderId !== sender.uniqueId);
+  senders.push({ senderId: sender.uniqueId, sendCount: 1, lastSentAt: timestamp });
+  await wallRef.set({
+    giftId,
+    receivedCount: (prior?.receivedCount || 0) + 1,
+    senders,
+    ...(opts.contextRoomId ? { contextRoomId: opts.contextRoomId } : {}),
+  });
+  return { senderId: sender.uniqueId, recipientId: recipient.uniqueId };
+}
+
+/** Mirror of a block: the blocker's user doc carries blockedUserIds. */
+async function seedBlock(ctx, blockerName, blockedName) {
+  const blocker = personaOrThrow(blockerName);
+  const blocked = personaOrThrow(blockedName);
+  const ref = ctx.db.doc(`users/${blocker.uniqueId}`);
+  const snap = await ref.get();
+  const existing = (snap.exists ? snap.data()?.blockedUserIds : null) || [];
+  const next = existing.map(Number).filter((id) => id !== Number(blocked.uniqueId));
+  next.push(Number(blocked.uniqueId));
+  await ref.set({ blockedUserIds: next }, { merge: true });
+  return { blockerId: blocker.uniqueId, blockedId: blocked.uniqueId };
+}
+
+/** Message into the conversation subcollection — the real production path. */
+async function seedMessage(ctx, fromName, toName, text, opts = {}) {
+  const from = personaOrThrow(fromName);
+  const to = personaOrThrow(toName);
+  const { conversationId } = await seedDirectConversation(ctx, fromName, toName);
+  const messageId = opts.messageId || `${from.uniqueId}-${Date.now()}`;
+  await ctx.db.doc(`conversations/${conversationId}/messages/${messageId}`).set({
+    senderId: String(from.uniqueId),
+    recipientId: String(to.uniqueId),
+    text,
+    type: 'TEXT',
+    createdAt: Date.now(),
+    ...(opts.readBy ? { readBy: opts.readBy } : {}),
+  });
+  return { conversationId, messageId };
+}
+
+/** Close a room the persona hosts, matching room-mutations.js's close write. */
+async function seedRoomClosed(ctx, hostName, opts = {}) {
+  const { roomId } = await ensureRoomForHost(ctx, hostName);
+  await ctx.db.doc(`rooms/${roomId}`).set(
+    {
+      state: 'CLOSED',
+      closedAt: Date.now(),
+      ownerLeftAt: null,
+      participantIds: [],
+      ...(opts.extraFields || {}),
+    },
+    { merge: true },
+  );
+  return { roomId };
+}
+
 // ── Step matchers ───────────────────────────────────────────────────
 
 /**
@@ -897,6 +1027,35 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
 // a two-line change and the replay semantics stay identical across all of them.
 // `$1`..`$n` interpolate the compound pattern's capture groups.
 const COMPOUND_ACTIONS = [
+  // Preconditions that are REAL requests/driver actions rather than database
+  // state — replayed through the same handlers the scenario would have used.
+  {
+    pattern: /^([A-Z][a-z]+) has been issued a LiveKit token for room "([^"]+)"$/,
+    steps: ['$1 on Web POSTs /api/livekit/token with roomName="$2"'],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has been refused a LiveKit token for the adult room "([^"]+)"$/,
+    steps: ['$1 on Android POSTs /api/livekit/token with roomName="$2"'],
+  },
+  {
+    pattern: /^([A-Z][a-z]+)'s cross-cohort coin transfer to ([A-Z][a-z]+) has been refused$/,
+    steps: ['$1 on Web POSTs /api/economy/transfer-coins with recipient=60000010 and amount=100'],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has a message queued while offline$/,
+    steps: [
+      '$1 on Web sets the network to "Offline" via DevTools',
+      '$1 on Web types "queued message" and taps send',
+    ],
+  },
+  {
+    pattern: /^([A-Z][a-z]+)'s queued message has been delivered after reconnecting$/,
+    steps: [
+      '$1 on Web sets the network to "Offline" via DevTools',
+      '$1 on Web types "queued message" and taps send',
+      '$1 on Web restores the network to "Slow 3G"',
+    ],
+  },
   {
     pattern: /^([A-Z][a-z]+) on Web buys the "([^"]+)" package with sandbox receipt "([^"]+)"$/,
     steps: [
@@ -997,6 +1156,219 @@ const matchers = [
         if (result.code === 'STEP_NOT_IMPLEMENTED') return result;
         if (Date.now() >= deadline) return result;
         await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    },
+  },
+  // ── SHY-0268 sweep: state-describing preconditions ──
+  //
+  // Each seeds the state its scenario needs, mirroring the production write
+  // (see the helper block above for the path/shape provenance). They exist
+  // because replaying the ORIGINAL mutation as setup would double-apply it.
+  {
+    pattern: /^([A-Z][a-z]+) has sent ([A-Z][a-z]+) a rose in the room$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, m[2]);
+        await seedGiftSent(ctx, m[1], m[2], 'rose', { cost: 10, beans: 5, contextRoomId: roomId });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has blocked ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedBlock(ctx, m[1], m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has sent ([A-Z][a-z]+) a second offensive message$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedMessage(ctx, m[1], m[2], 'offensive content #1');
+        await seedMessage(ctx, m[1], m[2], 'offensive content #2');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has replied to ([A-Z][a-z]+) and he has opened the thread$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const reader = personaOrThrow(m[2]);
+        await seedMessage(ctx, m[1], m[2], 'hi adam, welcome to shytalk', {
+          messageId: 'reply-id',
+          readBy: [String(reader.uniqueId)],
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has been sent the age-up welcome system PM$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSystemPmFromOfficia(ctx, m[1], 'age_seg_age_up_welcome_pm');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has joined ([A-Z][a-z]+)'s room from Web$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, m[2]);
+        await ensureParticipantInRoom(ctx, roomId, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has closed (?:her|his) room$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedRoomClosed(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has closed a room that earned (\d+) beans this session$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedRoomClosed(ctx, m[1], { extraFields: { sessionBeans: Number(m[2]) } });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has rejoined room "([^"]+)" after acknowledging his warning$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const persona = personaOrThrow(m[1]);
+        await ctx.db
+          .doc(`users/${persona.uniqueId}`)
+          .set({ hasActiveWarning: false, warningReason: null }, { merge: true });
+        await ensureParticipantInRoom(ctx, m[2], m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has been downgraded to cohort=minor after ID review$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const persona = personaOrThrow(m[1]);
+        await ctx.db
+          .doc(`users/${persona.uniqueId}`)
+          .set({ cohort: 'minor', isAgeVerified: false }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has just been refunded for receipt "([^"]+)"$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const persona = personaOrThrow(m[1]);
+        const ref = ctx.db.doc(`users/${persona.uniqueId}`);
+        const snap = await ref.get();
+        const coins = (snap.exists ? snap.data()?.shyCoins : 0) ?? 0;
+        const after = Math.max(0, coins - 1000);
+        await ref.set({ shyCoins: after }, { merge: true });
+        const txId = `${persona.uniqueId}-refund-${Date.now()}`;
+        await ctx.db.doc(`users/${persona.uniqueId}/transactions/${txId}`).set({
+          id: txId,
+          type: 'REFUND',
+          amount: -1000,
+          currency: 'COINS',
+          balanceAfter: after,
+          refundedReceipt: m[2],
+          timestamp: Date.now(),
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has just pulled the gacha (\d+) times$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const persona = personaOrThrow(m[1]);
+        const pulls = Number(m[2]);
+        const spend = pulls * 100;
+        const ref = ctx.db.doc(`users/${persona.uniqueId}`);
+        const snap = await ref.get();
+        const coins = (snap.exists ? snap.data()?.shyCoins : 0) ?? 0;
+        const after = Math.max(0, coins - spend);
+        await ref.set({ shyCoins: after }, { merge: true });
+        const txId = `${persona.uniqueId}-gacha-${Date.now()}`;
+        await ctx.db.doc(`users/${persona.uniqueId}/transactions/${txId}`).set({
+          id: txId,
+          type: 'GACHA',
+          amount: -spend,
+          currency: 'COINS',
+          balanceAfter: after,
+          timestamp: Date.now(),
+        });
+        for (let i = 0; i < pulls; i += 1) {
+          await ctx.db
+            .doc(`users/${persona.uniqueId}/gifts/gacha-${Date.now()}-${i}`)
+            .set({ giftId: 'rose', source: 'GACHA', acquiredAt: Date.now() });
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^the conversation "([^"]+)" is frozen for both participants$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await ctx.db
+          .doc(`conversations/${m[1]}`)
+          .set({ frozenAtMigration: true, crossCohortAtMigration: true }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
       }
     },
   },
@@ -4141,7 +4513,13 @@ const matchers = [
     // j05 background catalog. Sender wallet must have the gift cost
     // available — caller is responsible for setting shyCoins first via
     // an earlier "has shyCoins=N" setup-Given.
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has just sent\s+([A-Z][a-z]+)\s+a\s+(\w+)$/,
+    // SHY-0268: widened from `has just sent` to also accept `has sent`.
+    // The Gherkin sweep writes the plain past tense when the send is a
+    // precondition rather than the thing that just happened; it is the same
+    // behaviour, so it reuses this tested implementation instead of getting a
+    // competing copy.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has (?:just )?sent\s+([A-Z][a-z]+)\s+a\s+(\w+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
       const sender = m[1];

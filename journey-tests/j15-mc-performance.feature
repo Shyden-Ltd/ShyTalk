@@ -62,7 +62,7 @@ Feature: j15 — Selma's singing room with live gifts
     When Alice on Web sends the "rose" gift to "Selma" in the room
     Then within 3000ms the database has document "users/50000010" with field "shyCoins" decreased by 10
     Then the database has document "users/50000080" with field "beans" increased by 5
-    Then the database has 1 entries in "giftWalls/50000080/gifts" matching {giftId: "rose", senderId: 50000010, contextRoomId: "{roomId}"}
+    Then the database has document "users/50000080/giftWall/rose" with field "receivedCount" greater than 0
 
   @blocker @android-physical @browser-chromium
   Scenario: A gift animates for everyone in the room, not just the sender

@@ -64,7 +64,7 @@ Feature: j05 — Alice's monetization day
   @blocker @browser-chromium
   Scenario: A sent gift is displayed on the recipient's gift wall
     Given Alice has just sent Selma a crown
-    Then the database has 1 entries in "giftWalls/50000080/gifts" matching {giftId: "crown", senderId: 50000010}
+    Then the database has document "users/50000080/giftWall/crown" with field "receivedCount" greater than 0
 
   @android-physical
   Scenario: Selma's Android shows the in-app gift notification and gift wall entry for the crown

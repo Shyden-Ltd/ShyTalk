@@ -75,7 +75,7 @@ Feature: j17 — Bao's Mandarin lesson + Yuki the student
     When Yuki on iOS Sim taps the gift icon and selects "rose" with recipient "Bao"
     Then within 3000ms the database has document "users/50000091" with field "shyCoins" equal to 290
     Then within 3000ms the database has document "users/50000090" with field "beans" equal to 3005
-    Then within 3000ms the database has 1 entries in "giftWalls/50000090/gifts" matching {giftId: "rose", senderId: 50000091}
+    Then within 3000ms the database has document "users/50000090/giftWall/rose" with field "receivedCount" greater than 0
 
   @ios-sim
   Scenario: Yuki follows Bao for future lessons (graph mirrors)

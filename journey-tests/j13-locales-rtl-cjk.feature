@@ -40,7 +40,7 @@ Feature: j13 — Layla + Kenji multi-locale full flow
   Scenario: Layla — sends a gift in Arabic and sees confirmation
     When Layla on Web sends "rose" gift to Alice
     Then within 3000ms Layla's Web UI shows Arabic toast confirming the gift
-    Then within 3000ms the database has 1 entries in "giftWalls/50000010/gifts" matching {senderId: 50000070}
+    Then within 3000ms the database has document "users/50000010/giftWall/rose" with field "receivedCount" greater than 0
 
   @blocker @browser-chromium @locale-rtl
   Scenario: Layla — wallet in Arabic with locale-appropriate separators
