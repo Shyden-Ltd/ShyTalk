@@ -85,6 +85,51 @@ echo "  All required ports are free."
 # Step 1: Docker Compose up (LiveKit + MinIO + Mailpit)
 # =============================================================================
 echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, Mailpit)..."
+
+# LiveKit advertises NODE_IP to clients as its ICE candidate address
+# (SHY-0273). Without it, it advertises the Docker bridge address
+# (172.18.0.2) — unreachable from a phone, so voice signalling connects but
+# media never does. Detect the host's LAN address and hand it over.
+#
+# `route get` picks the interface that actually carries traffic, which is
+# correct when Wi-Fi and Ethernet are both up; en0/en1 guesswork is not.
+detect_lan_ip() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local iface
+    iface=$(route -n get default 2>/dev/null | awk '/interface: /{print $2; exit}')
+    [ -n "$iface" ] && ipconfig getifaddr "$iface" 2>/dev/null && return 0
+    for i in en0 en1; do ipconfig getifaddr "$i" 2>/dev/null && return 0; done
+  else
+    hostname -I 2>/dev/null | awk '{print $1}'
+  fi
+}
+
+# Two working modes for a REAL device:
+#
+#   Wi-Fi (default) — phone and this machine on the same network. LiveKit
+#     advertises the LAN IP; UDP media flows directly. Nothing else to do.
+#
+#   USB-only        — phone has no route to this machine's LAN. Run with
+#     `LIVEKIT_NODE_IP=127.0.0.1 bash local/start.sh` and add
+#     `adb reverse tcp:7881 tcp:7881` (alongside 3000/7880). ICE then falls
+#     back to the TCP candidate, which the reverse tunnel can carry — `adb
+#     reverse` forwards TCP ONLY, which is why the UDP range alone never
+#     worked over USB.
+LIVEKIT_NODE_IP="${LIVEKIT_NODE_IP:-$(detect_lan_ip)}"
+if [ -n "$LIVEKIT_NODE_IP" ]; then
+  export LIVEKIT_NODE_IP
+  echo "  LiveKit will advertise $LIVEKIT_NODE_IP to clients (real devices need this)."
+  if [ "$LIVEKIT_NODE_IP" = "127.0.0.1" ]; then
+    echo "  USB-only mode: also run 'adb reverse tcp:7881 tcp:7881' for TCP media."
+  fi
+else
+  # Loud, not fatal: emulator/simulator and web-on-localhost still work, but a
+  # real device will fail ICE. Silence here is how this cost an evening.
+  echo "  WARNING: could not detect a LAN IP — LiveKit will advertise its Docker" >&2
+  echo "           address and voice will NOT connect from a real device." >&2
+  echo "           Set LIVEKIT_NODE_IP=<this machine's LAN IP> and re-run." >&2
+fi
+
 docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
 
 # =============================================================================
