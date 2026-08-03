@@ -22,6 +22,9 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const yml = fs.readFileSync(path.join(REPO_ROOT, '.github/workflows/pr-checks.yml'), 'utf8');
 const jestConfig = require('../../jest.config.js');
 
+/** The detect-changes arm itself, at a line start so comments cannot match. */
+const ARM_RE = /^\s{2,}shared\/src\/commonMain\/composeResources\/\*\)/;
+
 const GUARDS = [
   'tests/scripts/locale-string-content.test.js',
   'tests/scripts/compose-resources-locale-parity.test.js',
@@ -33,15 +36,20 @@ describe('SHY-0271 — a locale-only PR runs the locale guards', () => {
   });
 
   test('that arm sets BACKEND, so the job running the guards is not skipped', () => {
-    const arm = yml.slice(yml.indexOf('shared/src/commonMain/composeResources/*)'));
-    expect(arm.slice(0, 160)).toMatch(/BACKEND=true/);
+    // Anchored on a line START, not a raw indexOf: a future COMMENT quoting the
+    // arm text would otherwise satisfy these assertions while the real arm was
+    // gone or misplaced — a pin that passes while guarding nothing.
+    const armLine = yml.split('\n').find((l) => ARM_RE.test(l));
+    expect(armLine).toBeDefined();
+    expect(armLine).toMatch(/BACKEND=true/);
   });
 
   test('the arm precedes the generic shared/* arm (case is first-match)', () => {
     // Ordering is load-bearing: shell `case` takes the first matching arm, so a
     // composeResources arm placed after `shared/*` would never be reached.
-    const specific = yml.indexOf('shared/src/commonMain/composeResources/*)');
-    const generic = yml.indexOf('shared/*) ANDROID_APP=true');
+    const lines = yml.split('\n');
+    const specific = lines.findIndex((l) => ARM_RE.test(l));
+    const generic = lines.findIndex((l) => /^\s{2,}shared\/\*\)/.test(l));
     expect(specific).toBeGreaterThan(-1);
     expect(generic).toBeGreaterThan(-1);
     expect(specific).toBeLessThan(generic);

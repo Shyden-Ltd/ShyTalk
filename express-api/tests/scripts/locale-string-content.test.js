@@ -156,6 +156,19 @@ describe('locale strings render as written', () => {
     expect(isBroken('+10% daily login coins')).toBe(false);
   });
 
+  test('no string leaks an XML entity other than the three XML requires', () => {
+    // `&apos;` is the entity form of the same defect the escapes were. It also
+    // round-trips WRONG through the translation pipeline: `unescapeXml` used
+    // not to decode it, so the raw `&apos;` reached the translator and came
+    // back through `escapeXml`, which escapes `&` — writing `&amp;apos;` into
+    // all 20 locales. Only `&amp;` `&lt;` `&gt;` are structurally required in
+    // XML element text; everything else should be the literal character.
+    const offenders = strings
+      .filter((s) => /&(?!amp;|lt;|gt;)[a-zA-Z#][a-zA-Z0-9]*;/.test(s.value))
+      .map(describeOffender);
+    expect(offenders).toEqual([]);
+  });
+
   test('the escape predicate actually fires, and spares a real line break', () => {
     // Mutation guard on the SHARED predicate — weakening the rule above
     // reddens this. A guard with its own inline copy of the regex proves
@@ -164,6 +177,12 @@ describe('locale strings render as written', () => {
     expect(carriesAndroidEscape('escaped \\" quote')).toBe(true);
     expect(carriesAndroidEscape('curly \\“ quote')).toBe(true);
     expect(carriesAndroidEscape('a real\\nline break')).toBe(false);
+    // Boundary cases that encode deliberate decisions, so a future
+    // "relaxation" of the rule has to break a test to happen.
+    expect(carriesAndroidEscape('a\\tb')).toBe(true); // no tabs — write the character
+    expect(carriesAndroidEscape('a\\\\b')).toBe(true); // escaped backslash
+    expect(carriesAndroidEscape('ends with\\')).toBe(true); // trailing
+    expect(carriesAndroidEscape('\\Name')).toBe(true); // uppercase N is not \n
     expect(carriesAndroidEscape("Driver's license")).toBe(false);
   });
 });

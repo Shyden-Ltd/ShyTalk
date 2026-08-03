@@ -100,9 +100,17 @@ function readEnglishStrings(filePath) {
 }
 
 function unescapeXml(s) {
+  // `&apos;` / `&quot;` are decoded BEFORE `&amp;`, and `&amp;` stays LAST
+  // (SHY-0271). Without the first two, an English string carrying `&apos;`
+  // went to the translator verbatim and came back to `escapeXml`, which turns
+  // every `&` into `&amp;` — writing `&amp;apos;` into all 20 locale files.
+  // That is the shipped-escape defect one layer up. `&amp;` last prevents
+  // double-decoding `&amp;apos;` straight to an apostrophe.
   return s
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&')
     .replace(/\\'/g, "'");
 }
