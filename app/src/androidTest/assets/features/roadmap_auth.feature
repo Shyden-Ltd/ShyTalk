@@ -12,35 +12,38 @@ Feature: Roadmap page authentication
     And the login prompt should have a "Sign in with Google" button
     And the login prompt should have a "Sign in with Apple" button
 
-  Scenario: User logs in with Google and has a ShyTalk account
-    When I tap "Sign in with Google"
-    And the Google sign-in completes successfully
-    And a ShyTalk account exists for my Google email
+  Scenario: A Google user with a ShyTalk account is signed in on the roadmap
+    Given a ShyTalk account exists for my Google email
+    When I sign in with Google
     Then I should see "Logged in as: TestUser"
     And I should see a sign out button
     And the login prompt should be hidden
-    And I should be able to vote on suggestions
 
-  Scenario: User logs in with Apple and has a ShyTalk account
-    When I tap "Sign in with Apple"
-    And the Apple sign-in completes successfully
-    And a ShyTalk account exists for my Apple ID
+  Scenario: A signed-in roadmap user can vote on suggestions
+    Given I am logged in as "TestUser"
+    When I scroll to the suggestions section
+    Then I should be able to vote on suggestions
+
+  Scenario: An Apple user with a ShyTalk account is signed in on the roadmap
+    Given a ShyTalk account exists for my Apple ID
+    When I sign in with Apple
     Then I should see "Logged in as: TestUser"
     And I should see a sign out button
 
-  Scenario: User logs in with Google but has NO ShyTalk account
-    When I tap "Sign in with Google"
-    And the Google sign-in completes successfully
-    And NO ShyTalk account exists for my Google email
+  Scenario: A Google user with no ShyTalk account is told how to get one
+    Given NO ShyTalk account exists for my Google email
+    When I sign in with Google
     Then I should see a "No ShyTalk account found" message
-    And I should see a link to download from the Play Store
-    And I should see a link to download from the App Store
     And the message should invite me to create an account in the app
 
-  Scenario: User logs in with Apple but has NO ShyTalk account
-    When I tap "Sign in with Apple"
-    And the Apple sign-in completes successfully
-    And NO ShyTalk account exists for my Apple ID
+  Scenario: The no-account message links to both app stores
+    Given I logged in with Google but have no ShyTalk account
+    Then I should see a link to download from the Play Store
+    And I should see a link to download from the App Store
+
+  Scenario: An Apple user with no ShyTalk account is told how to get one
+    Given NO ShyTalk account exists for my Apple ID
+    When I sign in with Apple
     Then I should see a "No ShyTalk account found" message
     And I should see download links for both stores
 

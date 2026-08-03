@@ -14,5 +14,4 @@ Feature: Degraded Mode
   Scenario: Acknowledge dismisses the screen
     Given I am on the "degraded_mode" screen
     When I tap the element with tag "degraded_acknowledgeButton"
-    And I wait 1000 milliseconds
     Then I should not see the element with tag "degraded_title"

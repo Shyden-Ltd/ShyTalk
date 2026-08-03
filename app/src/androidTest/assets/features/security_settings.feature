@@ -19,7 +19,6 @@ Feature: Security Settings
 
   Scenario: Disabling app lock hides timeout
     When I tap the element with tag "appLockToggle"
-    And I wait 500 milliseconds
     Then I should not see the element with tag "lockTimeoutSetting"
 
 # NOTE (SHY-0187): the reset-PIN flow is covered elsewhere, not here, because it

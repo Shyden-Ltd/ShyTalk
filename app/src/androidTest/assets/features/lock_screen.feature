@@ -16,16 +16,13 @@ Feature: Lock Screen
   Scenario: Wrong PIN shows error
     When I enter PIN "0000"
     And I tap the text "Unlock"
-    And I wait 2000 milliseconds
     Then I should see the text "Wrong PIN"
 
   Scenario: Correct PIN unlocks app
     When I enter PIN "1234"
     And I tap the text "Unlock"
-    And I wait 2000 milliseconds
     Then I should see the element with tag "main_roomsTab"
 
   Scenario: Lockout after five failures
     When I fail PIN entry 5 times
-    And I wait 2000 milliseconds
     Then I should see the text "Account Locked"

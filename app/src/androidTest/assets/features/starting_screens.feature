@@ -23,7 +23,6 @@ Feature: Starting Screens
   Scenario: Dismissable screen can be dismissed
     Given a dismissable starting screen is configured with title "Welcome" and message "Welcome to our app"
     When I tap the element with tag "startingScreen_dismissButton"
-    And I wait 1000 milliseconds
     Then I should not see the element with tag "startingScreen_title"
 
   # ── Templates ────────────────────────────────────────────

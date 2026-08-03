@@ -8,18 +8,14 @@ Feature: Linked Accounts
 
   Scenario: Navigate to Linked Accounts shows providers
     Given I am on the "settings" screen
-    When I wait for the text "Account"
-    And I tap the text "Account"
-    And I wait for the text "Linked Accounts"
+    When I tap the text "Account"
     And I tap the text "Linked Accounts"
     Then I should see the text "Google"
     And I should see the text "Email"
 
   Scenario: Linked Accounts shows Unlink buttons when multiple providers are active
     Given I am on the "settings" screen
-    When I wait for the text "Account"
-    And I tap the text "Account"
-    And I wait for the text "Linked Accounts"
+    When I tap the text "Account"
     And I tap the text "Linked Accounts"
     Then I should see the text "Unlink"
 
@@ -28,11 +24,8 @@ Feature: Linked Accounts
 
   Scenario: Tapping Unlink shows confirmation dialog
     Given I am on the "settings" screen
-    When I wait for the text "Account"
-    And I tap the text "Account"
-    And I wait for the text "Linked Accounts"
+    When I tap the text "Account"
     And I tap the text "Linked Accounts"
-    And I wait for the text "Unlink"
     And I tap the text "Unlink"
     Then I should see the text "Cancel"
 
@@ -41,8 +34,7 @@ Feature: Linked Accounts
 
   Scenario: Account page shows unique ID
     Given I am on the "settings" screen
-    When I wait for the text "Account"
-    And I tap the text "Account"
+    When I tap the text "Account"
     Then I should see the text "10000001"
 
   # Skipped: accountPage_showsLinkedCount ("2 linked") — requires specific fake data setup

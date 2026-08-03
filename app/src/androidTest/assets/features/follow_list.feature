@@ -15,9 +15,7 @@ Feature: Follow List
     Given I am on the "follow_list/test-user-1/followers" screen
     When I wait for the element with tag "followList_followersTab"
     And I tap the element with tag "followList_followingTab"
-    And I wait 500 milliseconds
     And I tap the element with tag "followList_followersTab"
-    And I wait 500 milliseconds
     Then I should see the element with tag "followList_followersTab"
 
   # Skipped: stalkersTab_notShown_forOtherUser — requires assertDoesNotExist on text with substring match,
@@ -35,8 +33,6 @@ Feature: Follow List
 
   Scenario: Tapping Stalkers tab from Followers shows SuperShy gate
     Given I am on the "follow_list/test-user-1/followers" screen
-    When I wait for the text "Stalkers (0)"
-    And I tap the text "Stalkers (0)"
-    And I wait 500 milliseconds
+    When I tap the text "Stalkers (0)"
     Then I should see the text "Super Shy Benefit"
     And I should see the text "Get Super Shy"

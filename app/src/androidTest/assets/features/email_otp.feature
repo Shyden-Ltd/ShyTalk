@@ -19,22 +19,18 @@ Feature: Email OTP Sign-In
   Scenario: Valid email shows code entry
     When I type "test@example.com" into the field with tag "emailInput"
     And I tap the text "Send code"
-    And I wait 2000 milliseconds
     Then I should see the text "Code sent to"
     And I should see the element with tag "codeInput"
 
   Scenario: Code screen shows resend and expiry info
     When I type "test@example.com" into the field with tag "emailInput"
     And I tap the text "Send code"
-    And I wait 2000 milliseconds
     Then I should see the text "Resend"
     And I should see the text "10 minutes"
 
   Scenario: Invalid code shows error
     When I type "test@example.com" into the field with tag "emailInput"
     And I tap the text "Send code"
-    And I wait 2000 milliseconds
     And I type "000000" into the field with tag "codeInput"
     And I tap the text "Verify"
-    And I wait 2000 milliseconds
     Then I should see the text "Invalid code"

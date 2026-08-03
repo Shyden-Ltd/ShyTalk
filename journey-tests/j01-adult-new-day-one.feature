@@ -29,21 +29,29 @@ Feature: j01 — Adam's first day
   # approve → token refresh → daily reward → discover/follow → first gift →
   # cross-platform propagation.
   @blocker @android-emulator
-  Scenario: Adam signs up with email/password/DOB — minor cohort + unverified by default
+  Scenario: Adam signs up with an email, a password and his date of birth
     When Adam on Android taps "signin_signUpLink"
     When Adam on Android types "adam-new-{ts}@shytalk.dev" into "signup_emailField"
     When Adam on Android types "TestPassw0rd!" into "signup_passwordField"
     When Adam on Android picks DOB "2004-01-01" in "signup_dobPicker"
     When Adam on Android taps "signup_createAccountButton"
     Then within 5000ms the database has document "identityMap/email:adam-new-{ts}@shytalk.dev" with field "uniqueId" of type "number"
+
+  @blocker @android-emulator
+  Scenario: A brand-new account starts as an unverified minor
+    Given Adam has just signed up with a minor-default cohort
     Then Adam's uniqueId is recorded as {newUniqueId} for the rest of this scenario
     Then within 5000ms the database has document "users/{newUniqueId}" with field "cohort" equal to "minor"
     Then the database has document "users/{newUniqueId}" with field "isAgeVerified" equal to false
 
   @blocker @android-emulator
-  Scenario: Adam accepts privacy + terms — usersAcceptedPolicies doc written, main UI shown
+  Scenario: A new signup is stopped at the legal acceptance screen
     Given Adam has just signed up with a minor-default cohort
     Then within 5000ms Adam's Android UI shows the legal acceptance screen
+
+  @blocker @android-emulator
+  Scenario: Accepting privacy and terms records the acceptance and opens the app
+    Given Adam has just signed up with a minor-default cohort
     When Adam on Android taps "legal_acceptPrivacyCheckbox"
     When Adam on Android taps "legal_acceptTermsCheckbox"
     When Adam on Android taps "legal_continueButton"
@@ -57,25 +65,41 @@ Feature: j01 — Adam's first day
     Then Adam's Android UI does not show the element with tag "wallet_buyCoinsButton"
 
   @blocker @android-emulator
-  Scenario: Adam submits a passport ID for age verification — PENDING row + "Submitted" UI
+  Scenario: An unverified member finds the age-verification entry on their profile
     Given Adam has accepted legal as a minor-default user
     When Adam on Android opens the "profile" screen
     Then Adam's Android UI shows the element with tag "profile_ageVerificationEntry"
+
+  @blocker @android-emulator
+  Scenario: Adam submits a passport for review
+    Given Adam has accepted legal as a minor-default user
     When Adam on Android taps "profile_ageVerificationEntry"
     When Adam on Android picks ID type "passport"
     When Adam on Android selects test image "test-passport-adult.jpg" from the gallery
     When Adam on Android taps "ageVerification_submitButton"
     Then within 5000ms the database has 1 entries in "ageVerificationSubmissions" matching {userId: "{newUniqueId}", status: "PENDING"}
+
+  @blocker @android-emulator
+  Scenario: A submitted ID tells the member it is awaiting review
+    Given Adam has a PENDING age-verification submission
     Then Adam's Android UI shows "Submitted — awaiting review"
 
   @blocker @browser-chromium
-  Scenario: Greta approves Adam's submission — cohort flips to adult, audit row written
+  Scenario: A pending submission appears in the admin queue
     Given Adam has a PENDING age-verification submission
     When Greta on Web Admin refreshes the age-verification tab
     Then within 3000ms Greta's Web Admin UI shows 1 row for "{newUniqueId}" with status "PENDING"
+
+  @blocker @browser-chromium
+  Scenario: Approving a submission verifies the member and flips them to adult
+    Given Adam has a PENDING age-verification submission
     When Greta on Web Admin taps "approve" on the submission for "{newUniqueId}"
     Then within 5000ms the database has document "users/{newUniqueId}" with field "isAgeVerified" equal to true
     Then the database has document "users/{newUniqueId}" with field "cohort" equal to "adult"
+
+  @blocker @browser-chromium
+  Scenario: An approval is written to the audit log
+    Given Adam has just been approved to cohort=adult by Greta
     Then the database has 1 entries in "auditLog" matching {action: "age_verification.approve", targetId: "{newUniqueId}", adminId: 90000001}
 
   @blocker @android-emulator
@@ -95,29 +119,42 @@ Feature: j01 — Adam's first day
     Then Adam's Android UI shows the "+{coins}" reward animation
 
   @blocker @android-emulator @browser-chromium
-  Scenario: Adam discovers + follows Alice — graph mirrors + Alice's Web counter ticks
+  Scenario: Adam finds Alice by searching discovery
     Given Adam is verified adult with adult features unlocked
     When Adam on Android opens the "discovery" screen
     When Adam on Android types "adult-power" into the search field
     Then within 3000ms Adam's Android UI shows Alice in the results with displayName "Alice (P-02 adult power)"
+
+  @blocker @android-emulator
+  Scenario: Following Alice mirrors the relationship on both accounts
+    Given Adam is verified adult with adult features unlocked
     When Adam on Android taps Alice's user card
     When Adam on Android taps "profile_followButton"
     Then within 3000ms the database has document "users/{newUniqueId}" with field "followingIds" containing 50000010
     Then within 3000ms the database has document "users/50000010" with field "followerIds" containing {newUniqueId}
+
+  @blocker @browser-chromium
+  Scenario: Alice's follower count ticks up on her open web session
+    Given Adam has just followed Alice
     Then within 5000ms Alice's Web UI shows a +1 in the "Followers" count
 
   @blocker @android-emulator
-  Scenario: Adam sends his first gift to Alice — coins debit, beans credit, both transactions + gift wall entry
+  Scenario: Sending a rose moves coins from the sender to beans for the recipient
     Given Adam is verified adult with adult features unlocked
     Given Adam has user doc with shyCoins=200
-    When Adam on Android opens the "wallet" screen
-    When Adam on Android taps "wallet_sendGiftButton"
-    When Adam on Android selects gift "rose" and recipient "Alice"
-    When Adam on Android taps "sendGift_confirmButton"
+    When Adam on Android sends the gift "rose" to "Alice"
     Then within 3000ms the database has document "users/{newUniqueId}" with field "shyCoins" decreased by 10
     Then the database has document "users/50000010" with field "beans" increased by 5
+
+  @blocker @android-emulator
+  Scenario: A sent gift writes a transaction on both sides
+    Given Adam has just sent Alice his first gift (a rose)
     Then the database has 1 entries in "users/{newUniqueId}/transactions" matching {type: "GIFT_SENT", amount: -10}
     Then the database has 1 entries in "users/50000010/transactions" matching {type: "GIFT_RECEIVED", amount: 5}
+
+  @blocker @android-emulator
+  Scenario: A sent gift lands on the recipient's gift wall
+    Given Adam has just sent Alice his first gift (a rose)
     Then the database has 1 entries in "giftWalls/50000010/gifts" matching {giftId: "rose", senderId: {newUniqueId}}
 
   @blocker @browser-chromium

@@ -13,5 +13,4 @@ Feature: Email Sign-In
 
   Scenario: Back returns to sign-in screen
     When I tap the text "Back"
-    And I wait 1000 milliseconds
     Then I should see the element with tag "signIn_googleButton"

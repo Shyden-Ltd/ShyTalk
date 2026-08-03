@@ -48,6 +48,32 @@ fun ComposeTestRule.waitForTag(
     }
 }
 
+/**
+ * Waits for a node with the given [tag] to be GONE.
+ *
+ * The mirror of [waitForTag], and the reason the feature corpus no longer
+ * needs `I wait N milliseconds` before a negative assertion: an assertion
+ * that fires immediately can only be made reliable by a fixed sleep, which
+ * is both flaky and a step wasted against the 6-step scenario cap. Returns
+ * as soon as the node is absent — if it was never there, that is instantly.
+ */
+fun ComposeTestRule.waitForTagToDisappear(
+    tag: String,
+    timeoutMs: Long = 10_000,
+) {
+    val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+    while (true) {
+        mainClock.advanceTimeBy(500)
+        waitForIdle()
+        try {
+            onNodeWithTag(tag).assertDoesNotExist()
+            return
+        } catch (e: AssertionError) {
+            if (System.nanoTime() >= deadline) throw e
+        }
+    }
+}
+
 fun ComposeTestRule.clickTag(tag: String) {
     onNodeWithTag(tag).performClick()
 }

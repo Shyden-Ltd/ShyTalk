@@ -12,6 +12,7 @@ import com.shyden.shytalk.util.launchMainScreen
 import com.shyden.shytalk.util.launchNavGraph
 import com.shyden.shytalk.util.launchSignIn
 import com.shyden.shytalk.util.waitForTag
+import com.shyden.shytalk.util.waitForTagToDisappear
 import com.shyden.shytalk.util.waitForText
 import io.cucumber.java.Before
 import io.cucumber.java.en.Given
@@ -84,6 +85,25 @@ class CommonSteps {
         rule.onNodeWithTag(tag).performTextInput(text)
     }
 
+    /**
+     * One declarative step for "the user agrees to everything", rather than
+     * four consecutive tap steps. Keeps the legal scenario within the 6-step
+     * cap and keeps the policy LIST an implementation detail — adding a fifth
+     * policy changes this step, not every scenario that consents.
+     */
+    @When("I tick every legal policy checkbox")
+    fun iTickEveryLegalCheckbox() {
+        listOf(
+            "legal_checkbox_PrivacyPolicy",
+            "legal_checkbox_CommunityStandards",
+            "legal_checkbox_TermsAndConditions",
+            "legal_checkbox_CyberBullyingPolicy",
+        ).forEach { tag ->
+            rule.waitForTag(tag)
+            rule.onNodeWithTag(tag).performClick()
+        }
+    }
+
     // ── Assertions ────────────────────────────────────────────
     @Then("I should see the element with tag {string}")
     fun iShouldSeeElementWithTag(tag: String) {
@@ -98,7 +118,10 @@ class CommonSteps {
 
     @Then("I should not see the element with tag {string}")
     fun iShouldNotSeeElementWithTag(tag: String) {
-        rule.onNodeWithTag(tag).assertDoesNotExist()
+        // Condition-based, not instantaneous: a dialog dismissal takes a few
+        // frames, and the corpus used to pad for it with `I wait N
+        // milliseconds`. Polling until absent removes the sleep and the step.
+        rule.waitForTagToDisappear(tag)
     }
 
     // ── Wait Helpers ──────────────────────────────────────────

@@ -38,7 +38,6 @@ Feature: PIN Setup
     And I tap the text "Next"
     And I enter PIN "1234"
     And I tap the text "Confirm"
-    And I wait 2000 milliseconds
     Then I should see the text "Security settings"
 
   Scenario: Shows security settings info text

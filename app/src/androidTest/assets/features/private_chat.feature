@@ -19,7 +19,6 @@ Feature: Private Chat
   Scenario: Type a message in chat
     When I tap the "Messages" tab
     And I tap the text "OtherUser"
-    And I wait for the element with tag "privateChat_messageInput"
     And I type "Hello there!" into the field with tag "privateChat_messageInput"
     Then I should see the element with tag "conversation_sendButton"
 
@@ -27,7 +26,6 @@ Feature: Private Chat
     When I tap the "Messages" tab
     And I tap the text "OtherUser"
     And I tap the element with tag "privateChat_backButton"
-    And I wait 1000 milliseconds
     Then I should see the element with tag "main_messagesTab"
 
   Scenario: Shows message input

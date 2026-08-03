@@ -19,25 +19,20 @@ Feature: New Message
 
   Scenario: New message screen shows search field when launched directly
     Given I am on the "new_message" screen
-    When I wait for the element with tag "newMessage_searchField"
     Then I should see the element with tag "newMessage_searchField"
 
   Scenario: Group setup screen shows name field
     Given I am on the "group_setup/test-user-2" screen
-    When I wait for the element with tag "groupSetup_nameField"
     Then I should see the element with tag "groupSetup_nameField"
 
   Scenario: Group setup screen shows create button
     Given I am on the "group_setup/test-user-2" screen
-    When I wait for the element with tag "groupSetup_createButton"
     Then I should see the element with tag "groupSetup_createButton"
 
   Scenario: Shows search field
     Given I am on the "new_message" screen
-    When I wait for the element with tag "newMessage_searchField"
     Then I should see the element with tag "newMessage_searchField"
 
   Scenario: Shows create group button
     Given I am on the "new_message" screen
-    When I wait for the element with tag "newMessage_createGroupButton"
     Then I should see the element with tag "newMessage_createGroupButton"

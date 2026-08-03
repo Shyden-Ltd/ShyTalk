@@ -27,13 +27,11 @@ Feature: Room
   Scenario: Room screen shows seat grid
     Given I am on the main screen
     When I tap the text "Chill Zone"
-    And I wait for the element with tag "room_seatGrid"
     Then I should see the element with tag "room_seatGrid"
 
   Scenario: Room screen back button returns to main
     Given I am on the main screen
     When I tap the text "Chill Zone"
-    And I wait for the element with tag "room_backButton"
     And I tap the element with tag "room_backButton"
     Then I should see the element with tag "main_roomsTab"
 
@@ -48,7 +46,6 @@ Feature: Room
   Scenario: Submitting room creation form navigates to new room
     Given I am on the main screen
     When I tap the element with tag "main_createRoomFab"
-    And I wait for the element with tag "createRoom_nameField"
     And I type "My New Room" into the field with tag "createRoom_nameField"
     And I tap the element with tag "createRoom_confirmButton"
     Then I should see the element with tag "room_roomName"
