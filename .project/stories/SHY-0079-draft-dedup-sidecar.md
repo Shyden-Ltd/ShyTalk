@@ -64,31 +64,37 @@ Root cause recap: the Projects v2 `items(first:100)` query is eventually consist
 ## BDD Scenarios
 
 **Scenario: Stale-empty API read does not duplicate drafts**
+
 - **Given** a populated `.project/board-items.json` listing 47 draft cards and an items API query that returns empty
 - **When** the sync runs
 - **Then** the overlay fills all 47 from the sidecar and ZERO `addProjectV2DraftIssue` calls are made
 
 **Scenario: Write-back keeps the sidecar current after a create**
+
 - **Given** a new non-bug story with no board item and no sidecar entry
 - **When** the sync creates its draft card
 - **Then** `.project/board-items.json` is regenerated to include the new SHY → item-id and committed via `createCommitOnBranch`
 
 **Scenario: API-fresh state wins over the sidecar**
+
 - **Given** a sidecar entry marking an issue OPEN and an API result marking it CLOSED
 - **When** the sync merges
 - **Then** the merged map uses the API's CLOSED state (freshest), and the sidecar is reconciled on write-back
 
 **Scenario: Malformed sidecar degrades gracefully**
+
 - **Given** a corrupt `.project/board-items.json`
 - **When** the sync runs
 - **Then** it emits a `::warning::`, falls back to the API-only map, completes the run, and rewrites a valid sidecar
 
 **Scenario: Committing the sidecar does not re-trigger the sync**
+
 - **Given** the sync commits `.project/board-items.json` to main
 - **When** the push event is evaluated
 - **Then** the sync workflow does not run again (path not in triggers + actor guard)
 
 **Scenario: Deleted board item is purged from the sidecar**
+
 - **Given** a draft removed by a type-flip or rebuild teardown
 - **When** the write-back runs
 - **Then** that SHY's entry is absent from the rewritten `.project/board-items.json`

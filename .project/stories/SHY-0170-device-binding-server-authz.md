@@ -79,6 +79,7 @@ Moving the decision server-side fixes the vulnerability AND reconciles both defe
 ## BDD Scenarios
 
 **Scenario: a device already used by someone else is blocked — decided by the server**
+
 - **Given** a device is bound to user A
 - **And** user B signs in on that device
 - **When** the app asks the API to check the device lock
@@ -87,18 +88,21 @@ Moving the decision server-side fixes the vulnerability AND reconciles both defe
 - **And** the decision was made by the API, not by the app reading the database
 
 **Scenario: a tampered app cannot bypass the lock**
+
 - **Given** the `deviceBindings` data can no longer be read or written directly by a client (rules deny it)
 - **When** a client attempts to read another device's binding directly
 - **Then** the read is denied
 - **And** the only way to obtain the lock decision is the authorized API endpoint
 
 **Scenario: first use of a fresh device binds it to the signing-in user**
+
 - **Given** a device with no existing binding
 - **When** an existing user signs in and the API performs the lock-check
 - **Then** the API binds the device to that user and returns "allowed"
 - **And** a later sign-in by the same user on the same device is still allowed
 
 **Scenario: a new account cannot be created on an already-used device**
+
 - **Given** a device already bound to some user
 - **When** a brand-new (not-yet-registered) person tries to create an account on it
 - **Then** the API reports the device is already bound

@@ -63,26 +63,31 @@ Severity P1: every future push-sync carries a non-zero duplication probability (
 ## BDD Scenarios
 
 **Scenario: Stale-empty items map does not duplicate a bug issue**
+
 - **Given** a `type: bug` story whose issue already exists, and an items-map query that (transiently) returns empty
 - **When** the sync runs
 - **Then** the consistent-source Issues search finds the existing issue and the sync routes to update/skip — no second issue is created
 
 **Scenario: Items-map empty-read is retried**
+
 - **Given** the first `items(first:100)` query returns zero nodes
 - **When** `load_items_map` runs
 - **Then** it retries once after the backoff before accepting an empty map
 
 **Scenario: Genuine first sync still creates once**
+
 - **Given** a SHY with no existing issue or board item
 - **When** the sync runs
 - **Then** the guard's existence check returns empty and the item/issue is created exactly once
 
 **Scenario: Prefix-exact existence check**
+
 - **Given** an existing issue titled `SHY-0070: ...`
 - **When** the guard checks for `SHY-0007`
 - **Then** it does NOT match `SHY-0070` and `SHY-0007` is created/handled independently
 
 **Scenario: Guard-check failure aborts rather than duplicating**
+
 - **Given** the consistent-source existence check returns a gh error
 - **When** the sync processes that bug story
 - **Then** it increments `N_FAILED`, exits 40, and does NOT create an issue on the uncertain result

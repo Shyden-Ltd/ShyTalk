@@ -75,33 +75,39 @@ The audit listed **fuzz/property testing** as a candidate gap (operator: "anythi
 ## BDD Scenarios
 
 **Scenario: A malformed expiry cannot un-ban a user (fail-closed)**
+
 - **Given** the ban-active predicate under property testing
 - **When** `fast-check` generates thousands of expiry strings including malformed ones
 - **Then** no generated input makes a banned user evaluate to not-banned
 - **And** any violation fails with the minimal shrunk counterexample
 
 **Scenario: The API never 500s on a fuzzed payload**
+
 - **Given** the real messaging endpoint
 - **When** `fuzz-api` sends oversized/wrong-type/injection-shaped payloads
 - **Then** each is rejected with a proper 4xx
 - **And** no payload causes a 5xx/crash/unhandled rejection or a persisted bad state
 
 **Scenario: A unicode moderation-bypass attempt is caught**
+
 - **Given** a display-name field
 - **When** the generator produces homoglyph/zero-width variants of a banned word
 - **Then** normalization/moderation still catches it (no bypass)
 
 **Scenario: A found counterexample becomes a permanent regression test**
+
 - **Given** a property run discovers a breaking input
 - **When** the fix lands
 - **Then** that exact input is pinned as a named example test forever
 
 **Scenario: Ambiguous input resolves to the safe side**
+
 - **Given** an age value at/around the boundary that is ambiguous or unparseable
 - **When** the cohort predicate runs under property testing
 - **Then** the result is always the safe (gated) side, never permissive
 
 **Scenario: Fuzz verdict reaches the public page**
+
 - **Given** a completed fuzz/property run
 - **When** SHY-0220's page reads the `metadata.json`
 - **Then** it can show "handles weird input safely ✓"

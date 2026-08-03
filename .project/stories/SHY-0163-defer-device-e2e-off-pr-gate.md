@@ -54,17 +54,20 @@ The required `android-e2e` check is **flaky on infrastructure, not code**: on PR
 ## BDD Scenarios
 
 **Scenario: device E2E no longer gates a feature PR**
+
 - **Given** `pr-checks.yml` after this change
 - **When** the `PR Gate` `needs:` list is read
 - **Then** it does not contain `android-e2e` or `ios-e2e`
 - **And** it still contains `playwright-web` and `integration-tests`
 
 **Scenario: PR Gate result loop drops the device jobs**
+
 - **Given** the PR Gate "Evaluate results" step
 - **When** its body is read
 - **Then** it contains no `needs.android-e2e.result` or `needs.ios-e2e.result` reference
 
 **Scenario: device jobs run only on base-main**
+
 - **Given** the `android-e2e` and `ios-e2e` job `if:` conditions
 - **When** they are read
 - **Then** each contains `github.base_ref == 'main'`

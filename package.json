@@ -15,6 +15,9 @@
     "*.feature": [
       "bash .claude/hooks/check-gherkin.sh"
     ],
+    ".project/stories/*.md": [
+      "bash .claude/hooks/check-gherkin.sh"
+    ],
     "*.{kt,kts}": [
       "ktlint --relative",
       "bash .claude/hooks/check-kmp-compat.sh"

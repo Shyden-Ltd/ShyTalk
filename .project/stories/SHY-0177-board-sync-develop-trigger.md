@@ -63,21 +63,25 @@ Syncing from develop ONLY (not both branches) is load-bearing: change detection 
 ## BDD Scenarios
 
 **Scenario: a ticket edited on the working branch shows up on the board**
+
 - **Given** a story file changes on the team's working branch
 - **When** the change lands
 - **Then** the story's card on the GitHub board updates to match within a few minutes
 
 **Scenario: two changes landing together don't duplicate cards**
+
 - **Given** two story changes land back-to-back
 - **When** both sync runs execute
 - **Then** each story still has exactly one card, with the newest content
 
 **Scenario: a manual sync can't roll the board backwards**
+
 - **Given** someone triggers the sync by hand from the release branch
 - **When** it runs
 - **Then** the board still shows the working branch's newer content, not the release branch's older copy
 
 **Scenario: board links open the ticket, even before release**
+
 - **Given** a brand-new story that exists only on the working branch
 - **When** the operator clicks the card's source link
 - **Then** the story file opens (no dead link)

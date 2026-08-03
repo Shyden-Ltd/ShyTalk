@@ -57,24 +57,28 @@ EPIC-0003's evidence pass found the 12-cell web matrix is 11/12 operational; the
 ## BDD Scenarios
 
 **Scenario: Edge cell runs green on a real device**
+
 - **Given** a real Android device with Mobile Edge open + USB Web Debugging on
 - **When** the `mobile-edge-android` cell runs a regression journey
 - **Then** it connects over CDP and the journey passes
 - **And** `--check-drivers` reports the driver healthy
 
 **Scenario: Edge absent → loud skip, not silent pass**
+
 - **Given** no Edge-capable Android device / Edge not installed
 - **When** the cell runs
 - **Then** the runner reports a loud skip naming the remediation
 - **And** it does NOT report a pass
 
 **Scenario: socket-name drift is caught by evidence**
+
 - **Given** the device's real Edge DevTools socket is inspected via `/proc/net/unix`
 - **When** it differs from `com.microsoft.emmx_devtools_remote`
 - **Then** `EDGE_CDP_SOCKET` is updated to the observed value
 - **And** the cell then connects
 
 **Scenario: no leaked adb forward**
+
 - **Given** the cell completes (pass or skip)
 - **When** `adb forward --list` is checked
 - **Then** the cell's `localabstract` forward has been removed

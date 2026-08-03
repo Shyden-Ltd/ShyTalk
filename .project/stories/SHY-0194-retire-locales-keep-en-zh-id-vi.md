@@ -63,27 +63,32 @@ Retired: `ar de es fr hi it ja km ko nl pl pt ru sv th tr uk` (17). Kept: base E
 ## BDD Scenarios
 
 **Scenario: picker offers exactly four languages**
+
 - **Given** any signed-in user opens app Settings → Language (or the web 🌐 selector)
 - **When** the language list renders
 - **Then** it contains exactly English, 中文 (Mandarin), Bahasa Indonesia, and Tiếng Việt — none of the retired 17
 
 **Scenario: retired saved preference falls back silently**
+
 - **Given** a device/browser whose stored language preference is `de` (retired)
 - **When** the app cold-launches / the page loads after the change ships
 - **Then** all UI renders in English with no error surfaced
 - **And** the picker shows English as the active selection
 
 **Scenario: retired locale in a URL resolves to English**
+
 - **Given** a visitor opens `shytalk.com/?lang=ru`
 - **When** the page renders
 - **Then** content is English and no redirect loop or JS error occurs
 
 **Scenario: kept locales still fully translate**
+
 - **Given** a user selects Tiếng Việt (or 中文 / Bahasa Indonesia)
 - **When** they browse app screens and public pages
 - **Then** every string renders translated (no raw keys, no English bleed-through in tested surfaces)
 
 **Scenario: the completeness gates enforce the NEW set**
+
 - **Given** the test suites run
 - **When** a future PR adds a user-facing string missing from `vi`
 - **Then** a completeness test fails naming the gap (the old "all 20 locales" pins now pin the four)

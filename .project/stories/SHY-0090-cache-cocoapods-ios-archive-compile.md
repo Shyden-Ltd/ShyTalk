@@ -67,26 +67,31 @@ So that the dominant non-link chunk of the 56-min iOS deploy shrinks and, with S
 ## BDD Scenarios
 
 **Scenario: warm pod cache shortens the archive**
+
 - **Given** a prior run populated the `Podfile.lock`-keyed build-product cache
 - **When** the next release runs with an unchanged `Podfile.lock` and unchanged runner image
 - **Then** the `xcodebuild archive` step is measurably faster than the 29m04s cold baseline and the IPA still uploads successfully to App Store Connect
 
 **Scenario: Podfile.lock change forces a clean rebuild**
+
 - **Given** a pod is upgraded (Podfile.lock changes)
 - **When** the release runs
 - **Then** the cache key misses and pods are compiled cleanly, producing a correct archive
 
 **Scenario: a toolchain bump forces a clean rebuild**
+
 - **Given** the runner image / Xcode version changes (its segment is in the cache key)
 - **When** the release runs against the old key
 - **Then** the key misses and the archive rebuilds from source rather than linking ABI-incompatible cached objects
 
 **Scenario: a cache failure never blocks a release**
+
 - **Given** the GitHub cache backend is unavailable or the key is absent
 - **When** the archive step runs
 - **Then** it rebuilds from source (≤ cold baseline) and the release proceeds; the save step's `continue-on-error` + `timeout-minutes` swallow save failures/hangs
 
 **Scenario: signing still runs on a cache hit**
+
 - **Given** a warm cache hit on the build products
 - **When** the archive + export run
 - **Then** `setup-ios-signing` / `cleanup-ios-signing` still execute and no signing material was ever written into the cache

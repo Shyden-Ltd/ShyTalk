@@ -77,31 +77,37 @@ The audit confirmed **no contract testing** (no Pact/OpenAPI/dredd). This gap is
 ## BDD Scenarios
 
 **Scenario: A server field rename breaks the provider contract**
+
 - **Given** the API changes `roomName` to `title` in the room response without updating the spec
 - **When** `contract-provider` validates the real response against the OpenAPI spec
 - **Then** the test fails naming the endpoint and the removed field
 
 **Scenario: A client expecting a dropped field breaks the consumer contract**
+
 - **Given** the Android room DTO still expects `roomName` which the spec no longer defines
 - **When** `contract-consumer` checks the Kotlin model against the spec
 - **Then** it fails naming the client and the field
 
 **Scenario: A new endpoint with no spec entry is blocked**
+
 - **Given** a new client-facing route added without an OpenAPI entry
 - **When** `check-openapi-in-sync` runs
 - **Then** it fails naming the uncovered route
 
 **Scenario: An error-shape change is caught**
+
 - **Given** the 403 error shape changes from `{ error, code }` to `{ message }`
 - **When** the contract suites run
 - **Then** the mismatch fails the contract (clients parse the old error shape)
 
 **Scenario: An additive optional field is non-breaking**
+
 - **Given** the API adds a new optional field and updates the spec
 - **When** both contract suites run
 - **Then** they pass (additive + optional = non-breaking)
 
 **Scenario: Contract verdict reaches the public page**
+
 - **Given** a completed contract run
 - **When** SHY-0220's page reads the contract `metadata.json`
 - **Then** it can show "Apps and server agree ✓"

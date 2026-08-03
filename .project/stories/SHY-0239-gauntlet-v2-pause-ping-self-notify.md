@@ -74,32 +74,38 @@ This delivers the operator's verbatim intent — *"pause + ping for PIN before s
 ## BDD Scenarios
 
 **Scenario: The run pauses + pings before touching any device**
+
 - **Given** a v2 run with the matrix enabled and the PIN gate not disabled
 - **When** the orchestrator finishes bringing the stack up
 - **Then** before matrix-dispatch it writes a `PIN_WAIT` marker under `RUN_DIR` and emits a `pin-wait` notify to the console + `events.log`
 - **And** it does not dispatch the matrix until the gate is confirmed
 
 **Scenario: Detached confirm via the PIN_READY token**
+
 - **Given** a gate blocking with no controlling TTY
 - **When** a `PIN_READY` file appears under `RUN_DIR`
 - **Then** the gate removes `PIN_WAIT`, emits a `pin-ready` notify, and the run proceeds
 
 **Scenario: The gate refuses to hang forever**
+
 - **Given** a gate blocking with a short `PIN_GATE_TIMEOUT` and no confirm
 - **When** the timeout elapses
 - **Then** the gate emits an `aborted` notify, removes `PIN_WAIT`, and the run exits non-zero with `FAIL` written
 
 **Scenario: First failure pings once, run continues**
+
 - **Given** a v2 run in which two suites fail
 - **When** the failures are recorded
 - **Then** exactly one `suite-fail` event is emitted (the first), the run still completes best-effort, and the final tally lists both failures
 
 **Scenario: Completion announces itself**
+
 - **Given** a v2 run where every step passes
 - **When** the run reaches the tally
 - **Then** it emits a `complete` notify (console + event + bell) and writes exactly `DONE`
 
 **Scenario: Status reader resolves the run to one line**
+
 - **Given** a run dir containing a `DONE` sentinel
 - **When** `gauntlet-v2.sh --status <dir>` is invoked
 - **Then** it prints `complete` and exits 0

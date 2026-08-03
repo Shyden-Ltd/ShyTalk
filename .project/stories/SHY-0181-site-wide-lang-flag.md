@@ -63,22 +63,26 @@ Operator directive (2026-07-13): the locale flag must work on **every web page w
 ## BDD Scenarios
 
 **Scenario: a forced locale renders every surface in that language**
+
 - **Given** the admin panel URL with `?lang=fr`
 - **When** it loads
 - **Then** its `data-i18n` text shows in French (not the browser default)
 - **And** the same holds for a public page (privacy.html) and the portal with `?lang=fr`
 
 **Scenario: the app opens legal pages in the app's language**
+
 - **Given** the app's in-app language is set to German while the device is English
 - **When** the user taps the Privacy Policy link on the legal-acceptance screen
 - **Then** the Privacy Policy page renders in German
 
 **Scenario: an unsupported locale is ignored safely**
+
 - **Given** a page URL with `?lang=<script>alert(1)</script>`
 - **When** it loads
 - **Then** the value is never applied and the page falls back to the browser/default language with no script execution
 
 **Scenario: a new page is protected for the future**
+
 - **Given** a newly-added `public/**/*.html` page that forgets the shared resolver
 - **When** CI runs the web-page lint
 - **Then** it fails, naming the page that must include `language-selector.js`

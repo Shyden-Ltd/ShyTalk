@@ -63,21 +63,25 @@ This is the **first concrete slice of SHY-0113** under the operator-chosen "chil
 ## BDD Scenarios
 
 **Scenario: a real cohort member receives a correctly-scoped real token**
+
 - **Given** the Firestore emulator holds a room `room-adult-1` with `cohort: "adult"` (age-segregation cohort — orthogonal to LiveKit region) and a caller whose real Firebase ID token carries `cohort: "adult"` and resolves to `uniqueId: 60000001` via a seeded `users` doc
 - **When** they `POST /api/livekit/token` for `room-adult-1`
 - **Then** the route returns a real JWT that decodes to `video.roomJoin=true`, `video.room="room-adult-1"`, `sub="60000001"`, `metadata` parsing to `{ cohort: "adult" }`, signed by the resolved region's real secret (asia by default)
 
 **Scenario: a cross-cohort caller is denied by the real cohort gate**
+
 - **Given** a room `room-minor-1` with `cohort: "minor"` and a caller whose real token carries `cohort: "adult"`
 - **When** they request a token for `room-minor-1`
 - **Then** the real route returns 404 (existence-hiding, byte-identical to the room-missing 404) and a real `segregationEvents` row is written (`sourceCohort: "adult"`, `targetCohort: "minor"`, `targetRoomId`, `surface: "/api/livekit/token"`, `action: "blocked"`) and asserted by polling the real collection
 
 **Scenario: missing region creds yields a real 503**
+
 - **Given** no LiveKit key/secret is set for the resolved region (and no fallback)
 - **When** a valid cohort member requests a token
 - **Then** the real route returns 503 (driven by real region resolution, not a mocked throw)
 
 **Scenario: the token is signed by the resolved region's real secret**
+
 - **Given** `LIVEKIT_SECRET_ASIA` and `LIVEKIT_SECRET_EU` differ
 - **When** an Asia-room token is minted
 - **Then** verifying the JWT with the Asia secret succeeds and with the EU secret fails

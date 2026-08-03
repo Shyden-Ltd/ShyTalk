@@ -59,21 +59,25 @@ Auth is the universal precondition: if sign-in is faked, every downstream "signe
 ## BDD Scenarios
 
 **Scenario: a real persona signs in against the real Auth emulator**
+
 - **Given** the real Auth emulator seeded with the persona's real user record
 - **When** the persona signs in via real REST / the real app
 - **Then** a real ID token is minted, verified by the real Admin SDK, and the signed-in home is reached — asserted on real auth state
 
 **Scenario: a wrong password is rejected for real**
+
 - **Given** the same real user
 - **When** sign-in is attempted with a wrong password
 - **Then** the real Auth emulator returns the real error and the migrated test asserts it (no mocked rejection)
 
 **Scenario: an expired token is rejected by the real verify path**
+
 - **Given** an expired/malformed ID token
 - **When** a protected route is called
 - **Then** the real Admin verify rejects it and the route returns the real 401
 
 **Scenario: a surfaced auth bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking auth defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed and the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

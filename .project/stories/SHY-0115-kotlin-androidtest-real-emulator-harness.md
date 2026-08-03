@@ -58,16 +58,19 @@ The largest single fake cluster on the Android side is the 22 `Fake*Repository.k
 ## BDD Scenarios
 
 **Scenario: an instrumented test resolves the real repository**
+
 - **Given** the real-emulator Koin test module + a running local emulator stack
 - **When** the migrated auth/user instrumented test runs
 - **Then** it exercises the real repository against the emulator (no `Fake*Repository` bound) and asserts real state
 
 **Scenario: real per-test reset gives a clean slate**
+
 - **Given** test A seeds real emulator state
 - **When** test B runs after the new reset rule
 - **Then** test B sees a clean slate (no leaked state from A)
 
 **Scenario: emulator unreachable fails fast**
+
 - **Given** the emulator stack is down
 - **When** an instrumented test using the harness runs
 - **Then** it fails fast with a clear "emulator unreachable" message, not a false pass

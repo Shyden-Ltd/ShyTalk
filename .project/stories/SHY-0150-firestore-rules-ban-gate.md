@@ -59,16 +59,19 @@ Rules can't see a device ID or IP, so the tractable, strong mechanism is a **`ba
 ## BDD Scenarios
 
 **Scenario: a banned person can't write to the database directly either**
+
 - **Given** a banned person
 - **When** they try to write data straight to the database, bypassing our app and service
 - **Then** the database itself refuses the write
 
 **Scenario: an ordinary person's actions save normally**
+
 - **Given** a person in good standing
 - **When** they do something in the app that saves data
 - **Then** it saves normally
 
 **Scenario: the block lifts when the ban is lifted**
+
 - **Given** a person whose ban has been removed
 - **When** their app refreshes and they act again
 - **Then** their actions save normally again

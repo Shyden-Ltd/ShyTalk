@@ -125,50 +125,50 @@ Operator decision (2026-06-08 ~18:38 BST): Option D, optimising for quality + re
 
 **Scenario: A SHY status flip propagates to the public webpage**
 
-- Given SHY-0099 exists with `public: true` and `status: In Progress`
-- When the SHY's status flips to `Done` and the change merges into `main`
-- Then within ~90s the `sync-roadmap-data.yml` workflow runs
-- And it regenerates `public/roadmap-data.json` with SHY-0099's status updated to `Done`
-- And it commits the regen with committer `github-actions[bot]` and message `chore(roadmap): sync roadmap-data.json from SHY corpus`
-- And the public webpage shows SHY-0099 as Done on the next browser refresh
+- **Given** SHY-0099 exists with `public: true` and `status: In Progress`
+- **When** the SHY's status flips to `Done` and the change merges into `main`
+- **Then** within ~90s the `sync-roadmap-data.yml` workflow runs
+- **And** it regenerates `public/roadmap-data.json` with SHY-0099's status updated to `Done`
+- **And** it commits the regen with committer `github-actions[bot]` and message `chore(roadmap): sync roadmap-data.json from SHY corpus`
+- **And** the public webpage shows SHY-0099 as Done on the next browser refresh
 
 **Scenario: A private SHY does NOT leak to the public webpage**
 
-- Given SHY-0099 exists WITHOUT a `public:` field (default = internal)
-- When its status flips and merges into main
-- Then the sync workflow runs and does NOT include SHY-0099 in the regenerated JSON
-- And the public webpage shows no trace of SHY-0099
+- **Given** SHY-0099 exists WITHOUT a `public:` field (default = internal)
+- **When** its status flips and merges into main
+- **Then** the sync workflow runs and does NOT include SHY-0099 in the regenerated JSON
+- **And** the public webpage shows no trace of SHY-0099
 
 **Scenario: Anonymous visitor sees the GH Project link**
 
-- Given I navigate to shytalk.com/roadmap
-- When the page finishes loading
-- Then I see a footer link with text "View on GitHub Project"
-- And the link's `href` is exactly `https://github.com/orgs/Shyden-Ltd/projects/1`
-- And the link has `target="_blank"` and `rel="noopener noreferrer"`
+- **Given** I navigate to shytalk.com/roadmap
+- **When** the page finishes loading
+- **Then** I see a footer link with text "View on GitHub Project"
+- **And** the link's `href` is exactly `https://github.com/orgs/Shyden-Ltd/projects/1`
+- **And** the link has `target="_blank"` and `rel="noopener noreferrer"`
 
 **Scenario: Auto-commit loop does not occur**
 
-- Given the sync workflow has just committed a regen to main
-- When the commit lands and would normally trigger workflows on main
-- Then the sync workflow's `if: github.actor != 'github-actions[bot]'` guard skips the run
-- And no second sync commit is created
+- **Given** the sync workflow has just committed a regen to main
+- **When** the commit lands and would normally trigger workflows on main
+- **Then** the sync workflow's `if: github.actor != 'github-actions[bot]'` guard skips the run
+- **And** no second sync commit is created
 
 **Scenario: Malformed SHY frontmatter fails CI loudly**
 
-- Given a SHY has `public: true` but is missing a required field (e.g. no `title`)
-- When the sync workflow runs
-- Then the script exits non-zero with stderr naming the file + the missing field
-- And CI fails on the affected push
-- And `public/roadmap-data.json` is NOT modified (no partial write)
+- **Given** a SHY has `public: true` but is missing a required field (e.g. no `title`)
+- **When** the sync workflow runs
+- **Then** the script exits non-zero with stderr naming the file + the missing field
+- **And** CI fails on the affected push
+- **And** `public/roadmap-data.json` is NOT modified (no partial write)
 
 **Scenario: Concurrent pushes do not double-commit**
 
-- Given two SHY edits land in main within ~30s
-- When the sync workflow runs for the second push
-- Then it sees the JSON already up-to-date (first run committed it)
-- And `git diff --quiet` returns no diff
-- And no second commit is created
+- **Given** two SHY edits land in main within ~30s
+- **When** the sync workflow runs for the second push
+- **Then** it sees the JSON already up-to-date (first run committed it)
+- **And** `git diff --quiet` returns no diff
+- **And** no second commit is created
 
 ## Test Plan
 

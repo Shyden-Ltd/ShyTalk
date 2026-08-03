@@ -51,17 +51,20 @@ SHY-0095's R4 review confirmed a repo-wide framework gap: NO visual-regression t
 ## BDD Scenarios
 
 **Scenario: watermark badge respects the safe area**
+
 - **Given** a Compose host with a simulated 59px top safe-area inset
 - **When** the PreviewWatermark screenshot test renders the badge
 - **Then** the badge's top edge is at or below 59px and the test passes
 - **And** reverting the `windowInsetsPadding` fix makes this exact test fail
 
 **Scenario: no-notch device keeps the legacy offset**
+
 - **Given** a Compose host with zero safe-area insets
 - **When** the badge renders
 - **Then** its top offset equals the legacy 4.dp margin
 
 **Scenario: CI failure is diagnosable**
+
 - **Given** a screenshot test failing on CI
 - **When** the workflow completes
 - **Then** the run's artifacts contain the expected/actual/diff images for the failing case

@@ -77,18 +77,21 @@ The audit confirmed **no visual regression testing** — no Playwright `toHaveSc
 ## BDD Scenarios
 
 **Scenario: A clipped-button layout regression fails the web visual gate**
+
 - **Given** a CSS change that clips the "Join room" button on the room list
 - **When** `visual-web` runs `toHaveScreenshot` in the real browser
 - **Then** the test fails
 - **And** an expected/actual/diff triptych is produced naming the screen and diff ratio
 
 **Scenario: A shared Compose regression is caught on the host, fast**
+
 - **Given** a composable padding change that shifts the sign-in layout
 - **When** `visual-compose` renders the screen on the JVM and compares to baseline
 - **Then** the host test fails without needing a device
 - **And** the diff image identifies the shifted region
 
 **Scenario: CI never auto-accepts a visual change**
+
 - **Given** an intentional redesign that changes a baselined screen
 - **When** the visual suite runs in CI
 - **Then** it FAILS (baseline mismatch)
@@ -96,17 +99,20 @@ The audit confirmed **no visual regression testing** — no Playwright `toHaveSc
 - **And** the baseline only updates when a human runs the explicit re-baseline command locally and commits it
 
 **Scenario: A translated string that overflows is caught visually**
+
 - **Given** the room list under a locale whose label is longer than the button
 - **When** `visual-web`/`visual-compose` compares the localized screen to its locale baseline
 - **Then** the overflow/clip is caught as a visual diff
 
 **Scenario: Baseline bloat is blocked**
+
 - **Given** a new baseline PNG committed at 8 MiB unoptimized
 - **When** `check-baseline-budget.mjs` runs in CI
 - **Then** it fails naming the oversized baseline and the budget
 - **And** the commit cannot merge until the baseline is optimized/removed
 
 **Scenario: Visual verdict reaches the public page**
+
 - **Given** a completed visual run
 - **When** SHY-0220's page reads the visual `metadata.json`
 - **Then** it can show "Looks right ✓" per surface

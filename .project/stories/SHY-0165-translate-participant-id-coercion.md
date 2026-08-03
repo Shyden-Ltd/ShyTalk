@@ -62,21 +62,31 @@ This is the same String/Number class as the SHY-0060 DM-gate Critical; it was fo
 ## BDD Scenarios
 
 **Scenario: a conversation participant gets the cached translation instead of burning quota**
+
 - **Given** a conversation whose participant list includes me
 - **And** one of its messages already has a stored Spanish translation "hola"
 - **And** I have already used up my free daily translations
 - **When** I ask to translate that message into Spanish
 - **Then** I receive "hola"
 - **And** the response says it came from cache
-- **And** I am not charged another translation against my daily limit
+
+**Scenario: I am not charged another translation against my daily limit**
+
+- **Given** a conversation whose participant list includes me
+- **And** one of its messages already has a stored Spanish translation "hola"
+- **And** I have already used up my free daily translations
+- **And** I ask to translate that message into Spanish
+- **Then** I am not charged another translation against my daily limit
 
 **Scenario: a room participant's repeat translation is a cache hit**
+
 - **Given** a room whose participant list includes me
 - **And** one of its messages already has a stored French translation
 - **When** I ask to translate that message into French
 - **Then** I receive the stored French translation flagged as cached
 
 **Scenario: a first-time translation is cached for next time**
+
 - **Given** a conversation message with no stored translation yet
 - **And** I am a participant with quota remaining
 - **When** I translate it into German
@@ -84,6 +94,7 @@ This is the same String/Number class as the SHY-0060 DM-gate Critical; it was fo
 - **And** a second identical request returns it as a cache hit
 
 **Scenario: a non-participant still gets a translation but no cache is used**
+
 - **Given** a conversation whose participant list does NOT include me
 - **When** I translate one of its messages
 - **Then** I still receive a translation

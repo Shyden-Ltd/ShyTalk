@@ -75,28 +75,33 @@ The four legs, each a real proof:
 ## BDD Scenarios
 
 **Scenario: A live stack passes the smoke and the run proceeds**
+
 - **Given** the local stack is up and seeded
 - **When** `25-smoke.sh local` runs
 - **Then** all four legs pass (`ok`) and it exits 0
 - **And** the write nonce is read back through the API
 
 **Scenario: A dead API aborts the run before the matrix**
+
 - **Given** the API is not reachable
 - **When** the smoke runs (health bound `SMOKE_HEALTH_TIMEOUT=1`)
 - **Then** it `die`s at the health leg within the bound, non-zero
 - **And** it never attempts sign-in or a write
 
 **Scenario: The write→read round-trip is the real proof**
+
 - **Given** a signed-in persona
 - **When** the smoke PATCHes `lastRoomName=<nonce>` and GETs the user back
 - **Then** it asserts the exact `<nonce>` is returned (a stale-doc 200 would not pass)
 
 **Scenario: The local↔dev password trap is caught**
+
 - **Given** `--target dev` with the wrong password
 - **When** sign-in returns `INVALID_PASSWORD`
 - **Then** the smoke dies with a message naming which password each target expects
 
 **Scenario: The orchestrator aborts early on a dead plumbing**
+
 - **Given** `gauntlet-v2.sh --frameworks` with a matrix and a dead data plane
 - **When** the smoke phase runs (after the PIN gate, before dispatch)
 - **Then** the run writes `FAIL` and exits before any device cell is dispatched

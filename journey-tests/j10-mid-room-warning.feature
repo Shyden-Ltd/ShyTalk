@@ -59,9 +59,13 @@ Feature: j10 — Admin warning lands during an active voice room
     Then within 5000ms Theo's Android UI navigates to the warning screen
     Then Theo's Android UI shows the warning reason "Inappropriate language in voice room"
     Then Theo's Android UI shows the police duck image
+    Then Theo's Android UI shows the element with tag "warning_acknowledgeButton"
+
+  @blocker @android-physical
+  Scenario: A warned member cannot get back to the app behind the warning
+    Given Theo has hasActiveWarning=true, warningReason="Inappropriate language in voice room"
     Then Theo's Android UI does not show the voice room UI
     Then Theo's Android UI does not show the element with tag "main_roomsTab"
-    Then Theo's Android UI shows the element with tag "warning_acknowledgeButton"
 
   @ios-sim
   Scenario: Ines's iOS Sim sees Theo's seat with mic-off and may receive the room-closed cascade
@@ -76,6 +80,11 @@ Feature: j10 — Admin warning lands during an active voice room
     When Theo on Android attempts to navigate via the back button
     Then Theo's Android UI does not navigate away
     Then Theo's Android UI still shows the warning screen
+
+  @blocker @android-physical
+  Scenario: Theo on Android attempts to kill and relaunch the app
+    Given Theo is on the warning screen with hasActiveWarning=true
+    And Theo on Android attempts to navigate via the back button
     When Theo on Android attempts to kill and relaunch the app
     Then within 5000ms Theo's Android UI shows the warning screen again on next launch
 
@@ -95,6 +104,10 @@ Feature: j10 — Admin warning lands during an active voice room
     When Theo on Android taps the room "r1" card
     Then within 5000ms the database has document "rooms/r1" with field "participantIds" containing 50000060
     Then within 3000ms Theo's Android UI shows the room screen
+
+  @blocker @android-physical
+  Scenario: Rejoining after a warning does not restore the host seat or the mic
+    Given Theo has rejoined room "r1" after acknowledging his warning
     Then Theo's Android UI shows his seat as available (he is NOT auto-seated as host on rejoin — must request seat)
     Then Theo's Android UI mic indicator shows "muted"
 
@@ -105,6 +118,11 @@ Feature: j10 — Admin warning lands during an active voice room
     Then within 5000ms Theo's Android UI shows the warning banner overlay on top of the room
     Then within 5000ms Theo's Android UI is still in the room but unable to interact
     Then within 5000ms Theo's Android UI shows the acknowledge button in the banner
+
+  @blocker @android-physical
+  Scenario: Theo on Android taps acknowledge
+    Given Theo is in voice room "r2" as a NON-seated listener
+    And Greta on Web Admin issues a warning to Theo
     When Theo on Android taps acknowledge
     Then within 3000ms Theo's Android UI continues normally in the room
 

@@ -149,7 +149,13 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **Then** 3 GitHub Issues are created with titles `SHY-0001: …`, `SHY-0002: …`, `SHY-0003: …`
 - **And** each issue has labels `story` + `status:draft` + `priority:p1` + `effort:m` + `type:infra`
 - **And** each issue is added to the Project v2 board in the `Draft` column
-- **And** the script exits 0
+
+**Scenario: The script exits 0**
+
+- **Given** the operator has provisioned the `ShyTalk Stories` Project v2 with all 5 required custom fields
+- **And** `.project/stories/` contains SHY-0001, SHY-0002, SHY-0003 (each well-formed, validator-clean)
+- **And** the operator runs `scripts/sync-stories-to-issues.sh --all` with a valid `GITHUB_TOKEN`
+- **Then** the script exits 0
 - **And** stderr lists `SHY-0001: created issue #N (url)` for each story
 
 **Scenario: Second run is idempotent — unchanged stories are skipped**
@@ -160,7 +166,13 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **Then** the script detects each issue exists (by parsing title for `SHY-NNNN:` tag)
 - **And** the script compares the issue body footer's `Last synced: … from commit <sha>` against the current HEAD
 - **And** stderr prints `SHY-NNNN: unchanged - skipping` for each story
-- **And** zero issues are created or updated
+
+**Scenario: Zero issues are created or updated**
+
+- **Given** the first sync run created issues for SHY-0001 through SHY-0003
+- **And** no story file has changed since
+- **And** the operator runs `--all` again
+- **Then** zero issues are created or updated
 - **And** exit code is 0
 
 **Scenario: Story `status` change propagates as a label flip**
@@ -171,7 +183,13 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **Then** the issue's `status:draft` label is removed
 - **And** `status:in-progress` is added
 - **And** the Project v2 status field is updated to `In Progress`
-- **And** stderr prints `SHY-0001: updated issue #N (labels reconciled)`
+
+**Scenario: Stderr prints `SHY-0001: updated issue #N (labels reconciled)`**
+
+- **Given** SHY-0001's frontmatter is updated from `status: Draft` to `status: In Progress`
+- **And** the script is re-run
+- **And** the sync processes SHY-0001
+- **Then** stderr prints `SHY-0001: updated issue #N (labels reconciled)`
 
 **Scenario: PR merge closes the issue via `Closes #N`**
 
@@ -225,7 +243,13 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **Then** stderr prints `rate limit hit at SHY-0100; reset in M minutes`
 - **And** the script sleeps until reset (max 60 min cap)
 - **And** resumes from SHY-0101 (no re-sync of already-processed stories)
-- **And** exits 0 on completion or exits 31 if the cap is exceeded
+
+**Scenario: Exits 0 on completion or exits 31 if the cap is exceeded**
+
+- **Given** the operator runs `--all` against 200 stories
+- **And** halfway through, the GitHub API returns 403 with `X-RateLimit-Remaining: 0`
+- **And** the script hits the rate limit
+- **Then** exits 0 on completion or exits 31 if the cap is exceeded
 
 **Scenario: Manually-created issue is detected and reconciled, not duplicated**
 
@@ -235,7 +259,12 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **And** updates #99's body to the mirrored format
 - **And** applies the SHY-0001 label set
 - **And** does NOT create a duplicate issue
-- **And** stderr prints `SHY-0001: reconciled with existing issue #99`
+
+**Scenario: Stderr prints `SHY-0001: reconciled with existing issue #99`**
+
+- **Given** the operator manually created Issue #99 with title `SHY-0001: Establish Agile workflow` before SHY-0002 ever ran
+- **And** the first sync runs
+- **Then** stderr prints `SHY-0001: reconciled with existing issue #99`
 
 **Scenario: Story marked `Cancelled` closes the issue with `not_planned`**
 
@@ -245,7 +274,13 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **Then** the script calls `gh issue close N --reason not-planned`
 - **And** posts a comment `Cancelled via sync from SHY-0042`
 - **And** the Project v2 card moves to the `Cancelled` column
-- **And** stderr prints `SHY-0042: closed issue #N (reason: not_planned)`
+
+**Scenario: Stderr prints `SHY-0042: closed issue #N (reason: not_planned)`**
+
+- **Given** SHY-0042 frontmatter is changed to `status: Cancelled`
+- **And** the issue #N for SHY-0042 is open
+- **And** the sync runs
+- **Then** stderr prints `SHY-0042: closed issue #N (reason: not_planned)`
 
 **Scenario: Duplicate SHY ID across two files exits 39 without mutation**
 
@@ -264,7 +299,13 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **Then** it invokes `scripts/check-story-frontmatter.sh` per story first
 - **And** SHY-0099 fails validation (exit 11 from the validator)
 - **And** the sync skips SHY-0099 with stderr `SHY-0099: validation failed (status invalid); skipping`
-- **And** continues with other stories
+
+**Scenario: Continues with other stories**
+
+- **Given** SHY-0099 has invalid frontmatter (`status: pending`)
+- **And** the sync is run
+- **And** the script processes SHY-0099
+- **Then** continues with other stories
 - **And** the final exit code reflects partial success (exit 0 if other stories synced; otherwise 33)
 
 **Scenario: Concurrent sync runs serialise via workflow `concurrency:` group**

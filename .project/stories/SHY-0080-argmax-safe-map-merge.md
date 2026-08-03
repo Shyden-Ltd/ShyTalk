@@ -68,16 +68,19 @@ Pre-existing scope ([[feedback-fix-pre-existing-and-new-same]]): the overflowing
 ## BDD Scenarios
 
 **Scenario: A board with overflow-sized draft bodies still produces a complete map**
+
 - **Given** an items API response listing 40 draft cards whose combined body JSON exceeds ARG_MAX (~2 MB)
 - **When** `load_items_map` merges the page
 - **Then** the resulting map contains all 40 SHY IDs (not empty), and a story already on the board is NOT re-created
 
 **Scenario: stdin merge is used, not --argjson, for the map**
+
 - **Given** the script source
 - **When** the pagination + overlay merges are inspected
 - **Then** they pipe via `printf | jq -s` and do NOT pass the map through `--argjson`
 
 **Scenario: overlay fill-count survives a large API map**
+
 - **Given** a large body-laden API map and a sidecar
 - **When** the overlay computes fills
 - **Then** it returns the correct count without an "Argument list too long" failure

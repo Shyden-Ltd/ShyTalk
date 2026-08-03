@@ -66,28 +66,33 @@ It also hardens a **legal** invariant: cohort read-segregation is a UK Online Sa
 ## BDD Scenarios
 
 **Scenario: an adult cannot read a minor's room**
+
 - **Given** the emulator holds a room stamped `cohort: 'minor'`
 - **When** an adult-claimed caller issues `get` on that room
 - **Then** the Rules engine denies it (`assertFails`)
 - **And** the same adult reading an `adult`-stamped room succeeds
 
 **Scenario: the cohort-filtered rooms list is allowed; the unfiltered one is denied**
+
 - **Given** two `ACTIVE` adult rooms and one `ACTIVE` minor room exist
 - **When** an adult caller lists rooms `where cohort == 'adult' AND state in ['ACTIVE','OWNER_AWAY']`
 - **Then** the engine allows it and returns exactly 2 docs
 - **And** the same caller listing rooms `where state in ['ACTIVE','OWNER_AWAY']` with **no** cohort constraint is denied (this is the SHY-0102 client bug)
 
 **Scenario: client room updates are locked to the Admin SDK**
+
 - **Given** a room owned by the caller
 - **When** the owner attempts a client `update()` on the room doc
 - **Then** the engine denies it (`update: if false`), forcing the change through a server endpoint
 
 **Scenario: a seat request cannot impersonate another user**
+
 - **Given** an adult caller with `uniqueId` 50001
 - **When** they create a `seatRequests` doc with `userId: '50002'`
 - **Then** the engine denies it (anti-impersonation `userId == string(callerUniqueId())`)
 
 **Scenario: the worker exits cleanly**
+
 - **Given** the suite cached one handle per persona and called `cleanup()` in `afterAll`
 - **When** Jest finishes the suite
 - **Then** there is no "worker process failed to exit gracefully" warning

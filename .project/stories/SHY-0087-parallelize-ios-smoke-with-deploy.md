@@ -67,18 +67,21 @@ So that the post-approval iOS critical path drops from ~82 min to ~57 min with n
 ## BDD Scenarios
 
 **Scenario: iOS smoke overlaps the iOS deploy on a successful release**
+
 - **Given** a prod deploy with `inputs.ios == true`
 - **When** `validate-release` completes and the approval gate is cleared
 - **Then** `deploy-ios-prod` and `smoke-test-ios` both start without one waiting on the other
 - **And** `gh api .../jobs` shows their time windows overlapping, with total post-approval wall-clock ≈ the longer of the two, not the sum
 
 **Scenario: a failed iOS deploy does not silently hide a smoke regression**
+
 - **Given** `deploy-ios-prod` fails (e.g. signing error)
 - **When** `smoke-test-ios` runs in parallel and the app fails to boot
 - **Then** both jobs report failure independently and `alert-desync` fires
 - **And** the release is marked failed
 
 **Scenario: iOS deselected — no orphan smoke**
+
 - **Given** a deploy dispatched with `inputs.ios == false`
 - **When** the pipeline runs
 - **Then** both `deploy-ios-prod` and `smoke-test-ios` are skipped (the smoke's `if:` still checks `inputs.ios`)

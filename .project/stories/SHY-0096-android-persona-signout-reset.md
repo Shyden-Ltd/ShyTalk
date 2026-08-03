@@ -68,29 +68,34 @@ This also closes the operator-flagged gap (the warning-acknowledge button was ob
 ## BDD Scenarios
 
 **Scenario: second persona switch reaches the new persona (the linchpin regression)**
+
 - **Given** the Android app is signed in as P-02 after a prior journey
 - **When** `androidPersonaSignIn('P-05', 'rooms', 'local')` runs
 - **Then** the driver classifies the launch state as signed-in, performs a real sign-out to the picker, signs in P-05
 - **And** the app reaches P-05's `main_roomsTab` (not P-02's)
 
 **Scenario: sign-out from a clean main screen**
+
 - **Given** the app is on `main_roomsTab` signed in
 - **When** `androidSignOut('local')` runs
 - **Then** it taps `main_settingsButton` → `settings_signOutButton` → `settings_signOutConfirmButton`
 - **And** resolves once `persona_picker_open` is visible
 
 **Scenario: sign-out through a warning gate**
+
 - **Given** the app is parked on the warning screen (`warning_acknowledgeButton` visible)
 - **When** `androidSignOut('local')` runs
 - **Then** it first taps `warning_acknowledgeButton` to reach the main screen
 - **And** then completes the settings sign-out chain to the picker
 
 **Scenario: already signed out is idempotent**
+
 - **Given** the app is already on the picker (`persona_picker_open` visible)
 - **When** `androidSignOut('local')` runs
 - **Then** it returns success without tapping the settings chain
 
 **Scenario: warning-acknowledge has its real server-side effect (operator-flagged gap)**
+
 - **Given** Raul (P-08/UID per registry) has an active first-strike warning and is on the warning screen
 - **When** the j11 journey taps `warning_acknowledgeButton` on the real device
 - **Then** within 3000ms the Firestore doc `users/<uid>` field `hasActiveWarning` is `false`

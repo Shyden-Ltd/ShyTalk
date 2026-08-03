@@ -63,16 +63,19 @@ So "harden cross-platform real-time coverage" = **add live web→device propagat
 ## BDD Scenarios
 
 **Scenario: Web-admin approval reaches the Android app live (j01)**
+
 - **Given** Adam is signed in on the Android app awaiting approval
 - **When** Greta approves Adam on the Web Admin
 - **Then** within the propagation bound, Adam's Android UI reflects the approved state without a manual relaunch
 
 **Scenario: Web-admin approval reaches the iPhone app live (j01/j04)**
+
 - **Given** the same admin action with a persona on the iPhone app
 - **When** the admin action is taken on Web Admin
 - **Then** within the propagation bound, the iPhone UI reflects it
 
 **Scenario: A broken propagation fails the scenario**
+
 - **Given** a regression that stops the live admin→device push
 - **When** the journey runs
 - **Then** the bounded `within <N>ms` assertion times out and the scenario FAILS (no silent pass)

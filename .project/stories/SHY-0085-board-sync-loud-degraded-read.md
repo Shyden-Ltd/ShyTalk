@@ -74,6 +74,7 @@ So that a broken/degraded `GH_PAT_PROJECT` read surfaces in the Actions UI inste
 ## BDD Scenarios
 
 **Scenario: fully-blind read warns loudly**
+
 - **Given** a committed sidecar with an entry for SHY-NNNN
 - **And** the live `projectV2{items}` read returns an empty `nodes` array
 - **When** the sync runs
@@ -81,16 +82,19 @@ So that a broken/degraded `GH_PAT_PROJECT` read surfaces in the Actions UI inste
 - **And** the run still completes normally (no non-zero exit from the warning)
 
 **Scenario: healthy read is quiet**
+
 - **Given** the live items read returns the board items (keys ≥1)
 - **When** the sync runs
 - **Then** NO `::warning::` about a degraded/sidecar-only read is emitted
 
 **Scenario: partial lag-fill is quiet**
+
 - **Given** the live read keys most items but the sidecar fills a few newly-added ones
 - **When** the sync runs
 - **Then** only the existing `[sidecar] API read missed N item(s)` info line is emitted, NOT the `::warning::`
 
 **Scenario: bootstrap (no sidecar, empty read) is quiet**
+
 - **Given** no sidecar file exists and the live read is empty
 - **When** the sync runs
 - **Then** no degraded-read `::warning::` is emitted (the empty map is legitimate)

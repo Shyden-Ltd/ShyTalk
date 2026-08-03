@@ -80,33 +80,39 @@ The audit found age-verification is **functionally** tested (5 Express suites) b
 ## BDD Scenarios
 
 **Scenario: An incomplete data export fails**
+
 - **Given** a user with profile, messages, and wallet data
 - **When** the export test requests their data through the real API and a collection is omitted
 - **Then** the suite fails naming the missing data category
 
 **Scenario: Residual PII after deletion fails erasure**
+
 - **Given** an account deleted through the real deletion path
 - **When** the erasure test scans for residual PII outside the approved carve-out
 - **Then** any residual PII fails the test naming its location
 
 **Scenario: A cohort-separation breach is the highest-severity failure**
+
 - **Given** a seeded minor account
 - **When** the test attempts to place them in an adult-only surface via the real API
 - **Then** the API refuses AND the suite asserts the refusal
 - **And** any breach fails loudly as a safety-critical compliance failure
 
 **Scenario: A user cannot export another user's data**
+
 - **Given** authenticated user A
 - **When** A requests an export scoped to user B
 - **Then** the API denies it AND the test asserts the denial
 
 **Scenario: The OSA retention carve-out is explicit, not accidental**
+
 - **Given** the stated policy retains certain safety records after account deletion
 - **When** the erasure test runs
 - **Then** it asserts those records ARE retained per policy (intentional carve-out)
 - **And** `docs/testing/compliance.md` flags the pending GDPR-vs-OSA legal review
 
 **Scenario: Compliance verdict reaches the public page**
+
 - **Given** a completed compliance run
 - **When** SHY-0220's page reads the compliance `metadata.json`
 - **Then** it can show "Your data + safety rights work ✓" per area (status only)

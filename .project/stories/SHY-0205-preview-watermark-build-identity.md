@@ -87,53 +87,63 @@ Existing assets being ENRICHED (not created): shared `PreviewWatermark.kt` (Andr
 ## BDD Scenarios
 
 **Scenario: Android local build shows its git identity**
+
 - **Given** the app is built via `installLocalDebug` from branch `story/SHY-0205-preview-watermark-build-identity` at a clean commit `abc1234`
 - **When** the app launches on the device
 - **Then** the watermark shows `story/SHY-0205-previe…dentity`, `abc1234` with NO `*`, and an install timestamp matching today
 - **And** logcat contains one line with branch+sha+built values
 
 **Scenario: dirty working tree is flagged**
+
 - **Given** a build produced with uncommitted changes present
 - **When** the watermark renders
 - **Then** the sha reads `abc1234*`
 
 **Scenario: iOS build injects identity via xcodebuild settings**
+
 - **Given** `build-debug-dev.sh` runs on a clean checkout
 - **When** the app installs and launches on the iPhone
 - **Then** the watermark branch/sha lines match the checkout (not `?`)
 - **And** an Xcode-GUI build without the settings shows `?` placeholders and does not crash
 
 **Scenario: every web page carries the badge locally**
+
 - **Given** the local stack + serve-web are running
 - **When** each `public/**/*.html` page (glob-discovered) is visited with a non-prod hostname
 - **Then** `#preview-watermark` is visible on every one with branch/sha populated from serve-web's injected metas
 
 **Scenario: server line proves which backend answered**
+
 - **Given** the web page or app points at the local Express
 - **When** the health poll completes
 - **Then** the server line shows the `/api/health` `sha` value (`?` for local's `unknown`) with a green dot
 
 **Scenario: dead backend turns the dot red without breaking anything**
+
 - **Given** the health target is a closed port (real failure, no mocks)
 - **When** the next poll fails
 - **Then** the dot renders red, the page/app remains fully interactive, and exactly one state-change debug log is emitted
 
 **Scenario: journey marker line is conditional**
+
 - **Given** a Playwright/runner session sets `window.__journey_marker = "j01 s03"`
 - **When** the watermark refreshes
 - **Then** `▶ j01 s03` appears; and after the session clears it, the line disappears
 
 **Scenario: cohort and locale self-describe QA screenshots**
+
 - **Given** an adult persona signs in with the zh locale active
 - **When** the watermark renders
 - **Then** it shows `· adult` after the UID and `zh · <route>` on the locale line; signed out, the cohort segment is absent
 
 **Scenario: prod stays clean**
+
 - **Given** a prod-hostname page load and a prod app build
 - **When** rendering completes
 - **Then** no watermark exists, no health poll fires, and deployed prod HTML contains no `shytalk-git-*` metas
 
 **Scenario: stamp script is deploy-safe and idempotent**
+
 - **Given** `scripts/stamp-build-meta.mjs` runs twice over `public/`
 - **When** the second run completes
 - **Then** each HTML file contains the meta set exactly once with updated values, exit 0; a non-dev invocation refuses with exit ≠ 0

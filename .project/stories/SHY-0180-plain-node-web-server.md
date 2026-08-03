@@ -55,21 +55,25 @@ Root-caused 2026-07-13 by a controlled repro with a parent/child death-ordering 
 ## BDD Scenarios
 
 **Scenario: the web server survives the whole test suite**
+
 - **Given** the local static server is `serve-web.js` on port 8888
 - **When** a full Chromium Playwright suite runs for 16+ minutes against it
 - **Then** the server is still alive at the end and no test fails with `ERR_CONNECTION_REFUSED`
 
 **Scenario: clean URLs and directory indexes match `serve`**
+
 - **Given** `serve-web.js` serving `public/`
 - **When** a request arrives for `/admin/reports` or `/admin/`
 - **Then** it returns `admin/reports.html` / `admin/index.html` with `Content-Type: text/html`
 
 **Scenario: a path-traversal attempt is refused**
+
 - **Given** `serve-web.js` serving `public/`
 - **When** a request tries to escape the root (`/../package.json`)
 - **Then** it returns `404` and never serves a file outside `public/`
 
 **Scenario: a mid-read fd error doesn't take the server down**
+
 - **Given** an in-flight response whose file read errors
 - **When** the read stream emits `error`
 - **Then** that request ends `500` and the server keeps serving every other request

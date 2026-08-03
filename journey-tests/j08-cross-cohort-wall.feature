@@ -93,8 +93,19 @@ Feature: j08 — Vexa's cross-cohort probing
     Given Vexa is signed in on Android (same Firebase identity as Web)
     When Vexa on Android searches "Marcus" in discovery
     Then Vexa's Android UI shows "No results found"
+
+  @blocker @android-physical @cross-cohort
+  Scenario: Vexa on Android attempts profile deep-link "/profile/60000010"
+    Given Vexa is signed in on Android (same Firebase identity as Web)
+    And Vexa on Android searches "Marcus" in discovery
     When Vexa on Android attempts profile deep-link "/profile/60000010"
     Then Vexa's Android UI shows "User not found"
+
+  @blocker @android-physical @cross-cohort
+  Scenario: Vexa on Android attempts to follow Marcus via the profile screen (via deep-link error path)
+    Given Vexa is signed in on Android (same Firebase identity as Web)
+    And Vexa on Android searches "Marcus" in discovery
+    And Vexa on Android attempts profile deep-link "/profile/60000010"
     When Vexa on Android attempts to follow Marcus via the profile screen (via deep-link error path)
     Then the request returns status 404
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
@@ -103,6 +114,10 @@ Feature: j08 — Vexa's cross-cohort probing
   Scenario: Reverse direction — Marcus (minor) probing Vexa (adult) — same wall
     When Marcus on Android searches "Vexa" in discovery
     Then Marcus's Android UI shows "No results found"
+
+  @blocker @cross-cohort
+  Scenario: POST /api/users/follow with targetUniqueId=50000040 as Marcus
+    Given Marcus on Android searches "Vexa" in discovery
     When POST /api/users/follow with targetUniqueId=50000040 as Marcus
     Then the response status is 404
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 60000010, targetUniqueId: 50000040}
@@ -125,9 +140,17 @@ Feature: j08 — Vexa's cross-cohort probing
     Then the response status is 404
     Then the database has document "users/50000040" with field "shyCoins" equal to 1000
     Then the database has document "users/60000010" with field "shyCoins" equal to 10
-    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
+
+  @blocker @cross-cohort
+  Scenario: A refused transfer leaves no transaction on either side
+    Given Vexa's cross-cohort coin transfer to Marcus has been refused
     Then no entry is added to "users/50000040/transactions" since "{ts}"
     Then no entry is added to "users/60000010/transactions" since "{ts}"
+
+  @blocker @cross-cohort
+  Scenario: A refused transfer is recorded as a segregation event
+    Given Vexa's cross-cohort coin transfer to Marcus has been refused
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
 
   # Fill-4 — PR #668 — pre-OSA cross-cohort conversation freezes + shows banner
   # in the recipient's locale. Tests that the migration set frozen=true on
@@ -140,11 +163,25 @@ Feature: j08 — Vexa's cross-cohort probing
     Given Vexa on Web locale=en, Marcus on Android locale=en
     When Vexa on Web opens "/conversations/c1"
     Then within 3000ms Vexa's Web UI shows the frozen-banner element with text from key "age_seg_frozen_conversation_banner"
+
+  @blocker @regression @cross-cohort
+  Scenario: A frozen conversation offers no way to send another message
+    Given the conversation "c1" is frozen for both participants
     Then Vexa's Web UI does not show the message-input field
     Then Vexa's Web UI does not show the "Send" button
+
+  @blocker @regression @cross-cohort osa17-pr8-frozen-conversation-banner
+  Scenario: Vexa on Web attempts POST /api/conversations/c1/messages with body {"text": "hello"}
+    Given a conversation "c1" exists with participantIds=[50000040, 60000010] created before the OSA migration
+    And the conversation doc "conversations/c1" has field "frozenAtMigration" equal to true (set by migration)
+    And Vexa on Web locale=en, Marcus on Android locale=en
     When Vexa on Web attempts POST /api/conversations/c1/messages with body {"text": "hello"}
     Then the response status is 403
     Then no document is created in "conversations/c1/messages"
+
+  @blocker @regression @cross-cohort
+  Scenario: The other end of a frozen conversation sees the same banner
+    Given the conversation "c1" is frozen for both participants
     Then within 3000ms Marcus's Android UI opens conversation "c1" shows the frozen-banner element with text from key "age_seg_frozen_conversation_banner"
     Then Marcus's Android UI does not show the message-input field
 
@@ -153,5 +190,10 @@ Feature: j08 — Vexa's cross-cohort probing
     Given the conversation "c2" between Hayato (post-flip minor, locale=ja) and Alice (adult, locale=en) is frozen
     When Hayato on Android opens "/conversations/c2"
     Then within 3000ms Hayato's Android UI shows the frozen-banner element with the Japanese age_seg_frozen_conversation_banner string
+
+  @regression @cross-cohort osa17-pr8-frozen-banner-locale
+  Scenario: Alice on Web opens "/conversations/c2"
+    Given the conversation "c2" between Hayato (post-flip minor, locale=ja) and Alice (adult, locale=en) is frozen
+    And Hayato on Android opens "/conversations/c2"
     When Alice on Web opens "/conversations/c2"
     Then within 3000ms Alice's Web UI shows the frozen-banner element with the English age_seg_frozen_conversation_banner string

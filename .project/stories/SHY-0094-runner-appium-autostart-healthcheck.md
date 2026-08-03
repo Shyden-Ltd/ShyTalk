@@ -59,6 +59,7 @@ EPIC-0003's operator decision (2026-06-13) made Appium the canonical real-iPhone
 ## BDD Scenarios
 
 **Scenario: server absent → runner starts + health-checks it**
+
 - **Given** no Appium server on :4723
 - **When** the runner reaches the native-iOS cells
 - **Then** it spawns Appium and polls `/status` until ready
@@ -66,18 +67,21 @@ EPIC-0003's operator decision (2026-06-13) made Appium the canonical real-iPhone
 - **And** the runner stops the server it started on completion
 
 **Scenario: operator-started server is reused, not killed**
+
 - **Given** a healthy Appium the operator started on :4723
 - **When** the runner runs the iOS cells
 - **Then** it reuses that server (does not start a second)
 - **And** on teardown it leaves the operator's server running
 
 **Scenario: Appium not installed → loud skip, not silent pass**
+
 - **Given** the `appium` binary cannot be spawned (ENOENT)
 - **When** the runner tries to ensure the server
 - **Then** it reports an actionable error naming the install steps
 - **And** the native-iOS cells are recorded as env-skip, never passed
 
 **Scenario: health-check times out → fail loud + teardown**
+
 - **Given** a spawned Appium whose `/status` never goes ready
 - **When** the bounded timeout elapses
 - **Then** the runner fails loud and kills the half-started server

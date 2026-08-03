@@ -66,23 +66,27 @@ This directly unblocks the real-iPhone image gauntlet for coil #1428 (and every 
 ## BDD Scenarios
 
 **Scenario: Debug-Dev build signs in as a dev persona against shytalk-dev**
+
 - **Given** an iPhone with a `Debug-Dev` build whose `DEV_QA_PERSONAS_PASSWORD` was injected at build time
 - **When** the user taps "Sign in as test persona" and selects P-02 (Alice)
 - **Then** Firebase Auth authenticates against shytalk-dev (not the local emulator)
 - **And** the app loads the signed-in experience over `https://dev-api.shytalk.shyden.co.uk`
 
 **Scenario: picker hidden when password absent**
+
 - **Given** a `Debug-Dev` build compiled WITHOUT `DEV_QA_PERSONAS_PASSWORD`
 - **When** the sign-in screen renders
 - **Then** the persona-picker entry is not shown (`isPersonaPickerAvailable == false`)
 
 **Scenario: distributable build still has no picker/password**
+
 - **Given** a Release/Distribution archive
 - **When** the `.ipa` is inspected
 - **Then** the shared persona password literal is absent
 - **And** `devPersonasPassword` was `nil` at init
 
 **Scenario: existing Debug (local) path unchanged**
+
 - **Given** the plain `Debug` configuration
 - **When** the app launches
 - **Then** it still targets the local emulators (`demo-shytalk`, localhost) with the local-emulator seed password

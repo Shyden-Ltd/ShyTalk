@@ -65,33 +65,39 @@ Enforcement model is **Option A** (operator-chosen 2026-06-18): hard CI checks f
 ## BDD Scenarios
 
 **Scenario: a backend change forces the full client gauntlet**
+
 - **Given** a PR that changes only `express-api/**`
 - **When** `detect-changes` runs
 - **Then** `backend_changed` is true
 - **And** `app_changed`, `web_changed`, and `integration_changed` are also forced true
 
 **Scenario: a story still In Progress blocks merge**
+
 - **Given** a ready (non-draft) PR whose diff includes a `SHY-XXXX-*.md` with `status: In Progress`
 - **When** the `pre-merge-gate` check runs
 - **Then** it exits non-zero with a `::error::` naming the file
 - **And** the required PR Gate check is therefore red
 
 **Scenario: status flipped to In Review unblocks the gate**
+
 - **Given** the same PR after the story `.md` is changed to `status: In Review`
 - **When** the gate re-runs on the new commit
 - **Then** it exits 0
 
 **Scenario: commits after a clean review are refused until re-reviewed**
+
 - **Given** `Reviewed-up-to: <sha>` in the story Notes and a later non-marker commit on the branch
 - **When** `scripts/pre-merge-check.sh <PR#>` runs
 - **Then** it refuses (no OK token) and reports the count of unreviewed commits
 
 **Scenario: a fully-satisfied PR is blessed**
+
 - **Given** status In Review, all required checks green, and `Reviewed-up-to` == head (modulo a marker-only bump)
 - **When** `scripts/pre-merge-check.sh <PR#>` runs
 - **Then** it prints the checklist and emits `PRE-MERGE-CHECK: OK`
 
 **Scenario: a non-story PR is not blocked by Gate 1**
+
 - **Given** a PR with no `SHY-XXXX-*.md` in its diff (e.g. a dependabot bump)
 - **When** the `pre-merge-gate` check runs
 - **Then** it exits 0 (skip — not applicable)

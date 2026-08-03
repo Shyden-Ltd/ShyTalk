@@ -67,23 +67,27 @@ This is not a SHY-0150 regression (the smoke account is not banned) and not an e
 ## BDD Scenarios
 
 **Scenario: A healthy dev deploy reports green smoke checks**
+
 - **Given** the dev environment has just been deployed and is healthy
 - **When** the automated smoke checks run
 - **Then** the voice-room smoke check creates its temporary room successfully
 - **And** the smoke job finishes green with no test failures
 
 **Scenario: The temporary smoke room is cleaned up**
+
 - **Given** the smoke checks created their temporary voice room
 - **When** the smoke run finishes
 - **Then** the temporary room is deleted by the same smoke user that created it
 
 **Scenario: Sneaking a room past the owner-identity check stays impossible**
+
 - **Given** a signed-in user attempts to create a voice room while leaving out — or faking — the room's owner identity
 - **When** the creation request reaches the database
 - **Then** the request is refused
 - **And** the refusal shows up in the smoke-check report, so a weakening of this protection is noticed on the very next deploy
 
 **Scenario: A future room-rule tightening is diagnosable from the log**
+
 - **Given** the room-creation rules gain a new requirement the smoke payload does not yet satisfy
 - **When** the smoke checks run
 - **Then** the smoke job fails with a message showing the denial and listing the rule's requirements, so the operator can see exactly which precondition to update

@@ -61,24 +61,28 @@ EPIC-0003's evidence pass found `ios-appium-driver.js` (419 lines) has **5 real 
 ## BDD Scenarios
 
 **Scenario: a presence-check is real (true case)**
+
 - **Given** a real iPhone in a room with a populated seat grid
 - **When** `iosShowsSeatGrid()` runs
 - **Then** it reads the real `iosUiDump()` XML and returns `true`
 - **And** it does not fall through to the `return false` stub
 
 **Scenario: a presence-check is real (false case, real induced absence)**
+
 - **Given** a real seeded state where the participants list is empty
 - **When** `iosShowsParticipantsList()` runs against the real UI
 - **Then** it returns `false` because the element is truly absent
 - **And** the `false` came from a real dump, not a mock
 
 **Scenario: full designated journey passes on a real iPhone**
+
 - **Given** the local stack is healthy and a real iPhone is connected (Appium auto-started per SHY-0094)
 - **When** a designated native-iOS journey runs end-to-end
 - **Then** every invoked iOS method has a real implementation
 - **And** the journey passes against the real app + real backend
 
 **Scenario: a journey-required method beyond the 11 is added, not skipped**
+
 - **Given** the enumeration finds a designated journey needs a method not in `IOS_METHOD_NAMES`
 - **When** the driver is extended
 - **Then** that method is added to the constant and really implemented

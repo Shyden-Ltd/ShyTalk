@@ -57,17 +57,20 @@ Deferred from SHY-0021 (architect, 2026-06-10): the spec's observability AC assu
 ## BDD Scenarios
 
 **Scenario: healthy sweep is auditable from the response**
+
 - **Given** the sweep mock reports 3 deletions and 1 per-account failure
 - **When** an authorized POST hits /api/system/sweep-account-deletions
 - **Then** the response is 200 `{status: 'ok', swept: 3, errors: 1}`
 - **And** an INFO `sweep_run` log carries `{swept: 3, errors: 1, duration_ms}`
 
 **Scenario: auth failure logs the requester, never the secret**
+
 - **Given** a request with a wrong bearer token from IP 203.0.113.9
 - **When** the middleware rejects it
 - **Then** a WARN log carries the IP and variant, and no log line contains any token material
 
 **Scenario: zero-swept run is visible**
+
 - **Given** the sweep mock reports 0 eligible accounts
 - **When** an authorized POST runs
 - **Then** the 200 body carries `swept: 0` (auditably distinct from pre-story bare ok)

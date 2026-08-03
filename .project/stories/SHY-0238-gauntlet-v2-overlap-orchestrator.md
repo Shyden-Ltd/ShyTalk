@@ -79,29 +79,34 @@ So v2 dispatches the device matrix immediately, overlaps only the three stack-in
 ## BDD Scenarios
 
 **Scenario: Devices start before the Mac suites**
+
 - **Given** a v2 run with `--frameworks`
 - **When** the orchestrator reaches the execution phase
 - **Then** the device matrix is dispatched (detached) **before** the first framework suite starts
 - **And** the three stack-independent suites run concurrently with the live matrix
 
 **Scenario: The Auth-wiping suite never overlaps the live matrix**
+
 - **Given** a v2 run
 - **When** the schedule is inspected
 - **Then** `express-jest` (and the two Playwright suites) are scheduled in a window with no live device matrix
 - **And** no code path starts them concurrently with the matrix
 
 **Scenario: Live console + file both receive output**
+
 - **Given** a v2 run
 - **When** a suite emits a line
 - **Then** that line appears on the console (source-prefixed) AND in the run file
 
 **Scenario: An overlapped suite failure is recorded, not fatal**
+
 - **Given** a v2 run where `eslint` fails
 - **When** the run completes
 - **Then** the matrix + other suites still ran to completion
 - **And** the final tally writes `FAIL`, lists `eslint`, and the run exits non-zero
 
 **Scenario: Overlapped suites are reaped on exit**
+
 - **Given** a v2 run with background suites in flight
 - **When** the run is interrupted (Ctrl-C) or a fatal step fires
 - **Then** no orphaned `gradlew`/`ktlint`/`node` suite processes remain

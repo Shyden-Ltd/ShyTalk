@@ -92,12 +92,14 @@ Coverage audit findings driving the test bar (operator: "every moving part, ever
 ## BDD Scenarios
 
 **Scenario: Non-bug story becomes a draft card, not an issue**
+
 - **Given** a `type: feature` story with no existing board item
 - **When** the sync runs
 - **Then** `addProjectV2DraftIssue` is called with title `SHY-NNNN: <Title>` and the full-spec body
 - **And** NO `gh issue create` call is made for it
 
 **Scenario: Bug story becomes a bug-report issue on the board**
+
 - **Given** a `type: bug` story with no existing issue
 - **When** the sync runs
 - **Then** `gh issue create` fires with label exactly `story` and a body whose `## Bug` section is the story's `## Why` content
@@ -105,59 +107,70 @@ Coverage audit findings driving the test bar (operator: "every moving part, ever
 - **And** `addProjectV2ItemById` adds that issue to the board
 
 **Scenario: Draft story lands in Todo / Done story lands in Done**
+
 - **Given** stories with each of the five lifecycle statuses (any type)
 - **When** the sync runs
 - **Then** each board item's Status field is set to exactly Todo / In Progress / In Review / Done / Cancelled respectively, as the LAST mutation per item
 
 **Scenario: Status transition posts an issue comment**
+
 - **Given** a synced bug issue whose footer says `_Status: In Progress_` and a story file now at `status: In Review`
 - **When** the sync runs
 - **Then** an issue comment `Status: In Progress → In Review` is posted
 - **And** the refreshed body footer says `_Status: In Review_`
 
 **Scenario: Done bug closes its issue naming the release**
+
 - **Given** a bug story flipped to `status: Done` with `released_in: v0.98.0`
 - **When** the sync runs
 - **Then** `gh issue close` fires with reason completed and a comment naming v0.98.0
 
 **Scenario: Cancelled bug closes as not planned**
+
 - **Given** a bug story flipped to `status: Cancelled`
 - **When** the sync runs
 - **Then** `gh issue close` fires with reason "not planned"
 
 **Scenario: Rebuild refuses without confirmation**
+
 - **Given** `--rebuild` is invoked without `REBUILD_CONFIRM=yes`
 - **When** the script starts
 - **Then** it exits 2 naming the missing confirmation env var and performs zero mutations
 
 **Scenario: Rebuild tears down and resyncs fresh**
+
 - **Given** `REBUILD_CONFIRM=yes` and a board with existing items (drafts + issue-backed)
 - **When** `--rebuild` runs
 - **Then** every item is deleted via `deleteProjectV2Item`, every `story`-labeled issue via `deleteIssue`
 - **And** the fresh sync then creates drafts for non-bugs and issues for bugs
 
 **Scenario: deleteIssue permission gap is loud, not silent**
+
 - **Given** `deleteIssue` returns a permissions error during rebuild
 - **When** the teardown processes that issue
 - **Then** a `::warning::` names the PAT scope gap with an actionable message and `N_FAILED` increments
 - **And** the teardown continues with the remaining items
 
 **Scenario: Spec containing literal body-hash text does not break change detection**
+
 - **Given** a synced story whose embedded spec contains `body-hash: deadbeef`
 - **When** the sync re-runs with no file change
 - **Then** the stored hash is extracted from the footer line and the story is skipped as unchanged
 
 **Scenario: One field's mutation failure does not mask the others**
+
 - **Given** the Effort mutation returns HTTP 500 while the other five succeed
 - **When** the sync runs
 - **Then** `N_FAILED` increments exactly once and the exit code is 40
 
 **Scenario: Duplicated label families are deleted repo-wide, foreign labels untouched**
+
 - **Given** repo labels `status:done`, `priority:p1`, `effort:m`, `type:bug`, `roadmap:g001`, `story`, `dependencies`
 - **When** the sync runs
 - **Then** exactly the five family labels are deleted; `story` and `dependencies` survive; a second run deletes nothing
 
 **Scenario: Type flip recreates the correct backing**
+
 - **Given** a story previously synced as a draft whose `type:` is now `bug`
 - **When** the sync runs
 - **Then** the draft item is deleted and a bug issue + issue-backed item is created in its place

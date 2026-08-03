@@ -64,27 +64,32 @@ SHY-0038 made `phases[].items[]` + `currentlyWorkingOn` in `public/roadmap-data.
 ## BDD Scenarios
 
 **Scenario: synced item renders inside its phase with badge**
+
 - **Given** roadmap-data.json has `phases[0].items = [{shyId: "SHY-0060", name: "Age-gating per feature", status: "In Progress", i18n: {}}]`
 - **When** the roadmap page renders
 - **Then** the Safety & Compliance phase list contains a row "Age-gating per feature" with a chip reading "SHY-0060"
 - **And** the row also appears in the top In Progress section with its badge
 
 **Scenario: progress math includes items**
+
 - **Given** a phase with 2 features (1 Done) and 2 items (1 Done)
 - **When** the page renders
 - **Then** the phase shows "(2/4)" and a 50% progress bar
 
 **Scenario: missing items key is harmless**
+
 - **Given** a phases entry with no `items` key
 - **When** the page renders
 - **Then** the phase renders identically to the pre-SHY-0061 output and no console errors occur
 
 **Scenario: badge is translated for screen readers**
+
 - **Given** the page locale is Arabic and the fixture contains an item with status `In Progress`
 - **When** the page renders
 - **Then** the badge chip's aria-label (in both the phase row and the In Progress lift) is the Arabic `storyBadge` template with the ID substituted
 
 **Scenario: all-items phase renders**
+
 - **Given** a phase fixture with `features: []` and one item with status `Done`
 - **When** the page renders
 - **Then** the phase card is present with the item row and a "(1/1)" count and a 100% progress bar

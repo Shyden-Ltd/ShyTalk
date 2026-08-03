@@ -67,33 +67,39 @@ The operator's decision (2026-07-25): **hard-gate ALL develop PRs** — every `d
 ## BDD Scenarios
 
 **Scenario: A safe dependency update lands on develop by itself**
+
 - **Given** Dependabot opens a patch or minor dependency update
 - **And** it targets the `develop` integration branch
 - **When** the automated test suite runs and passes
 - **Then** the update is approved and squash-merged into `develop` with no human involved
 
 **Scenario: A dependency update with failing tests is held back**
+
 - **Given** Dependabot opens a dependency update targeting `develop`
 - **When** the automated test suite fails
 - **Then** the update is **not** merged
 - **And** it stays open for a human to investigate
 
 **Scenario: A contributor's own change to develop must pass CI first**
+
 - **Given** a contributor opens a pull request into `develop`
 - **When** the required automated checks have not all passed
 - **Then** the pull request cannot be merged until they do
 
 **Scenario: A major dependency update still needs a human**
+
 - **Given** Dependabot opens a **major** version update targeting `develop`
 - **When** the tests pass
 - **Then** it is **not** auto-merged — a human makes the call (unchanged policy)
 
 **Scenario: The story-board sync keeps working**
+
 - **Given** the board sync writes its bookkeeping file to `develop` using its trusted release app
 - **When** the new develop protection is active
 - **Then** the release app is exempt and the write still succeeds (the board does not go stale)
 
 **Scenario: Feature branches are untouched**
+
 - **Given** a contributor pushes an ordinary feature branch (not a PR into develop or main)
 - **When** the new develop protection is active
 - **Then** no new required checks apply to that branch (the gate is scoped to develop only)

@@ -66,21 +66,25 @@ Operator decision (2026-07-01): use DeviceCheck + Play Integrity (both free); **
 ## BDD Scenarios
 
 **Scenario: a banned iPhone stays banned even after reinstalling**
+
 - **Given** an iPhone that was banned
 - **When** it reinstalls the app to try to get a fresh start
 - **Then** it is still recognised as the banned device and blocked (the device is remembered across the reinstall)
 
 **Scenario: a banned Android device is recognised when it returns**
+
 - **Given** a banned Android device
 - **When** it reinstalls and tries to sign up again
 - **Then** the app's device-integrity check recognises it and blocks or flags it
 
 **Scenario: an ordinary device is never wrongly blocked**
+
 - **Given** an ordinary, untampered device
 - **When** someone installs the app and signs up
 - **Then** they are never mistaken for a banned device — the check is exact, not a guess
 
 **Scenario: a device that can't prove it's genuine is treated as unsafe**
+
 - **Given** a device that fails the platform's genuineness check (for example a tampered or uncertified device)
 - **When** it opens the app
 - **Then** it is treated as an unsafe device, not silently trusted

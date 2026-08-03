@@ -57,18 +57,21 @@ As the ShyTalk maintainer, I want CI's SonarCloud scanner-engine JAR served from
 ## BDD Scenarios
 
 **Scenario: warm cache serves the engine without network**
+
 - **Given** a prior run populated the engine cache for the current scanner version
 - **When** the sonarcloud job runs on a new commit
 - **Then** the cache step reports a hit and the scanner log shows no engine download
 - **And** analysis completes using the cached JAR
 
 **Scenario: engine version change is additive, not key-busting**
+
 - **Given** a warm cache and a new engine version advertised server-side
 - **When** the job runs
 - **Then** the prefix restore still hits, the scanner downloads only the new engine version once
 - **And** the next cache save includes both versions in `~/.sonar/cache`
 
 **Scenario: WAF block on cold cache fails loudly**
+
 - **Given** an empty cache and the CDN returning 403
 - **When** the job runs
 - **Then** the job fails with the 403 visible in the step log

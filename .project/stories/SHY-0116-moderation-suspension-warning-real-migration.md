@@ -59,21 +59,25 @@ Moderation is the largest express fake cluster (~65 files) **and** the highest-s
 ## BDD Scenarios
 
 **Scenario: a suspended user is genuinely blocked (real safety contract)**
+
 - **Given** an admin suspends a real persona (real moderation state written)
 - **When** that persona attempts a gated action on the real surface
 - **Then** the real backend/rules block it — asserted on real state, not a mocked guard
 
 **Scenario: a warned user sees the real reason (SHY-0101 scenario-1)**
+
 - **Given** a first-strike warning issued with a reason via the real fetch source
 - **When** the persona opens the warning screen on the real device
 - **Then** the real reason is displayed (the migrated test seeds the real fetch path)
 
 **Scenario: moderation state does not leak between scenarios (SHY-0101 A)**
+
 - **Given** the per-persona real reset runs before each scenario
 - **When** scenario N seeds suspension and scenario N+1 expects a clean persona
 - **Then** N+1 starts un-suspended (no leaked `isSuspended`) and signs in cleanly
 
 **Scenario: a surfaced moderation bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

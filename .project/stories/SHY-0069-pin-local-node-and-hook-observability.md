@@ -59,27 +59,32 @@ On 2026-06-09 19:38 brew silently upgraded `node` to 26.3.0 during an unrelated 
 ## BDD Scenarios
 
 **Scenario: push blocked on Node major mismatch**
+
 - **Given** `.nvmrc` contains `24` and the active `node -v` reports `v26.3.0`
 - **When** `scripts/check-node-version.sh` runs
 - **Then** it exits 1
 - **And** stderr contains `node-version-guard`, `26`, `24`, and `brew link`
 
 **Scenario: guard passes silently on matching major**
+
 - **Given** `.nvmrc` contains `24` and `node -v` reports `v24.16.0`
 - **When** the script runs
 - **Then** it exits 0 with empty stdout and stderr
 
 **Scenario: fail-closed on unreadable .nvmrc**
+
 - **Given** `.nvmrc` contains `abc`
 - **When** the script runs
 - **Then** it exits 2 and stderr mentions `.nvmrc`
 
 **Scenario: fail-closed when node is not on PATH**
+
 - **Given** a PATH containing no `node` executable
 - **When** the script runs
 - **Then** it exits 3 and stderr mentions `node not found`
 
 **Scenario: version-string normalisation**
+
 - **Given** `.nvmrc` contains `v24.16.0` followed by a trailing newline
 - **When** the script runs under node v24.x
 - **Then** it exits 0

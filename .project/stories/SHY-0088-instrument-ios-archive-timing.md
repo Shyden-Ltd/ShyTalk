@@ -66,16 +66,19 @@ So that the dominant non-link chunk of the 56-min iOS deploy is quantified per s
 ## BDD Scenarios
 
 **Scenario: the archive emits a per-target timing summary**
+
 - **Given** `deploy-ios-prod`'s archive step with `-showBuildTimingSummary` on the `archive` invocation
 - **When** a release runs
 - **Then** the job log shows the per-target build-timing summary table (incl. the CocoaPods targets) and `## Notes` records the app-Swift vs Pods-compile vs sign/package shares
 
 **Scenario: dev and prod stay in parity**
+
 - **Given** both `deploy-prod.yml` (`deploy-ios-prod`) and `deploy-dev.yml` (`distribute-ios`) archive the iOS app
 - **When** the YAML-assertion suite runs
 - **Then** both workflows' `archive` invocations contain `-showBuildTimingSummary` and neither's `-exportArchive` invocation does
 
 **Scenario: instrumentation never breaks a release**
+
 - **Given** the diagnostic flag is the only change to the archive invocation
 - **When** an archive runs (passing or failing for unrelated reasons)
 - **Then** the flag alters no artifact/signing/exit behaviour — a green archive stays green, a red one fails identically

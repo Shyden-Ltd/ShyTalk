@@ -66,12 +66,14 @@ Surfaced by the SHY-0149 round-5 code review. Not exploitable in production — 
 ## BDD Scenarios
 
 **Scenario: two test files that both use accounts run at the same time**
+
 - **Given** one test file that needs an empty list of accounts
 - **And** another test file that has just created an account and is using it
 - **When** both run at the same time
 - **Then** neither disturbs the other, and both report the truth about the code
 
 **Scenario: a cleanup runs while another test is working**
+
 - **Given** a test file finishing and tidying up after itself
 - **When** another test file is midway through a check that relies on its own data
 - **Then** the tidying removes only the first file's data

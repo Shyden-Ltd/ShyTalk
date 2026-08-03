@@ -58,22 +58,26 @@ The current test asserts only that the mocked `db`/`batch`/`log` were *called* i
 ## BDD Scenarios
 
 **Scenario: expired backpack items across multiple users are deleted**
+
 - **Given** the emulator `backpack` collection group is empty, then seeded with two expired items (under `users/u1` and `users/u2`) and one future item (under `users/u3`)
 - **When** `backpackCleanup()` runs
 - **Then** reading the emulator back shows both expired items deleted
 - **And** the future item still exists with its original `expiresAt`
 
 **Scenario: the expiry boundary is exact**
+
 - **Given** one item with `expiresAt = Date.now()` (already due) and one with `expiresAt = Date.now() + 1 day`
 - **When** `backpackCleanup()` runs
 - **Then** the due item is deleted and the future item is retained
 
 **Scenario: empty collection group is a no-op**
+
 - **Given** `clearCollectionGroup(db, 'backpack')` has emptied the group
 - **When** `backpackCleanup()` runs
 - **Then** it resolves without error and nothing is created or deleted
 
 **Scenario: helper clears a collection group**
+
 - **Given** three `backpack` docs exist under different parents
 - **When** `clearCollectionGroup(db, 'backpack')` runs
 - **Then** a subsequent `collectionGroup('backpack')` read returns empty and the deleted count is 3

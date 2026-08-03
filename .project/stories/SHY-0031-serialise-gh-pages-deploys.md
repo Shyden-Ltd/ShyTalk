@@ -94,7 +94,12 @@ P1 Tier-2 CI reliability — affects EVERY PR's deploy + every cron-triggered de
 - **And** PR B's deploy waits in the concurrency queue
 - **And** when PR A's deploy completes (success or fail), PR B's deploy starts
 - **And** both deploys ultimately complete; the final published site reflects PR B's content (the later merge)
-- **And** no interleaved partial deploys are observed
+
+**Scenario: No interleaved partial deploys are observed**
+
+- **Given** PR A and PR B both merge to main within 30 seconds
+- **And** both PRs' deploy workflows enqueue
+- **Then** no interleaved partial deploys are observed
 
 **Scenario: Build jobs run in parallel; only deploy serialises**
 

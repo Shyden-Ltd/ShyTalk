@@ -65,6 +65,7 @@ During the OkHttp-5 journey gauntlet (#1429) on a real Android device, persona R
 ## BDD Scenarios
 
 **Scenario: adult member lists rooms successfully**
+
 - **Given** an authenticated member with effective cohort `adult`
 - **And** the rooms collection contains adult-cohort rooms in state ACTIVE/OWNER_AWAY
 - **When** the app issues its production rooms-list query (now pinned `where cohort == "adult"`)
@@ -72,6 +73,7 @@ During the OkHttp-5 journey gauntlet (#1429) on a real Android device, persona R
 - **And** only adult-cohort rooms are returned
 
 **Scenario: empty rooms collection returns empty, not denied**
+
 - **Given** an authenticated `adult` member
 - **And** zero matching rooms exist
 - **When** the app issues its cohort-pinned rooms-list query
@@ -79,18 +81,21 @@ During the OkHttp-5 journey gauntlet (#1429) on a real Android device, persona R
 - **And** no PERMISSION_DENIED is raised
 
 **Scenario: minor cannot list adult rooms (segregation preserved)**
+
 - **Given** an authenticated member with effective cohort `minor`
 - **When** the client resolves the caller's cohort and pins `where cohort == "minor"`
 - **Then** the query returns only minor-cohort rooms
 - **And** no adult-cohort room is ever returned to the minor
 
 **Scenario: cohort cannot be resolved — fail closed**
+
 - **Given** an authenticated member whose user document cannot be fetched
 - **When** the client resolves the caller's cohort
 - **Then** it pins the most-restrictive cohort `minor`
 - **And** an adult caller in this state sees a denied/empty list rather than any cross-cohort leak
 
 **Scenario: owner-dedup query is also cohort-pinned**
+
 - **Given** an authenticated member who owns an active room
 - **When** `findActiveRoomByOwner` runs (now pinned `where cohort == <caller cohort>`)
 - **Then** the query succeeds and returns the owner's active room id (it shares the owner's cohort)

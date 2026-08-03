@@ -76,32 +76,38 @@ The audit confirmed **no systematic WCAG accessibility tooling** exists today â€
 ## BDD Scenarios
 
 **Scenario: An unlabeled web control fails the a11y gate**
+
 - **Given** the sign-in page has a button with no accessible name
 - **When** the web a11y suite runs axe-core against the page
 - **Then** the suite fails
 - **And** the output names the axe rule (`button-name`), the WCAG criterion, and the element selector
 
 **Scenario: A low-contrast text regression is caught on Android**
+
 - **Given** a screen adds body text at 3:1 contrast against its background
 - **When** the Android `AccessibilityChecks` suite runs on a real device
 - **Then** the suite fails naming the view and the contrast check
 
 **Scenario: iOS Dynamic Type clipping is caught**
+
 - **Given** a localized label that truncates at the largest Dynamic Type size
 - **When** `performAccessibilityAudit` runs on a real iPhone
 - **Then** the audit reports a dynamic-type/text-clipping finding for that element
 
 **Scenario: Correctly-hidden decoration does not false-fail**
+
 - **Given** a purely decorative image marked as presentation/hidden from accessibility
 - **When** the a11y suites run
 - **Then** no "missing label" violation is raised for that image
 
 **Scenario: Accessibility labels are localized**
+
 - **Given** the app is running under a non-English active locale
 - **When** the a11y suite inspects a labeled control's accessible name
 - **Then** the name matches the localized `strings.xml` value, not English
 
 **Scenario: A11y verdict reaches the public page**
+
 - **Given** a completed a11y run across all three surfaces
 - **When** SHY-0220's page reads the a11y `metadata.json`
 - **Then** it can show "Accessible âœ“" (or a plain-language issue count) per surface

@@ -89,6 +89,11 @@ Feature: j11 — Full harassment moderation lifecycle
     Given Raul has acknowledged his first-strike warning
     When Raul on Android sends "offensive content #2" to Nora
     Then within 3000ms Nora's iOS Sim UI shows the second offensive message
+
+  @blocker @android-physical @ios-sim
+  Scenario: Nora on iOS Sim reports it for "Harassment"
+    Given Raul has acknowledged his first-strike warning
+    And Raul has sent Nora a second offensive message
     When Nora on iOS Sim reports it for "Harassment"
     Then within 3000ms the database has 2 entries in "reports" with reportedId=50000050
 
@@ -126,6 +131,11 @@ Feature: j11 — Full harassment moderation lifecycle
     Given Raul is in a suspendedUntil state 3 days from now
     When POST /api/conversations with body as Raul
     Then the response status is 403
+
+  @blocker
+  Scenario: POST /api/livekit/token as Raul
+    Given Raul is in a suspendedUntil state 3 days from now
+    And POST /api/conversations with body as Raul
     When POST /api/livekit/token as Raul
     Then the response status is 403
 
@@ -144,6 +154,11 @@ Feature: j11 — Full harassment moderation lifecycle
     Given Raul has submitted a suspension appeal
     When Greta on Web Admin opens the suspension-appeals tab
     Then Greta's Web Admin UI shows Raul's appeal with the text
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin taps "Lift suspension" with reason "Appeal accepted — first repeat, leniency"
+    Given Raul has submitted a suspension appeal
+    And Greta on Web Admin opens the suspension-appeals tab
     When Greta on Web Admin taps "Lift suspension" with reason "Appeal accepted — first repeat, leniency"
     Then within 5000ms the database has document "users/50000050" with field "suspendedUntil" equal to null
     Then the database has 1 entries in "auditLog" matching {action: "unsuspend", targetId: 50000050}
@@ -162,6 +177,11 @@ Feature: j11 — Full harassment moderation lifecycle
     When Raul on Android opens his conversation with Nora
     Then Raul's Android UI shows "You are suspended — appeal to continue" banner
     Then Raul's Android UI disables the message input
+
+  @android-physical
+  Scenario: Raul on Android attempts POST /api/messages
+    Given Raul is suspended until 2 days from now
+    And Raul on Android opens his conversation with Nora
     When Raul on Android attempts POST /api/messages
     Then the response status is 403
 
@@ -170,7 +190,18 @@ Feature: j11 — Full harassment moderation lifecycle
     Given Raul has been warned but not suspended
     When Nora on iOS Sim opens Raul's profile and taps "Block"
     Then within 3000ms the database has document "users/50000051" with field "blockedIds" containing 50000050
+
+  @ios-sim
+  Scenario: Raul on Android searches "Nora" in discovery
+    Given Raul has been warned but not suspended
+    And Nora has blocked Raul
     When Raul on Android searches "Nora" in discovery
     Then Raul's Android UI shows "No results found"
+
+  @ios-sim
+  Scenario: Raul on Android attempts to open the existing conversation with Nora
+    Given Raul has been warned but not suspended
+    And Nora has blocked Raul
+    And Raul on Android searches "Nora" in discovery
     When Raul on Android attempts to open the existing conversation with Nora
     Then Raul's Android UI shows "User unavailable"

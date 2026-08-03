@@ -76,32 +76,38 @@ The audit listed **PII-leak / log-privacy** as a candidate gap. ShyTalk holds se
 ## BDD Scenarios
 
 **Scenario: Prod logs redact PII**
+
 - **Given** the production logging config is active
 - **When** a real request carrying an email + auth token is processed
 - **Then** the emitted logs redact both values
 - **And** any un-redacted PII fails `pii-logs` (with the value itself redacted in the failure)
 
 **Scenario: Dev logging stays intentionally verbose**
+
 - **Given** the local/dev logging config
 - **When** the redaction test runs against dev
 - **Then** it asserts dev remains unredacted (debuggability) and does NOT fail — only prod is gated
 
 **Scenario: A PII leak in a published feed is blocked**
+
 - **Given** a `health-data.json` that accidentally includes a seeded persona email
 - **When** `pii-feeds` scans it
 - **Then** it fails naming the file and field before publication
 
 **Scenario: An error response leaking internals is caught**
+
 - **Given** an endpoint that returns a stack trace on error
 - **When** the error-response check runs
 - **Then** it fails naming the endpoint
 
 **Scenario: A non-PII id is not false-flagged**
+
 - **Given** a public room UUID in a feed
 - **When** `pii-feeds` scans it
 - **Then** it is not flagged (opaque non-PII id, per the reviewed policy)
 
 **Scenario: Privacy verdict reaches the public page**
+
 - **Given** a completed PII-leak run with zero leaks
 - **When** SHY-0220's page reads the `metadata.json`
 - **Then** it can show "Your data stays private ✓"

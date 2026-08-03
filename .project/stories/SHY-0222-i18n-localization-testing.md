@@ -76,31 +76,37 @@ The audit listed **i18n depth** as a candidate gap: `scripts/check-orphan-i18n-k
 ## BDD Scenarios
 
 **Scenario: A missing translation key fails the parity gate**
+
 - **Given** a new string added to the base locale but not to Chinese
 - **When** `i18n-parity` runs across the active locale set
 - **Then** it fails naming the key and the missing locale
 
 **Scenario: A dropped placeholder is caught before it crashes**
+
 - **Given** a Vietnamese translation that drops the `{name}` placeholder present in base
 - **When** the placeholder-safety gate runs
 - **Then** it fails naming the key, the locale, and the placeholder diff
 
 **Scenario: A hardcoded string is caught**
+
 - **Given** a new UI label written as a literal instead of a resource reference
 - **When** the no-hardcoded gate runs
 - **Then** it fails naming the file and line
 
 **Scenario: Text overflow is caught by pseudo-localization**
+
 - **Given** a button whose label overflows when text expands ~40%
 - **When** `i18n-pseudo` renders the screen
 - **Then** it fails naming the clipped screen/control
 
 **Scenario: The active-locale set is the single source of truth**
+
 - **Given** the SHY-0194 sweep expands the active set in `active-locales.mjs`
 - **When** the gates run
 - **Then** every gate enforces the new set with no other edit
 
 **Scenario: i18n verdict reaches the public page**
+
 - **Given** a completed i18n run
 - **When** SHY-0220's page reads the i18n `metadata.json`
 - **Then** it can show "Fully translated ✓" per locale

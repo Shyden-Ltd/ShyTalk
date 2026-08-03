@@ -133,13 +133,41 @@ Once SHY-0003 ships:
 - **When** the operator runs `scripts/convert-roadmap-to-stories.sh`
 - **Then** the script parses the roadmap into PR-bundles
 - **And** cross-checks each G-item's shipped status via merged PR history
-- **And** emits ~25 skeleton SHYs starting from SHY-0004 sequentially
+
+**Scenario: Emits ~25 skeleton SHYs starting from SHY-0004 sequentially**
+
+- **Given** the roadmap at the canonical path is well-formed
+- **And** `.project/stories/` contains SHY-0001 + SHY-0002 + SHY-0003 (the highest existing is SHY-0003)
+- **And** the operator has authenticated `gh` and is online
+- **And** the operator runs `scripts/convert-roadmap-to-stories.sh`
+- **Then** emits ~25 skeleton SHYs starting from SHY-0004 sequentially
 - **And** each skeleton passes `scripts/check-story-frontmatter.sh` immediately after creation
-- **And** the roadmap is updated in-place with the new SHY column
+
+**Scenario: The roadmap is updated in-place with the new SHY column**
+
+- **Given** the roadmap at the canonical path is well-formed
+- **And** `.project/stories/` contains SHY-0001 + SHY-0002 + SHY-0003 (the highest existing is SHY-0003)
+- **And** the operator has authenticated `gh` and is online
+- **And** the operator runs `scripts/convert-roadmap-to-stories.sh`
+- **Then** the roadmap is updated in-place with the new SHY column
 - **And** G054 row appears at the bottom of Phase G's table with the documented values
-- **And** SHY-INDEX.md grows by ~25 rows under Active
+
+**Scenario: SHY-INDEX.md grows by ~25 rows under Active**
+
+- **Given** the roadmap at the canonical path is well-formed
+- **And** `.project/stories/` contains SHY-0001 + SHY-0002 + SHY-0003 (the highest existing is SHY-0003)
+- **And** the operator has authenticated `gh` and is online
+- **And** the operator runs `scripts/convert-roadmap-to-stories.sh`
+- **Then** SHY-INDEX.md grows by ~25 rows under Active
 - **And** the final summary line reads `Created 25 SHYs (PR-A1 through PR-I8); roadmap updated; INDEX updated`
-- **And** exit code is 0
+
+**Scenario: Exit code is 0**
+
+- **Given** the roadmap at the canonical path is well-formed
+- **And** `.project/stories/` contains SHY-0001 + SHY-0002 + SHY-0003 (the highest existing is SHY-0003)
+- **And** the operator has authenticated `gh` and is online
+- **And** the operator runs `scripts/convert-roadmap-to-stories.sh`
+- **Then** exit code is 0
 
 **Scenario: Second run is idempotent — no duplicates**
 
@@ -149,7 +177,13 @@ Once SHY-0003 ships:
 - **Then** the script detects existing SHYs (matching each PR-bundle's `roadmap_ids` set)
 - **And** generates ZERO new files
 - **And** the roadmap edits are also idempotent (no duplicate SHY columns added)
-- **And** the G054 row is NOT re-inserted (script detects its presence)
+
+**Scenario: The G054 row is NOT re-inserted (script detects its presence)**
+
+- **Given** the first run created SHY-0004 through SHY-0028
+- **And** no roadmap edits have occurred since
+- **And** the operator re-runs the script
+- **Then** the G054 row is NOT re-inserted (script detects its presence)
 - **And** exit code is 0
 - **And** the summary line reads `0 new SHYs; roadmap unchanged; INDEX unchanged`
 

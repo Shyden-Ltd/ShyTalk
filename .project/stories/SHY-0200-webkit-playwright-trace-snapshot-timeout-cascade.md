@@ -67,23 +67,27 @@ This is the "root cause, not symptom" class: the fix removes the actual expensiv
 ## BDD Scenarios
 
 **Scenario: the webkit gauntlet reflects real health**
+
 - **Given** the admin panel works correctly in Safari
 - **When** an engineer runs the full WebKit Playwright suite
 - **Then** it passes without timing out
 - **And** it finishes in minutes, not over an hour
 
 **Scenario: a real webkit failure is still diagnosable**
+
 - **Given** a WebKit test genuinely fails
 - **When** the engineer opens its retained trace
 - **Then** they see the action log, the network calls, the source, and a screenshot of the failure
 
 **Scenario: keyboard accessibility is verified honestly across engines**
+
 - **Given** the portal sign-in buttons are real, focusable, named buttons
 - **When** the a11y test runs on WebKit (where macOS omits buttons from the default Tab order)
 - **Then** it confirms the buttons are focusable and named, rather than demanding they appear in WebKit's default Tab sequence
 - **And** the same test still passes on Chromium and Firefox
 
 **Scenario: the PIN-lockout status is read after it settles**
+
 - **Given** a user with no PIN lockout
 - **When** the security subtab renders the "is locked" field on WebKit
 - **Then** the test waits for the field to settle on "No" instead of reading it once mid-render

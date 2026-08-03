@@ -36,11 +36,26 @@ Feature: j12 — Greta's admin daily routine
     Given Greta is on the admin dashboard with 3 pending reports
     When Greta on Web Admin opens the "reports" tab
     Then within 3000ms Greta's Web Admin UI shows 3 rows in the reports table
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin opens the first report and taps "Issue warning"
+    Given Greta is on the admin dashboard with 3 pending reports
+    And Greta on Web Admin opens the "reports" tab
     When Greta on Web Admin opens the first report and taps "Issue warning"
     Then within 3000ms the database has 1 entries in "auditLog" matching {action: "warn"}
     Then within 3000ms the reports counter on the dashboard updates to 2
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin opens the second report and taps "Dismiss" with reason "No violation observed"
+    Given Greta is on the admin dashboard with 3 pending reports
+    And Greta on Web Admin opens the "reports" tab
     When Greta on Web Admin opens the second report and taps "Dismiss" with reason "No violation observed"
     Then within 3000ms the database has document "reports/{reportId}" with field "status" equal to "DISMISSED"
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin opens the third report and taps "Suspend for 7 days"
+    Given Greta is on the admin dashboard with 3 pending reports
+    And Greta on Web Admin opens the "reports" tab
     When Greta on Web Admin opens the third report and taps "Suspend for 7 days"
     Then within 3000ms the database has 1 entries in "auditLog" matching {action: "suspend", durationDays: 7}
 
@@ -49,12 +64,27 @@ Feature: j12 — Greta's admin daily routine
     Given Greta is on the admin dashboard with 5 pending age-verification submissions
     When Greta on Web Admin opens the "age-verification" tab
     Then within 3000ms Greta's Web Admin UI shows 5 rows
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin approves submissions 1-3
+    Given Greta is on the admin dashboard with 5 pending age-verification submissions
+    And Greta on Web Admin opens the "age-verification" tab
     When Greta on Web Admin approves submissions 1-3
     Then within 5000ms 3 audit entries with action "age_verification.approve" exist
     Then within 5000ms the 3 corresponding users have isAgeVerified=true
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin rejects submission 4 with reason "Image too blurry to read"
+    Given Greta is on the admin dashboard with 5 pending age-verification submissions
+    And Greta on Web Admin opens the "age-verification" tab
     When Greta on Web Admin rejects submission 4 with reason "Image too blurry to read"
     Then within 3000ms the database has document "ageVerificationSubmissions/{sub4Id}" with field "status" equal to "REJECTED"
     Then within 3000ms the user receives a system PM from Officia with the reject reason
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin rejects submission 5 with reason "DOB on ID shows minor" and dobOverride="2011-01-01"
+    Given Greta is on the admin dashboard with 5 pending age-verification submissions
+    And Greta on Web Admin opens the "age-verification" tab
     When Greta on Web Admin rejects submission 5 with reason "DOB on ID shows minor" and dobOverride="2011-01-01"
     Then within 5000ms the database has 1 entries in "auditLog" matching {action: "age_verification.reject_and_dob_down"}
     Then within 5000ms the target user is downgraded to cohort=minor
@@ -64,17 +94,26 @@ Feature: j12 — Greta's admin daily routine
     Given Greta is on the admin dashboard with 2 pending suspension appeals
     When Greta on Web Admin opens the "appeals" tab
     Then Greta's Web Admin UI shows 2 rows
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin lifts the first appeal
+    Given Greta is on the admin dashboard with 2 pending suspension appeals
+    And Greta on Web Admin opens the "appeals" tab
     When Greta on Web Admin lifts the first appeal
     Then within 3000ms that user has suspendedUntil=null
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin denies the second appeal with reason "Persistent pattern of harassment"
+    Given Greta is on the admin dashboard with 2 pending suspension appeals
+    And Greta on Web Admin opens the "appeals" tab
+    And Greta on Web Admin lifts the first appeal
     When Greta on Web Admin denies the second appeal with reason "Persistent pattern of harassment"
     Then within 3000ms the database has document "suspensionAppeals/{appealId}" with field "status" equal to "DENIED"
 
   @blocker @browser-chromium
   Scenario: Greta adjusts a user's economy balance with a refund — audit + transaction entries both written
     Given Greta is on the admin dashboard
-    When Greta on Web Admin opens the "economy" tab
-    When Greta on Web Admin searches for user "50000020"
-    When Greta on Web Admin adjusts shyCoins by +500 with reason "Customer support refund"
+    When Greta on Web Admin adjusts user "50000020" shyCoins by +500 with reason "Customer support refund"
     Then within 3000ms the database has document "users/50000020" with field "shyCoins" increased by 500
     Then the database has 1 entries in "auditLog" matching {action: "economy.adjust", amount: 500, targetId: 50000020}
     Then the database has 1 entries in "users/50000020/transactions" matching {type: "ADMIN_ADJUST", amount: 500}
@@ -100,6 +139,11 @@ Feature: j12 — Greta's admin daily routine
     When Greta on Web Admin opens the "audit-log" tab
     Then within 3000ms Greta's Web Admin UI shows the most recent 20 entries
     Then each entry shows action + targetId + adminId + timestamp + reason
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin filters by action="suspend"
+    Given Greta is on the admin dashboard with at least 50 audit-log entries
+    And Greta on Web Admin opens the "audit-log" tab
     When Greta on Web Admin filters by action="suspend"
     Then within 3000ms Greta's Web Admin UI shows only suspend entries
 
@@ -108,6 +152,11 @@ Feature: j12 — Greta's admin daily routine
     Given Greta is on the admin dashboard with at least 50 audit-log entries
     When Greta on Web Admin attempts to PATCH /api/admin/audit/{anyEntry}
     Then the response status is 405 or 403
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin attempts to DELETE /api/admin/audit/{anyEntry}
+    Given Greta is on the admin dashboard with at least 50 audit-log entries
+    And Greta on Web Admin attempts to PATCH /api/admin/audit/{anyEntry}
     When Greta on Web Admin attempts to DELETE /api/admin/audit/{anyEntry}
     Then the response status is 405 or 403
 
@@ -116,6 +165,11 @@ Feature: j12 — Greta's admin daily routine
     Given Adam [P-01] is signed in as a non-admin user
     When Adam on Web Chromium navigates to "/admin.html"
     Then within 3000ms Adam's Web UI shows "You are not authorized to view this page"
+
+  @browser-chromium
+  Scenario: Adam on Web POSTs /api/admin/users/suspend with targetUniqueId=50000050
+    Given Adam [P-01] is signed in as a non-admin user
+    And Adam on Web Chromium navigates to "/admin.html"
     When Adam on Web POSTs /api/admin/users/suspend with targetUniqueId=50000050
     Then the response status is 403
 
@@ -129,6 +183,9 @@ Feature: j12 — Greta's admin daily routine
     Given Greta [P-12] is signed in
     Then Greta's Firebase Auth custom claims include "admin" equal to true
     Then Greta's Firebase Auth custom claims do not include "isAdmin"
+
+  Scenario: Greta on Web Admin sends GET /api/user/50000010 with her ID token
+    Given Greta [P-12] is signed in
     When Greta on Web Admin sends GET /api/user/50000010 with her ID token
     Then the response status is 200
     Then the response body has user data for uniqueId 50000010

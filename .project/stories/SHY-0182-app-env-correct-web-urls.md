@@ -57,22 +57,26 @@ mvp: true
 ## BDD Scenarios
 
 **Scenario: a dev build opens dev web pages, never prod**
+
 - **Given** a `dev` build
 - **When** the user taps the Privacy Policy link
 - **Then** the page loads from the **dev** web host (not `shytalk.shyden.co.uk`)
 - **And** it renders in the app language
 
 **Scenario: a local build opens the locally-served pages**
+
 - **Given** a `local` build on a real device with the localhost bridge
 - **When** any in-app web page opens
 - **Then** it loads from the locally-served host, not dev or prod
 
 **Scenario: the app is auto-allowed into restricted dev pages**
+
 - **Given** a `dev` build and a public-restricted dev web page
 - **When** the app opens it
 - **Then** the app is allowed through (it carries the credential) without a manual step, while a public browser is still blocked
 
 **Scenario: no cross-environment contamination**
+
 - **Given** any single build environment
 - **When** every web URL the app can open is computed
 - **Then** none of them point at a different environment's host

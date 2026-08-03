@@ -65,21 +65,25 @@ Until those two are fixed, "no more faking" is unenforced and the boundary is un
 ## BDD Scenarios
 
 **Scenario: a new fake in an integration test is blocked**
+
 - **Given** the widened, policy-aware ratchet + a regenerated green baseline
 - **When** a contributor adds `jest.fn()` standing in for Firestore to `express-api/tests/cron/foo.test.js` (an integration location) and runs `node scripts/check-no-new-stubs.js`
 - **Then** the guard exits 1 and names `tests/cron/foo.test.js` under the `jest.fn(` category as a NEW offender
 
 **Scenario: a double in a real unit test is allowed**
+
 - **Given** the same guard
 - **When** a contributor adds the identical `jest.fn()` to `express-api/tests/unit/pure-formatter.unit.test.js`
 - **Then** the guard exits 0 — the unit-test location is permitted by policy
 
 **Scenario: migrating a file forces the baseline to shrink**
+
 - **Given** `makeStatefulFakeDb` is in the baseline for `manual-qa-runner.test.js`
 - **When** that file is migrated to the real emulator and the fake removed, but the baseline still lists it
 - **Then** the guard exits 1 with a STALE entry until `--generate-baseline` is re-run
 
 **Scenario: the policy doc matches the governing rule**
+
 - **Given** `CLAUDE.md` §No-Stubs after this change
 - **When** a reader checks "where may I use a mock?"
 - **Then** the only permitted answer is "a genuine unit test (pure logic, no real collaborator), in a unit-test location" — everything else is real-only

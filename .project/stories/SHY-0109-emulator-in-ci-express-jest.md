@@ -68,29 +68,34 @@ The operator authorised this story to **push and merge on the CI-green gate** (A
 ## BDD Scenarios
 
 **Scenario: CI provisions emulators before Jest (test-backend.yml)**
+
 - **Given** the `test-backend` job on a PR that touches `express-api/`
 - **When** the workflow runs
 - **Then** the `setup-java` (Temurin 21, pinned SHA) and `start-firebase-emulators` steps both execute and appear **before** the "Run Express API tests with coverage" step
 - **And** the migrated `expireTempIds` test passes against the running emulator (proving the emulator was actually reachable from Jest)
 
 **Scenario: CI provisions emulators before Jest (sonarcloud.yml)**
+
 - **Given** the SonarCloud workflow job
 - **When** it runs the express coverage step
 - **Then** `start-firebase-emulators` runs before the Jest step, reusing the JVM from the existing `setup-jdk-gradle` step (no duplicate JVM setup)
 
 **Scenario: migrated cron test verifies real query semantics**
+
 - **Given** the Firestore emulator is running and the `users` collection is seeded with two expired temp IDs, one future temp ID, one `0`-sentinel, and one with no expiry field
 - **When** `expireTempIds()` runs against the real emulator
 - **Then** reading the emulator back shows exactly the two expired docs cleared (`tempUniqueId == null && tempUniqueIdExpiry == null`)
 - **And** the future, `0`-sentinel, and field-absent docs are unchanged
 
 **Scenario: emulator-absent fails loud, not silent**
+
 - **Given** nothing is listening on `localhost:8080`
 - **When** the migrated/helper test suite runs
 - **Then** it fails within ~6s with a message naming `localhost:8080` and `bash local/start.sh`
 - **And** it does NOT report a passing/skipped result (no soft-mock false confidence)
 
 **Scenario: helper clears a collection for isolation**
+
 - **Given** the `users` collection has 3 seeded docs in the emulator
 - **When** `clearCollection(db, 'users')` runs
 - **Then** a subsequent read of `users` returns empty

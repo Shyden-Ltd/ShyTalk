@@ -79,27 +79,32 @@ So that I can mark the stories that must ship for the first public release (the 
 ## BDD Scenarios
 
 **Scenario: mvp:true is accepted**
+
 - **Given** a story file whose frontmatter contains `mvp: true`
 - **When** `check-story-frontmatter.sh <file>` runs
 - **Then** it exits `0` with no error for the `mvp` field
 
 **Scenario: absent mvp field is valid (optional)**
+
 - **Given** a story file with no `mvp:` line
 - **When** the validator runs
 - **Then** it exits `0` (absence is valid, meaning not-in-MVP)
 
 **Scenario: non-boolean mvp value is rejected**
+
 - **Given** a story file with `mvp: yes`
 - **When** the validator runs
 - **Then** it exits `11`
 - **And** stderr names the `mvp` field and states the allowed values are `true` or `false`
 
 **Scenario: capitalised boolean is rejected (strict)**
+
 - **Given** a story file with `mvp: True`
 - **When** the validator runs
 - **Then** it exits `11` (only lowercase `true`/`false` are valid)
 
 **Scenario: corpus scan with mixed presence stays green**
+
 - **Given** some stories carry `mvp: true`, others `mvp: false`, others none
 - **When** `check-story-frontmatter.sh --scan .project/stories` runs
 - **Then** it exits `0`

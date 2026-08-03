@@ -74,45 +74,53 @@ Closing these makes j11 a genuinely-runnable real-device journey (EPIC-0003's "f
 ## BDD Scenarios
 
 **Scenario: fresh dev install advances past all launch gates to the picker**
+
 - **Given** a freshly-installed dev build on the real OnePlus CPH2653 (legal not yet accepted, notifications not yet granted)
 - **When** `_advancePastLaunchGates('dev')` runs
 - **Then** it clears the legal-accept, OS notification-permission, daily-reward, and splash gates in turn
 - **And** resolves with `persona_picker_open` (or a `main_*` tag) visible
 
 **Scenario: stock dev build exposes the persona picker (password baked)**
+
 - **Given** a dev build assembled with `DEV_QA_PERSONAS_PASSWORD` provided via gradle property/env
 - **When** `BuildVariant.isPersonaPickerAvailable` is evaluated
 - **Then** it returns `true` and the sign-in screen renders the persona picker
 - **And** the same evaluation on a PROD build returns `false`
 
 **Scenario: send a message to another persona on the real device (happy path)**
+
 - **Given** Raul [P-08] is signed in on Android with a pre-existing conversation with Nora
 - **When** `androidSendMessageTo('Nora', 'dev')` sends "offensive content #1"
 - **Then** within 3000ms the datastore has a `messages` entry `{senderId: 50000050, body: "offensive content #1"}`
 
 **Scenario: acknowledge is robust to a covering daily-reward popup (retires the known-failure)**
+
 - **Given** Raul is on the warning screen and a daily-reward popup transiently covers `warning_acknowledgeButton`
 - **When** the j11 acknowledge step runs
 - **Then** the driver dismisses the popup, re-dumps, re-locates and taps `warning_acknowledgeButton`
 - **And** within 3000ms `users/50000050.hasActiveWarning` is `false` and `main_roomsTab` shows — with `@known-failure-SHY-0097` removed
 
 **Scenario: a new driver action fails loudly, never silently (error path)**
+
 - **Given** the conversation thread never renders (wrong screen / stale session)
 - **When** `androidOpenConversationWith('Nora', 'dev')` exhausts its budget
 - **Then** it throws an error naming the missing tag + the observed screen
 - **And** the runner marks the scenario failed (no silent pass on a stale screen)
 
 **Scenario: launch-gate advance is order-tolerant / idempotent (edge case)**
+
 - **Given** a dev install that has already accepted legal and granted notifications
 - **When** `_advancePastLaunchGates('dev')` runs
 - **Then** it skips the already-cleared gates without error and still reaches the picker
 
 **Scenario: free-form message text is shell-escaped (edge case / security-adjacent)**
+
 - **Given** a message body containing quotes, spaces, and a `$` (`say "hi" $NOW`)
 - **When** `androidSendMessageTo` sends it
 - **Then** the persisted `messages.body` equals the input verbatim (no shell interpolation / truncation)
 
 **Scenario: the dev password is never baked into prod (security)**
+
 - **Given** a PROD-flavor build
 - **When** `BuildConfig` is inspected
 - **Then** the dev personas password field is empty and `isPersonaPickerAvailable` is `false`

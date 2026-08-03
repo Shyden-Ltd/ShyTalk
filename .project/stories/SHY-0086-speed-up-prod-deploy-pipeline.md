@@ -77,26 +77,31 @@ So that targeted follow-up fixes cut a prod release from "several hours" to some
 ## BDD Scenarios
 
 **Scenario: the multi-hour deploy is attributed to a critical path**
+
 - **Given** a full prod-deploy run
 - **When** the spike profiles every job + the iOS deploy's internal steps
 - **Then** `## Notes` shows the critical-path breakdown summing to ~the total, naming the dominant step(s) (expected: the iOS App Store deploy + the iOS smoke build)
 
 **Scenario: the iOS App Store 56 min is split into our-build vs Apple-side**
+
 - **Given** the `Deploy iOS to App Store` job
 - **When** its steps are timed
 - **Then** the framework-link / xcodebuild-archive / export / upload shares are recorded, separating fixable build time from Apple-side upload/processing
 
 **Scenario: the iOS double-build is confirmed or refuted**
+
 - **Given** `deploy-ios-prod` and `smoke-test-ios` both invoke gradle to build the KMP framework
 - **When** their gradle task execution is compared
 - **Then** the spike states whether the framework is built twice, and (if so) files a follow-up to share it
 
 **Scenario: parallelism opportunities are identified**
+
 - **Given** the `needs:` graph (every deploy needs deploy-backend-prod)
 - **When** the spike assesses true vs incidental dependencies
 - **Then** it recommends which jobs can run in parallel post-gate to shrink total wall-clock, with an estimated saving
 
 **Scenario: each recommended fix becomes a follow-up SHY**
+
 - **Given** the profiling identifies actionable wins
 - **When** the spike concludes
 - **Then** a fully-refined follow-up SHY exists per fix (with estimated saving), and the spike closes with the decision recorded in `## Notes`

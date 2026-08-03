@@ -113,7 +113,13 @@ N/A — no user-facing strings introduced.
 - **Then** the single `jq -n` invocation produces a ~237KB PAYLOAD bash variable
 - **And** `echo "$PAYLOAD" | gh api graphql --input -` succeeds without an ARG_MAX error
 - **And** the mutation returns a non-empty `commit.oid`
-- **And** the workflow logs `[sync] signed commit <oid> on main`
+
+**Scenario: The workflow logs `[sync] signed commit <oid> on main`**
+
+- **Given** `public/roadmap-data.json` is ~177KB (current corpus size) and has been regenerated with semantic changes
+- **And** the actor-guard passes (`github.actor` is neither `github-actions[bot]` nor `shytalk-release-bot[bot]`)
+- **And** the workflow runs the combined-jq commit-back step
+- **Then** the workflow logs `[sync] signed commit <oid> on main`
 
 **Scenario: Fast-path still skips the mutation on no-op runs**
 

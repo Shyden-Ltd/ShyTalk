@@ -55,21 +55,25 @@ Discovered during SHY-0182 review (`reference` note in that story): `./gradlew :
 ## BDD Scenarios
 
 **Scenario: the K/N test binary compiles**
+
 - **Given** the shared module with the renamed `commonTest` names
 - **When** `./gradlew :shared:compileTestKotlinIosSimulatorArm64` runs
 - **Then** it exits 0 with no `Name contains illegal characters` error
 
 **Scenario: an illegal name is caught, not skipped**
+
 - **Given** a `commonTest` function named with a `(` in its backtick identifier
 - **When** the shared module is compiled for `iosSimulatorArm64`
 - **Then** the build fails with a `Name contains illegal characters` compile error (never a silent skip)
 
 **Scenario: no rename collision**
+
 - **Given** two pre-existing test names that differed only by punctuation
 - **When** the punctuation is stripped by the rename
 - **Then** the guard/check reports the collision and the build fails until the names are made distinct
 
 **Scenario: JVM + androidHost stay green**
+
 - **Given** the renamed test names
 - **When** `:shared:jvmTest` and `:shared:testAndroidHostTest` run
 - **Then** both stay 100% green with the same test counts as before the rename

@@ -57,21 +57,25 @@ mvp: false
 ## BDD Scenarios
 
 **Scenario: a migrated e2e asserts a real round-trip**
+
 - **Given** the real local backend up
 - **When** the migrated Playwright e2e drives the web flow
 - **Then** it asserts on the real backend response (no `page.route` fulfilment)
 
 **Scenario: a real error path is rendered**
+
 - **Given** the real backend will return a real denial for the action
 - **When** the e2e triggers it
 - **Then** the UI renders the real error (not an intercepted fake)
 
 **Scenario: genuine-unit Playwright tests are preserved + allowed**
+
 - **Given** the XSS / i18n unit tests
 - **When** the policy-aware ratchet scans
 - **Then** they are classified unit (allowed) and do not count as offenders; the 6 migrated ones leave the `page.route` baseline
 
 **Scenario: a surfaced web bug is catalogued**
+
 - **Given** a migrated e2e exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

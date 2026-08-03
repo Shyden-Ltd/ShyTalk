@@ -57,21 +57,25 @@ The utility layer (firebase wrapper, email via Mailpit, fcm, r2/MinIO storage, a
 ## BDD Scenarios
 
 **Scenario: a real email lands in Mailpit**
+
 - **Given** the real Mailpit backend up
 - **When** the email util sends a message
 - **Then** the message is retrievable via the real Mailpit API (no mocked transport)
 
 **Scenario: a real upload lands in MinIO and reads back**
+
 - **Given** the real MinIO backend up
 - **When** the r2 util uploads an object
 - **Then** a real read-back returns the same bytes
 
 **Scenario: a pure-logic util is classified unit, not force-migrated**
+
 - **Given** a util with no real collaborator
 - **When** it is reviewed for migration
 - **Then** it is marked a unit test (double allowed) and placed in a unit-test location per the keystone convention
 
 **Scenario: a surfaced util bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

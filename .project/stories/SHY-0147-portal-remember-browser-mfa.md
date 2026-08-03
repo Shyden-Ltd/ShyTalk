@@ -68,41 +68,49 @@ Because the re-prompt is server-driven, this can't be a client-only tweak: after
 ## BDD Scenarios
 
 **Scenario: ticking "remember this browser" means no code prompt next time**
+
 - **Given** a portal user who signs in and enters their authenticator code with "remember this browser" ticked
 - **When** they come back to the portal on the same browser within the trust period
 - **Then** they go straight to the dashboard without being asked for a code
 
 **Scenario: the code is asked for again after the trust period ends**
+
 - **Given** a portal user whose "remember this browser" period has expired
 - **When** they open the portal
 - **Then** they are asked for their authenticator code again
 
 **Scenario: a different browser still asks for the code**
+
 - **Given** a portal user who ticked "remember this browser" on one browser
 - **When** they open the portal on a different browser or device
 - **Then** they are asked for their authenticator code
 
 **Scenario: signing out forgets the browser**
+
 - **Given** a portal user who ticked "remember this browser"
 - **When** they sign out
 - **Then** the next visit on that browser asks for their authenticator code again
 
 **Scenario: not ticking "remember" keeps asking every visit**
+
 - **Given** a portal user who does not tick "remember this browser"
 - **When** they visit again
 - **Then** they are asked for their authenticator code, exactly as before
 
 **Scenario: a bad "remembered" token never skips the code**
+
 - **Given** a portal user whose stored "remembered" proof has been tampered with or has expired
 - **When** they open the portal
 - **Then** they are asked for their authenticator code (the tampered proof is never trusted)
 
 **Scenario: a suspended user is still blocked, even on a remembered browser**
+
 - **Given** a portal user whose browser is still "remembered" (inside the trust period) but whose account has since been suspended
 - **When** they open the portal
 - **Then** they are shown the suspension notice, not the dashboard
 
 **Scenario: a revoked session is still signed out, even on a remembered browser**
+
 - **Given** a portal user whose browser is still "remembered" but whose access has been revoked
 - **When** they open the portal
 - **Then** they are signed out and not allowed into the dashboard

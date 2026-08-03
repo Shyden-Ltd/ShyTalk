@@ -27,6 +27,11 @@ Feature: j07 — Adam discovers + messages Alice
     When Adam on Android opens the "discovery" screen
     When Adam on Android types "Alice" into the search field
     Then within 3000ms Adam's Android UI shows Alice's user card
+
+  @blocker @android-physical
+  Scenario: Adam on Android taps Alice's user card
+    Given Adam on Android opens the "discovery" screen
+    And Adam on Android types "Alice" into the search field
     When Adam on Android taps Alice's user card
     Then within 2000ms Adam's Android UI navigates to Alice's profile screen
     Then Adam's Android UI shows Alice's displayName "Alice (P-02 adult power)"
@@ -69,6 +74,11 @@ Feature: j07 — Adam discovers + messages Alice
     Given Adam has just sent Alice "hello, alice — first PM from a new adult"
     When Alice on Web opens the "pm" tab
     Then within 3000ms Alice's Web UI shows a new conversation with Adam highlighted as unread
+
+  @blocker @browser-chromium
+  Scenario: Alice on Web opens the conversation with Adam
+    Given Adam has just sent Alice "hello, alice — first PM from a new adult"
+    And Alice on Web opens the "pm" tab
     When Alice on Web opens the conversation with Adam
     Then within 2000ms Alice's Web UI shows "hello, alice — first PM from a new adult"
     Then within 5000ms the database has document "messages/<id>" with field "readBy" containing 50000010
@@ -81,10 +91,13 @@ Feature: j07 — Adam discovers + messages Alice
   @blocker @android-physical @browser-chromium
   Scenario: Alice replies — Adam sees the reply + both sides see read receipts
     Given Alice has read Adam's first message in the open thread
-    When Alice on Web types "hi adam, welcome to shytalk" into the conversation input
-    When Alice on Web taps the send button
+    When Alice on Web replies "hi adam, welcome to shytalk" in the conversation
     Then within 3000ms the database has 1 entries in "messages" matching {senderId: 50000010, body: "hi adam, welcome to shytalk"}
     Then within 3000ms Adam's Android UI shows the reply in the thread
+
+  @blocker @android-physical @browser-chromium
+  Scenario: Both sides see a read receipt once the reply is opened
+    Given Alice has replied to Adam and he has opened the thread
     Then within 5000ms the database has document "messages/<reply-id>" with field "readBy" containing {adamId}
     Then Adam's Android UI shows "read" indicator on his original message
     Then Alice's Web UI shows "read" indicator on her reply
@@ -119,6 +132,9 @@ Feature: j07 — Adam discovers + messages Alice
     When Alice sends GET /api/users/discover?limit=5 with her ID token
     Then the response status is 200
     Then the response body has field "users" of type "array"
+
+  Scenario: Alice sends GET /api/users/search?q=alice with her ID token
+    Given Alice [P-02] is signed in
     When Alice sends GET /api/users/search?q=alice with her ID token
     Then the response status is 200
     Then the response body has field "users" of type "array"

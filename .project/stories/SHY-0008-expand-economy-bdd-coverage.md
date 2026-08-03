@@ -129,14 +129,35 @@ The scenarios below ARE the story-level behavioural contract. The `.feature` fil
 - **And** select "Monthly Plan"
 - **And** confirm via Play Billing test card
 - **Then** the subscription becomes active within 5 seconds
-- **And** AppSettings shows "Premium" badge
-- **And** the user's premium features unlock
+
+**Scenario: AppSettings shows "Premium" badge**
+
+- **Given** test persona "local-claude-001" is signed in
+- **And** has no active subscription
+- **And** they navigate to Subscription Management
+- **And** select "Monthly Plan"
+- **And** confirm via Play Billing test card
+- **Then** AppSettings shows "Premium" badge
+
+**Scenario: The user's premium features unlock**
+
+- **Given** test persona "local-claude-001" is signed in
+- **And** has no active subscription
+- **And** they navigate to Subscription Management
+- **And** select "Monthly Plan"
+- **And** confirm via Play Billing test card
+- **Then** the user's premium features unlock
 
 **Scenario: Cancel subscription — confirmation + grace period**
 
 - **Given** test persona "local-claude-002" has an active monthly subscription
 - **When** they tap "Cancel subscription"
 - **Then** a confirmation dialog appears
+
+**Scenario: They confirm**
+
+- **Given** test persona "local-claude-002" has an active monthly subscription
+- **And** they tap "Cancel subscription"
 - **When** they confirm
 - **Then** the subscription shows "Cancels on YYYY-MM-DD" state
 - **And** premium features remain active until that date
@@ -150,13 +171,25 @@ The scenarios below ARE the story-level behavioural contract. The `.feature` fil
 - **And** confirm the send
 - **Then** their balance shows 400 coins within 2s
 - **And** an animation plays in the room
-- **And** persona 004's gift wall shows the new gift within 5s
+
+**Scenario: Persona 004's gift wall shows the new gift within 5s**
+
+- **Given** test persona "local-claude-003" is in room "test-room-X" with persona "local-claude-004"
+- **And** has 500 coins
+- **And** they tap a 100-coin gift and select recipient 004
+- **And** confirm the send
+- **Then** persona 004's gift wall shows the new gift within 5s
 
 **Scenario: Backpack — use a theme item**
 
 - **Given** test persona has a "Sunset Theme" in their backpack
 - **When** they tap the item
 - **Then** preview appears
+
+**Scenario: They tap "Apply"**
+
+- **Given** test persona has a "Sunset Theme" in their backpack
+- **And** they tap the item
 - **When** they tap "Apply"
 - **Then** the app theme switches to Sunset within 1s
 - **And** AppSettings reflects "Theme: Sunset"

@@ -66,25 +66,40 @@ Feature: j13 — Layla + Kenji multi-locale full flow
     When Layla on Android opens the "discovery" screen
     Then within 3000ms Layla's Android UI shows the Arabic translation of "Discover"
     Then Layla's Android UI layoutDirection is RTL (Compose `LayoutDirection.Rtl`)
+
+  @blocker @android-emulator @locale-rtl
+  Scenario: Layla on Android opens the "wallet" screen
+    Given Layla is signed in on Android emulator with device locale ar
+    And Layla on Android opens the "discovery" screen
     When Layla on Android opens the "wallet" screen
     Then Layla's Android UI shows the Arabic translation of "Wallet"
     Then no string is missing translation (no fallback to English-only resource for ar)
 
   @blocker @browser-webkit @locale-cjk
   Scenario: Kenji's full Japanese flow with CJK glyphs
-    # ── Discovery in Japanese ──
     When Kenji on Web WebKit opens "/discovery"
     Then within 3000ms Kenji's Web UI shows the Japanese translation of "Discover"
     Then no rendered character has the Unicode replacement glyph U+FFFD
     Then the system font fallback resolves to a Japanese-capable font (e.g. Hiragino Sans, Yu Gothic, Noto Sans JP)
 
-    # ── Profile + gift ──
+  @blocker @browser-webkit @locale-cjk
+  Scenario: Kenji on Web opens Alice's profile
+    Given Kenji on Web WebKit opens "/discovery"
     When Kenji on Web opens Alice's profile
     Then Kenji's Web UI shows Japanese labels
+
+  @blocker @browser-webkit @locale-cjk
+  Scenario: Kenji on Web sends a "rose" gift to Alice
+    Given Kenji on Web WebKit opens "/discovery"
+    And Kenji on Web opens Alice's profile
     When Kenji on Web sends a "rose" gift to Alice
     Then within 3000ms Kenji's Web UI shows Japanese confirmation toast
 
-    # ── Notifications in Japanese ──
+  @blocker @browser-webkit @locale-cjk
+  Scenario: Kenji on Web opens "/notifications"
+    Given Kenji on Web WebKit opens "/discovery"
+    And Kenji on Web opens Alice's profile
+    And Kenji has sent Alice a rose
     When Kenji on Web opens "/notifications"
     Then Kenji's Web UI shows Japanese translation of "Notifications"
 

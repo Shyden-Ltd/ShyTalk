@@ -65,27 +65,32 @@ This is a launch-blocker for the App-Lock (a security control in a minors-facing
 ## BDD Scenarios
 
 **Scenario: a first PIN can actually be set**
+
 - **Given** a signed-in user who has never set a PIN
 - **When** they complete Settings → Security → Reset PIN and confirm a valid PIN
 - **Then** the server stores the hash and returns success
 - **And** the local App-Lock credential is registered (uniqueId + deviceId + hash) with no "Device not registered" error
 
 **Scenario: setup response carries what the client needs**
+
 - **Given** the client calls `POST /api/auth/pin/setup` with a valid PIN
 - **When** the server responds
 - **Then** the client can construct its local credential from the response without throwing on a missing field
 
 **Scenario: identity/device come from the session, not the App-Lock repo**
+
 - **Given** the App-Lock repo has no stored uniqueId/deviceId yet (first enrolment)
 - **When** the user sets a PIN
 - **Then** the flow uses the authenticated `currentUserId` + the device-id provider to register the credential
 
 **Scenario: failed setup does not half-enrol**
+
 - **Given** the setup request fails (network or server error)
 - **When** the user retries or leaves
 - **Then** no local credential is registered and the App-Lock does not engage with an unverifiable PIN
 
 **Scenario: reset still requires verification (no regression)**
+
 - **Given** a user who already has a PIN
 - **When** they tap Reset PIN
 - **Then** they must pass PinVerifyDialog before setting a new one

@@ -65,12 +65,14 @@ Operator directive (2026-07-18): acceptance is **saved on the device**; at launc
 ## BDD Scenarios
 
 **Scenario: Returning user with unchanged policies is not re-gated after sign-out**
+
 - **Given** a user has accepted all current legal documents on this device
 - **And** the server document versions are unchanged
 - **When** the user signs out and relaunches the app
 - **Then** no legal acceptance screen is shown and the user reaches the sign-in screen directly
 
 **Scenario: A changed Privacy Policy re-gates and names the document**
+
 - **Given** a user's device recorded privacy=4 as accepted
 - **When** the server reports privacy=5 at launch
 - **Then** the acceptance screen is shown
@@ -78,11 +80,13 @@ Operator directive (2026-07-18): acceptance is **saved on the device**; at launc
 - **And** the Terms/Community documents (unchanged) are not presented as changed
 
 **Scenario: Offline at launch applies the ruled fallback**
+
 - **Given** the device has a prior full acceptance record
 - **When** the launch-time `/legal/versions` check fails (offline)
 - **Then** the app applies the OFFLINE policy (Open Question 4) and logs the fallback reason
 
 **Scenario: First launch requires acceptance of all documents**
+
 - **Given** a fresh install with no device acceptance record
 - **When** the app launches
 - **Then** the acceptance screen lists all current legal documents and blocks entry until all are accepted

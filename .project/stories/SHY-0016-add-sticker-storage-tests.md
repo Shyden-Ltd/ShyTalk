@@ -96,7 +96,9 @@ P2 Tier-4 polish. Same contract-test pattern as SHY-0015 (SecureStorage), smalle
 
 **Scenario: iOS round-trip**
 
-- Same as Android but on iOS.
+- **Given** iOS StickerStorage with a writable cache dir
+- **When** put("sticker-A", bytes) followed by get("sticker-A")
+- **Then** the get returns identical bytes
 
 **Scenario: Non-existent get returns null**
 

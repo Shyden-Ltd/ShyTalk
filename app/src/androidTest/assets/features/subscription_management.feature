@@ -18,6 +18,10 @@ Feature: Subscription management
     When I navigate to notification preferences
     And I enable "email" for "roadmap updates"
     Then I should see a GDPR consent prompt
+
+  Scenario: I accept the GDPR consent
+    Given I navigate to notification preferences
+    And I enable "email" for "roadmap updates"
     When I accept the GDPR consent
     Then the "email" toggle for "roadmap updates" should be enabled
 
@@ -30,5 +34,9 @@ Feature: Subscription management
     Given I am watching feature "account-deletion"
     When I navigate to notification preferences
     Then I should see "account-deletion" in my watch list
+
+  Scenario: I remove "account-deletion" from my watch list
+    Given I am watching feature "account-deletion"
+    And I navigate to notification preferences
     When I remove "account-deletion" from my watch list
     Then "account-deletion" should not be in my watch list

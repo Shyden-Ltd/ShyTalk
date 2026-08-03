@@ -68,16 +68,19 @@ So that the second-largest chunk of the 56-min iOS deploy stops being re-paid fr
 ## BDD Scenarios
 
 **Scenario: unchanged shared source restores the link from cache**
+
 - **Given** a prior release populated the gradle build cache and `:shared` is unchanged
 - **When** the next iOS deploy runs
 - **Then** the K/N link tasks report `FROM-CACHE` and the link step is materially faster than 22m49s
 
 **Scenario: a shared-source change relinks only what changed**
+
 - **Given** a release commit that edits `:shared`
 - **When** the link runs with the build cache enabled
 - **Then** only the affected K/N tasks relink (gradle incremental) and the timing is recorded for the partial-change case
 
 **Scenario: the cache is net-negative and the SHY is rejected with evidence**
+
 - **Given** measurements show cache restore time ≥ the link-time saved (large outputs) or near-zero hit-rate across releases
 - **When** the spike-like evaluation concludes
 - **Then** the build cache is NOT shipped, and `## Notes` records the numbers + the rejection so it isn't re-attempted

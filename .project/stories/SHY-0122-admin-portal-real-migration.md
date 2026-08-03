@@ -59,21 +59,25 @@ The admin portal is where privileged mutations originate, and the /manual-qa pri
 ## BDD Scenarios
 
 **Scenario: an admin action propagates to real state and the consumer**
+
 - **Given** an admin resolves an alert on the real portal
 - **When** the consumer surface re-reads within the real window
 - **Then** real state shows the alert resolved on both sides
 
 **Scenario: a non-admin is denied for real**
+
 - **Given** a non-admin user
 - **When** they call an admin route
 - **Then** real auth/rules deny it (no mocked guard)
 
 **Scenario: every mutating admin action leaves a real audit entry**
+
 - **Given** an admin performs a mutating action
 - **When** the audit path is read
 - **Then** a real audit entry exists for it
 
 **Scenario: a surfaced admin bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

@@ -63,23 +63,27 @@ Companion to SHY-0072 (the service) — this is the consumption half plus the op
 ## BDD Scenarios
 
 **Scenario: German visitor sees German items**
+
 - **Given** the translate service (mocked) returns German for the fixture item names
 - **When** the roadmap renders with locale `de`
 - **Then** the chunked translate round fires (all chunks in one Promise.all) and item rows display the German names
 - **And** legacy feature rows still show their embedded German payloads
 
 **Scenario: service down — page intact in English**
+
 - **Given** the translate route is mocked to 503
 - **When** the page renders with locale `fr`
 - **Then** items display English, layout unbroken, exactly one console.error fires, and the test's error-collection (filtered per the network-noise convention) records the translate failure as the ONLY console error
 
 **Scenario: gated link, once per session**
+
 - **Given** locale `ar` and a rendered item link
 - **When** the visitor clicks it
 - **Then** a translated RTL confirm dialog appears; cancel keeps them on the page
 - **And** after confirming once, a second item click navigates with no dialog
 
 **Scenario: English visitors pay zero cost**
+
 - **Given** locale `en`
 - **When** the page renders and a story link is clicked
 - **Then** no translate request is made and navigation is direct

@@ -86,57 +86,67 @@ Operator decisions (2026-07-01, AskUserQuestion): **instant shell, data streamed
 ## BDD Scenarios
 
 **Scenario: a returning user opens straight to their rooms**
+
 - **Given** a user who is already signed in, whose device and network are in good standing
 - **When** they open the app after having closed it
 - **Then** their room list appears immediately — no login screen and no loading screen
 - **And** the app is on screen right away, before their rooms have finished loading in
 
 **Scenario: private content only appears once the app confirms they're allowed to see it**
+
 - **Given** the app has just opened straight to a returning user's room list
 - **When** it checks their access in the background
 - **Then** none of their private rooms or messages appear until the app has confirmed they still belong to this group
 - **And** once confirmed, their rooms and conversations fill in
 
 **Scenario: a user whose access has ended is taken to the login screen**
+
 - **Given** a returning user whose sign-in is no longer valid — their access was revoked or expired while the app was closed
 - **When** they open the app
 - **Then** they are taken to the login screen to sign in again
 - **And** no private content is shown to them at any point
 
 **Scenario: a user moved to a different group sees the right content without being logged out**
+
 - **Given** a user who was moved to a different group while the app was closed
 - **When** they open the app
 - **Then** they see their new group's rooms
 - **And** they are never shown their old group's content, and they are not made to log in again
 
 **Scenario: the first open after this feature is added still works normally**
+
 - **Given** a signed-in user opening the app for the first time since this feature was added, so nothing is remembered yet
 - **When** they open the app
 - **Then** the app checks who they are the usual way and then shows their room list
 - **And** nothing breaks and no wrong-group content is ever shown
 
 **Scenario: a suspended user is shown the suspension notice, not their rooms**
+
 - **Given** a user whose account has been suspended
 - **When** they open the app
 - **Then** they are shown the suspension notice instead of the room list
 
 **Scenario: a banned device is stopped before it reaches the rooms**
+
 - **Given** a returning user whose device has been banned
 - **When** they open the app
 - **Then** they are shown the ban screen — not their room list, and not the login screen
 - **And** none of their rooms or messages load
 
 **Scenario: a banned network or blocked VPN is stopped even with nobody signed in**
+
 - **Given** someone on a banned network, or using a blocked VPN, who is not signed in
 - **When** they open the app
 - **Then** they are shown the ban screen — not the login screen
 
 **Scenario: a tampered or emulated Android device is still blocked**
+
 - **Given** a returning user on a rooted or emulated Android device
 - **When** they open the app
 - **Then** they are shown the "unsafe device" screen and cannot reach the room list
 
 **Scenario: signing out means the next open shows the login screen**
+
 - **Given** a signed-in user
 - **When** they sign out
 - **Then** their saved sign-in is cleared from the device

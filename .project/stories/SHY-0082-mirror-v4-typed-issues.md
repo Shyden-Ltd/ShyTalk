@@ -95,48 +95,56 @@ So that work items are first-class, filterable, and visually typed — while the
 ## BDD Scenarios
 
 **Scenario: a feature story becomes a real Feature-typed issue on the board**
+
 - **Given** a story `SHY-0200` with frontmatter `type: feature` and `status: In Progress` and no existing board item
 - **When** the sync runs
 - **Then** a real GitHub issue titled `SHY-0200: <Title>` is created (not a draft), added to the `ShyTalk Stories` board
 - **And** its native issue type is `Feature`, it carries the `story` label, its board Status is `In Progress`, and the issue is open
 
 **Scenario: a chore story is typed Task (7→3 mapping)**
+
 - **Given** a story with `type: chore`
 - **When** the sync runs
 - **Then** the created issue's native type is `Task`
 - **And** no `type:chore` label is applied (type is the native field, not a label)
 
 **Scenario: a bug story is a typed issue, never a draft**
+
 - **Given** a story with `type: bug`
 - **When** the sync runs
 - **Then** exactly one `createIssue` (real issue) is emitted with native type `Bug`
 - **And** zero `addProjectV2DraftIssue` mutations are emitted for it
 
 **Scenario: terminal status closes the issue**
+
 - **Given** a story-issue that is open and its story status flips to `Done`
 - **When** the sync runs
 - **Then** the board Status moves to `Done` AND the issue is transitioned to `closed`
 - **And** the body is not re-embedded if its body-hash is unchanged
 
 **Scenario: unchanged corpus is all-skip**
+
 - **Given** every story already mirrored as a matching typed issue (body-hash, type, labels, fields, state all current)
 - **When** the sync runs with no `.md` changes
 - **Then** the summary is `0 created, 0 updated, N skipped, 0 failed`
 - **And** zero create/update/close/type mutations are emitted
 
 **Scenario: v3→v4 migration converts drafts to typed issues**
+
 - **Given** the board holds 77 draft items (v3 state) and `--rebuild` is invoked with `REBUILD_CONFIRM=yes`
 - **When** the migration runs
 - **Then** each story gets a real typed issue added to the board and its old draft item is deleted
 - **And** afterwards the board has 0 drafts and 77 typed issues, the 25 `prod-desync` deploy-alert issues are untouched, and an immediate normal sync is all-skip
 
 **Scenario: type-set failure is loud, not silent**
+
 - **Given** the `issueTypeId` mutation returns a 5xx for one story
 - **When** the sync runs
 - **Then** the issue is still created with the `story` label and body
 - **And** a `::warning::` names the SHY + intended type, `N_FAILED` increments, and the run exits non-zero
 
 **Scenario: unknown native type aborts before mutating**
+
 - **Given** the org is missing the `Feature` issue type at run start
 - **When** the sync starts
 - **Then** it exits `40` with an actionable message before creating/deleting anything

@@ -75,6 +75,7 @@ Because this is a **rules-vs-code namespace mismatch** (not data-dependent), it 
 ## BDD Scenarios
 
 **Scenario: owner registers presence and room stays open**
+
 - **Given** an authenticated member whose token carries custom claim `uniqueId`
 - **And** they create a room
 - **When** the client writes `rooms/{roomId}/presence/{uniqueId}`
@@ -82,11 +83,13 @@ Because this is a **rules-vs-code namespace mismatch** (not data-dependent), it 
 - **And** the room remains open and the voice session connects
 
 **Scenario: foreign uniqueId presence write is denied**
+
 - **Given** an authenticated member with `uniqueId` = A
 - **When** they attempt to write `rooms/{roomId}/presence/{B}` where B ≠ A
 - **Then** the write is denied
 
 **Scenario: joiner presence appears in the presence set**
+
 - **Given** an open room with the owner present
 - **And** a second authenticated member joins
 - **When** the second member writes their presence node
@@ -94,6 +97,7 @@ Because this is a **rules-vs-code namespace mismatch** (not data-dependent), it 
 - **And** both uniqueIds appear in the room presence listener's set
 
 **Scenario: unauthenticated presence write denied**
+
 - **Given** an unauthenticated client
 - **When** it attempts any `rooms/{roomId}/presence/{userId}` write
 - **Then** the write is denied

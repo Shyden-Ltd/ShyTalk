@@ -65,17 +65,20 @@ Both levers were explicitly out of scope there (API patterns + the validator's i
 ## BDD Scenarios
 
 **Scenario: one lookup serves the whole corpus**
+
 - **Given** a fixture corpus of 3 stories and a mock gh recording invocations
 - **When** `--all` runs (non-dry)
 - **Then** exactly ONE `issue list` invocation is recorded
 - **And** the create/update decisions equal the pre-batching behaviour on the same fixtures
 
 **Scenario: upfront lookup failure is fail-closed**
+
 - **Given** mock gh exits non-zero for `issue list`
 - **When** `--all` runs
 - **Then** the script exits non-zero with an `api` category error and zero `issue create` calls recorded
 
 **Scenario: scan-derived invalid set preserves per-file semantics**
+
 - **Given** a 3-file fixture (valid, malformed, valid)
 - **When** `--all` runs
 - **Then** stderr contains the malformed file's `validate` line exactly as today, N_FAILED=1, and both valid files sync

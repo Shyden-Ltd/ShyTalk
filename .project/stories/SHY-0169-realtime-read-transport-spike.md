@@ -69,17 +69,20 @@ The RTDB `onDisconnect()` primitive (used for presence + stale-room reaping — 
 ## BDD Scenarios
 
 **Scenario: the spike produces a ratifiable recommendation**
+
 - **Given** the ~50 real-time listeners + the RTDB presence/`onDisconnect` case
 - **When** the spike evaluates SSE, WebSocket, and short-poll against the fixed rubric
 - **Then** it recommends one primary transport with reasoning
 - **And** files the read-path remediation follow-up SHYs referencing that choice
 
 **Scenario: a transport that can't authorize per-stream is rejected**
+
 - **Given** a candidate transport that cannot carry or renew the caller's ID token for the life of the stream
 - **When** it is assessed against the Security criterion
 - **Then** it is disqualified (the API must remain the continuous authz layer)
 
 **Scenario: the presence gap is explicitly resolved, not dropped**
+
 - **Given** RTDB `onDisconnect()` has no request/response analog
 - **When** the spike writes its recommendation
 - **Then** it names a concrete server-side replacement for "client went away" (heartbeat/last-seen or transport-native disconnect), not a TODO

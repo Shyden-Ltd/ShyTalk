@@ -56,21 +56,25 @@ The denial is then **swallowed fail-open**: `GroupSetupViewModel.loadOwnedGroupC
 ## BDD Scenarios
 
 **Scenario: owned-group count succeeds after the fix**
+
 - **Given** a member who created 2 non-closed groups (and is a participant of each)
 - **When** `getOwnedGroupCount` runs with the participant-scoped query
 - **Then** it succeeds (no PERMISSION_DENIED) and returns `2`
 
 **Scenario: the denial is real before the fix (regression guard)**
+
 - **Given** a seeded group with `createdBy == caller, isGroup == true`
 - **When** the client lists by `createdBy + isGroup` only (no `participantIds` constraint)
 - **Then** the engine denies the list (proven against the real rules engine)
 
 **Scenario: the cap is enforced**
+
 - **Given** a member who already owns `MAX_OWNED_GROUPS` groups
 - **When** they attempt to create another
 - **Then** creation is blocked by the cap
 
 **Scenario: a count error fails closed**
+
 - **Given** `getOwnedGroupCount` returns `Resource.Error`
 - **When** the group-setup screen evaluates the cap
 - **Then** it does not treat the count as `0`/unlimited — it surfaces the error and blocks (or prompts retry), and the error is logged

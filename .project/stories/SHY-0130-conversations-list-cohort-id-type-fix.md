@@ -75,34 +75,40 @@ This is the same class of UK OSA #17 segregation-read bug as SHY-0102, plus a wr
 ## BDD Scenarios
 
 **Scenario: Android member lists their conversations successfully**
+
 - **Given** an authenticated Android member whose string uniqueId is in a conversation's `participantIds`
 - **When** the app issues its `getConversations` query (now `array-contains "<uniqueId>"`, a string)
 - **Then** the query succeeds (no PERMISSION_DENIED)
 - **And** the member's conversations are returned
 
 **Scenario: a conversation created on Android is readable by both participants**
+
 - **Given** an Android member creates a DM via `getOrCreateConversation`
 - **When** the participantIds are persisted
 - **Then** they are stored as strings (e.g. `["50000050","50000010"]`)
 - **And** both participants can `get`/`list` the thread on Android and iOS
 
 **Scenario: non-participant is denied (privacy preserved)**
+
 - **Given** an authenticated member NOT in a conversation's `participantIds`
 - **When** the member attempts to list that conversation
 - **Then** the query is denied
 
 **Scenario: cross-cohort migrated thread stays hidden**
+
 - **Given** a conversation with `crossCohortAtMigration: true`
 - **When** a participant lists their conversations
 - **Then** that thread is excluded (rule gate preserved)
 
 **Scenario: legacy numeric-id thread is recovered by the migration**
+
 - **Given** a conversation written by an old Android build with numeric `participantIds`
 - **When** the Admin-SDK backfill runs
 - **Then** its `participantIds` become the string form
 - **And** its participants can read it again
 
 **Scenario: empty conversations list returns empty, not denied**
+
 - **Given** an authenticated member with zero matching conversations
 - **When** the app issues the conversations-list query
 - **Then** the result is an empty list and no PERMISSION_DENIED is raised

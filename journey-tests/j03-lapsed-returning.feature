@@ -28,24 +28,36 @@ Feature: j03 — Lena's lapsed return
     When Lena on Web navigates to "/login.html"
     Then Lena's Web UI document direction is "ltr"
     Then Lena's Web UI shows German translation of "Sign in" in the page heading
+
+  @blocker @browser-chromium @locale
+  Scenario: Lena on Web types "lapsed-adult@shytalk.dev" + "{PERSONAS_PASSWORD}" and submits
+    Given Lena on Web navigates to "/login.html"
     When Lena on Web types "lapsed-adult@shytalk.dev" + "{PERSONAS_PASSWORD}" and submits
     Then within 5000ms Lena's Web UI navigates to "/"
 
   @blocker @browser-chromium @locale
-  Scenario: Lena is forced through the new-privacy acceptance flow on first post-lapse load
+  Scenario: A returning member on an old policy version is stopped to re-accept
     Given Lena has just signed in after 45 days with accepted privacy v2 (current is v4)
     Then within 3000ms Lena's Web UI shows the legal acceptance screen
     Then Lena's Web UI shows a "What's changed" highlight pointing at section 11 (UK OSA cohorts)
     Then Lena's Web UI shows the heading in German
+
+  @blocker @browser-chromium
+  Scenario: Re-accepting records the current policy versions
+    Given Lena has just signed in after 45 days with accepted privacy v2 (current is v4)
     When Lena on Web checks both legal checkboxes and continues
     Then within 5000ms the database has document "usersAcceptedPolicies/50000020" with field "privacyVersion" equal to 4
     Then the database has document "usersAcceptedPolicies/50000020" with field "termsVersion" equal to 4
 
   @blocker @browser-chromium @locale
-  Scenario: Lena's daily-reward streak resets to 1 with the German "Streak reset" toast
+  Scenario: A long lapse is announced as a reset streak, in the member's language
     Given Lena has accepted the new privacy version after her 45-day lapse
     When Lena on Web opens the "/daily-reward" screen
     Then Lena's Web UI shows "Streak reset" toast in German
+
+  @blocker @browser-chromium
+  Scenario: Claiming after a reset starts the streak again at one
+    Given Lena has accepted the new privacy version after her 45-day lapse
     When Lena on Web taps the claim button
     Then within 3000ms the database has document "users/50000020" with field "loginStreak" equal to 1
     Then the database has document "users/50000020" with field "shyCoins" greater than 800

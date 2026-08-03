@@ -83,7 +83,13 @@ This SHY also slots SHY-0024 (NavGraph coexistence) into Tier 1 priority (P0) pe
 - **Then** all 8 AC dimensions contain verifiable bullets — no `TBD-on-pickup` placeholders
 - **And** the Test Plan names the actual files to modify (`app/.../MainActivity.kt`, `shared/.../SharedNavGraph.kt`, the 11 androidTest journey files) and the test names to add
 - **And** the BDD scenarios cover the AC bullets by presence so the validator exits 0
-- **And** the Risks section enumerates the parallel-Android-feature-conflict risk and names the mitigation (freeze other Android nav changes during the refactor)
+
+**Scenario: The Risks section enumerates the parallel-Android-feature-conflict risk and names the mitigation (freeze other Android nav changes during the refactor)**
+
+- **Given** the operator is AFK and the previous Claude session ended after merging this PR
+- **And** the next-highest-priority SHY in the index is SHY-0024 (NavGraph migration, P0)
+- **And** a fresh Claude session reads SHY-0024's `.md` file
+- **Then** the Risks section enumerates the parallel-Android-feature-conflict risk and names the mitigation (freeze other Android nav changes during the refactor)
 - **And** no further planning round-trip with the operator is required before architect dispatch
 
 **Scenario: Validator catches a skeleton residue before push**

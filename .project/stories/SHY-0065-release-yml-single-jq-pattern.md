@@ -87,6 +87,7 @@ Apply the SHY-0064 fix preventively: ONE `jq -n` invocation, additions array con
 ## BDD Scenarios
 
 **Scenario: release.yml uses single-jq pattern after refactor**
+
 - **Given** the operator views the `Create signed commit on main via GraphQL` step in `release.yml`
 - **When** searching its run block for `jq -n`
 - **Then** exactly ONE match is returned
@@ -94,18 +95,21 @@ Apply the SHY-0064 fix preventively: ONE `jq -n` invocation, additions array con
 - **And** no `--argjson additions` substring is present
 
 **Scenario: All 3 release files still committed**
+
 - **Given** the refactored step is reached during a workflow_dispatch run
 - **When** the GraphQL mutation succeeds
 - **Then** the resulting commit on `main` contains updates for `app/build.gradle.kts`, `app/src/main/play/release-notes/en-US/internal.txt`, and `app/src/main/play/release-notes/en-US/default.txt`
 - **And** the bytes in each file match the post-`bump-version.sh` working-tree state
 
 **Scenario: Jest assertion guards the pattern**
+
 - **Given** the `express-api/tests/scripts/release-workflow-jq-pattern.test.js` Jest file
 - **When** a future commit re-introduces `ADDITIONS=$(jq …)` or `--argjson additions` in `release.yml`
 - **Then** the Jest run fails at the assertion `expect(content).not.toMatch(/--argjson\s+additions/)`
 - **And** CI's `test-backend` job exits non-zero, blocking the regressing PR
 
 **Scenario: Local dry-run validates the new jq pipeline**
+
 - **Given** the new jq pipeline is invoked locally with representative content (current `app/build.gradle.kts` + sample 500-char release-notes files)
 - **When** running the exact `jq -n --rawfile c1 … --rawfile c2 … --rawfile c3 … '{ … }'` block
 - **Then** the resulting JSON parses successfully via `jq .`
@@ -113,6 +117,7 @@ Apply the SHY-0064 fix preventively: ONE `jq -n` invocation, additions array con
 - **And** each entry's `contents:` field is a valid base64 string that decodes back to the source file bytes
 
 **Scenario: jq exits non-zero on missing rawfile**
+
 - **Given** one of the 3 source files is renamed or deleted prior to the jq call
 - **When** the `jq -n --rawfile c1 <missing-path> …` invocation runs
 - **Then** jq exits non-zero with "Could not open file" stderr

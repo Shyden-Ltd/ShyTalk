@@ -72,12 +72,14 @@ Reserved since 2026-06-07; operator greenlit FULL migration 2026-06-10 ("Yes, st
 ## BDD Scenarios
 
 **Scenario: a batch lands atomically**
+
 - **Given** SHY-0072 + SHY-0073 are live and batch 1's PR merges
 - **When** the sync regenerates roadmap-data.json
 - **Then** Revenue & Status shows its 3 entries as story-derived items (badged, linked, lazily translated) and its features[] array is empty
 - **And** the page's total visible entry count is unchanged
 
 **Scenario: duplicate-of-existing absorbs**
+
 - **Given** a feature matching an existing tracked SHY
 - **When** its batch is authored
 - **Then** the existing SHY gains public/phase fields and the batch Notes record the absorption — no new file

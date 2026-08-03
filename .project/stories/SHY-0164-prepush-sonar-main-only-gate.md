@@ -68,6 +68,7 @@ The workable fix (operator-approved 2026-07-08, "skip Sonar gate for feature bra
 ## BDD Scenarios
 
 **Scenario: pushing a feature branch is not blocked by the code-quality gate**
+
 - **Given** a contributor has finished a ticket on a feature branch
 - **And** the shared code-quality gate on the main line is currently red from older debt
 - **When** they push the branch
@@ -75,17 +76,20 @@ The workable fix (operator-approved 2026-07-08, "skip Sonar gate for feature bra
 - **And** a message tells them the scan runs when the work is promoted to the main line
 
 **Scenario: promoting to the main line still runs the full code-quality scan**
+
 - **Given** the main line itself is being pushed
 - **When** the push runs
 - **Then** the full code-quality scan runs and must pass before the push completes
 
 **Scenario: a real quality problem on the main line still stops the push**
+
 - **Given** a main-line push has started the code-quality scan
 - **And** the scan reports a failing quality gate
 - **Then** the push is blocked with a clear failure message
 - **And** nothing is pushed
 
 **Scenario: skipping the quality gate does not skip the web checks**
+
 - **Given** a contributor pushes a feature branch that changed web pages
 - **And** the local test stack is running
 - **When** the push runs

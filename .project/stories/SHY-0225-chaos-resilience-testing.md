@@ -74,32 +74,38 @@ The audit listed **chaos / resilience** as a candidate gap: nothing tests how th
 ## BDD Scenarios
 
 **Scenario: The app reconnects after a real voice-server drop**
+
 - **Given** an active voice call on the real local LiveKit
 - **When** the LiveKit container is really killed mid-call
 - **Then** the app shows a reconnecting state and recovers when LiveKit returns
 - **And** it does not crash or silently mute
 
 **Scenario: The client retries and stays consistent under real API failure**
+
 - **Given** the real API returns induced 503/timeout on a chokepoint
 - **When** the client makes a request
 - **Then** it retries with backoff, shows a friendly error on exhaustion, and persists no partial state
 
 **Scenario: Offline message delivers exactly once on reconnect**
+
 - **Given** a message composed while the device is really offline
 - **When** the network is restored
 - **Then** the message is delivered exactly once (not lost, not duplicated)
 
 **Scenario: A safety decision fails closed under failure**
+
 - **Given** the API/ban-check dependency is failing
 - **When** an action requiring a ban/age check is attempted
 - **Then** the decision fails CLOSED (denied), never open
 
 **Scenario: The harness verifies the fault was truly induced**
+
 - **Given** a chaos scenario that should kill the voice container
 - **When** the container did NOT actually stop
 - **Then** the framework fails (no false green over an un-induced fault)
 
 **Scenario: Resilience verdict reaches the public page**
+
 - **Given** a completed chaos run
 - **When** SHY-0220's page reads the chaos `metadata.json`
 - **Then** it can show "Handles problems gracefully ✓" with recovery times

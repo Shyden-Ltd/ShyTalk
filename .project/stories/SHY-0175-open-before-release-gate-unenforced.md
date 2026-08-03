@@ -62,12 +62,14 @@ The same mechanism would be useful beyond i18n: "needs a load test", "needs the 
 ## BDD Scenarios
 
 **Scenario: something still needs a human**
+
 - **Given** a finished piece of work whose notes say a person must check something before it goes out
 - **And** nobody has ticked it off
 - **When** a release is prepared
 - **Then** the release stops and says which piece of work, and what is outstanding
 
 **Scenario: everything has been signed off**
+
 - **Given** the same piece of work with the box ticked
 - **When** a release is prepared
 - **Then** it proceeds

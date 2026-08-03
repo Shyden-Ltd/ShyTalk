@@ -79,37 +79,44 @@ The audit found our only published test reporting is **Allure on GitHub Pages** 
 ## BDD Scenarios
 
 **Scenario: A parent sees at-a-glance safety status**
+
 - **Given** the latest test cycle passed all Safety-area checks recently
 - **When** a visitor opens shytalk.com/health
 - **Then** the Safety card is green with a recent "last checked" time
 - **And** expanding it shows plain-language detail with no test jargon
 
 **Scenario: A failing critical check shows red, not green**
+
 - **Given** a Sign-in critical check failed in the latest cycle
 - **When** the page renders from `health-data.json`
 - **Then** the Sign-in card is red with a plain-language problem line
 
 **Scenario: Stale results show amber, not a false green**
+
 - **Given** the Voice-rooms checks have not refreshed within the freshness window
 - **When** the page renders
 - **Then** the Voice-rooms card is amber with the age of the last check
 
 **Scenario: The page never leaks detail**
+
 - **Given** a security finding contributed to the Safety area
 - **When** the public page renders
 - **Then** it shows only status/counts — no finding detail, no PII, no security specifics
 
 **Scenario: Reporting decision is recorded**
+
 - **Given** the evaluation of Allure vs alternatives
 - **When** a reviewer reads `docs/testing/reporting-decision.md`
 - **Then** it states the chosen approach (slim internal + $0 public static page) with rationale and rejected options
 
 **Scenario: Missing data degrades gracefully**
+
 - **Given** `health-data.json` is temporarily absent
 - **When** a visitor opens the page
 - **Then** it shows "status temporarily unavailable", not a broken page or a false green
 
 **Scenario: The page is localized**
+
 - **Given** a visitor with a non-English active locale (zh/id/vi)
 - **When** they open the health page
 - **Then** all card labels, detail, and timestamps render in their language

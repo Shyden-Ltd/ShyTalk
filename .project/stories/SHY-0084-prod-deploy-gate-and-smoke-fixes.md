@@ -87,31 +87,37 @@ Net effect: prod releases are blocked by a flaky/mis-pinned Android smoke, and t
 ## BDD Scenarios
 
 **Scenario: one approval unlocks the whole prod deploy**
+
 - **Given** a prod deploy is dispatched
 - **When** the operator approves the single `prod` environment gate once
 - **Then** all four platform deploy jobs (backend/web/android/ios) proceed without any further approval prompt
 
 **Scenario: Android boot smoke verifies a green app**
+
 - **Given** the prod debug APK is built and the app is healthy
 - **When** `smoke-test-android` runs
 - **Then** the APK installs, the app launches and is the foreground activity, no FATAL EXCEPTION is logged, and the job concludes `success`
 
 **Scenario: iOS boot smoke actually executes the boot step**
+
 - **Given** the prod iOS app builds for the simulator within the timeout
 - **When** `smoke-test-ios` runs
 - **Then** the "Boot simulator and verify app launches" step has conclusion `success` (NOT skipped/cancelled) and verifies launch + no crash report
 
 **Scenario: a real Android crash still fails the smoke**
+
 - **Given** the app throws a FATAL EXCEPTION on launch
 - **When** `smoke-test-android` runs
 - **Then** the job fails (exit 1) and `alert-desync` fires for Android
 
 **Scenario: the Android verifier runs under bash (the dash regression is gone)**
+
 - **Given** `reactivecircus/android-emulator-runner` executes its `script:` via `/usr/bin/sh` (dash)
 - **When** the smoke `script:` invokes `bash "$GITHUB_WORKSPACE/scripts/ci/android-smoke-verify.sh"`
 - **Then** `set -o pipefail` / `shopt` / arrays in the verifier run under a bash interpreter and the APK install + launch verification proceeds (no "Illegal option -o pipefail")
 
 **Scenario: a missing/duplicate APK artifact fails the smoke loudly**
+
 - **Given** the `debug-apk` dir holds zero or more than one `*.apk`
 - **When** the verifier runs
 - **Then** it exits 1 with `::error::Expected exactly one debug APK … found N` (no silent pass)

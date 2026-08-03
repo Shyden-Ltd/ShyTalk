@@ -59,24 +59,28 @@ EPIC-0003 (Phase X, cross-cutting) calls for exactly this: *"a lint guard preven
 ## BDD Scenarios
 
 **Scenario: clean tree (offenders == baseline) → pass**
+
 - **Given** the committed baseline matches the repo's current offenders
 - **When** `node scripts/check-no-new-stubs.js` runs
 - **Then** it exits 0
 - **And** it prints the remaining baseline size per category
 
 **Scenario: a new in-process double is introduced → fail loud**
+
 - **Given** a tracked test file adds `jest.mock(...)` and is NOT in the baseline
 - **When** the guard runs
 - **Then** it exits non-zero
 - **And** a `::error::` line names the file + category + remediation
 
 **Scenario: a migrated file leaves a stale baseline entry → fail loud**
+
 - **Given** a baseline path no longer contains any banned pattern
 - **When** the guard runs
 - **Then** it exits non-zero
 - **And** it instructs the author to remove the stale entry (ratchet only tightens)
 
 **Scenario: baseline regeneration is deterministic**
+
 - **Given** the repo's current offenders
 - **When** `--generate-baseline` is run twice
 - **Then** both outputs are byte-identical (sorted, stable-keyed)

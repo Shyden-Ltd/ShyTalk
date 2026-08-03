@@ -107,7 +107,13 @@ The operator's "quality + reliability + pre-public" priority weighting means thi
 - **Then** the plan doc is updated to reflect "deployed `<sha>` on `<date>`"
 - **And** the firestore.rules:256 block gets a comment block naming the deploy SHA + Express route
 - **And** the emulator test asserts direct write denied + Express route 200 OK
-- **And** no user-visible behaviour change ships
+
+**Scenario: No user-visible behaviour change ships**
+
+- **Given** the operator has SSH access to prod via `~/.ssh/shytalk-oci`
+- **And** `ssh -i ~/.ssh/shytalk-oci ubuntu@213.35.98.160 "cd /opt/shytalk-api && git log --oneline -5"` succeeds
+- **And** the captured log includes the P1 room-mutation route commits
+- **Then** no user-visible behaviour change ships
 
 **Scenario: SSH check succeeds, State B (P1 NOT deployed)**
 

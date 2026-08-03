@@ -28,13 +28,20 @@ Feature: j16 — Tariq's multi-singer event
   # journey coverage preserved.
   @browser-chromium @android-physical
   Scenario: Tariq schedules a Saturday Showcase, Selma is invited and accepts
-    When Tariq on Web opens the "event-host" panel from his profile
-    When Tariq on Web taps "schedule_newEventButton"
-    When Tariq on Web fills in: title "Saturday Showcase", startsAt "now + 5 min", durationMin 60, roster [Selma]
-    When Tariq on Web taps "scheduleEvent_confirmButton"
+    When Tariq on Web schedules "Saturday Showcase" starting in 5 minutes for 60 minutes with roster [Selma]
     Then within 5000ms the database has 1 entries in "events" matching {hostId: 50000081, title: "Saturday Showcase", roster: [50000080]}
+
+  @blocker @android-physical
+  Scenario: Everyone on the roster is invited when an event is scheduled
+    Given Tariq has scheduled the "Saturday Showcase" event
     Then within 3000ms Selma's Android UI shows an in-app banner "You are scheduled in Tariq's event"
     Then within 3000ms the database has 1 entries in "users/50000080/eventInvites" matching {eventId: any, status: "PENDING"}
+
+  @browser-chromium @android-physical
+  Scenario: Selma on Android taps "Accept" on the event invite
+    Given Tariq on Web opens the "event-host" panel from his profile
+    And Tariq on Web fills in: title "Saturday Showcase", startsAt "now + 5 min", durationMin 60, roster [Selma]
+    And Tariq has scheduled the "Saturday Showcase" event
     When Selma on Android taps "Accept" on the event invite
     Then within 3000ms the database has document "users/50000080/eventInvites/{eventId}" with field "status" equal to "ACCEPTED"
 
@@ -46,6 +53,10 @@ Feature: j16 — Tariq's multi-singer event
     Then within 5000ms the database has document "events/{eventId}" with field "state" equal to "LIVE"
     Then within 5000ms the database has 1 entries in "rooms" matching {hostId: 50000081, eventId: "{eventId}", state: "OPEN"}
     Then within 3000ms Tariq's Android UI shows the event room screen
+
+  @blocker @android-physical
+  Scenario: A live event room lists its roster and who is still waiting
+    Given Tariq's event "Saturday Showcase" is LIVE
     Then Tariq's Android UI shows the roster panel with Selma listed as "waiting"
 
   @android-physical @browser-chromium
@@ -53,6 +64,11 @@ Feature: j16 — Tariq's multi-singer event
     Given Tariq's "Saturday Showcase" event room is OPEN
     When Selma on Android taps the event-room link from the invite banner
     Then within 5000ms the database has document "rooms/{eventRoomId}" with field "rosterParticipants" containing 50000080
+
+  @android-physical @browser-chromium
+  Scenario: Alice on Web and Theo on Android both join the event room
+    Given Tariq's "Saturday Showcase" event room is OPEN
+    And Selma has joined the event room
     When Alice on Web and Theo on Android both join the event room
     Then within 5000ms the database has document "rooms/{eventRoomId}" with field "participantIds" containing [50000010, 50000060]
 
@@ -97,7 +113,15 @@ Feature: j16 — Tariq's multi-singer event
     Then within 5000ms the database has document "events/{eventId}" with field "state" equal to "CLOSED"
     Then within 5000ms the database has document "rooms/{eventRoomId}" with field "state" equal to "CLOSED"
     Then within 5000ms Tariq's Android UI shows the event summary panel: total gifts, total beans, per-MC breakdown
+
+  @blocker @android-physical
+  Scenario: A performer sees her own earnings when the event closes
+    Given Tariq's event "Saturday Showcase" has just closed
     Then within 5000ms Selma's Android UI shows her individual earnings for this event (255 beans)
+
+  @blocker @android-physical @browser-chromium
+  Scenario: The audience sees the event-closed summary on every platform
+    Given Tariq's event "Saturday Showcase" has just closed
     Then within 5000ms Alice's Web UI shows the event-closed summary screen
     Then within 5000ms Theo's Android UI shows the event-closed summary screen
 

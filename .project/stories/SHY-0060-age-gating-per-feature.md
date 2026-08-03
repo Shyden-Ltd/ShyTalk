@@ -112,63 +112,69 @@ This SHY captures the FULL per-feature age-gating design as the source-of-truth 
 
 **Scenario: 14yo passes signup gate but gets blocked at DM-with-stranger**
 
-- Given a user "Alex" has verified age 14 and country UK
-- And Alex is browsing public rooms successfully
-- When Alex attempts to DM a non-mutual user "Stranger"
-- Then the gate returns `BlockedUnderAge(threshold: 18, feature: directMessageWithStranger)`
-- And the UI shows a localised explanation "Direct messages with people you don't follow are available at 18+. You can follow them first to start a conversation."
-- And an audit log entry records `{ feature: directMessageWithStranger, userAge: 14, blocked: true }`
+- **Given** a user "Alex" has verified age 14 and country UK
+- **And** Alex is browsing public rooms successfully
+- **When** Alex attempts to DM a non-mutual user "Stranger"
+- **Then** the gate returns `BlockedUnderAge(threshold: 18, feature: directMessageWithStranger)`
+- **And** the UI shows a localised explanation "Direct messages with people you don't follow are available at 18+. You can follow them first to start a conversation."
+- **And** an audit log entry records `{ feature: directMessageWithStranger, userAge: 14, blocked: true }`
 
 **Scenario: 17yo unlocks gifting on 18th birthday during active session**
 
-- Given a user "Sam" has verified age 17 and is mid-session
-- And the current time is 1 second before Sam's 18th birthday in their local timezone
-- When Sam attempts to send a gift at the moment of birthday rollover
-- Then the gate-check (server-side, fresh age computation) returns `Allowed`
-- And the gift sends successfully
-- And the audit log records `{ feature: giftingSend, userAge: 18, allowed: true }`
+- **Given** a user "Sam" has verified age 17 and is mid-session
+- **And** the current time is 1 second before Sam's 18th birthday in their local timezone
+- **When** Sam attempts to send a gift at the moment of birthday rollover
+- **Then** the gate-check (server-side, fresh age computation) returns `Allowed`
+- **And** the gift sends successfully
+- **And** the audit log records `{ feature: giftingSend, userAge: 18, allowed: true }`
 
-**Scenario: German 14yo gets stricter signup gate than UK 14yo**
+**Scenario: A 14-year-old in Germany is below the local signup age**
 
-- Given a user from Germany signs up claiming age 14
-- And Germany's GDPR Article 8 region-override sets signup threshold to 16
-- When the signup gate-check runs
-- Then the signup is REJECTED with reason `BlockedRegion("Germany requires age 16 for account creation")`
-- And the user is shown a localised explanation pointing to parental-consent flow
-- Given a user from UK signs up claiming age 14
-- And UK's region-override sets signup threshold to 13 (default)
-- When the signup gate-check runs
-- Then the signup is ALLOWED
+- **Given** a user from Germany signs up claiming age 14
+- **And** Germany's GDPR Article 8 region-override sets signup threshold to 16
+- **When** the signup gate-check runs
+- **Then** the signup is REJECTED with reason `BlockedRegion("Germany requires age 16 for account creation")`
+- **And** the user is shown a localised explanation pointing to parental-consent flow
+
+**Scenario: The same 14-year-old is old enough in the UK**
+
+- **Given** a user from UK signs up claiming age 14
+- **And** UK's region-override sets signup threshold to 13 (default)
+- **When** the signup gate-check runs
+- **Then** the signup is ALLOWED
 
 **Scenario: Client tampers age claim — server rejects + alerts**
 
-- Given a user "Mallory" has verified server-side age 15
-- When Mallory's client sends a gift-send request with a forged claim `claimedAge: 19`
-- Then the server gate-check compares against the verified record (15) not the claim
-- And the request is REJECTED with HTTP 403
-- And a `SAFETY_AGE_TAMPER_ALERT` is fired to the T&S incident webhook
-- And Mallory's account is flagged for T&S review
+- **Given** a user "Mallory" has verified server-side age 15
+- **When** Mallory's client sends a gift-send request with a forged claim `claimedAge: 19`
+- **Then** the server gate-check compares against the verified record (15) not the claim
+- **And** the request is REJECTED with HTTP 403
+- **And** a `SAFETY_AGE_TAMPER_ALERT` is fired to the T&S incident webhook
+- **And** Mallory's account is flagged for T&S review
 
 **Scenario: Migration — legacy unverified account treated as Reverify required**
 
-- Given a user "Legacy" created an account in 2024 (pre-verification system)
-- And `Legacy.verifiedAge` is null
-- When Legacy attempts to send a DM to any user
-- Then the gate returns `BlockedUnderAge(requiredVerification = Reverify)` (regardless of DM target)
-- And the UI flows Legacy through the existing age-verification screen
-- And on successful verification, the gate is re-checked against the now-verified age
+- **Given** a user "Legacy" created an account in 2024 (pre-verification system)
+- **And** `Legacy.verifiedAge` is null
+- **When** Legacy attempts to send a DM to any user
+- **Then** the gate returns `BlockedUnderAge(requiredVerification = Reverify)` (regardless of DM target)
+- **And** the UI flows Legacy through the existing age-verification screen
+- **And** on successful verification, the gate is re-checked against the now-verified age
 
 **Scenario: Country change downgrades access**
 
-- Given a user "Hans" has verified age 15 and country Germany (signup threshold 16, but Hans was grandfathered in via verified parental consent)
-- And Hans currently has access to voice rooms (threshold 16, region-default for Germany)
-- When Hans changes their profile country to Spain (signup threshold 14, voice room threshold 16 — same)
-- Then the gate-check still ALLOWS voice rooms (no change)
-- Given Hans changes country to Netherlands (gachaSpend threshold 18 due to loot-box gambling laws)
-- And Hans was previously in a region where gachaSpend was 16
-- When Hans attempts a gacha spin
-- Then the gate returns `BlockedUnderAge(threshold: 18, region: NL)`
-- And a one-time banner explains "Your access to some features changed because your country is now Netherlands."
+- **Given** a user "Hans" has verified age 15 and country Germany (signup threshold 16, but Hans was grandfathered in via verified parental consent)
+- **And** Hans currently has access to voice rooms (threshold 16, region-default for Germany)
+- **When** Hans changes their profile country to Spain (signup threshold 14, voice room threshold 16 — same)
+- **Then** the gate-check still ALLOWS voice rooms (no change)
+
+**Scenario: Moving to a country with a stricter rule removes that access**
+
+- **Given** Hans has moved to the Netherlands (gachaSpend threshold 18 due to loot-box gambling laws)
+- **And** Hans was previously in a region where gachaSpend was 16
+- **When** Hans attempts a gacha spin
+- **Then** the gate returns `BlockedUnderAge(threshold: 18, region: NL)`
+- **And** a one-time banner explains "Your access to some features changed because your country is now Netherlands."
 
 ## Test Plan
 

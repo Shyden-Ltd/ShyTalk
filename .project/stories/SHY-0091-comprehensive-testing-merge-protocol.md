@@ -58,23 +58,27 @@ Operator 2026-06-12: the "before push" step was a one-line "code review agent" t
 ## BDD Scenarios
 
 **Scenario: the protocol is the single source of truth**
+
 - **Given** a story is being refined to embed testing
 - **When** I add its Definition-of-Done gauntlet assertion
 - **Then** it references `## Pre-Merge Testing Protocol` in `CLAUDE.md`
 - **And** it lists only the frameworks/surfaces that specific story exercises
 
 **Scenario: a `*.md`-only story is exempt**
+
 - **Given** a not-Done story whose change set is `*.md`-only (e.g. a docs story)
 - **When** it is refined
 - **Then** its DoD records "`*.md`-only → device gauntlet exempt; validator + lint + review + CI only"
 - **And** it does NOT assert real-device journey coverage
 
 **Scenario: a non-md infra story is NOT exempt**
+
 - **Given** a not-Done infra/chore story that changes a workflow or script (not `*.md`-only)
 - **When** it is refined
 - **Then** it asserts the FULL protocol (its relevant frameworks run; the gauntlet validates the pipeline output)
 
 **Scenario: the corpus stays valid after refinement**
+
 - **Given** all 54 not-Done stories have been refined
 - **When** `scripts/check-story-frontmatter.sh --scan .project/stories` runs
 - **Then** it exits 0

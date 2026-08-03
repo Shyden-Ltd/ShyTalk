@@ -126,7 +126,13 @@ P1 Tier-3 coverage. Sequential dependency on SHY-0010 (GachaVM tests) for the un
 - **Then** balance deducts to 400 within 2s
 - **And** the spin animation plays
 - **And** within 5s the reward summary appears
-- **And** the reward is added to backpack
+
+**Scenario: The reward is added to backpack**
+
+- **Given** test persona "local-claude-018" (age 25) signed in with 500 coins
+- **And** they navigate to Gacha
+- **And** tap "Spin"
+- **Then** the reward is added to backpack
 
 **Scenario: Gacha — insufficient coins**
 
@@ -142,6 +148,11 @@ P1 Tier-3 coverage. Sequential dependency on SHY-0010 (GachaVM tests) for the un
 - **Given** persona "local-claude-020" (age 16) signed in
 - **When** they navigate to Gacha and tap "Spin"
 - **Then** the AgeRestrictionDialog appears
+
+**Scenario: They tap "Verify my age"**
+
+- **Given** persona "local-claude-020" (age 16) signed in
+- **And** they navigate to Gacha and tap "Spin"
 - **When** they tap "Verify my age"
 - **Then** they land on the AgeVerificationSubmit screen
 - **And** no coins are deducted
@@ -154,7 +165,13 @@ P1 Tier-3 coverage. Sequential dependency on SHY-0010 (GachaVM tests) for the un
 - **Then** the screen shows a loading indicator
 - **And** within 5s the success state appears
 - **And** they are redirected to Home
-- **And** their profile shows "Age verified" badge
+
+**Scenario: Their profile shows "Age verified" badge**
+
+- **Given** persona on the AgeVerificationSubmit screen
+- **And** they enter DOB indicating age 22
+- **And** tap "Submit"
+- **Then** their profile shows "Age verified" badge
 
 **Scenario: Age verification — server-side rejection (DOB contradicts existing data)**
 

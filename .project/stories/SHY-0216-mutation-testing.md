@@ -75,36 +75,42 @@ The audit confirmed **no mutation testing** (no Stryker for JS, no Pitest for Ko
 ## BDD Scenarios
 
 **Scenario: A surviving mutant on a ban check fails the gate**
+
 - **Given** a change to `bans.js` whose boundary (`>=` vs `>`) is not asserted by any test
 - **When** `mutation-js` runs Stryker incrementally on the diff
 - **Then** the gate fails
 - **And** it names the file, line, the surviving mutation, and the test that should kill it
 
 **Scenario: A tautological test is exposed despite 100% coverage**
+
 - **Given** a test that calls a function but asserts nothing meaningful (100% line coverage)
 - **When** mutation testing runs
 - **Then** a mutant in that function survives
 - **And** the gate fails, revealing the assertion gap
 
 **Scenario: A Kotlin domain-logic mutant is killed**
+
 - **Given** the auth-guard precedence logic with exhaustive commonTest coverage
 - **When** `mutation-kotlin` runs Pitest over it
 - **Then** every mutant is killed
 - **And** the mutation score meets the floor
 
 **Scenario: An equivalent mutant is handled without hiding real gaps**
+
 - **Given** a genuinely equivalent mutant (no behavior change possible)
 - **When** it appears in the report
 - **Then** it is suppressed only via the reviewed allowlist with a written rationale
 - **And** the allowlist cannot grow without review
 
 **Scenario: PR gate stays bounded via incremental mode**
+
 - **Given** a PR touching one critical file
 - **When** the mutation gate runs
 - **Then** only that file's mutants are evaluated on the PR
 - **And** the run finishes within the CI budget
 
 **Scenario: Mutation quality reaches the public page**
+
 - **Given** a completed mutation run
 - **When** SHY-0220's page reads the mutation `metadata.json`
 - **Then** it can show "Our tests actually catch bugs ✓" with the score

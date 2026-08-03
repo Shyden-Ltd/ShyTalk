@@ -59,21 +59,25 @@ The operator reported: *"I tried out the dev app yesterday and I still can't cre
 ## BDD Scenarios
 
 **Scenario: a real user creates and enters a working room (the operator's failing path)**
+
 - **Given** a real persona signed into the real dev app (or local stack on a real device)
 - **When** they create a room
 - **Then** a real document appears in the `rooms` collection, the user enters the room, and LiveKit audio connects — the task the operator could not complete now succeeds
 
 **Scenario: a non-member is denied by real rules (SHY-0102 reproduced)**
+
 - **Given** real `firestore.rules` deployed + a private room owned by persona A
 - **When** persona B lists/reads it
 - **Then** the real backend returns PERMISSION_DENIED and the migrated test asserts the real denial (not a mocked rejection)
 
 **Scenario: presence is written under the real authed uid (SHY-0103)**
+
 - **Given** a real persona joins a room
 - **When** presence is written to RTDB
 - **Then** the record key matches the real authed uid (a mismatch fails the real test)
 
 **Scenario: a surfaced non-blocking room bug is catalogued, not silently fixed**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** it is triaged
 - **Then** a `type: bug` SHY is filed and the test is tagged `@known-failure-SHY-NNNN` with its correct assertion intact

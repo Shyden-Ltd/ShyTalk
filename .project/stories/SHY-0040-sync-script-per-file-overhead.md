@@ -62,17 +62,20 @@ Post-SHY-0062 (~150 stories) this becomes ~85s per CI sync run and unusable loca
 ## BDD Scenarios
 
 **Scenario: corpus dry-run gets fast without behaviour change**
+
 - **Given** the 66-story corpus and a clean checkout
 - **When** `--all --dry-run` runs pre- and post-refactor
 - **Then** stdout/stderr summary lines are identical
 - **And** the pre/post compute-share and wall-clock measurements are recorded in Notes (wall-clock target carried by SHY-0071)
 
 **Scenario: separator-adversarial frontmatter cannot corrupt parsing**
+
 - **Given** a fixture story whose title contains `\x1f`, quotes, `$`, and backticks
 - **When** the single-pass parser extracts fields
 - **Then** every extracted field equals the value the pre-refactor parser produced
 
 **Scenario: malformed file keeps its exit contract**
+
 - **Given** a fixture with an unterminated frontmatter block
 - **When** the script processes it
 - **Then** the exit code and stderr category match the pre-refactor behaviour

@@ -61,28 +61,33 @@ ShyTalk's web deploys via `deploy-prod.yml` (`wrangler pages deploy public --pro
 ## BDD Scenarios
 
 **Scenario: Blank input rolls back to the previous production deployment**
+
 - **Given** `shytalk-site` has ≥2 production deployments in Cloudflare Pages
 - **When** a collaborator dispatches `rollback.yml` with `deployment_id` blank
 - **Then** the workflow promotes the deployment at newest-first index `[1]`
 - **And** the run succeeds and logs the new live deployment ID + URL
 
 **Scenario: Explicit deployment ID is promoted verbatim**
+
 - **Given** a collaborator knows a specific good deployment ID
 - **When** they dispatch `rollback.yml` with that `deployment_id`
 - **Then** the workflow promotes exactly that deployment (skips the previous-deployment lookup)
 
 **Scenario: No previous deployment fails loud**
+
 - **Given** `shytalk-site` has zero or exactly one production deployment
 - **When** a collaborator dispatches `rollback.yml` with `deployment_id` blank
 - **Then** the run exits non-zero with `::error::No previous production deployment found to roll back to.`
 - **And** no rollback API call is made
 
 **Scenario: Missing token fails before any API call**
+
 - **Given** the `CLOUDFLARE_API_TOKEN` secret is unset
 - **When** the workflow runs
 - **Then** it exits 1 with a clear `::error::` naming the missing secret, before contacting Cloudflare
 
 **Scenario: Cloudflare API error surfaces**
+
 - **Given** the CF API responds `success:false` (e.g. an invalid target ID)
 - **When** the promote step runs
 - **Then** the run fails (exit 1) and echoes the `.errors` array from the response

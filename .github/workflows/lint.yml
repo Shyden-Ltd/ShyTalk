@@ -71,8 +71,12 @@ jobs:
           npm run lint
           npm run format:check
 
+      # Unconditional: the hook covers app feature files, the journey corpus
+      # AND the Markdown BDD blocks in .project/stories. Gating it on
+      # `app_changed` skipped a story-only or journey-only change, which is
+      # exactly when the Gherkin rules are most likely to drift. It scans the
+      # whole corpus in well under a second.
       - name: Gherkin lint
-        if: inputs.app_changed == true || github.event_name == 'workflow_dispatch'
         run: bash .claude/hooks/check-gherkin.sh
 
       # actionlint embeds shellcheck; together they catch unquoted globs,

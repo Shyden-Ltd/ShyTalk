@@ -76,29 +76,34 @@ The `!= true` clause is present in the `list` rule **text**, but Firestore does 
 ## BDD Scenarios
 
 **Scenario: migrated cross-cohort thread is hidden on list (the fix)**
+
 - **Given** an adult caller participates in a normal thread `T1` (`crossCohortAtMigration: false`) and a migrated thread `T2` (`crossCohortAtMigration: true`) seeded via admin
 - **When** the client lists conversations with `array-contains(participantIds, string(uniqueId))` **and** `where(crossCohortAtMigration == false)`
 - **Then** the query succeeds and returns exactly `[T1]`
 - **And** `T2` is absent (no participantIds/lastMessageAt metadata leaked)
 
 **Scenario: the leak is real without the fix (regression guard)**
+
 - **Given** the same `T1` + `T2` seeded
 - **When** the client lists with `array-contains(participantIds, string(uniqueId))` and **no** `crossCohortAtMigration` constraint
 - **Then** the query returns BOTH `[T1, T2]` (proves the rule does not filter on `list` — this test documents the vulnerability and must be updated/removed only alongside the query fix)
 
 **Scenario: the `== false` filter needs the backfill**
+
 - **Given** `T1` seeded **without** any `crossCohortAtMigration` field (legacy normal thread)
 - **When** the client lists with `where(crossCohortAtMigration == false)`
 - **Then** `T1` is **absent** (an `== false` equality excludes docs where the field is absent)
 - **And** after the backfill stamps `crossCohortAtMigration: false` on `T1`, the same list returns `[T1]`
 
 **Scenario: backfill is idempotent and never widens**
+
 - **Given** `T1` (no field), `T2` (`true`), `T3` (`false`) seeded
 - **When** `backfillCrossCohortFlag(db)` runs, then runs a second time
 - **Then** the first run stamps `T1 → false`, skips `T2` and `T3`; the second run updates 0
 - **And** `T2.crossCohortAtMigration` is still `true` (never overwritten)
 
 **Scenario: a new thread is born stamped**
+
 - **Given** the fix is deployed
 - **When** a user creates a new DM (`getOrCreateConversation`) or group (`createGroupConversation`)
 - **Then** the new doc has `crossCohortAtMigration: false` at creation

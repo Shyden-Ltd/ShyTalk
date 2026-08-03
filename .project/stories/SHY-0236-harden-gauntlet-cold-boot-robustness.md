@@ -61,22 +61,26 @@ Plus the detached child re-execs with a fresh `RUN_ID`, writing its logs + senti
 ## BDD Scenarios
 
 **Scenario: One web suite fails but the device matrix still runs**
+
 - **Given** a cold-boot run where `playwright-e2e` fails
 - **When** the frameworks phase completes
 - **Then** the failure is recorded (not fatal) and the run proceeds to dispatch the journey matrix
 - **And** at the end the run writes `FAIL`, lists `playwright-e2e`, and exits non-zero
 
 **Scenario: Clean run writes DONE in the advertised dir**
+
 - **Given** a detached cold-boot run with no failing suites
 - **When** it completes
 - **Then** `DONE` exists in the exact `RUN_DIR` the parent printed (not a sibling timestamp dir)
 
 **Scenario: bash 3.2 empty array does not abort**
+
 - **Given** macOS system bash 3.2 with `set -u`
 - **When** android-prep runs with an empty `ANDROID_ARGS`
 - **Then** the run proceeds (no "unbound variable" abort)
 
 **Scenario: Playwright phase has its API base URL**
+
 - **Given** the frameworks phase
 - **When** `playwright-e2e` runs
 - **Then** `API_BASE_URL=http://localhost:3000` is set and tests execute (no "must be explicitly set" error)

@@ -68,22 +68,26 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 ## BDD Scenarios
 
 **Scenario: a new direct Firestore call is blocked**
+
 - **Given** a contributor adds `import com.google.firebase.firestore.FirebaseFirestore` to a new file under `app/src/main`
 - **When** the CI ratchet runs
 - **Then** it exits non-zero, naming the offending file and pointing at the API-only rule
 - **And** the PR's required check fails, so it cannot merge
 
 **Scenario: the known baseline still passes (no false block during remediation)**
+
 - **Given** the repo at the audit baseline (the ~26 already-known direct-access files, unchanged)
 - **When** the ratchet runs
 - **Then** it exits zero (baseline-exempted) — remediation isn't blocked by pre-existing debt
 
 **Scenario: remediating a file and forgetting to trim the baseline is surfaced, not silently passed**
+
 - **Given** a file's direct-access calls are removed (remediated) but its baseline entry remains
 - **When** the ratchet runs
 - **Then** it FAILS, naming the now-stale baseline entry to remove (run `--generate-baseline`) — the ratchet only tightens, so the baseline must stay honest
 
 **Scenario: the iOS gitlive namespace is caught too**
+
 - **Given** a new `dev.gitlive.firebase.firestore` reference in `shared/src/iosMain`
 - **When** the ratchet runs
 - **Then** it fails — both SDK namespaces are enforced, not just Android's

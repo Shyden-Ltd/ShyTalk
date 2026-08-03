@@ -30,6 +30,10 @@ Feature: j19 — OSA migration steady-state regression guards
     When a query is run for every "users/*" doc where cohort="adult"
     Then no doc has any entry in "followingIds" whose target user has cohort="minor"
     Then no doc has any entry in "followerIds" whose source user has cohort="minor"
+
+  @blocker @regression @cross-cohort osa17-pr6-migration-following-edges
+  Scenario: A query is run for every "users/*" doc where cohort="minor"
+    Given a query is run for every "users/*" doc where cohort="adult"
     When a query is run for every "users/*" doc where cohort="minor"
     Then no doc has any entry in "followingIds" whose target user has cohort="adult"
     Then no doc has any entry in "followerIds" whose source user has cohort="adult"

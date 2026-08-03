@@ -64,26 +64,31 @@ SHY-0143 deliberately **preserves** the Android gate on the optimistic path but 
 ## BDD Scenarios
 
 **Scenario: a normal iPhone opens the app as usual**
+
 - **Given** someone using an ordinary, untampered iPhone
 - **When** they open the app
 - **Then** the app opens normally, with no "unsafe device" warning
 
 **Scenario: a jailbroken iPhone is blocked**
+
 - **Given** someone using a jailbroken iPhone
 - **When** they open the app
 - **Then** they are shown the "unsafe device" screen and cannot use the app
 
 **Scenario: the released app refuses to run on a fake or simulated iPhone**
+
 - **Given** the released version of the app running on a simulated (not real) iPhone
 - **When** it opens
 - **Then** it shows the "unsafe device" screen
 
 **Scenario: internal test builds still run on simulators for the team**
+
 - **Given** an internal (non-released) test build
 - **When** the team runs it on a simulator to test
 - **Then** it opens and runs normally, so testing can go ahead
 
 **Scenario: a hiccup in one safety check doesn't wrongly block a normal device**
+
 - **Given** an ordinary device where one of the safety checks can't finish for a moment
 - **When** the app checks whether the device is safe
 - **Then** the person is not wrongly blocked

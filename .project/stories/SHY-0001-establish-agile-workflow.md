@@ -296,7 +296,12 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** validation fails on SHY-0002
 - **And** SHY-0003 is NOT processed (stop-on-first, not collect-all)
 - **And** exit code is 20
-- **And** stderr contains the full path of SHY-0002 plus `missing required frontmatter field: id`
+
+**Scenario: Stderr contains the full path of SHY-0002 plus `missing required frontmatter field: id`**
+
+- **Given** `.project/stories/` contains SHY-0001 (valid), SHY-0002 (missing `id`), SHY-0003 (also missing `id`)
+- **And** I run `--scan`
+- **Then** stderr contains the full path of SHY-0002 plus `missing required frontmatter field: id`
 
 **Scenario: `--scan` on an empty directory exits 0**
 
@@ -329,7 +334,12 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** `shellcheck` runs next
 - **And** the `Validate SHY story frontmatter` step runs LAST
 - **And** the job log shows BOTH the YAML warning AND the story validation error
-- **And** the lint job exits non-zero
+
+**Scenario: The lint job exits non-zero**
+
+- **Given** a PR introduces both a malformed story file AND an actionlint warning on a workflow YAML
+- **And** CI's lint job runs
+- **Then** the lint job exits non-zero
 
 **Scenario: lint.yml passes when no story files are touched**
 

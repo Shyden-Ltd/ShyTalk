@@ -69,12 +69,14 @@ Not a production defect. This is test-infrastructure correctness, and the cost o
 ## BDD Scenarios
 
 **Scenario: someone gives the database handle a different name**
+
 - **Given** a test file that refers to the database by a new name of its own
 - **And** it clears out or reads a shared area of data through that name
 - **When** the test suite runs
 - **Then** the guard either understands the new name, or stops and says it cannot
 
 **Scenario: a test writes a path the guard has never seen before**
+
 - **Given** a test file that builds a data location in an unusual way
 - **When** the test suite runs
 - **Then** the guard refuses to guess, and names the file and the line

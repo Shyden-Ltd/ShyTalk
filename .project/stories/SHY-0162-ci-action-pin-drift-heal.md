@@ -116,6 +116,7 @@ share them) — which survives every future bump automatically.
 ## BDD Scenarios
 
 **Scenario: the cache helpers stay in lockstep**
+
 - **Given** the CI workflows cache their build dependencies with a family of
   matching helper actions
 - **When** one of those helpers is upgraded to a newer version but its siblings
@@ -125,6 +126,7 @@ share them) — which survives every future bump automatically.
 - **And** the fix is to bring every helper to the same version
 
 **Scenario: a routine dependency upgrade does not break the safety checks**
+
 - **Given** a maintainer upgrades a pinned CI action to a newer, consistently
   applied version
 - **When** the backend checks run
@@ -133,6 +135,7 @@ share them) — which survives every future bump automatically.
 - **And** no test file needs editing to accommodate the upgrade
 
 **Scenario: the two iOS workflows keep sharing one cache**
+
 - **Given** the device-build and simulator-test workflows are meant to restore
   from the same shared caches
 - **When** their cache steps drift apart (different keys or different helper
@@ -141,6 +144,7 @@ share them) — which survives every future bump automatically.
   costs cold-cache build minutes
 
 **Scenario: an action pinned to a moving tag is rejected**
+
 - **Given** a workflow references a CI action by a floating version label instead
   of an exact, immutable commit
 - **When** the pin check runs

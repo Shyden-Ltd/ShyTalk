@@ -180,9 +180,23 @@ The architect agent (feature-dev:code-architect) reviewed all 3 options against 
 - **When** release.yml's `create_commit` step runs
 - **Then** the GraphQL `createCommitOnBranch` mutation targets `branchName: "main"` (NOT `release/v0.97.8-r<run-id>`)
 - **And** the mutation succeeds (the App's bypass actor permits direct-to-main signed commits)
-- **And** the signed commit `chore: release v0.97.8` appears on main (verified by `gh api repos/.../pulls/N/commits | jq '.[].commit.verification.verified' == true`)
+
+**Scenario: The signed commit `chore: release v0.97.8` appears on main (verified by `gh api repos/.../pulls/N/commits | jq '.[].commit.verification.verified' == true`)**
+
+- **Given** the refactored release.yml is in place
+- **And** the Release App has been added as a `bypass_actors` entry on ruleset `12613584`
+- **And** the operator triggers a release via `workflow_dispatch` for `v0.97.8`
+- **And** release.yml's `create_commit` step runs
+- **Then** the signed commit `chore: release v0.97.8` appears on main (verified by `gh api repos/.../pulls/N/commits | jq '.[].commit.verification.verified' == true`)
 - **And** NO `release/v0.97.8-*` branch exists in `gh api repos/.../branches`
-- **And** the `Open release PR` step has been removed from release.yml entirely (no PR is opened)
+
+**Scenario: The `Open release PR` step has been removed from release.yml entirely (no PR is opened)**
+
+- **Given** the refactored release.yml is in place
+- **And** the Release App has been added as a `bypass_actors` entry on ruleset `12613584`
+- **And** the operator triggers a release via `workflow_dispatch` for `v0.97.8`
+- **And** release.yml's `create_commit` step runs
+- **Then** the `Open release PR` step has been removed from release.yml entirely (no PR is opened)
 
 **Scenario: release-tag.yml fires unchanged on the new commit**
 

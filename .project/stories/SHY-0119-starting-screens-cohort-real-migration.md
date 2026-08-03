@@ -57,21 +57,25 @@ A cohort gate that "works" against a mock but lets the wrong cohort through is a
 ## BDD Scenarios
 
 **Scenario: an in-cohort user sees the gated content (real rules)**
+
 - **Given** real rules + a real user in cohort X
 - **When** they reach the starting screen
 - **Then** the real gated read returns exactly the cohort-X content
 
 **Scenario: an out-of-cohort write is denied for real**
+
 - **Given** a real user not in cohort X
 - **When** they attempt a cohort-X-gated write
 - **Then** real rules deny it (no mocked guard)
 
 **Scenario: a cohort transition reflects in real state**
+
 - **Given** a real user added to cohort X
 - **When** the starting screen re-reads within the real cache window
 - **Then** the cohort-X content now appears
 
 **Scenario: a surfaced cohort bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

@@ -61,21 +61,25 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 ## BDD Scenarios
 
 **Scenario: the dev deploy distributes iOS again**
+
 - **Given** the fix branch carries the destination fix
 - **When** Deploy-To-Dev is dispatched with the fix branch as its `ref` (Phase-3 unmerged-branch pattern)
 - **Then** the "Distribute iOS to TestFlight" job completes successfully (no "Found no destinations" error)
 
 **Scenario: personas reseed on deploy again**
+
 - **Given** the same dispatched run
 - **When** the "Seed Dev Personas" job executes
 - **Then** it resolves `DEV_QA_PERSONAS_PASSWORD` and completes successfully
 
 **Scenario: the pin suite enforces the fixed state**
+
 - **Given** the repo after the fix
 - **When** the express script-pin tests run
 - **Then** the seed-personas pins assert the CANONICAL secret name, the archive pins assert the explicit generic destination on BOTH deploy workflows, and the action-SHA consistency test passes
 
 **Scenario: prod carries no latent copy of the bug**
+
 - **Given** `deploy-prod.yml` after the fix
 - **When** its archive invocation is inspected (pin test)
 - **Then** it carries `-destination 'generic/platform=iOS'` identically

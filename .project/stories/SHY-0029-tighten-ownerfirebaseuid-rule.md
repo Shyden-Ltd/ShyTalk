@@ -81,31 +81,37 @@ Roadmap G026 (`.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`): 
 ## BDD Scenarios
 
 **Scenario: legitimate owner CAN create their room**
+
 - **Given** an authenticated caller whose `request.auth.uid` is `firebase-alice` and whose `ownerId` matches their `callerUniqueId()`
 - **When** they create a room whose `ownerFirebaseUid` is `firebase-alice`
 - **Then** the create succeeds (all create clauses pass)
 
 **Scenario: fieldless create is DENIED (the bypass this SHY closes)**
+
 - **Given** the same authenticated caller
 - **When** they attempt to create a room with NO `ownerFirebaseUid` field
 - **Then** the create fails with `PERMISSION_DENIED` (NEW — previously the `.get(default)` made it succeed and produced an owner-left-broken room)
 
 **Scenario: forged ownerFirebaseUid is DENIED**
+
 - **Given** the authenticated caller `firebase-alice`
 - **When** they create a room whose `ownerFirebaseUid` is `firebase-bob`
 - **Then** the create fails with `PERMISSION_DENIED`
 
 **Scenario: empty-string ownerFirebaseUid is DENIED**
+
 - **Given** the authenticated caller (mirrors the client's `currentFirebaseUid ?: ""` edge)
 - **When** they create a room whose `ownerFirebaseUid` is `""`
 - **Then** the create fails with `PERMISSION_DENIED` (no unattributable-owner rooms)
 
 **Scenario: unauthenticated create is DENIED**
+
 - **Given** no authenticated user
 - **When** a room create is attempted
 - **Then** it fails with `PERMISSION_DENIED` (`request.auth == null`)
 
 **Scenario: sibling audit clean**
+
 - **Given** the reviewer runs `grep -nE "\.get\('?ownerFirebaseUid'?" firestore.rules`
 - **Then** the only historical match (line 229) is the one tightened in this PR, and no other rule uses the legacy fallback
 

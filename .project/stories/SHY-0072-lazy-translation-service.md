@@ -68,23 +68,27 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 ## BDD Scenarios
 
 **Scenario: first view translates and caches**
+
 - **Given** an empty cache and a working provider mock
 - **When** `POST /api/translate {texts:["Age-gating per feature"], target:"de"}` runs twice
 - **Then** the provider mock is called exactly once
 - **And** both responses carry the German translation with empty `missed`
 
 **Scenario: provider dies — visitors never know**
+
 - **Given** the provider mock returns 503
 - **When** a translation is requested for `fr`
 - **Then** the HTTP response is 200 with the English text and `missed` listing it
 - **And** a WARN `translate_provider_fail` log fires and the miss-queue gains one deduplicated line
 
 **Scenario: mixed batch partial-fills from cache**
+
 - **Given** text A cached for `ja` and text B uncached
 - **When** both are requested for `ja`
 - **Then** the provider is called only for B and the response contains both translations
 
 **Scenario: queue dedupe survives repeats**
+
 - **Given** the provider is down
 - **When** the same text+target misses three times
 - **Then** the miss-queue contains exactly one entry for it

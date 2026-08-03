@@ -136,7 +136,12 @@ N/A — no user-facing strings introduced. The sync produces no localised conten
 - **And** the regen step runs the Node script and produces a non-empty diff vs the current `public/roadmap-data.json`
 - **And** the `createCommitOnBranch` mutation completes successfully
 - **And** a signed commit by the Release App identity lands on `main` carrying ONLY the updated `public/roadmap-data.json`
-- **And** the workflow exits 0 with `[sync] signed commit <oid> on main` logged
+
+**Scenario: The workflow exits 0 with `[sync] signed commit <oid> on main` logged**
+
+- **Given** a SHY's frontmatter is changed (e.g. `status: In Progress` → `Done`) and merged to `main` via a squash-merge PR
+- **And** the `sync-roadmap-data.yml` workflow runs on the `push: main` event
+- **Then** the workflow exits 0 with `[sync] signed commit <oid> on main` logged
 
 **Scenario: No-op fast-path when SHY changes don't affect public surfacing**
 
@@ -146,7 +151,12 @@ N/A — no user-facing strings introduced. The sync produces no localised conten
 - **And** `git diff --quiet public/roadmap-data.json` exits 0
 - **And** the workflow logs `[sync] no changes — public/roadmap-data.json is up to date`
 - **And** the App-token mint step does NOT run (or runs but the mutation is skipped — either ordering is acceptable; the test asserts the mutation step is `if: <changed-condition>`)
-- **And** the workflow exits 0 in under 10 seconds total
+
+**Scenario: The workflow exits 0 in under 10 seconds total**
+
+- **Given** a SHY's frontmatter is changed but the change is to an internal-only field (e.g. `owner` or `notes`) on a SHY with `public: false`
+- **And** the workflow runs on push-to-main
+- **Then** the workflow exits 0 in under 10 seconds total
 
 **Scenario: Loop guard prevents re-fire on App's own commit-back**
 

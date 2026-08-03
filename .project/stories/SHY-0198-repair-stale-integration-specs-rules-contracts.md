@@ -57,22 +57,26 @@ Local canonical-runner repro reproduced all 4 failures exactly; a rules-file bis
 ## BDD Scenarios
 
 **Scenario: the integration gate goes green on the current main tree**
+
 - **Given** the local stack is running (Firebase emulators + Express) on an unmodified main checkout plus this fix
 - **When** the full integration suite runs via the canonical Playwright integration config
 - **Then** every test passes, including the 4 that previously failed
 - **And** the run finishes with exit code 0
 
 **Scenario: a device binding stays private even from its owner**
+
 - **Given** a device binding document exists for a user
 - **When** that same user, signed in normally, tries to read their own binding directly from the database
 - **Then** the read is refused (bindings are only reachable through the server API)
 
 **Scenario: creating a room works when the app supplies the caller's identity correctly**
+
 - **Given** an adult user signed in with an adult cohort claim
 - **When** they create a room tagged adult with their own owner identity fields
 - **Then** the room is created successfully
 
 **Scenario: a room create still fails when the cohort is forged, even with correct identity fields**
+
 - **Given** an adult user signed in with an adult cohort claim
 - **When** they try to create a room tagged minor while supplying their correct owner identity fields
 - **Then** the create is refused for the cohort mismatch alone

@@ -168,6 +168,10 @@ Feature: j01 — Adam's first day
   Scenario: Adam signs up + immediately tries to access adult features (must be gated)
     When Adam on Android signs up with DOB "2004-01-01" and accepts legal
     Then Adam's Android UI shows main tabs but PM tab is hidden
+
+  @android-emulator
+  Scenario: Adam on Android attempts to navigate to "/pm" via deep link
+    Given Adam on Android signs up with DOB "2004-01-01" and accepts legal
     When Adam on Android attempts to navigate to "/pm" via deep link
     Then Adam's Android UI shows "PMs are only available after age verification"
     Then no PM screen renders

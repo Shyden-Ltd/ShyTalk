@@ -64,26 +64,31 @@ Operator chose **`mvp: true`** — cross-browser session correctness is a launch
 ## BDD Scenarios
 
 **Scenario: a signed-in visitor stays signed in when they reload — in any browser**
+
 - **Given** someone who is signed in on the ShyTalk website
 - **When** they reload the page — whether in Chrome, Firefox, Safari, or on a phone browser
 - **Then** they are still signed in and are not asked to sign in again
 
 **Scenario: no flicker of "signed out" before the page settles**
+
 - **Given** a signed-in visitor opening one of the pages
 - **When** the page loads
 - **Then** they do not briefly see a "Sign In" button before their account appears
 
 **Scenario: a signed-in visitor isn't shown the sign-in pop-up on the suggestions board**
+
 - **Given** a signed-in visitor on the suggestions board
 - **When** the page reloads
 - **Then** they can suggest or vote without being shown the sign-in pop-up
 
 **Scenario: a signed-out visitor is still asked to sign in**
+
 - **Given** a visitor who is not signed in
 - **When** they try to suggest or subscribe
 - **Then** they are shown the sign-in prompt, exactly as before
 
 **Scenario: the session survives a reload on Safari**
+
 - **Given** a signed-in visitor using Safari
 - **When** they reload the page
 - **Then** they are still signed in (Safari's tracking protection has not silently signed them out)

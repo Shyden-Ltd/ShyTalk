@@ -29,6 +29,10 @@ Feature: j18 — Officia's system PMs
     Then within 5000ms the database has 1 entries in "conversations" matching {participantIds: [1, {adamId}]}
     Then within 5000ms the database has 1 entries in "messages" matching {senderId: 1, recipientId: {adamId}, key: "age_seg_age_up_welcome_pm"}
     Then the message body is the English translation of the age-up template
+
+  @blocker @android-physical
+  Scenario: An official system PM is recognisable as official in the member's language
+    Given Adam has been sent the age-up welcome system PM
     Then within 5000ms Adam's Android UI shows a new PM thread with sender "ShyTalk Official"
     Then Adam's Android UI shows the official badge on the sender avatar
     Then Adam's Android UI shows the welcome PM body in English
@@ -47,6 +51,11 @@ Feature: j18 — Officia's system PMs
     Given Adam received a system PM from Officia
     When Adam on Android opens Officia's profile from the PM
     Then Adam's Android UI shows "Official" badge and a disabled block button
+
+  @blocker @android-physical
+  Scenario: POST /api/users/block with targetUniqueId=1 as Adam
+    Given Adam received a system PM from Officia
+    And Adam on Android opens Officia's profile from the PM
     When POST /api/users/block with targetUniqueId=1 as Adam
     Then the response status is 400
     Then the response body contains "Cannot block ShyTalk Official account"

@@ -62,6 +62,10 @@ Feature: j06 — Alice IAP failure paths
     Then within 5000ms the database has document "users/50000010" with field "shyCoins" equal to 5000
     Then the database has 1 entries in "users/50000010/transactions" matching {type: "REFUND", amount: -1000, refundedReceipt: "receipt-R3"}
     Then the database has 1 entries in "auditLog" matching {action: "economy.refund", targetId: 50000010, amount: 1000, adminId: 90000001}
+
+  @blocker @android-physical
+  Scenario: A refund reaches the member's open app without a reload
+    Given Alice has just been refunded for receipt "receipt-R3"
     Then within 5000ms Alice's Android UI shows the new "5,000" balance via Firestore listener
 
   @android-physical

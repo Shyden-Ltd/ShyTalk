@@ -59,16 +59,19 @@ Reproduced first (not assumed): on the real CPH2653, a cold-launch followed by a
 ## BDD Scenarios
 
 **Scenario: the app is still starting up when the screen is read**
+
 - **Given** the test runner has just opened the app on the real Android phone and it is still finishing loading
 - **When** the runner reads the current screen contents to find a button
 - **Then** it keeps trying for a few seconds until the screen is stable and returns the real contents, so the button is found instead of being wrongly reported as missing
 
 **Scenario: the screen is already stable**
+
 - **Given** the app is sitting on a settled screen
 - **When** the runner reads the current screen contents
 - **Then** it returns them immediately with no added delay
 
 **Scenario: the screen never becomes readable**
+
 - **Given** a screen that stays busy and never settles within the allowed time
 - **When** the runner tries to read it
 - **Then** it gives up after the bounded number of attempts and reports clearly that it could not read the screen, rather than silently pretending the screen was empty

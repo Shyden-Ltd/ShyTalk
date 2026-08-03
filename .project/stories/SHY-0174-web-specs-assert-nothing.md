@@ -100,17 +100,20 @@ Surfaced while working [[SHY-0149]], which touched `suggestions-security.spec.ts
 ## BDD Scenarios
 
 **Scenario: a test that checks nothing**
+
 - **Given** a test that describes a behaviour in its title
 - **And** a body that never checks that behaviour
 - **When** the suite runs
 - **Then** the build fails and names the test, rather than counting it as a pass
 
 **Scenario: the thing under test has disappeared**
+
 - **Given** a test whose target element is no longer on the page
 - **When** the test runs
 - **Then** it fails, rather than quietly doing nothing
 
 **Scenario: switching language**
+
 - **Given** the roadmap page in English
 - **When** a reader switches the language to German
 - **Then** the headings, buttons, status badges and form labels all read in German

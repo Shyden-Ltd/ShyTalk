@@ -59,21 +59,25 @@ Messaging is core social functionality and a frequent source of integration regr
 ## BDD Scenarios
 
 **Scenario: a real message is delivered and persisted**
+
 - **Given** real personas A and B
 - **When** A sends B a message on the real path
 - **Then** real conversation state holds the message and B reads it back with correct ordering/unread
 
 **Scenario: a non-participant is denied by real rules**
+
 - **Given** a conversation between A and B
 - **When** C tries to read it
 - **Then** the real backend denies it (no mocked guard)
 
 **Scenario: adversarial content is handled by the real backend**
+
 - **Given** a message containing zero-width + RLO + emoji + max-length+1
 - **When** A sends it
 - **Then** the real server enforces its contract (accept-sanitised or reject) — asserted on real state
 
 **Scenario: a surfaced messaging bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

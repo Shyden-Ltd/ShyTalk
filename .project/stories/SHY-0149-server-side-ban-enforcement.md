@@ -67,26 +67,31 @@ The fix: add a **per-request ban gate** to the shared `authMiddleware` (mirrorin
 ## BDD Scenarios
 
 **Scenario: a banned person can't post on the website**
+
 - **Given** someone whose device or network is banned
 - **When** they try to post a suggestion, vote, or comment on the website
 - **Then** the action is refused
 
 **Scenario: a banned person can't get around the app by contacting the service directly**
+
 - **Given** a banned person using a tool to talk to the service directly instead of the app
 - **When** they try to perform a banned action
 - **Then** the service refuses it
 
 **Scenario: forging your network address doesn't get past a network ban**
+
 - **Given** someone on a banned network who forges a different network address in their request
 - **When** they contact the service
 - **Then** they are still recognised as banned and refused
 
 **Scenario: being banned while using the app stops you right away**
+
 - **Given** someone using the app who is banned while still signed in
 - **When** they next try to do something
 - **Then** they are refused — they do not stay in until they close the app
 
 **Scenario: an ordinary user is unaffected**
+
 - **Given** a user in good standing
 - **When** they post, vote, or comment
 - **Then** it works as normal

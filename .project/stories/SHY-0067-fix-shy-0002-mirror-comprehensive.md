@@ -122,12 +122,14 @@ Operator named the project board as a hard prerequisite for prod deploys (2026-0
 ## BDD Scenarios
 
 **Scenario: Workflow env propagates PAT to gh CLI correctly**
+
 - **Given** the workflow `Sync stories to GitHub Issues` step's `env:` block
 - **When** parsing the YAML
 - **Then** it contains `GH_TOKEN: ${{ secrets.GH_PAT_PROJECT }}` (the rename or alias that gh CLI actually reads)
 - **And** the script's first `gh issue create` invocation succeeds against a real (not mocked) GitHub API after merge
 
 **Scenario: Label auto-creation on first sync**
+
 - **Given** a repo with NONE of the SHY-namespace labels (`story`, `status:*`, `priority:*`, `effort:*`, `type:*`, `roadmap:*`)
 - **And** a freshly-merged SHY-0067 + a workflow_dispatch trigger
 - **When** the sync script encounters its first SHY-with-labels
@@ -136,15 +138,22 @@ Operator named the project board as a hard prerequisite for prod deploys (2026-0
 - **And** all expected SHY-namespace labels exist post-run
 
 **Scenario: Silent-failure path eliminated**
+
 - **Given** the sync script encounters a failing `gh issue create` (simulated: bad token, missing label, rate limit)
 - **When** the failure occurs
 - **Then** the full gh stderr is logged (NOT `>/dev/null 2>&1`)
 - **And** `N_FAILED` is incremented
 - **And** the loop continues processing remaining SHYs
 - **And** at end-of-loop, if `N_FAILED > 0`, the script exits 40 (not 0)
-- **And** the workflow run shows red status — operator sees the partial failure
+
+**Scenario: The workflow run shows red status — operator sees the partial failure**
+
+- **Given** the sync script encounters a failing `gh issue create` (simulated: bad token, missing label, rate limit)
+- **And** the failure occurs
+- **Then** the workflow run shows red status — operator sees the partial failure
 
 **Scenario: Issue creation produces real Issues**
+
 - **Given** SHY-0067 has merged + workflow_dispatch fires
 - **When** the sync script runs against the live API
 - **Then** `gh issue list --state open --json number,title --jq 'length'` returns ≥ 1 post-run
@@ -152,6 +161,7 @@ Operator named the project board as a hard prerequisite for prod deploys (2026-0
 - **And** the issue is labelled with `story` + status/priority/effort/type + per-G-ID roadmap labels
 
 **Scenario: Project v2 board addition + field population**
+
 - **Given** an issue has just been created (returned issue number `N`)
 - **When** the script runs the project-add step
 - **Then** `addProjectV2ItemById` GraphQL mutation is invoked with the issue's node ID + project ID
@@ -160,12 +170,14 @@ Operator named the project board as a hard prerequisite for prod deploys (2026-0
 - **And** `gh api graphql … projectV2 { items(first: 100) { nodes { content { ... on Issue { number } } } } }` after sync includes issue #N
 
 **Scenario: Type field auto-created on first sync**
+
 - **Given** the Project v2 board has fields Pri/Effort/Roadmap IDs/SHY ID/Epic but NO Type field
 - **When** the sync script's setup phase runs
 - **Then** the script invokes `createProjectV2Field(input: { projectId, dataType: SINGLE_SELECT, name: "Type", singleSelectOptions: [{name: "feature"}, {name: "bug"}, ...] })`
 - **And** subsequent SHYs in the same run can set the Type field via the returned field ID
 
 **Scenario: Workflow exits non-zero on any failure**
+
 - **Given** a SHY whose frontmatter is malformed (intentional fixture)
 - **When** the sync script encounters it
 - **Then** the script logs `failed to validate; skipping` + increments N_FAILED
@@ -173,6 +185,7 @@ Operator named the project board as a hard prerequisite for prod deploys (2026-0
 - **And** GitHub Actions shows the workflow run as red
 
 **Scenario: --dry-run preview is fully accurate**
+
 - **Given** a repo with mixed state (some SHYs have issues, some don't; one label missing; Type field missing)
 - **When** running `bash scripts/sync-stories-to-issues.sh --all --dry-run --verbose`
 - **Then** stderr shows a complete preview: which issues WOULD be created, which WOULD be updated, which labels WOULD be created, whether Type field WOULD be created

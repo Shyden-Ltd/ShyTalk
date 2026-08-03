@@ -93,6 +93,7 @@ This story is the **keystone** of EPIC-0008: it builds the shared contract (`fra
 ## BDD Scenarios
 
 **Scenario: One command runs the whole host suite on a clean checkout**
+
 - **Given** a fresh clone with no local stack running and no device attached
 - **When** I run `npm run test:all`
 - **Then** the runner selects only `category: host` frameworks
@@ -101,6 +102,7 @@ This story is the **keystone** of EPIC-0008: it builds the shared contract (`fra
 - **And** `test-results/run-summary.json` and each framework's `metadata.json` exist
 
 **Scenario: Stack profile fails loudly when the stack is down**
+
 - **Given** the local emulator stack is NOT running
 - **When** I run `scripts/test/run-all.sh --profile stack`
 - **Then** the runner exits 3
@@ -108,6 +110,7 @@ This story is the **keystone** of EPIC-0008: it builds the shared contract (`fra
 - **And** no `stack` framework is reported as passed
 
 **Scenario: A failing framework propagates to the runner exit code**
+
 - **Given** the registry includes a framework whose `command` currently fails
 - **When** I run the aggregate runner over a profile that includes it
 - **Then** that framework's line reads `FAIL`
@@ -116,24 +119,28 @@ This story is the **keystone** of EPIC-0008: it builds the shared contract (`fra
 - **And** the failure is repeated at the bottom with its single-framework reproduce command
 
 **Scenario: `--profile all` never quietly means "the runnable subset"**
+
 - **Given** a host with the stack up but no device attached
 - **When** I run `scripts/test/run-all.sh --profile all`
 - **Then** each `device` framework is reported `SKIPPED` with reason "no device attached"
 - **And** the runner exits non-zero (skips are not silent) unless `--allow-skips` is passed
 
 **Scenario: Registry validator rejects a malformed entry**
+
 - **Given** a registry entry with `category: "sometimes"` (not one of host/stack/device)
 - **When** I run `node scripts/test/check-registry.mjs`
 - **Then** it exits non-zero
 - **And** stderr names the offending `id` and the `category` field
 
 **Scenario: README index cannot drift from the registry**
+
 - **Given** a newly registered framework whose row is missing from `docs/testing/README.md`
 - **When** I run `node scripts/test/check-readme-in-sync.mjs`
 - **Then** it exits non-zero naming the framework absent from the index
 - **And** CI's lint job fails on that gate
 
 **Scenario: Result feed shape matches what the public page consumes**
+
 - **Given** a completed `--profile host` run
 - **When** SHY-0220's page reads a framework's `metadata.json`
 - **Then** it finds `{ id, plainName, publicArea, passed, failed, total, status, startedAt, finishedAt, durationMs }`

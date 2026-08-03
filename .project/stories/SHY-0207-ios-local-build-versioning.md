@@ -63,16 +63,19 @@ Operator task #11 (2026-07-18, ordered right after the watermark). `1.0 (1)` com
 ## BDD Scenarios
 
 **Scenario: local iPhone build shows the real version**
+
 - **Given** `app/build.gradle.kts` says `versionName = "0.97.15"` and the checkout has N commits
 - **When** `build-debug-dev.sh` builds and installs on the iPhone
 - **Then** the preview watermark's status line reads `dev · 0.97.15 (N) · api <sha>` and the NSLog identity line matches
 
 **Scenario: corrupt versionName fails fast**
+
 - **Given** a build.gradle.kts whose versionName is not strict `X.Y.Z`
 - **When** the script runs
 - **Then** it exits non-zero BEFORE xcodebuild with the same error shape CI uses
 
 **Scenario: CI path unchanged**
+
 - **Given** deploy-dev.yml's archive step
 - **When** the pin suite runs
 - **Then** its existing `CURRENT_PROJECT_VERSION="${BUILD_NUMBER}"` / `MARKETING_VERSION="${VERSION_NAME}"` lines are still asserted verbatim

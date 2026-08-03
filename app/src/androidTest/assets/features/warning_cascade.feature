@@ -6,6 +6,10 @@ Feature: Warning Cascade
     Given I am <role> "<user>" in seat <seat> of a fully-occupied 8-seat room
     When admin issues a warning for me
     Then I should see the element with tag "warning_title"
+
+  Scenario Outline: I tap the element with tag "warning_acknowledgeButton"
+    Given I am <role> "<user>" in seat <seat> of a fully-occupied 8-seat room
+    And admin issues a warning for me
     When I tap the element with tag "warning_acknowledgeButton"
     Then I should still be in seat <seat>
     And the room should still be active
@@ -20,6 +24,10 @@ Feature: Warning Cascade
     Given I am visitor "User V" in the audience of a room
     When admin issues a warning for me
     Then I should see the element with tag "warning_title"
+
+  Scenario: I tap the element with tag "warning_acknowledgeButton"
+    Given I am visitor "User V" in the audience of a room
+    And admin issues a warning for me
     When I tap the element with tag "warning_acknowledgeButton"
     Then I should still be in the room as a visitor
 

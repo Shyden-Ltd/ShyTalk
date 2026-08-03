@@ -59,6 +59,7 @@ The App-Lock gate reads the **local** credential (SecureStorage). After a reinst
 ## BDD Scenarios
 
 **Scenario: reinstall is detected and the user can re-enrol**
+
 - **Given** a user whose account has a PIN set (`pinHash` present server-side)
 - **And** the app is freshly installed (no local App-Lock credential)
 - **When** they sign in
@@ -66,21 +67,25 @@ The App-Lock gate reads the **local** credential (SecureStorage). After a reinst
 - **And** choosing "Set up PIN" lands on the PIN setup screen and completing it re-engages the lock
 
 **Scenario: never-enrolled users are not nagged**
+
 - **Given** a user whose account has no PIN
 - **When** they sign in on any device
 - **Then** no re-enrolment prompt appears
 
 **Scenario: enrolled-and-intact devices are not prompted**
+
 - **Given** a user with a PIN and a valid local credential
 - **When** they sign in
 - **Then** no re-enrolment prompt appears
 
 **Scenario: the signal is a boolean, never the hash**
+
 - **Given** any user signs in
 - **When** the sign-in response is inspected
 - **Then** it contains `hasPin` as a boolean and does not contain `pinHash`
 
 **Scenario: declining is respected**
+
 - **Given** the re-enrolment prompt is shown
 - **When** the user taps "Not now"
 - **Then** they proceed normally and the prompt is not shown again this session

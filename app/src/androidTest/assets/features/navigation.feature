@@ -9,8 +9,15 @@ Feature: Bottom Navigation
   Scenario: All bottom tabs are navigable
     When I tap the "Messages" tab
     Then I should see the element with tag "main_messagesTab"
+
+  Scenario: I tap the "Profile" tab
+    Given I tap the "Messages" tab
     When I tap the "Profile" tab
     Then I should see the element with tag "main_profileTab"
+
+  Scenario: I tap the "Rooms" tab
+    Given I tap the "Messages" tab
+    And I tap the "Profile" tab
     When I tap the "Rooms" tab
     Then I should see the element with tag "main_roomsTab"
 

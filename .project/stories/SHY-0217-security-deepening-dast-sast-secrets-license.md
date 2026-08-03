@@ -86,33 +86,39 @@ This story closes all four with **real, $0** defensive tooling (scanning our own
 ## BDD Scenarios
 
 **Scenario: A missing security header is caught by DAST**
+
 - **Given** a route change that drops a `helmet` header
 - **When** `sec-dast` runs OWASP ZAP against the real running local API
 - **Then** the scan fails naming the URL and the missing-header alert
 
 **Scenario: An iOS Swift vulnerability is caught by SAST**
+
 - **Given** a Swift change that hardcodes a key or stores sensitive data insecurely
 - **When** `sec-sast-swift` analyzes the iOS code
 - **Then** it fails naming the file and the security rule
 
 **Scenario: A high-entropy secret with no known prefix is caught**
+
 - **Given** a commit containing a random 40-character token (matching no known-prefix regex)
 - **When** gitleaks runs in pre-commit / CI
 - **Then** it fails naming the file and line — the class the old regex missed
 - **And** the reported output does NOT print the secret value
 
 **Scenario: A disallowed-license dependency is blocked**
+
 - **Given** a new npm dependency under AGPL-3.0
 - **When** `sec-license` runs against the reviewed allowlist
 - **Then** it fails naming the package and its license
 
 **Scenario: Test-fixture secrets are not false-flagged**
+
 - **Given** the existing intentional secret-shaped fixtures used by the secret-regex tests
 - **When** gitleaks runs
 - **Then** those reviewed, allowlisted paths do not fail the scan
 - **And** the allowlist cannot grow without review
 
 **Scenario: Security verdict reaches the public page**
+
 - **Given** a completed security run
 - **When** SHY-0220's page reads the security `metadata.json`
 - **Then** it can show "Safety checks ✓" (counts only, no sensitive detail)

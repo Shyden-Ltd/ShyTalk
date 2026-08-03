@@ -36,6 +36,10 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
   Scenario: Greta reviews Hayato's age-verification submission and sees the parsed DOB
     When Greta on Web Admin opens the age-verification tab
     Then within 3000ms Greta's Web Admin UI shows 1 row for "50000030" with status "PENDING"
+
+  @blocker @browser-chromium
+  Scenario: Greta on Web Admin taps "review" on Hayato's submission
+    Given Greta on Web Admin opens the age-verification tab
     When Greta on Web Admin taps "review" on Hayato's submission
     Then Greta's Web Admin UI shows the ID image
     Then Greta's Web Admin UI shows the parsed DOB candidate "2011-05-12"
@@ -48,6 +52,10 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
     Then the database has document "users/50000030" with field "dateOfBirth" equal to 1305158400000
     Then the database has document "users/50000030" with field "isAgeVerified" equal to false
     Then the database has document "ageVerificationSubmissions/{subId}" with field "status" equal to "REJECTED"
+
+  @blocker @browser-chromium
+  Scenario: A downgrade decision is written to the audit log
+    Given Hayato has been downgraded to cohort=minor after ID review
     Then the database has 1 entries in "auditLog" matching {action: "age_verification.reject_and_dob_down", targetId: 50000030, adminId: 90000001}
 
   @blocker
@@ -62,8 +70,17 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
   Scenario: Hayato's session is invalidated; refreshed JWT shows cohort=minor
     Given Hayato has been downgraded to cohort=minor by Greta
     Then within 5000ms the Firebase Auth session for Hayato has revokeRefreshTokens timestamp updated
+
+  @blocker @android-physical
+  Scenario: Hayato on Android performs any authenticated API call
+    Given Hayato has been downgraded to cohort=minor by Greta
     When Hayato on Android performs any authenticated API call
     Then the response has status 401 or signals "auth/user-token-expired"
+
+  @blocker @android-physical
+  Scenario: Hayato on Android force-refreshes via securetoken endpoint
+    Given Hayato has been downgraded to cohort=minor by Greta
+    And Hayato on Android performs any authenticated API call
     When Hayato on Android force-refreshes via securetoken endpoint
     Then Hayato's Android JWT custom claim "cohort" equals "minor"
 
@@ -84,6 +101,10 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
     Then Hayato's Android UI does not show Theo (P-10, adult)
     Then Hayato's Android UI renders the "age_seg_user_unavailable" placeholder in both slots
     Then the database has document "users/50000030" with field "followingIds" still containing [50000010, 50000060]
+
+  @blocker @android-physical
+  Scenario: The downgraded member also disappears from the other side's followers
+    Given Hayato has been downgraded to cohort=minor after ID review
     When Theo on Android opens his followers list
     Then within 5000ms Theo's Android UI does not show Hayato
     Then the database has document "users/50000060" with field "followerIds" still containing 50000030

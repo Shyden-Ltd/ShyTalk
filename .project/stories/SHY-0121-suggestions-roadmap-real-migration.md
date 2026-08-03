@@ -59,21 +59,25 @@ Suggestions is a large fake cluster (~45 files) but lower user-risk than safety/
 ## BDD Scenarios
 
 **Scenario: a real suggestion moves through its lifecycle**
+
 - **Given** a real suggestion submitted by persona A
 - **When** it is voted and transitioned through its real states
 - **Then** real reads show each state + the correct real tally
 
 **Scenario: a duplicate vote is prevented for real**
+
 - **Given** persona A has voted on a suggestion
 - **When** A votes again
 - **Then** the real backend keeps the tally unchanged (one-vote-per-user)
 
 **Scenario: concurrent votes converge to the right count**
+
 - **Given** N real personas voting concurrently
 - **When** all votes land
 - **Then** the real tally equals N (no lost/duplicate vote)
 
 **Scenario: a surfaced suggestions bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

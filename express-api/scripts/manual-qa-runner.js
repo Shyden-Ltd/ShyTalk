@@ -892,6 +892,81 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
  * Patterns are matched in declaration order; first match wins. Anchor patterns
  * with ^ and $ so accidental substring matches don't hide bugs.
  */
+// Compound action vocabulary: one declarative step -> the imperative steps it
+// replaces. Declared as data (not 11 near-identical handlers) so adding one is
+// a two-line change and the replay semantics stay identical across all of them.
+// `$1`..`$n` interpolate the compound pattern's capture groups.
+const COMPOUND_ACTIONS = [
+  {
+    pattern: /^([A-Z][a-z]+) on Web buys the "([^"]+)" package with sandbox receipt "([^"]+)"$/,
+    steps: [
+      '$1 on Web opens "/wallet"',
+      '$1 on Web taps "wallet_buyCoinsButton"',
+      '$1 on Web selects package "$2"',
+      '$1 on Web submits a sandbox receipt "$3"',
+    ],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Web pulls the gacha (\d+) times$/,
+    steps: ['$1 on Web opens "/gacha"', '$1 on Web taps "gacha_pull$2Button"'],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Web sends the "([^"]+)" gift to "([^"]+)"$/,
+    steps: [
+      '$1 on Web opens "/wallet#send-gift"',
+      '$1 on Web selects recipient "$3" and gift "$2"',
+      '$1 on Web taps "sendGift_confirmButton"',
+    ],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Web sends the "([^"]+)" gift to "([^"]+)" in the room$/,
+    steps: [
+      '$1 on Web taps the gift icon in the room',
+      '$1 on Web selects "$2" and recipient "$3"',
+      '$1 on Web confirms',
+    ],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Web replies "([^"]+)" in the conversation$/,
+    steps: ['$1 on Web types "$2" into the conversation input', '$1 on Web taps the send button'],
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+) on Web Admin adjusts user "(\d+)" shyCoins by \+(\d+) with reason "([^"]+)"$/,
+    steps: [
+      '$1 on Web Admin opens the "economy" tab',
+      '$1 on Web Admin searches for user "$2"',
+      '$1 on Web Admin adjusts shyCoins by +$3 with reason "$4"',
+    ],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Android creates a public room titled "([^"]+)"$/,
+    steps: [
+      '$1 on Android taps "main_createRoomFab"',
+      '$1 on Android types title "$2" and chooses public visibility',
+      '$1 on Android taps "createRoom_confirmButton"',
+    ],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Android kicks ([A-Z][a-z]+) from the room$/,
+    steps: ["$1 on Android long-presses $2's seat", '$1 on Android taps "Kick"'],
+  },
+  {
+    pattern: /^([A-Z][a-z]+) on Android closes the room$/,
+    steps: ['$1 on Android taps "room_endRoomButton"', '$1 on Android confirms'],
+  },
+  {
+    pattern:
+      /^([A-Z][a-z]+) on Web schedules "([^"]+)" starting in (\d+) minutes for (\d+) minutes with roster \[([^\]]+)\]$/,
+    steps: [
+      '$1 on Web opens the "event-host" panel from his profile',
+      '$1 on Web taps "schedule_newEventButton"',
+      '$1 on Web fills in: title "$2", startsAt "now + $3 min", durationMin $4, roster [$5]',
+      '$1 on Web taps "scheduleEvent_confirmButton"',
+    ],
+  },
+];
+
 const matchers = [
   // ── Meta-matchers (compose over other matchers) ──
   {
@@ -925,6 +1000,28 @@ const matchers = [
       }
     },
   },
+  // ── Compound actions (SHY-0268 Gherkin sweep) ──
+  //
+  // The corpus caps a scenario at six steps and allows exactly one `When`, so
+  // a four-tap purchase chain can no longer be spelled out inline. These
+  // matchers name the ACTION and replay the exact steps the chain used to
+  // perform, back through `executeStep` — same handlers, same drivers, same
+  // real backend. Nothing here is a shortcut or a simulation: if a sub-step
+  // has no matcher, the compound fails with that sub-step's error rather than
+  // reporting a hollow pass.
+  ...COMPOUND_ACTIONS.map(({ pattern, steps }) => ({
+    pattern,
+    async handler(m, ctx) {
+      for (const template of steps) {
+        const text = template.replace(/\$(\d)/g, (_x, i) => m[Number(i)] ?? '');
+        const result = await executeStep({ kind: 'When', text }, ctx);
+        if (!result.ok) {
+          return { ok: false, error: `compound step "${text}" failed: ${result.error}` };
+        }
+      }
+      return { ok: true };
+    },
+  })),
   // ── Environment setup ──
   {
     pattern: /^the local stack is healthy$/i,

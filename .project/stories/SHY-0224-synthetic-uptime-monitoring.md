@@ -76,6 +76,7 @@ The audit listed **synthetic / uptime** monitoring as a gap: nothing checks the 
 ## BDD Scenarios
 
 **Scenario: A live sign-in outage is detected and shown red**
+
 - **Given** sign-in is failing on dev
 - **When** the scheduled synthetic probe runs
 - **Then** `synthetic-uptime` fails naming the sign-in journey + environment
@@ -83,27 +84,32 @@ The audit listed **synthetic / uptime** monitoring as a gap: nothing checks the 
 - **And** an operator signal (issue/notification) is raised
 
 **Scenario: A latency degradation is amber, not red**
+
 - **Given** the room-join journey is slow but succeeds
 - **When** the probe runs
 - **Then** it reports a degraded (amber) signal, distinct from a hard failure
 
 **Scenario: Probes are non-destructive on prod**
+
 - **Given** a prod probe joins a room and sends a message with the synthetic account
 - **When** the probe finishes
 - **Then** it leaves the room and removes the test message
 - **And** no real user data or room is polluted
 
 **Scenario: A transient blip does not spam alerts**
+
 - **Given** a single failed run followed by successes
 - **When** the failure-threshold logic evaluates
 - **Then** it does not hard-red/alert on a single blip, but DOES on sustained failure
 
 **Scenario: Unreachable environment is red, not falsely green**
+
 - **Given** the live environment is unreachable
 - **When** the probe runs
 - **Then** it reports the environment down (red) with the reachability error
 
 **Scenario: Live signal reaches the public page**
+
 - **Given** a completed probe cycle
 - **When** SHY-0220's page reads the live section of the feed
 - **Then** it shows current status + "last checked N minutes ago" per area

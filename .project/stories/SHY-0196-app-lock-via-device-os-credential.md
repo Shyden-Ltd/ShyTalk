@@ -71,32 +71,38 @@ This supersedes the app-managed PIN design: PIN setup screens, app PIN entry on 
 ## BDD Scenarios
 
 **Scenario: enabling with a device credential present**
+
 - **Given** a signed-in user whose device has a screen lock configured
 - **When** they enable App-Lock in Settings → Security and pass the device's own unlock prompt
 - **Then** a success message confirms the lock is on, says the device unlock will be needed to enter the app, and explains how to disable it in app Settings
 
 **Scenario: enabling without any device lock**
+
 - **Given** a device with no PIN/pattern/biometric configured
 - **When** the user tries to enable App-Lock (from the first-run offer or Settings)
 - **Then** the toggle does not enable and the app explains they must first set a device lock in system settings, and how to enable App-Lock here afterwards
 
 **Scenario: the lock gates entry with the OS prompt**
+
 - **Given** App-Lock is enabled and the lock timeout has passed
 - **When** the user cold-launches or resumes the app
 - **Then** a locked screen appears and tapping Unlock shows the device's own unlock prompt
 - **And** passing it enters the app; cancelling stays locked with the app content never visible
 
 **Scenario: re-enabling after a disable re-verifies**
+
 - **Given** a user who had App-Lock on, then disabled it
 - **When** they enable it again in Settings
 - **Then** the device's own unlock prompt appears again and only passing it turns the lock on
 
 **Scenario: uninstall loses the lock by design**
+
 - **Given** a user with App-Lock enabled uninstalls and reinstalls the app
 - **When** they sign in again
 - **Then** App-Lock is off, no prompt claims they "had" a lock, and the first-run offer appears once
 
 **Scenario: nothing about the lock touches the network**
+
 - **Given** any enable/unlock/disable interaction
 - **When** network traffic is inspected (local stack logs)
 - **Then** no request related to PIN or biometrics is made — only real account login calls the server

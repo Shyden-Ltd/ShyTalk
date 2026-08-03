@@ -59,16 +59,19 @@ Surfaced by SHY-0187's code review (R1 Important-6 + Minor-9, 2026-07-14). Two c
 ## BDD Scenarios
 
 **Scenario: locked phone goes silent**
+
 - **Given** I am live in a voice room and my App-Lock timeout expires in the background
 - **When** the app returns to the foreground and the Lock screen renders
 - **Then** no room audio is audible while the Lock screen stands
 
 **Scenario: hard lockout disconnects the room**
+
 - **Given** I am live in a voice room on the Lock screen
 - **When** the fifth wrong PIN locks the account
 - **Then** the voice session disconnects and the Account Locked state renders
 
 **Scenario: unlock does not ghost-rejoin**
+
 - **Given** my room was disconnected by the lock
 - **When** I unlock successfully
 - **Then** I see the room in its real disconnected state (no phantom audio, no auto-rejoin)

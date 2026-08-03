@@ -58,21 +58,25 @@ Crons act unattended on production data, so a cron that deletes/archives the wro
 ## BDD Scenarios
 
 **Scenario: closedRooms archives the right rooms by real outcome**
+
 - **Given** real rooms — some closed past the threshold, some recent
 - **When** the real closedRooms cron runs
 - **Then** real reads show the past-threshold rooms archived/cleaned and the recent ones retained
 
 **Scenario: a cron's empty collection is a no-op**
+
 - **Given** the cron's target collection emptied for real
 - **When** the cron runs
 - **Then** it resolves without error and mutates nothing
 
 **Scenario: an external-dep cron uses the real sandbox path**
+
 - **Given** a cron that calls r2/fcm
 - **When** it runs in the test
 - **Then** it exercises the real sandbox path (not a mocked client), asserting the real Firestore outcome
 
 **Scenario: a surfaced cron bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

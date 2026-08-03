@@ -70,22 +70,26 @@ This is a **safety/moderation** bug (a warned user is trapped; and the security 
 ## BDD Scenarios
 
 **Scenario: acknowledge clears the warning server-side**
+
 - **Given** Raul has an active first-strike warning (`hasActiveWarning=true`, `warningCount=1`)
 - **When** Raul taps `warning_acknowledgeButton` on the real device
 - **Then** within 3000ms `users/<raul>` has `hasActiveWarning=false`, `warningAcknowledged=true`, and `warningCount` still `1`
 - **And** the app navigates to the rooms tab and does not bounce back to the warning screen
 
 **Scenario: a client cannot clear its own warning directly (security preserved)**
+
 - **Given** an authenticated client
 - **When** it attempts a Firestore `update(hasActiveWarning=false)` on its own user doc
 - **Then** the write is denied by the rules (`PERMISSION_DENIED`)
 
 **Scenario: acknowledge endpoint failure is surfaced, not swallowed**
+
 - **Given** the acknowledge endpoint returns an error (e.g. network down)
 - **When** Raul taps acknowledge
 - **Then** the app stays on the warning screen and shows an error (no navigate-to-Main-then-bounce)
 
 **Scenario: a user cannot acknowledge another user's warning**
+
 - **Given** user A is authenticated
 - **When** A calls `POST /api/users/<B>/acknowledge-warning`
 - **Then** the endpoint responds 403 and B's warning is unchanged

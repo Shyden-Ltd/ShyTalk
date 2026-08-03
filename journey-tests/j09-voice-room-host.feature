@@ -26,9 +26,7 @@ Feature: j09 — Theo hosts a public voice room
   # audio check now its own scenario.
   @blocker @android-physical
   Scenario: Theo creates a public voice room with himself in the host seat
-    When Theo on Android taps "main_createRoomFab"
-    When Theo on Android types title "Theo's Test Room" and chooses public visibility
-    When Theo on Android taps "createRoom_confirmButton"
+    When Theo on Android creates a public room titled "Theo's Test Room"
     Then within 5000ms the database has 1 entries in "rooms" matching {hostId: 50000060, title: "Theo's Test Room", state: "OPEN", visibility: "public"}
     Then Theo on Android receives a LiveKit token in response from POST /api/livekit/token
     Then within 3000ms Theo's Android UI navigates to the room screen with host seat occupied
@@ -39,10 +37,19 @@ Feature: j09 — Theo hosts a public voice room
     Given Theo's public room "Theo's Test Room" is OPEN
     When Alice on Web refreshes the rooms list
     Then within 3000ms Alice's Web UI shows "Theo's Test Room" in the public rooms list
+
+  @blocker @android-physical @browser-chromium
+  Scenario: Alice on Web taps the room card
+    Given Theo's public room "Theo's Test Room" is OPEN
+    And Alice on Web refreshes the rooms list
     When Alice on Web taps the room card
     Then within 5000ms the database has document "rooms/{roomId}" with field "participantIds" containing 50000010
     Then Alice on Web receives a LiveKit token
     Then within 3000ms Alice's Web UI navigates to the room screen as a non-seated participant
+
+  @blocker @android-physical
+  Scenario: The host sees a new joiner appear in the participants list
+    Given Alice has joined Theo's room from Web
     Then within 3000ms Theo's Android UI shows Alice in the participants list
 
   @blocker @android-physical @browser-chromium @ios-sim
@@ -85,13 +92,16 @@ Feature: j09 — Theo hosts a public voice room
   @blocker @android-physical @ios-sim
   Scenario: Theo kicks Ines — participant removed, kickedIds entry, "you were kicked" UI
     Given Ines is seated and unmuted in Theo's room
-    When Theo on Android long-presses Ines's seat
-    When Theo on Android taps "Kick"
+    When Theo on Android kicks Ines from the room
     Then within 3000ms the database has document "rooms/{roomId}" with field "participantIds" not containing 50000061
     Then within 3000ms the database has 1 entries in "rooms/{roomId}/kickedIds" matching {userId: 50000061}
     Then within 5000ms Ines's iOS Sim UI navigates back to the "rooms" tab
-    Then within 5000ms Ines's LiveKit track for room {roomId} is disconnected
     Then Ines's iOS Sim UI shows "You were kicked from this room"
+
+  @blocker @ios-device
+  Scenario: A kicked member's voice connection is torn down, not just their screen
+    Given Ines has been kicked from Theo's room
+    Then within 5000ms Ines's LiveKit track for room {roomId} is disconnected
 
   @blocker @ios-sim
   Scenario: Ines cannot rejoin Theo's room — 403 + kicked banner remains
@@ -103,8 +113,7 @@ Feature: j09 — Theo hosts a public voice room
   @blocker @android-physical @browser-chromium
   Scenario: Theo closes the room — state=CLOSED, Alice's UI shows the summary, tracks disconnect
     Given Theo's room "Theo's Test Room" is OPEN with Alice as a participant
-    When Theo on Android taps the "room_endRoomButton"
-    When Theo on Android confirms in the dialog
+    When Theo on Android closes the room
     Then within 5000ms the database has document "rooms/{roomId}" with field "state" equal to "CLOSED"
     Then within 5000ms Alice's Web UI navigates back to the "rooms" tab
     Then within 5000ms Alice's Web UI shows the room-closed summary panel
@@ -137,9 +146,23 @@ Feature: j09 — Theo hosts a public voice room
     When Alice on Web POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 200
     Then the response body has field "token" of type "string"
+
+  @blocker @cross-cohort
+  Scenario: A room token carries the room's cohort and name
+    Given Alice has been issued a LiveKit token for room "ra1"
     Then the decoded JWT payload has field "metadata.cohort" equal to "adult"
     Then the decoded JWT payload has field "video.room" equal to "ra1"
+
+  @regression @cross-cohort osa17-pr7-livekit-token-cohort-claim
+  Scenario: Marcus on Android POSTs /api/livekit/token with roomName="ra1"
+    Given Theo on Android created an adult-cohort room "ra1"
+    And Marcus [P-04] is signed in on Android
+    And no prior segregationEvents exist between "60000010" and "ra1"
     When Marcus on Android POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 404
     Then the response body does not include a token
+
+  @blocker @cross-cohort
+  Scenario: A refused room token is recorded as a segregation event
+    Given Marcus has been refused a LiveKit token for the adult room "ra1"
     Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: "60000010", targetUniqueId: "ra1"}

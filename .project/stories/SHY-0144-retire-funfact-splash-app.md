@@ -62,23 +62,27 @@ Critically, **banners are independent of the splash** — loaded *and displayed*
 ## BDD Scenarios
 
 **Scenario: a new user goes straight to their rooms after signing in**
+
 - **Given** someone signing in for the first time who has finished their profile, entered their date of birth, and agreed to the terms
 - **When** they finish signing in
 - **Then** they arrive at their room list right away
 - **And** the fun-fact loading screen never appears
 
 **Scenario: someone still finishing setup isn't shown a loading screen**
+
 - **Given** a person who has signed in but hasn't finished setting up their profile
 - **When** the app moves them to the next step
 - **Then** they are taken to profile setup, and once that's done they arrive at their room list
 - **And** no fun-fact loading screen appears at any point
 
 **Scenario: promotional banners still show on the home screen**
+
 - **Given** there are active promotional banners to display
 - **When** someone opens the app to their room list
 - **Then** the banners still appear in the home-screen carousel, exactly as before
 
 **Scenario: a returning user never sees the loading screen either**
+
 - **Given** a returning user who is already signed in
 - **When** they open the app
 - **Then** they land on their room list with no fun-fact loading screen shown

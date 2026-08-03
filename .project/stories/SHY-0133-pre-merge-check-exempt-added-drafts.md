@@ -63,27 +63,32 @@ The exemption is **add-only** and **Draft-only**, preserving every existing guar
 ## BDD Scenarios
 
 **Scenario: a newly-added Draft spec filing passes the local gate**
+
 - **Given** a branch whose only story change adds `.project/stories/SHY-0999-x.md` at `status: Draft`
 - **When** `bash scripts/pre-merge-check.sh <PR#> --skip-ci-check` runs
 - **Then** it exits 0 and prints `PRE-MERGE-CHECK: OK`
 - **And** stderr notes the filing exemption for that file
 
 **Scenario: a story modified to Draft is still refused (add-only)**
+
 - **Given** a story that exists on `main` as `In Review`, modified to `status: Draft` on the branch
 - **When** the gate runs
 - **Then** it REFUSES (non-zero, no OK token) with the "must be In Review" message
 
 **Scenario: an added non-Draft story is still gated**
+
 - **Given** a branch adding a story at `status: In Progress`
 - **When** the gate runs
 - **Then** it REFUSES (the exemption is Draft-only)
 
 **Scenario: mixed PR gates the implementation story, exempts the filing**
+
 - **Given** a branch that adds a Draft filing AND modifies an implementation story to `In Review` with a valid `Reviewed-up-to`, with an unreviewed code commit after the marker
 - **When** the gate runs
 - **Then** it REFUSES on the In-Review story's unreviewed commit (the filing exemption does not suppress Gate-3 for the other story)
 
 **Scenario: Done/Cancelled still refused locally (unchanged)**
+
 - **Given** a branch adding a story at `status: Done` (or `Cancelled`)
 - **When** the gate runs
 - **Then** it REFUSES (local gate stays stricter than CI on terminal statuses)

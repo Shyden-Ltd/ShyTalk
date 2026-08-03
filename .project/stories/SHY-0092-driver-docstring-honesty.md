@@ -65,24 +65,28 @@ This is documentation correctness only — no runtime behaviour changes. But bec
 ## BDD Scenarios
 
 **Scenario: a reader trusts the web-playwright header**
+
 - **Given** `web-playwright-driver.js` with real method overrides below the registration loop
 - **When** an engineer reads the file header
 - **Then** the header describes the stub-registration + real-override pattern
 - **And** it does not claim "STUB FOR EVERY METHOD that returns false"
 
 **Scenario: a reader trusts the android-adb header**
+
 - **Given** `android-adb-driver.js` with 2350+ lines of real implementations
 - **When** an engineer reads the file header
 - **Then** the header states it is a real ADB/UIAutomator driver (not a scaffold)
 - **And** the No-Stubs hazard of "comment says stub over real code" is removed
 
 **Scenario: devicectl/simctl are documented non-canonical**
+
 - **Given** Appium is the canonical real-iPhone native path (EPIC-0003 decision)
 - **When** an engineer reads `ios-devicectl-driver.js` / `ios-simctl-driver.js`
 - **Then** each header states it is a non-canonical alternative with intentionally-unbuilt UI inspection
 - **And** the reader will not "complete" it under the No-Stubs rule
 
 **Scenario: behaviour is provably unchanged**
+
 - **Given** the comment edits are applied
 - **When** the driver Jest + contract + interface-pin tests run
 - **Then** they pass unchanged (same `listMethods()`, same `*_METHOD_NAMES`)

@@ -60,11 +60,13 @@ The informational "view policy" links in Settings can stay WebView (online, late
 ## BDD Scenarios
 
 **Scenario: the terms are readable with no network**
+
 - **Given** an offline device at the legal-acceptance gate
 - **When** the user opens each policy
 - **Then** the full text renders from bundled content, in the app language
 
 **Scenario: the accepted version is provable**
+
 - **Given** a user accepted Privacy v4
 - **When** Privacy v5 later ships
 - **Then** the exact v4 text they accepted is still recoverable (bundled + versioned), not overwritten by the live page

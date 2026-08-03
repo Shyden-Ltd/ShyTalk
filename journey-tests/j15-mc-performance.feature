@@ -59,12 +59,14 @@ Feature: j15 — Selma's singing room with live gifts
   @android-physical @browser-chromium
   Scenario: Alice sends a rose mid-performance — coins debit, beans credit, animation on all 3 UIs
     Given Alice and Theo are participants in Selma's room
-    When Alice on Web taps the gift icon in the room
-    When Alice on Web selects "rose" and recipient "Selma"
-    When Alice on Web confirms
+    When Alice on Web sends the "rose" gift to "Selma" in the room
     Then within 3000ms the database has document "users/50000010" with field "shyCoins" decreased by 10
     Then the database has document "users/50000080" with field "beans" increased by 5
     Then the database has 1 entries in "giftWalls/50000080/gifts" matching {giftId: "rose", senderId: 50000010, contextRoomId: "{roomId}"}
+
+  @blocker @android-physical @browser-chromium
+  Scenario: A gift animates for everyone in the room, not just the sender
+    Given Alice has sent Selma a rose in the room
     Then within 3000ms Selma's Android UI shows the rose gift animation overlay with sender "Alice"
     Then within 3000ms Alice's Web UI shows the rose gift animation
     Then within 3000ms Theo's Android UI shows the rose gift animation
@@ -75,6 +77,11 @@ Feature: j15 — Selma's singing room with live gifts
     When Theo on Android sends "crown" to Selma
     Then within 3000ms the database has document "users/50000080" with field "beans" increased by another 250
     Then within 3000ms all 3 participants' UIs show the crown animation (more elaborate than rose)
+
+  @android-physical @browser-chromium
+  Scenario: Alice on Web sends "diamond" to Selma
+    Given Alice has already tipped Selma a rose; all three participants are in the room
+    And Theo has sent Selma a crown
     When Alice on Web sends "diamond" to Selma
     Then within 3000ms the database has document "users/50000010" with field "shyCoins" equal to (5000 - 10 - 1000)
     Then the database has document "users/50000080" with field "beans" increased by 500
@@ -88,12 +95,21 @@ Feature: j15 — Selma's singing room with live gifts
   @android-physical
   Scenario: Selma closes the room — summary panel + global leaderboard reflect 755 beans
     Given Selma's room has received 755 beans (rose + crown + diamond) from this session
-    When Selma on Android taps "room_endRoomButton"
-    When Selma on Android confirms
+    When Selma on Android closes the room
     Then within 5000ms the database has document "rooms/{roomId}" with field "state" equal to "CLOSED"
     Then within 5000ms Selma's Android UI shows the room-closed summary panel
+
+  @blocker @android-physical
+  Scenario: The closing summary totals the session's earnings and who gave them
+    Given Selma has closed a room that earned 755 beans this session
     Then Selma's Android UI shows total beans earned this session = (5 + 250 + 500) = 755
     Then Selma's Android UI shows the list of contributors with amounts
+
+  @android-physical
+  Scenario: Selma on Android opens the "leaderboard" screen
+    Given Selma's room has received 755 beans (rose + crown + diamond) from this session
+    And Selma has closed her room
+    And Selma on Android confirms
     When Selma on Android opens the "leaderboard" screen
     Then within 5000ms Selma's Android UI shows her rank in the MC_SINGER leaderboard
     Then the response from /api/economy/leaderboards?segment=mc-singer includes Selma

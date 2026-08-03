@@ -79,28 +79,33 @@ only escape hatch was crashing or inert.
 ## BDD Scenarios
 
 **Scenario: Accepting the age offer opens verification instead of closing the app**
+
 - **Given** a member is old enough but has never had an ID approved
 - **When** they try to spin the gacha and choose to verify now
 - **Then** the start of the age-verification flow opens
 - **And** the app stays open
 
 **Scenario: The same offer in private messages leads to the same place**
+
 - **Given** a member has been stopped by the age wall in a private chat
 - **When** they choose to verify now
 - **Then** the start of the age-verification flow opens
 
 **Scenario: Declining the offer costs nothing**
+
 - **Given** a member has been stopped by the age wall on the gacha
 - **When** they dismiss it
 - **Then** they are back in the room with their coins untouched
 
 **Scenario: A member under 18 is never routed into verification**
+
 - **Given** a member is under 18
 - **When** they try to spin the gacha
 - **Then** they are told they cannot spin and are offered support
 - **And** they are never offered the chance to verify
 
 **Scenario: The spin is refused even when the wall is bypassed**
+
 - **Given** a member is old enough but has never had an ID approved
 - **When** a spin is requested without passing the wall
 - **Then** the spin is refused and their coins are untouched

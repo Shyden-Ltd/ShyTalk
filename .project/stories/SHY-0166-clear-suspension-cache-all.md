@@ -70,6 +70,7 @@ The test helper `express-api/tests/helpers/real-auth.js` `clearAuthCaches()` cal
 ## BDD Scenarios
 
 **Scenario: a blanket cache clear reflects an un-suspension**
+
 - **Given** a user who is currently suspended, and whose suspension has just been checked (so it is cached)
 - **And** their stored account is then changed to no-longer-suspended
 - **When** the suspension cache is cleared with no specific user named
@@ -77,6 +78,7 @@ The test helper `express-api/tests/helpers/real-auth.js` `clearAuthCaches()` cal
 - **And** they are allowed through instead of being blocked
 
 **Scenario: a targeted clear still evicts just one user**
+
 - **Given** two different users whose suspension states are both cached
 - **When** the cache is cleared for only the first user
 - **Then** the first user's next check re-reads storage

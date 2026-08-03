@@ -57,28 +57,33 @@ Successor to [[SHY-0186]] (split per 1-story-1-PR, [[feedback-agile-user-stories
 ## BDD Scenarios
 
 **Scenario: the K/N test binary links and runs**
+
 - **Given** the shared module with SHY-0186's renamed `commonTest` names
 - **When** `./gradlew :shared:iosSimulatorArm64Test` runs
 - **Then** it exits 0
 - **And** the test report lists every `commonTest` class (same class set as `:shared:jvmTest`)
 
 **Scenario: an illegal name is caught by the guard before it can break the compile**
+
 - **Given** a `commonTest` function named with a `(` in its backtick identifier
 - **When** the `lint.yml` guard runs
 - **Then** it exits non-zero naming the file and the offending identifier
 - **And** every other violation in the tree is listed in the same run
 
 **Scenario: the guard's detector is itself tested**
+
 - **Given** the guard's fixture corpus (legal names, one illegal name, several illegal names, an unparseable file)
 - **When** the guard's meta-tests run in Jest
 - **Then** each fixture yields its exact expected exit code and per-violation output, and the unparseable fixture lands in the unresolved channel (not a silent pass)
 
 **Scenario: CI enforces K/N execution**
+
 - **Given** a PR that makes a `commonTest` test K/N-red (but JVM-green)
 - **When** CI runs
 - **Then** the K/N job fails by name and the PR cannot be judged merge-ready
 
 **Scenario: JVM + androidHost unaffected**
+
 - **Given** the link/guard/CI changes
 - **When** `:shared:jvmTest` and `:shared:testAndroidHostTest` run
 - **Then** both stay green with the same counts as before this story

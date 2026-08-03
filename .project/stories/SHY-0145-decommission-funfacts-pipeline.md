@@ -65,23 +65,27 @@ The collection deletion is **irreversible**, so it is isolated in this small, au
 ## BDD Scenarios
 
 **Scenario: an admin no longer sees fun-facts management**
+
 - **Given** an admin opening the dashboard after the fun-facts feature has been retired
 - **When** they look at the available management tabs
 - **Then** there is no fun-facts tab
 - **And** the rest of the dashboard loads and works normally
 
 **Scenario: the banners feature keeps working everywhere**
+
 - **Given** the fun-facts removal is complete
 - **When** an admin manages banners, and people use the app
 - **Then** banners still appear and can still be managed, exactly as before
 
 **Scenario: the fun-facts content is backed up before it's removed**
+
 - **Given** the fun-facts content that is being retired
 - **When** the removal is carried out
 - **Then** a backup copy of all of it is saved first
 - **And** only then is the original content removed
 
 **Scenario: the removal refuses to delete anything if the backup didn't save**
+
 - **Given** the backup step fails for any reason
 - **When** the removal is carried out
 - **Then** nothing is deleted, and the team is clearly alerted that it stopped

@@ -58,16 +58,19 @@ mvp: true
 ## BDD Scenarios
 
 **Scenario: a currently-live admin keeps cross-cohort moderation entry**
+
 - **Given** a caller whose real ID token carries `admin: true` AND whose live Firebase customClaims still carry `admin: true`, and a `minor` room
 - **When** they `POST /api/livekit/token` for that room
 - **Then** the route returns 200 with a valid token and writes no audit row
 
 **Scenario: a demoted admin is denied with an opaque 404 + audit**
+
 - **Given** a caller whose real ID token still carries `admin: true` but whose live customClaims have had `admin` removed, and a `minor` room while the caller's claim cohort is `adult`
 - **When** they request a token for that room
 - **Then** the route returns 404 `{ error: 'Not found' }` and a real `segregationEvents` row is written (`action: 'blocked'`, `surface: '/api/livekit/token'`)
 
 **Scenario: a live-store outage fails closed**
+
 - **Given** an admin-claim caller and a live-admin lookup that errors
 - **When** they request a cross-cohort token
 - **Then** the route fails closed (404), never granting the bypass

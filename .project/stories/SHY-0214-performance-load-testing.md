@@ -78,32 +78,38 @@ The audit confirmed **no performance or load testing** of any kind — no k6/art
 ## BDD Scenarios
 
 **Scenario: API latency regression fails the budget**
+
 - **Given** a change that pushes room-join p95 latency above the 400ms budget
 - **When** `perf-api` runs k6 against the real local API
 - **Then** the run fails
 - **And** the output names the endpoint, the measured p95, and the budget
 
 **Scenario: Voice join-time regression is caught**
+
 - **Given** a LiveKit/config change that slows median room join past 2s
 - **When** `perf-voice` runs the LiveKit load-tester against the real local LiveKit
 - **Then** the run fails naming the measured join time
 
 **Scenario: Web performance budget breach fails Lighthouse**
+
 - **Given** a web change that raises LCP above 2.5s on the sign-in page
 - **When** `perf-web` runs Lighthouse CI against the locally-served site
 - **Then** the assertion fails naming LCP and the page
 
 **Scenario: Cold-start regression fails on a real device**
+
 - **Given** an app change that slows Android cold start past its budget
 - **When** `perf-mobile` runs the macrobenchmark on a real device (discarding the warm-up iteration)
 - **Then** the gate fails with the measured median startup time
 
 **Scenario: Missing dependency fails loudly, not silently**
+
 - **Given** the local LiveKit container is not running
 - **When** `perf-voice` runs
 - **Then** it fails fast naming LiveKit as unreachable — it does not report a passed run
 
 **Scenario: Perf verdict reaches the public page**
+
 - **Given** a completed perf run across the four sub-surfaces
 - **When** SHY-0220's page reads the perf `metadata.json`
 - **Then** it can show "Voice rooms: fast ✓" and a simple trend per area

@@ -61,22 +61,26 @@ So there are **two** failure axes: (1) boot variance (largely mitigated by the 2
 ## BDD Scenarios
 
 **Scenario: a healthy run finishes inside budget**
+
 - **Given** the `android-e2e` cell on a healthy GitHub-hosted runner
 - **When** the full BDD suite runs (sharded and/or snapshot-cached per the fix)
 - **Then** every shard completes within its per-shard `timeout-minutes`
 - **And** no shard is cancelled by the cap
 
 **Scenario: a real test failure still fails fast**
+
 - **Given** a deliberately failing BDD scenario
 - **When** `android-e2e` runs
 - **Then** the owning shard reports FAILURE promptly (not by timing out)
 
 **Scenario: a hung scenario is attributable**
+
 - **Given** a run that approaches the cap
 - **When** it is investigated
 - **Then** the retained per-scenario timing + emulator log identify whether a specific scenario stalled or the runner was globally slow
 
 **Scenario: no auto-retry workflow is introduced**
+
 - **Given** the fix
 - **When** the workflow is reviewed
 - **Then** there is no `workflow_run`-triggered `gh run rerun --failed` (or equivalent) auto-retry — determinism is achieved by making the job fast/bounded, not by retrying failures

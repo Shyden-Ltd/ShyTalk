@@ -69,17 +69,20 @@ Surfaced by the SHY-0149 round-10 code review (finding R10-I4). Not a production
 ## BDD Scenarios
 
 **Scenario: two test files that both store files run at the same time**
+
 - **Given** one test file that tidies away all stored files before it starts
 - **And** another test file that has just stored a file and is checking it is still there
 - **When** both run at the same time
 - **Then** neither disturbs the other, and both report the truth about the code
 
 **Scenario: a tidy-up runs while another test is working**
+
 - **Given** a test file finishing and clearing out the shared mailbox
 - **When** another test file is midway through checking the email it just sent
 - **Then** the tidy-up removes only the first file's messages
 
 **Scenario: someone adds a new wholesale clear-out**
+
 - **Given** a new test file that empties a shared storage folder without claiming it
 - **When** the test suite runs
 - **Then** it fails immediately with a message naming the file, the folder, and the other files that rely on it

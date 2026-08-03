@@ -55,17 +55,20 @@ Root-caused 2026-07-13 from 20 on-device crash reports (`idevicecrashreport`, al
 ## BDD Scenarios
 
 **Scenario: a listener error no longer crashes the app**
+
 - **Given** the iOS app has signed in and is observing the current user's flags
 - **When** the Firestore user-flags listener emits an error (rules denial or network drop)
 - **Then** the app keeps running (no `SIGABRT`)
 - **And** the flags collector receives a default `UserFlags()` (not-suspended, no-warning)
 
 **Scenario: healthy updates are unaffected**
+
 - **Given** the user-flags listener is delivering normal snapshots
 - **When** a snapshot arrives with `isSuspended=true`
 - **Then** the collector receives `UserFlags(isSuspended=true, …)` exactly as before (the recovery operator is transparent to non-error emissions)
 
 **Scenario: values before an error are preserved**
+
 - **Given** a listener Flow that emits one valid value then errors
 - **When** it is observed through the recovery operator
 - **Then** the collector receives the valid value followed by the fallback, in order

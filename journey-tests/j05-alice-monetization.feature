@@ -32,10 +32,7 @@ Feature: j05 — Alice's monetization day
 
   @blocker @browser-chromium
   Scenario: Alice buys coins-1000 via sandbox IAP — coins credit + transaction row
-    When Alice on Web opens "/wallet"
-    When Alice on Web taps "wallet_buyCoinsButton"
-    When Alice on Web selects package "coins-1000"
-    When Alice on Web submits a sandbox receipt "sandbox-receipt-{ts}-A"
+    When Alice on Web buys the "coins-1000" package with sandbox receipt "sandbox-receipt-{ts}-A"
     Then within 5000ms the response status from /api/economy/purchase is 200
     Then the database has document "users/50000010" with field "shyCoins" equal to 6000
     Then the database has 1 entries in "users/50000010/transactions" matching {type: "PURCHASE", amount: 1000, productId: "coins-1000"}
@@ -44,30 +41,39 @@ Feature: j05 — Alice's monetization day
   @blocker @browser-chromium
   Scenario: Alice pulls 3 gacha — 300 coins debit + 3 gifts + transaction row
     Given Alice has just purchased coins-1000 and has shyCoins=6000
-    When Alice on Web opens "/gacha"
-    When Alice on Web taps "gacha_pull3Button"
+    When Alice on Web pulls the gacha 3 times
     Then within 5000ms the response status from /api/economy/gacha is 200
     Then the response body has field "gifts" array length 3
     Then the database has document "users/50000010" with field "shyCoins" equal to 5700
     Then the database has 1 entries in "users/50000010/transactions" matching {type: "GACHA", amount: -300}
+
+  @blocker @browser-chromium
+  Scenario: A three-pull adds three gifts to the backpack
+    Given Alice has just pulled the gacha 3 times
     Then the database has 3 entries in "users/50000010/gifts" added since "{ts}"
 
   @blocker @browser-chromium
   Scenario: Alice sends a crown to Selma — atomic coins-to-beans transfer with both transactions
     Given Alice has shyCoins=5700
-    When Alice on Web opens "/wallet#send-gift"
-    When Alice on Web selects recipient "Selma" and gift "crown"
-    When Alice on Web taps "sendGift_confirmButton"
+    When Alice on Web sends the "crown" gift to "Selma"
     Then within 3000ms the database has document "users/50000010" with field "shyCoins" equal to 5200
     Then the database has document "users/50000080" with field "beans" equal to 10250
     Then the database has 1 entries in "users/50000010/transactions" matching {type: "GIFT_SENT", amount: -500, giftId: "crown"}
     Then the database has 1 entries in "users/50000080/transactions" matching {type: "GIFT_RECEIVED", amount: 250, giftId: "crown"}
+
+  @blocker @browser-chromium
+  Scenario: A sent gift is displayed on the recipient's gift wall
+    Given Alice has just sent Selma a crown
     Then the database has 1 entries in "giftWalls/50000080/gifts" matching {giftId: "crown", senderId: 50000010}
 
   @android-physical
   Scenario: Selma's Android shows the in-app gift notification and gift wall entry for the crown
     Given Alice has just sent Selma a crown
     Then within 5000ms Selma's Android UI shows the in-app gift notification with sender "Alice" and gift "crown"
+
+  @android-physical
+  Scenario: Selma on Android opens her "gift_wall" screen
+    Given Alice has just sent Selma a crown
     When Selma on Android opens her "gift_wall" screen
     Then within 3000ms Selma's Android UI shows the new "crown" gift entry
 

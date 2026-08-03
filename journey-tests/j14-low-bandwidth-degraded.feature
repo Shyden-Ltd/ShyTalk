@@ -20,6 +20,10 @@ Feature: j14 — Ines on Slow 3G + intermittent loss
   Scenario: Sign-in on Slow 3G completes within 10s without timing out
     When Ines on Web navigates to "/login.html"
     Then within 10000ms Ines's Web UI shows the sign-in form
+
+  @browser-chromium
+  Scenario: Ines on Web signs in with valid credentials
+    Given Ines on Web navigates to "/login.html"
     When Ines on Web signs in with valid credentials
     Then within 10000ms Ines's Web UI navigates to "/"
     Then no XHR returns 408 (timeout)
@@ -38,9 +42,19 @@ Feature: j14 — Ines on Slow 3G + intermittent loss
     When Ines on Web sets the network to "Offline" via DevTools
     When Ines on Web types "queued message" and taps send
     Then within 2000ms Ines's Web UI shows the message in the thread with "sending..." indicator
+
+  @browser-chromium
+  Scenario: Ines on Web restores the network to "Slow 3G"
+    Given Ines is signed in on Web Chromium
+    And Ines is in a conversation with Theo
+    And Ines has a message queued while offline
     When Ines on Web restores the network to "Slow 3G"
     Then within 10000ms Ines's Web UI shows the message with "sent" indicator
     Then within 15000ms the database has 1 entries in "messages" matching {senderId: 50000061, body: "queued message"}
+
+  @blocker @android-physical
+  Scenario: A message queued offline reaches the other person once it sends
+    Given Ines's queued message has been delivered after reconnecting
     Then Theo's Android UI shows the message in the conversation
 
   @ios-sim
@@ -49,6 +63,11 @@ Feature: j14 — Ines on Slow 3G + intermittent loss
     When Ines's iOS Sim network drops for 10 seconds
     Then within 5000ms Ines's iOS Sim UI shows a "Reconnecting..." banner
     Then Ines's iOS Sim UI is still in the room (does not navigate away)
+
+  @ios-sim
+  Scenario: Ines's iOS Sim network restores
+    Given Ines [P-11] is on iOS Sim joined to voice room "r1" with mic open
+    And Ines's iOS Sim network drops for 10 seconds
     When Ines's iOS Sim network restores
     Then within 10000ms Ines's iOS Sim UI shows the room normally (no banner)
     Then within 10000ms Ines's LiveKit track for room "r1" is republished

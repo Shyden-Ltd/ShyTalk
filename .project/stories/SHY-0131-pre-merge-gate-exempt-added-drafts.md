@@ -56,23 +56,27 @@ Concretely: SHY-0130 (the conversations-list bug, just filed) cannot merge its `
 ## BDD Scenarios
 
 **Scenario: filing a new Draft story passes**
+
 - **Given** a PR diff that adds `.project/stories/SHY-0130-*.md` at `status: Draft`
 - **When** the Pre-Merge Gate runs
 - **Then** it exits 0
 - **And** stdout records the added-Draft filing exemption for that file
 
 **Scenario: implementing a story while still In Progress still fails**
+
 - **Given** a PR diff that MODIFIES an existing `.project/stories/SHY-0999-*.md` whose status is `In Progress`
 - **When** the gate runs
 - **Then** it exits non-zero
 - **And** stderr names the file and requires `In Review`
 
 **Scenario: modifying an existing story that is still Draft still fails**
+
 - **Given** an existing `Draft` story on `main` that a PR MODIFIES but leaves `Draft`
 - **When** the gate runs
 - **Then** it exits non-zero (the add-only exemption does not apply to modifications)
 
 **Scenario: adding a story at In Progress still fails**
+
 - **Given** a PR diff that ADDS a story at `status: In Progress`
 - **When** the gate runs
 - **Then** it exits non-zero (only Draft is exempt at filing)

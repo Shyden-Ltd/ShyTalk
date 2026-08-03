@@ -56,23 +56,27 @@ The `SHY-INDEX.md` + board statuses had drifted: a fitness pass on pickup found 
 ## BDD Scenarios
 
 **Scenario: a shipped-but-Draft story is corrected**
+
 - **Given** SHY-0044, marked Draft, whose `firestore.rules` admin-claim fix is already in the code and released
 - **When** the backlog is reconciled
 - **Then** SHY-0044 is marked Done with `released_in: v0.97.15`
 - **And** its Notes cite the current-code evidence
 
 **Scenario: a delivered-but-unreleased story is marked In Review not Done**
+
 - **Given** SHY-0025, whose locale-parity key-set test upgrade exists on develop but is absent from the v0.97.15 release
 - **When** the backlog is reconciled
 - **Then** SHY-0025 is marked In Review (not Done), matching the merged-not-released lifecycle rule
 
 **Scenario: a story whose delivered work doesn't meet its own AC keeps Draft, gap surfaced**
+
 - **Given** SHY-0010, whose ViewModel tests exist but in the Android app module (MockK) rather than the shared cross-platform test set its AC requires — so the ViewModels have no iOS test-execution proof
 - **When** the backlog is reconciled
 - **Then** SHY-0010 stays Draft (not marked delivered)
 - **And** the iOS-coverage gap is recorded for an operator decision, not hidden under a delivered-looking status
 
 **Scenario: a superseded story is cancelled**
+
 - **Given** SHY-0050 (add a rationale comment for the biometric *alpha* pin)
 - **And** SHY-0005 already moved biometric to stable 1.1.0
 - **When** the backlog is reconciled

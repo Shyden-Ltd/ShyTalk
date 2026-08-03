@@ -52,12 +52,14 @@ During SHY-0149's verification (2026-07-10/11), three consecutive full-suite Web
 ## BDD Scenarios
 
 **Scenario: full WebKit suite completes without engine crashes**
+
 - **Given** the local stack is up and seeded and the machine has no other browser load
 - **When** the full WebKit project runs serially to completion
 - **Then** the run exits 0 with zero "did not run" specs
 - **And** the log contains zero engine-crash markers
 
 **Scenario: a crash, if it still occurs, is loudly attributed**
+
 - **Given** a WebKit run in which the engine crashes
 - **When** the runner prints its per-project summary
 - **Then** the summary names the crash count and the number of aborted specs rather than only a bare non-zero exit

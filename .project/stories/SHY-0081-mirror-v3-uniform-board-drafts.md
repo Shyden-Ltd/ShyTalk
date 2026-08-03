@@ -67,26 +67,31 @@ This corrects the [[SHY-0074]] v2 modelling error: in our framework `type: bug` 
 ## BDD Scenarios
 
 **Scenario: A bug-type story becomes a board card, not an issue**
+
 - **Given** a `type: bug` story with no existing board item
 - **When** the sync runs
 - **Then** `addProjectV2DraftIssue` is called for it and NO `gh issue create` is made
 
 **Scenario: No story type ever writes the Issues page**
+
 - **Given** stories of every type (feature, bug, refactor, docs, infra, spike, chore)
 - **When** the sync runs
 - **Then** zero `gh issue create`/`edit`/`comment`/`close` calls are recorded
 
 **Scenario: --rebuild migrates v2 issues to draft cards**
+
 - **Given** a board with v2 issue-backed items + their `story`-labeled issues
 - **When** `--rebuild` runs
 - **Then** every board item is deleted, every story-labeled issue is deleted, and every story is recreated as a draft card (Issues page empty of story entries)
 
 **Scenario: Legacy issue-backed item is converted incrementally**
+
 - **Given** the items map shows SHY-NNNN backed by an ISSUE (v2 leftover)
 - **When** a normal sync runs
 - **Then** the issue-backed item is deleted and SHY-NNNN is recreated as a draft
 
 **Scenario: Board fields set for every card**
+
 - **Given** stories with each Status/Pri/Effort/Type value
 - **When** the sync runs
 - **Then** each draft card's six fields are set to the exact option/text values, Status last

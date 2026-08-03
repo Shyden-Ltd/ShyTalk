@@ -61,29 +61,34 @@ The 2026-06-08 repo-size audit found the repo pack is ~12.74 GiB, ~95% historica
 ## BDD Scenarios
 
 **Scenario: A deploy replaces its own latest/ instead of accumulating**
+
 - **Given** `<suite>/<env>/latest` on gh-pages contains files from many prior runs
 - **When** the next report deploys with `keep_files: false`
 - **Then** `<suite>/<env>/latest` afterwards contains exactly the fresh report
 - **And** sibling suites' directories and the root landing page are untouched
 
 **Scenario: The cap truncates history without changing content**
+
 - **Given** gh-pages has more than 25 commits and tip tree T
 - **When** the cap step runs after a successful deploy
 - **Then** gh-pages becomes a single orphan commit whose tree is exactly T
 - **And** every published report URL resolves identically before and after
 
 **Scenario: A racing writer is never clobbered**
+
 - **Given** the cap has computed its rebuild from tip X
 - **When** another deploy moves gh-pages to Y before the ref update
 - **Then** the cap logs the moved tip and exits 0 without force-moving
 - **And** a later report run performs the cap instead
 
 **Scenario: First ever run of a fresh repository**
+
 - **Given** the gh-pages branch does not exist
 - **When** the cap step runs
 - **Then** it logs "nothing to cap" and exits 0 (the job stays green)
 
 **Scenario: Quiet branch stays untouched**
+
 - **Given** gh-pages has 25 or fewer commits
 - **When** the cap step runs
 - **Then** it logs the count and exits without rewriting anything

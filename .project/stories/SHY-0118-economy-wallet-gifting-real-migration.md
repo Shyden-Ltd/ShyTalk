@@ -59,21 +59,25 @@ Economy is integrity-critical: a daily reward that double-claims under a double-
 ## BDD Scenarios
 
 **Scenario: a real gift conserves total currency**
+
 - **Given** real personas A (balance 100) and B (balance 0)
 - **When** A gifts B 30 on the real path
 - **Then** real state shows A=70, B=30 (atomic, sum conserved)
 
 **Scenario: a daily reward cannot double-claim**
+
 - **Given** a real persona eligible for the daily reward
 - **When** two concurrent claims fire
 - **Then** the real transaction credits exactly once (real idempotency), not twice
 
 **Scenario: an over-spend is rejected by the real backend**
+
 - **Given** a real persona with balance 10
 - **When** they attempt to gift 30
 - **Then** the real backend rejects it and the balance stays 10
 
 **Scenario: a surfaced economy bug is catalogued**
+
 - **Given** a migrated real test exposes a non-blocking defect
 - **When** triaged
 - **Then** a `type: bug` SHY is filed + the test tagged `@known-failure-SHY-NNNN` with its correct assertion intact

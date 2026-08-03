@@ -26,13 +26,17 @@ Feature: j02 — Mia's restricted minor experience
   # preserved across signup → legal → restricted UX → blocked age-verification
   # → same-cohort discovery → cross-cohort wall → follow → leaderboard → stalkers.
   @blocker @ios-sim
-  Scenario: Mia signs up with a minor DOB — user doc records cohort=minor and exact dateOfBirth
+  Scenario: Signing up with a minor date of birth creates a minor account
     When Mia on iOS Sim taps "signin_signUpLink"
     When Mia on iOS Sim types "mia-new-{ts}@shytalk.dev" into "signup_emailField"
     When Mia on iOS Sim types "TestPassw0rd!" into "signup_passwordField"
     When Mia on iOS Sim picks DOB "2010-08-20" in "signup_dobPicker"
     When Mia on iOS Sim taps "signup_createAccountButton"
     Then within 5000ms the database has document "users/{newUniqueId}" with field "cohort" equal to "minor"
+
+  @blocker @ios-sim
+  Scenario: The date of birth is stored exactly as entered
+    Given Mia has just signed up as a minor
     Then the database has document "users/{newUniqueId}" with field "dateOfBirth" equal to 1282262400000
 
   @blocker @ios-sim
@@ -49,12 +53,20 @@ Feature: j02 — Mia's restricted minor experience
     Then Mia's iOS Sim UI does not show the element with tag "main_gachaTab"
 
   @blocker @ios-sim
-  Scenario: Mia cannot access age-verification (UI hidden + deep-link blocked + API 403)
+  Scenario: A minor is not offered age verification on their profile
     Given Mia has accepted legal as a minor
     When Mia on iOS Sim opens the "profile" screen
     Then Mia's iOS Sim UI does not show the element with tag "profile_ageVerificationEntry"
+
+  @blocker @ios-sim
+  Scenario: A minor who deep-links to age verification is turned away
+    Given Mia has accepted legal as a minor
     When Mia on iOS Sim attempts to navigate to "/age-verification" via deep link
     Then Mia's iOS Sim UI shows "You must be 18 or older to use this feature"
+
+  @blocker @ios-sim
+  Scenario: The server refuses an age-verification submission from a minor
+    Given Mia has accepted legal as a minor
     When POST /api/age-verification/submit with any payload as Mia
     Then the response status is 403
 

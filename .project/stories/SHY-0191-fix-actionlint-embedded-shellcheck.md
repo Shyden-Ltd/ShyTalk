@@ -54,17 +54,20 @@ Found during SHY-0128 pickup (2026-07-15): `lint.yml` and `.husky/pre-push` both
 ## BDD Scenarios
 
 **Scenario: The gate actually runs shellcheck again**
+
 - **Given** a workflow `run:` block containing a shellcheck-detectable bug
 - **When** CI's lint job (or the pre-push hook) runs actionlint
 - **Then** the run FAILS with the shellcheck finding named
 - **And** the same command on the fixed repo exits 0
 
 **Scenario: The intended SC2086 exclusion survives**
+
 - **Given** a `run:` block with an intentionally-unquoted GH-managed path (SC2086-info site)
 - **When** the fixed invocation runs
 - **Then** no SC2086 finding is reported while all other rules apply
 
 **Scenario: No suppression sneaks in**
+
 - **Given** the 8 real findings + the one legacy suppression
 - **When** they are fixed
 - **Then** no `# shellcheck disable` comment and no new `SHELLCHECK_OPTS` exclusion exists anywhere in the diff

@@ -63,31 +63,37 @@ Operator decided 2026-07-09 this is **in MVP scope, a security bug** ("Fix it �
 ## BDD Scenarios
 
 **Scenario: cold launch with App-Lock enabled gates entry**
+
 - **Given** a returning user with a stored credential and App-Lock enabled + lock-required
 - **When** the app cold-launches
 - **Then** the Lock screen renders and Main is not reachable until PIN/biometric passes
 
 **Scenario: warm resume after timeout re-locks**
+
 - **Given** the app was backgrounded past the lock timeout
 - **When** it returns to foreground
 - **Then** the Lock screen is shown before the prior content
 
 **Scenario: no lock configured → no gate**
+
 - **Given** a user without App-Lock enabled
 - **When** the app launches
 - **Then** it goes to the normal destination with no Lock screen
 
 **Scenario: same destination on both platforms**
+
 - **Given** identical auth+lock state
 - **When** `resolveLaunchDestination` runs on Android and on iOS
 - **Then** both yield the same destination (Lock when lock-required)
 
 **Scenario: expired session routes to Sign-In not Lock**
+
 - **Given** the Firebase session expired (reauth required)
 - **When** the launch destination is resolved
 - **Then** it routes to Sign-In, not the Lock screen
 
 **Scenario: a user can actually turn the App-Lock on**
+
 - **Given** a signed-in user on either platform
 - **When** they open Settings → Security
 - **Then** the Security screen renders with the App-Lock toggle and lock-timeout options

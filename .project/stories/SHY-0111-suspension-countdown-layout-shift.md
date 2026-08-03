@@ -64,22 +64,26 @@ The clock is `CountdownClock` in `shared/src/commonMain/kotlin/com/shyden/shytal
 ## BDD Scenarios
 
 **Scenario: countdown stays horizontally fixed while ticking**
+
 - **Given** Raul is on the suspension screen with an active multi-day suspension (`endDate` in the future)
 - **When** the countdown ticks across several seconds (and milliseconds repaint continuously)
 - **Then** the on-screen x-position of every clock segment (days/hours/minutes/seconds/millis blocks + separators) is unchanged between frames
 - **And** no element moves left or right
 
 **Scenario: crossing a day boundary does not jump the layout**
+
 - **Given** the countdown shows `days = 1` with the days segment + separator visible
 - **When** the remaining time crosses below 24h and `days` becomes `0` (days segment removal path, `:387`)
 - **Then** the remaining hours/minutes/seconds/millis segments do not shift horizontally
 
 **Scenario: expiry transition is stable**
+
 - **Given** the countdown is at a few seconds remaining
 - **When** `remainingMs` reaches 0 and the screen swaps to the expired state (`:178-179`, `:282`)
 - **Then** surrounding content does not jump horizontally during the swap
 
 **Scenario: RTL locale countdown is layout-stable**
+
 - **Given** the device locale is Arabic (RTL) on the suspension screen
 - **When** the countdown ticks
 - **Then** the clock is correctly mirrored and every segment stays at a fixed position (no per-tick horizontal drift)
