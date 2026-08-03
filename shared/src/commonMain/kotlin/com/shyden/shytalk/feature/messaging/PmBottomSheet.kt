@@ -46,6 +46,9 @@ fun PmBottomSheet(
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
+    // SHY-0268: the sheet hosts the same private chat — and therefore the same
+    // 18+ wall — as the full-screen route, so it must forward the CTA too.
+    onNavigateToAgeVerification: () -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
 ) {
@@ -68,6 +71,7 @@ fun PmBottomSheet(
                     onPickImages = onPickImages,
                     onPickStickerImage = onPickStickerImage,
                     onNavigateToRoom = onNavigateToRoom,
+                    onNavigateToAgeVerification = onNavigateToAgeVerification,
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoomName,
                 )
@@ -81,6 +85,7 @@ fun PmBottomSheet(
                     onPickImages = onPickImages,
                     onPickStickerImage = onPickStickerImage,
                     onNavigateToRoom = onNavigateToRoom,
+                    onNavigateToAgeVerification = onNavigateToAgeVerification,
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoomName,
                 )
@@ -185,6 +190,7 @@ private fun PmSheetChatView(
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
+    onNavigateToAgeVerification: () -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     viewModel: PrivateChatViewModel = koinViewModel(key = otherUserId) { parametersOf(otherUserId) },
@@ -211,6 +217,7 @@ private fun PmSheetChatView(
                     null
                 },
             onNavigateToRoom = onNavigateToRoom,
+            onNavigateToAgeVerification = onNavigateToAgeVerification,
             activeRoomId = activeRoomId,
             activeRoomName = activeRoomName,
             viewModel = viewModel,
@@ -226,6 +233,7 @@ private fun PmSheetGroupChatView(
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
+    onNavigateToAgeVerification: () -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     viewModel: PrivateChatViewModel = koinViewModel(key = conversationId) { parametersOf("", conversationId) },
@@ -252,6 +260,7 @@ private fun PmSheetGroupChatView(
                     null
                 },
             onNavigateToRoom = onNavigateToRoom,
+            onNavigateToAgeVerification = onNavigateToAgeVerification,
             activeRoomId = activeRoomId,
             activeRoomName = activeRoomName,
             viewModel = viewModel,

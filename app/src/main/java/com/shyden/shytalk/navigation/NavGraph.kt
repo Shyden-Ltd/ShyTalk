@@ -61,6 +61,7 @@ import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitScreen
 import com.shyden.shytalk.feature.auth.EmailOtpScreen
 import com.shyden.shytalk.feature.auth.PinSetupScreen
 import com.shyden.shytalk.feature.auth.SignInScreen
@@ -280,6 +281,16 @@ fun NavGraph(
                             popUpTo(Screen.RequiredDOB.route) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            // Age-verification submit flow. Reached from the 18+
+            // AgeRestrictionDialog's "Verify now" CTA on every gated surface
+            // (Gacha, DM, in-room PM sheet) and from the profile entry point.
+            // The screen owns its own back/done navigation via onClose.
+            composable(Screen.AgeVerificationSubmit.route) {
+                AgeVerificationSubmitScreen(
+                    onClose = { navController.safePopBackStack() },
                 )
             }
 
@@ -598,6 +609,9 @@ fun NavGraph(
                         )
                     },
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
+                    onNavigateToAgeVerification = {
+                        navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoom?.name,
                     viewModel = chatViewModel,
@@ -817,6 +831,9 @@ fun NavGraph(
                         )
                     },
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
+                    onNavigateToAgeVerification = {
+                        navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
                     activeRoomId = groupActiveRoomId,
                     activeRoomName = groupActiveRoom?.name,
                     viewModel = groupChatViewModel,

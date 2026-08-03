@@ -690,6 +690,9 @@ fun SharedNavGraph(
                         }
                     },
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
+                    onNavigateToAgeVerification = {
+                        navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
                     activeRoomId = groupActiveRoomId,
                     activeRoomName = groupActiveRoom?.name,
                     viewModel = groupChatViewModel,

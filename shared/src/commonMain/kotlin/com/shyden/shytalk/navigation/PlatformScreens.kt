@@ -62,7 +62,10 @@ data class RoomScreenParams(
     val onNavigateToUserProfile: (String) -> Unit = {},
     val onNavigateToChat: (String) -> Unit = {},
     val onNavigateToWallet: () -> Unit = {},
-    val onNavigateToAgeVerification: () -> Unit = {},
+    // Deliberately NOT defaulted (SHY-0268): a default here would let a host
+    // construct room params without a route out of the 18+ wall, which is the
+    // dead-end this story closed. Keep the compiler as the enforcement.
+    val onNavigateToAgeVerification: () -> Unit,
 )
 
 /**

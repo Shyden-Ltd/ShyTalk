@@ -27,6 +27,8 @@ This directory is the source of truth for the `/manual-qa` skill. The primary ax
 | `j17-teacher-classroom.feature` | Bao (TEACHER) + Yuki (student) — Mandarin lesson, voice, tip, rate |
 | `j18-official-system-pms.feature` | Officia (SHYTALK_OFFICIAL) — system PMs, locale rendering, cohort exemption, unblockable |
 | `j19-osa-migration-regression.feature` | OSA #17 migration steady-state guards — followingIds, mixed rooms, frozen convos, idempotency |
+| `j20-signin-environment-matrix.feature` | Sign-in across every environment/flavour combination — persona picker, email OTP, provider fallbacks |
+| `j21-age-gate-cta.feature` | Adam — every 18+ wall (gacha, DM, in-room PM sheet) routes its "Verify now" CTA to the submit screen, on both platforms |
 | `_osa17-coverage-matrix.md` | OSA #17 prod-readiness coverage matrix — PR × behavior × covering scenario × status |
 | `manual-verification-ledger.json` | Human sign-off ledger for `@manual` scenarios (file-hash + commit-SHA + 30-day expiry) |
 | `manual-verification-ledger.schema.json` | JSON Schema for the ledger |
