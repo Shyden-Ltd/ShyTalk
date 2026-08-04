@@ -137,6 +137,27 @@ test.describe('SHY-0279 — sign-in resolution is observable', () => {
     expect(after).toEqual({ uid: 'partial-1', profile: { uniqueId: 7, displayName: 'PartialUser' } });
   });
 
+  test('the injected visitor can produce an id token', async ({ page }) => {
+    // `getIdToken` is a function, so it cannot cross into the page with the
+    // rest of the state — the helper rebuilds it there. Page handlers call it
+    // (three specs pass an explicit token for exactly that reason), and a
+    // broken rebuild would surface as a confusing failure in whichever spec
+    // happened to call it rather than here, where the contract lives.
+    await page.goto('/roadmap.html');
+    await injectAuthState(
+      page,
+      { currentUser: { uid: 'token-1', displayName: 'TokenUser' }, profile: null },
+      { idToken: 'a-specific-token' },
+    );
+
+    const token = await page.evaluate(() => {
+      const auth = (window as unknown as { shytalkAuth?: { currentUser?: { getIdToken?: () => Promise<string> } } })
+        .shytalkAuth;
+      return auth?.currentUser?.getIdToken?.() ?? null;
+    });
+    expect(token).toBe('a-specific-token');
+  });
+
   test('the signed-out path publishes exactly one auth-changed event', async ({ page }) => {
     await page.goto('/roadmap.html');
     await waitForAuthStateKnown(page);
