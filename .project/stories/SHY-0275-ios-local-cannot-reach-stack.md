@@ -69,9 +69,10 @@ advertising an unreachable ICE candidate (server-side), and is Android-proven.
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] A real iPhone on the same Wi-Fi as the Mac reaches the local API, Firestore, Auth and RTDB
-- [ ] A tester can sign in as a seeded persona on a real iPhone against the local stack
-- [ ] Voice connects in a room on a real iPhone against the local stack
+- [x] A real iPhone on the same Wi-Fi as the Mac reaches the local API, Firestore, Auth and RTDB
+- [x] A tester can sign in as a seeded persona on a real iPhone against the local stack
+- [x] Voice connects in a room on a real iPhone against the local stack
+- [x] Every emulator a device must reach listens on the LAN, not only on loopback
 
 ### Error paths
 - [ ] When no local host is configured, the app falls back to `localhost` and says so in the
@@ -181,12 +182,20 @@ first can happen without the second being checked.
 
 ## Definition of Done
 
-- [ ] RED tests written first and seen to fail
-- [ ] iOS unit + structural pins green; Android regression suite unchanged
-- [ ] **Sign-in verified on a real iPhone against the local stack**
-- [ ] **Voice verified connecting on a real iPhone** (`connectionType` != `unknown`, audio
-      track published)
-- [ ] Release-build allow-list behaviour proven unchanged
+- [x] RED tests written first and seen to fail (7 of 11 structural pins RED before the fix;
+      3 emulator-binding pins RED before `firebase.json` changed)
+- [x] iOS unit + structural pins green; Android regression suite unchanged
+      (7462/7462 `tests/scripts`, `shared:jvmTest`, `compileKotlinIosArm64`)
+- [x] **Sign-in verified on a real iPhone against the local stack** — persona P-02,
+      watermark `UID: 50000010 · adult`, route `splash`
+- [x] **Voice verified connecting on a real iPhone** — `sdk: SWIFT`,
+      `deviceModel: iPhone18,4`, `connectionType: "udp"` in 335ms, ICE pair
+      `192.168.1.9:52089` ↔ `192.168.1.3:50477`, and `mediaTrack published
+      source: MICROPHONE mime: audio/red`
+- [x] Release-build allow-list behaviour proven unchanged — the relaxation is inside
+      `#if DEBUG`; the public-address rejections are asserted unconditionally
+- [x] `code-reviewer` findings applied (7, all mutation-verified)
+- [ ] Journey gauntlet green on both devices (local, then dev)
 - [ ] Merged to develop; `released_in:` at the next release cut
 
 ## Notes (running log)
@@ -196,3 +205,26 @@ first can happen without the second being checked.
   `localhost`. The `LOCAL_HOST` build setting had been passed exactly as the working recipe
   documents, which is why this survived — the recipe looked followed. Operator asked for
   everything fixed before the gauntlet runs, so this is being fixed rather than filed.
+- **2026-08-04 18:5x WIB** — A FOURTH cause, found only by walking it: with the host routing
+  fixed, sign-in still failed with `FIRAuthErrorDomain 17020` /
+  `NSURLErrorDomain -1004 "Could not connect to the server"` against
+  `http://192.168.1.9:9099/…/verifyPassword` (ECONNREFUSED 61). All three Firebase emulators
+  bound to `127.0.0.1` while Express (`*:3000`) and the web serve (`*:8888`) bind to all
+  interfaces — precisely why the health check passed while Auth was refused: the stack
+  *looked* reachable when it was only half reachable. `firebase.json` now binds
+  auth/firestore/database to `0.0.0.0`; the UI stays on loopback deliberately.
+- **2026-08-04 19:0x WIB** — DONE on device. Sign-in as P-02 (UID 50000010), then joined the
+  room the ANDROID phone had created (cross-device state sync working) and unmuted. LiveKit:
+  `sdk: SWIFT`, `deviceModel: iPhone18,4`, `connectionType: "udp"`, 335ms,
+  `mediaTrack published source: MICROPHONE`. iOS-local was never "unsupported" — it was four
+  bugs, three of which only a device walk could reveal.
+- **2026-08-04 19:0x WIB** — `code-reviewer`: 7 findings, all applied and mutation-verified;
+  the `isPrivateLAN` security boundary came back clean against every bypass class probed
+  (172.32, hostname-lookalikes, leading zeros, signs, unicode digits, IPv6, trailing dots,
+  and `ws://192.168.1.9@evil.com`). Two were Critical and correct: `liveKitUrl` had zero
+  tests, and the fallback chain was pinned only by a substring — so swapping the operands
+  would have stayed green while breaking dev and prod voice. Fixed by extracting
+  `resolveVoiceServerUrl` into commonMain, where it is testable at all. The no-stubs ratchet
+  then caught a stand-in `Bundle` added for a test; rather than whitelist it, resolution now
+  takes the raw plist value and is tested with real strings.
+  `Reviewed-up-to: ea75d9d6175`
