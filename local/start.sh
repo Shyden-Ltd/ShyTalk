@@ -301,7 +301,14 @@ echo "  Web serve ready."
 # =============================================================================
 APK_PATH="app/build/outputs/apk/local/debug/app-local-debug.apk"
 echo "==> Step 7/8: Building Android APK..."
-cd "$PROJECT_ROOT" && ./gradlew assembleLocalDebug
+# `-PlocalHost` is NOT optional here. Its default is 10.0.2.2 — the Android
+# EMULATOR's alias for the host loopback. Emulators were retired 2026-07-15
+# (AVD + emulator package deleted), so the default bakes an address that
+# resolves nowhere on the only device type left, and Step 8 then installs
+# that APK on the attached phone. `localhost` + the reverse tunnels below is
+# the canonical physical-device recipe (CLAUDE.md, app/build.gradle.kts, and
+# what the gauntlet + journey runner already use).
+cd "$PROJECT_ROOT" && ./gradlew assembleLocalDebug -PlocalHost=localhost
 
 # =============================================================================
 # Step 8: Install on device if connected
@@ -312,6 +319,21 @@ if adb devices 2>/dev/null | grep -q "device$"; then
   DEVICE_NAME=$(adb devices -l 2>/dev/null | grep "device " | head -1 | sed 's/.*model:\([^ ]*\).*/\1/' || echo "connected device")
   echo "  Installing on $DEVICE_NAME..."
   adb install -r "$PROJECT_ROOT/$APK_PATH" 2>/dev/null && echo "  Installed." || echo "  Install failed -- APK path shown below."
+  # An APK built for `localhost` reaches nothing until localhost IS this
+  # machine. Kept identical to the gauntlet's and the journey runner's lists
+  # (pinned equal by livekit-local-node-ip.test.js) — a device that reaches
+  # the stack under one harness and not another is the drift this prevents.
+  # 3000 Express · 7880 LiveKit signalling · 7881 LiveKit TCP media
+  # · 8080 Firestore · 8888 web serve · 9000 RTDB · 9002 MinIO · 9099 Auth
+  echo "  Tunnelling stack ports into $DEVICE_NAME..."
+  for p in 3000 7880 7881 8080 8888 9000 9002 9099; do
+    adb reverse "tcp:$p" "tcp:$p" >/dev/null 2>&1 \
+      || echo "  WARNING: adb reverse tcp:$p failed -- the app may not reach the stack." >&2
+  done
+  # `grep -c .`, NOT `wc -l`: `adb reverse --list` emits a trailing blank line,
+  # so `wc -l` reports one MORE tunnel than exist. A status line that overstates
+  # what is actually there is worse than none — it reads as confirmation.
+  echo "  Tunnels: $(adb reverse --list 2>/dev/null | grep -c . | tr -d ' ') active."
 else
   echo "  No device connected -- skipping install."
 fi

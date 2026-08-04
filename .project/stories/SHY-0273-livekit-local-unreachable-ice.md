@@ -66,15 +66,17 @@ have been correct for one evening.
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] A real phone on the same Wi-Fi connects voice against the local stack
+- [x] A real phone on the same Wi-Fi connects voice against the local stack
+- [x] `local/start.sh` installs an APK that can actually reach the stack it just started
 
 ### Error paths
 - [ ] When no LAN address can be determined, the stack says so loudly instead of starting a
       server that will silently fail on device
 
 ### Edge cases
-- [ ] A machine with both Wi-Fi and Ethernet up picks the interface that actually carries traffic
-- [ ] A USB-only device (no shared LAN) has a documented, working route
+- [x] A machine with both Wi-Fi and Ethernet up picks the interface that actually carries traffic
+- [x] A USB-only device (no shared LAN) has a documented route that is actually *followable* — every
+      harness that tunnels the stack carries LiveKit's TCP media port (7881), not just signalling
 
 ### Performance
 - [ ] N/A — one environment variable resolved once at startup.
@@ -127,10 +129,41 @@ assignment); and the USB-only fallback is documented.
 `ios-local-xcconfig` all still green (49 + 14 tests), since this touches `docker-compose.yml`
 and `start.sh` which they pin.
 
-**Not yet done: the device walk.** Devices are unavailable, and this machine has since moved to
-a different network from the phone, so the end-to-end proof is owed. Everything above is
-evidence from the server's own logs plus structural pins; the claim "voice now connects" is
-NOT yet made.
+**The device walk — DONE 2026-08-04 16:4x WIB.** Real OnePlus CPH2653 (Android 16) over USB adb
+`3b402284`; host LAN `192.168.1.9`, phone `192.168.1.4`; app built with the canonical physical-device
+recipe (`-PlocalHost=localhost` + reverse tunnels). Walked sign-in (persona P-02, uid 50000010) →
+create room → unmute.
+
+LiveKit's own log is the evidence, and it is the *same* field that read `"unknown"` before:
+
+```
+rtc/room.go:1262  participant active
+  publisherCandidates: ["[local][selected:1][trickle] udp4 host 192.168.1.9:52038",
+                        "[remote][selected:1][trickle] udp host 192.168.1.4:36260"]
+  connectionType: "udp"          ← was "unknown"; ICE now pairs
+  connectTime: "630.027302ms"
+
+rtc/participant.go:2278  mediaTrack published
+  kind: "audio", source: "MICROPHONE", mime: "audio/red",
+  trackID: "TR_AMETZZDhfas47D",
+  audioFeatures: ["TF_AUTO_GAIN_CONTROL","TF_ECHO_CANCELLATION","TF_NOISE_SUPPRESSION"]
+```
+
+ICE completing is necessary but not sufficient, so the walk did not stop there — the published
+`MICROPHONE` track is the proof that audio actually flows, not merely that a path exists.
+
+**Two further defects the walk exposed** (same class as the bridge address — a route baked for an
+environment that no longer exists), fixed here with 6 added pins, all mutation-verified:
+
+1. `start.sh` Step 7 built `assembleLocalDebug` with **no** `-PlocalHost`, baking the default
+   `10.0.2.2` — the Android *emulator's* host alias. Emulators were retired 2026-07-15. Step 8 then
+   installed that APK on the attached phone, i.e. the stack's own bring-up shipped an app that
+   could not reach it. Now builds for `localhost` and opens the reverse tunnels it needs.
+2. LiveKit's TCP media port **7881 was tunnelled by nothing**. `--node-ip` is singular (confirmed
+   against `livekit-server:v1.12.0 --help`), so LAN mode and USB-only mode are mutually exclusive —
+   which makes the documented USB-only fallback the *only* route for a phone off the LAN, and it
+   had no way to be followed. Added to all three port lists, which are now pinned equal to each
+   other after the runner's had silently drifted from the gauntlet's (missing 8888).
 
 ## Out of Scope
 
@@ -154,9 +187,12 @@ NOT yet made.
 
 ## Definition of Done
 
-- [ ] LiveKit advertises the host address (verified in its startup log)
-- [ ] Structural pins green
-- [ ] **Voice verified connecting from a real phone on the local stack**
+- [x] LiveKit advertises the host address (verified in its startup log: `nodeIP: "192.168.1.9"`)
+- [x] Structural pins green (14/14 in this file; 7444/7444 across `tests/scripts/`, no regressions)
+- [x] **Voice verified connecting from a real phone on the local stack** — OnePlus CPH2653,
+      `connectionType: "udp"`, `mediaTrack published kind:audio source:MICROPHONE`
+- [ ] Voice verified on the real iPhone against the local stack
+- [ ] Journey gauntlet green on both devices (local, then dev)
 - [ ] Merged to develop; `released_in:` at the next release cut
 
 ## Notes (running log)
@@ -167,3 +203,17 @@ NOT yet made.
   its host's address, and `adb reverse` cannot carry UDP. Fixed the first; documented the second.
   The LAN address changing mid-session (192.168.1.13 → 10.179.17.101) settled the
   detect-vs-commit question by itself.
+- **2026-08-04 16:4x WIB** — Devices returned; the owed device walk ran and **passed**. See
+  `## Test Plan` for the verbatim server log. Third distinct LAN address for this machine
+  (`192.168.1.9`) since the story opened, which is the detect-vs-commit argument making itself
+  for the third time.
+  Walking it turned up two more instances of the same defect class, both fixed here: `start.sh`
+  installing an emulator-addressed APK onto a real phone, and LiveKit's TCP media port being
+  tunnelled by no harness at all. Neither was reachable from the server logs alone — only from
+  driving the real device — which is the argument for the device walk being a DoD item rather
+  than a formality.
+  Observed but NOT actioned (out of scope, no evidence of user impact): joining a room opens
+  three RTC sessions in ~300ms, two torn down with `CLIENT_REQUEST_LEAVE` before one connects,
+  and `setMicrophoneEnabled` is called before join completes so the first calls are dropped
+  (`called but not joined, ignoring`). Voice works regardless. Worth its own story if room-entry
+  latency is ever investigated.

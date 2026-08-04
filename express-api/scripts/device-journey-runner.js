@@ -73,7 +73,15 @@ const TARGETS = {
     gradleTask: ':app:assembleLocalDebug',
     gradleArgs: ['-PlocalHost=localhost'],
     // Device localhost -> Mac, so the on-device app reaches the local stack.
-    reversePorts: [3000, 7880, 9000, 9099, 8080, 9002],
+    // 3000 Express · 7880 LiveKit signalling · 7881 LiveKit TCP media
+    // · 8080 Firestore · 8888 web · 9000 RTDB · 9002 MinIO · 9099 Auth.
+    //
+    // 7881 is the ONLY media transport a reverse tunnel can carry — `adb
+    // reverse` forwards TCP and never UDP (SHY-0273). Kept identical to
+    // start.sh's and the gauntlet's lists; pinned equal by
+    // livekit-local-node-ip.test.js, which caught this list having silently
+    // drifted from the gauntlet's (it was missing 8888).
+    reversePorts: [3000, 7880, 7881, 8080, 8888, 9000, 9002, 9099],
   },
   dev: {
     pkg: 'com.shyden.shytalk.dev',
