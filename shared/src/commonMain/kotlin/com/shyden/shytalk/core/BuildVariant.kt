@@ -390,3 +390,29 @@ object BuildVariant {
         holder = holder.copy(liveKitUrl = value?.takeIf { it.isNotBlank() })
     }
 }
+
+/**
+ * Which LiveKit URL should a client connect to? (SHY-0275)
+ *
+ * The server's answer wins when it gives one. On `local`,
+ * `express-api/src/routes/livekit.js` deliberately omits `url` from the token
+ * response, so the client falls back to its own build-time value — Android's
+ * `BuildConfig.LIVEKIT_SERVER_URL`, iOS's [BuildVariant.liveKitUrl].
+ *
+ * Lives here, in commonMain, rather than inline in `IosLiveKitVoiceService`
+ * because there is no `iosTest` source set: inline, the only thing pinning it
+ * was a structural check that the token `liveKitUrl` appeared somewhere in the
+ * file, which a swapped operand order (`fallback ?: response`) would satisfy
+ * while breaking voice for every dev and prod user.
+ *
+ * Returns `""` when neither is available — preserving the previous behaviour,
+ * where the bridge's own allow-list refuses the empty string before any
+ * network call rather than this throwing at a less useful moment.
+ */
+fun resolveVoiceServerUrl(
+    responseUrl: String?,
+    fallback: String?,
+): String =
+    responseUrl?.takeIf { it.isNotBlank() }
+        ?: fallback?.takeIf { it.isNotBlank() }
+        ?: ""

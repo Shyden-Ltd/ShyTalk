@@ -1,6 +1,7 @@
 package com.shyden.shytalk.data.remote
 
 import com.shyden.shytalk.core.BuildVariant
+import com.shyden.shytalk.core.resolveVoiceServerUrl
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import kotlinx.coroutines.CoroutineScope
@@ -94,10 +95,15 @@ class IosLiveKitVoiceService(
             // call — indistinguishable, from the UI, from voice being broken.
             // BuildVariant.liveKitUrl is null on dev/prod, where the server
             // always answers, so this changes nothing off local.
-            val fallbackUrl = BuildVariant.liveKitUrl ?: ""
+            // The selection lives in commonMain as `resolveVoiceServerUrl` so it
+            // is unit-testable — there is no iosTest source set, and inline the
+            // only guard was a structural check that the token `liveKitUrl`
+            // appeared in this file, which a swapped operand order would satisfy
+            // while breaking voice on dev and prod.
+            val fallbackUrl = BuildVariant.liveKitUrl
             if (prewarmedToken != null && prewarmedRoomName == roomName) {
                 token = prewarmedToken!!
-                serverUrl = prewarmedUrl ?: fallbackUrl
+                serverUrl = resolveVoiceServerUrl(prewarmedUrl, fallbackUrl)
                 prewarmedToken = null
                 prewarmedUrl = null
                 prewarmedRoomName = null
@@ -107,7 +113,7 @@ class IosLiveKitVoiceService(
                 try {
                     val response = tokenService.fetchToken(roomName)
                     token = response.token
-                    serverUrl = response.url ?: fallbackUrl
+                    serverUrl = resolveVoiceServerUrl(response.url, fallbackUrl)
                 } catch (e: Exception) {
                     logE(TAG, "Token fetch failed: ${e.message}")
                     _error.value = "Failed to connect to voice: ${e.message}"

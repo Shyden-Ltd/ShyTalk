@@ -125,9 +125,12 @@ advertising an unreachable ICE candidate (server-side), and is Android-proven.
 
 ## Test Plan
 
-**RED first.** `iosApp/iosAppTests/AppEnvironmentTests` gains cases pinning that the resolved
-API / RTDB / LiveKit URLs carry the configured host rather than a literal `localhost`, and
-`LiveKitBridgeTests` gains the allow-list matrix below. Both fail against the current code.
+**RED first.** `iosApp/iosAppTests/AppEnvironmentTests.swift` gains cases pinning that the
+resolved API / RTDB / LiveKit URLs carry the configured host rather than a literal `localhost`,
+including a stub `Bundle` so the READ-the-plist-key path is exercised and not only the fallback.
+`iosApp/iosAppTests/AgeSegregationTests.swift` — the file that already owns the LiveKit
+allow-list boundary — gains the matrix below. `shared/src/commonTest/.../BuildVariantTest.kt`
+gains the `liveKitUrl` slot and `resolveVoiceServerUrl` cases. All fail against current code.
 
 **Allow-list matrix** — the security-sensitive part, so it is enumerated rather than sampled:
 accepted in DEBUG (`ws://10.0.0.5:7880`, `ws://172.16.0.1`, `ws://192.168.1.9`,

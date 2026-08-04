@@ -91,8 +91,25 @@ describe('SHY-0275 — the local host reaches the iOS code that needs it', () =>
     const code = stripComments(KOIN_HELPER);
     expect(code).not.toMatch(/val\s+host\s*=\s*"localhost"/);
     expect(code).toMatch(/fun\s+configureFirebaseEmulators\s*\(\s*host\s*:/);
-    // Proves the assertion above is not vacuous — it catches the original line.
+    // The CALL SITE, not just the signature. A regression to
+    // `configureFirebaseEmulators("localhost")` — dropping the parameter and
+    // passing a literal — satisfies both assertions above and silently
+    // resurrects the exact bug this story fixes.
+    expect(code).toMatch(/configureFirebaseEmulators\(\s*localHost/);
+    // Proves the assertions are not vacuous — they catch the original lines.
     expect(/val\s+host\s*=\s*"localhost"/.test('    val host = "localhost"')).toBe(true);
+    expect(
+      /configureFirebaseEmulators\(\s*localHost/.test('configureFirebaseEmulators("localhost")'),
+    ).toBe(false);
+  });
+
+  test('iOSApp.swift forwards the resolved host into Koin', () => {
+    // `doInitKoin(localHost:)` has a Kotlin-side default, so omitting the
+    // argument still COMPILES and makes localHost always nil — reproducing the
+    // original bug with nothing red. Only a positive pin catches that.
+    const code = stripComments(IOS_APP);
+    expect(code).toMatch(/localHost:\s*env\.useEmulators\s*\?\s*AppEnvironment\.localHost/);
+    expect(code).toMatch(/liveKitUrl:\s*env\.useEmulators\s*\?\s*AppEnvironment\.localLiveKitUrl/);
   });
 
   test.each([
@@ -165,6 +182,30 @@ describe('SHY-0275 — the local host reaches the iOS code that needs it', () =>
     // prefix test, wrongly accepts the public 172.32.x.
     expect(code).toMatch(/16\s*\.\.\.\s*31/);
   });
+
+  test.each(['auth', 'firestore', 'database'])(
+    'the %s emulator listens on the LAN, not only on loopback',
+    (name) => {
+      // A real iPhone reaches this machine by LAN address and has no
+      // `adb reverse` equivalent, so an emulator bound to 127.0.0.1 REFUSES it.
+      // Measured on device: with the host routing fixed, sign-in still failed —
+      //
+      //   FIRAuthErrorDomain 17020 ERROR_NETWORK_REQUEST_FAILED
+      //   NSURLErrorDomain -1004 "Could not connect to the server"
+      //   http://192.168.1.9:9099/…/verifyPassword   ← ECONNREFUSED (61)
+      //
+      // Express (*:3000) and the web serve (*:8888) already bind to all
+      // interfaces, which is exactly why the health check passed while Auth was
+      // refused — the asymmetry made the stack look reachable when it was only
+      // half reachable.
+      //
+      // 0.0.0.0 is correct here and NOT a security regression: these are
+      // emulators holding seeded fixtures, started by a developer, on a
+      // developer's machine — the same posture Express already has.
+      const firebaseJson = JSON.parse(read('firebase.json'));
+      expect(firebaseJson.emulators?.[name]?.host).toBe('0.0.0.0');
+    },
+  );
 
   test('a helper script builds iOS-local with a DETECTED address, not a committed one', () => {
     // This machine's LAN address changed three times across SHY-0273 alone. The

@@ -45,10 +45,23 @@ enum AppEnvironment {
     /// documented recipe looked followed while every backend call went to a port
     /// on the handset. `iOSApp.swift` logs the resolved value at launch so a
     /// wrong one is visible on first run rather than as "the app is broken".
-    static var localHost: String {
-        let raw = (Bundle.main.infoDictionary?["ShyTalkLocalHost"] as? String) ?? ""
-        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+    /// Info.plist key carrying the build-time `LOCAL_HOST` value.
+    static let localHostInfoKey = "ShyTalkLocalHost"
+
+    /// Takes the RAW plist value so the resolution rules are testable with real
+    /// strings — no stand-in Bundle. Every input a build can actually produce is
+    /// covered: a stamped address, an absent key (`nil`, on dev/release), and an
+    /// xcconfig that expanded to empty or whitespace.
+    ///
+    /// Absent must resolve to `localhost`, never `""`: an empty host builds
+    /// `http://:3000`, which parses fine and then fails opaquely much later.
+    static func resolveLocalHost(rawValue: String?) -> String {
+        let trimmed = (rawValue ?? "").trimmingCharacters(in: .whitespaces)
         return trimmed.isEmpty ? "localhost" : trimmed
+    }
+
+    static var localHost: String {
+        resolveLocalHost(rawValue: Bundle.main.object(forInfoDictionaryKey: localHostInfoKey) as? String)
     }
 
     static var localApiBaseUrl: String { "http://\(localHost):3000" }

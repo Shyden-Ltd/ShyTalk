@@ -157,22 +157,8 @@ final class AgeSegregationTests: XCTestCase {
     }
     #endif
 
-    // MARK: - SHY-0275 — the local host reaches the URLs built from it
-
-    func test_localUrls_areBuiltFromTheResolvedHost() {
-        // These were literals containing "localhost", so a real iPhone pointed
-        // every backend call at itself. They must now derive from whatever
-        // AppEnvironment.localHost resolved to, whatever that is in this build.
-        let host = AppEnvironment.localHost
-        XCTAssertEqual(AppEnvironment.localApiBaseUrl, "http://\(host):3000")
-        XCTAssertEqual(AppEnvironment.localLiveKitUrl, "ws://\(host):7880")
-        XCTAssertEqual(AppEnvironment.localRtdbUrl, "http://\(host):9000?ns=demo-shytalk")
-    }
-
-    func test_localHost_fallsBackRatherThanReturningEmpty() {
-        // A test bundle has no ShyTalkLocalHost key, so this exercises the
-        // fallback path: it must be a usable host, never "" (which would build
-        // "http://:3000" and fail with an opaque error much later).
-        XCTAssertFalse(AppEnvironment.localHost.isEmpty)
-    }
+    // NOTE: the `AppEnvironment.localHost` / local-URL tests live in
+    // AppEnvironmentTests.swift, where they belong — this file's subject is the
+    // LiveKit URL allow-list security boundary. Only the allow-list half of
+    // SHY-0275 is tested here.
 }

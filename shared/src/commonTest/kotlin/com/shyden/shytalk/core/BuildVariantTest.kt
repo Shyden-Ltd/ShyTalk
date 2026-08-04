@@ -22,6 +22,10 @@ class BuildVariantTest {
             builtAt = "?",
         )
         BuildVariant.initApiBaseUrl(null)
+        // SHY-0275: without this, the FIRST test that sets a liveKitUrl leaks it
+        // into every test that runs after it in this class — the slot is a
+        // process-wide singleton, so the leak is silent and order-dependent.
+        BuildVariant.initLiveKitUrl(null)
     }
 
     @Test
@@ -499,6 +503,103 @@ class BuildVariantTest {
         BuildVariant.initApiBaseUrl("http://localhost:3000")
         BuildVariant.initApiBaseUrl(null)
         assertNull(BuildVariant.apiBaseUrl)
+    }
+
+    // ── liveKitUrl (SHY-0275 — iOS local voice) ────────────────────────────
+    // express-api/src/routes/livekit.js OMITS `url` from the token response
+    // when NODE_ENV is `local`, leaving the client to supply its own. Android
+    // reads BuildConfig.LIVEKIT_SERVER_URL; iOS had no counterpart at all, so
+    // IosLiveKitVoiceService took `response.url ?: ""` and handed the empty
+    // string to the bridge, which refused its own connection before any network
+    // call. Same fail-closed shape as apiBaseUrl above.
+
+    @Test
+    fun `liveKitUrl defaults to null so dev and prod keep using the server URL`() {
+        assertNull(BuildVariant.liveKitUrl)
+    }
+
+    @Test
+    fun `initLiveKitUrl captures the local ws URL`() {
+        BuildVariant.initLiveKitUrl("ws://192.168.1.9:7880")
+        assertEquals("ws://192.168.1.9:7880", BuildVariant.liveKitUrl)
+    }
+
+    @Test
+    fun `initLiveKitUrl coerces empty string to null`() {
+        // An unstamped LOCAL_HOST would otherwise produce "ws://:7880" — a URL
+        // that parses but resolves nowhere, failing much later and opaquely.
+        BuildVariant.initLiveKitUrl("")
+        assertNull(BuildVariant.liveKitUrl)
+    }
+
+    @Test
+    fun `initLiveKitUrl coerces blank string to null`() {
+        BuildVariant.initLiveKitUrl("   ")
+        assertNull(BuildVariant.liveKitUrl)
+    }
+
+    @Test
+    fun `initLiveKitUrl can be cleared by passing null`() {
+        BuildVariant.initLiveKitUrl("ws://192.168.1.9:7880")
+        BuildVariant.initLiveKitUrl(null)
+        assertNull(BuildVariant.liveKitUrl)
+    }
+
+    @Test
+    fun `liveKitUrl and apiBaseUrl are independent slots`() {
+        // Both were added to the same holder; a copy() that clobbered the
+        // sibling would be invisible to every single-slot test above.
+        BuildVariant.initApiBaseUrl("http://192.168.1.9:3000")
+        BuildVariant.initLiveKitUrl("ws://192.168.1.9:7880")
+        assertEquals("http://192.168.1.9:3000", BuildVariant.apiBaseUrl)
+        assertEquals("ws://192.168.1.9:7880", BuildVariant.liveKitUrl)
+        BuildVariant.initLiveKitUrl(null)
+        assertEquals("http://192.168.1.9:3000", BuildVariant.apiBaseUrl)
+    }
+
+    // ── resolveVoiceServerUrl (SHY-0275) ───────────────────────────────────
+    // Extracted from IosLiveKitVoiceService so the fallback CHAIN is testable:
+    // no iosTest source set exists, and the structural pin only proved the
+    // token `liveKitUrl` appears somewhere in the file — so swapping the
+    // operand order (`fallback ?: response`) would have kept every test green
+    // while breaking voice for every dev and prod user.
+
+    @Test
+    fun `resolveVoiceServerUrl prefers the server URL over the local fallback`() {
+        assertEquals(
+            "wss://livekit-eu.shytalk.shyden.co.uk",
+            resolveVoiceServerUrl(
+                responseUrl = "wss://livekit-eu.shytalk.shyden.co.uk",
+                fallback = "ws://192.168.1.9:7880",
+            ),
+        )
+    }
+
+    @Test
+    fun `resolveVoiceServerUrl uses the local fallback when the server omits a URL`() {
+        // The `local` case: livekit.js deliberately sends no `url`.
+        assertEquals(
+            "ws://192.168.1.9:7880",
+            resolveVoiceServerUrl(responseUrl = null, fallback = "ws://192.168.1.9:7880"),
+        )
+    }
+
+    @Test
+    fun `resolveVoiceServerUrl returns empty when neither is available`() {
+        // Preserves the pre-existing behaviour exactly: the bridge's own
+        // allow-list then refuses "" before any network call.
+        assertEquals("", resolveVoiceServerUrl(responseUrl = null, fallback = null))
+    }
+
+    @Test
+    fun `resolveVoiceServerUrl treats a blank server URL as absent`() {
+        // A server that answers with "" is indistinguishable, to the bridge,
+        // from one that answers with nothing — so it must not win over a
+        // usable local fallback.
+        assertEquals(
+            "ws://192.168.1.9:7880",
+            resolveVoiceServerUrl(responseUrl = "  ", fallback = "ws://192.168.1.9:7880"),
+        )
     }
 
     // ── isPersonaPickerAvailable matrix (PR B v2 — persona picker) ──
