@@ -229,8 +229,16 @@ test.describe('Admin Audit Log Tab', () => {
       if (isVisible) {
         const initialCount = rowCount;
         await loadMore.click();
-        await page.waitForTimeout(2_000);
-        expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThanOrEqual(initialCount);
+        // Wait for the next page to LAND rather than betting on 2s. Under the
+        // full suite the audit log has accumulated entries from every earlier
+        // admin test, so the fetch+re-render runs slower than when this file
+        // is run alone — and the old sleep sampled the table mid-render, when
+        // the row count had briefly dropped. It passed in isolation and failed
+        // in the suite, which is machine speed deciding the verdict rather
+        // than the product (same defect class as SHY-0279).
+        await expect
+          .poll(() => page.locator('#audit-log-tbody tr').count(), { timeout: 10_000 })
+          .toBeGreaterThanOrEqual(initialCount);
       }
     }
   });
