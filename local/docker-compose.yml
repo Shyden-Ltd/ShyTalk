@@ -19,15 +19,6 @@ services:
       - "52000-52100:52000-52100/udp"
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml
-    # NODE_IP is the address LiveKit ADVERTISES to clients in its ICE
-    # candidates (SHY-0273). Left unset, it auto-detects the container's own
-    # bridge address (172.18.0.2), which no phone can reach by any route — so
-    # signalling connects, ICE never completes, and the room dies with
-    # "Broken pipe / Reconnecting". `local/start.sh` sets this to the host's
-    # LAN IP so a real device on the same Wi-Fi can reach the published
-    # UDP/TCP media ports directly.
-    environment:
-      NODE_IP: ${LIVEKIT_NODE_IP:-}
     command: --config /etc/livekit.yaml
 
   minio:
