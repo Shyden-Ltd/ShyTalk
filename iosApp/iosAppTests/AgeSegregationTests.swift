@@ -90,4 +90,89 @@ final class AgeSegregationTests: XCTestCase {
         // it downstream with a clearer error than "missing_livekit_token").
         XCTAssertTrue(LiveKitBridgeImpl.isValidToken(" not-empty "))
     }
+
+    // MARK: - SHY-0275 — private-LAN cleartext, DEBUG builds only
+    //
+    // A physical iPhone reaches the developer's Mac by LAN address; unlike
+    // Android it has no `adb reverse`, so loopback cannot serve and
+    // `ws://<mac-lan-ip>:7880` was rejected before any network call. That is
+    // why iOS-local voice had never worked.
+    //
+    // The relaxation is compiled out of Release. These tests run in a DEBUG
+    // test build, so they assert the DEBUG behaviour; the rejection cases
+    // below are asserted unconditionally because they must hold in EVERY
+    // build, and those are the ones that matter if the guard ever slips.
+
+    func test_isPrivateLAN_acceptsAllThreeRFC1918Blocks() {
+        XCTAssertTrue(LiveKitBridgeImpl.isPrivateLAN("10.0.0.5"))
+        XCTAssertTrue(LiveKitBridgeImpl.isPrivateLAN("172.16.0.1"))
+        XCTAssertTrue(LiveKitBridgeImpl.isPrivateLAN("172.31.255.254"))
+        XCTAssertTrue(LiveKitBridgeImpl.isPrivateLAN("192.168.1.9"))
+    }
+
+    func test_isPrivateLAN_rejectsJustOutsideThe172Block() {
+        // THE case a `hasPrefix("172.")` check gets wrong: the private block is
+        // 172.16–172.31, so 172.15 and 172.32 are PUBLIC addresses.
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("172.15.0.1"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("172.32.0.1"))
+    }
+
+    func test_isPrivateLAN_rejectsHostnameThatMerelyStartsLikeOne() {
+        // THE case a `hasPrefix("10.")` check gets wrong — an attacker-controlled
+        // hostname, not an address. Four components are required AND each must
+        // parse as a number.
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("10.0.0.5.evil.com"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("192.168.1.9.attacker.net"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("10.0.0"))
+    }
+
+    func test_isPrivateLAN_rejectsMalformedOctets() {
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("10.0.0.256"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("10.0.0."))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("10.0.0.0x5"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN(""))
+    }
+
+    func test_isPrivateLAN_rejectsPublicAddresses() {
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("8.8.8.8"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("192.169.1.1"))
+        XCTAssertFalse(LiveKitBridgeImpl.isPrivateLAN("11.0.0.1"))
+    }
+
+    func test_isAllowedURL_rejectsCleartextToPublicHost_inEveryBuild() {
+        // The property that must survive the DEBUG relaxation: cleartext is
+        // permitted to a PRIVATE address only. If this ever passes, the guard
+        // has been widened into a hole.
+        XCTAssertFalse(LiveKitBridgeImpl.isAllowedURL("ws://8.8.8.8:7880"))
+        XCTAssertFalse(LiveKitBridgeImpl.isAllowedURL("ws://172.32.0.1:7880"))
+        XCTAssertFalse(LiveKitBridgeImpl.isAllowedURL("ws://evil.com:7880"))
+        XCTAssertFalse(LiveKitBridgeImpl.isAllowedURL("ws://10.0.0.5.evil.com:7880"))
+    }
+
+    #if DEBUG
+    func test_isAllowedURL_acceptsPrivateLANCleartext_inDebugOnly() {
+        XCTAssertTrue(LiveKitBridgeImpl.isAllowedURL("ws://192.168.1.9:7880"))
+        XCTAssertTrue(LiveKitBridgeImpl.isAllowedURL("ws://10.0.0.5:7880"))
+        XCTAssertTrue(LiveKitBridgeImpl.isAllowedURL("ws://172.16.0.1:7880"))
+    }
+    #endif
+
+    // MARK: - SHY-0275 — the local host reaches the URLs built from it
+
+    func test_localUrls_areBuiltFromTheResolvedHost() {
+        // These were literals containing "localhost", so a real iPhone pointed
+        // every backend call at itself. They must now derive from whatever
+        // AppEnvironment.localHost resolved to, whatever that is in this build.
+        let host = AppEnvironment.localHost
+        XCTAssertEqual(AppEnvironment.localApiBaseUrl, "http://\(host):3000")
+        XCTAssertEqual(AppEnvironment.localLiveKitUrl, "ws://\(host):7880")
+        XCTAssertEqual(AppEnvironment.localRtdbUrl, "http://\(host):9000?ns=demo-shytalk")
+    }
+
+    func test_localHost_fallsBackRatherThanReturningEmpty() {
+        // A test bundle has no ShyTalkLocalHost key, so this exercises the
+        // fallback path: it must be a usable host, never "" (which would build
+        // "http://:3000" and fail with an opaque error much later).
+        XCTAssertFalse(AppEnvironment.localHost.isEmpty)
+    }
 }

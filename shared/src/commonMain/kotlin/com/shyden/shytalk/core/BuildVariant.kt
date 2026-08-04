@@ -23,6 +23,7 @@ data class BuildVariantConfig(
     val buildVersion: String = "?",
     val deviceInfo: String = "?",
     val apiBaseUrl: String? = null,
+    val liveKitUrl: String? = null,
     val gitBranch: String = "?",
     val gitSha: String = "?",
     val gitDirty: Boolean = false,
@@ -157,6 +158,24 @@ object BuildVariant {
      * posting to a relative URL.
      */
     val apiBaseUrl: String? get() = holder.apiBaseUrl
+
+    /**
+     * Local LiveKit signalling URL for iOS (SHY-0275). `null` on dev/prod,
+     * where `express-api/src/routes/livekit.js` returns the region's URL in
+     * the token response.
+     *
+     * On `local` that route deliberately OMITS `url`, leaving the client to
+     * supply its own — Android does this from
+     * `BuildConfig.LIVEKIT_SERVER_URL`, and iOS had no counterpart at all, so
+     * `IosLiveKitVoiceService` took `response.url ?: ""` and handed the empty
+     * string to the bridge, which refused it before any network call. This is
+     * that missing counterpart, populated from Swift's
+     * `AppEnvironment.localLiveKitUrl`.
+     *
+     * Default `null` (not `""`) so a caller can tell "not configured" from
+     * "configured blank"; blank coerces to null in [initLiveKitUrl].
+     */
+    val liveKitUrl: String? get() = holder.liveKitUrl
 
     /**
      * Git branch the binary was built from (SHY-0205). Injected at
@@ -357,5 +376,17 @@ object BuildVariant {
      */
     fun initApiBaseUrl(value: String?) {
         holder = holder.copy(apiBaseUrl = value?.takeIf { it.isNotBlank() })
+    }
+
+    /**
+     * One-shot local LiveKit URL initialiser (SHY-0275). Called from
+     * `KoinHelper.doInitKoin(liveKitUrl = ...)`, itself called from Swift's
+     * `iOSApp.swift` with `AppEnvironment.localLiveKitUrl` on local builds and
+     * `nil` everywhere else. Blank coerces to null, so a build that stamps an
+     * empty setting behaves as "not configured" rather than producing a URL of
+     * `ws://:7880`. See [liveKitUrl].
+     */
+    fun initLiveKitUrl(value: String?) {
+        holder = holder.copy(liveKitUrl = value?.takeIf { it.isNotBlank() })
     }
 }

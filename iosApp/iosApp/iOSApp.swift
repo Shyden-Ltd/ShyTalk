@@ -51,10 +51,14 @@ struct iOSApp: App {
         // not a credential leak. The startup log below makes the misconfiguration
         // obvious in the device console on first launch.
         options.apiKey = "A" + String(repeating: "0", count: 38)
-        NSLog("[ShyTalk] DEBUG build — using Firebase Emulators (project=demo-shytalk, db=localhost:9000). NOT FOR PRODUCTION.")
+        // SHY-0275: log the RESOLVED host, not a fixed string. This line used to
+        // say "localhost:9000" unconditionally, so it read as confirmation even
+        // when the build was pointed somewhere else entirely — and on a real
+        // iPhone "localhost" is the phone, which is the bug it was hiding.
+        NSLog("[ShyTalk] DEBUG build — using Firebase Emulators (project=demo-shytalk, host=\(AppEnvironment.localHost)). NOT FOR PRODUCTION.")
         options.projectID = "demo-shytalk"
         options.bundleID = Bundle.main.bundleIdentifier ?? "com.shyden.shytalk"
-        options.databaseURL = "http://localhost:9000?ns=demo-shytalk"
+        options.databaseURL = AppEnvironment.localRtdbUrl
         options.storageBucket = "demo-shytalk.appspot.com"
         FirebaseApp.configure(options: options)
         variant = .local
@@ -120,7 +124,17 @@ struct iOSApp: App {
             gitBranch: gitBranch,
             gitSha: gitSha,
             gitDirty: gitDirty,
-            builtAt: builtAt
+            builtAt: builtAt,
+            // SHY-0275 — only meaningful when useEmulators is true. The Kotlin
+            // side pointed Firestore/Auth/RTDB at a fixed "localhost", which on
+            // a physical iPhone is the phone. Passed rather than derived in
+            // Kotlin so Swift stays the single owner of local URL shape, the
+            // same way apiBaseUrl already works.
+            localHost: env.useEmulators ? AppEnvironment.localHost : nil,
+            // Express omits `url` from the local token response by design, so
+            // the client must bring its own. Android has
+            // BuildConfig.LIVEKIT_SERVER_URL; this is the iOS counterpart.
+            liveKitUrl: env.useEmulators ? AppEnvironment.localLiveKitUrl : nil
         )
         NSLog(
             "[ShyTalk] build identity: %@ %@ %@@%@%@ built %@",

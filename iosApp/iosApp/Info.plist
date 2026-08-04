@@ -136,5 +136,13 @@
 	<string>$(SHYTALK_GIT_SHA)</string>
 	<key>ShyTalkGitDirty</key>
 	<string>$(SHYTALK_GIT_DIRTY)</string>
+	<!-- SHY-0275: the network address a LOCAL build uses to reach the developer's
+	     Mac. An iPhone has no `adb reverse` equivalent, so "localhost" is the
+	     PHONE — a local build without this reaches nothing. Local.xcconfig
+	     defines LOCAL_HOST (default "localhost"); a real device must override it
+	     with the Mac's LAN address, which scripts/dev/ios-local-install.sh
+	     detects. Empty/absent on dev + release builds, which never read it. -->
+	<key>ShyTalkLocalHost</key>
+	<string>$(LOCAL_HOST)</string>
 </dict>
 </plist>

@@ -1,5 +1,6 @@
 package com.shyden.shytalk.data.remote
 
+import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import kotlinx.coroutines.CoroutineScope
@@ -84,9 +85,19 @@ class IosLiveKitVoiceService(
             // Use prewarmed token if available and matching
             val token: String
             val serverUrl: String
+            // SHY-0275 — the server does NOT always supply the URL.
+            // `express-api/src/routes/livekit.js` omits `url` from the token
+            // response when NODE_ENV is `local`, by design, leaving the client
+            // to use its own: Android reads BuildConfig.LIVEKIT_SERVER_URL.
+            // iOS had no counterpart, so both branches below fell through to
+            // "" and the bridge refused its own connection before any network
+            // call — indistinguishable, from the UI, from voice being broken.
+            // BuildVariant.liveKitUrl is null on dev/prod, where the server
+            // always answers, so this changes nothing off local.
+            val fallbackUrl = BuildVariant.liveKitUrl ?: ""
             if (prewarmedToken != null && prewarmedRoomName == roomName) {
                 token = prewarmedToken!!
-                serverUrl = prewarmedUrl ?: ""
+                serverUrl = prewarmedUrl ?: fallbackUrl
                 prewarmedToken = null
                 prewarmedUrl = null
                 prewarmedRoomName = null
@@ -96,7 +107,7 @@ class IosLiveKitVoiceService(
                 try {
                     val response = tokenService.fetchToken(roomName)
                     token = response.token
-                    serverUrl = response.url ?: ""
+                    serverUrl = response.url ?: fallbackUrl
                 } catch (e: Exception) {
                     logE(TAG, "Token fetch failed: ${e.message}")
                     _error.value = "Failed to connect to voice: ${e.message}"

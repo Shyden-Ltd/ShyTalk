@@ -45,6 +45,8 @@ fun doInitKoin(
     gitSha: String = "",
     gitDirty: Boolean = false,
     builtAt: String = "",
+    localHost: String? = null,
+    liveKitUrl: String? = null,
 ) {
     BuildVariant.initLocalEmulator(
         value = useEmulators,
@@ -88,13 +90,18 @@ fun doInitKoin(
     // localhost:3000 from real iPhones and locked the user on "Unable to
     // connect".
     BuildVariant.initApiBaseUrl(apiBaseUrl)
+    // SHY-0275 — same fail-closed shape as apiBaseUrl. Express omits `url` from
+    // the token response on local by design, so without this the iOS voice
+    // service fell through to "" and refused its own connection before any
+    // network call. Null on dev/prod, where the server always supplies the URL.
+    BuildVariant.initLiveKitUrl(liveKitUrl)
     if (KoinPlatformTools.defaultContext().getOrNull() != null) {
         logI("KoinHelper", "Koin already initialised — skipping")
         return
     }
     try {
         if (useEmulators) {
-            configureFirebaseEmulators()
+            configureFirebaseEmulators(localHost?.takeIf { it.isNotBlank() } ?: "localhost")
         }
         startKoin {
             modules(viewModelModule, iosPlatformModule)
@@ -126,8 +133,16 @@ fun recordAppBackgroundedForAppLock() {
     koin.get<com.shyden.shytalk.data.repository.AppLockRepository>().updateLastActiveTimestamp()
 }
 
-private fun configureFirebaseEmulators() {
-    val host = "localhost"
+/**
+ * SHY-0275 — [host] is supplied by Swift from `Info.plist`'s `ShyTalkLocalHost`
+ * (the `LOCAL_HOST` build setting). It used to be the literal `"localhost"`,
+ * which is correct for a Mac-hosted run and WRONG on a physical iPhone: an
+ * iPhone has no `adb reverse` equivalent, so `localhost` is the phone and all
+ * three emulator connections went to ports on the handset. The log line below
+ * is the one that made the bug visible, and it now prints the value actually
+ * used rather than a fixed string.
+ */
+private fun configureFirebaseEmulators(host: String) {
     Firebase.firestore.useEmulator(host, 8080)
     Firebase.auth.useEmulator(host, 9099)
     Firebase.database.useEmulator(host, 9000)

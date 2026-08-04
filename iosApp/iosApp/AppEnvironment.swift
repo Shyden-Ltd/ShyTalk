@@ -31,7 +31,37 @@ struct AppEnvironmentConfig: Equatable {
 /// `isPersonaPickerAvailable` from the password's presence.
 enum AppEnvironment {
     static let devApiBaseUrl = "https://dev-api.shytalk.shyden.co.uk"
-    static let localApiBaseUrl = "http://localhost:3000"
+
+    /// SHY-0275 — the address a LOCAL build uses to reach the developer's Mac.
+    ///
+    /// Comes from `Info.plist`'s `ShyTalkLocalHost`, substituted at build time
+    /// from the `LOCAL_HOST` build setting (`Local.xcconfig`, overridable on the
+    /// xcodebuild command line). Falls back to `localhost`, which is correct for
+    /// a Mac-hosted run and WRONG on a physical iPhone — an iPhone has no
+    /// `adb reverse` equivalent, so `localhost` is the phone itself.
+    ///
+    /// Previously these were literals and the plist value did not exist, so
+    /// `LOCAL_HOST=<mac-ip>` on the command line set a value nothing read: the
+    /// documented recipe looked followed while every backend call went to a port
+    /// on the handset. `iOSApp.swift` logs the resolved value at launch so a
+    /// wrong one is visible on first run rather than as "the app is broken".
+    static var localHost: String {
+        let raw = (Bundle.main.infoDictionary?["ShyTalkLocalHost"] as? String) ?? ""
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "localhost" : trimmed
+    }
+
+    static var localApiBaseUrl: String { "http://\(localHost):3000" }
+
+    /// The local LiveKit signalling URL. `express-api/src/routes/livekit.js`
+    /// deliberately omits `url` from the token response when NODE_ENV is
+    /// `local`, leaving the client to supply its own — Android does this via
+    /// `BuildConfig.LIVEKIT_SERVER_URL`. iOS had no equivalent, so the voice
+    /// service fell through to `""` and refused its own connection.
+    static var localLiveKitUrl: String { "ws://\(localHost):7880" }
+
+    /// The local Realtime Database emulator URL, used to configure Firebase.
+    static var localRtdbUrl: String { "http://\(localHost):9000?ns=demo-shytalk" }
 
     /// WEB OAuth client ID for the `shytalk-dev` Firebase project — Android
     /// passes the same value via `BuildConfig.WEB_CLIENT_ID`. Needed by
