@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -220,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -285,7 +285,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -441,7 +441,7 @@ jobs:
     # net for anything unexpected before the step timeouts fire.
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -837,7 +837,7 @@ jobs:
     # well under the limit.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -859,7 +859,7 @@ jobs:
           # cond is true. `actions/checkout` parses the input as int.
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: 24
 
@@ -922,12 +922,12 @@ jobs:
     # warm runs complete much faster.
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: 24
 
