@@ -112,6 +112,17 @@ jobs:
               # — driver code is a subset of the backend).
               express-api/scripts/drivers/*|express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
               express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
+              # SHY-0284. Root `scripts/**` are CI/tooling scripts whose ONLY
+              # automated coverage lives in express-api/tests/scripts/** (15 of
+              # those suites exercise a root script). They previously fell to
+              # `*) OTHER=true`, which feeds only the workflow_only decision on
+              # line ~120 and never sets backend_changed — so a PR editing just
+              # a root script skipped test-backend and shipped with its guards
+              # unrun. That is the exact defect SHY-0284 exists to fix, one
+              # layer down: the check-action-pin-consistency guard added by
+              # that story lives here, so leaving this gap would have let a
+              # future edit break the guard itself, silently.
+              scripts/*) BACKEND=true ;;
               .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
               *) OTHER=true ;;
             esac

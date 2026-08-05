@@ -51,6 +51,23 @@ function main({ refs, out = process.stdout, err = process.stderr } = {}) {
     return 2;
   }
 
+  // A count floor alone cannot tell "scanned everything" from "scanned the big
+  // directory". `.github/workflows/` holds ~178 refs; `.github/actions/` holds
+  // FOUR — and the composites are where the real drift lived. So if recursion
+  // into `.github/actions/**` ever broke, the scan would still return ~114
+  // refs, clear any sane floor, and report success while blind to exactly the
+  // class of bug this guard exists for. Require breadth, not just volume.
+  const areas = new Set(found.map((r) => r.file.split('/')[1]).filter(Boolean));
+  if (areas.size < 2) {
+    err.write(
+      `check-action-pin-consistency: every reference came from a single area under .github/ ` +
+        `(${[...areas].join(', ') || 'none'}).\n` +
+        'Workflows AND composite actions both carry pins, so a single-area result means the walk ' +
+        'stopped descending. Refusing to report success on a partial scan.\n',
+    );
+    return 2;
+  }
+
   const unpinned = findUnpinned(found);
   const inconsistent = findInconsistentRepos(found);
 
