@@ -859,7 +859,7 @@ jobs:
           # cond is true. `actions/checkout` parses the input as int.
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
 
@@ -927,7 +927,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
 
