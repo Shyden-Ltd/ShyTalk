@@ -168,5 +168,5 @@ Related but separate: `scripts/check-action-shas.sh` verifies that actions *are*
 - **2026-08-06 01:35 WIB — response.** Root scripts carry their own `scripts_changed` flag; `test-backend` runs on either it or `backend_changed`; the cascade is untouched and pinned so the fix cannot over-correct. The lint job's ungated-ness is now a test. 11 new tests driving the REAL case statement through real bash, 7 RED first; four mutants, four kills.
 - **2026-08-06 01:40 WIB — `code-reviewer` cycle 2.** Confirmed both cycle-1 findings resolved end to end, and found a regression the FIX had introduced: `WORKFLOW_ONLY` is computed from APP/BACKEND/WEB/INTEGRATION/OTHER, and moving root scripts out of `OTHER` meant a scripts-only PR now declared itself workflow-only and skipped every job gated on that, sonarcloud included. Fixing one silent skip had created another. Reproduced from the source, fixed by adding SCRIPTS to the condition, pinned by three more tests (scripts-only is NOT workflow-only; a real workflow-only change still is; docs-only still is) and a fifth killed mutant. 144 suites / 7,444 tests green; actionlint clean.
 
-Reviewed-up-to: 2fc2a19bd1a81182783bc7c60bcddd0ce1296c52
+Reviewed-up-to: 2b35f58345fe7e7fec2d75b822ca042a9947d453
 
