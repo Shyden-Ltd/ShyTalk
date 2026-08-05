@@ -138,7 +138,13 @@ jobs:
             esac
           done <<< "$CHANGED"
           WORKFLOW_ONLY=false
-          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$OTHER" = "false" ]; then
+          # SCRIPTS is checked here for the same reason the others are: a root
+          # script is not workflow plumbing. Before SHY-0284 gave them their own
+          # flag they fell to OTHER, and OTHER kept this false for them — so
+          # omitting SCRIPTS would have fixed one silent skip (test-backend) by
+          # introducing another, since every job gated on workflow_only,
+          # sonarcloud among them, would then skip on a scripts-only PR.
+          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$SCRIPTS" = "false" ] && [ "$OTHER" = "false" ]; then
             WORKFLOW_ONLY=true
           fi
           # Explicit per-platform E2E skip markers in the PR body. Use when the

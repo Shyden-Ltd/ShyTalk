@@ -103,6 +103,70 @@ describe('SHY-0284: a root script change runs the suites that cover it', () => {
   });
 });
 
+describe('SHY-0284: a root script change is not a workflow-only change', () => {
+  /**
+   * Giving root scripts their own flag removed them from `OTHER`, and
+   * `OTHER` was what kept `WORKFLOW_ONLY` false for them. Left unhandled, a
+   * PR touching only a root script would compute APP/BACKEND/WEB/INTEGRATION/
+   * OTHER all false, declare itself workflow-only, and skip every job gated on
+   * that — sonarcloud among them. The fix for one silent skip would have
+   * introduced another.
+   *
+   * Runs the REAL case statement and the REAL workflow_only condition,
+   * extracted from the workflow, against real bash.
+   */
+  /**
+   * The `if …; then WORKFLOW_ONLY=true; fi` block, taken by scanning lines
+   * rather than by regex. A lazy `[\s\S]*?` reaching for a later `fi` is
+   * exactly the super-linear backtracking shape sonarjs/slow-regex rejects,
+   * and line scanning is clearer here anyway.
+   */
+  function workflowOnlyCondition() {
+    const lines = yaml.split('\n');
+    const start = lines.findIndex((l) => l.trim() === 'WORKFLOW_ONLY=false');
+    if (start === -1) throw new Error('WORKFLOW_ONLY init not found');
+    const end = lines.findIndex((l, i) => i > start && l.trim() === 'fi');
+    if (end === -1) throw new Error('closing fi not found');
+    return lines.slice(start + 1, end + 1).join('\n');
+  }
+
+  function workflowOnlyFor(files) {
+    const caseMatch = yaml.match(/case "\$file" in([\s\S]*?)esac/);
+    const cond = workflowOnlyCondition();
+    if (!caseMatch) throw new Error('could not extract from workflow');
+    const list = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
+    const script = `
+set -e
+ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false SCRIPTS=false OTHER=false
+WORKFLOW_ONLY=false
+for file in ${list}; do
+  case "$file" in${caseMatch[1]}esac
+done
+${cond}
+echo "$WORKFLOW_ONLY"
+`;
+    const r = spawnSync('/bin/bash', ['-c', script], {
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+    if (r.status !== 0) throw new Error(`bash failed: ${r.stderr}`);
+    return r.stdout.trim() === 'true';
+  }
+
+  it('a scripts-only change is NOT workflow-only', () => {
+    expect(workflowOnlyFor(['scripts/check-action-pin-consistency.js'])).toBe(false);
+  });
+
+  it('a genuinely workflow-only change still is', () => {
+    // The flag must keep working for what it was built for.
+    expect(workflowOnlyFor(['.github/workflows/lint.yml'])).toBe(true);
+  });
+
+  it('a docs-only change still is', () => {
+    expect(workflowOnlyFor(['README.md', '.project/stories/SHY-0001-x.md'])).toBe(true);
+  });
+});
+
 describe('SHY-0284: the jobs that must run for a root script change', () => {
   /** A job header block, from `  name:` to the next job at the same indent. */
   function job(name) {
