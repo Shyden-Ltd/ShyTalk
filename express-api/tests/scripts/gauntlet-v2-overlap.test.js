@@ -185,6 +185,24 @@ describe('wait_overlapped — empty-array safety (SHY-0238)', () => {
   });
 });
 
+describe('reap_overlapped — empty-state safety (SHY-0243)', () => {
+  // Parity with wait_overlapped above. reap_overlapped carries the SAME two
+  // bash-3.2 guards — `${OVERLAP_PIDS[@]+…}` for the empty array and
+  // `${TAIL_PID:-}` for the never-set scalar — but nothing pinned them, so
+  // either could be dropped and only the operator's Mac would find out.
+  // macOS ships bash 3.2, where `"${arr[@]}"` on an empty array is an
+  // unbound-variable abort under `set -u`; bash 4.4+ (Linux CI) is not, so
+  // a Linux-only probe would stay green through the regression.
+  test('a call with nothing registered returns cleanly under set -u (bash-3.2)', () => {
+    const { result } = runLib(`
+      set -u
+      reap_overlapped
+      echo "RC=$?"
+    `);
+    expect(result.stdout).toMatch(/RC=0/); // no "unbound variable" abort
+  });
+});
+
 describe('gauntlet-v2.sh — CLI flag parsing (real entrypoint, SHY-0238)', () => {
   const run = (...args) =>
     spawnSync('/bin/bash', [SCRIPT, ...args], { encoding: 'utf8', timeout: 10000 });

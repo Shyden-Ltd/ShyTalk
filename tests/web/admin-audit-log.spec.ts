@@ -222,25 +222,40 @@ test.describe('Admin Audit Log Tab', () => {
     const loadMore = page.locator('#audit-log-load-more');
     const rowCount = await page.locator('#audit-log-tbody tr').count();
 
-    if (rowCount > 0) {
-      // Load more should be visible when entries exist
-      // (hidden only when no more pages — acceptable either way)
-      const isVisible = await loadMore.isVisible();
-      if (isVisible) {
-        const initialCount = rowCount;
-        await loadMore.click();
-        // Wait for the next page to LAND rather than betting on 2s. Under the
-        // full suite the audit log has accumulated entries from every earlier
-        // admin test, so the fetch+re-render runs slower than when this file
-        // is run alone — and the old sleep sampled the table mid-render, when
-        // the row count had briefly dropped. It passed in isolation and failed
-        // in the suite, which is machine speed deciding the verdict rather
-        // than the product (same defect class as SHY-0279).
-        await expect
-          .poll(() => page.locator('#audit-log-tbody tr').count(), { timeout: 10_000 })
-          .toBeGreaterThanOrEqual(initialCount);
-      }
+    // Report a missing precondition as a SKIP, not a pass. Nesting the
+    // assertion inside bare `if`s let this test go green having asserted
+    // nothing at all when the log was empty or Load More was hidden — the
+    // same "absence of work reported as success" the sibling CSV test below
+    // already avoids with `test.skip`.
+    if (rowCount === 0) {
+      test.skip(true, 'No audit entries — pagination cannot be exercised');
+      return;
     }
+    if (!(await loadMore.isVisible())) {
+      test.skip(true, 'Load More hidden — fewer entries than one page');
+      return;
+    }
+
+    const initialCount = rowCount;
+    await loadMore.click();
+    // Wait for the next page to LAND rather than betting on 2s. Under the
+    // full suite the audit log has accumulated entries from every earlier
+    // admin test, so the fetch+re-render runs slower than when this file
+    // is run alone — and the old sleep sampled the table mid-render, when
+    // the row count had briefly dropped. It passed in isolation and failed
+    // in the suite, which is machine speed deciding the verdict rather
+    // than the product (same defect class as SHY-0279).
+    //
+    // Deliberately `toBeGreaterThanOrEqual` and NOT a proof that page 2
+    // arrived: `state.page` is never incremented in
+    // `public/admin/js/tabs/audit-log.js`, so Load More re-fetches page 1
+    // and appends duplicates. Asserting the real contract here would pin a
+    // product bug that this story cannot fix — `public/**` is a shipped
+    // runtime surface needing the device gauntlet. Tracked as SHY-0283,
+    // which carries the RED test that pins it.
+    await expect
+      .poll(() => page.locator('#audit-log-tbody tr').count(), { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(initialCount);
   });
 
   // ── CSV Export ──

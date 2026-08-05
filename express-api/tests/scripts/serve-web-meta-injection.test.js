@@ -178,6 +178,32 @@ describe('serve-web git-meta injection (SHY-0205)', () => {
     }
   });
 
+  test('an uncommitted change publishes dirty="1"', async () => {
+    // Every other case here deliberately puts the web root OUTSIDE the repo so
+    // the tree stays clean and dirty is deterministically "0" — which left the
+    // TRUE branch of `dirty ? "1" : "0"` (local/build-meta.js:92) with no
+    // coverage at all, so the watermark could stop reporting a dirty build and
+    // nothing would notice. Dirty the repo itself, not the web root.
+    const repo = makeScratchRepo('probe-branch');
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-web-test-'));
+    try {
+      makeWebRoot(scratch);
+      fs.writeFileSync(path.join(repo.dir, 'uncommitted.txt'), 'not committed\n');
+      expect(repo.git('status', '--porcelain')).not.toBe(''); // fixture is really dirty
+      const started = await startServer(repo.dir, path.join(scratch, 'web'));
+      proc = started.proc;
+      const res = await get(started.port, '/');
+      expect(res.status).toBe(200);
+      expect(res.body).toContain('name="shytalk-git-dirty" content="1"');
+      // Dirtiness must not disturb the identity it already reported correctly.
+      expect(res.body).toContain('name="shytalk-git-branch" content="probe-branch"');
+      expect(res.body).toContain(`name="shytalk-git-sha" content="${repo.sha}"`);
+    } finally {
+      fs.rmSync(scratch, { recursive: true, force: true });
+      fs.rmSync(repo.dir, { recursive: true, force: true });
+    }
+  });
+
   test('an attribute-hostile branch name is sanitised, never breaking out of the tag', async () => {
     // `"`, `<` and `&` are all legal in a git refname but would corrupt the
     // markup if they reached the attribute. sanitizeLabel collapses them first,
