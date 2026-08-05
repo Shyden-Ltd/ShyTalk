@@ -177,4 +177,8 @@ Proven before any code was written (Linux container, real `gauntlet-v2.sh`): `re
 - **2026-08-05 07:50 WIB — the owed `code-reviewer` pass ran; Gate 3 now satisfied on merit.** The 2026-07-25 note above deliberately withheld `Reviewed-up-to:` because the agent was never dispatched. The operator authorised the dispatch during the pre-merge check on PR #1697, and it ran over exactly the two files this story contributes (`gauntlet-v2-overlap.test.js`, `serve-web-meta-injection.test.js`).
   **Verdict: no defects in what this story introduces.** The reviewer traced all three fixed probes against the real `reap_overlapped` / `on_signal` / `_pid_tree` implementations in `gauntlet-v2.sh` and confirmed each would genuinely go red if the corresponding production logic were skipped — which is the whole claim this story makes. It also confirmed `makeScratchRepo`'s git-identity isolation genuinely fixes the "asserting a property of the runner, not the product" problem, and that the hostile-branch-name assertions are defence-in-depth rather than vacuous cover.
   **Two coverage gaps found and closed** (commit `b57c3ce02fa`): `reap_overlapped` had no `set -u` empty-state test despite carrying the same two bash-3.2 guards its tested sibling does, and the git-meta contract never exercised `dirty="1"` because every case deliberately keeps the web root outside the repo. Both new tests were mutation-verified — removing the array guard empties stdout (the abort), and pinning `dirty` to `"0"` fails the new assertion — and both production files were restored byte-identical afterwards (`git diff` clean).
-  `Reviewed-up-to: b57c3ce02fa`
+  The marker below is written at column 0 with no backticks on purpose:
+  `scripts/pre-merge-check.sh` matches `^Reviewed-up-to:`, so an indented or
+  backticked mention — or one embedded in prose — is invisible to the gate.
+
+Reviewed-up-to: b57c3ce02fa

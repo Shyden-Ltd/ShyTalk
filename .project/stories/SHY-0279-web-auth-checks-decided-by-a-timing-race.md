@@ -175,4 +175,9 @@ This is the same defect class as [[SHY-0243]]: **the check encoded the machine i
 - **2026-08-05 07:50 WIB — `code-reviewer` round 2, covering the one commit that landed after round 1.** `4deaddf5c4e` (the audit-log sleep removal) post-dated the clean review, so Gate 3 owed it a pass. The reviewer confirmed the wait *mechanism* is honest — `expect.poll` genuinely auto-retries, and it is neither a sleep nor the banned single-shot `expect(await locator.count())` — but raised two findings against the check, both re-verified against source before acting.
   **Fixed here** (commit `b57c3ce02fa`): the assertion was nested inside two bare `if`s, so an empty audit log or a hidden Load More button let the test report PASS having asserted nothing at all. It now reports the missing precondition as a SKIP, matching the `test.skip` idiom the sibling CSV check in the same file already uses — the same "absence of work reported as success" class this story exists to eliminate.
   **Deferred to [[SHY-0283]], deliberately:** `toBeGreaterThanOrEqual` cannot tell real pagination from a duplicate re-fetch of page 1 — and there IS one. `public/admin/js/tabs/audit-log.js` never increments `state.page` (verified: exactly three references — initialiser line 12, reset line 58, read line 75 — and no increment anywhere), so Load More re-requests page 1 and appends the same rows beneath themselves. The server paginates correctly; it is purely client state. Strengthening the assertion here would pin a product bug in `public/**`, a shipped runtime surface needing the full device gauntlet — unavailable with the phones unplugged, and holding this PR would strand the ~30-PR queue it exists to unblock. The weak assertion is left in place with a comment naming [[SHY-0283]], which carries the RED test.
-  `Reviewed-up-to: b57c3ce02fa`
+  The round-1 note above records `Reviewed-up-to: e78b0e06ff8` inside prose,
+  which `scripts/pre-merge-check.sh` cannot see — it matches `^Reviewed-up-to:`
+  at column 0 precisely so a narrative mention can never satisfy the gate. The
+  authoritative marker is the standalone line below, superseding it.
+
+Reviewed-up-to: b57c3ce02fa
