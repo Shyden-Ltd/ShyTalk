@@ -173,20 +173,24 @@ test.describe('Admin Users - Security Subtab', () => {
       // After reset, the button should be hidden (no more lockout)
       await expect(page.locator('#reset-pin-lockout-btn')).toBeHidden({ timeout: 15_000 });
 
-      // Verify PIN is-locked shows "No"
+      // Verify PIN is-locked shows "No". Use a retrying web-first assertion,
+      // NOT a one-shot textContent() read: #pin-is-locked becomes visible
+      // before its text is populated with the settled value, and on WebKit
+      // (slower render) that gap is wide enough that a single read catches the
+      // intermediate state — the source of this test's webkit flakiness.
+      // toHaveText polls until the text settles (whitespace-normalised).
       const pinIsLocked = page.locator('#pin-is-locked');
       await expect(pinIsLocked).toBeVisible({ timeout: 15_000 });
-      const lockedText = await pinIsLocked.textContent();
-      expect(lockedText!.trim()).toBe('No');
+      await expect(pinIsLocked).toHaveText('No', { timeout: 15_000 });
     } else {
       // No lockout — the button being hidden IS the correct behavior
       await expect(resetBtn).toBeHidden();
 
-      // Verify the currently locked field shows "No"
+      // Verify the currently locked field shows "No" (retrying assertion —
+      // see the note above on the visible-before-populated race on WebKit).
       const pinIsLocked = page.locator('#pin-is-locked');
       await expect(pinIsLocked).toBeVisible({ timeout: 15_000 });
-      const lockedText = await pinIsLocked.textContent();
-      expect(lockedText!.trim()).toBe('No');
+      await expect(pinIsLocked).toHaveText('No', { timeout: 15_000 });
     }
   });
 

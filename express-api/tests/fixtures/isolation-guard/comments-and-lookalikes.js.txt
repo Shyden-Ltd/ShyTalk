@@ -1,0 +1,16 @@
+/**
+ * A docblock that mentions clearCollection(db, 'users') while describing the
+ * rule. It must not read as a wipe of `users`.
+ */
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection } = require('../helpers/firebase-emulator');
+
+const notAComment = 'a // b';
+const protocol = /https?:\/\/example/;
+const authWipeUrl = 'http://localhost:9099/emulator/v1/projects/demo-shytalk/accounts';
+
+beforeEach(async () => {
+  await clearCollection(db, 'rooms'); // the only real wipe here
+});

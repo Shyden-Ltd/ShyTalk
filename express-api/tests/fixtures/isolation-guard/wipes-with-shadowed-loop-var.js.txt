@@ -1,0 +1,17 @@
+// Two `for…of` loops reuse the variable name `c`. A file-global name→array map
+// would let the LAST declaration win and hide the real wipe entirely.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection } = require('../helpers/firebase-emulator');
+
+const WIPED = ['users', 'rooms'];
+const MERELY_LOGGED = ['scratch'];
+
+beforeEach(async () => {
+  for (const c of WIPED) await clearCollection(db, c);
+});
+
+test('an unrelated loop reuses the same variable name', () => {
+  for (const c of MERELY_LOGGED) expect(c).toBe('scratch');
+});

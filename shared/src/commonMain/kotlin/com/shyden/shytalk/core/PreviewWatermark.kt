@@ -3,8 +3,15 @@ package com.shyden.shytalk.core
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,9 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.logD
+import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.repository.AuthRepository
 import kotlinx.coroutines.delay
 import org.koin.mp.KoinPlatformTools
@@ -92,7 +104,17 @@ fun PreviewWatermark(content: @Composable () -> Unit) {
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 4.dp, end = 4.dp)
+                        // Keep the badge clear of the status bar / notch (top) and the
+                        // right safe-area edge — otherwise its top rows sit under the
+                        // clock/battery and are unreadable (reported on iPhone
+                        // 2026-07-12). safeDrawing covers iOS safe area + Android
+                        // system bars/cutout; `.only(Top + End)` avoids padding the
+                        // bottom/start where this top-right badge doesn't need it.
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(
+                                WindowInsetsSides.Top + WindowInsetsSides.End,
+                            ),
+                        ).padding(top = 4.dp, end = 4.dp)
                         .zIndex(WATERMARK_Z_INDEX),
             )
         }
@@ -100,29 +122,81 @@ fun PreviewWatermark(content: @Composable () -> Unit) {
 }
 
 private const val WATERMARK_Z_INDEX = 1000f
-private const val USER_ID_POLL_INTERVAL_MS = 2_000L
+private const val CONTENT_REFRESH_INTERVAL_MS = 2_000L
+private const val HEALTH_POLL_INTERVAL_MS = 30_000L
+private const val WATERMARK_TAG = "PreviewWatermark"
+
+/**
+ * Reads every watermark input (BuildVariant, QaContext, AuthRepository
+ * via Koin) and assembles the compact content through [WatermarkFormat]
+ * — the pure, jvm-tested layout contract (SHY-0205).
+ */
+private fun assembleContent(locale: String): WatermarkContent {
+    // `getOrNull()` on the context returns the Koin instance (or null if
+    // Koin hasn't started yet — possible early in `setContent` before
+    // `doInitKoin` completes).
+    val repo =
+        runCatching {
+            KoinPlatformTools.defaultContext().getOrNull()?.getOrNull<AuthRepository>()
+        }.getOrNull()
+    return WatermarkFormat.content(
+        environment = BuildVariant.environment,
+        buildVersion = BuildVariant.buildVersion,
+        gitBranch = BuildVariant.gitBranch,
+        gitSha = BuildVariant.gitSha,
+        gitDirty = BuildVariant.gitDirty,
+        builtAt = BuildVariant.builtAt,
+        deviceInfo = BuildVariant.deviceInfo,
+        uniqueId = repo?.resolvedUniqueId,
+        cohort = repo?.resolvedCohort,
+        displayName = repo?.resolvedDisplayName?.takeIf { it.isNotBlank() },
+        locale = locale,
+        route = QaContext.currentRoute,
+        journeyMarker = QaContext.journeyMarker,
+        serverSha = QaContext.serverSha,
+    )
+}
 
 @Composable
 private fun WatermarkBadge(modifier: Modifier = Modifier) {
-    var uniqueId by remember { mutableStateOf<String?>(null) }
-    var displayName by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        // Sample AuthRepository.resolvedUniqueId / resolvedDisplayName
-        // on a tick rather than observe flows — both are plain `var`s
-        // and a watermark refresh latency of up to 2s is unnoticeable
-        // to the human eye, while threading StateFlows through every
-        // auth call site for this single display would be invasive.
-        // `getOrNull()` on the context returns the Koin instance (or
-        // null if Koin hasn't started yet — possible early in
-        // `setContent` before `doInitKoin` completes).
+    val locale = Locale.current.language
+    var content by remember { mutableStateOf(assembleContent(locale)) }
+    var serverOk by remember { mutableStateOf(QaContext.serverOk) }
+
+    LaunchedEffect(locale) {
+        // Sample the volatile inputs on a tick rather than observe flows —
+        // a watermark refresh latency of up to 2s is unnoticeable to the
+        // human eye, while threading StateFlows through every producer
+        // for this single display would be invasive.
         while (true) {
-            val repo =
+            content = assembleContent(locale)
+            serverOk = QaContext.serverOk
+            delay(CONTENT_REFRESH_INTERVAL_MS)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        // Server-echo poll (SHY-0205): asks the EXISTING health endpoint
+        // which backend is answering. Runs only on preview builds (this
+        // composable never mounts on prod) and logs only on state
+        // CHANGES so a long-red local session doesn't spam the log.
+        while (true) {
+            val service =
                 runCatching {
-                    KoinPlatformTools.defaultContext().getOrNull()?.getOrNull<AuthRepository>()
+                    KoinPlatformTools.defaultContext().getOrNull()?.getOrNull<AppConfigService>()
                 }.getOrNull()
-            uniqueId = repo?.resolvedUniqueId
-            displayName = repo?.resolvedDisplayName?.takeIf { it.isNotBlank() }
-            delay(USER_ID_POLL_INTERVAL_MS)
+            if (service != null) {
+                val result =
+                    runCatching { service.checkBackendHealth() }
+                        .getOrElse { Resource.Error(it.message ?: "health poll failed") }
+                val verdict = ServerHealth.verdict(result)
+                val previous = QaContext.serverOk
+                QaContext.reportServerHealth(verdict.sha, verdict.ok)
+                if (previous != verdict.ok) {
+                    logD(WATERMARK_TAG, "server health ${previous ?: "unknown"} -> ${verdict.ok} (sha=${verdict.sha ?: "?"})")
+                }
+            }
+            delay(HEALTH_POLL_INTERVAL_MS)
         }
     }
 
@@ -130,39 +204,46 @@ private fun WatermarkBadge(modifier: Modifier = Modifier) {
         modifier =
             modifier
                 .background(WatermarkBackgroundColor)
-                .padding(horizontal = 6.dp, vertical = 3.dp),
+                .padding(horizontal = 6.dp, vertical = 3.dp)
+                .widthIn(max = WATERMARK_MAX_WIDTH_DP.dp),
         horizontalAlignment = Alignment.End,
     ) {
         Text(
-            text = "ShyTalk Preview",
+            text = content.title,
             color = Color.White,
             fontSize = WATERMARK_TITLE_SIZE_SP.sp,
             fontWeight = FontWeight.Bold,
         )
-        Text(
-            text = "${BuildVariant.environment} · ${BuildVariant.buildVersion}",
-            color = Color.White,
-            fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
-            fontFamily = FontFamily.Monospace,
-        )
-        Text(
-            text = BuildVariant.deviceInfo,
-            color = Color.White,
-            fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
-            fontFamily = FontFamily.Monospace,
-        )
-        Text(
-            text = "UID: ${uniqueId ?: "-"}",
-            color = Color.White,
-            fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
-            fontFamily = FontFamily.Monospace,
-        )
-        Text(
-            text = "Name: ${displayName ?: "-"}",
-            color = Color.White,
-            fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
-            fontFamily = FontFamily.Monospace,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = content.statusLine + " ",
+                color = Color.White,
+                fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "●",
+                color =
+                    when (serverOk) {
+                        true -> ServerOkColor
+                        false -> ServerFailColor
+                        null -> ServerUnknownColor
+                    },
+                fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
+            )
+        }
+        content.detailLines.forEach { line ->
+            Text(
+                text = line,
+                color = Color.White,
+                fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -177,3 +258,13 @@ private val WatermarkBackgroundColor =
         .copy(red = 0xD3 / 255f, green = 0x2F / 255f, blue = 0x2F / 255f, alpha = PreviewWatermarkConstants.BADGE_BACKGROUND_ALPHA)
 private const val WATERMARK_TITLE_SIZE_SP = 10
 private const val WATERMARK_DETAIL_SIZE_SP = 9
+
+// Compactness cap (operator ruling 2026-07-18): the badge never spans
+// more than ~60% of a small phone's width; long lines ellipsize.
+private const val WATERMARK_MAX_WIDTH_DP = 220
+
+// Server-dot palette — solid (not translucent like the badge) so the
+// ok/fail state survives screenshot compression at 9sp.
+private val ServerOkColor = Color(0xFF66BB6A)
+private val ServerFailColor = Color(0xFFFF5252)
+private val ServerUnknownColor = Color(0xFFBDBDBD)
