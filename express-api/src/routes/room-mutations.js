@@ -40,6 +40,7 @@ const {
   OWNER_SEAT_INDEX,
 } = require('../utils/room-auth');
 const { shouldReapStaleRoom, reapStaleRoomTx } = require('../utils/stale-room-reap');
+const { checkFeatureAccess } = require('../safety/enforce');
 const log = require('../utils/log');
 
 // Mirrors the client room-name input cap (CreateRoomDialog: length <= 50).
@@ -151,6 +152,17 @@ async function executeRoomMutation(req, res, errorContext, mutate) {
 router.post('/rooms/:roomId/seats/:seatIndex/claim', async (req, res) => {
   const seatIndex = parseSeatIndex(req.params.seatIndex);
   if (seatIndex === null) return res.status(400).json({ error: 'Invalid seat index' });
+
+  // SHY-0060 — taking a mic seat is active speaking → 16+ (voice moderation
+  // is harder than text). Inert unless the operator flag is ON; the loader
+  // defers the user-doc read to flag-ON so the seat path pays nothing when off.
+  const voiceBlock = await checkFeatureAccess(
+    db,
+    'VOICE_ROOM_ACTIVE_SPEAKING',
+    async () => (await db.doc(`users/${req.auth.uniqueId}`).get()).data() || {},
+  );
+  if (voiceBlock) return res.status(voiceBlock.status).json(voiceBlock.body);
+
   return executeRoomMutation(req, res, 'Seat claim', ({ room, t, roomRef, callerId }) => {
     if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     const seat = (room.seats || {})[String(seatIndex)] || {};
@@ -178,6 +190,15 @@ router.post('/rooms/:roomId/seats/:seatIndex/claim', async (req, res) => {
 router.post('/rooms/:roomId/seats/:seatIndex/accept-invite', async (req, res) => {
   const seatIndex = parseSeatIndex(req.params.seatIndex);
   if (seatIndex === null) return res.status(400).json({ error: 'Invalid seat index' });
+
+  // SHY-0060 — accepting a seat invite also takes a mic → 16+ active speaking.
+  const voiceBlock = await checkFeatureAccess(
+    db,
+    'VOICE_ROOM_ACTIVE_SPEAKING',
+    async () => (await db.doc(`users/${req.auth.uniqueId}`).get()).data() || {},
+  );
+  if (voiceBlock) return res.status(voiceBlock.status).json(voiceBlock.body);
+
   return executeRoomMutation(req, res, 'Accept invite', ({ room, t, roomRef, callerId }) => {
     if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     const invited = Object.prototype.hasOwnProperty.call(room.pendingInvites || {}, callerId);

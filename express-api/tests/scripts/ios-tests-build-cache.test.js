@@ -262,13 +262,13 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
     expect(minutes).toBeGreaterThanOrEqual(60);
   });
 
-  // Round 1 M-1 + Round 2 M-1: pin the exact SHA used by deploy-dev.yml
-  // so a supply-chain shift (or a future SHA-pin "update") is caught.
-  // The full SHA string contains 'actions/cache' as a substring, so
-  // asserting both would be redundant — a single assertion on the
-  // pinned SHA covers both the action choice and the version pin.
-  test('Restore Kotlin/Native step pins actions/cache/restore@v5.0.5 SHA (matches deploy-dev)', () => {
-    expect(cacheStep).toContain('actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+  // SHY-0162: assert the restore action is SHA-PINNED (version-agnostic) rather
+  // than frozen to a specific SHA. ci-action-pin-consistency.test.js guarantees
+  // every actions/cache* variant across the workflows shares ONE SHA, so this
+  // step stays aligned with deploy-dev's restore pin automatically; a frozen
+  // literal here is what left main red after Dependabot bumped cache to 6.1.0.
+  test('Restore Kotlin/Native step uses a SHA-pinned actions/cache/restore', () => {
+    expect(cacheStep).toMatch(/actions\/cache\/restore@[a-f0-9]{40}\b/);
   });
 
   test('Restore Kotlin/Native step targets ~/.konan', () => {
@@ -419,7 +419,7 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
       const step = [
         '      - name: Cache iosApp/Pods',
         '        id: pods-cache',
-        '        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
+        '        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
         '        with:',
         '          path: iosApp/Pods',
         "          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}",
@@ -632,10 +632,8 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('CocoaPods spec-repos cache', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
-      expect(cocoaPodsRepoCacheStep).toContain(
-        'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
-      );
+    test('pins a SHA-pinned actions/cache', () => {
+      expect(cocoaPodsRepoCacheStep).toMatch(/actions\/cache@[a-f0-9]{40}\b/);
     });
     test('targets ~/.cocoapods/repos', () => {
       expect(cocoaPodsRepoCacheStep).toContain('~/.cocoapods/repos');
@@ -663,8 +661,8 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('iosApp/Pods cache (load-bearing — gates Install CocoaPods skip)', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
-      expect(podsCacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+    test('pins a SHA-pinned actions/cache', () => {
+      expect(podsCacheStep).toMatch(/actions\/cache@[a-f0-9]{40}\b/);
     });
     test('targets iosApp/Pods', () => {
       expect(podsCacheStep).toContain('path: iosApp/Pods');
@@ -695,10 +693,8 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('Xcode DerivedData cache', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
-      expect(derivedDataCacheStep).toContain(
-        'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
-      );
+    test('pins a SHA-pinned actions/cache', () => {
+      expect(derivedDataCacheStep).toMatch(/actions\/cache@[a-f0-9]{40}\b/);
     });
     test('targets build/ios-derived-data (matches xcodebuild -derivedDataPath)', () => {
       expect(derivedDataCacheStep).toContain('path: build/ios-derived-data');
@@ -739,8 +735,8 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('SwiftPM packages cache', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
-      expect(swiftPmCacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+    test('pins a SHA-pinned actions/cache', () => {
+      expect(swiftPmCacheStep).toMatch(/actions\/cache@[a-f0-9]{40}\b/);
     });
     test('targets build/ios-spm-packages (matches xcodebuild -clonedSourcePackagesDirPath)', () => {
       expect(swiftPmCacheStep).toContain('path: build/ios-spm-packages');

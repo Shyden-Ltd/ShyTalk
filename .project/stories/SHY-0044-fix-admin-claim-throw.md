@@ -1,6 +1,6 @@
 ---
 id: SHY-0044
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: [G025]
 pr:
 mvp: true
+released_in: v0.97.15
 ---
 
 # SHY-0044: Fix `firestore.rules:140` admin-claim throws-on-absent — use `isAdmin()` helper
@@ -164,3 +165,4 @@ This is a **security correctness defect** because:
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 27 (G025). Reserved ID SHY-0044. **Critical security correctness item** — schedule pickup ahead of the lower-priority polish SHYs.
 - 2026-06-12 ~23:50 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): authz-helper fix → rules emulator suite (3 token states) is RED→GREEN, admin-moderation flow re-proven on real Android + real iPhone + all browsers; firestore dev deploy maps onto the DEV gauntlet. DoD → judgment-merge. Pickup-fitness: no dupes/stale found.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Done. firestore.rules uses isAdmin() (def @38, 27 call sites); direct request.auth.token.admin survives only as a comment @33; present at v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

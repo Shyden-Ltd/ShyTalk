@@ -1,0 +1,10 @@
+// A victim: it seeds a subcollection whose name appears only mid-path.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+
+const seedItem = (uid, itemId) => db.doc(`users/${uid}/backpack/${itemId}`).set({ qty: 1 });
+
+test('an item survives', async () => {
+  await seedItem('42', 'hat');
+});

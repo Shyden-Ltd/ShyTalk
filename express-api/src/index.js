@@ -158,6 +158,10 @@ app.use('/api', (req, res, next) => {
 });
 
 // Stricter limits on write-heavy routes
+// Device endpoints perform a Firestore write keyed by a client-supplied deviceId
+// (bind on lock-check / telemetry upsert) — cap per-user churn (SHY-0170).
+app.use('/api/devices', writeLimiter);
+app.use('/api/device-info', writeLimiter);
 app.use('/api/conversations', writeLimiter);
 app.use('/api/economy/gacha', writeLimiter);
 app.use('/api/economy/gift', writeLimiter);
@@ -254,6 +258,7 @@ app.use('/api', require('./routes/admin-logs'));
 app.use('/api', require('./routes/admin-log-config'));
 app.use('/api', require('./routes/storage'));
 app.use('/api', require('./routes/device-info'));
+app.use('/api', require('./routes/devices'));
 app.use('/api', require('./routes/admin-bans'));
 app.use('/api', require('./routes/admin-devices'));
 app.use('/api', require('./routes/admin-temp-id'));

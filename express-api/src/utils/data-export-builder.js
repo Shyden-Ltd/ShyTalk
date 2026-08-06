@@ -142,6 +142,17 @@ const _deviceBindingMapper = (d) => ({ ...d.data(), id: d.id });
 const _submittedSuggestionMapper = (d) => ({ ...d.data(), id: d.id });
 const _notificationMapper = (d) => ({ ...d.data(), id: d.id });
 
+// SHY-0132 — OSA §17: a conversation is exportable UNLESS it was frozen as a
+// migrated cross-cohort thread (`crossCohortAtMigration: true`). The data export
+// uses the Admin SDK, which BYPASSES Firestore rules, so the segregation that the
+// client `where('crossCohortAtMigration','==', false)` filter enforces must be
+// applied here too — otherwise a migrated cross-cohort thread's metadata AND its
+// message content leak into the user's GDPR export. `!== true` keeps non-migrated
+// threads (field `false` OR absent), matching the in-app visibility. Extracted as a
+// module-level predicate so it is unit-testable without the ZIP buffer (no unzip lib
+// is on the dep tree) — same testability rationale as the mappers above.
+const _isExportableConversation = (doc) => doc.data().crossCohortAtMigration !== true;
+
 async function buildDataExport(uniqueId) {
   // Single numeric coercion shared by every Firestore equality query in
   // this function — the function previously did this seven times inline
@@ -250,7 +261,12 @@ async function buildDataExport(uniqueId) {
       .collection('conversations')
       .where('participantIds', 'array-contains', numericUid)
       .get();
-    conversations = convSnap.docs.map((d) => {
+    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17) ONCE, for BOTH the
+    // exported metadata AND the per-conversation message collection below (the loop
+    // previously iterated the raw docs, so the message CONTENT of a migrated thread
+    // would have leaked even with a metadata-only filter).
+    const visibleConvDocs = convSnap.docs.filter(_isExportableConversation);
+    conversations = visibleConvDocs.map((d) => {
       const data = d.data();
       return {
         id: d.id,
@@ -264,7 +280,7 @@ async function buildDataExport(uniqueId) {
     });
 
     // Collect user's own messages from each conversation (max 1000 total)
-    for (const conv of convSnap.docs) {
+    for (const conv of visibleConvDocs) {
       if (userMessages.length >= 1000) break;
       try {
         const remaining = 1000 - userMessages.length;
@@ -559,3 +575,4 @@ module.exports._identityEntryMapper = _identityEntryMapper;
 module.exports._deviceBindingMapper = _deviceBindingMapper;
 module.exports._submittedSuggestionMapper = _submittedSuggestionMapper;
 module.exports._notificationMapper = _notificationMapper;
+module.exports._isExportableConversation = _isExportableConversation;
