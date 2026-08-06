@@ -132,6 +132,22 @@ val testModule =
                 .AndroidPlatformSettingsService(androidContext())
         }
 
+        // App-Lock — required by SecuritySettingsScreen (SHY-0187 wired it into
+        // the graph). Real impl over the already-bound (real) SecureStorage, so
+        // instrumented steps can seed/clear a credential; it makes no network
+        // calls. BiometricAuth is a real OS-capability probe. PinRepository is
+        // deliberately NOT bound here: the screen resolves it lazily only when
+        // the verify dialog shows (existing credential), a real-backend path
+        // exercised by the device gauntlet, never by the fake Compose harness.
+        single<com.shyden.shytalk.data.repository.AppLockRepository> {
+            com.shyden.shytalk.data.repository
+                .AppLockRepositoryImpl(get())
+        }
+        single {
+            com.shyden.shytalk.core.util
+                .BiometricAuth(androidContext())
+        }
+
         // ActiveRoomManager (concrete) — required by RoomScreen which injects the concrete type directly.
         // Constructed with fake dependencies so no real Firebase/LiveKit calls are made.
         // The 8th argument is RoomServiceController (NOT a Context — bug in pre-PR-#404 test

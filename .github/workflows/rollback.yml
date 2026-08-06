@@ -1,0 +1,95 @@
+name: Rollback web prod (Cloudflare Pages)
+# Emergency recovery: instantly re-promote a previous successful Cloudflare
+# Pages PRODUCTION deployment of the `shytalk-site` project — no rebuild,
+# seconds to recover. Manual dispatch only (a repo collaborator must trigger
+# it from the Actions tab), deliberately WITHOUT the `production` approval gate
+# so recovery is never blocked behind an approver when prod is already broken.
+#
+# Scope: this rolls back the WEB surface only (the `shytalk-site` Cloudflare
+# Pages project). Backend / Android / iOS have their own recovery paths (re-run
+# deploy-prod.yml against the last-good tag) — rolling those back is out of
+# scope here (see SHY-0233 Out of Scope).
+#
+# Default target = the deployment immediately BEFORE the current live one. Pass
+# a specific deployment ID to roll back further (see the Deployments list in the
+# Cloudflare dashboard for project `shytalk-site`).
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: 'CF Pages deployment ID to roll back to. Blank = the previous live production deployment.'
+        required: false
+        default: ''
+
+# Dedicated concurrency group — deliberately NOT the `deploy-prod` group used by
+# deploy-prod.yml. That group serialises the ENTIRE multi-platform deploy
+# (backend + web + Android + iOS), which can take ~100 min on a cold iOS build;
+# an emergency web rollback must never queue behind an unrelated platform build.
+# Rollbacks serialise against EACH OTHER (cancel-in-progress: false) so two
+# concurrent recoveries can't race on the same project. The only theoretical
+# race is a rollback overlapping an in-flight web deploy-prod — vanishingly
+# unlikely (deploy-prod is a rare, deliberate, approval-gated act) and
+# self-correcting (re-dispatch either action; last promote wins).
+concurrency:
+  group: rollback-web-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rollback:
+    name: Roll back shytalk-site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Promote a previous production deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Account ID is inlined to match deploy-prod.yml / deploy-dev.yml — it
+          # is NOT a secret (it already appears in those workflow files).
+          CLOUDFLARE_ACCOUNT_ID: '9315582c39b627dca58dfa83602db385'
+          TARGET_ID: ${{ inputs.deployment_id }}
+        run: |
+          set -euo pipefail
+
+          # Fail fast + clear if the CF token secret is unset — otherwise the
+          # first curl would fail with an opaque 400 mid-recovery.
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN secret is not set — cannot reach the Cloudflare API to roll back."
+            exit 1
+          fi
+
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/shytalk-site"
+          hdr="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+
+          target="${TARGET_ID}"
+          if [ -z "$target" ]; then
+            echo "No deployment ID given — finding the previous production deployment…"
+            # Wrap the curl in `if !` so an HTTP/network error fails with a
+            # clear message instead of an opaque `set -e` death mid-recovery.
+            if ! raw="$(curl -fsS -H "$hdr" "${API}/deployments?per_page=25")"; then
+              echo "::error::Could not list shytalk-site deployments (network or HTTP error — check the CLOUDFLARE_API_TOKEN)."
+              exit 1
+            fi
+            # Production deployments are returned newest-first: [0] is the
+            # current live one, [1] the previous. Roll back to [1].
+            target="$(jq -r '[.result[] | select(.environment == "production")] | .[1].id // ""' <<<"$raw")"
+          fi
+
+          if [ -z "$target" ]; then
+            echo "::error::No previous production deployment found to roll back to."
+            exit 1
+          fi
+          echo "Rolling shytalk-site back to deployment: ${target}"
+
+          if ! resp="$(curl -fsS -X POST -H "$hdr" "${API}/deployments/${target}/rollback")"; then
+            echo "::error::Rollback request to Cloudflare failed (HTTP/network error — e.g. invalid deployment ID or expired token)."
+            exit 1
+          fi
+          if [ "$(jq -r '.success' <<<"$resp")" != "true" ]; then
+            echo "::error::Rollback failed: $(jq -c '.errors' <<<"$resp")"
+            exit 1
+          fi
+          echo "Rollback OK. Live deployment is now $(jq -r '.result.id' <<<"$resp") ($(jq -r '.result.url' <<<"$resp"))"

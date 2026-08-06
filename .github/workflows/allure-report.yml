@@ -61,7 +61,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check if report already generated for this run
         id: check-existing
@@ -87,11 +87,17 @@ jobs:
         if: steps.check-existing.outputs.skip != 'true'
         run: |
           MERGED="allure-results-all/environment.properties"
-          > "$MERGED"
+          : > "$MERGED"
           find allure-results-all -name environment.properties -not -path "$MERGED" | sort | while read -r f; do
-            SUITE=$(echo "$f" | sed 's|allure-results-all/||;s|/environment.properties||;s|/|.|g')
+            # <dir>/<suite path>/environment.properties → dot-joined suite id,
+            # in pure parameter expansion (same output as the old sed chain).
+            rel="${f#allure-results-all/}"
+            rel="${rel%/environment.properties}"
+            SUITE="${rel//\//.}"
             while IFS= read -r line; do
-              trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
+              # pure-bash left-trim: strip the leading-whitespace run (the
+              # longest non-space-led suffix is everything after it).
+              trimmed="${line#"${line%%[![:space:]]*}"}"
               [ -z "$trimmed" ] && continue
               KEY=$(echo "$trimmed" | cut -d= -f1)
               VALUE=$(echo "$trimmed" | cut -d= -f2-)
@@ -114,7 +120,7 @@ jobs:
 
       - name: Restore history from gh-pages
         if: steps.check-existing.outputs.skip != 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: gh-pages
           path: gh-pages
@@ -156,7 +162,20 @@ jobs:
         run: |
           RUNS_DIR="gh-pages/${{ inputs.suite_name }}/${{ inputs.report_env }}/runs"
           if [ -d "$RUNS_DIR" ]; then
-            ls -1d "$RUNS_DIR"/*/ 2>/dev/null | sort | head -n -${{ inputs.max_history_runs }} | xargs rm -rf 2>/dev/null || true
+            # NUL-delimited find into a bash array (not `ls` parsing —
+            # SC2012): filename-safe end to end, no GNU-only flags, same
+            # ascending byte sort as before so the newest N (date-prefixed
+            # names) are the ones kept.
+            dirs=()
+            while IFS= read -r -d '' d; do
+              dirs+=("$d")
+            done < <(find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+            excess=$(( ${#dirs[@]} - ${{ inputs.max_history_runs }} ))
+            if [ "$excess" -gt 0 ]; then
+              for (( i = 0; i < excess; i++ )); do
+                rm -rf -- "${dirs[i]}"
+              done
+            fi
             echo "Pruned old runs, kept last ${{ inputs.max_history_runs }}"
           fi
 
@@ -202,13 +221,81 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: allure-report
           destination_dir: ${{ inputs.suite_name }}/${{ inputs.report_env }}/latest
-          keep_files: true
+          # SHY-0128 fix 1: false — peaceiris cleans ONLY destination_dir
+          # before copying (v4.1.0 git-utils.ts L127-138), so each deploy
+          # replaces this suite/env's latest/ instead of stranding prior
+          # hashed files forever (playwright/pr/latest had accumulated
+          # 6.9 GiB / 1.05M files). Sibling suites, the root landing page and
+          # CNAME live outside destination_dir and are untouched. force_orphan
+          # was evaluated and rejected: it skips the clone entirely
+          # (src L97-104), so each deploy would wipe every sibling suite.
+          keep_files: false
+
+      - name: Cap gh-pages history (bounded, content-identical)
+        # SHY-0128 fix 2: each deploy adds a gh-pages commit and that history
+        # has no value (reports are point-in-time snapshots; Pages serves only
+        # the tip) — 1,771 commits had accumulated 12.75 GiB of reachable pack.
+        # Past MAX_GH_PAGES_COMMITS this rebuilds the branch as ONE orphan
+        # commit whose tree IS the current tip tree (omitting the parent list
+        # in the createCommit call is what truncates the history), entirely
+        # via the Git Data API — nothing multi-GiB is downloaded or checked
+        # out. Race-safety: this step runs inside the workflow-level
+        # gh-pages-deploy concurrency group (serializes every allure deploy),
+        # and the tip is re-read just before the ref move — if a writer
+        # outside the group (the kotlin deploy in pr-checks.yml) lands mid-cap
+        # the cap skips and a later run retries. Same gating as the deploy
+        # step: dependabot runs hold a read-only GITHUB_TOKEN and can't write.
+        if: steps.check-existing.outputs.skip != 'true' && !startsWith(github.head_ref, 'dependabot/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          MAX_GH_PAGES_COMMITS: 25
+        run: |
+          set -euo pipefail
+          TIP_ERR="${RUNNER_TEMP}/gh-pages-tip-err"
+          if ! TIP=$(gh api "repos/${REPO}/git/ref/heads/gh-pages" --jq '.object.sha' 2>"$TIP_ERR"); then
+            if grep -q "HTTP 404" "$TIP_ERR"; then
+              echo "gh-pages does not exist yet — nothing to cap"
+              exit 0
+            fi
+            cat "$TIP_ERR"
+            echo "::error::failed to read the gh-pages tip"
+            exit 1
+          fi
+          # Every LATER API failure (count, tree read, create, re-read, move)
+          # already aborts via set -e; the ERR trap makes each one surface as
+          # a loud ::error:: annotation too (the guarded read above is exempt
+          # from ERR by bash if-condition semantics — its 404 path stays
+          # tolerated).
+          trap 'echo "::error::gh-pages history cap failed unexpectedly"' ERR
+          # O(1) commit count: with per_page=1 the Link header's rel="last"
+          # page number IS the total count (absent header = single commit).
+          # The first sed slices the RESPONSE HEADERS (everything before the
+          # first blank line) so the JSON body can never satisfy the pattern.
+          HEADERS=$(gh api -i "repos/${REPO}/commits?sha=gh-pages&per_page=1")
+          COUNT=$(printf '%s\n' "$HEADERS" | sed -n '1,/^\r\{0,1\}$/p' | sed -n 's/.*[?&]page=\([0-9][0-9]*\)>; rel="last".*/\1/p' | head -n 1)
+          COUNT="${COUNT:-1}"
+          echo "gh-pages history: ${COUNT} commit(s); cap threshold: ${MAX_GH_PAGES_COMMITS}"
+          if [ "$COUNT" -le "$MAX_GH_PAGES_COMMITS" ]; then
+            exit 0
+          fi
+          TREE=$(gh api "repos/${REPO}/git/commits/${TIP}" --jq '.tree.sha')
+          NEW=$(gh api -X POST "repos/${REPO}/git/commits" -f message="chore(gh-pages): cap deploy history — content-identical orphan rebuild of ${TIP} (SHY-0128)" -f tree="${TREE}" --jq '.sha')
+          CURRENT=$(gh api "repos/${REPO}/git/ref/heads/gh-pages" --jq '.object.sha')
+          if [ "$CURRENT" != "$TIP" ]; then
+            echo "tip moved (${TIP} -> ${CURRENT}) since the count — skipping cap this run"
+            exit 0
+          fi
+          gh api -X PATCH "repos/${REPO}/git/refs/heads/gh-pages" -f sha="${NEW}" -F force=true > /dev/null
+          echo "capped gh-pages: ${COUNT} commits -> 1 (tree ${TREE} unchanged)"
 
       - name: Post report URL in summary
         if: steps.check-existing.outputs.skip != 'true'
         run: |
           REPO="${{ github.repository }}"
           OWNER="${REPO%%/*}"
-          echo "## Allure Report (${{ inputs.suite_name }})" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/${{ inputs.suite_name }}/${{ inputs.report_env }}/latest/)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Allure Report (${{ inputs.suite_name }})"
+            echo ""
+            echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/${{ inputs.suite_name }}/${{ inputs.report_env }}/latest/)"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,11 @@
+// A route path contains the word `users`. The analyzer counts it as a use — a
+// deliberate over-approximation: a false positive costs one namespace, a false
+// negative costs a scheduling-dependent flake.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+
+test('the admin route responds', async () => {
+  expect(db).toBeDefined();
+  expect('/api/admin/users').toContain('users');
+});

@@ -23,16 +23,20 @@ const WORKFLOWS_DIR = path.join(REPO_ROOT, '.github', 'workflows');
 const SONARCLOUD_YML = path.join(WORKFLOWS_DIR, 'sonarcloud.yml');
 const AUTO_RETRY_YML = path.join(WORKFLOWS_DIR, 'sonarcloud-auto-retry.yml');
 
-// The repo's existing actions/cache pin — asserted EXACTLY so a future
-// SHA bump triggers a review of this cache contract too.
-const CACHE_ACTION_SHA = '27d5ce7f107fe9357f9df03efb73ab90386fccae';
+// SHY-0162: assert the engine cache is SHA-PINNED (version-agnostic) rather
+// than frozen to a specific SHA. A frozen literal left main red after
+// Dependabot bumped actions/cache 5.0.5 → 6.1.0; pinned-ness + cross-workflow
+// consistency are guarded by ci-action-pin-consistency.test.js +
+// scripts/check-action-shas.sh.
+const CACHE_USES_PINNED = /uses: actions\/cache@[a-f0-9]{40}\b/;
+const CACHE_ACTION_PREFIX = 'actions/cache@';
 
 const yml = () => fs.readFileSync(SONARCLOUD_YML, 'utf-8');
 
 describe('sonarcloud.yml scanner-engine cache (SHY-0068)', () => {
   test('caches ~/.sonar/cache via the exact pinned actions/cache SHA with OS-scoped key + restore-keys', () => {
     const src = yml();
-    expect(src).toContain(`uses: actions/cache@${CACHE_ACTION_SHA}`);
+    expect(src).toMatch(CACHE_USES_PINNED);
     expect(src).toContain('path: ~/.sonar/cache');
     // Run-unique key (immutability workaround: always save fresh) with
     // OS-scoped prefix restore (always restore newest). Line-based checks
@@ -47,7 +51,7 @@ describe('sonarcloud.yml scanner-engine cache (SHY-0068)', () => {
   test('cache restore step sits after checkout and before setup-jdk-gradle', () => {
     const src = yml();
     const checkoutIdx = src.indexOf('actions/checkout@');
-    const cacheIdx = src.indexOf(`actions/cache@${CACHE_ACTION_SHA}`);
+    const cacheIdx = src.indexOf(CACHE_ACTION_PREFIX);
     const jdkIdx = src.indexOf('./.github/actions/setup-jdk-gradle');
     expect(checkoutIdx).toBeGreaterThan(-1);
     expect(cacheIdx).toBeGreaterThan(-1);

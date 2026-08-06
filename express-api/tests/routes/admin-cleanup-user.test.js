@@ -97,6 +97,13 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
+// Deleting a user's device bindings can lift a hardware ban that only reached
+// them through one of those devices, so the route must invalidate the ban
+// gate's cache (SHY-0149). The route destructures `clearBanCache` at require
+// time, so the mock must be installed here.
+jest.mock('../../src/utils/bans', () => ({ clearBanCache: jest.fn() }));
+const { clearBanCache } = require('../../src/utils/bans');
+
 // ─── App setup ────────────────────────────────────────────────────
 
 const adminCleanupRouter = require('../../src/routes/admin-cleanup');
@@ -333,6 +340,9 @@ describe('POST /api/cleanup/device-binding/:uniqueId', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.deleted).toBe(1);
+    // The freed binding may have been the only thing carrying a hardware ban
+    // into this account's standing — clear their cached verdict.
+    expect(clearBanCache).toHaveBeenCalledWith(10000001);
   });
 
   test('keeps non-numeric uniqueId as string', async () => {
@@ -348,6 +358,8 @@ describe('POST /api/cleanup/device-binding/:uniqueId', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.deleted).toBe(0);
     expect(res.body.message).toContain('No device bindings');
+    // Nothing was deleted, so no standing changed — no cache churn.
+    expect(clearBanCache).not.toHaveBeenCalled();
   });
 
   test('returns deleted count when bindings exist', async () => {

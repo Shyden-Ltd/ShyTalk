@@ -37,11 +37,17 @@ class PrivateMessageRepositoryImpl(
         // for splash screen — just do a Firestore read to warm the cache
         try {
             val uid = authRepository.currentUserId ?: return
-            val uidQuery: Any = uid.toLongOrNull() ?: uid
+            // SHY-0130 — query participantIds as a STRING (the stored type); the
+            // prior toLongOrNull() coercion produced a Long that matched nothing
+            // and could not satisfy the `string(callerUniqueId())` list rule.
             val snapshot =
                 firestore
                     .collection("conversations")
-                    .whereArrayContains("participantIds", uidQuery)
+                    .whereArrayContains("participantIds", uid)
+                    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17): the
+                    // `list` rule does NOT enforce crossCohortAtMigration as a filter, so
+                    // the query must. Requires the backfill to stamp false on legacy docs.
+                    .whereEqualTo("crossCohortAtMigration", false)
                     .orderBy("lastMessageAt", Query.Direction.DESCENDING)
                     .get()
                     .await()
@@ -62,14 +68,23 @@ class PrivateMessageRepositoryImpl(
                 trySend(it)
                 prefetchedConversations = null
             }
-            val userIdQuery: Any = userId.toLongOrNull() ?: userId
+            // SHY-0130 — query participantIds as a STRING (the stored type).
             val listener =
                 firestore
                     .collection("conversations")
-                    .whereArrayContains("participantIds", userIdQuery)
+                    .whereArrayContains("participantIds", userId)
+                    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17); see prefetch.
+                    .whereEqualTo("crossCohortAtMigration", false)
                     .orderBy("lastMessageAt", Query.Direction.DESCENDING)
                     .addSnapshotListener { snapshot, error ->
-                        if (error != null || snapshot == null) return@addSnapshotListener
+                        if (error != null) {
+                            // SHY-0130 — surface a denied/failed listen to the Flow
+                            // (observeConversations' catch logs it) rather than
+                            // swallowing it, so a denial is distinguishable from empty.
+                            close(error)
+                            return@addSnapshotListener
+                        }
+                        if (snapshot == null) return@addSnapshotListener
                         val conversations =
                             snapshot.documents.mapNotNull { doc ->
                                 val data = doc.data ?: return@mapNotNull null
@@ -95,12 +110,17 @@ class PrivateMessageRepositoryImpl(
                 val now = System.currentTimeMillis()
                 val data =
                     mapOf(
-                        "participantIds" to
-                            listOf<Any>(
-                                uid1.toLongOrNull() ?: uid1,
-                                uid2.toLongOrNull() ?: uid2,
-                            ).sortedBy { it.toString() },
+                        // SHY-0130 — participantIds are STRINGS (the canonical type:
+                        // model `List<String>`, rule `string(callerUniqueId()) in
+                        // resource.data.participantIds`, iOS, Express `.map(String)`).
+                        // The prior `toLongOrNull()` coercion wrote numbers, making
+                        // Android-created threads unreadable by the rule's string gate.
+                        "participantIds" to listOf(uid1, uid2).sorted(),
                         "isGroup" to false,
+                        // SHY-0132 — new threads are never cross-cohort (creation rejects
+                        // cross-cohort pairs); stamp false so they match the segregation
+                        // filter `where('crossCohortAtMigration','==', false)`.
+                        "crossCohortAtMigration" to false,
                         "createdAt" to now,
                         "lastMessageAt" to now,
                         "isClosed" to false,
@@ -480,6 +500,10 @@ class PrivateMessageRepositoryImpl(
                     "isGroup" to true,
                     "groupName" to groupName,
                     "createdBy" to creatorId,
+                    // SHY-0132 — stamp false so the group matches the segregation filter
+                    // `where('crossCohortAtMigration','==', false)`; cross-cohort growth is
+                    // rejected per-add, so a new group is never cross-cohort.
+                    "crossCohortAtMigration" to false,
                     "createdAt" to now,
                     "lastMessageAt" to now,
                     "isClosed" to false,

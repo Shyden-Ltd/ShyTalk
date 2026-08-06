@@ -157,13 +157,16 @@ describe('rooms/{roomId} create — real rules engine', () => {
     await assertSucceeds(dbFor(MINOR).doc('rooms/r-create-2').set(roomDoc(MINOR)));
   });
 
-  test('legacy client that OMITS ownerFirebaseUid can still create (rollout default branch)', async () => {
-    // `.get('ownerFirebaseUid', request.auth.uid)` — field-missing → default
-    // matches `request.auth.uid` → passes (keeps pre-cron-elim app versions
-    // creating rooms during Play/App Store rollout).
+  test('DENY (SHY-0029): a create that OMITS ownerFirebaseUid — no fieldless, owner-left-broken rooms', async () => {
+    // Pre-SHY-0029 the `.get('ownerFirebaseUid', request.auth.uid)` default let a
+    // field-missing create through, producing a room with NO ownerFirebaseUid —
+    // which silently breaks the owner-left RTDB attestation (PresenceService reads
+    // room.ownerFirebaseUid). Tightened to `.get('ownerFirebaseUid', '')` so the
+    // field must be present AND equal to auth.uid. Pre-public, no legacy clients
+    // to break, and the current app already writes the field (HomeViewModel).
     const legacy = roomDoc(ADULT);
     delete legacy.ownerFirebaseUid;
-    await assertSucceeds(dbFor(ADULT).doc('rooms/r-create-3').set(legacy));
+    await assertFails(dbFor(ADULT).doc('rooms/r-create-3').set(legacy));
   });
 
   test('DENY: a minor-claimed caller stamping cohort:adult (cohort forgery)', async () => {
@@ -204,6 +207,44 @@ describe('rooms/{roomId} create — real rules engine', () => {
       dbFor(ADULT)
         .doc('rooms/r-deny-4')
         .set(roomDoc(ADULT, { ownerFirebaseUid: 'someone-else' })),
+    );
+  });
+
+  test('DENY (SHY-0029): empty-string ownerFirebaseUid (the client currentFirebaseUid ?: "" edge)', async () => {
+    // An authenticated caller whose Firebase uid was momentarily unresolved would
+    // stamp ''. `.get('ownerFirebaseUid', '') == request.auth.uid` denies it — no
+    // unattributable-owner rooms. (Already denied pre-fix since '' != auth.uid;
+    // pinned so the tightening cannot regress it.)
+    await assertFails(
+      dbFor(ADULT)
+        .doc('rooms/r-deny-4b')
+        .set(roomDoc(ADULT, { ownerFirebaseUid: '' })),
+    );
+  });
+
+  test('DENY (SHY-0029): explicit-null ownerFirebaseUid (present key, null value — distinct .get() path from absent)', async () => {
+    // `.get('ownerFirebaseUid', '')` returns the present null (not the default) →
+    // null != auth.uid → deny. Pins the null branch separately from field-absent.
+    await assertFails(
+      dbFor(ADULT)
+        .doc('rooms/r-deny-4c')
+        .set(roomDoc(ADULT, { ownerFirebaseUid: null })),
+    );
+  });
+
+  test('DENY (SHY-0029): whitespace-only ownerFirebaseUid', async () => {
+    await assertFails(
+      dbFor(ADULT)
+        .doc('rooms/r-deny-4d')
+        .set(roomDoc(ADULT, { ownerFirebaseUid: '   ' })),
+    );
+  });
+
+  test('DENY (SHY-0029): non-string ownerFirebaseUid (type confusion — rules == does not coerce)', async () => {
+    await assertFails(
+      dbFor(ADULT)
+        .doc('rooms/r-deny-4e')
+        .set(roomDoc(ADULT, { ownerFirebaseUid: 12345 })),
     );
   });
 

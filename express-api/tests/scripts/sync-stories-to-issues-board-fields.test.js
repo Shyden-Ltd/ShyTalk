@@ -36,7 +36,9 @@ const SCRIPT = path.join(REPO_ROOT, 'scripts', 'sync-stories-to-issues.sh');
 const VALIDATOR = path.join(REPO_ROOT, 'scripts', 'check-story-frontmatter.sh');
 
 const GITHUB_BODY_LIMIT = 65536;
-const SOURCE_URL_PREFIX = 'https://github.com/Shyden-Ltd/ShyTalk/blob/main/.project/stories';
+// SHY-0177: footer links point at develop — the git-flow branch where story
+// truth lives; a blob/main link 404s for stories not yet promoted.
+const SOURCE_URL_PREFIX = 'https://github.com/Shyden-Ltd/ShyTalk/blob/develop/.project/stories';
 
 const TEMP_DIRS = [];
 function tempDir(prefix = 'sync74-') {
@@ -983,7 +985,7 @@ describe('SHY-0082 v4: create path — per-value board-field matrix (every type 
     const afterSpec = body.slice(spec.length);
     expect(afterSpec).toMatch(
       new RegExp(
-        '^\\n\\n---\\n\\n_Source: https:\\/\\/github\\.com\\/Shyden-Ltd\\/ShyTalk\\/blob\\/main\\/\\.project\\/stories\\/SHY-9001-fixture-story\\.md_\\n' +
+        '^\\n\\n---\\n\\n_Source: https:\\/\\/github\\.com\\/Shyden-Ltd\\/ShyTalk\\/blob\\/develop\\/\\.project\\/stories\\/SHY-9001-fixture-story\\.md_\\n' +
           '_Status: Draft_\\n' +
           '_Last synced: \\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z from commit [0-9a-f]+ body-hash: [0-9a-f]{64}_\\n$',
       ),
@@ -1473,7 +1475,7 @@ describe('SHY-0074: oversize body truncation (mock-gh)', () => {
     expect(beforeNotice.endsWith('\n\n…')).toBe(true);
     // Footer survives intact and parseable at the very end.
     expect(body).toMatch(
-      /_Source: https:\/\/github\.com\/Shyden-Ltd\/ShyTalk\/blob\/main\/\.project\/stories\/SHY-8301-fixture-story\.md_\n_Status: Draft_\n_Last synced: .* body-hash: [0-9a-f]{64}_\n$/,
+      /_Source: https:\/\/github\.com\/Shyden-Ltd\/ShyTalk\/blob\/develop\/\.project\/stories\/SHY-8301-fixture-story\.md_\n_Status: Draft_\n_Last synced: .* body-hash: [0-9a-f]{64}_\n$/,
     );
     // Omitted count is arithmetically consistent with what was kept.
     const spec = expectedSpecBody(content);
