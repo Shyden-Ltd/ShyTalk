@@ -186,10 +186,11 @@ describe('manual-qa-matrix.yml — structural pin', () => {
 
   test('Playwright browser cache keyed on resolved version', () => {
     // [[feedback-ci-cache-downloads-version-aware]] — cache must
-    // invalidate when Playwright version bumps. Accepts either the
-    // tag form or the SHA-pinned form with `# v5` comment (see the
-    // setup-node test above for the full rationale).
-    expect(yamlText).toMatch(/actions\/cache@(v5|[0-9a-f]{40}\s+#\s*v5)/);
+    // invalidate when Playwright version bumps.
+    // SHY-0162: assert actions/cache is SHA-PINNED (version-agnostic),
+    // not frozen to `# v5` — a frozen version literal reddened the suite
+    // on the v5 → v6.1.0 Dependabot bump.
+    expect(yamlText).toMatch(/actions\/cache@[0-9a-f]{40}\b/);
     expect(yamlText).toMatch(
       /playwright-\$\{\{ runner\.os \}\}-\$\{\{ steps\.pw\.outputs\.version \}\}/,
     );

@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BanStatus
+import com.shyden.shytalk.data.repository.DeviceLockStatus
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.SignInResult
@@ -80,7 +81,7 @@ class AuthViewModelBanTest {
     fun `signInWithGoogle - device banned blocks authentication`() =
         runTest {
             setupSignInIdentity()
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { deviceRepository.checkBanStatus(deviceId) } returns
                 Resource.Success(
                     BanStatus(isBanned = true, banType = "device", reason = "Spam", expiresAt = "2099-01-01T00:00:00Z"),
@@ -102,7 +103,7 @@ class AuthViewModelBanTest {
     fun `signInWithGoogle - network banned blocks authentication`() =
         runTest {
             setupSignInIdentity()
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { deviceRepository.checkBanStatus(deviceId) } returns
                 Resource.Success(
                     BanStatus(isBanned = true, banType = "network_ip", reason = "VPN abuse", expiresAt = null),
@@ -124,7 +125,7 @@ class AuthViewModelBanTest {
     fun `signInWithGoogle - not banned proceeds to profile resolution`() =
         runTest {
             setupSignInIdentity()
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Success(BanStatus())
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
@@ -146,7 +147,7 @@ class AuthViewModelBanTest {
     fun `signInWithGoogle - ban check error is lenient`() =
         runTest {
             setupSignInIdentity()
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { deviceRepository.checkBanStatus(deviceId) } returns Resource.Error("network error")
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
@@ -174,7 +175,7 @@ class AuthViewModelBanTest {
             coEvery { identityRepository.resolveIdentity("apple", "001234.abcdef") } returns
                 Resource.Success(SignInResult.Found(uniqueId))
             coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { deviceRepository.checkBanStatus(deviceId) } returns
                 Resource.Success(
                     BanStatus(isBanned = true, banType = "network_asn", reason = "Datacenter IP"),
@@ -193,7 +194,7 @@ class AuthViewModelBanTest {
     fun `signOut clears ban state`() =
         runTest {
             setupSignInIdentity()
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { deviceRepository.checkBanStatus(deviceId) } returns
                 Resource.Success(
                     BanStatus(isBanned = true, banType = "device", reason = "Spam"),

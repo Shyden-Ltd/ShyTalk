@@ -22,6 +22,10 @@ data class AppSettingsScreenParams(
     val onNavigateToCommunityStandards: () -> Unit = {},
     val onNavigateToTermsAndConditions: () -> Unit = {},
     val onNavigateToCyberBullyingPolicy: () -> Unit = {},
+    // Deliberately non-defaulted: the Security entry is the ONLY path to
+    // App-Lock enrolment, so a platform that forgets to wire it must fail
+    // to compile rather than ship a dead row (SHY-0187).
+    val onNavigateToSecurity: () -> Unit,
     val onSignOut: () -> Unit,
 )
 
