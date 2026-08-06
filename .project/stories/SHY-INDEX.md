@@ -10,6 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0282](SHY-0282-shared-header-flashes-sign-in-at-signed-in-visitors.md) | P2 | S | bug | The site header offers "Sign In" to people who are already signed in | 📝 Draft | — | — |
 | [SHY-0276](SHY-0276-playwright-pre-push-is-a-duplicate-gate.md) | P2 | XS | infra | The Playwright pre-push gate is a slower, weaker duplicate of a CI job | 📝 Draft | — | — |
 | [SHY-0290](SHY-0290-local-gate-refuses-what-ci-allows.md) | P2 | S | infra | The local merge gate refuses a PR that CI allows (supersession PRs) | 📝 Draft | — | — |
 | [SHY-0285](SHY-0285-locale-routed-build-for-the-website.md) | P1 | L | infra | Locale-routed build for the website, proven on one page (EPIC-0010) | 📝 Draft | — | — |
