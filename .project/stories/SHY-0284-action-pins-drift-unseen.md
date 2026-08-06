@@ -149,11 +149,11 @@ Related but separate: `scripts/check-action-shas.sh` verifies that actions *are*
 
 ## Definition of Done
 
-- [ ] Red tests observed failing against unmodified code.
-- [ ] Both split tools restored to one version each, proven by the guard going green.
-- [ ] The guard runs on a workflow-only pull request — proven by this PR, which is workflow-and-scripts only.
-- [ ] `code-reviewer` 100% clean; CI green by name; `Reviewed-up-to:` recorded.
-- [ ] CI-config-only (no app, backend, or website runtime surface) — device/browser gauntlet not applicable per the SHY-0163 exemption.
+- [x] Red tests observed failing against unmodified code.
+- [x] Both split tools restored to one version each, proven by the guard going green.
+- [x] The guard runs on a workflow-only pull request — proven by this PR, which is workflow-and-scripts only.
+- [x] `code-reviewer` 100% clean; CI green by name; `Reviewed-up-to:` recorded.
+- [x] CI-config-only (no app, backend, or website runtime surface) — device/browser gauntlet not applicable per the SHY-0163 exemption.
 
 ## Notes (running log)
 
@@ -168,5 +168,8 @@ Related but separate: `scripts/check-action-shas.sh` verifies that actions *are*
 - **2026-08-06 01:35 WIB — response.** Root scripts carry their own `scripts_changed` flag; `test-backend` runs on either it or `backend_changed`; the cascade is untouched and pinned so the fix cannot over-correct. The lint job's ungated-ness is now a test. 11 new tests driving the REAL case statement through real bash, 7 RED first; four mutants, four kills.
 - **2026-08-06 01:40 WIB — `code-reviewer` cycle 2.** Confirmed both cycle-1 findings resolved end to end, and found a regression the FIX had introduced: `WORKFLOW_ONLY` is computed from APP/BACKEND/WEB/INTEGRATION/OTHER, and moving root scripts out of `OTHER` meant a scripts-only PR now declared itself workflow-only and skipped every job gated on that, sonarcloud included. Fixing one silent skip had created another. Reproduced from the source, fixed by adding SCRIPTS to the condition, pinned by three more tests (scripts-only is NOT workflow-only; a real workflow-only change still is; docs-only still is) and a fifth killed mutant. 144 suites / 7,444 tests green; actionlint clean.
 
-Reviewed-up-to: 2b35f58345fe7e7fec2d75b822ca042a9947d453
+- **2026-08-06 07:20 WIB — `code-reviewer` cycle 3: 100% CLEAN, zero findings.** Reviewed `2b35f58345f`, the answer to cycle 2. Confirmed the WORKFLOW_ONLY fix is complete rather than partial (sonarcloud is the ONLY consumer of that output, grepped repo-wide), that the case-arm ordering has no overlap with `express-api/scripts/drivers/*`, that the pre-existing `pr-checks-backend-forces-full.test.js` pin is untouched and still correct, and that the line-scanning `workflowOnlyCondition()` helper stops at the RIGHT `fi` — `WORKFLOW_ONLY=false` occurs exactly once, and only comments sit between it and its closing `fi`, so the three new tests assert the complete condition and not a truncated one. `1a9935d052d` is story-`.md`-only and review-neutral.
+- **2026-08-06 07:20 WIB — DoD verified item by item before ticking.** Red-first: 7 of the 11 cycle-1 tests and all 3 cycle-2 tests were observed failing first. Both split tools restored, proven by the live-repository case passing. The guard ran on THIS pull request — `lint / Lint: completed/success` on run 31035710175, which is the whole point of the story. CI green BY NAME: Detect Changes, Analyze JavaScript, PR Gate, plus Build & Test, Pre-Merge Gate, SonarCloud, Unit Tests, CodeQL. CI-config-only confirmed mechanically, not asserted: the ten changed files are `.github/actions/**`, `.github/workflows/**`, this story, three `express-api/tests/scripts/**` meta-tests and two root `scripts/**` CI helpers — a grep for every product-runtime path named in CLAUDE.md's boundary (`shared/`, `app/`, `iosApp/`, `express-api/src/`, `public/`, the three rules files) returns nothing. So the device/browser gauntlet is N/A by the SHY-0163 exemption, and there is no backend runtime change to trigger the SHY-0127 full-gauntlet rule.
+- **2026-08-06 07:20 WIB — `BASE_REF=origin/develop bash scripts/pre-merge-check.sh 1702` → `PRE-MERGE-CHECK: OK`.** Merging with zero doubt.
 
+Reviewed-up-to: 2b35f58345fe7e7fec2d75b822ca042a9947d453
