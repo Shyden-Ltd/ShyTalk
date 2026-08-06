@@ -10,6 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0281](SHY-0281-journey-gift-givens-overwrite-the-shared-gift-catalog.md) | P1 | S | bug | Journey gift setup-Givens overwrite the shared gift catalog and leave it corrupted for e | 📝 Draft | — | — |
 | [SHY-0280](SHY-0280-signed-in-roadmap-path-double-publishes-and-is-unproven.md) | P2 | M | bug | The signed-in roadmap path publishes twice and has never been exercised by a real sign-i | 📝 Draft | — | — |
 | [SHY-0276](SHY-0276-playwright-pre-push-is-a-duplicate-gate.md) | P2 | XS | infra | The Playwright pre-push gate is a slower, weaker duplicate of a CI job | 📝 Draft | — | — |
 | [SHY-0290](SHY-0290-local-gate-refuses-what-ci-allows.md) | P2 | S | infra | The local merge gate refuses a PR that CI allows (supersession PRs) | 📝 Draft | — | — |
