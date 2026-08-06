@@ -30,6 +30,10 @@ Keeping the files "in case" costs real money: every new string must be added to
 20 files or fail parity, so 15 unreviewed locales tax every piece of work
 forever. They are recoverable from git if a language returns.
 
+The same is true of the 19 translated root READMEs. They are the first thing a
+contributor sees, and a README offering Polish for a product that no longer
+speaks Polish is a promise the repository cannot keep.
+
 ## Acceptance Criteria
 
 ### Happy path
@@ -38,16 +42,25 @@ forever. They are recoverable from git if a language returns.
       `shared/src/commonMain/composeResources`: base, zh, id, vi, th.
 - [ ] Exactly five web string tables remain.
 - [ ] Nothing references a removed locale anywhere in the tree.
+- [ ] Exactly five root READMEs remain: `README.md` (English), `README.zh.md`,
+      `README.id.md`, `README.vi.md`, `README.th.md`. The other 15 are deleted.
 
 ### Error paths
 
 - [ ] A device set to a removed language renders the app in English rather than
       crashing or showing empty strings.
 - [ ] A request for a removed locale prefix on the web returns the 404 page.
+- [ ] No surviving README links to a deleted one. `README.md` carries a
+      19-entry language table and each translated README carries its own
+      18-entry table, so deleting the files without editing the tables leaves
+      a dead link in every survivor — 15 of them in `README.md` alone.
 
 ### Edge cases
 
 - [ ] `values` (the base, English) is NOT deleted along with `values-*`.
+- [ ] Khmer is handled despite being asymmetric: `values-km` exists but there
+      has never been a `README.km.md`. A sweep that assumes one README per
+      locale will either miss the directory or fail looking for the file.
 - [ ] A locale removed from the app but still listed in any manifest, allowlist
       or test fixture fails a test rather than silently drifting.
 
@@ -92,6 +105,13 @@ forever. They are recoverable from git if a language returns.
 - **Then** the app is in English
 - **And** no screen shows an empty or missing label
 
+**Scenario: The README language list matches the languages we support**
+
+- **Given** the retirement has been applied
+- **When** someone opens the README in any supported language
+- **Then** every language it offers is one that still exists
+- **And** the five it offers are the five the product supports
+
 **Scenario: A dropped language cannot reappear unnoticed**
 
 - **Given** the retirement has been applied
@@ -110,6 +130,12 @@ forever. They are recoverable from git if a language returns.
   language renders English with no empty labels, on a real device.
 - `tests/web/removed-locale-404.spec.ts` — `/fr/`, `/de/`, `/ar/` return the
   404 page.
+- `express-api/tests/scripts/readme-locale-parity.test.js` — the set of root
+  `README.*.md` files equals the supported set minus English; every
+  `README.*.md` link inside every surviving README resolves to a file that
+  exists; no README references a retired locale. Reads the supported set from
+  the SAME single definition as the app and web inventories, so the three
+  surfaces cannot drift apart.
 
 **GREEN:** delete the 15 directories and their web equivalents; collapse any
 allowlist to the five.
@@ -147,6 +173,8 @@ suite; journeys in all five languages on a real Android and a real iPhone.
 ## Definition of Done
 
 - [ ] All AC met; tests written RED first.
+- [ ] `ls README.*.md` returns exactly the five supported languages, and no
+      link in any of them points at a file that no longer exists.
 - [ ] Journeys walked in all five languages on a real Android device AND a real
       iPhone, local then dev.
 - [ ] `code-reviewer` 100% clean; `Reviewed-up-to:` recorded.
@@ -157,3 +185,10 @@ suite; journeys in all five languages on a real Android and a real iPhone.
 - 2026-08-06 — Created under EPIC-0010. Operator chose deletion over keeping
   the files unbuilt, and confirmed the MVP set is FIVE (en, zh, id, vi, th),
   correcting SHY-0194 which named only four.
+- 2026-08-06 — Operator addition: the retirement must remove the corresponding
+  root README files too. Surveyed rather than assumed: there are 19
+  (`README.ar.md` … `README.zh.md`), so exactly 15 go and 5 stay. `README.md`
+  links to all 19 and each translation links to the other 18, so deleting the
+  files without editing the tables would leave a dead link in every survivor.
+  Khmer is the asymmetric case — `values-km` exists but `README.km.md` never
+  did.
