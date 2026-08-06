@@ -1501,10 +1501,10 @@
     <string name="security_reset_pin">पिन रीसेट करें</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">नया पिन सेट करने के लिए अपनी पहचान सत्यापित करें</string>
+    <string name="security_set_pin">पिन सेट करें</string>
+    <string name="security_set_pin_desc">ऐप को पिन से सुरक्षित करें</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">लिंक किए गए खाते</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">साइन-इन विधियाँ प्रबंधित करें</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">ईमेल से साइन इन करें</string>

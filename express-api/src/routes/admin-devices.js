@@ -9,8 +9,32 @@
  */
 
 const router = require('express').Router();
+
+/**
+ * A uniqueId is a non-negative integer, given either as a number or as its
+ * plain decimal string. Deliberately stricter than `Number()`, which happily
+ * turns '   ', '' and null into 0, and accepts '1e3', -1 and 1.5.
+ */
+function isNonNegativeIntegerId(value) {
+  // Beyond MAX_SAFE_INTEGER, `Number()` silently rounds — two different 20-digit
+  // ids can collide on one float and reassign a binding's owner (R8-I2).
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+  }
+  if (typeof value === 'string') {
+    return /^\d+$/.test(value) && Number(value) <= Number.MAX_SAFE_INTEGER;
+  }
+  return false;
+}
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
+const {
+  clearBanCache,
+  countBoundDevices,
+  rollbackBindingIfOverCap,
+  MAX_BOUND_DEVICES,
+  BINDING_TRANSACTION_OPTIONS,
+} = require('../utils/bans');
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
@@ -64,10 +88,24 @@ router.post('/admin/devices', async (req, res) => {
 
     const { deviceId, uniqueId, manufacturer, model, lastIp, isp } = req.body;
 
-    if (!deviceId || uniqueId === undefined) {
+    // `uniqueId` is written as `Number(uniqueId)`, so every value that coerces
+    // must be rejected up front. `Number()` is far too permissive here: null,
+    // false, '' AND any whitespace-only string all become account 0, while
+    // '1e3', -1 and 1.5 produce ids no account can ever have (reviewers R5-I4,
+    // R6-I1, R7-I1/I2). A uniqueId is a non-negative integer — nothing else.
+    if (!deviceId || !isNonNegativeIntegerId(uniqueId)) {
       return res.status(400).json({ error: 'deviceId and uniqueId are required' });
     }
 
+    // The same per-account cap the client routes enforce (SHY-0149 C1). An
+    // uncapped admin write could push an account past the ban gate's scan
+    // limit, and support tooling should not be able to do that by accident —
+    // delete a stale binding first.
+    //
+    // The cap applies whenever this write would COST the target a new binding
+    // slot: a brand-new device, or an existing one being reassigned away from
+    // its current owner. Re-seeding a device's own metadata (same owner) is
+    // free (reviewer R3-I2).
     const bindingData = {
       deviceId,
       uniqueId: Number(uniqueId),
@@ -78,7 +116,45 @@ router.post('/admin/devices', async (req, res) => {
       boundAt: now(),
     };
 
-    await db.doc(`deviceBindings/${deviceId}`).set(bindingData);
+    // Doc-only transaction, cap pre-checked outside and reconciled after — a
+    // query read inside would break the device-lock's conflict detection (see
+    // BINDING_TRANSACTION_OPTIONS).
+    const docRef = db.doc(`deviceBindings/${deviceId}`);
+    const capReached = (await countBoundDevices(uniqueId)) >= MAX_BOUND_DEVICES;
+    const outcome = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(docRef);
+      const currentOwner = existing.exists
+        ? (existing.data()?.uniqueId ?? existing.data()?.userId ?? null)
+        : null;
+      const costsASlot = currentOwner === null || String(currentOwner) !== String(uniqueId);
+
+      if (costsASlot && capReached) {
+        return { blocked: true };
+      }
+
+      // merge:true — a real binding carries ~20 telemetry fields written by
+      // /api/device-info; a full replace would silently wipe them (R4-I3).
+      tx.set(docRef, bindingData, { merge: true });
+      return { blocked: false, currentOwner, bound: costsASlot };
+    }, BINDING_TRANSACTION_OPTIONS);
+
+    if (
+      outcome.blocked ||
+      (outcome.bound && (await rollbackBindingIfOverCap(uniqueId, deviceId)))
+    ) {
+      return res.status(403).json({
+        error: 'Device limit reached for this account',
+        code: 'device_limit',
+      });
+    }
+
+    // A binding change alters which hardware bans reach an account — clear the
+    // new owner, and the previous one too when the device changed hands (they
+    // just lost a device that may have been carrying their ban).
+    clearBanCache(uniqueId);
+    if (outcome.currentOwner !== null && String(outcome.currentOwner) !== String(uniqueId)) {
+      clearBanCache(outcome.currentOwner);
+    }
 
     res.json({ id: deviceId, ...bindingData });
   } catch (err) {
@@ -147,6 +223,13 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
     const deviceData = snap.data();
 
     await db.doc(`deviceBindings/${deviceId}`).delete();
+    // Removing a binding can lift a hardware ban that reached the owner
+    // through it — clear their cached standing (SHY-0149). An owner-less
+    // binding falls back to the full clear (clearBanCache() with no argument),
+    // which is the conservative choice.
+    const owner = deviceData.uniqueId ?? deviceData.userId;
+    if (owner === null || owner === undefined) clearBanCache();
+    else clearBanCache(owner);
 
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({

@@ -55,9 +55,11 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     // [[feedback-ci-cache-downloads-version-aware]] — newer Playwright
     // must bust the cache automatically. The key must reference the
     // resolved version (steps.pw.outputs.version), not just runner.os.
-    // Accepts tag form or SHA-pinned form with `# v5` comment, per
-    // PR-G1 #1016's repo-wide SHA-pinning rule.
-    expect(reusable).toMatch(/uses:\s*actions\/cache@(v5|[0-9a-f]{40}\s+#\s*v5)/);
+    // SHY-0162: assert actions/cache is SHA-PINNED (version-agnostic),
+    // not frozen to `# v5` — a frozen version literal reddened the suite
+    // on the v5 → v6.1.0 Dependabot bump. Repo-wide SHA-pinning is
+    // separately enforced by ci-action-pin-consistency.test.js.
+    expect(reusable).toMatch(/uses:\s*actions\/cache@[0-9a-f]{40}\b/);
     expect(reusable).toMatch(
       /key:\s*playwright-\$\{\{\s*runner\.os\s*\}\}-\$\{\{\s*steps\.pw\.outputs\.version\s*\}\}/,
     );

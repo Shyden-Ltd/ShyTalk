@@ -74,12 +74,11 @@ describe('e2e-tests.yml — Android emulator boot headroom', () => {
     emulatorStepBlock = lines.slice(0, endLineIdx).join('\n');
   });
 
-  test('emulator step uses the pinned action SHA (v2.37.0)', () => {
-    // Sanity guard. If the action version is bumped, the safety options
-    // below need re-verification against the new release's input schema.
-    expect(emulatorStepBlock).toContain(
-      'reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a',
-    );
+  test('emulator step uses a SHA-pinned android-emulator-runner', () => {
+    // Version-agnostic (SHY-0162): assert pinned-ness, not a frozen SHA. The
+    // safety options (boot-timeout, heap-size, cores below) are asserted
+    // independently of the action version, so a bump can't silently drop them.
+    expect(emulatorStepBlock).toMatch(/reactivecircus\/android-emulator-runner@[a-f0-9]{40}\b/);
   });
 
   test('emulator-boot-timeout is at least 1800s (3× the 600s default)', () => {

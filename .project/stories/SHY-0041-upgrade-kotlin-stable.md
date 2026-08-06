@@ -1,6 +1,6 @@
 ---
 id: SHY-0041
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -9,6 +9,7 @@ type: chore
 roadmap_ids: [G001]
 pr:
 mvp: true
+released_in: v0.97.15
 ---
 
 # SHY-0041: Upgrade Kotlin from 2.4.0-RC2 to 2.4.0 stable
@@ -142,3 +143,4 @@ As the ShyTalk operator who flagged that `gradle/libs.versions.toml:3` declares 
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 24 (G001). Reserved ID SHY-0041.
 - 2026-06-12 ~23:45 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): a Kotlin compiler bump recompiles both apps → full journey corpus on real Android + real iPhone is mandatory (not impact-selected); detekt is the headline framework. Blocker-comment-only path collapses to the build/regression floor. **Pickup-fitness fix:** corrected a stale cross-ref in Error-paths (detekt-2.0 wait is [[SHY-0048]], NOT SHY-0059 which is the admin-users-moderation-skip bug). DoD auto-merge → judgment-merge.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Done. kotlin = "2.4.0" (stable, no RC) in gradle/libs.versions.toml; present at v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

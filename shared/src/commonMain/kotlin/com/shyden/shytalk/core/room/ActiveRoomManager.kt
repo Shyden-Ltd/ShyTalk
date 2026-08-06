@@ -19,6 +19,7 @@ import com.shyden.shytalk.data.repository.MessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.data.repository.resolveEffectiveCohort
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -264,8 +265,10 @@ class ActiveRoomManager(
             leaveRoom()
         }
 
-        // Close any active rooms owned by this user
-        val ownedRoomId = roomRepository.findActiveRoomByOwner(currentUserId)
+        // Close any active rooms owned by this user. SHY-0102 — owner-dedup is
+        // a rooms `list`, so it pins the caller's cohort (fails closed to "minor").
+        val cohort = userRepository.resolveEffectiveCohort(currentUserId)
+        val ownedRoomId = roomRepository.findActiveRoomByOwner(currentUserId, cohort)
         if (ownedRoomId != null) {
             roomRepository.closeRoom(ownedRoomId)
         }

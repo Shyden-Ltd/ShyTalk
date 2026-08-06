@@ -143,7 +143,7 @@ val iosPlatformModule =
         single<SeatRequestRepository> { IosSeatRequestRepositoryImpl(get(), get()) }
         single<StorageRepository> { IosStorageRepositoryImpl(get()) }
         single<AgeVerificationRepository> { IosAgeVerificationRepositoryImpl(get()) }
-        single<DeviceRepository> { IosDeviceRepositoryImpl(get(), get()) }
+        single<DeviceRepository> { IosDeviceRepositoryImpl(get()) }
         single<IdentityRepository> { IosIdentityRepositoryImpl(get(), get()) }
         single<PrivateMessageRepository> { IosPrivateMessageRepositoryImpl(get(), get(), get()) }
         single<ReportRepository> { IosReportRepositoryImpl(get()) }

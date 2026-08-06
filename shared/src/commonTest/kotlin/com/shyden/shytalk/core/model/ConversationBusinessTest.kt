@@ -163,7 +163,7 @@ class ConversationBusinessTest {
     }
 
     @Test
-    fun `toMap deliberately omits frozenAtMigration (server-only flag immutability defence)`() {
+    fun `toMap deliberately omits frozenAtMigration server-only flag immutability defence`() {
         // The flag is set ONLY by the migration script via Admin SDK.
         // If `toMap()` included the flag, every benign client write
         // (groupName edit, etc.) would round-trip the value back to

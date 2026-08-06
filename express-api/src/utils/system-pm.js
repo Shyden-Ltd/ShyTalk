@@ -61,7 +61,14 @@ async function sendSystemPm(recipientUid, text) {
     },
     lastMessageAt: timestamp,
   };
-  if (!convSnap.exists) convData.createdAt = timestamp;
+  if (!convSnap.exists) {
+    convData.createdAt = timestamp;
+    // SHY-0132 — stamp false so the system-PM thread matches the conversations
+    // segregation filter `where('crossCohortAtMigration','==', false)`. A system PM
+    // (user ↔ SYSTEM_UID) is never cross-cohort, so false is always correct; set it
+    // only on create so a hypothetical existing value is never overwritten.
+    convData.crossCohortAtMigration = false;
+  }
   await db.doc(`conversations/${convId}`).set(convData, { merge: true });
 
   await db.doc(`conversations/${convId}/messages/${msgId}`).set({

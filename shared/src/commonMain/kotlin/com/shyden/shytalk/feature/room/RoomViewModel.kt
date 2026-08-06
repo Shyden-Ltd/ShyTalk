@@ -32,6 +32,7 @@ import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.data.repository.resolveEffectiveCohort
 import com.shyden.shytalk.feature.report.UserReportOutcome
 import com.shyden.shytalk.feature.report.submitUserReport
 import kotlinx.coroutines.CancellationException
@@ -926,7 +927,10 @@ class RoomViewModel(
             // security rules before they can write to firstJoinTimestamps.
             launch {
                 try {
-                    roomRepository.leaveAllRooms(userId, exceptRoomId = roomId)
+                    // SHY-0102 — leaveAllRooms lists the user's participated rooms
+                    // (a `list`), so it pins the caller's cohort.
+                    val cohort = userRepository.resolveEffectiveCohort(userId)
+                    roomRepository.leaveAllRooms(userId, cohort, exceptRoomId = roomId)
                     roomRepository.joinRoom(roomId, userId)
                     roomRepository.recordFirstJoinTimestamp(roomId, userId)
                 } catch (e: CancellationException) {

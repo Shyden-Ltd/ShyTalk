@@ -27,7 +27,9 @@ const {
   clearUniqueIdCache,
   clearSuspensionCache,
   clearAdminClaimCache,
+  clearBanCache,
 } = require('../../src/middleware/auth');
+const { clearBannedClaimSyncDedup } = require('../../src/utils/banned-claim');
 
 // Monotonic counter for unique synthetic uids (avoids a flagged Math.random PRNG).
 let noUserDocSeq = 0;
@@ -37,6 +39,8 @@ function clearAuthCaches() {
   clearUniqueIdCache();
   clearSuspensionCache();
   clearAdminClaimCache();
+  clearBanCache();
+  clearBannedClaimSyncDedup();
 }
 
 async function exchangeCustomTokenForIdToken(customToken) {
@@ -68,7 +72,33 @@ async function exchangeCustomTokenForIdToken(customToken) {
  * @param {boolean} [opts.isSuspended=false]
  * @param {string} [opts.uid]            Firebase uid (defaults to rt-uid-<uniqueId>)
  * @param {object} [opts.extraUserData]  extra fields merged into the users doc
+ * @param {object} [opts.extraClaims]    additional developer claims minted onto the
+ *   ID token (e.g. `{ banned: true }` for SHY-0150's stale-token divergence
+ *   tests). Developer claims only shape THIS token — live customClaims on the
+ *   Auth user record are set separately via setCustomUserClaims.
  */
+/**
+ * A namespaced Firestore project (SHY-0171's `FIRESTORE_TEST_NAMESPACE`) makes
+ * every minted ID token 401, because the Auth emulator resolves tokens against
+ * the project it was STARTED with. Firestore isolates per project; Auth will not.
+ *
+ * The two are therefore mutually exclusive WITHIN A FILE: a suite may namespace
+ * its Firestore project, or it may mint Auth tokens, never both. (Across files
+ * there is no hazard — jest-environment-node builds a fresh `process` per test
+ * file, so `process.env` writes never reach a sibling file or the parent.)
+ *
+ * Fail loudly here rather than let the caller chase a mystery 401.
+ */
+function assertNoTestNamespace() {
+  if (process.env.FIRESTORE_TEST_NAMESPACE) {
+    throw new Error(
+      `FIRESTORE_TEST_NAMESPACE is set to '${process.env.FIRESTORE_TEST_NAMESPACE}' while minting an ` +
+        'Auth token. A Firestore-namespaced suite leaked it (restore it in afterAll). ' +
+        'The Auth emulator only knows the project it was started with, so this token would 401.',
+    );
+  }
+}
+
 async function mintRealUser({
   uniqueId,
   cohort,
@@ -76,7 +106,9 @@ async function mintRealUser({
   isSuspended = false,
   uid,
   extraUserData = {},
+  extraClaims = {},
 } = {}) {
+  assertNoTestNamespace();
   if (uniqueId === undefined || uniqueId === null) {
     throw new Error('mintRealUser requires a uniqueId');
   }
@@ -87,7 +119,7 @@ async function mintRealUser({
     isSuspended,
     ...extraUserData,
   });
-  const claims = {};
+  const claims = { ...extraClaims };
   if (cohort !== undefined) claims.cohort = cohort;
   if (admin) claims.admin = true;
   const customToken = await auth.createCustomToken(firebaseUid, claims);
@@ -107,6 +139,7 @@ async function mintRealUser({
  * to exercise the "authenticated but no profile" path (e.g. livekit 403).
  */
 async function mintTokenWithoutUserDoc({ cohort, admin = false, uid } = {}) {
+  assertNoTestNamespace();
   const firebaseUid = uid || `rt-nouser-${Date.now()}-${++noUserDocSeq}`;
   const claims = {};
   if (cohort !== undefined) claims.cohort = cohort;
@@ -121,4 +154,4 @@ async function mintTokenWithoutUserDoc({ cohort, admin = false, uid } = {}) {
   };
 }
 
-module.exports = { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches };
+module.exports = { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches, assertNoTestNamespace };

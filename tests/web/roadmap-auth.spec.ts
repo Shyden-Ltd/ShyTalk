@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { injectAuthState } from './helpers/roadmap-auth';
 
 /**
  * Roadmap page authentication flow tests.
@@ -1172,27 +1173,27 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
   });
 
   test('bell icon when authenticated does NOT open login modal', async ({ page }) => {
-    // Simulate authenticated state
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
+    await injectAuthState(
+      page,
+      {
+        currentUser: { uid: 'test-123', displayName: 'TestUser' },
         profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
-    });
+      },
+      { dispatch: false },
+    );
 
     const bell = page.locator('[data-testid="feature-bell"]').first();
     await bell.waitFor({ timeout: 10_000 });
     await bell.click();
 
-    // Login modal should NOT appear for authenticated users
+    // Prove the click was HANDLED before asserting what it did not do.
+    // The old form slept 1000ms and then counted — which asserted nothing if
+    // the handler had not run yet, and actively created the failure it was
+    // testing for, because the page's own sign-in resolution landed during
+    // that second and reset `currentUser` to null (SHY-0279).
+    await expect(page.locator('[data-testid="subscribe-modal"]')).toBeVisible({ timeout: 5_000 });
     const loginModal = page.locator('[data-testid="login-modal-overlay"]');
-    await page.waitForTimeout(1000);
-    expect(await loginModal.count()).toBe(0);
+    await expect(loginModal).toHaveCount(0);
   });
 
   test('bell icon while profile still loading opens subscribe modal — NOT login modal (W1 race window)', async ({ page }) => {
@@ -1223,19 +1224,16 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
       }),
     );
 
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-race-456',
-          displayName: 'RaceUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
+    await injectAuthState(
+      page,
+      {
+        currentUser: { uid: 'test-race-456', displayName: 'RaceUser' },
         // Critical: profile is null (still loading), NOT undefined or false.
         // This is the exact race-window state that produced the bug.
         profile: null,
-      };
-    });
+      },
+      { dispatch: false },
+    );
 
     const bell = page.locator('[data-testid="feature-bell"]').first();
     await bell.waitFor({ timeout: 10_000 });
@@ -1249,18 +1247,14 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
   });
 
   test('bell icon when authenticated opens subscribe modal', async ({ page }) => {
-    // Simulate authenticated state with profile
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
+    await injectAuthState(
+      page,
+      {
+        currentUser: { uid: 'test-123', displayName: 'TestUser' },
         profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
-    });
+      },
+      { dispatch: false },
+    );
 
     // Mock the subscribe API to avoid real network call
     await page.route('**/api/roadmap/subscribe/preferences*', (route) =>
@@ -1337,17 +1331,36 @@ test.describe('Roadmap Auth — Redirect-based OAuth', () => {
       const res = await fetch('/js/roadmap-auth.js');
       return res.text();
     });
+    // Strip comments first. This pin searches the module's TEXT, so prose
+    // that merely mentions a call would satisfy it — and the ordering it
+    // guards would be pinned by a sentence rather than by code.
+    const code = source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .map((line) => line.replace(/(^|[^:])\/\/.*$/, '$1'))
+      .join('\n');
+
     // Find the onAuthStateChanged handler body and assert ordering.
-    const handlerStart = source.indexOf('auth.onAuthStateChanged(function');
+    const handlerStart = code.indexOf('auth.onAuthStateChanged(function');
     expect(handlerStart).toBeGreaterThan(-1);
     // Take a slice that comfortably contains the signed-in branch.
-    const slice = source.slice(handlerStart, handlerStart + 1500);
-    const updateIdx = slice.indexOf('updateGlobalAuth()');
+    const slice = code.slice(handlerStart, handlerStart + 1500);
+
+    // The publish reaches the global through `markAuthStateKnown()`, which
+    // exists so that no path can conclude the sign-in state is known without
+    // publishing it (SHY-0279). Naming the call is not enough — assert it
+    // really publishes, otherwise this ordering check could be satisfied by
+    // an indirection that quietly does nothing.
+    const publisherBody = /function markAuthStateKnown\s*\([^)]*\)\s*\{([\s\S]*?)\n {2}\}/.exec(code);
+    expect(publisherBody).not.toBeNull();
+    expect(publisherBody![1]).toMatch(/updateGlobalAuth\s*\(\s*\)/);
+
+    const publishIdx = slice.indexOf('markAuthStateKnown()');
     const checkIdx = slice.indexOf('checkShyTalkAccount(user)');
-    expect(updateIdx).toBeGreaterThan(-1);
+    expect(publishIdx).toBeGreaterThan(-1);
     expect(checkIdx).toBeGreaterThan(-1);
-    // Critical: updateGlobalAuth must come BEFORE checkShyTalkAccount
-    // in the signed-in branch so the global publishes synchronously.
-    expect(updateIdx).toBeLessThan(checkIdx);
+    // Critical: the publish must come BEFORE checkShyTalkAccount in the
+    // signed-in branch so the global publishes synchronously.
+    expect(publishIdx).toBeLessThan(checkIdx);
   });
 });
