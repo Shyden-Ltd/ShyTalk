@@ -3,6 +3,9 @@ updates:
   # Gradle dependencies (libs.versions.toml)
   - package-ecosystem: "gradle"
     directory: "/"
+    # SHY-0242: updates flow through the develop integration branch (git-flow),
+    # where they are CI-gated and auto-merged on green — not straight to main.
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -43,6 +46,7 @@ updates:
   # Express API npm dependencies
   - package-ecosystem: "npm"
     directory: "/express-api"
+    target-branch: "develop"  # SHY-0242: git-flow — develop, not main
     schedule:
       interval: "weekly"
       day: "monday"
@@ -60,6 +64,7 @@ updates:
   # Root npm dependencies (Playwright, sharp)
   - package-ecosystem: "npm"
     directory: "/"
+    target-branch: "develop"  # SHY-0242: git-flow — develop, not main
     schedule:
       interval: "weekly"
       day: "monday"
@@ -77,6 +82,7 @@ updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "develop"  # SHY-0242: git-flow — develop, not main
     schedule:
       interval: "weekly"
       day: "monday"
