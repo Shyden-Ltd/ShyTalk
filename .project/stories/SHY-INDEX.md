@@ -10,6 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0292](SHY-0292-firebase-admin-14-breaks-the-backend-suite.md) | P2 | M | refactor | firebase-admin 14 breaks the backend suite | 📝 Draft | — | — |
 | [SHY-0291](SHY-0291-fcm-deprecations-block-the-firebase-bom-bump.md) | P2 | S | refactor | FCM deprecations block the firebase-bom bump (-Werror) | 📝 Draft | — | — |
 | [SHY-0282](SHY-0282-shared-header-flashes-sign-in-at-signed-in-visitors.md) | P2 | S | bug | The site header offers "Sign In" to people who are already signed in | 📝 Draft | — | — |
 | [SHY-0281](SHY-0281-journey-gift-givens-overwrite-the-shared-gift-catalog.md) | P1 | S | bug | Journey gift setup-Givens overwrite the shared gift catalog and leave it corrupted for e | 📝 Draft | — | — |
