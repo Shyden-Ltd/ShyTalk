@@ -6,6 +6,8 @@
  */
 
 const { auth, db } = require('../utils/firebase');
+const { checkUserBans, clearBanCache } = require('../utils/bans');
+const { syncBannedClaim } = require('../utils/banned-claim');
 const log = require('../utils/log');
 
 // ─── In-memory caches ────────────────────────────────────────────
@@ -195,17 +197,50 @@ async function authMiddleware(req, res, next) {
     // Check suspension (only if user exists)
     const isSuspended = await checkSuspension(uniqueId);
 
-    if (isSuspended) {
-      const isSuspensionExempt =
-        /^\/users\/[^/]+\/appeal$/.test(req.path) ||
-        /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
-        /^\/users\/[^/]+\/delete$/.test(req.path) ||
-        /^\/users\/[^/]+\/cancel-delete$/.test(req.path) ||
-        /^\/users\/[^/]+\/deletion-status$/.test(req.path) ||
-        /^\/users\/[^/]+\/data-export/.test(req.path) ||
-        (req.method === 'POST' && req.path === '/appeals');
-      if (!isSuspensionExempt) {
-        return res.status(403).json({ error: 'Account suspended' });
+    if (isSuspended && !isSuspensionExemptPath(req)) {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
+
+    // Per-request ban gate (SHY-0149): device + network bans, matched on
+    // the REAL edge IP. Runs on every auth-gated request so the web,
+    // direct-API, modified-client, and mid-session bypasses are all closed.
+    //
+    // The exemption is tested BEFORE the lookup, never after. An exempt path
+    // is reachable by a banned user by definition, so its verdict is already
+    // known — and a lookup FAILURE (fail-closed, rejects into the catch → 401)
+    // must not confiscate the appeal / GDPR-export / ban-screen rights a ban
+    // itself spares. Ordering this the other way locked those paths out of a
+    // permanently-truncating account for good (reviewer C-NEW-1).
+    if (!isBanExemptPath(req)) {
+      const ban = await checkUserBans(uniqueId, req.ip);
+      // SHY-0150 lazy claim sync: the fresh verdict and the decoded token
+      // meet exactly here — when they disagree, reconcile the `banned`
+      // custom claim so the Firestore rules gate tracks standings no route
+      // ever mutated (lazy expiry, binding flips, UNLINKED network bans
+      // caught by the live IP). Mint rides the verdict; clear goes through
+      // the full recompute inside syncBannedClaim (never the IP-scoped
+      // verdict). syncBannedClaim never throws — a sync failure must not
+      // turn this request into the outer catch's 401.
+      const tokenBanned = decoded.banned === true;
+      if (ban.isBanned) {
+        if (!tokenBanned) {
+          await syncBannedClaim(uniqueId, { uid, verdictBanned: true, dedupe: true });
+        }
+        log.warn('auth', 'Request denied: banned', {
+          path: req.path,
+          uniqueId,
+          banType: ban.banType,
+        });
+        return res.status(403).json({
+          error: 'Account banned',
+          code: 'banned',
+          banType: ban.banType,
+          reason: ban.reason,
+          expiresAt: ban.expiresAt,
+        });
+      }
+      if (tokenBanned) {
+        await syncBannedClaim(uniqueId, { uid, dedupe: true });
       }
     }
 
@@ -215,6 +250,55 @@ async function authMiddleware(req, res, next) {
     log.error('auth', 'Authentication failed', { error: err.message });
     return res.status(401).json({ error: 'Authentication failed' });
   }
+}
+
+/**
+ * Paths a SUSPENDED user may still reach: the appeal flow plus the
+ * account-deletion / GDPR-export rights that suspension must not remove.
+ */
+function isSuspensionExemptPath(req) {
+  return (
+    /^\/users\/[^/]+\/appeal$/.test(req.path) ||
+    /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
+    /^\/users\/[^/]+\/delete$/.test(req.path) ||
+    /^\/users\/[^/]+\/cancel-delete$/.test(req.path) ||
+    /^\/users\/[^/]+\/deletion-status$/.test(req.path) ||
+    /^\/users\/[^/]+\/data-export/.test(req.path) ||
+    (req.method === 'POST' && req.path === '/appeals') ||
+    // Portal self-service. portal.js mounts `authMiddlewareStrict` per-route,
+    // and that middleware carves these two out — but EVERY /api request runs
+    // through THIS middleware first (index.js mounts it globally), so without
+    // the same carve-out here the strict exemption was unreachable: a
+    // suspended user could not view their own portal profile or even sign
+    // out. Pre-existing for suspension; the ban gate would have inherited it
+    // (reviewer R3-C2).
+    req.path === '/portal/me' ||
+    req.path === '/portal/sign-out'
+  );
+}
+
+/**
+ * Paths a BANNED user may still reach: everything a suspended user may
+ * (appeals + GDPR rights survive a ban), PLUS the two ban-delivery /
+ * device-binding channels — /device-info is how the app LEARNS it is
+ * banned (the ban screen), and /devices/lock-check runs pre-ban-screen in
+ * the sign-in flow. Gating those would replace the ban screen with a
+ * generic error while enforcing nothing (both are telemetry/verdict
+ * endpoints, not abuse-capable actions).
+ *
+ * ONE deliberate subtraction: `/portal/me`. A SUSPENDED user reaches it and
+ * portal.js answers with an explicit `isSuspended` payload — but portal.js
+ * has no ban branch at all, so exempting a BANNED user would hand them a
+ * normal-looking dashboard with no hint they are banned. The gate's own 403
+ * (`code: 'banned'` + reason + expiresAt) IS the ban notice, and it is the
+ * same shape every other client already renders. Signing out, by contrast,
+ * must always work — a ban is not a reason to trap someone in a session.
+ */
+function isBanExemptPath(req) {
+  if (req.path === '/portal/me') return false;
+  return (
+    isSuspensionExemptPath(req) || req.path === '/device-info' || req.path === '/devices/lock-check'
+  );
 }
 
 /**
@@ -253,13 +337,50 @@ async function authMiddlewareStrict(req, res, next) {
     // Check suspension (only if user exists)
     const isSuspended = await checkSuspension(uniqueId);
 
-    if (isSuspended) {
-      const isSuspensionExempt =
-        req.path === '/portal/me' ||
-        req.path === '/portal/sign-out' ||
-        /^\/users\/[^/]+\/appeal$/.test(req.path);
-      if (!isSuspensionExempt) {
-        return res.status(403).json({ error: 'Account suspended' });
+    const isStrictSuspensionExempt =
+      req.path === '/portal/me' ||
+      req.path === '/portal/sign-out' ||
+      /^\/users\/[^/]+\/appeal$/.test(req.path);
+
+    if (isSuspended && !isStrictSuspensionExempt) {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
+
+    // A BAN exempts strictly less than a suspension does. `/portal/me` is
+    // reachable while suspended (portal.js answers with an `isSuspended`
+    // payload) but NOT while banned — portal.js has no ban branch, so a banned
+    // caller would receive a normal-looking dashboard. This is the same
+    // subtraction `isBanExemptPath` makes for the outer gate. The two lists
+    // must agree: today the outer gate reaches every /portal/* request first
+    // and masks a divergence here (reviewer R5-C1).
+    const isStrictBanExempt = isStrictSuspensionExempt && req.path !== '/portal/me';
+
+    // Per-request ban gate (SHY-0149). Exemption is checked BEFORE the lookup
+    // so a fail-closed rejection cannot strip those rights (reviewer C-NEW-1).
+    if (!isStrictBanExempt) {
+      const ban = await checkUserBans(uniqueId, req.ip);
+      // SHY-0150 lazy claim sync — same reconciliation as authMiddleware
+      // (see the comment there); the two gates must not diverge.
+      const tokenBanned = decoded.banned === true;
+      if (ban.isBanned) {
+        if (!tokenBanned) {
+          await syncBannedClaim(uniqueId, { uid, verdictBanned: true, dedupe: true });
+        }
+        log.warn('auth', 'Request denied: banned (strict)', {
+          path: req.path,
+          uniqueId,
+          banType: ban.banType,
+        });
+        return res.status(403).json({
+          error: 'Account banned',
+          code: 'banned',
+          banType: ban.banType,
+          reason: ban.reason,
+          expiresAt: ban.expiresAt,
+        });
+      }
+      if (tokenBanned) {
+        await syncBannedClaim(uniqueId, { uid, dedupe: true });
       }
     }
 
@@ -349,10 +470,26 @@ async function requireAdmin(req, res) {
 }
 
 function clearSuspensionCache(uniqueId) {
-  suspensionCache.delete(uniqueId);
-  // Also drop any inflight Promise so the NEXT caller refetches from
-  // Firestore (the inflight Promise was about to resolve to the OLD value).
-  suspensionInFlight.delete(uniqueId);
+  // Guard on `=== undefined` (a genuine no-arg call), NOT truthiness: unlike the
+  // string uids the sibling helpers take, uniqueId can arrive as Number(badId) →
+  // NaN (e.g. identity-graph.js), and `if (NaN)` truthiness would wrongly wipe
+  // the whole cache. A passed 0/NaN/null falls to the targeted delete (a safe
+  // no-op) instead.
+  if (uniqueId === undefined) {
+    // No id → clear everything (mirrors clearUniqueIdCache/clearAdminClaimCache),
+    // so the no-arg clearAuthCaches() test-isolation helper actually empties it.
+    // suspensionInFlight is cleared for mirror-consistency; the no-arg path runs
+    // between requests (test isolation) so there is no in-flight entry to drop —
+    // the production ban/unban-during-traffic case goes through the targeted
+    // branch below.
+    suspensionCache.clear();
+    suspensionInFlight.clear();
+  } else {
+    suspensionCache.delete(uniqueId);
+    // Also drop any inflight Promise so the NEXT caller refetches from
+    // Firestore (the inflight Promise was about to resolve to the OLD value).
+    suspensionInFlight.delete(uniqueId);
+  }
 }
 
 /**
@@ -394,6 +531,9 @@ module.exports = {
   clearSuspensionCache,
   clearUniqueIdCache,
   clearAdminClaimCache,
+  // Re-exported from utils/bans so middleware consumers (tests, admin
+  // routes already importing from here) have one import surface.
+  clearBanCache,
   updateUniqueIdCache,
   resolveUniqueId,
 };

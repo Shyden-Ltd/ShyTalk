@@ -63,7 +63,51 @@ echo "[build-debug-dev] device=$UDID config=$CONFIG"
 # -allowProvisioningUpdates lets automatic signing register the device /
 # refresh the profile for a development install. The persona password is
 # passed as a command-line build setting so it never touches a committed file.
-set -x
+# The invocation is echoed with the password REDACTED — `set -x` would expand
+# $PW into the xtrace, leaking the real dev password into stderr and every
+# captured build log.
+echo "[build-debug-dev] xcodebuild build -workspace $WORKSPACE -scheme $SCHEME" \
+  "-configuration $CONFIG -destination id=$UDID -derivedDataPath $DERIVED" \
+  "-allowProvisioningUpdates -quiet DEV_QA_PERSONAS_PASSWORD=<redacted>" \
+  "SHYTALK_GIT_BRANCH/SHA/DIRTY=<from live git>"
+# ── SHY-0207: real version identity for local installs ──
+# project.pbxproj's defaults (MARKETING_VERSION=1.0, CURRENT_PROJECT_VERSION=1)
+# made every local install read "1.0 (1)". CI already overrides both at
+# archive time on the xcodebuild-settings seam — this is the local
+# equivalent. versionName parses from app/build.gradle.kts with the SAME
+# anchored awk deploy-dev.yml uses (single source of truth; the pin suite
+# asserts both stay identical). Build number = commit count: monotonic per
+# history, meaningful ("commit #N"), needs no external counter; never
+# compared against CI's GITHUB_RUN_NUMBER channel (each is internally
+# monotonic; local Debug-Dev installs never upload to TestFlight).
+# Shallow clones would undercount — N/A here: this script only ever runs
+# against the operator's full local checkout, never in CI.
+VERSION_NAME=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' "$REPO_ROOT/app/build.gradle.kts")
+if [ -z "$VERSION_NAME" ]; then
+  echo "FATAL: could not parse versionName from app/build.gradle.kts" >&2
+  exit 1
+fi
+if ! echo "$VERSION_NAME" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "FATAL: versionName '$VERSION_NAME' is not a strict 3-int semver (Apple's CFBundleShortVersionString rule)" >&2
+  exit 1
+fi
+if ! BUILD_NUMBER=$(git rev-list --count HEAD); then
+  echo "FATAL: could not count commits for CURRENT_PROJECT_VERSION (git rev-list --count HEAD failed)" >&2
+  exit 1
+fi
+echo "[build-debug-dev] version identity: MARKETING_VERSION=$VERSION_NAME CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+
+# SHY-0205 — stamp the git identity into the build (Info.plist ShyTalkGit*
+# keys resolve these settings; the preview watermark renders them).
+# Failures degrade to "" → the Kotlin side coerces blank → "?".
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+# Detached HEAD prints the LITERAL "HEAD" (exit 0) — that's "branch
+# unknown"; pass empty so the Kotlin side renders "?" not "HEAD".
+if [ "$GIT_BRANCH" = "HEAD" ]; then GIT_BRANCH=""; fi
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
+GIT_DIRTY=""
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT_DIRTY="1"; fi
+
 xcodebuild build \
   -workspace "$WORKSPACE" \
   -scheme "$SCHEME" \
@@ -72,8 +116,12 @@ xcodebuild build \
   -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates \
   -quiet \
-  DEV_QA_PERSONAS_PASSWORD="$PW"
-set +x
+  DEV_QA_PERSONAS_PASSWORD="$PW" \
+  MARKETING_VERSION="$VERSION_NAME" \
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+  SHYTALK_GIT_BRANCH="$GIT_BRANCH" \
+  SHYTALK_GIT_SHA="$GIT_SHA" \
+  SHYTALK_GIT_DIRTY="$GIT_DIRTY"
 
 # ── Install on the device ──
 APP_PATH="$DERIVED/Build/Products/$CONFIG-iphoneos/iosApp.app"

@@ -123,6 +123,9 @@
     searchQuery: "",
     isLoading: false,
     error: null,
+    // null = good standing (or signed out); otherwise { kind, reason }
+    // as told to us by the server's ban gate (SHY-0149).
+    standing: null,
     myVotes: {},
     subscriptionPrefs: null,
     watchList: [],
@@ -204,14 +207,89 @@
               return { error: "Request failed" };
             })
             .then(function (body) {
+              // The server is the authority on standing (SHY-0149): every
+              // auth-gated request runs the ban gate, so ANY 403 tells us
+              // the answer — no separate "am I banned?" endpoint, and a
+              // ban issued mid-session lands on the next call the page
+              // makes.
+              noteStandingFrom(res.status, body);
               var err = new Error(body.error || "Request failed");
               err.status = res.status;
               throw err;
             });
         }
+        // A 200 clears our standing ONLY if the ban gate actually ran on this
+        // request. Several suggestion reads are auth-exempt on the server
+        // (public browsing) and answer 200 even for a banned user — treating
+        // those as proof of good standing would make the blocked banner
+        // vanish the moment they sorted or searched. Call sites opt in.
+        if (token && options.gated) clearStanding();
         return res.json();
       });
     });
+  }
+
+  // ─── Account standing (server-authoritative) ──────────────────
+  //
+  // `state.standing` is null when the user is in good standing (or signed
+  // out) and { kind: 'banned'|'suspended', reason } otherwise. It is only
+  // ever set from a real server response — the page never decides on its
+  // own who is banned.
+
+  function noteStandingFrom(status, body) {
+    if (status !== 403) return;
+    var kind = null;
+    if (body && body.code === "banned") kind = "banned";
+    else if (body && body.error === "Account suspended") kind = "suspended";
+    if (!kind) return;
+
+    var changed = !state.standing || state.standing.kind !== kind;
+    state.standing = { kind: kind, reason: (body && body.reason) || null };
+    if (changed) renderBoard();
+  }
+
+  function clearStanding() {
+    if (!state.standing) return;
+    state.standing = null;
+    renderBoard();
+  }
+
+  function canAct() {
+    return !state.standing;
+  }
+
+  /**
+   * Ask the server for our standing by making the auth-gated call the
+   * board already needs. A 403 flows through noteStandingFrom(); anything
+   * else means we may act. Signed-out visitors keep full read access.
+   */
+  function refreshStanding() {
+    if (!getUser()) {
+      clearStanding();
+      return Promise.resolve();
+    }
+    return fetchSubscriptionPrefs().catch(function () {
+      // Non-403 failures (offline, 500) must not lock a good-standing user
+      // out of the UI — noteStandingFrom already handled the 403 case.
+    });
+  }
+
+  /** The blocked banner shown to a banned or suspended user. */
+  function standingBannerHtml() {
+    if (!state.standing) return "";
+    var msgKey =
+      state.standing.kind === "banned" ? "standing_banned" : "standing_suspended";
+    var html =
+      '<div class="sg-standing-banner" role="alert" data-testid="standing-banner" ' +
+      'data-standing="' + escapeHtml(state.standing.kind) + '">' +
+      "<span>" + escapeHtml(sgT(msgKey)) + "</span>";
+    if (state.standing.reason) {
+      html +=
+        '<span class="sg-standing-reason" data-testid="standing-reason">' +
+        escapeHtml(sgT("standing_reason") + " " + state.standing.reason) +
+        "</span>";
+    }
+    return html + "</div>";
   }
 
   function relativeTime(dateStr) {
@@ -331,6 +409,7 @@
     apiFetch("/api/suggestions/" + suggestionId + "/vote", {
       method: method,
       body: body,
+      gated: true,
     })
       .then(function (data) {
         if (method === "DELETE") {
@@ -368,6 +447,7 @@
         language: lang,
         contactOptIn: contactOptIn,
       },
+      gated: true,
     });
   }
 
@@ -385,17 +465,21 @@
     return apiFetch("/api/suggestions/" + suggestionId + "/comments", {
       method: "POST",
       body: { text: text },
+      gated: true,
     });
   }
 
+  // `gated: true` marks the routes the server runs the ban gate on, so a 200
+  // from them is real evidence of good standing (see apiFetch).
   function fetchSubscriptionPrefs() {
-    return apiFetch("/api/subscriptions/me");
+    return apiFetch("/api/subscriptions/me", { gated: true });
   }
 
   function saveSubscriptionPrefs(prefs) {
     return apiFetch("/api/subscriptions/me", {
       method: "PUT",
       body: prefs,
+      gated: true,
     });
   }
 
@@ -403,6 +487,7 @@
     return apiFetch("/api/subscriptions/me/watch", {
       method: "POST",
       body: { suggestionId: suggestionId },
+      gated: true,
     });
   }
 
@@ -936,24 +1021,27 @@
       '">';
     html += '<h4 class="sg-comments-heading">Comments</h4>';
 
-    // Comment form
-    html +=
-      '<div class="sg-comment-form">' +
-      '<textarea class="sg-textarea sg-textarea--sm" placeholder="Add a comment..." ' +
-      'data-testid="comment-input-' +
-      suggestion.id +
-      '" ' +
-      'data-suggestion-id="' +
-      suggestion.id +
-      '"></textarea>' +
-      '<button class="sg-btn sg-btn--primary sg-btn--sm sg-comment-submit" ' +
-      'data-testid="comment-submit-' +
-      suggestion.id +
-      '" ' +
-      'data-suggestion-id="' +
-      suggestion.id +
-      '">Post</button>' +
-      "</div>";
+    // Comment form — withheld from a banned/suspended user, whose comment
+    // the server would refuse anyway (SHY-0149).
+    if (canAct()) {
+      html +=
+        '<div class="sg-comment-form">' +
+        '<textarea class="sg-textarea sg-textarea--sm" placeholder="Add a comment..." ' +
+        'data-testid="comment-input-' +
+        suggestion.id +
+        '" ' +
+        'data-suggestion-id="' +
+        suggestion.id +
+        '"></textarea>' +
+        '<button class="sg-btn sg-btn--primary sg-btn--sm sg-comment-submit" ' +
+        'data-testid="comment-submit-' +
+        suggestion.id +
+        '" ' +
+        'data-suggestion-id="' +
+        suggestion.id +
+        '">Post</button>' +
+        "</div>";
+    }
 
     // Existing comments
     if (comments.length > 0) {
@@ -1011,6 +1099,10 @@
       "<span>All suggestions are reviewed before publishing. Please search for existing suggestions before submitting — duplicate submissions will be merged.</span>" +
       "</div>";
 
+    // Blocked banner — a banned/suspended user keeps READ access to the
+    // board but loses every write control below (SHY-0149).
+    html += standingBannerHtml();
+
     // Toolbar: search + suggest button
     html += '<div class="sg-toolbar" data-testid="suggestions-toolbar">';
     html +=
@@ -1021,8 +1113,10 @@
       '" ' +
       'data-testid="suggestions-search-input" />' +
       "</div>";
-    html +=
-      '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">' + escapeHtml(sgT("suggest")) + '</button>';
+    if (canAct()) {
+      html +=
+        '<button class="sg-btn sg-btn--primary sg-suggest-btn" data-testid="suggest-btn">' + escapeHtml(sgT("suggest")) + '</button>';
+    }
     html += "</div>";
 
     // Sort + filter controls
@@ -1209,7 +1303,9 @@
 
   function renderSuggestionCard(s) {
     var myVote = state.myVotes[s.id] || null;
-    var votingDisabled = isVotingDisabled(s.status);
+    // A banned/suspended user loses the vote controls for the same reason
+    // a completed suggestion does: the action would be refused (SHY-0149).
+    var votingDisabled = isVotingDisabled(s.status) || !canAct();
     var score = s.score != null ? s.score : 0;
     var desc = s.description || "";
     var truncated = desc.length > 200;
@@ -1533,10 +1629,17 @@
     window.shytalkShowLoginModal = showLoginPromptModal;
     window.shytalkOpenSubscribeModal = openSubscribeModal;
 
-    // Re-render when auth state changes (show/hide suggest button)
+    // Re-render when auth state changes (show/hide suggest button), and
+    // ask the server for our standing so a banned user sees the blocked
+    // banner on load rather than on their first refused click (SHY-0149).
     document.addEventListener("shytalk-auth-changed", function () {
       renderBoard();
+      refreshStanding();
     });
+
+    // The auth-changed event may have fired before this listener attached
+    // (Firebase restores a session fast); probe once for that race.
+    refreshStanding();
   }
 
   if (document.readyState === "loading") {

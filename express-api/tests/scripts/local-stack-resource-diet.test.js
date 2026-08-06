@@ -330,21 +330,27 @@ describe('Local-stack resource diet', () => {
     // for the local target, but no script serves the static web app
     // there. Without this step, every desktop browser cell in the
     // matrix fails its smoke test ("webUiDump failed: ECONNREFUSED").
-    // start.sh must launch `npx serve public -l 8888` in the background.
-    test('launches npx serve public on port 8888', () => {
-      // The operative line must be `npx serve public -l 8888` at line-
-      // start, with a trailing `&` (backgrounded) so the script
-      // continues to subsequent steps.
-      expect(scriptText).toMatch(/^npx serve public[^\n]*-l 8888[^\n]*&\s*$/m);
+    // SHY-0180: start.sh launches the zero-dep `local/serve-web.js` (not the
+    // fragile `npx serve`, which died mid-suite). Backgrounded so the script
+    // continues; SERVE_PID captured right after for cleanup().
+    test('launches serve-web.js on port 8888', () => {
+      expect(scriptText).toMatch(/serve-web\.js[^\n]*--port 8888/);
     });
 
-    // SERVE_PID capture must follow the backgrounded npx serve so
-    // cleanup() can kill it. Mirrors the FIREBASE_PID / API_PID pattern.
+    // SERVE_PID capture must immediately follow the backgrounded launch so
+    // cleanup() can kill it. The launch spans two lines (command `\` then the
+    // `> >(sed ...) 2>&1 &` continuation), so SERVE_PID is on the line right
+    // after the `&`, and the serve-web launch precedes it nearby.
     test('captures SERVE_PID immediately after the backgrounded serve', () => {
       const lines = scriptText.split('\n');
-      const serveIdx = lines.findIndex((l) => /^npx serve public[^\n]*-l 8888[^\n]*&\s*$/.test(l));
-      expect(serveIdx).toBeGreaterThanOrEqual(0);
-      expect(lines[serveIdx + 1]).toMatch(/^SERVE_PID=\$!$/);
+      const pidIdx = lines.findIndex((l) => /^SERVE_PID=\$!$/.test(l));
+      expect(pidIdx).toBeGreaterThanOrEqual(0);
+      const launchIdx = lines.findIndex((l) => /serve-web\.js[^\n]*--port 8888/.test(l));
+      expect(launchIdx).toBeGreaterThanOrEqual(0);
+      expect(pidIdx).toBeGreaterThan(launchIdx);
+      expect(pidIdx - launchIdx).toBeLessThanOrEqual(3);
+      // the line just above SERVE_PID must be the backgrounding `&`
+      expect(lines[pidIdx - 1]).toMatch(/&\s*$/);
     });
 
     // cleanup() must kill SERVE_PID alongside API_PID and FIREBASE_PID
@@ -389,7 +395,7 @@ describe('Local-stack resource diet', () => {
     test('serve step runs after Express API ready', () => {
       const lines = scriptText.split('\n');
       const apiReadyIdx = lines.findIndex((l) => l.includes('Express API ready'));
-      const serveIdx = lines.findIndex((l) => /^npx serve public[^\n]*-l 8888[^\n]*&\s*$/.test(l));
+      const serveIdx = lines.findIndex((l) => /serve-web\.js[^\n]*--port 8888/.test(l));
       expect(apiReadyIdx).toBeGreaterThanOrEqual(0);
       expect(serveIdx).toBeGreaterThanOrEqual(0);
       expect(serveIdx).toBeGreaterThan(apiReadyIdx);
@@ -422,7 +428,7 @@ describe('Local-stack resource diet', () => {
     //   7880  LiveKit (Docker)
     //   9002  MinIO API (Docker; internal 9000 mapped to host 9002)
     //   8025  Mailpit UI (Docker)
-    //   8888  npx serve (added by PR #947)
+    //   8888  serve-web.js static web server (SHY-0180; was npx serve, PR #947)
     const REQUIRED_PORTS = [4000, 8080, 9000, 9099, 3000, 7880, 9002, 8025, 8888];
 
     test('declares a preflight port-check step before any service start', () => {

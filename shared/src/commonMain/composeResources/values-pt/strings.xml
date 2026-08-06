@@ -1501,10 +1501,10 @@
     <string name="security_reset_pin">Redefinir PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifique sua identidade para definir um novo PIN</string>
+    <string name="security_set_pin">Definir PIN</string>
+    <string name="security_set_pin_desc">Proteja o aplicativo com um PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Contas vinculadas</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Gerenciar métodos de login</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Faça login com e-mail</string>
