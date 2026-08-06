@@ -211,10 +211,22 @@ echo "  Express API ready."
 # local/test-playwright.sh now also relies on this serve rather than
 # starting its own redundant one on 8080.
 #
-# `serve` is pinned as a root devDependency so `npx serve` resolves
-# deterministically (no registry fetch needed on a fresh clone).
+# SHY-0180: launches the zero-dependency `local/serve-web.js` (Node core only)
+# instead of `npx serve`. `npx serve` DIED ~15 min into a heavy Chromium suite
+# — its `npm exec` wrapper caught a SIGINT/SIGTERM and the graceful-shutdown
+# path crashed on an in-flight EBADF, drowning the suite tail in
+# ERR_CONNECTION_REFUSED (blocked SHY-0095's push 3×; ~5 deaths). A plain-node
+# server (no npm-exec wrapper, per-stream error handling) is empirically immune.
 echo "==> Step 6b/8: Serving static web app on localhost:8888..."
-npx serve public --no-clipboard -l 8888 > >(sed 's/^/[WEB] /') 2>&1 &
+# Raise the fd cap in THIS shell (not a subshell) so SERVE_PID=$! below still
+# points at the server. Guarded: under `set -e` a bare failing ulimit (hard cap
+# < 10240 on a managed machine) would abort BEFORE cleanup() and orphan Docker/
+# emulators; warn-and-continue keeps the run alive with a visible signal.
+if ! ulimit -n 10240 2>/dev/null; then
+  echo "WARNING: could not raise fd limit to 10240 (hard limit lower on this machine?)." >&2
+fi
+node "$PROJECT_ROOT/local/serve-web.js" --port 8888 --root "$PROJECT_ROOT/public" --quiet \
+  > >(sed 's/^/[WEB] /') 2>&1 &
 SERVE_PID=$!
 
 # Readiness probe -- mirrors Step 6's wait-for-API pattern. Without
@@ -226,7 +238,7 @@ echo "  Waiting for web serve (localhost:8888)..."
 MAX_WAIT=30; WAITED=0
 until curl -s http://localhost:8888 > /dev/null 2>&1; do
   if ! kill -0 "$SERVE_PID" 2>/dev/null; then
-    echo "ERROR: npx serve died -- check [WEB] log lines (port 8888 in use?)"
+    echo "ERROR: serve-web.js died -- check [WEB] log lines (port 8888 in use?)"
     cleanup
     exit 1
   fi

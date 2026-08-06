@@ -2,22 +2,22 @@
 agp = "9.2.1"
 kotlin = "2.4.0"
 composeMultiplatform = "1.10.3"
-composeBom = "2026.05.01"
+composeBom = "2026.06.00"
 coreKtx = "1.19.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
 appcompat = "1.7.1"
 navigationCompose = "2.9.8"
 firebaseBom = "34.14.1"
-googleServices = "4.4.4"
+googleServices = "4.5.0"
 coroutines = "1.11.0"
 coil3 = "3.5.0"
-ktor = "3.5.0"
+ktor = "3.5.1"
 imageCropper = "4.7.0"
-livekit = "2.26.0"
+livekit = "2.26.1"
 credentials = "1.6.0"
 googleid = "1.2.0"
-koin = "4.2.1"
+koin = "4.2.2"
 kotlinxDatetime = "0.8.0"
 kotlinxSerialization = "1.11.0"
 mockk = "1.14.11"
@@ -26,13 +26,13 @@ junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 lottieCompose = "6.7.1"
-billing = "9.0.0"
+billing = "9.1.0"
 allureKotlin = "2.4.0"
 cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.1.0"
 ktlint = "14.2.0"
-detekt = "2.0.0-alpha.4"
+detekt = "2.0.0-alpha.5"
 gitliveFirebase = "2.4.0"
 
 [libraries]
@@ -89,7 +89,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
 # KMP
-firebase-common = { group = "com.google.firebase", name = "firebase-common", version = "22.0.1" }
+firebase-common = { group = "com.google.firebase", name = "firebase-common", version = "22.1.0" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 

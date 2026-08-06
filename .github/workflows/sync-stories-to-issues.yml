@@ -12,14 +12,21 @@ name: Sync SHY Stories to GitHub Issues
 # SHY-0079: after a mutating run the script writes `.project/board-items.json`
 # (a consistent id-map that overlays the eventually-consistent Projects v2
 # items query, healing read-after-write lag that otherwise re-creates draft
-# cards). The final step commits that file to main via createCommitOnBranch
-# with the Release App token (signed; SHY-0063 mechanism). board-items.json is
-# deliberately ABSENT from the push `paths:` below, so committing it does NOT
-# re-fire this workflow (no loop); the actor guard on the job is belt-and-braces.
+# cards). The final step commits that file to develop (SHY-0177; was main
+# pre-git-flow) via createCommitOnBranch with the Release App token (signed;
+# SHY-0063 mechanism). board-items.json is deliberately ABSENT from the push
+# `paths:` below and the commit message carries [skip ci], so committing it
+# does NOT re-fire this workflow (no loop); the actor guard on the job is
+# belt-and-braces.
 
 on:
   push:
-    branches: [main]
+    # SHY-0177: develop (the git-flow integration branch) is the board's
+    # SINGLE source — story truth lands there first and main is always a
+    # subset. Never add main back: change detection is an equality body-hash
+    # with no version ordering, so a main-triggered run after a develop one
+    # would regress issues to main's older content.
+    branches: [develop]
     # NOTE (SHY-0079): board-items.json is intentionally NOT a trigger path —
     # the sidecar commit-back must not re-fire the sync.
     paths:
@@ -37,11 +44,14 @@ on:
         type: boolean
         default: false
 
-# Workflow-level concurrency guarantees only one sync runs at a time per ref.
-# cancel-in-progress: false because we never want to cancel an in-flight sync
-# mid-API-call — that would leave issues in inconsistent state.
+# GLOBAL concurrency (SHY-0177): one shared board ⇒ at most one sync runs at
+# a time across ALL triggers (develop pushes + manual dispatches from any
+# ref). The pre-SHY-0177 per-ref group let a dispatch and a push mutate the
+# board concurrently and race duplicate issues. cancel-in-progress: false
+# because we never want to cancel an in-flight sync mid-API-call — that
+# would leave issues in inconsistent state.
 concurrency:
-  group: sync-stories-${{ github.ref }}
+  group: sync-stories
   cancel-in-progress: false
 
 permissions:
@@ -64,9 +74,13 @@ jobs:
     # ≈ ~330-700 calls ≈ ~2-3 min. 15 min ≈ 5× headroom.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          # SHY-0177: every trigger syncs DEVELOP truth — a workflow_dispatch
+          # clicked from main (the default branch) must not publish stale
+          # main content onto the board.
+          ref: develop
 
       - name: Validate all stories before sync
         run: bash scripts/check-story-frontmatter.sh --scan .project/stories
@@ -124,40 +138,67 @@ jobs:
             exit 0
           fi
           # Reuse SHY-0063's signed-commit path: createCommitOnBranch with the
-          # Release App token is the only signed-commit route from CI that
-          # satisfies main's required_signatures (App is in bypass_actors on
-          # ruleset 12613584). board-items.json is not a trigger path, so this
-          # commit does not re-fire the sync.
+          # Release App token. SHY-0177: targets DEVELOP — the branch the next
+          # sync checks out and reads the sidecar from. Develop's only blocking
+          # rule is non_fast_forward (ruleset 16058327), so the App needs no
+          # bypass there. Not a trigger path + [skip ci] + actor guard ⇒ this
+          # commit fires nothing.
           if git diff --quiet "$SIDECAR" 2>/dev/null && git ls-files --error-unmatch "$SIDECAR" >/dev/null 2>&1; then
             echo "[sidecar] board-items.json unchanged — no commit."
             exit 0
           fi
-          PARENT_SHA=$(git rev-parse HEAD)
-          # shellcheck disable=SC2016
-          PAYLOAD=$(jq -n \
-            --arg repo "${{ github.repository }}" \
-            --arg branch "main" \
-            --arg oid "${PARENT_SHA}" \
-            --arg msg "chore(board): sync board-items.json id-map [skip ci]" \
-            --rawfile c1 "$SIDECAR" \
-            '{
-              query: "mutation($repo: String!, $branch: String!, $oid: GitObjectID!, $msg: String!, $additions: [FileAddition!]!) { createCommitOnBranch(input: { branch: { repositoryNameWithOwner: $repo, branchName: $branch }, expectedHeadOid: $oid, fileChanges: { additions: $additions }, message: { headline: $msg } }) { commit { oid } } }",
-              variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: [{path: ".project/board-items.json", contents: ($c1|@base64)}]}
-            }')
-          RESPONSE=$(echo "$PAYLOAD" | gh api graphql --input -)
-          OID=$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')
+          # SHY-0177: develop is a busy integration branch — a PR merging
+          # during the ~2-3 min sync makes a checkout-time SHA stale as
+          # expectedHeadOid. Resolve the LIVE head at commit time; the sidecar
+          # is a whole-file replacement written only by this (globally
+          # serialized) workflow, so committing onto a newer head is safe. One
+          # retry absorbs a head advancing between resolve and mutate; a second
+          # failure stays loud and the next run reconciles.
+          # The jq PROGRAM lives in a quoted heredoc: the $names below are
+          # jq variables (bound via --arg/--rawfile), and the quoted
+          # delimiter means the shell never expands anything — which is also
+          # why no shellcheck SC2016 suppression is needed (it only flags $
+          # inside single-quoted literals; SHY-0191 removed the old inline
+          # single-quoted form). Program text is unchanged.
+          JQ_PROG=$(cat <<'JQPROG'
+          {
+            query: "mutation($repo: String!, $branch: String!, $oid: GitObjectID!, $msg: String!, $additions: [FileAddition!]!) { createCommitOnBranch(input: { branch: { repositoryNameWithOwner: $repo, branchName: $branch }, expectedHeadOid: $oid, fileChanges: { additions: $additions }, message: { headline: $msg } }) { commit { oid } } }",
+            variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: [{path: ".project/board-items.json", contents: ($c1|@base64)}]}
+          }
+          JQPROG
+          )
+          OID=""
+          for attempt in 1 2; do
+            LIVE_HEAD=$(gh api "repos/${{ github.repository }}/git/ref/heads/develop" --jq '.object.sha')
+            echo "[sidecar] attempt ${attempt}: live develop head ${LIVE_HEAD}"
+            PAYLOAD=$(jq -n \
+              --arg repo "${{ github.repository }}" \
+              --arg branch "develop" \
+              --arg oid "${LIVE_HEAD}" \
+              --arg msg "chore(board): sync board-items.json id-map [skip ci]" \
+              --rawfile c1 "$SIDECAR" \
+              "$JQ_PROG")
+            set +e
+            RESPONSE=$(echo "$PAYLOAD" | gh api graphql --input - 2>&1)
+            set -e
+            OID=$(printf '%s' "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty' 2>/dev/null || printf '')
+            if [ -n "$OID" ]; then
+              break
+            fi
+            echo "::warning::sidecar createCommitOnBranch attempt ${attempt} failed — raw response below."
+            echo "$RESPONSE"
+          done
           if [ -z "$OID" ]; then
-            echo "::error::sidecar createCommitOnBranch failed — response below."
-            echo "$RESPONSE" | jq .
+            echo "::error::sidecar createCommitOnBranch failed after 2 attempts (responses above)."
             exit 1
           fi
           echo "[sidecar] signed commit ${OID} (.project/board-items.json)"
           {
-            echo "## Board sidecar: signed commit on main"
+            echo "## Board sidecar: signed commit on develop"
             echo ""
             echo "| | |"
             echo "|---|---|"
-            echo "| **Parent SHA** | \`${PARENT_SHA}\` |"
+            echo "| **Parent (live develop head)** | \`${LIVE_HEAD}\` |"
             echo "| **New commit OID** | \`${OID}\` |"
             echo "| **File** | \`.project/board-items.json\` |"
           } >> "$GITHUB_STEP_SUMMARY"

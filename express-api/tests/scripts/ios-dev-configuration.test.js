@@ -267,6 +267,112 @@ describe('iosApp.xcodeproj — SHY-0104 Debug-Dev build configuration', () => {
     });
   });
 
+  describe('local build versioning (SHY-0207)', () => {
+    let script;
+    beforeAll(() => {
+      script = fs.readFileSync(path.join(REPO_ROOT, 'scripts/ios/build-debug-dev.sh'), 'utf8');
+    });
+
+    // Local device builds must pass BOTH version settings on the same
+    // xcodebuild seam CI uses — the pbxproj 1.0/(1) defaults must never
+    // reach a device install again.
+    test.each([
+      [/MARKETING_VERSION="\$VERSION_NAME"/],
+      [/CURRENT_PROJECT_VERSION="\$BUILD_NUMBER"/],
+    ])('script passes %s to xcodebuild', (re) => {
+      expect(script).toMatch(re);
+    });
+
+    test('versionName parsed with the SAME anchored awk CI uses', () => {
+      const anchored =
+        "awk -F'\"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*\"/ {print $2; exit}'";
+      expect(script).toContain(anchored);
+      const devYml = fs.readFileSync(
+        path.join(REPO_ROOT, '.github', 'workflows', 'deploy-dev.yml'),
+        'utf8',
+      );
+      expect(devYml).toContain(anchored);
+    });
+
+    test('script fail-fasts on a non-semver versionName BEFORE xcodebuild', () => {
+      expect(script).toMatch(/\^\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
+      const guardIdx = script.indexOf('not a strict 3-int semver');
+      // Anchor on the real invocation (line start), not the redacted-echo
+      // line that also contains the words 'xcodebuild build'.
+      const buildIdx = script.indexOf('\nxcodebuild build');
+      expect(guardIdx).toBeGreaterThan(-1);
+      expect(guardIdx).toBeLessThan(buildIdx);
+    });
+
+    test('local build number = git rev-list --count HEAD (monotonic, no external counter)', () => {
+      expect(script).toMatch(/git rev-list --count HEAD/);
+    });
+
+    test('CI archive version overrides are UNCHANGED (regression pin)', () => {
+      const devYml = fs.readFileSync(
+        path.join(REPO_ROOT, '.github', 'workflows', 'deploy-dev.yml'),
+        'utf8',
+      );
+      expect(devYml).toMatch(/CURRENT_PROJECT_VERSION="\$\{BUILD_NUMBER\}"/);
+      expect(devYml).toMatch(/MARKETING_VERSION="\$\{VERSION_NAME\}"/);
+    });
+  });
+
+  describe('Info.plist git-identity injection (SHY-0205)', () => {
+    let plist;
+    beforeAll(() => {
+      plist = fs.readFileSync(INFO_PLIST, 'utf8');
+    });
+
+    // Same mechanism as DevQaPersonasPassword: each key resolves a
+    // SHYTALK_GIT_* build setting passed by build-debug-dev.sh (local)
+    // and deploy-dev.yml (CI). Builds without the settings (Xcode GUI,
+    // prod archives) resolve to empty strings — iOSApp.swift forwards
+    // them and BuildVariant coerces blank → "?", so the preview
+    // watermark shows placeholders instead of crashing, and prod
+    // carries no git metadata.
+    test.each([
+      ['ShyTalkGitBranch', 'SHYTALK_GIT_BRANCH'],
+      ['ShyTalkGitSha', 'SHYTALK_GIT_SHA'],
+      ['ShyTalkGitDirty', 'SHYTALK_GIT_DIRTY'],
+    ])('Info.plist exposes %s = $(%s)', (key, setting) => {
+      const re = new RegExp(`<key>${key}</key>\\s*<string>\\$\\(${setting}\\)</string>`);
+      expect(plist).toMatch(re);
+    });
+
+    // Values must be build-setting references, never literals — a baked
+    // branch/sha would go stale silently and defeat the whole feature.
+    // Both WRITERS of the settings must pass the full triple: the local
+    // device build script AND the CI TestFlight archive (CI passes an
+    // explicit empty DIRTY — checkouts are clean — so the plist key
+    // resolves to the documented empty-string state, never to the
+    // unresolved literal).
+    test.each([
+      ['scripts/ios/build-debug-dev.sh', /SHYTALK_GIT_BRANCH="\$GIT_BRANCH"/],
+      ['scripts/ios/build-debug-dev.sh', /SHYTALK_GIT_SHA="\$GIT_SHA"/],
+      ['scripts/ios/build-debug-dev.sh', /SHYTALK_GIT_DIRTY="\$GIT_DIRTY"/],
+      ['.github/workflows/deploy-dev.yml', /SHYTALK_GIT_BRANCH="\$\{SHYTALK_DEPLOY_REF\}"/],
+      [
+        '.github/workflows/deploy-dev.yml',
+        /SHYTALK_GIT_SHA="\$\(git -C \.\. rev-parse --short HEAD\)"/,
+      ],
+      ['.github/workflows/deploy-dev.yml', /SHYTALK_GIT_DIRTY=""/],
+    ])('%s passes the git-identity settings (%s)', (rel, re) => {
+      const src = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+      expect(src).toMatch(re);
+    });
+
+    test.each([
+      ['ShyTalkGitBranch', '$(SHYTALK_GIT_BRANCH)'],
+      ['ShyTalkGitSha', '$(SHYTALK_GIT_SHA)'],
+      ['ShyTalkGitDirty', '$(SHYTALK_GIT_DIRTY)'],
+    ])('%s carries no literal value', (key, expected) => {
+      const m = plist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`));
+      expect(m).not.toBeNull();
+      expect(m[1]).toBe(expected);
+    });
+  });
+
   describe('Podfile CocoaPods config-type mapping', () => {
     let podfile;
     beforeAll(() => {

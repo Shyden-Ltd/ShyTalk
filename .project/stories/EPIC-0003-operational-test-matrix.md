@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-13
 priority: P1
 title: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
-child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101, SHY-0112, SHY-0113, SHY-0114, SHY-0115, SHY-0116, SHY-0117, SHY-0118, SHY-0119, SHY-0120, SHY-0121, SHY-0122, SHY-0123, SHY-0124, SHY-0129]
+child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101, SHY-0112, SHY-0113, SHY-0114, SHY-0115, SHY-0116, SHY-0117, SHY-0118, SHY-0119, SHY-0120, SHY-0121, SHY-0122, SHY-0123, SHY-0124, SHY-0129, SHY-0186, SHY-0188]
 ---
 
 # EPIC-0003: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
@@ -114,6 +114,10 @@ Delivered as phases — each phase is one or more 1-SHY-1-PR vertical slices; th
 - **SHY-0124** (P2) — Playwright integration e2e → real backend (6 migrate, 2 unit kept). Status: Draft.
 
 > These 13 are the **feature-area tracking children**; each XL/L area sub-splits into 1-SHY-1-PR work-slices filed as-started at pickup ([[feedback-agile-user-stories]]). The earlier by-phase plan (Phase 1–6+X) is retained as the *framework* view in `## Scope`; this feature-area set is the *prioritised execution order*. `child_shys` frontmatter lists only filed-and-existing SHYs (validator cross-checks existence in `--scan`); per-PR sub-slices are promoted into it as their files are created.
+
+**K/N runtime work-slices (filed 2026-07-14 — the shared suite has never executed on Kotlin/Native):**
+- **SHY-0186** (P1) — make `commonTest` COMPILE on K/N (rename the 20 K/N-illegal backtick names). Status: In Review (PR #1598).
+- **SHY-0188** (P1) — EXECUTE the suite on K/N (Firebase-framework link) + illegal-name guard + CI enforcement. Status: Draft (follows SHY-0186).
 
 ## Operator decisions (running)
 

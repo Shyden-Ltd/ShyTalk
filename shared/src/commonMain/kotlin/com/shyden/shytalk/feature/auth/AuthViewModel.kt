@@ -8,12 +8,14 @@ import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.effectiveCohort
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
+import com.shyden.shytalk.data.repository.DeviceLockStatus
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.SignInResult
@@ -60,8 +62,11 @@ data class AuthUiState(
     val banExpiresAt: String? = null,
     val awaitingEmailLink: Boolean = false,
     val emailForLink: String? = null,
-    val needsPinSetup: Boolean = false,
     val hasStoredCredential: Boolean = false,
+    // Informational only — the ACTUAL App-Lock gate reads AppLockRepository
+    // directly via resolveLaunchDestination (cold launch) + AppLockResumeGate
+    // (warm resume); nothing routes on this flag (SHY-0187). Do not build
+    // navigation against it.
     val needsLockScreen: Boolean = false,
     /**
      * Set when local auth storage (Keychain / EncryptedSharedPreferences / Firebase
@@ -310,24 +315,9 @@ class AuthViewModel(
                         identityRepository.forceRefreshToken()
 
                         if (!bypassDeviceChecks) {
-                            when (val binding = deviceRepository.getDeviceBinding(deviceId)) {
-                                is Resource.Success -> {
-                                    val boundUserId = binding.data
-                                    if (boundUserId != null && boundUserId != uniqueIdStr) {
-                                        logW(TAG, "Device locked for uniqueId=${signInResult.uniqueId}")
-                                        authRepository.signOut()
-                                        _uiState.update { it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true) }
-                                        return
-                                    }
-                                    if (boundUserId == null) {
-                                        deviceRepository.bindDevice(deviceId, uniqueIdStr)
-                                    }
-                                }
-
-                                is Resource.Error -> { /* lenient */ }
-
-                                is Resource.Loading -> Unit
-                            }
+                            // Server-authoritative device-lock (SHY-0170): the API
+                            // decides + binds; a locked device signs out here.
+                            if (!resolveDeviceLockOrBlock()) return
                             checkAndApplyBan()
                         } else {
                             logI(TAG, "Device checks bypassed (debug build)")
@@ -338,21 +328,9 @@ class AuthViewModel(
                     is SignInResult.NotFound -> {
                         logI(TAG, "Identity not found — new user")
                         if (!bypassDeviceChecks) {
-                            when (val binding = deviceRepository.getDeviceBinding(deviceId)) {
-                                is Resource.Success -> {
-                                    val boundUserId = binding.data
-                                    if (boundUserId != null) {
-                                        logW(TAG, "Device bound — blocking new account creation")
-                                        authRepository.signOut()
-                                        _uiState.update { it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true) }
-                                        return
-                                    }
-                                }
-
-                                is Resource.Error -> { /* lenient */ }
-
-                                is Resource.Loading -> Unit
-                            }
+                            // A device already bound to another account cannot spawn
+                            // a new account — the API makes that call (SHY-0170).
+                            if (!resolveDeviceLockOrBlock()) return
                             checkAndApplyBan()
                         }
                         _uiState.update {
@@ -463,6 +441,36 @@ class AuthViewModel(
     }
 
     /**
+     * Server-authoritative device-lock check (SHY-0170). Asks the API whether
+     * this device is locked to another account (the API also binds an unbound
+     * device to an existing caller). Returns `true` to proceed, or `false` when
+     * the device is LOCKED — in which case it has already signed the caller out
+     * and set `isDeviceLocked`. On an API error it is lenient (returns `true`),
+     * preserving the prior availability-over-strictness posture.
+     */
+    private suspend fun resolveDeviceLockOrBlock(): Boolean =
+        when (val lock = deviceRepository.resolveDeviceLock(deviceId)) {
+            is Resource.Success -> {
+                if (lock.data == DeviceLockStatus.LOCKED) {
+                    logW(TAG, "Device locked by the API — blocking")
+                    authRepository.signOut()
+                    _uiState.update {
+                        it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true)
+                    }
+                    false
+                } else {
+                    true
+                }
+            }
+
+            // Lenient: a lock-check outage (Error) or a pending state (Loading)
+            // must not lock out real users — proceed.
+            is Resource.Error -> true
+
+            is Resource.Loading -> true
+        }
+
+    /**
      * Checks device/network ban status via the API.
      * Stores ban info in state but does NOT block the auth flow,
      * so suspension status can also be resolved. The UI decides
@@ -504,6 +512,7 @@ class AuthViewModel(
                         is Resource.Success -> {
                             val user = userResult.data
                             authRepository.resolvedDisplayName = user.displayName
+                            authRepository.resolvedCohort = user.effectiveCohort
                             if (user.isActivelySuspended) {
                                 logI(TAG, "Suspension detected: reason=${user.suspensionReason}")
                                 _uiState.update {
@@ -579,8 +588,6 @@ class AuthViewModel(
                             if (!needsLegal) {
                                 LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
                             }
-                            // Check if user needs PIN setup (migration or new device)
-                            val needsPin = appLockRepository?.hasCredential == false
                             // Inconsistent state guard (PR 5b 2026-05-04): a user
                             // with `ageVerified = true` AND `dateOfBirth = null`
                             // is in a state the verification flow cannot have
@@ -609,7 +616,6 @@ class AuthViewModel(
                                     hasProfile = true,
                                     hasDOB = user.dateOfBirth != null,
                                     needsLegalAcceptance = needsLegal,
-                                    needsPinSetup = needsPin,
                                 )
                             }
                         }

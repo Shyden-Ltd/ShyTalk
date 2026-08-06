@@ -23,6 +23,7 @@ const bcrypt = require('bcrypt');
 const { db, auth, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { getDoc } = require('../utils/firestore-helpers');
+const { nextUniqueIdFrom } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
 const { clearSuspensionCache, updateUniqueIdCache } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
@@ -275,10 +276,15 @@ router.post('/users', async (req, res) => {
         }
       }
 
-      // Atomic counter increment
-      let current = counterSnap.exists ? counterSnap.data().value || 0 : 0;
-      if (current < MIN_UNIQUE_ID) current = MIN_UNIQUE_ID - 1;
-      const next = current + 1;
+      // Atomic counter increment. counters/uniqueId is shared with the
+      // test-helpers allocator and has been observed string-typed — a string
+      // >= MIN_UNIQUE_ID passed the old `<` floor un-reassigned and `+ 1`
+      // CONCATENATED, minting a real account at users/"100000421".
+      // nextUniqueIdFrom is type-immune; the floor keeps ids >= MIN_UNIQUE_ID.
+      const next = nextUniqueIdFrom(counterSnap.exists ? counterSnap.data().value : undefined, {
+        base: MIN_UNIQUE_ID - 1,
+        floor: MIN_UNIQUE_ID - 1,
+      });
 
       const timestamp = now();
 

@@ -39,6 +39,13 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
+// Seeding a ban — or a BINDING, which decides which hardware bans reach an
+// account — bypasses the routes that normally invalidate the gate's caches, so
+// this route clears them itself (SHY-0149 R4-I5). The route destructures
+// `clearBanCache` at require time, so the mock must precede the require.
+jest.mock('../../src/utils/bans', () => ({ clearBanCache: jest.fn() }));
+const { clearBanCache } = require('../../src/utils/bans');
+
 // ─── App setup ───────────────────────────────────────────────────
 
 const testHelpersRouter = require('../../src/routes/test-helpers');
@@ -206,6 +213,9 @@ describe('POST /api/test/write/:collection', () => {
       'suggestions',
       'ageVerificationSubmissions',
       'coinPackages',
+      'deviceBindings',
+      'deviceBans',
+      'networkBans',
     ];
 
     for (const collection of allowedCollections) {
@@ -224,4 +234,39 @@ describe('POST /api/test/write/:collection', () => {
       expect(res.body.id).toBe(`test-${collection}`);
     }
   });
+});
+
+describe('POST /api/test/write/:collection — ban-gate cache invalidation', () => {
+  // A doc seeded straight into Firestore bypasses the admin routes that
+  // normally clear the gate's caches. Without this, a spec that seeds a REAL
+  // ban (or a binding that pulls a hardware ban into scope) can be answered
+  // from a stale "clean" verdict for the full 5-minute TTL — a false negative
+  // in exactly the security specs this endpoint exists to serve (R4-I5).
+  test.each(['deviceBans', 'networkBans', 'deviceBindings'])(
+    'seeding %s clears the ban cache',
+    async (collection) => {
+      const app = createApp();
+      await request(app)
+        .post(`/api/test/write/${collection}`)
+        .set('X-Test-Api-Key', VALID_API_KEY)
+        .send({ id: 'seed-1' })
+        .expect(200);
+
+      expect(clearBanCache).toHaveBeenCalledWith();
+    },
+  );
+
+  test.each(['users', 'suggestions'])(
+    'seeding %s does NOT touch the ban cache (no standing changed)',
+    async (collection) => {
+      const app = createApp();
+      await request(app)
+        .post(`/api/test/write/${collection}`)
+        .set('X-Test-Api-Key', VALID_API_KEY)
+        .send({ id: 'seed-1' })
+        .expect(200);
+
+      expect(clearBanCache).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.DeviceLockStatus
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.SignInResult
@@ -101,9 +102,9 @@ class IdentityFlowTest : KoinTest {
 
     @Test
     fun deviceBinding_boundToSameUser_proceedsNormally() {
-        // Device is bound to the same user resolving identity
+        // Device bound to the same user resolving identity → the API allows it.
         val fakeDevice = deviceRepository as FakeDeviceRepository
-        fakeDevice.bindings["test-device-id"] = "10000005"
+        fakeDevice.lockStatus = DeviceLockStatus.ALLOWED
 
         val fakeIdentity = identityRepository as FakeIdentityRepository
         fakeIdentity.resolveResult = Resource.Success(SignInResult.Found(10000005))

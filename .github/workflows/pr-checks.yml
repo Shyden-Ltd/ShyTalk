@@ -2,7 +2,11 @@ name: PR Checks
 
 on:
   pull_request:
-    branches: [main]
+    # SHY-0242: develop joins the trigger so every develop PR (stories +
+    # Dependabot) is CI-gated. The device-E2E jobs stay base-main-guarded
+    # (SHY-0163) so feature→develop pays no emulator cost; they run only on
+    # the develop→main promotion.
+    branches: [main, develop]
     types: [opened, synchronize, reopened]
 
 permissions:
@@ -30,11 +34,12 @@ jobs:
       web_changed: ${{ steps.changes.outputs.web_changed }}
       integration_changed: ${{ steps.changes.outputs.integration_changed }}
       qa_runner_drivers_changed: ${{ steps.changes.outputs.qa_runner_drivers_changed }}
+      scripts_changed: ${{ steps.changes.outputs.scripts_changed }}
       workflow_only: ${{ steps.changes.outputs.workflow_only }}
       skip_android_e2e: ${{ steps.changes.outputs.skip_android_e2e }}
       skip_ios_e2e: ${{ steps.changes.outputs.skip_ios_e2e }}
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -54,7 +59,7 @@ jobs:
           # retained for lint/sonarcloud/integration-tests which
           # cover both platforms; only the heavy build/E2E jobs
           # gate on the granular ANDROID_APP / IOS_APP flags.
-          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false OTHER=false
+          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false SCRIPTS=false OTHER=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
@@ -108,12 +113,38 @@ jobs:
               # — driver code is a subset of the backend).
               express-api/scripts/drivers/*|express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
               express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
+              # SHY-0284. Root `scripts/**` are CI/tooling scripts whose ONLY
+              # automated coverage lives in express-api/tests/scripts/** (15 of
+              # those suites exercise a root script). They previously fell to
+              # `*) OTHER=true`, which feeds only the workflow_only decision
+              # below and never reached test-backend — so a PR editing just a
+              # root script shipped with its guards unrun. That is the exact
+              # defect SHY-0284 exists to fix, one layer down: the
+              # check-action-pin-consistency guard added by that story IS a
+              # root script, so leaving this gap would have let a future edit
+              # break the guard itself, silently.
+              #
+              # Its OWN flag, deliberately not BACKEND. BACKEND is not "run the
+              # backend tests" — the SHY-0127 block below reads it as "the
+              # shared core changed, retest every client" and forces APP,
+              # ANDROID_APP, IOS_APP, WEB and INTEGRATION on while clearing the
+              # E2E skip markers. Routing 37 CI/tooling scripts through that
+              # would put `scripts/backup-r2.sh` through a Gradle build and
+              # device E2E, which is not what CLAUDE.md's CI-config-only
+              # boundary describes. test-backend runs on either flag.
+              scripts/*) SCRIPTS=true ;;
               .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
               *) OTHER=true ;;
             esac
           done <<< "$CHANGED"
           WORKFLOW_ONLY=false
-          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$OTHER" = "false" ]; then
+          # SCRIPTS is checked here for the same reason the others are: a root
+          # script is not workflow plumbing. Before SHY-0284 gave them their own
+          # flag they fell to OTHER, and OTHER kept this false for them — so
+          # omitting SCRIPTS would have fixed one silent skip (test-backend) by
+          # introducing another, since every job gated on workflow_only,
+          # sonarcloud among them, would then skip on a scripts-only PR.
+          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$SCRIPTS" = "false" ] && [ "$OTHER" = "false" ]; then
             WORKFLOW_ONLY=true
           fi
           # Explicit per-platform E2E skip markers in the PR body. Use when the
@@ -144,10 +175,10 @@ jobs:
             APP=true; ANDROID_APP=true; IOS_APP=true; WEB=true; INTEGRATION=true
             SKIP_ANDROID_E2E=false; SKIP_IOS_E2E=false
           fi
-          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION qa_runner_drivers_changed=$QA_RUNNER_DRIVERS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
+          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION qa_runner_drivers_changed=$QA_RUNNER_DRIVERS scripts_changed=$SCRIPTS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
-          echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION qa_runner_drivers=$QA_RUNNER_DRIVERS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
+          echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION qa_runner_drivers=$QA_RUNNER_DRIVERS scripts=$SCRIPTS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
 
   lint:
     needs: [detect-changes]
@@ -182,7 +213,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -286,7 +317,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: kotlin-report
           destination_dir: kotlin/pr/latest
-          keep_files: true
+          # SHY-0128: false — peaceiris cleans ONLY destination_dir before
+          # copying (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
+          # suite/env's latest/ instead of stranding prior hashed files forever.
+          keep_files: false
 
   sonarcloud:
     needs: [detect-changes, build-and-test]
@@ -305,7 +339,8 @@ jobs:
     needs: [detect-changes, lint]
     if: |
       always() &&
-      needs.detect-changes.outputs.backend_changed == 'true' &&
+      (needs.detect-changes.outputs.backend_changed == 'true' ||
+       needs.detect-changes.outputs.scripts_changed == 'true') &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     uses: ./.github/workflows/test-backend.yml
     with:
@@ -313,10 +348,18 @@ jobs:
       report_env: pr
     secrets: inherit
 
+  # SHY-0163: device E2E deferred OFF the required per-PR gate — the gate no
+  # longer waits on this job (see the `gate` job), so its emulator flake can't
+  # block a merge. The `base_ref == 'main'` guard below is forward-looking: this
+  # workflow currently triggers only on base=main PRs (so the guard is always
+  # true today); once SHY-0161 adds `develop` to the trigger it will skip this
+  # job on feature→develop and run it only on the develop→main promotion. Real
+  # devices verify at the end-of-batch gauntlet, not on this CI emulator.
   android-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
+      github.base_ref == 'main' &&
       needs.detect-changes.outputs.android_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_android_e2e != 'true' &&
       needs.build-and-test.result == 'success' &&
@@ -366,10 +409,18 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
+  # SHY-0163: device E2E deferred OFF the required per-PR gate — the gate no
+  # longer waits on this job (see the `gate` job), so its simulator flake can't
+  # block a merge. The `base_ref == 'main'` guard below is forward-looking: this
+  # workflow currently triggers only on base=main PRs (so the guard is always
+  # true today); once SHY-0161 adds `develop` to the trigger it will skip this
+  # job on feature→develop and run it only on the develop→main promotion. Real
+  # devices verify at the end-of-batch gauntlet, not on this CI simulator.
   ios-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
+      github.base_ref == 'main' &&
       needs.detect-changes.outputs.ios_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_ios_e2e != 'true' &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
@@ -418,7 +469,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       # SHY-0127 Gate 1: a PR that touches a SHY story MUST have flipped it to
@@ -433,7 +484,15 @@ jobs:
 
   gate:
     name: PR Gate
-    needs: [detect-changes, pre-merge-gate, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e, qa-runner-driver-checks]
+    # SHY-0163: android-e2e + ios-e2e are DEFERRED off the required per-PR gate.
+    # The CI Android emulator flakes on infrastructure (emulator process death
+    # mid-run — port 5554 refused, no JUnit results), so gating on it blocked
+    # every merge. Under the MVP-sprint model, real-device verification is a
+    # single end-of-batch gauntlet on REAL devices before the develop→main
+    # promotion; those two jobs are base-main-guarded (see their job comments).
+    # Fast checks — including playwright-web (headless browsers) and
+    # integration-tests — stay per-PR and still gate here.
+    needs: [detect-changes, pre-merge-gate, lint, build-and-test, sonarcloud, test-backend, playwright-web, integration-tests, qa-runner-driver-checks]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -453,10 +512,8 @@ jobs:
             "${{ needs.build-and-test.result }}" \
             "${{ needs.sonarcloud.result }}" \
             "${{ needs.test-backend.result }}" \
-            "${{ needs.android-e2e.result }}" \
             "${{ needs.playwright-web.result }}" \
             "${{ needs.integration-tests.result }}" \
-            "${{ needs.ios-e2e.result }}" \
             "${{ needs.qa-runner-driver-checks.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "Required check failed: $result"

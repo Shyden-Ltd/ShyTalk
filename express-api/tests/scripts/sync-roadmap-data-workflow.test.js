@@ -80,12 +80,12 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
   });
 
   test('SHY-0063: mints a Release App token via actions/create-github-app-token (SHA-pinned)', () => {
-    // Locks the specific known-good SHA. Paired with the cross-workflow
-    // parity test below so a unilateral bump (e.g. Dependabot on only one
-    // file) fails fast in CI rather than silently desynchronising the two
-    // main-mutating workflows.
+    // SHY-0162: assert SHA-PINNED (version-agnostic), not frozen to a specific
+    // SHA — a frozen literal reds on any Dependabot bump. Cross-workflow parity
+    // with release.yml is still enforced by the parity test below AND repo-wide
+    // by ci-action-pin-consistency.test.js.
     expect(content).toMatch(
-      /uses:\s*actions\/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1\s*#\s*v3\.2\.0/,
+      /uses:\s*actions\/create-github-app-token@[0-9a-f]{40}\s*#\s*v\d[\d.]*/,
     );
   });
 
