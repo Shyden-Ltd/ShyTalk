@@ -3,6 +3,105 @@ import { Page, expect } from '@playwright/test';
 const AUTH_EMULATOR = 'http://localhost:9099';
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
 
+/** Shape of the parts of `window.shytalkAuth` the web specs read or set. */
+export interface ShytalkAuthState {
+  currentUser?: {
+    uid: string;
+    displayName?: string | null;
+    photoURL?: string | null;
+    getIdToken?: () => Promise<string>;
+  } | null;
+  /** An object is a fetched profile; `null` is "still loading"; `false` is "no ShyTalk account". */
+  profile?: Record<string, unknown> | null | false;
+  authStateKnown?: boolean;
+}
+
+/**
+ * Resolve once the page has finished its OWN Firebase sign-in check.
+ *
+ * Until that happens, `roadmap-auth.js` still owns `window.shytalkAuth` and
+ * will REPLACE it wholesale the moment `onAuthStateChanged` fires — erasing
+ * anything a spec assigned and re-rendering the shared header from scratch.
+ * A spec that injects before this point is decided by a race it cannot see:
+ * measured 2026-08-05 on the same page, Chromium resolved at 505 ms and won,
+ * WebKit resolved at 594 ms against an injection at 415 ms and lost (SHY-0279).
+ *
+ * `authStateKnown` is the page's own "the check has finished" flag, published
+ * on every path that reaches a verdict — including the config-never-loaded
+ * fallback — so this wait cannot strand a spec.
+ */
+export async function waitForAuthStateKnown(page: Page, timeout = 15_000): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => (window as unknown as { shytalkAuth?: ShytalkAuthState }).shytalkAuth?.authStateKnown === true,
+      undefined,
+      { timeout },
+    );
+  } catch (cause) {
+    // A bare "waitForFunction timed out" sends the reader hunting. The usual
+    // reason is a page that never loads `roadmap-auth.js` at all — `404.html`
+    // and `index.html` carry the shared header WITHOUT the auth module, so
+    // `window.shytalkAuth` is permanently undefined there and no amount of
+    // waiting will help.
+    const present = await page.evaluate(() => {
+      const auth = (window as unknown as { shytalkAuth?: ShytalkAuthState }).shytalkAuth;
+      return { defined: auth !== undefined, authStateKnown: auth?.authStateKnown ?? null };
+    });
+    throw new Error(
+      `waitForAuthStateKnown timed out after ${timeout}ms on ${page.url()} — ` +
+        `window.shytalkAuth ${present.defined ? `exists with authStateKnown=${present.authStateKnown}` : 'is UNDEFINED (page does not load roadmap-auth.js)'}. ` +
+        `Only pages that load roadmap-auth.js can report sign-in state (SHY-0279).`,
+      { cause },
+    );
+  }
+}
+
+/**
+ * Present the page with a signed-in visitor, AFTER the page's own sign-in
+ * check has settled so nothing can overwrite it.
+ *
+ * This is the only sanctioned way for a spec to assign `window.shytalkAuth`;
+ * `auth-injection-discipline.spec.ts` fails any spec that assigns it directly,
+ * because such a spec is racing the page (SHY-0279).
+ */
+export async function injectAuthState(
+  page: Page,
+  state: ShytalkAuthState,
+  options: { dispatch?: boolean; idToken?: string } = {},
+): Promise<void> {
+  await waitForAuthStateKnown(page);
+  const dispatch = options.dispatch !== false;
+  const idToken = options.idToken ?? 'fake';
+  await page.evaluate(
+    ({ next, shouldDispatch, token }) => {
+      const w = window as unknown as { shytalkAuth?: ShytalkAuthState };
+      const merged: ShytalkAuthState = { ...w.shytalkAuth, ...next };
+      // `getIdToken` has to be rebuilt in the page: a function cannot survive
+      // the structured clone that carries `next` across from the test process.
+      // Handlers on the roadmap page call it, so a visitor without one is not
+      // the state the page would ever really see.
+      //
+      // Rebuilt on `merged`, never appended as a trailing property: writing
+      // `{ ...next, currentUser }` would set the key even when the caller
+      // never mentioned it, silently wiping an existing visitor with
+      // `undefined` — a state the page can never produce for itself.
+      if (merged.currentUser) {
+        merged.currentUser = { ...merged.currentUser, getIdToken: () => Promise.resolve(token) };
+      }
+      w.shytalkAuth = merged;
+      const currentUser = merged.currentUser ?? null;
+      if (shouldDispatch) {
+        document.dispatchEvent(
+          new CustomEvent('shytalk-auth-changed', {
+            detail: { user: currentUser ?? null, profile: next.profile ?? null },
+          }),
+        );
+      }
+    },
+    { next: state, shouldDispatch: dispatch, token: idToken },
+  );
+}
+
 /**
  * Create a test user in the Firebase Auth emulator and ensure they have a
  * ShyTalk profile in Firestore. Returns the UID of the created user.

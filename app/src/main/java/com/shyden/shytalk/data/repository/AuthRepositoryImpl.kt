@@ -16,6 +16,7 @@ class AuthRepositoryImpl(
 ) : AuthRepository {
     override var resolvedUniqueId: String? = null
     override var resolvedDisplayName: String? = null
+    override var resolvedCohort: String? = null
 
     override val currentUserId: String?
         get() = resolvedUniqueId ?: auth.currentUser?.uid
@@ -154,6 +155,7 @@ class AuthRepositoryImpl(
     override suspend fun signOut() {
         resolvedUniqueId = null
         resolvedDisplayName = null
+        resolvedCohort = null
         auth.signOut()
     }
 

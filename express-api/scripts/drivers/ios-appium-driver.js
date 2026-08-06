@@ -18,8 +18,8 @@
  * Architecture:
  *   - Operator's Mac runs `appium server -p 4723` (one-time)
  *   - Driver POSTs JSON to http://localhost:4723/session to create
- *     a session against the operator's iPhone (udid auto-detected
- *     via xcrun devicectl)
+ *     a session against the operator's iPhone (hardware udid
+ *     auto-detected via `xcrun xctrace list devices` — see selectUdid())
  *   - WDA gets installed/launched by Appium on first session
  *   - Driver tears down the session in close()
  *
@@ -72,35 +72,74 @@ const IOS_METHOD_NAMES = [
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
 /**
- * Returns the first connected physical iPhone's UDID via
- * `xcrun devicectl list devices`. Mirrors the picker in
- * ios-devicectl-driver.js so both drivers select the same device.
+ * Returns the connected physical iPhone's HARDWARE UDID via
+ * `xcrun xctrace list devices`.
+ *
+ * MUST NOT mirror ios-devicectl-driver.js's picker — the two drivers need DIFFERENT
+ * identifiers. `xcrun devicectl list devices` prints the CoreDevice UUID (e.g.
+ * `74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6`) in its Identifier column, and Appium's
+ * XCUITest driver REJECTS that at session start — real 2026-07-11 journey failure:
+ * `Unknown device or simulator UDID: '74563FF8-…'`. Appium's `appium:udid` needs the
+ * ECID-based HARDWARE UDID (e.g. `00008150-000954D90A20401C`), which xctrace prints as
+ * `<name> (<osver>) (<udid>)`. The devicectl driver legitimately keeps the CoreDevice
+ * UUID for its own app-lifecycle commands — that is precisely why these two pickers
+ * must diverge (a prior "make both select the same device" unification is the bug this
+ * fixes; SHY-0095).
+ *
+ * Parsing rules (proven by the real captured fixtures in this driver's test):
+ *  - Split off the `== Simulators ==` section first — a simulator line shares the exact
+ *    `(osver) (udid)` shape, so without this a run with NO real device would return a
+ *    simulator UDID and silently drive a simulator (false green + real-device violation).
+ *  - Keep BOTH `== Devices ==` and `== Devices Offline ==`: on iOS 26/27 a wired,
+ *    Appium-drivable iPhone routinely appears under "Offline" in xctrace's legacy view,
+ *    so excluding it returned null and failed the whole iOS matrix (2026-07-02).
+ *  - The `(osver) (udid)` double-paren shape excludes the Mac host line, which carries a
+ *    UUID but no OS-version paren and must never be selected.
  */
 function selectUdid(preferredUdid) {
-  if (preferredUdid) return preferredUdid;
+  // A blank/whitespace-only preferred udid is treated as "no preference" and falls
+  // through to auto-detection; a real value is returned trimmed (a udid never carries
+  // surrounding whitespace, so padding is always a mistake Appium would reject).
+  const preferred = typeof preferredUdid === 'string' ? preferredUdid.trim() : preferredUdid;
+  if (preferred) return preferred;
   try {
-    // execFileSync (no shell) avoids the command-injection class of bug
-    // — even though the args here are hardcoded, default to the safer
-    // primitive. stderr discarded via `ignore` so a missing devicectl
-    // doesn't pollute the runner's output (the empty stdout below
-    // returns null cleanly).
+    // execFileSync (no shell) avoids the command-injection class of bug — even though
+    // the args are hardcoded, default to the safer primitive. stderr discarded via
+    // `ignore` so a missing xctrace doesn't pollute the runner's output (empty stdout
+    // below returns null cleanly).
     //
-    // Absolute path (/usr/bin/xcrun) satisfies sonarjs/no-os-command-from-path:
-    // xcrun is shipped by Apple at this fixed system location on every
-    // macOS install (Command Line Tools shim), so PATH-search is both
-    // unnecessary and a weak link.
-    const raw = execFileSync('/usr/bin/xcrun', ['devicectl', 'list', 'devices'], {
+    // Absolute path (/usr/bin/xcrun) satisfies sonarjs/no-os-command-from-path: xcrun is
+    // shipped by Apple at this fixed system location on every macOS install (Command
+    // Line Tools shim), so PATH-search is both unnecessary and a weak link.
+    const raw = execFileSync('/usr/bin/xcrun', ['xctrace', 'list', 'devices'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      // Bound the call: `xctrace list devices` can hang on a stale usbmuxd tunnel (the
+      // very Devices-Offline territory this driver handles). A timeout-kill throws → the
+      // catch below returns null → createIosDriver fails fast + loud, never wedging the
+      // runner indefinitely.
+      timeout: 15000,
     });
-    const uuidRx =
-      /([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})\s+(?:available|connected)/i;
-    const legacyRx = /([0-9A-F]{8}-[0-9A-F]{16})\s+(?:available|connected)/i;
-    const uuidMatch = raw.match(uuidRx);
-    if (uuidMatch) return uuidMatch[1];
-    const legacyMatch = raw.match(legacyRx);
-    return legacyMatch ? legacyMatch[1] : null;
-  } catch (_e) {
+    // Everything before "== Simulators ==" is the real-device sections (online +
+    // offline); simulators are dropped so a no-real-device run never returns a sim UDID.
+    const deviceSection = raw.split(/==\s*Simulators\s*==/)[0];
+    // Physical device line: "<name> (<osver>) (<hardware-udid>)". The OS-version paren
+    // before the UDID paren is what distinguishes a real iPhone from the Mac host line
+    // ("<name> (<uuid>)" — no os-version paren), whose UUID must never be selected.
+    const deviceLineRx = /\([0-9]+(?:\.[0-9]+)*\)\s+\(([0-9A-Fa-f-]+)\)\s*$/;
+    for (const line of deviceSection.split('\n')) {
+      const match = line.match(deviceLineRx);
+      if (match) return match[1];
+    }
+    return null;
+  } catch (e) {
+    // Distinguish a genuine xctrace failure (missing Xcode, permissions, timeout,
+    // malformed output) from the ordinary no-device case (which returns null above
+    // WITHOUT throwing). This diagnostic is the observability SHY-0095 adds — a silent
+    // device-selection failure previously cost a full day of QA runs.
+    console.error(
+      `[ios-appium-driver] selectUdid: \`xcrun xctrace list devices\` failed: ${e.message}`,
+    );
     return null;
   }
 }
@@ -131,23 +170,43 @@ async function createIosDriver({
   bundleId: explicitBundleId,
   fetchImpl = globalThis.fetch,
 } = {}) {
-  const udid = selectUdid(preferredUdid);
-  if (!udid) {
-    throw new Error(
-      'createIosDriver: no connected iPhone found via `xcrun devicectl list devices`. Pair the device with Xcode, ensure it shows "available" or "connected", then re-run.',
-    );
-  }
+  // Cheap env validation FIRST, device probe second: a no-device
+  // environment (CI, phone unplugged) must surface the missing env var,
+  // not a misleading "no physical iPhone" for what is a config gap —
+  // and the probe shells out to xcrun, so failing early is also faster.
+  // Same ordering as the two web-mobile iOS siblings.
   if (!wdaTeamId) {
     throw new Error(
       'createIosDriver: WDA_TEAM_ID env var is required. This is the operator\'s Apple Developer team ID — Appium uses it to sign WebDriverAgent for the iPhone. Find it in Xcode → Preferences → Accounts → <your account> → Manage Certificates, or via `security find-identity -v -p codesigning | grep "Apple Development"`.',
     );
   }
+  const udid = selectUdid(preferredUdid);
+  if (!udid) {
+    // Stable `code` so matrix-dispatch's isInitError classifies "no device" as a SKIP
+    // (not a FAIL that can abort the whole matrix under --fail-fast) independently of
+    // the human message wording — the message is a fragile signal on its own.
+    throw Object.assign(
+      new Error(
+        'createIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
+      ),
+      { code: 'DRIVER_INIT_FAILED' },
+    );
+  }
+  // iOS ships a SINGLE PRODUCT_BUNDLE_IDENTIFIER for every build config (Debug /
+  // Debug-Dev / Debug-Local / Release) — the config, via AppEnvironment, selects the
+  // backend, NOT a suffixed bundle id (unlike Android's per-flavour ids; confirmed in
+  // iosApp.xcodeproj: every config sets `com.shyden.shytalk`). Every `target` therefore
+  // maps to the same id; kept as a map (not a bare constant) to stay explicit per-target
+  // and keep `target` a live input. IOS_BUNDLE_ID overrides for one-off installs.
   const bundleIdMap = {
-    local: 'com.shyden.shytalk.local',
-    dev: 'com.shyden.shytalk.dev',
+    local: 'com.shyden.shytalk',
+    dev: 'com.shyden.shytalk',
     prod: 'com.shyden.shytalk',
   };
-  const bundleId = explicitBundleId || bundleIdMap[target] || bundleIdMap.dev;
+  // Blank-but-truthy env values ('   ') must not reach Appium as a
+  // literal-whitespace bundleId — trim, and fall through when empty.
+  const envBundleId = (process.env.IOS_BUNDLE_ID || '').trim();
+  const bundleId = explicitBundleId || envBundleId || bundleIdMap[target] || bundleIdMap.dev;
 
   const driver = { _udid: udid, _appiumBaseUrl: appiumBaseUrl, _bundleId: bundleId };
 
@@ -164,11 +223,17 @@ async function createIosDriver({
           'appium:automationName': 'XCUITest',
           'appium:udid': udid,
           'appium:bundleId': bundleId,
-          'appium:xcodeSigningId': 'Apple Developer',
+          // "Apple Development" is the modern signing-cert name; "Apple Developer"
+          // matches no certificate and fails the WDA rebuild with xcodebuild code 65
+          // (real 2026-07-12 device failure — "No certificate matching 'Apple Developer'").
+          'appium:xcodeSigningId': 'Apple Development',
           'appium:xcodeOrgId': wdaTeamId,
-          // Don't auto-install WDA every time — operator's first run
-          // takes the install hit; subsequent runs reuse the bundle.
-          'appium:useNewWDA': false,
+          // Reuse the installed WDA by default (fast — the operator's first run takes
+          // the build+install hit; later runs reuse the bundle). IOS_FORCE_NEW_WDA=true
+          // forces a fresh build+install — required after a WDA signing/config change or
+          // when the installed WDA is stale/unsigned (else Appium tries to launch a
+          // broken WDA and fails with "connection refused to port 8100").
+          'appium:useNewWDA': process.env.IOS_FORCE_NEW_WDA === 'true',
           // Don't reset app state between sessions; the runner controls
           // app state via its own start-of-scenario reset (parity with
           // androidPersonaSignIn force-stop).

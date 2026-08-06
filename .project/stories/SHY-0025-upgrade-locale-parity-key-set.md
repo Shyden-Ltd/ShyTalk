@@ -1,6 +1,6 @@
 ---
 id: SHY-0025
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-07
 priority: P2
@@ -180,3 +180,4 @@ P2 Tier-4. XS effort. Two small fixes that close two adjacent polish gaps.
 - 2026-06-07 ~21:31 BST — Refined under SHY-0032. Tier 4 polish; two adjacent gaps bundled.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-I3` (G042, G052).
 - 2026-06-13 ~00:54 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): i18n key-set parity → Jest headline reading the REAL 20 `values-*/strings.xml` (count-vs-keyset RED via a real temp fixture dir, never a mocked FS). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): nothing to scrub for the test; **🚩 flagged** that English-as-fake-translation for absent keys would be a stub-by-another-name → real translations are an operator/supply dependency, block don't placeholder. If G052 adds strings, a real-device banner render in LTR+RTL becomes a conditional surface check + the shared-compile/Android-build gate. DoD swaps the stale Reviewer-ZERO / `bug→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; the count-vs-keyset state of the live test still needs the read-and-confirm at pickup (may already be key-set → G042 no-op).
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → In Review. compose-resources-locale-parity.test.js upgraded to key-set (no-missing + no-extra) from a count check; develop, post-v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

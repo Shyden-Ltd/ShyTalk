@@ -1,16 +1,22 @@
 /* eslint-disable no-console */
 /**
- * One-time migration: convert participantIds from strings to numbers
- * in all conversation documents.
+ * One-time migration (SHY-0130): convert `participantIds` from numbers BACK to
+ * STRINGS in all conversation documents.
  *
- * Firestore security rules check `uniqueId in resource.data.participantIds`
- * where uniqueId is a number (set via custom claims). If participantIds are
- * stored as strings, the type-strict `in` operator fails silently.
+ * Firestore security rules gate conversation reads on
+ * `string(callerUniqueId()) in resource.data.participantIds` — the caller's
+ * uniqueId is STRINGIFIED, so `participantIds` must be stored as STRINGS (the
+ * same type the model `List<String>`, iOS, and Express `.map(String)` all use).
+ *
+ * This REVERSES an earlier, mistaken migration (and the Android client's
+ * `toLongOrNull()` coercion) that converted ids to numbers on the false premise
+ * that the rule compared a numeric uniqueId. Numeric `participantIds` make a
+ * thread unreadable by the string gate — including by its own participants.
  *
  * Usage:
  *   GOOGLE_APPLICATION_CREDENTIALS=./sa.json FIREBASE_DATABASE_URL=... node scripts/migrate-participant-ids.js
  *
- * Safe to re-run — already-numeric values are left unchanged.
+ * Safe to re-run — already-string values are left unchanged.
  */
 
 async function migrateParticipantIds(db) {
@@ -27,20 +33,17 @@ async function migrateParticipantIds(db) {
       continue;
     }
 
-    const hasStringIds = ids.some((id) => typeof id === 'string');
-    if (!hasStringIds) {
+    const hasNonStringId = ids.some((id) => typeof id !== 'string');
+    if (!hasNonStringId) {
       skipped++;
       continue;
     }
 
-    const numericIds = ids
-      .map((id) => {
-        const num = Number(id);
-        return Number.isFinite(num) ? num : id;
-      })
-      .sort((a, b) => a - b);
+    // Stringify every id and sort lexicographically (matches the iOS/Express
+    // `listOf(...).sorted()` shape; the rule's membership check is order-agnostic).
+    const stringIds = ids.map((id) => String(id)).sort();
 
-    batch.push({ ref: doc.ref, numericIds });
+    batch.push({ ref: doc.ref, stringIds });
     migrated++;
   }
 
@@ -48,8 +51,8 @@ async function migrateParticipantIds(db) {
   for (let i = 0; i < batch.length; i += 500) {
     const writeBatch = db.batch();
     const chunk = batch.slice(i, i + 500);
-    for (const { ref, numericIds } of chunk) {
-      writeBatch.update(ref, { participantIds: numericIds });
+    for (const { ref, stringIds } of chunk) {
+      writeBatch.update(ref, { participantIds: stringIds });
     }
     await writeBatch.commit();
   }

@@ -44,8 +44,8 @@ val viewModelModule =
         single { AgeRestrictionService() }
 
         viewModel { AuthViewModel(get(), get(), get(), get(), get(named("deviceId")), get(named("bypassDeviceChecks")), get(), get()) }
-        viewModel { LockScreenViewModel(get(), get(), get(), get(), get()) }
-        viewModel { PinSetupViewModel(get(), get()) }
+        viewModel { LockScreenViewModel(get(), get(), get(), get(), get(), get()) }
+        viewModel { PinSetupViewModel(get(), get(), get(), get(named("deviceId"))) }
         viewModel { EmailOtpViewModel(get()) }
         viewModel { HomeViewModel(get(), get(), get(), get()) }
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }

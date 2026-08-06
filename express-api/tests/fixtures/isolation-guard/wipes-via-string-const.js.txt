@@ -1,0 +1,13 @@
+// The wipe target is a plain string constant, not a loop variable and not an
+// inline literal. Both the original text scan and the first AST version were
+// blind to this shape — it is how `livekit-cohort.test.js` wipes.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection } = require('../helpers/firebase-emulator');
+
+const SEG_EVENTS = 'segregationEvents';
+
+beforeEach(async () => {
+  await clearCollection(db, SEG_EVENTS);
+});
