@@ -11,7 +11,7 @@ pr:
 mvp: false
 ---
 
-# SHY-0295: The develop ruleset has blocked the board sidecar for 19 days
+# SHY-0295: The board sync is broken two ways — a blocked sidecar, and a Type field it cannot create
 
 ## User Story
 
@@ -67,6 +67,50 @@ created since — including SHY-0293, SHY-0294 and this one.
 It also means a failing workflow has been red for 19 days without anyone
 reading it, which is its own finding.
 
+## Second finding: the sync tries to create a `Type` field that cannot exist
+
+Folded in on operator instruction (2026-08-14). Separate cause, same workflow,
+and it fires on EVERY run — visible in run 31739175485:
+
+```
+[gh-error] createProjectV2Field Type (exit 1):
+  gh: Name cannot have a reserved value, Name has already been taken
+```
+
+Two refusals in one message, and they say different things:
+
+- **"already been taken"** — a `Type` field exists on the board.
+- **"cannot have a reserved value"** — GitHub now RESERVES the name `Type` for
+  the native issue-type field, so a custom one can never be created under that
+  name again.
+
+The script cannot see the existing field because its detection is narrower
+than reality. `load_project_cache` builds its field map from
+`select(.dataType == "SINGLE_SELECT")` and then reads `.["Type"]`
+(sync-stories-to-issues.sh:418-425) — a native issue-type field is not a
+single-select, so the lookup returns empty, the script concludes the field is
+absent, and `ensure_project_type_field` attempts a creation that GitHub
+refuses on two independent grounds.
+
+The auto-create dates from SHY-0067 (Defect E), when `Type` really was a
+custom single-select the script had to provision. SHY-0082 v4 replaced that
+with GitHub's native issue types — CLAUDE.md: _"The native issue TYPE replaces
+the old `type:` label"_ — which makes this code path vestigial. It is not
+failing because something is wrong with the board; it is failing because it is
+solving a problem v4 removed.
+
+It is non-fatal (the run continues and `emit`s a config-gap warning rather
+than exiting), which is exactly why it has gone unread. A permanent error on
+every run trains the reader to ignore the log.
+
+**Open question this story must answer before changing code:** whether the
+board still wants a `Type` COLUMN at all. CLAUDE.md lists Type among the board
+columns ("Status / Pri / Effort / Type / Roadmap IDs") while also saying the
+native type replaces the label. If the native field satisfies the column, the
+fix is to delete the auto-create path. If a distinct column is still wanted,
+it needs a name that is not reserved. Deciding that is the work; silencing the
+error is not.
+
 ## Acceptance Criteria
 
 ### Happy path
@@ -76,6 +120,8 @@ reading it, which is its own finding.
       `develop`.
 - [ ] `.project/board-items.json` contains entries for every story created
       since 2026-07-25.
+- [ ] A full sync run emits **no** `[gh-error] createProjectV2Field Type`
+      line — the run is clean, not merely non-fatal.
 
 ### Error paths
 
@@ -85,10 +131,23 @@ reading it, which is its own finding.
 - [ ] If the App identity cannot be confirmed, the story stops and reports
       rather than adding `3324562` speculatively — a bypass actor is a
       permission grant, and granting the wrong one is worse than the bug.
+- [ ] The `Type` error is fixed by making the script agree with reality, not
+      by suppressing the message. Redirecting or swallowing the `[gh-error]`
+      line fails this AC: a silenced error is the state that let it run
+      unread for months.
+- [ ] Board issues keep carrying their native issue type (`Bug`/`Feature`/
+      `Task`). Whatever happens to the auto-create path, typing must not
+      regress — that is the whole point of the v4 architecture.
 
 ### Edge cases
 
 - [ ] The `non_fast_forward` ruleset `16058327` (target `~ALL`) is untouched.
+- [ ] `load_project_cache`'s field map no longer assumes every board field is
+      a `SINGLE_SELECT`; a native issue-type field is recognised for what it
+      is rather than read as absent.
+- [ ] `--dry-run` reports the same conclusion as a real run. Today it prints
+      "would CREATE Project v2 Type field" unconditionally, which would lie
+      about a board that already has one.
 - [ ] Verified against the actual API (`gh api repos/.../rules/branches/develop`)
       that only 19719048 and 16058327 govern `develop`, so no third ruleset is
       also contributing.
@@ -136,6 +195,13 @@ reading it, which is its own finding.
 - **When** a contributor opens a PR into `develop` with a failing check
 - **Then** the PR is still blocked by `required_status_checks`
 
+**Scenario: a clean sync run**
+
+- **Given** a board whose `Type` is GitHub's native issue-type field
+- **When** `Mirror stories to Issues` runs
+- **Then** it does not attempt `createProjectV2Field` for `Type`, and no
+  `[gh-error]` line appears
+
 **Scenario: the identity is unconfirmed**
 
 - **Given** the App ID minting the token cannot be established
@@ -160,6 +226,19 @@ the error disappear.
 
 **Regression:** re-read `gh api repos/Shyden-Ltd/ShyTalk/rulesets/19719048`
 and confirm `required_status_checks` still lists all three contexts.
+
+**Second finding — red, observed:** run 31739175485 emits
+`[gh-error] createProjectV2Field Type (exit 1): gh: Name cannot have a
+reserved value, Name has already been taken`. Reproduces every run.
+
+**Green:** a full sync run with no `createProjectV2Field` line at all, and
+board issues still carrying their native types. Verified by reading the run
+log rather than by exit code — this error never changed the exit code, which
+is precisely how it survived.
+
+`express-api/tests/scripts/sync-stories-to-issues.test.js` is the home for a
+structural test: the script must not attempt to create a field whose name
+GitHub reserves.
 
 **Classification:** ruleset configuration; no repository code changes. No
 device/browser gauntlet surface.
@@ -204,6 +283,11 @@ device/browser gauntlet surface.
       contexts are unchanged.
 - [ ] `Mirror stories to Issues` green, sidecar commit landed on `develop`.
 - [ ] Observability decision recorded in Notes.
+- [ ] The `Type` auto-create path is resolved — deleted if the native field
+      satisfies the column, renamed if a distinct column is still wanted — and
+      the decision is written down in Notes with its reasoning.
+- [ ] A sync run's log is read end to end and confirmed free of `[gh-error]`,
+      not just exit-0.
 
 ## Notes
 
