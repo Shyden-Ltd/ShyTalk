@@ -1,6 +1,6 @@
 ---
 id: SHY-0293
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-13
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1732
+released_in: v0.98.0
 mvp: false
 ---
 

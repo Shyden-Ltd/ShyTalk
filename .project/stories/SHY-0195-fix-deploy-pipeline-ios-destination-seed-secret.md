@@ -1,6 +1,6 @@
 ---
 id: SHY-0195
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-16
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1614
+released_in: v0.98.0
 ---
 
 # SHY-0195: Fix the Deploy-To-Dev pipeline — iOS archive destination, persona-seed secret name, setup-java SHA drift

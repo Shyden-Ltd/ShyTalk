@@ -1,6 +1,6 @@
 ---
 id: SHY-0284
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-05
 priority: P2
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 public: false
+released_in: v0.98.0
 ---
 
 # SHY-0284: The guard against half-finished action upgrades never runs on the changes that cause them
