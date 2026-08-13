@@ -174,7 +174,7 @@ case ("don't merge a Done story") meets the one case that inverts it ("the
 release PR marks stories Done"). The rule was not wrong; its scope was
 unstated. The fix names the exception rather than weakening the rule.
 
-Reviewed-up-to: recorded on the PR after push
+Reviewed-up-to: 6dee928f5ed64de470a26a20efd2421078d4b63f
 
 Review was a self-review against the diff rather than a `code-reviewer` agent
 dispatch, per the operating instruction in force this session.
