@@ -203,7 +203,9 @@ was that a promotion was blocked on it silently — the job had been red long
 enough that its cause had stopped being read.
 
 **2026-08-13, PR #1734 pushed.** Full local gate green through `.husky/pre-push`
-(Playwright chromium 1420 passed / 1 flaky / 38 skipped). Reviewed-up-to: 3306f5a402e
+(Playwright chromium 1420 passed / 1 flaky / 38 skipped).
+
+Reviewed-up-to: 3306f5a402e
 
 Review was a self-review against the diff rather than a `code-reviewer` agent
 dispatch, per the operating instruction in force this session. The diff is one
