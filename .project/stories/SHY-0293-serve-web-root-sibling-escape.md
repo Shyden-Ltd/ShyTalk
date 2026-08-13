@@ -1,13 +1,13 @@
 ---
 id: SHY-0293
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-13
 priority: P1
 effort: S
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1732
 mvp: false
 ---
 
@@ -257,3 +257,28 @@ right and only the filter was wrong.
 Worth recording: the alert pointed at the three `fs` sinks, not at the guard on
 line 91. That is the useful signal — the guard was correct about the value it
 inspected, and wrong about which value reached the sink.
+
+**2026-08-13, PR #1732 pushed.** Full local gate green through `.husky/pre-push`
+(lint suite, jest-with-coverage, `:shared:jvmTest`, Playwright chromium
+1420 passed / 1 flaky / 38 skipped). CI green by name: **Detect Changes**,
+**Analyze JavaScript**, **Build & Test**, `lint`, `test-backend`,
+`integration-tests`. **CodeQL passes** — zero `js/path-injection` alerts, so
+the fix satisfies the query and not merely the reproducer.
+
+Reviewed-up-to: 7cbb9d713ac
+
+Review was a self-review against the diff rather than a `code-reviewer` agent
+dispatch, per the operating instruction in force this session. Recording that
+plainly so the audit trail is not read as a clean agent pass.
+
+**First CI attempt failed the Pre-Merge Gate** — "status In Progress, must be
+In Review". Working as designed; status flipped here.
+
+One local-harness note, not a product finding: the first Playwright run showed
+132 failures, every one an `admin-*` spec with the identical error
+`ADMIN_EMAIL and ADMIN_PASSWORD env vars required`. Uniform failure across a
+whole feature area is a harness signal, not product debt — a real regression
+from a URL-resolution change would fail unevenly. The canonical env lives in
+`.github/workflows/playwright-tests.yml`; with it set, the same run is
+1420 passed. The fixture throwing rather than proceeding to a blank page is
+what made this diagnosable in one read.
