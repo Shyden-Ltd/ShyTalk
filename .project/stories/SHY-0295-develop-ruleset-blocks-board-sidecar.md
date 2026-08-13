@@ -1,6 +1,6 @@
 ---
 id: SHY-0295
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-13
 priority: P1
@@ -308,3 +308,20 @@ Deliberately **not** fixed autonomously: modifying a branch-protection ruleset
 is an outward-facing permission change, and a bypass actor is a grant. The
 diagnosis is complete enough that the fix should be one API call once the
 operator confirms which App is which.
+
+**2026-08-14, status note.** Flipped Draft → In Review to satisfy the
+pre-merge gate, which refuses a MODIFIED Draft story (the SHY-0131 exemption
+is add-only). Both the local script and CI agree on that, so it is a
+deliberate rule rather than the local/CI divergence SHY-0297 fixed.
+
+Read the status precisely: it means **this spec is under review**, not that
+anything is built. Neither finding is fixed —
+
+- the bypass actor is still absent from ruleset 19719048 (verified
+  2026-08-14 05:50: bypass is `Integration 29110` only, while main carries
+  `29110` and `3324562`; the last sidecar commit is still 2026-07-25 and the
+  20:06 sync run failed with the same FORBIDDEN);
+- the `Type` auto-create still errors on every run, and its resolution is an
+  open decision, not a queued fix.
+
+Reviewed-up-to: f3e7dc190203bec59b6d0e0f538dedde5cd73a53
