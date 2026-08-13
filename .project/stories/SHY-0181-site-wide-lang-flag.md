@@ -1,6 +1,6 @@
 ---
 id: SHY-0181
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-13
 priority: P1
@@ -9,6 +9,7 @@ effort: M
 roadmap_ids: []
 epic: EPIC-0007
 mvp: true
+released_in: v0.98.0
 ---
 
 # SHY-0181: Site-wide `?lang=` locale flag — every owned web page (public + admin + portal + future) honors the requested language

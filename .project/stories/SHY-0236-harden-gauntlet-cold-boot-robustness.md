@@ -1,12 +1,13 @@
 ---
 id: SHY-0236
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-24
 priority: P1
 effort: M
 type: infra
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0236: Harden the cold-boot gauntlet — best-effort suites, FAIL sentinel, Playwright env, bash-3.2 safety
