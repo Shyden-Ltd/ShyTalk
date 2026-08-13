@@ -1,13 +1,13 @@
 {
   "_meta": {
-    "epicCount": 3,
-    "generatedAt": "2026-06-13T12:04:05.334Z",
+    "epicCount": 10,
+    "generatedAt": "2026-08-13T12:24:49.824Z",
     "generatedFrom": ".project/stories/",
     "schemaVersion": 2,
-    "shyCount": 3
+    "shyCount": 4
   },
   "currentlyWorkingOn": [],
-  "lastUpdated": "2026-06-13T12:04:05.334Z",
+  "lastUpdated": "2026-08-13T12:24:49.824Z",
   "phases": [
     {
       "features": [
@@ -3613,6 +3613,14 @@
           "shyId": "SHY-0073",
           "slug": "renderer-lazy-i18n-and-gated-story-links",
           "status": "Done"
+        },
+        {
+          "description": null,
+          "i18n": {},
+          "name": "The site header offers \"Sign In\" to people who are already signed in",
+          "shyId": "SHY-0282",
+          "slug": "shared-header-flashes-sign-in-at-signed-in-visitors",
+          "status": "Draft"
         }
       ],
       "progress": {
