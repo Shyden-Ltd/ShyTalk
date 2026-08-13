@@ -23,8 +23,8 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 176
-        versionName = "0.97.15"
+        versionCode = 177
+        versionName = "0.98.0"
 
         // SHY-0205: bake the git identity into EVERY flavour's BuildConfig
         // so the preview watermark can name the exact code on a device.
