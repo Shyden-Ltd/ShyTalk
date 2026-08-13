@@ -1,0 +1,12 @@
+// The wipe target is a member expression. It cannot be resolved statically, and
+// must be REPORTED rather than silently contributing nothing.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection } = require('../helpers/firebase-emulator');
+
+const config = { collection: 'users' };
+
+beforeEach(async () => {
+  await clearCollection(db, config.collection);
+});

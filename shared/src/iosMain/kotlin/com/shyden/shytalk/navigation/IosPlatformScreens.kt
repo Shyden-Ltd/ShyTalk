@@ -28,6 +28,7 @@ fun createIosPlatformScreens(): PlatformScreens =
                 onNavigateToCommunityStandards = params.onNavigateToCommunityStandards,
                 onNavigateToTermsAndConditions = params.onNavigateToTermsAndConditions,
                 onNavigateToCyberBullyingPolicy = params.onNavigateToCyberBullyingPolicy,
+                onNavigateToSecurity = params.onNavigateToSecurity,
                 onSignOut = params.onSignOut,
             )
         },

@@ -98,7 +98,7 @@ class SafetyGateTest {
     }
 
     @Test
-    fun `treats a sub-floor age in a GDPR region as under-age, not region`() {
+    fun `treats a sub-floor age in a GDPR region as under-age not region`() {
         // A 12-year-old is below the COPPA floor entirely -> under-age (reported bar is the region-effective 16).
         assertEquals(
             GateResult.BlockedUnderAge(threshold = 16, actualAge = 12, requiredVerification = VerificationKind.NONE),

@@ -75,14 +75,4 @@ class PinRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
-
-    override suspend fun resetPin(newPin: String): Result<Unit> =
-        runCatching {
-            apiClient.post(
-                "/api/auth/pin/reset",
-                JSONObject().apply {
-                    put("pin", newPin)
-                },
-            )
-        }
 }

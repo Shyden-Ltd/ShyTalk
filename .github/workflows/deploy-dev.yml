@@ -252,10 +252,20 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: "9315582c39b627dca58dfa83602db385"
           DEV_FIREBASE_API_KEY: ${{ secrets.DEV_FIREBASE_API_KEY }}
+          # SHY-0205 — effective deployed ref for the watermark stamp
+          # (same inputs.ref-or-ref_name convention as the iOS archive
+          # step); via env:, never inline in run: (inputs.ref is
+          # operator-typed text — workflow-injection hygiene).
+          SHYTALK_DEPLOY_REF: ${{ inputs.ref != '' && inputs.ref || github.ref_name }}
         run: |
           sed "s|<DEV_FIREBASE_API_KEY>|$DEV_FIREBASE_API_KEY|" public/admin/config.dev.example.js > public/admin/config.js
           sed "s|<DEV_FIREBASE_API_KEY>|$DEV_FIREBASE_API_KEY|" public/portal/config.dev.example.js > public/portal/config.js
           sed "s|<DEV_FIREBASE_API_KEY>|$DEV_FIREBASE_API_KEY|" public/js/roadmap-config.dev.example.js > public/js/roadmap-config.js
+          # SHY-0205 — stamp the git identity + build label into every
+          # page so the dev-site watermark names the deployed code
+          # (build label mirrors the Android dev versionName-b<run>).
+          VERSION_NAME=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' app/build.gradle.kts)
+          node scripts/stamp-build-meta.mjs --target dev --root public --build "${VERSION_NAME}-b${GITHUB_RUN_NUMBER}"
           wrangler pages deploy public --project-name shytalk-site-dev --branch main
 
   distribute-android:
@@ -622,6 +632,11 @@ jobs:
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # SHY-0205 — effective deployed ref for the watermark stamp
+          # (same inputs.ref-or-ref_name convention the deploy-summary
+          # steps use). Via env:, never inline in run: — inputs.ref is
+          # operator-typed text (workflow-injection hygiene).
+          SHYTALK_DEPLOY_REF: ${{ inputs.ref != '' && inputs.ref || github.ref_name }}
         run: |
           set -euo pipefail
           # Inject a unique CFBundleVersion per CI run. TestFlight rejects
@@ -690,6 +705,9 @@ jobs:
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             MARKETING_VERSION="${VERSION_NAME}" \
+            SHYTALK_GIT_BRANCH="${SHYTALK_DEPLOY_REF}" \
+            SHYTALK_GIT_SHA="$(git -C .. rev-parse --short HEAD)" \
+            SHYTALK_GIT_DIRTY="" \
             archive
           # Export IPA
           xcodebuild \
@@ -841,7 +859,7 @@ jobs:
           # cond is true. `actions/checkout` parses the input as int.
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
 
@@ -909,7 +927,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
 

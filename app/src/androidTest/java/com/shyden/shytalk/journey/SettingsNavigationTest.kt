@@ -84,4 +84,19 @@ class SettingsNavigationTest {
         composeTestRule.mainClock.advanceTimeBy(1000)
         composeTestRule.waitForIdle()
     }
+
+    @Test
+    fun securityRow_navigatesToSecurityScreen() {
+        // SHY-0187: the Security row is the ONLY reachable path to App-Lock
+        // enrolment. Before it was wired, `settings_securityItem` had no
+        // navigation consumer; this proves the row actually opens the Security
+        // screen (the App-Lock toggle renders), not just that a source pin
+        // mentions the string.
+        composeTestRule.launchNavGraph(startDestination = Screen.Settings.route)
+        composeTestRule.waitForTag("settings_securityItem")
+        composeTestRule.onNodeWithTag("settings_securityItem").performClick()
+        composeTestRule.waitForTag("securitySettingsScreen")
+        composeTestRule.onNodeWithTag("securitySettingsScreen").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("appLockToggle").assertIsDisplayed()
+    }
 }

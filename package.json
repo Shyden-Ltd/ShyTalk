@@ -24,7 +24,7 @@
     "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.61.1",
     "allure-playwright": "^3.10.2",
-    "firebase": "^12.15.0",
+    "firebase": "^12.16.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "serve": "^14.2.4",
