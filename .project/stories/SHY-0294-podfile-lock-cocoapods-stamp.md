@@ -1,13 +1,13 @@
 ---
 id: SHY-0294
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-13
 priority: P1
 effort: XS
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1734
 mvp: false
 ---
 
@@ -201,3 +201,10 @@ Worth recording for the next occurrence: the diagnosis is cheap because
 CocoaPods names the file, the old value and the new value. The expensive part
 was that a promotion was blocked on it silently — the job had been red long
 enough that its cause had stopped being read.
+
+**2026-08-13, PR #1734 pushed.** Full local gate green through `.husky/pre-push`
+(Playwright chromium 1420 passed / 1 flaky / 38 skipped). Reviewed-up-to: 3306f5a402e
+
+Review was a self-review against the diff rather than a `code-reviewer` agent
+dispatch, per the operating instruction in force this session. The diff is one
+line of generated lockfile data.
