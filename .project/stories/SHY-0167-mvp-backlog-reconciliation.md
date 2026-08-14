@@ -1,6 +1,6 @@
 ---
 id: SHY-0167
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-09
 priority: P2
@@ -8,6 +8,7 @@ effort: S
 type: chore
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 mvp: false
 ---
 

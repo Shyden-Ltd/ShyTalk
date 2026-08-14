@@ -148,6 +148,36 @@ describe('resolveFile — clean URLs, index, traversal', () => {
     }
   });
 
+  // SHY-0293 — CodeQL js/path-injection, 3 high alerts on PR #1652.
+  //
+  // The guard above validates `requested`, but the CANDIDATES are derived from
+  // it AFTERWARDS: `${requested}.html`. When a URL resolves to the root itself
+  // the guard passes (the root IS inside the root) and the clean-URL candidate
+  // becomes `<root>.html` — a SIBLING of the web root, outside it.
+  //
+  // Non-tautological: a real `<root>.html` is created with real content, so a
+  // resolver that returns it fails on the value, not merely on non-null.
+  test.each([
+    ['/.', 'the current dir'],
+    ['/foo/..', 'a parent traversal that lands back on the root'],
+    ['/%2e', 'a percent-encoded dot'],
+    ['//.', 'a doubled leading slash'],
+  ])('%s (%s) must not reach the sibling <root>.html', (urlPath) => {
+    const sibling = `${root}.html`;
+    fs.writeFileSync(sibling, 'SECRET-OUTSIDE-THE-ROOT');
+    try {
+      const resolved = resolveFile(root, urlPath);
+      expect(resolved).not.toBe(sibling);
+      // Whatever it resolves to must be inside the root — a stricter claim than
+      // "not that one file", so a fix that merely renames the escape still reds.
+      if (resolved !== null) {
+        expect(resolved.startsWith(root + path.sep)).toBe(true);
+      }
+    } finally {
+      fs.rmSync(sibling, { force: true });
+    }
+  });
+
   test('an extensionless request WITHOUT a trailing slash still falls back to dir index', () => {
     // Exercises the non-slash branch's third candidate (`<path>/index.html`),
     // distinct from the trailing-slash branch above.

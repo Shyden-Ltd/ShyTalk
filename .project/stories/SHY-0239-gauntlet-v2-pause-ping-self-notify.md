@@ -1,6 +1,6 @@
 ---
 id: SHY-0239
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-25
 priority: P1
@@ -8,6 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 epic: EPIC-0009
+released_in: v0.98.0
 ---
 
 # SHY-0239: Gauntlet v2 — PIN-ready start gate + event-driven self-notify (console + phone) + fail-fast first-failure ping

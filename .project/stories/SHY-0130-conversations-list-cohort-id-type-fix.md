@@ -1,6 +1,6 @@
 ---
 id: SHY-0130
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-19
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 public: false
 mvp: false
+released_in: v0.98.0
 ---
 
 # SHY-0130: Conversations `list` denied + DM threads corrupted — Android coerces participant uniqueIds to Long
