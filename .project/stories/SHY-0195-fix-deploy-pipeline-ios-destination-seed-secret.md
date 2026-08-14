@@ -135,7 +135,7 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 - 2026-07-16 ~14:3x WIB — PR [#1614](https://github.com/Shyden-Ltd/ShyTalk/pull/1614) (base main) opened; #1613 closed superseded. Verification run 29478170583 progress: **"Seed Dev Personas / Seed test personas (dev)" GREEN** (red in control — secret fix proven); "Distribute iOS to TestFlight" in progress; all other jobs green.
 - 2026-07-16 ~16:5x WIB — **Root cause #2** from verification run 29478170583: "Distribute iOS to TestFlight" fails with "iOS 26.0 is not installed" (exit 70) — runner image 20260630.0213.1 ships the default Xcode WITHOUT the iOS platform runtime (the earlier EMPTY "Found no destinations" list was the same gap pre-`-destination`). Fix: `sudo xcodebuild -downloadPlatform iOS` ensure-step (`timeout-minutes: 20`) before the archive in BOTH deploy workflows. Idempotency probed empirically (Xcode 27.0 host, platform already installed): exit 0 in 0.745s — NOT the Metal-Toolchain `-importComponent` exit-70 "already installed" mode; probe output also shows the plain invocation auto-resolves the arm64 architecture variant. **Caching decision trail:** Actions cache at 9.76/10 GB (98% of the HARD per-repo quota, stale/dupe entries pending audit); platform dmg size unmeasured; arm64 `-architectureVariant` export probe NOT a fast no-op (~90s locally) — decision: ship the uncached ensure-step now (seconds when present, ~3-10 min fetch, step-capped) and revisit dmg caching under the cache-hygiene task once quota headroom + measured size are known. `code-reviewer` R1: 5 findings (3 Imp / 1 Min / 1 Nit) — ALL fixed: job envelopes 100→120 both workflows (TDD: ≥120 pin RED at 100, GREEN at 120), install-step `timeout-minutes: 20` pinned scoped to its step block (20→50 drift mutant RED), order pin scoped to the real xcodebuild archive invocation + same-job `runs-on` guard (cross-job decoy mutant RED — the R1 whole-file pin PASSED that mutant), idempotency claim replaced with probe evidence, root-cause #1/#2 comment wording disambiguated. R1.1: **ZERO FINDINGS** (reviewer independently grep-verified job boundaries, ARCHIVE_JOBS mapping, mutation soundness across both full workflows). Gates on final tree: 11 workflow pin suites 218/218; prettier + eslint `--max-warnings=0`; actionlint; tree clean at 0887bd52cd2.
 
-Reviewed-up-to: 243c3aa358a
+(Review marker lives at the end of this log — see the final `Reviewed-up-to:` line.)
 
 **2026-08-14 — wrongly marked released, and corrected.** The v0.98.0
 bookkeeping sweep (#1741) flipped this story to `Done` + `released_in: v0.98.0`.
@@ -203,3 +203,63 @@ and the `personas-password:` usage-line pin) — neither of which #1687 contests
 
 Marker bumped to `243c3aa358a` (the develop merge) to record that the review
 covered the merged tree, not just the last code commit.
+
+**2026-08-15 02:1x WIB — the DoD was NOT met, and the dispatch proved it.**
+`pre-merge-check.sh` emitted `PRE-MERGE-CHECK: OK` (story In Review, no
+unreviewed commits, 25/25 checks green) — but that is only the mechanical half.
+This story's DoD requires a dispatched Deploy-To-Dev run showing **both**
+"Distribute iOS to TestFlight" and "Seed Dev Personas" green, and the only run
+that ever existed on a SHY-0195 branch is 29478170583 — the one that FAILED and
+produced root cause #2. The platform-runtime fix was written in response to that
+failure and was never itself verified. Merging on the green gate would have
+shipped an unverified fix.
+
+Dispatched **run 31832143087** against this branch (`backend`+`ios-testers`+
+`seed-personas` only). Result: **Seed Dev Personas GREEN**, **iOS FAILED with
+the identical `iOS 26.0 is not installed` (exit 70)**.
+
+### Root cause #3 — the Xcode SELECTION picked the oldest on the box
+
+The ensure step is not the problem; it ran and exited 0, printing
+`iOS is already downloaded as universal … iOS 26.5`. A no-op, because _an_ iOS
+platform was present — just not the one the selected Xcode needs. It asserts
+nothing about **which** version, so it succeeds while leaving the archive's real
+dependency unmet (the same silent-success shape SHY-0269 is about, in another
+file).
+
+`macos-latest` is now **`macos-26-arm64`, image `20260728.0273.1`** — a newer
+image than the `20260630.0213.1` this story was diagnosed against; it ships
+**seven** Xcode 26.x builds: 26.6 (default), 26.5, 26.4.1, 26.3, 26.2, 26.1.1,
+26.0.1. `setup-ios-signing` selected with
+`ls -d /Applications/Xcode_26*.app | head -1`, and `ls` sorts as **text**, so
+`26.0.1` beat `26.5` (`'0' < '5'` at the third component) and every archive ran
+on the **oldest** Xcode present. Per the image manifest, `iOS 26.0` belongs to
+Xcode 26.0.1 while the pre-installed device platform is `iphoneos26.5`
+(Xcode 26.5/26.6) — so the one Xcode we picked is the one whose platform is
+absent. A version compared as a string;
+[[feedback-no-string-ordering-for-security-decisions]] in a new costume.
+
+**Fix:** `sort -V | tail -1` — tracks whatever the image ships as default.
+
+**Two tests, because one is not enough.** A structural pin on the ordering, plus
+a behavioural test that runs the action's OWN pipeline over the real image list.
+Mutation matrix (baseline 21/21):
+
+| mutant               | caught by                                     |
+| -------------------- | --------------------------------------------- |
+| `head -1` (the bug)  | 3 tests                                       |
+| `sort -V \| head -1` | 3 tests                                       |
+| `sort \| tail -1`    | 2 tests — behavioural fixture alone PASSES it |
+
+That last row is why the behavioural test also asserts a two-digit minor sorts
+last: for the current seven-version list a plain lexicographic sort happens to
+return 26.6 as well, so the fixture proved nothing about ordering until
+`26.10` (which sorts BEFORE `26.2` as text, after it as a version) was added.
+
+Full `tests/scripts` suite after the fix: **145 suites / 7465 tests green**;
+eslint `--max-warnings=0` and prettier clean.
+
+**Still gated on a green dispatch.** Root cause #3 is fixed and unit-proven, but
+the DoD is unchanged: a real run must show both jobs green before this merges.
+
+Reviewed-up-to: ff4b9ff6fe9
