@@ -259,7 +259,35 @@ return 26.6 as well, so the fixture proved nothing about ordering until
 Full `tests/scripts` suite after the fix: **145 suites / 7465 tests green**;
 eslint `--max-warnings=0` and prettier clean.
 
-**Still gated on a green dispatch.** Root cause #3 is fixed and unit-proven, but
-the DoD is unchanged: a real run must show both jobs green before this merges.
+### DoD MET — 2026-08-15 04:2x WIB, run 31838911028
+
+Dispatched against `c68c458a77d` (the exact head of this PR) with
+`backend`+`ios-testers`+`seed-personas` in ONE run, because the DoD names a
+single run showing both jobs green and the first two proofs landed on two
+different commits. Run conclusion: **success**.
+
+| DoD job                                | step                                          | result      |
+| -------------------------------------- | --------------------------------------------- | ----------- |
+| Distribute iOS to TestFlight           | Ensure iOS platform runtime is installed      | **success** |
+|                                        | Build, archive, and export iOS app            | **success** |
+|                                        | Upload to TestFlight                          | **success** |
+|                                        | Ensure TestFlight internal-group distribution | **success** |
+| Seed Dev Personas / Seed test personas | (job)                                         | **success** |
+
+Not taken on trust — the seed log carries `PROVISIONING 17 personas against
+project shytalk-dev` → `Applying social graph...` → **`PROVISION_ALL_OK
+count=17`**, and the iOS job's `Selected:` line reads
+`/Applications/Xcode_26.6.0.app` (the fix doing its job; `26.6.0` is the image's
+alias path for 26.6 — `sort -V` puts it after `26.6`, and both resolve to the
+same Xcode).
+
+Intermediate proof for the record: run **31834843907** (iOS-only, same fix,
+commit `c68c458a77d`) was the first successful iOS TestFlight distribution since
+**2026-07-11** — a 34-day outage. The last deploy-dev run that reported
+"success" before this (30049924675, 2026-07-23) had **skipped** iOS entirely,
+which is why nothing surfaced the breakage.
+
+**All three acceptance-criteria jobs are now genuinely green on a real
+dispatch.** Ready to merge.
 
 Reviewed-up-to: ff4b9ff6fe9
