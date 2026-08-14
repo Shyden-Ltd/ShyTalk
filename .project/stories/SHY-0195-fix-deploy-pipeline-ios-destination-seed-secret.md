@@ -137,7 +137,7 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 
 - 2026-07-16 ~18:5x WIB — Develop-side drift half: the device-return gauntlet's express battery failed exactly ci-action-pin-consistency (setup-java pinned to 2 SHAs — the drift THIS story fixed on the main-based branch never reached develop after #1613 was closed superseded). Aligned `.github/actions/setup-jdk-gradle/action.yml` to the SAME SHA #1614 uses (0f481fcb… v5.5.0) so the eventual main→develop back-merge cannot conflict or re-drift. RED = the canonical full express run (13,495/13,496, sole failure named this drift + fix verbatim); GREEN = pin suite 15/15. One-line test-prescribed alignment, self-verified per the agent-frugality rule (the R1/R1.1-reviewed main-side fix is byte-identical on this SHA).
 
-Reviewed-up-to: 2238d4e3640
+Reviewed-up-to: 264c2ed2ebfe435263151142993acd5cb324d49b
 
 **2026-08-14 — correction.** This story was flipped to `Done` +
 `released_in: v0.98.0` by the v0.98.0 bookkeeping sweep (PR #1741) and that
@@ -156,3 +156,9 @@ the honest status.
 
 Checked for the same fault across the whole sweep: cross-referencing all 59
 flipped stories against open PRs found SHY-0195 and nothing else.
+
+The `Reviewed-up-to` marker above was bumped from `2238d4e3640` — 52 commits
+stale, from this story's original implementation round. It now points at the
+status-correction commit, which is the only thing reviewed on this branch. The
+story's IMPLEMENTATION is still unreviewed-since and still open in PR #1614;
+this marker says nothing about that, and must be bumped again there.
