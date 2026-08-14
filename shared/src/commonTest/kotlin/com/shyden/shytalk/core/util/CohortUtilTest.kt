@@ -141,7 +141,7 @@ class CohortUtilTest {
     }
 
     @Test
-    fun `future DOB returns minor (defensive — never happens but pin the contract)`() {
+    fun `future DOB returns minor defensive — never happens but pin the contract`() {
         // A clock-skew or data-entry error could surface a DOB later
         // than now (e.g. a Firebase server-timestamp deserialised
         // against a wrong wall clock). The age computation goes

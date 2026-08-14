@@ -80,14 +80,14 @@ class DevPersonasTest {
     }
 
     @Test
-    fun `P-07 Vexa is the cross-cohort prober (adult cohort)`() {
+    fun `P-07 Vexa is the cross-cohort prober adult cohort`() {
         val vexa = devPersonas.first { it.id == "P-07" }
         assertEquals(DevPersona.Cohort.ADULT, vexa.cohort)
         assertEquals("adult-prober@shytalk.dev", vexa.email)
     }
 
     @Test
-    fun `P-12 Greta is the admin (adult cohort)`() {
+    fun `P-12 Greta is the admin adult cohort`() {
         val greta = devPersonas.first { it.id == "P-12" }
         assertEquals(DevPersona.Cohort.ADULT, greta.cohort)
         assertEquals("admin@shytalk.dev", greta.email)

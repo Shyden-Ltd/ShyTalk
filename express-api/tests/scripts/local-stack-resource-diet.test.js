@@ -177,8 +177,13 @@ describe('Local-stack resource diet', () => {
     // blocks at the firebase emulators:start call indefinitely and
     // never reaches Step 3 onward. `FIREBASE_PID=$!` would capture
     // the wrong PID (the shell's, not firebase's).
+    // Matched on the FLAG and the trailing `&`, not on the literal path.
+    // The path became a variable when FRESH mode was added, and this
+    // assertion reddened -- pinning `local/firebase-emulator-data` was
+    // incidental to what it is actually about, which is that the launch is
+    // backgrounded at all.
     test('firebase emulator launch is backgrounded with trailing &', () => {
-      expect(scriptText).toMatch(/^ {2}--export-on-exit=local\/firebase-emulator-data &$/m);
+      expect(scriptText).toMatch(/^ {2}--export-on-exit=\S+ &$/m);
     });
 
     // Coverage gap (round 2): pin the FIREBASE_PID=$! capture
@@ -187,9 +192,7 @@ describe('Local-stack resource diet', () => {
     // (the trap function relies on FIREBASE_PID being valid).
     test('FIREBASE_PID is captured on the line immediately after the firebase & command', () => {
       const lines = scriptText.split('\n');
-      const ampLineIdx = lines.findIndex((l) =>
-        l.match(/^ {2}--export-on-exit=local\/firebase-emulator-data &$/),
-      );
+      const ampLineIdx = lines.findIndex((l) => l.match(/^ {2}--export-on-exit=\S+ &$/));
       expect(ampLineIdx).toBeGreaterThanOrEqual(0);
       expect(lines[ampLineIdx + 1]).toMatch(/^FIREBASE_PID=\$!$/);
     });
@@ -330,21 +333,27 @@ describe('Local-stack resource diet', () => {
     // for the local target, but no script serves the static web app
     // there. Without this step, every desktop browser cell in the
     // matrix fails its smoke test ("webUiDump failed: ECONNREFUSED").
-    // start.sh must launch `npx serve public -l 8888` in the background.
-    test('launches npx serve public on port 8888', () => {
-      // The operative line must be `npx serve public -l 8888` at line-
-      // start, with a trailing `&` (backgrounded) so the script
-      // continues to subsequent steps.
-      expect(scriptText).toMatch(/^npx serve public[^\n]*-l 8888[^\n]*&\s*$/m);
+    // SHY-0180: start.sh launches the zero-dep `local/serve-web.js` (not the
+    // fragile `npx serve`, which died mid-suite). Backgrounded so the script
+    // continues; SERVE_PID captured right after for cleanup().
+    test('launches serve-web.js on port 8888', () => {
+      expect(scriptText).toMatch(/serve-web\.js[^\n]*--port 8888/);
     });
 
-    // SERVE_PID capture must follow the backgrounded npx serve so
-    // cleanup() can kill it. Mirrors the FIREBASE_PID / API_PID pattern.
+    // SERVE_PID capture must immediately follow the backgrounded launch so
+    // cleanup() can kill it. The launch spans two lines (command `\` then the
+    // `> >(sed ...) 2>&1 &` continuation), so SERVE_PID is on the line right
+    // after the `&`, and the serve-web launch precedes it nearby.
     test('captures SERVE_PID immediately after the backgrounded serve', () => {
       const lines = scriptText.split('\n');
-      const serveIdx = lines.findIndex((l) => /^npx serve public[^\n]*-l 8888[^\n]*&\s*$/.test(l));
-      expect(serveIdx).toBeGreaterThanOrEqual(0);
-      expect(lines[serveIdx + 1]).toMatch(/^SERVE_PID=\$!$/);
+      const pidIdx = lines.findIndex((l) => /^SERVE_PID=\$!$/.test(l));
+      expect(pidIdx).toBeGreaterThanOrEqual(0);
+      const launchIdx = lines.findIndex((l) => /serve-web\.js[^\n]*--port 8888/.test(l));
+      expect(launchIdx).toBeGreaterThanOrEqual(0);
+      expect(pidIdx).toBeGreaterThan(launchIdx);
+      expect(pidIdx - launchIdx).toBeLessThanOrEqual(3);
+      // the line just above SERVE_PID must be the backgrounding `&`
+      expect(lines[pidIdx - 1]).toMatch(/&\s*$/);
     });
 
     // cleanup() must kill SERVE_PID alongside API_PID and FIREBASE_PID
@@ -389,7 +398,7 @@ describe('Local-stack resource diet', () => {
     test('serve step runs after Express API ready', () => {
       const lines = scriptText.split('\n');
       const apiReadyIdx = lines.findIndex((l) => l.includes('Express API ready'));
-      const serveIdx = lines.findIndex((l) => /^npx serve public[^\n]*-l 8888[^\n]*&\s*$/.test(l));
+      const serveIdx = lines.findIndex((l) => /serve-web\.js[^\n]*--port 8888/.test(l));
       expect(apiReadyIdx).toBeGreaterThanOrEqual(0);
       expect(serveIdx).toBeGreaterThanOrEqual(0);
       expect(serveIdx).toBeGreaterThan(apiReadyIdx);
@@ -422,7 +431,7 @@ describe('Local-stack resource diet', () => {
     //   7880  LiveKit (Docker)
     //   9002  MinIO API (Docker; internal 9000 mapped to host 9002)
     //   8025  Mailpit UI (Docker)
-    //   8888  npx serve (added by PR #947)
+    //   8888  serve-web.js static web server (SHY-0180; was npx serve, PR #947)
     const REQUIRED_PORTS = [4000, 8080, 9000, 9099, 3000, 7880, 9002, 8025, 8888];
 
     test('declares a preflight port-check step before any service start', () => {
@@ -548,5 +557,60 @@ describe('Local-stack resource diet', () => {
         /Could not find service "livekit\.\*nonexistent"/,
       );
     });
+  });
+});
+
+/**
+ * Emulator data compounds, and the failure it causes is invisible where it
+ * bites.
+ *
+ * `--import` and `--export-on-exit` name the same path, so every run of
+ * local/start.sh imports the previous run's leftovers and writes its own on
+ * top. On 2026-08-13 that dataset had reached 7.9 MB and 843 Auth users, and
+ * `adminLogin` plus the admin tabs were slow enough to exceed Playwright's
+ * 20s test timeout: the pre-push gate reported 66 failing admin specs. None
+ * was a defect. The same spec on a clean emulator passed 11 of 11 in 24s.
+ *
+ * What is pinned here is the pair of guards that make that self-explaining:
+ * a way to start clean, and a warning before the wall rather than after it.
+ */
+describe('local/start.sh — emulator data does not compound silently', () => {
+  const startSh = () => fs.readFileSync(START_SH_PATH, 'utf-8');
+
+  it('offers FRESH=1 to start with no imported data', () => {
+    const sh = startSh();
+    expect(sh).toMatch(/FRESH:?-?/);
+    // The import flag must be OMITTED under FRESH, not merely pointed
+    // elsewhere: importing a different stale path is the same bug again.
+    expect(sh).toMatch(/IMPORT_ARGS=\(\)/);
+  });
+
+  it('still exports on exit under FRESH, so a clean run leaves clean data', () => {
+    // A FRESH run that also stopped exporting would leave the next run with
+    // nothing at all — which works, but silently discards the seeded state
+    // every time and hides that FRESH was ever used.
+    expect(startSh()).toMatch(/--export-on-exit="?\$EMULATOR_DATA/);
+  });
+
+  it('preserves the previous data rather than deleting it', () => {
+    // 7.9 MB of local state is not ours to throw away on a flag.
+    expect(startSh()).toMatch(/mv "\$EMULATOR_DATA" .*pre-fresh/);
+  });
+
+  it('warns while the dataset is still recoverable, not once tests fail', () => {
+    const sh = startSh();
+    // 4 MB: measured, not guessed. 7.9 MB was already failing and a freshly
+    // seeded export is under 1 MB, so the warning lands with room to act.
+    expect(sh).toMatch(/-gt 4096/);
+    expect(sh).toMatch(/FRESH=1 bash local\/start\.sh/);
+  });
+
+  it('names the symptom the operator will actually see', () => {
+    // A warning that says "data is large" teaches nothing. The failure
+    // presents as dozens of unrelated admin test failures, and the warning
+    // has to say so or it will be read past.
+    const sh = startSh();
+    expect(sh).toMatch(/time out|timeout/i);
+    expect(sh).toMatch(/pre-push|admin/i);
   });
 });

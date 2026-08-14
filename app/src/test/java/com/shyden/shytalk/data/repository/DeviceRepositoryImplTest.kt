@@ -1,12 +1,9 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.android.gms.tasks.Tasks
-import com.google.firebase.firestore.DocumentReference
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
-import io.mockk.every
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
@@ -16,41 +13,91 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * Unit test for the Android [DeviceRepositoryImpl] — it now routes EVERYTHING
+ * through the Express API (no Firestore). Doubles the [WorkerApiClient] (a
+ * permitted unit-test double); the server-authoritative device-lock behaviour
+ * itself is proven against the real emulator in
+ * express-api/tests/routes/devices-lock-check.test.js (SHY-0170).
+ */
 class DeviceRepositoryImplTest {
-    private lateinit var firestore: FirebaseFirestore
     private lateinit var workerApiClient: WorkerApiClient
     private lateinit var repo: DeviceRepositoryImpl
-    private lateinit var mockDocRef: DocumentReference
 
     @Before
     fun setup() {
-        firestore = mockk(relaxed = true)
         workerApiClient = mockk(relaxed = true)
-        mockDocRef = mockk(relaxed = true)
-        every { firestore.document(any()) } returns mockDocRef
-        repo = DeviceRepositoryImpl(firestore, workerApiClient)
+        repo = DeviceRepositoryImpl(workerApiClient)
     }
 
-    // region bindDevice
+    // region resolveDeviceLock
 
     @Test
-    fun `bindDevice returns Success`() =
+    fun `resolveDeviceLock maps status=locked to LOCKED`() =
         runTest {
-            every { mockDocRef.set(any()) } returns Tasks.forResult(null)
+            coEvery { workerApiClient.post(any(), any()) } returns
+                JSONObject().apply {
+                    put("status", "locked")
+                    put("boundToOther", true)
+                }
 
-            val result = repo.bindDevice("device-1", "user-123")
+            val result = repo.resolveDeviceLock("device-1")
 
             assertTrue(result is Resource.Success)
+            assertEquals(DeviceLockStatus.LOCKED, (result as Resource.Success).data)
         }
 
     @Test
-    fun `bindDevice returns Error on exception`() =
+    fun `resolveDeviceLock maps status=allowed to ALLOWED`() =
         runTest {
-            every { mockDocRef.set(any()) } returns Tasks.forException(RuntimeException("Write failed"))
+            coEvery { workerApiClient.post(any(), any()) } returns
+                JSONObject().apply {
+                    put("status", "allowed")
+                    put("boundToOther", false)
+                }
 
-            val result = repo.bindDevice("device-1", "user-123")
+            val result = repo.resolveDeviceLock("device-1")
+
+            assertTrue(result is Resource.Success)
+            assertEquals(DeviceLockStatus.ALLOWED, (result as Resource.Success).data)
+        }
+
+    @Test
+    fun `resolveDeviceLock defaults to ALLOWED when status is absent (fail-open on a malformed but successful response)`() =
+        runTest {
+            coEvery { workerApiClient.post(any(), any()) } returns JSONObject().apply { put("success", true) }
+
+            val result = repo.resolveDeviceLock("device-1")
+
+            assertTrue(result is Resource.Success)
+            assertEquals(DeviceLockStatus.ALLOWED, (result as Resource.Success).data)
+        }
+
+    @Test
+    fun `resolveDeviceLock returns Error on API exception (lenient — VM proceeds)`() =
+        runTest {
+            coEvery { workerApiClient.post(any(), any()) } throws RuntimeException("Network error")
+
+            val result = repo.resolveDeviceLock("device-1")
 
             assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `resolveDeviceLock POSTs to the lock-check path with the deviceId in the body`() =
+        runTest {
+            // Pins the exact endpoint + payload — a regression to a wrong path or
+            // body key would otherwise slip through the any()-matched stubs above.
+            coEvery { workerApiClient.post(any(), any()) } returns JSONObject().apply { put("status", "allowed") }
+
+            repo.resolveDeviceLock("device-xyz")
+
+            coVerify {
+                workerApiClient.post(
+                    "/api/devices/lock-check",
+                    match { it.getString("deviceId") == "device-xyz" },
+                )
+            }
         }
 
     // endregion

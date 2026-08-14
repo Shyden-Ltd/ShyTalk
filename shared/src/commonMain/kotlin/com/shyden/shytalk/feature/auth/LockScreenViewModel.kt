@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.BiometricResult
 import com.shyden.shytalk.core.util.CryptoKeyPair
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.data.repository.PinVerifyResult
@@ -17,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.getString
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -39,6 +40,7 @@ class LockScreenViewModel(
     private val biometricAuth: BiometricAuth,
     private val cryptoKeyPair: CryptoKeyPair,
     private val appLockRepository: AppLockRepository,
+    private val authRepository: AuthRepository,
 ) : ViewModel() {
     private val _state =
         MutableStateFlow(
@@ -106,10 +108,39 @@ class LockScreenViewModel(
         }
     }
 
-    private fun handlePinResult(result: PinVerifyResult) {
+    /**
+     * SHY-0187: the unlock token doubles as the session-restore credential.
+     * The launch resolver routes credential+dead-session states to this
+     * screen (rule 4), so a correct PIN/biometric must restore the Firebase
+     * session BEFORE unlocking — otherwise unlock lands on Main with no
+     * usable session. A live session skips the round-trip. Success also
+     * refreshes the lock timestamp so the very next resume/rotation doesn't
+     * immediately re-lock; failure leaves the timestamp stale (fail-closed)
+     * and routes to full re-auth.
+     */
+    private suspend fun restoreSessionAndUnlock(customToken: String) {
+        if (!authRepository.isAuthenticated) {
+            val restored = authRepository.signInWithCustomToken(customToken)
+            if (restored is Resource.Error) {
+                _state.update {
+                    it.copy(
+                        isLoading = false,
+                        pinInput = "",
+                        error = UiText.res(Res.string.pin_session_expired),
+                        requiresReauth = true,
+                    )
+                }
+                return
+            }
+        }
+        appLockRepository.updateLastActiveTimestamp()
+        checkBiometricGracePeriod()
+        _state.update { it.copy(isLoading = false, unlocked = true, pinInput = "") }
+    }
+
+    private suspend fun handlePinResult(result: PinVerifyResult) {
         if (result.customToken != null) {
-            checkBiometricGracePeriod()
-            _state.update { it.copy(isLoading = false, unlocked = true, pinInput = "") }
+            restoreSessionAndUnlock(result.customToken)
         } else if (result.locked) {
             lockoutTimestamp = epochMillis()
             onLockout?.invoke()
@@ -136,13 +167,21 @@ class LockScreenViewModel(
         }
     }
 
+    /**
+     * [bioTitle]/[bioDesc] are the OS biometric-prompt strings, resolved by
+     * the UI layer (stringResource) and passed in — the VM must not suspend
+     * on compose-resource IO (`getString` parks the coroutine on real
+     * resource-loading IO, which deadlocks the host-JVM test scheduler; the
+     * prompt copy is a UI concern anyway — errors stay lazy via [UiText]).
+     */
     @OptIn(ExperimentalEncodingApi::class)
-    fun authenticateWithBiometric() {
+    fun authenticateWithBiometric(
+        bioTitle: String,
+        bioDesc: String,
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            val bioTitle = getString(Res.string.biometric_unlock_title)
-            val bioDesc = getString(Res.string.biometric_unlock_desc)
             when (val bioResult = biometricAuth.authenticate(bioTitle, bioDesc)) {
                 is BiometricResult.Success -> {
                     val uniqueId = appLockRepository.storedUniqueId
@@ -169,9 +208,8 @@ class LockScreenViewModel(
                             val signatureBase64 = Base64.encode(signatureBytes)
                             val verifyResult = biometricRepository.verify(uniqueId, deviceId, signatureBase64)
                             verifyResult
-                                .onSuccess {
-                                    checkBiometricGracePeriod()
-                                    _state.update { it.copy(isLoading = false, unlocked = true) }
+                                .onSuccess { token ->
+                                    restoreSessionAndUnlock(token)
                                 }.onFailure { e ->
                                     _state.update {
                                         it.copy(
