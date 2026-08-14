@@ -119,7 +119,11 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     // an explicit per-secret mapping. Names match the repo's GitHub
     // Actions secrets settings.
     expect(SEED_WORKFLOW).toContain('FIREBASE_SERVICE_ACCOUNT_DEV:');
+    // SHY-0195: the canonical name is DEV_QA_PERSONAS_PASSWORD (SHY-0136
+    // consolidation); the old PERSONAS_PASSWORD_DEV repo secret no longer
+    // exists, and requiring it broke every seed run from 2026-07-01 on.
     expect(SEED_WORKFLOW).toContain('DEV_QA_PERSONAS_PASSWORD:');
+    expect(SEED_WORKFLOW).not.toContain('PERSONAS_PASSWORD_DEV');
     // Both must be required so a future caller that forgets to forward
     // them fails at workflow_call validation rather than at runtime.
     const callIdx = SEED_WORKFLOW.indexOf('workflow_call:');
@@ -127,6 +131,15 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     const callBlock = SEED_WORKFLOW.slice(callIdx, dispatchIdx);
     expect(callBlock).toMatch(/FIREBASE_SERVICE_ACCOUNT_DEV:[\s\S]{1,200}required: true/);
     expect(callBlock).toMatch(/DEV_QA_PERSONAS_PASSWORD:[\s\S]{1,200}required: true/);
+  });
+
+  test('forwards personas-password from secrets.DEV_QA_PERSONAS_PASSWORD to the seed action (review SHY-0195 Imp #2)', () => {
+    // The declaration test above proves the secret EXISTS on the contract;
+    // this pins the USAGE line, so a typo'd third name in the `with:` block
+    // can't slip through to fail only at real dispatch time.
+    expect(SEED_WORKFLOW).toMatch(
+      /personas-password:\s*\$\{\{\s*secrets\.DEV_QA_PERSONAS_PASSWORD\s*\}\}/,
+    );
   });
 
   test('declares a `target` input on both triggers with `dev` as the only allowed value', () => {
