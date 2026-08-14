@@ -7,7 +7,7 @@ priority: P0
 effort: S
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1687
 mvp: true
 ---
 
@@ -213,3 +213,54 @@ would have merged a self-contradicting branch.
 
 Verified after resolution: 24 tests pass in
 `deploy-dev-seed-personas.test.js`, and actionlint is clean on the workflow.
+
+**2026-08-15 01:xx WIB — pre-merge review of the full `origin/develop...HEAD`
+diff (606+/22-, 7 files).** Read every hunk. Verified the three things a
+clean-looking diff could hide:
+
+1. **`PROVISION_ALL_OK` is real and unconditional.** Emitted at
+   `provision-test-personas.js:584` via `console.log` (stdout, so `tee` captures
+   it), reachable only after the full persona loop AND `applySocialGraph`
+   complete — immediately before `process.exit(0)`. Not a string that merely
+   appears somewhere.
+2. **`set -o pipefail` genuinely is in effect.** The step declares
+   `shell: bash`, which GitHub expands to `bash --noprofile --norc -eo pipefail
+{0}`, so a non-zero exit from `node` still fails the step despite the pipe.
+   The comment's claim checks out.
+3. **The preflight runs before `checkout`**, so a misconfigured repo fails in
+   seconds with the secret named, rather than after a clone.
+
+**One defect found and fixed here (TDD).** The guard's comment claimed it
+catches "a script that no-ops because the persona list came back empty" — it did
+not. The script prints `PROVISION_ALL_OK count=` + `personas.length`
+unconditionally once the loop finishes, so an empty list yields `count=0`, which
+a bare `grep -q 'PROVISION_ALL_OK'` accepts. The guard was true for every other
+failure mode and false for exactly the one its comment advertised.
+
+Not reachable today (`personas` is a literal array at
+`provision-test-personas.js:64`), which is why CI could never have caught it —
+but the guard exists for the day that list becomes dynamic. Tightened to
+`grep -qE 'PROVISION_ALL_OK count=[1-9]'`, with a new test pinning the
+non-zero requirement that was observed RED first (it reported the old
+`grep -q 'PROVISION_ALL_OK'` line verbatim), then GREEN: 25/25. `bash -n` +
+`shellcheck -S warning` clean on the extracted step script.
+
+**Cross-PR: this story supersedes an AC of SHY-0195 ([#1614](https://github.com/Shyden-Ltd/ShyTalk/pull/1614)).**
+SHY-0195's Error-paths AC reads _"it still fails LOUDLY at call time (the
+`required: true` contract is kept — no silent skip)"_. That AC assumed call-time
+validation is loud; it is not — it produces zero steps and zero logs, which is
+the silent skip the AC was written to prevent. This story keeps the AC's intent
+and fixes its mechanism. Recorded in both stories so a later audit reads a
+deliberate supersession, not a regression.
+
+**Merge order — #1614 FIRST, then this.** Both PRs edit the same test in
+`deploy-dev-seed-personas.test.js` and were cut from develop independently, so
+neither one's CI has ever seen the other's YAML. On merging develop into this
+branch, the resolution is: keep THIS branch's two rewritten tests (the canonical
+secret-names test — which already carries `not.toContain('PERSONAS_PASSWORD_DEV')`
+— and the `NOT required: true` test), and **keep #1614's new
+`forwards personas-password from secrets.DEV_QA_PERSONAS_PASSWORD` test**, which
+this branch does not have and does not contest. That usage-line pin is the one
+assertion a careless resolution would silently drop.
+
+Reviewed-up-to: 7b0077d4cfc
