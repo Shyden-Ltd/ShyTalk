@@ -263,4 +263,16 @@ secret-names test — which already carries `not.toContain('PERSONAS_PASSWORD_DE
 this branch does not have and does not contest. That usage-line pin is the one
 assertion a careless resolution would silently drop.
 
-Reviewed-up-to: 7b0077d4cfc
+**2026-08-15 06:0x WIB — merged develop (now carrying SHY-0195 #1614) and
+resolved the predicted conflict.** Exactly one, in
+`deploy-dev-seed-personas.test.js`, precisely as the merge-tree dry-run
+predicted. Taken in this story's favour per the analysis above; #1614's two
+additions were both kept, including the `personas-password:` USAGE-line pin,
+which is the assertion a careless resolution drops silently.
+
+Post-merge verification: the target file is 26/26, and the whole
+`tests/scripts` suite is **146 suites / 7475 tests green**. Marker bumped to the
+merge commit because the conflict resolution is a real code decision made
+inside it, not an automatic merge.
+
+Reviewed-up-to: 1bdba8f6a95
