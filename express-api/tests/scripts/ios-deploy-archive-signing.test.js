@@ -211,3 +211,86 @@ describe('iOS deploy archive timing instrumentation (SHY-0088)', () => {
     expect(parseInt(match[1], 10)).toBeGreaterThanOrEqual(120);
   });
 });
+
+// ── SHY-0195 root cause #3: the Xcode SELECTION picked the oldest ──────────
+//
+// Verification run 31832143087 (2026-08-14) failed with the SAME
+// "iOS 26.0 is not installed" (exit 70) that root cause #2 was meant to fix,
+// even with the platform-runtime ensure step in place. The ensure step ran,
+// exited 0, and printed "iOS is already downloaded as universal … iOS 26.5" —
+// a no-op, because AN iOS platform was present. It just wasn't the one the
+// selected Xcode needs.
+//
+// The selection is why. `macos-latest` is now `macos-26-arm64` image
+// 20260728.0273.1, which ships SEVEN Xcode 26.x builds: 26.6 (default), 26.5,
+// 26.4.1, 26.3, 26.2, 26.1.1, 26.0.1. `ls -d /Applications/Xcode_26*.app |
+// head -1` sorts LEXICOGRAPHICALLY, so "26.0.1" wins over "26.5" ('0' < '5')
+// and the job ran on the OLDEST Xcode on the box. Per the image manifest,
+// iOS 26.0 belongs to Xcode 26.0.1 while the pre-installed device platform is
+// iphoneos26.5 (Xcode 26.5/26.6) — so the one Xcode we picked is the one whose
+// platform is absent.
+//
+// This is [[feedback-no-string-ordering-for-security-decisions]] in a new
+// costume: a version compared as a string. `sort -V | tail -1` picks 26.6.
+const SETUP_IOS_SIGNING = path.join(
+  __dirname,
+  '../../../.github/actions/setup-ios-signing/action.yml',
+);
+
+describe('setup-ios-signing — Xcode selection (SHY-0195 root cause #3)', () => {
+  test('selects the NEWEST matching Xcode by version, never the lexicographically first', () => {
+    const src = stripComments(fs.readFileSync(SETUP_IOS_SIGNING, 'utf8'));
+    const line = src.split('\n').find((l) => /XCODE=\$\(/.test(l));
+    expect(line).toBeDefined();
+    expect(line).toMatch(/sort -V/);
+    expect(line).toMatch(/tail -1/);
+    // The specific defect: a bare `head -1` over an lexicographic listing.
+    expect(line).not.toMatch(/head -1/);
+  });
+
+  // Behavioural, not textual: runs the ACTUAL pipeline from the action over a
+  // fixture list. `pipeline` is spliced out of the repo's own action.yml (not
+  // user input) and the fixture is passed via $INPUT rather than interpolated,
+  // so nothing untrusted reaches the shell.
+  const runSelection = (versions) => {
+    const src = stripComments(fs.readFileSync(SETUP_IOS_SIGNING, 'utf8'));
+    const line = src.split('\n').find((l) => /XCODE=\$\(/.test(l));
+    expect(line).toBeDefined();
+    // Reuse the action's own sort/select tail, so a future change to the
+    // ordering strategy is exercised here rather than merely described.
+    // indexOf/slice rather than a regex: `^.*?\|` is a lazy scan to an
+    // alternation char and trips sonarjs/slow-regex, the same backtracking
+    // hazard this file already avoids in archiveInvocation().
+    const firstPipe = line.indexOf('|');
+    const orTrue = line.lastIndexOf('|| true');
+    expect(firstPipe).toBeGreaterThan(-1);
+    const pipeline = line.slice(firstPipe + 1, orTrue > firstPipe ? orTrue : undefined).trim();
+    return require('child_process')
+      .execSync(`printf '%s\\n' "$INPUT" | ${pipeline}`, {
+        env: {
+          ...process.env,
+          INPUT: versions.map((v) => `/Applications/Xcode_${v}.app`).join('\n'),
+        },
+        shell: '/bin/bash',
+      })
+      .toString()
+      .trim();
+  };
+
+  test('picks 26.6 out of the real macos-26-arm64 Xcode list', () => {
+    expect(runSelection(['26.0.1', '26.1.1', '26.2', '26.3', '26.4.1', '26.5', '26.6'])).toBe(
+      '/Applications/Xcode_26.6.app',
+    );
+  });
+
+  test('orders by VERSION, not text — a two-digit minor must still sort last', () => {
+    // The list above cannot tell `sort -V` from a plain lexicographic `sort`:
+    // text-ordering happens to put 26.6 last there too, so that mutant passes
+    // it (verified — 1 failed / 1 passed). This case discriminates, because
+    // "26.10" sorts BEFORE "26.2" as text ('1' < '2') and AFTER it as a
+    // version. Without it the behavioural test proves nothing about ordering,
+    // and a lexicographic sort would ship — breaking on the first two-digit
+    // minor Apple publishes.
+    expect(runSelection(['26.2', '26.6', '26.10'])).toBe('/Applications/Xcode_26.10.app');
+  });
+});
