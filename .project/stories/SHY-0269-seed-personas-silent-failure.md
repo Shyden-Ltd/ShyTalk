@@ -275,4 +275,45 @@ Post-merge verification: the target file is 26/26, and the whole
 merge commit because the conflict resolution is a real code decision made
 inside it, not an automatic merge.
 
+### DoD items 2 and 3 — both PROVEN by real dispatch, 2026-08-15 06:0x WIB
+
+Item 3 had **no recorded evidence** and is this story's central claim, so it was
+proven rather than assumed. (SHY-0195 had just demonstrated what an unverified
+DoD item hides: a 34-day iOS outage behind a green mechanical gate.)
+
+**Item 2 — seeding reaches `PROVISION_ALL_OK` on THIS branch** (run
+**31849038860**, `seed-dev-personas.yml` dispatched against this branch). The
+earlier 2026-08-03 proof predates the count-guard change, so it was re-run:
+
+```
+Both required secrets are present.
+PROVISION_ALL_OK count=17
+Seeded: PROVISION_ALL_OK count=17
+```
+
+The `Seeded:` echo confirms the tightened `grep -qE 'PROVISION_ALL_OK
+count=[1-9]'` matched, i.e. the new guard ran and passed on real output.
+
+**Item 3 — a missing secret fails IN THE LOG** (run **31849199825**). Induced
+for real on a throwaway branch (never merged; deleted local + remote
+immediately afterwards) by emptying the secret the preflight reads:
+
+| the claim                    | evidence                                                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| the job actually STARTS      | **7 steps ran** (the `required: true` path produced zero steps, zero logs)                                   |
+| the reason is in the RUN LOG | step `Verify required secrets are present` →<br>`Missing repository secret(s): FIREBASE_SERVICE_ACCOUNT_DEV` |
+| it is actionable             | `::error` names the secret, the settings path, and the consequence ("Seeded personas … NOT refreshed")       |
+
+**Extra finding — a layer this story did not claim.** The first attempt induced
+the failure by pointing at a non-existent secret NAME, and the pre-push hook
+**refused the push**: actionlint reported `property
+"firebase_service_account_dev_does_not_exist" is not defined in object type
+{… dev_qa_personas_password; firebase_service_account_dev …}`. So the
+`workflow_call` secret declarations do not only serve `secrets: inherit` — they
+give actionlint a closed set to check every `secrets.X` reference against, and
+an undeclared reference cannot reach CI at all. That is a static guard against
+exactly the rename that broke this workflow, complementing the runtime
+preflight. Worth keeping in mind before anyone "simplifies" the declarations
+away now that they are `required: false`.
+
 Reviewed-up-to: 1bdba8f6a95
