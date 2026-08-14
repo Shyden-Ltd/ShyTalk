@@ -121,6 +121,9 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     // cross-check in workflow-secrets-inventory.test.js is the real guard;
     // this is the named pin for the one that actually broke.
     expect(SEED_WORKFLOW).toContain('FIREBASE_SERVICE_ACCOUNT_DEV:');
+    // SHY-0195: the canonical name is DEV_QA_PERSONAS_PASSWORD (SHY-0136
+    // consolidation); the old PERSONAS_PASSWORD_DEV repo secret no longer
+    // exists, and requiring it broke every seed run from 2026-07-01 on.
     expect(SEED_WORKFLOW).toContain('DEV_QA_PERSONAS_PASSWORD:');
     expect(SEED_WORKFLOW).not.toContain('PERSONAS_PASSWORD_DEV');
   });
@@ -147,6 +150,15 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     const preflight = SEED_WORKFLOW.slice(preflightIdx, preflightIdx + 1600);
     expect(preflight).toContain('DEV_QA_PERSONAS_PASSWORD');
     expect(preflight).toContain('FIREBASE_SERVICE_ACCOUNT_DEV');
+  });
+
+  test('forwards personas-password from secrets.DEV_QA_PERSONAS_PASSWORD to the seed action (review SHY-0195 Imp #2)', () => {
+    // The declaration test above proves the secret EXISTS on the contract;
+    // this pins the USAGE line, so a typo'd third name in the `with:` block
+    // can't slip through to fail only at real dispatch time.
+    expect(SEED_WORKFLOW).toMatch(
+      /personas-password:\s*\$\{\{\s*secrets\.DEV_QA_PERSONAS_PASSWORD\s*\}\}/,
+    );
   });
 
   test('declares a `target` input on both triggers with `dev` as the only allowed value', () => {

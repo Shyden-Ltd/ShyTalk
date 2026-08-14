@@ -135,30 +135,159 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 - 2026-07-16 ~14:3x WIB — PR [#1614](https://github.com/Shyden-Ltd/ShyTalk/pull/1614) (base main) opened; #1613 closed superseded. Verification run 29478170583 progress: **"Seed Dev Personas / Seed test personas (dev)" GREEN** (red in control — secret fix proven); "Distribute iOS to TestFlight" in progress; all other jobs green.
 - 2026-07-16 ~16:5x WIB — **Root cause #2** from verification run 29478170583: "Distribute iOS to TestFlight" fails with "iOS 26.0 is not installed" (exit 70) — runner image 20260630.0213.1 ships the default Xcode WITHOUT the iOS platform runtime (the earlier EMPTY "Found no destinations" list was the same gap pre-`-destination`). Fix: `sudo xcodebuild -downloadPlatform iOS` ensure-step (`timeout-minutes: 20`) before the archive in BOTH deploy workflows. Idempotency probed empirically (Xcode 27.0 host, platform already installed): exit 0 in 0.745s — NOT the Metal-Toolchain `-importComponent` exit-70 "already installed" mode; probe output also shows the plain invocation auto-resolves the arm64 architecture variant. **Caching decision trail:** Actions cache at 9.76/10 GB (98% of the HARD per-repo quota, stale/dupe entries pending audit); platform dmg size unmeasured; arm64 `-architectureVariant` export probe NOT a fast no-op (~90s locally) — decision: ship the uncached ensure-step now (seconds when present, ~3-10 min fetch, step-capped) and revisit dmg caching under the cache-hygiene task once quota headroom + measured size are known. `code-reviewer` R1: 5 findings (3 Imp / 1 Min / 1 Nit) — ALL fixed: job envelopes 100→120 both workflows (TDD: ≥120 pin RED at 100, GREEN at 120), install-step `timeout-minutes: 20` pinned scoped to its step block (20→50 drift mutant RED), order pin scoped to the real xcodebuild archive invocation + same-job `runs-on` guard (cross-job decoy mutant RED — the R1 whole-file pin PASSED that mutant), idempotency claim replaced with probe evidence, root-cause #1/#2 comment wording disambiguated. R1.1: **ZERO FINDINGS** (reviewer independently grep-verified job boundaries, ARCHIVE_JOBS mapping, mutation soundness across both full workflows). Gates on final tree: 11 workflow pin suites 218/218; prettier + eslint `--max-warnings=0`; actionlint; tree clean at 0887bd52cd2.
 
-- 2026-07-16 ~18:5x WIB — Develop-side drift half: the device-return gauntlet's express battery failed exactly ci-action-pin-consistency (setup-java pinned to 2 SHAs — the drift THIS story fixed on the main-based branch never reached develop after #1613 was closed superseded). Aligned `.github/actions/setup-jdk-gradle/action.yml` to the SAME SHA #1614 uses (0f481fcb… v5.5.0) so the eventual main→develop back-merge cannot conflict or re-drift. RED = the canonical full express run (13,495/13,496, sole failure named this drift + fix verbatim); GREEN = pin suite 15/15. One-line test-prescribed alignment, self-verified per the agent-frugality rule (the R1/R1.1-reviewed main-side fix is byte-identical on this SHA).
+(Review marker lives at the end of this log — see the final `Reviewed-up-to:` line.)
 
-Reviewed-up-to: 264c2ed2ebfe435263151142993acd5cb324d49b
+**2026-08-14 — wrongly marked released, and corrected.** The v0.98.0
+bookkeeping sweep (#1741) flipped this story to `Done` + `released_in: v0.98.0`.
+That was wrong. The sweep derived membership from "the story ID appears in
+`git log v0.98.0`", and this story appears there via PR #1617 — whose own title
+says it is _"the drift half of the main-based fix"_. A partial fix carries the
+story ID exactly as loudly as a complete one. Reverted in #1744; the other half
+is this PR.
 
-**2026-08-14 — correction.** This story was flipped to `Done` +
-`released_in: v0.98.0` by the v0.98.0 bookkeeping sweep (PR #1741) and that
-was WRONG. Reverted here.
+**2026-08-14 — retargeted to develop and conflicts resolved.** The merge policy
+moved to develop-first on 2026-07-25; this PR predates it. Four conflicts,
+resolved on merit rather than by taking one side wholesale:
 
-The sweep derived membership from "the story ID appears in `git log v0.98.0`".
-SHY-0195 appears there via PR #1617 — whose own title says it is _"the drift
-half of the main-based fix"_. A partial fix carries the story ID exactly as
-loudly as a complete one.
+| file                                          | taken from | why                                                                                                                                                                             |
+| --------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/actions/setup-jdk-gradle/action.yml` | develop    | v5.7.0 is a newer Dependabot pin than the branch's v5.5.0                                                                                                                       |
+| `.github/workflows/seed-dev-personas.yml`     | develop    | SHY-0136 landed a fuller description of the same secret                                                                                                                         |
+| `deploy-dev-seed-personas.test.js`            | **branch** | it is a SUPERSET — it also asserts the old `PERSONAS_PASSWORD_DEV` name is gone, and pins the `personas-password:` USAGE line so a typo'd third name cannot reach dispatch time |
+| this story                                    | branch     | its own current content                                                                                                                                                         |
 
-The other half is still open in **PR #1614**, and its changes are demonstrably
-not on develop: `deploy-dev.yml`, `.github/actions/setup-jdk-gradle/action.yml`
-and `deploy-dev-seed-personas.test.js` all differ between develop and that
-branch. The branch's own copy of this story still reads `In Review`, which is
-the honest status.
+The test conflict is the one worth noting: taking develop's side there would
+have silently dropped two assertions and left the PR weaker than the branch it
+came from.
 
-Checked for the same fault across the whole sweep: cross-referencing all 59
-flipped stories against open PRs found SHY-0195 and nothing else.
+**2026-08-15 00:5x WIB — pre-merge review of the full `origin/develop...HEAD`
+diff (179+/29-, 5 files).** Read every hunk. The workflow changes are
+symmetric across `deploy-dev.yml` and `deploy-prod.yml` (destination, ensure
+step, 100→120 envelope) with no third copy of the archive invocation anywhere
+in `.github/`. The tests are stronger than line pins: the order test walks back
+from the `archive` action line to its owning `xcodebuild` call and then proves
+no `runs-on:` sits between install and archive, so an install placed in an
+earlier job would still fail; the timeout test scopes to the install step's own
+`- name:` block so the pin cannot drift onto a sibling.
 
-The `Reviewed-up-to` marker above was bumped from `2238d4e3640` — 52 commits
-stale, from this story's original implementation round. It now points at the
-status-correction commit, which is the only thing reviewed on this branch. The
-story's IMPLEMENTATION is still unreviewed-since and still open in PR #1614;
-this marker says nothing about that, and must be bumped again there.
+**Cross-PR finding — merge order is NOT arbitrary.** This PR and
+[#1687](https://github.com/Shyden-Ltd/ShyTalk/pull/1687) (SHY-0269) edit the
+same test in `deploy-dev-seed-personas.test.js` with **opposite** assertions:
+
+| PR           | asserts                                                                         |
+| ------------ | ------------------------------------------------------------------------------- |
+| #1614 (here) | `callBlock` matches `…DEV_QA_PERSONAS_PASSWORD:…required: true`                 |
+| #1687        | `callBlock` does **not** match `/required: true/`, and removes it from the YAML |
+
+Both were cut from `develop` independently, so neither one's CI has ever seen
+the other's YAML — a green run on each proves nothing about the pair. **#1687's
+reasoning supersedes this one's:** a `required: true` `workflow_call` secret is
+validated _before_ the job starts, so GitHub fails the call with zero steps and
+zero logs and the reason exists only as a check-run annotation. That is exactly
+how dev persona seeding stayed broken for ~18 days across five deploys — the
+failure mode this story was filed to fix. #1687 replaces the pre-flight
+validation with an explicit in-job preflight step that fails in the run log,
+naming the secret.
+
+This also supersedes an **acceptance criterion of this story** — the Error-paths
+AC "it still fails LOUDLY at call time (the `required: true` contract is kept —
+no silent skip)". That AC assumed call-time validation _is_ loud. It is not:
+call-time failure produces zero steps and zero logs, which is the definition of
+the silent skip the AC was written to prevent. #1687 keeps the AC's intent and
+fixes its mechanism. Recorded here so a later AC audit sees a deliberate
+supersession rather than a regression.
+
+Order: **#1614 merges first**, then #1687 merges `develop` and resolves that
+hunk in its own favour, keeping this PR's two additions (`not.toContain('PERSONAS_PASSWORD_DEV')`
+and the `personas-password:` usage-line pin) — neither of which #1687 contests.
+
+Marker bumped to `243c3aa358a` (the develop merge) to record that the review
+covered the merged tree, not just the last code commit.
+
+**2026-08-15 02:1x WIB — the DoD was NOT met, and the dispatch proved it.**
+`pre-merge-check.sh` emitted `PRE-MERGE-CHECK: OK` (story In Review, no
+unreviewed commits, 25/25 checks green) — but that is only the mechanical half.
+This story's DoD requires a dispatched Deploy-To-Dev run showing **both**
+"Distribute iOS to TestFlight" and "Seed Dev Personas" green, and the only run
+that ever existed on a SHY-0195 branch is 29478170583 — the one that FAILED and
+produced root cause #2. The platform-runtime fix was written in response to that
+failure and was never itself verified. Merging on the green gate would have
+shipped an unverified fix.
+
+Dispatched **run 31832143087** against this branch (`backend`+`ios-testers`+
+`seed-personas` only). Result: **Seed Dev Personas GREEN**, **iOS FAILED with
+the identical `iOS 26.0 is not installed` (exit 70)**.
+
+### Root cause #3 — the Xcode SELECTION picked the oldest on the box
+
+The ensure step is not the problem; it ran and exited 0, printing
+`iOS is already downloaded as universal … iOS 26.5`. A no-op, because _an_ iOS
+platform was present — just not the one the selected Xcode needs. It asserts
+nothing about **which** version, so it succeeds while leaving the archive's real
+dependency unmet (the same silent-success shape SHY-0269 is about, in another
+file).
+
+`macos-latest` is now **`macos-26-arm64`, image `20260728.0273.1`** — a newer
+image than the `20260630.0213.1` this story was diagnosed against; it ships
+**seven** Xcode 26.x builds: 26.6 (default), 26.5, 26.4.1, 26.3, 26.2, 26.1.1,
+26.0.1. `setup-ios-signing` selected with
+`ls -d /Applications/Xcode_26*.app | head -1`, and `ls` sorts as **text**, so
+`26.0.1` beat `26.5` (`'0' < '5'` at the third component) and every archive ran
+on the **oldest** Xcode present. Per the image manifest, `iOS 26.0` belongs to
+Xcode 26.0.1 while the pre-installed device platform is `iphoneos26.5`
+(Xcode 26.5/26.6) — so the one Xcode we picked is the one whose platform is
+absent. A version compared as a string;
+[[feedback-no-string-ordering-for-security-decisions]] in a new costume.
+
+**Fix:** `sort -V | tail -1` — tracks whatever the image ships as default.
+
+**Two tests, because one is not enough.** A structural pin on the ordering, plus
+a behavioural test that runs the action's OWN pipeline over the real image list.
+Mutation matrix (baseline 21/21):
+
+| mutant               | caught by                                     |
+| -------------------- | --------------------------------------------- |
+| `head -1` (the bug)  | 3 tests                                       |
+| `sort -V \| head -1` | 3 tests                                       |
+| `sort \| tail -1`    | 2 tests — behavioural fixture alone PASSES it |
+
+That last row is why the behavioural test also asserts a two-digit minor sorts
+last: for the current seven-version list a plain lexicographic sort happens to
+return 26.6 as well, so the fixture proved nothing about ordering until
+`26.10` (which sorts BEFORE `26.2` as text, after it as a version) was added.
+
+Full `tests/scripts` suite after the fix: **145 suites / 7465 tests green**;
+eslint `--max-warnings=0` and prettier clean.
+
+### DoD MET — 2026-08-15 04:2x WIB, run 31838911028
+
+Dispatched against `c68c458a77d` (the exact head of this PR) with
+`backend`+`ios-testers`+`seed-personas` in ONE run, because the DoD names a
+single run showing both jobs green and the first two proofs landed on two
+different commits. Run conclusion: **success**.
+
+| DoD job                                | step                                          | result      |
+| -------------------------------------- | --------------------------------------------- | ----------- |
+| Distribute iOS to TestFlight           | Ensure iOS platform runtime is installed      | **success** |
+|                                        | Build, archive, and export iOS app            | **success** |
+|                                        | Upload to TestFlight                          | **success** |
+|                                        | Ensure TestFlight internal-group distribution | **success** |
+| Seed Dev Personas / Seed test personas | (job)                                         | **success** |
+
+Not taken on trust — the seed log carries `PROVISIONING 17 personas against
+project shytalk-dev` → `Applying social graph...` → **`PROVISION_ALL_OK
+count=17`**, and the iOS job's `Selected:` line reads
+`/Applications/Xcode_26.6.0.app` (the fix doing its job; `26.6.0` is the image's
+alias path for 26.6 — `sort -V` puts it after `26.6`, and both resolve to the
+same Xcode).
+
+Intermediate proof for the record: run **31834843907** (iOS-only, same fix,
+commit `c68c458a77d`) was the first successful iOS TestFlight distribution since
+**2026-07-11** — a 34-day outage. The last deploy-dev run that reported
+"success" before this (30049924675, 2026-07-23) had **skipped** iOS entirely,
+which is why nothing surfaced the breakage.
+
+**All three acceptance-criteria jobs are now genuinely green on a real
+dispatch.** Ready to merge.
+
+Reviewed-up-to: ff4b9ff6fe9
