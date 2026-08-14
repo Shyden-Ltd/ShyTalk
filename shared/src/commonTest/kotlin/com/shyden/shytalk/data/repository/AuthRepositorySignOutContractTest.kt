@@ -15,9 +15,10 @@ import kotlin.test.assertTrue
  *     `override suspend fun signOut()` enforces this — if the interface ever
  *     regresses to non-suspend without simultaneously reverting this fake,
  *     compilation fails here).
- *  2. `resolvedUniqueId` and `resolvedDisplayName` must both be cleared
- *     on sign-out, so the next sign-in starts from a clean slate (and
- *     the dev-only PreviewWatermark doesn't show stale identity).
+ *  2. `resolvedUniqueId`, `resolvedDisplayName`, and `resolvedCohort`
+ *     must ALL be cleared on sign-out, so the next sign-in starts from a
+ *     clean slate (and the dev-only PreviewWatermark doesn't show stale
+ *     identity or a stale cohort tag — SHY-0205).
  *  3. Platform exceptions must propagate to the caller rather than be
  *     swallowed (pre-Phase-2J the iOS impl wrapped GitLive's suspend
  *     `auth.signOut()` in `runBlocking`, which silently surfaced any
@@ -32,6 +33,7 @@ class AuthRepositorySignOutContractTest {
                 FakeAuthRepository(
                     initialResolvedUniqueId = "10000007",
                     initialResolvedDisplayName = "Alice",
+                    initialResolvedCohort = "adult",
                 )
 
             repo.signOut()
@@ -39,6 +41,7 @@ class AuthRepositorySignOutContractTest {
             assertTrue(repo.signOutCalled, "signOut should have run")
             assertNull(repo.resolvedUniqueId, "resolvedUniqueId should be cleared on sign-out")
             assertNull(repo.resolvedDisplayName, "resolvedDisplayName should be cleared on sign-out")
+            assertNull(repo.resolvedCohort, "resolvedCohort should be cleared on sign-out (SHY-0205)")
         }
 
     @Test
@@ -54,6 +57,7 @@ class AuthRepositorySignOutContractTest {
     private class FakeAuthRepository(
         initialResolvedUniqueId: String? = null,
         initialResolvedDisplayName: String? = null,
+        initialResolvedCohort: String? = null,
     ) : AuthRepository {
         var signOutCalled = false
         var signOutShouldThrow = false
@@ -64,6 +68,7 @@ class AuthRepositorySignOutContractTest {
         override val currentFirebaseUid: String? = null
         override var resolvedUniqueId: String? = initialResolvedUniqueId
         override var resolvedDisplayName: String? = initialResolvedDisplayName
+        override var resolvedCohort: String? = initialResolvedCohort
 
         override fun getProviderInfo(): Pair<String, String>? = null
 
@@ -90,6 +95,7 @@ class AuthRepositorySignOutContractTest {
             signOutCalled = true
             resolvedUniqueId = null
             resolvedDisplayName = null
+            resolvedCohort = null
         }
 
         override suspend fun refreshIdToken(): Resource<Unit> = Resource.Success(Unit)

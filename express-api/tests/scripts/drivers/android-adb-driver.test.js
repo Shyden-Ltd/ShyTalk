@@ -83,6 +83,50 @@ describe('androidUiDump backoff wiring', () => {
   });
 });
 
+describe('androidUiDump stale-holder recovery (SHY-0236)', () => {
+  // A persistent dump failure is usually a STALE UiAutomation holder (the hung
+  // on-device `uiautomator`, EXIT=137 loop). The driver must CLEAR that holder
+  // so the NEXT dump rebinds fresh — instead of returning '' forever while the
+  // caller relaunches the app endlessly (the matrix-orphans thrash). This pin
+  // is exactly what would have prevented the 2026-07-24 recurrence.
+  test('kills the on-device uiautomator after the retry budget is exhausted', async () => {
+    execSync.mockClear();
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      throw new Error('busy'); // dump throws → retry exhausts; pkill also throws (caught)
+    });
+    const driver = await createAndroidDriver();
+    const xml = await driver.androidUiDump();
+    expect(xml).toBe(''); // failure still returns '' — behaviour preserved
+    const commands = execSync.mock.calls.map((c) => c[0]);
+    expect(commands.some((c) => /pkill\b.*uiautomator/.test(c))).toBe(true);
+  });
+
+  // The sibling branch: the holder-clear pkill SUCCEEDS (a real stale holder was
+  // present and got killed). The recovery log line lives in the try's success
+  // path — the case above only exercised the catch (pkill itself throwing), so
+  // without this the whole success branch is dead, uncovered code on new logic.
+  test('logs the recovery when the on-device pkill itself succeeds', async () => {
+    execSync.mockClear();
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (/pkill\b.*uiautomator/.test(cmd)) return ''; // a real stale holder is cleared
+      throw new Error('busy'); // every dump attempt throws → retry exhausts
+    });
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const driver = await createAndroidDriver();
+      const xml = await driver.androidUiDump();
+      expect(xml).toBe(''); // failure path still returns '' — behaviour preserved
+      expect(errSpy).toHaveBeenCalledWith(
+        expect.stringContaining('cleared a possibly-stale uiautomator holder'),
+      );
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
+});
+
 /**
  * Build a mock execSync responder driven by a cmd-substring → output
  * map. Each `pattern` is matched against the full shell-quoted

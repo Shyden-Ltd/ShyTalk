@@ -32,6 +32,7 @@
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
+const { clearBanCache } = require('../utils/bans');
 const r2 = require('../utils/r2');
 const { queryDocs } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
@@ -783,6 +784,11 @@ router.post('/cleanup/all-device-bindings', async (req, res) => {
       await batch.commit();
     }
 
+    // Bindings feed the ban gate's hardware-ban resolution, so a wholesale
+    // delete changes everyone's standing. Full clear — this route does not
+    // know which accounts were affected (SHY-0149).
+    clearBanCache();
+
     res.json({ success: true, deleted: docs.length });
   } catch (err) {
     log.error('admin-cleanup', 'Cleanup all device bindings failed', { error: err.message });
@@ -817,6 +823,10 @@ router.post('/cleanup/device-binding/:uniqueId', async (req, res) => {
       batch.delete(doc.ref);
     }
     await batch.commit();
+
+    // Removing this user's bindings can lift a hardware ban that only reached
+    // them through one of those devices (SHY-0149).
+    clearBanCache(uniqueId);
 
     res.json({ success: true, deleted: docs.length });
   } catch (err) {

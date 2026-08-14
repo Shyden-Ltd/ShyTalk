@@ -1,0 +1,14 @@
+// The wipe list is built by spreading two other arrays, so its elements are not
+// string literals. Unknowable statically → must be reported, not ignored.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection } = require('../helpers/firebase-emulator');
+
+const CORE = ['users'];
+const EXTRA = ['rooms'];
+const ALL = [...CORE, ...EXTRA];
+
+beforeEach(async () => {
+  for (const c of ALL) await clearCollection(db, c);
+});

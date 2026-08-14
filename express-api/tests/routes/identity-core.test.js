@@ -231,6 +231,72 @@ describe('POST /api/users (identity-based creation)', () => {
     );
   });
 
+  // counters/uniqueId is shared with the test-helpers allocator, whose
+  // teardown once wrote it string-typed. A string >= MIN_UNIQUE_ID passes the
+  // `current < MIN_UNIQUE_ID` floor un-reassigned, and `current + 1` then
+  // CONCATENATES — a real production account minted at users/"100000421".
+  test('string-poisoned counter ("10000042") still mints NUMBER 10000043', async () => {
+    mockTransactionGet.mockImplementation((path) => {
+      if (path === 'counters/uniqueId') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ value: '10000042' }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+
+    const app = createApp('firebase-uid-2', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'bob@gmail.com',
+        displayName: 'Bob',
+        dateOfBirth: '2000-01-01',
+      })
+      .expect(200);
+
+    expect(res.body.uniqueId).toBe(10000043);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      'counters/uniqueId',
+      { value: 10000043 },
+      { merge: true },
+    );
+  });
+
+  // "banana" < MIN_UNIQUE_ID is false (NaN comparison), so garbage ALSO
+  // slipped past the floor and concatenated ("banana1"). Must restart at MIN.
+  test('garbage counter value restarts the sequence at MIN_UNIQUE_ID', async () => {
+    mockTransactionGet.mockImplementation((path) => {
+      if (path === 'counters/uniqueId') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ value: 'banana' }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+
+    const app = createApp('firebase-uid-2', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'bob@gmail.com',
+        displayName: 'Bob',
+        dateOfBirth: '2000-01-01',
+      })
+      .expect(200);
+
+    expect(res.body.uniqueId).toBe(10000000);
+    expect(mockTransactionSet).toHaveBeenCalledWith(
+      'counters/uniqueId',
+      { value: 10000000 },
+      { merge: true },
+    );
+  });
+
   test('rejects when provider is missing', async () => {
     const app = createApp();
     await request(app).post('/api/users').send({ identifier: 'alice@gmail.com' }).expect(400);

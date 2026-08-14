@@ -28,8 +28,11 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.shyden.shytalk.core.BuildVariant
+import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.ui.PlatformWebView
+import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
@@ -38,6 +41,7 @@ import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitScreen
 import com.shyden.shytalk.feature.auth.EmailOtpScreen
+import com.shyden.shytalk.feature.auth.PinSetupScreen
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
@@ -61,6 +65,7 @@ import com.shyden.shytalk.feature.profile.GiftWallScreen
 import com.shyden.shytalk.feature.profile.GiftWallViewModel
 import com.shyden.shytalk.feature.profile.ProfileSetupScreen
 import com.shyden.shytalk.feature.profile.RequiredDOBScreen
+import com.shyden.shytalk.feature.settings.SecuritySettingsScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
@@ -104,8 +109,15 @@ fun SharedNavGraph(
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
-        navController.currentBackStackEntryFlow.collect {
+        navController.currentBackStackEntryFlow.collect { entry ->
             currentUserId = authRepository.currentUserId
+            if (BuildVariant.isPreviewBuild) {
+                // Feed the preview watermark's route line (SHY-0205).
+                // Route PATTERNS only (`rooms/{roomId}`), never filled-in
+                // arguments — a room id or user id in the watermark would
+                // leak identifiers into shared screenshots.
+                QaContext.setCurrentRoute(entry.destination.route)
+            }
         }
     }
 
@@ -148,12 +160,39 @@ fun SharedNavGraph(
         }
     }
 
+    // SHY-0187: re-interpose the App-Lock over post-auth content when the
+    // lock timeout expires in the background.
+    AppLockResumeGate(navController)
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
         ) {
             // ── Auth ──
+
+            composable(Screen.Lock.route) {
+                com.shyden.shytalk.feature.auth.LockScreen(
+                    onUnlocked = {
+                        // Warm re-lock (Lock pushed over content) → return to that
+                        // content; cold launch (Lock is the stack root) → to Main
+                        // with Lock removed so back cannot re-enter it.
+                        if (navController.previousBackStackEntry != null) {
+                            navController.safePopBackStack()
+                        } else {
+                            navController.navigate(Screen.Main.route) {
+                                popUpTo(Screen.Lock.route) { inclusive = true }
+                            }
+                        }
+                    },
+                    onReauthRequired = {
+                        // Session unrecoverable — full re-auth, nothing beneath kept.
+                        navController.navigate(Screen.SignIn.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
+            }
 
             composable(Screen.SignIn.route) {
                 platformScreens.signInScreen(
@@ -510,6 +549,7 @@ fun SharedNavGraph(
                         onNavigateToCyberBullyingPolicy = {
                             navController.navigate(Screen.CyberBullyingPolicy.route)
                         },
+                        onNavigateToSecurity = { navController.navigate(Screen.SecuritySettings.route) },
                         onSignOut = {
                             val signOutUserId = authRepository.currentUserId
                             if (signOutUserId != null) {
@@ -522,6 +562,22 @@ fun SharedNavGraph(
                             }
                         },
                     ),
+                )
+            }
+
+            composable(Screen.SecuritySettings.route) {
+                SecuritySettingsScreen(
+                    appLockRepository = koinInject(),
+                    biometricAvailable = koinInject<BiometricAuth>().isAvailable(),
+                    onNavigateBack = { navController.safePopBackStack() },
+                    onResetPin = { navController.navigate(Screen.PinSetup.route) },
+                )
+            }
+
+            composable(Screen.PinSetup.route) {
+                PinSetupScreen(
+                    onCompleted = { navController.safePopBackStack() },
+                    biometricAvailable = koinInject<BiometricAuth>().isAvailable(),
                 )
             }
 

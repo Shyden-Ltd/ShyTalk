@@ -3,7 +3,10 @@ package com.shyden.shytalk.feature.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.UiText
+import com.shyden.shytalk.core.util.logE
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -26,9 +29,13 @@ data class PinSetupState(
     val showBiometricOffer: Boolean = false,
 )
 
+private const val TAG = "PinSetup"
+
 class PinSetupViewModel(
     private val pinRepository: PinRepository,
     private val appLockRepository: AppLockRepository,
+    private val authRepository: AuthRepository,
+    private val deviceId: String,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PinSetupState())
     val state: StateFlow<PinSetupState> = _state.asStateFlow()
@@ -89,22 +96,33 @@ class PinSetupViewModel(
     }
 
     private fun savePinToServer(pin: String) {
+        // Re-entrancy guard: a second submit while the first round-trip is in
+        // flight must not fire a second /pin/setup call. isLoading is set
+        // SYNCHRONOUSLY (before the coroutine launches) so an immediate
+        // re-tap observes it; inside the launch it would race the second tap.
+        if (_state.value.isLoading) return
+        _state.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
-
             pinRepository
                 .setupPin(pin)
                 .onSuccess { pinHash ->
-                    // Store bcrypt hash locally for offline PIN verification
-                    val uniqueId = appLockRepository.storedUniqueId
-                    val deviceId = appLockRepository.storedDeviceId
-                    if (uniqueId.isNullOrEmpty() || deviceId.isNullOrEmpty()) {
+                    // Source identity from the authenticated session + the device-id
+                    // provider — NOT from the App-Lock repo's own stored copy, which
+                    // setCredential (below) is the ONLY writer of. Reading it here
+                    // was circular: on a first-ever enrolment it is always null, so
+                    // every first PIN failed "Device not registered" (SHY-0192).
+                    val uniqueId = authRepository.currentUserId
+                    if (uniqueId.isNullOrEmpty()) {
+                        // No resolved identity ⇒ not signed in; genuinely cannot enrol.
+                        logE(TAG, "PIN enrolment blocked: no authenticated session identity")
                         _state.update { it.copy(isLoading = false, error = UiText.res(Res.string.pin_device_not_registered)) }
                         return@onSuccess
                     }
                     appLockRepository.setCredential(uniqueId, deviceId, pinHash)
+                    logI(TAG, "PIN enrolment succeeded: credential registered for this device")
                     _state.update { it.copy(isLoading = false, showBiometricOffer = true) }
                 }.onFailure { e ->
+                    logE(TAG, "PIN enrolment failed at /pin/setup", e)
                     _state.update {
                         it.copy(
                             isLoading = false,

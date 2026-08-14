@@ -33,6 +33,13 @@
  */
 const PRIOR_NODE_ENV = process.env.NODE_ENV;
 process.env.NODE_ENV = 'local';
+// This suite WIPES `alerts` and `alertConfig` wholesale, so it runs against its own emulator
+// project — otherwise it deletes documents a parallel Jest worker just seeded
+// (SHY-0171). Safe here: the suite never resolves ID tokens, and that is the
+// only thing a namespaced project breaks (the Auth emulator binds token
+// verification to the project it was STARTED with). Enforced by
+// tests/unit/test-isolation-guard.unit.test.js.
+process.env.FIRESTORE_TEST_NAMESPACE = 'srvhealth';
 
 const { db } = require('../../src/utils/firebase');
 const serverHealth = require('../../src/cron/serverHealth');

@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { injectAuthState } from './helpers/roadmap-auth';
 
 /**
  * Suggestions board tests.
@@ -2221,18 +2222,15 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
   test('vote click while profile is loading (null) opens NO login modal', async ({ page }) => {
     // Race-window state as published by `roadmap-auth.js` between
     // onAuthStateChanged firing and the ShyTalk profile fetch resolving.
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-race-sb-1',
-          displayName: 'RaceSBUser',
-          getIdToken: () => Promise.resolve('fake-token'),
-        },
+    await injectAuthState(
+      page,
+      {
+        currentUser: { uid: 'test-race-sb-1', displayName: 'RaceSBUser' },
         // Critical: profile is null (loading), NOT undefined or false.
         profile: null,
-      };
-    });
+      },
+      { dispatch: false, idToken: 'fake-token' },
+    );
 
     await page.locator('[data-testid="vote-up-test-sug-1"]').click();
 
@@ -2249,17 +2247,14 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     // object-profile branch of `hasValidAccount` so a future inversion of
     // the comparison (`auth.profile === false` instead of `!== false`)
     // is loudly rejected here, not silently in production.
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-auth-sb',
-          displayName: 'AuthUser',
-          getIdToken: () => Promise.resolve('fake-token'),
-        },
+    await injectAuthState(
+      page,
+      {
+        currentUser: { uid: 'test-auth-sb', displayName: 'AuthUser' },
         profile: { uniqueId: 1001, displayName: 'AuthUser' },
-      };
-    });
+      },
+      { dispatch: false, idToken: 'fake-token' },
+    );
 
     await page.locator('[data-testid="vote-up-test-sug-1"]').click();
 
@@ -2274,17 +2269,14 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     // "simplification" replacing `profile !== false` with `profile != null`
     // would silently let no-account users hit privileged paths
     // client-side (server still rejects, but UX would be broken).
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-no-shytalk-account',
-          displayName: 'NoAccount',
-          getIdToken: () => Promise.resolve('fake-token'),
-        },
+    await injectAuthState(
+      page,
+      {
+        currentUser: { uid: 'test-no-shytalk-account', displayName: 'NoAccount' },
         profile: false,
-      };
-    });
+      },
+      { dispatch: false, idToken: 'fake-token' },
+    );
 
     await page.locator('[data-testid="vote-up-test-sug-1"]').click();
 
@@ -2296,13 +2288,7 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     // Negative-pin: the `getUser()` half of the combined gate. Profile
     // contract aside, null currentUser means truly signed out and the
     // requireAuth short-circuit MUST fire regardless of profile state.
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: null,
-        profile: null,
-      };
-    });
+    await injectAuthState(page, { currentUser: null, profile: null }, { dispatch: false });
 
     await page.locator('[data-testid="vote-up-test-sug-1"]').click();
 

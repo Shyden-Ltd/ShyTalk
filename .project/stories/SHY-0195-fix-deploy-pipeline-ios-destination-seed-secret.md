@@ -29,53 +29,65 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 ## Acceptance Criteria
 
 ### Happy path
+
 - [ ] `deploy-dev.yml`'s archive step carries `-destination 'generic/platform=iOS'`; a dispatched Deploy-To-Dev run's "Distribute iOS to TestFlight" job passes (archive + export + upload).
 - [ ] `deploy-prod.yml`'s archive step carries the same explicit destination (latent-fix; proven by the pin test — prod is NOT dispatched for this story).
 - [ ] `seed-dev-personas.yml` requires + consumes `DEV_QA_PERSONAS_PASSWORD`; the "Seed Dev Personas" job passes on the same dispatched run.
 - [ ] `setup-jdk-gradle/action.yml` pins the same setup-java SHA as every workflow (`0f481fcb613427c0f801b606911222b5b6f3083a`); `ci-action-pin-consistency.test.js` is green.
 
 ### Error paths
+
 - [ ] If the seed workflow is invoked without the canonical secret available, it still fails LOUDLY at call time (the `required: true` contract is kept — no silent skip).
 - [ ] N/A beyond that — the changes remove failure modes rather than adding branches.
 
 ### Edge cases
+
 - [ ] `seed-dev-personas.yml`'s `workflow_dispatch` path (standalone re-seed without a deploy) resolves the renamed secret from repo secrets — comment updated to match.
 - [ ] Every OTHER `actions/setup-java` reference repo-wide stays on the one canonical SHA (the consistency test enumerates workflows + composite actions).
 
 ### Performance
+
 - [ ] N/A — flag + name changes only; no added steps.
 
 ### Security
+
 - [ ] The secret RENAME does not widen access: same secret material, same scopes; `secrets: inherit` forwards by name to the reusable workflow exactly as before. No secret value is ever echoed.
 - [ ] The SHA bump is dependabot's own reviewed 5.5.0 SHA already trusted in `test-backend.yml` — no new supply-chain surface.
 
 ### UX
+
 - [ ] N/A — no user-facing surface (CI plumbing only).
 
 ### i18n
+
 - [ ] N/A — no strings.
 
 ### Observability
+
 - [ ] The dispatched verification run's job list is the proof artifact: previously-failing jobs green, recorded in Notes with the run id.
 
 ## BDD Scenarios
 
 **Scenario: the dev deploy distributes iOS again**
+
 - **Given** the fix branch carries the destination fix
 - **When** Deploy-To-Dev is dispatched with the fix branch as its `ref` (Phase-3 unmerged-branch pattern)
 - **Then** the "Distribute iOS to TestFlight" job completes successfully (no "Found no destinations" error)
 
 **Scenario: personas reseed on deploy again**
+
 - **Given** the same dispatched run
 - **When** the "Seed Dev Personas" job executes
 - **Then** it resolves `DEV_QA_PERSONAS_PASSWORD` and completes successfully
 
 **Scenario: the pin suite enforces the fixed state**
+
 - **Given** the repo after the fix
 - **When** the express script-pin tests run
 - **Then** the seed-personas pins assert the CANONICAL secret name, the archive pins assert the explicit generic destination on BOTH deploy workflows, and the action-SHA consistency test passes
 
 **Scenario: prod carries no latent copy of the bug**
+
 - **Given** `deploy-prod.yml` after the fix
 - **When** its archive invocation is inspected (pin test)
 - **Then** it carries `-destination 'generic/platform=iOS'` identically
@@ -85,6 +97,7 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 **CI-config-only classification:** changes confined to `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `.github/workflows/seed-dev-personas.yml`, `.github/actions/setup-jdk-gradle/action.yml`, and their pin tests in `express-api/tests/scripts/` — no app, backend, or website runtime surface → device/browser gauntlet exempt per the protocol's exemption 2. Verification is the REAL dispatch (verified-needs-dispatch).
 
 **Red → Green:**
+
 - **`express-api/tests/scripts/deploy-dev-seed-personas.test.js`**: flip the three `PERSONAS_PASSWORD_DEV` expectations (lines ~93/122/129) to `DEV_QA_PERSONAS_PASSWORD` — RED against current YAML → rename in `seed-dev-personas.yml` → GREEN.
 - **`express-api/tests/scripts/ios-deploy-archive-signing.test.js`**: new `test.each(WORKFLOWS)` asserting the archive invocation (existing `archiveInvocation` helper) contains `-destination 'generic/platform=iOS'` — RED on both workflows → add the flag → GREEN.
 - **`express-api/tests/scripts/ci-action-pin-consistency.test.js`**: ALREADY RED on develop (the drift) → bump the composite action's SHA → GREEN. No test edit needed (the ratchet is the test).
@@ -123,3 +136,26 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 - 2026-07-16 ~16:5x WIB — **Root cause #2** from verification run 29478170583: "Distribute iOS to TestFlight" fails with "iOS 26.0 is not installed" (exit 70) — runner image 20260630.0213.1 ships the default Xcode WITHOUT the iOS platform runtime (the earlier EMPTY "Found no destinations" list was the same gap pre-`-destination`). Fix: `sudo xcodebuild -downloadPlatform iOS` ensure-step (`timeout-minutes: 20`) before the archive in BOTH deploy workflows. Idempotency probed empirically (Xcode 27.0 host, platform already installed): exit 0 in 0.745s — NOT the Metal-Toolchain `-importComponent` exit-70 "already installed" mode; probe output also shows the plain invocation auto-resolves the arm64 architecture variant. **Caching decision trail:** Actions cache at 9.76/10 GB (98% of the HARD per-repo quota, stale/dupe entries pending audit); platform dmg size unmeasured; arm64 `-architectureVariant` export probe NOT a fast no-op (~90s locally) — decision: ship the uncached ensure-step now (seconds when present, ~3-10 min fetch, step-capped) and revisit dmg caching under the cache-hygiene task once quota headroom + measured size are known. `code-reviewer` R1: 5 findings (3 Imp / 1 Min / 1 Nit) — ALL fixed: job envelopes 100→120 both workflows (TDD: ≥120 pin RED at 100, GREEN at 120), install-step `timeout-minutes: 20` pinned scoped to its step block (20→50 drift mutant RED), order pin scoped to the real xcodebuild archive invocation + same-job `runs-on` guard (cross-job decoy mutant RED — the R1 whole-file pin PASSED that mutant), idempotency claim replaced with probe evidence, root-cause #1/#2 comment wording disambiguated. R1.1: **ZERO FINDINGS** (reviewer independently grep-verified job boundaries, ARCHIVE_JOBS mapping, mutation soundness across both full workflows). Gates on final tree: 11 workflow pin suites 218/218; prettier + eslint `--max-warnings=0`; actionlint; tree clean at 0887bd52cd2.
 
 Reviewed-up-to: 0887bd52cd2
+
+**2026-08-14 — wrongly marked released, and corrected.** The v0.98.0
+bookkeeping sweep (#1741) flipped this story to `Done` + `released_in: v0.98.0`.
+That was wrong. The sweep derived membership from "the story ID appears in
+`git log v0.98.0`", and this story appears there via PR #1617 — whose own title
+says it is _"the drift half of the main-based fix"_. A partial fix carries the
+story ID exactly as loudly as a complete one. Reverted in #1744; the other half
+is this PR.
+
+**2026-08-14 — retargeted to develop and conflicts resolved.** The merge policy
+moved to develop-first on 2026-07-25; this PR predates it. Four conflicts,
+resolved on merit rather than by taking one side wholesale:
+
+| file                                          | taken from | why                                                                                                                                                                             |
+| --------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/actions/setup-jdk-gradle/action.yml` | develop    | v5.7.0 is a newer Dependabot pin than the branch's v5.5.0                                                                                                                       |
+| `.github/workflows/seed-dev-personas.yml`     | develop    | SHY-0136 landed a fuller description of the same secret                                                                                                                         |
+| `deploy-dev-seed-personas.test.js`            | **branch** | it is a SUPERSET — it also asserts the old `PERSONAS_PASSWORD_DEV` name is gone, and pins the `personas-password:` USAGE line so a typo'd third name cannot reach dispatch time |
+| this story                                    | branch     | its own current content                                                                                                                                                         |
+
+The test conflict is the one worth noting: taking develop's side there would
+have silently dropped two assertions and left the PR weaker than the branch it
+came from.

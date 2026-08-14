@@ -451,9 +451,15 @@ test.describe('Admin Gifts Tab', () => {
     const originalSound = await row.locator('[data-field="soundUrl"]').inputValue();
     const originalIcon = await row.locator('[data-field="iconUrl"]').inputValue();
 
-    const testAnim = 'https://example.com/anim.json';
-    const testSound = 'https://example.com/sound.mp3';
-    const testIcon = 'https://example.com/icon.png';
+    // Unique per run: a crashed run can abort between Apply and the restore
+    // below, leaving these values persisted — a fixed URL then equals the
+    // stored one on the next run, no change event marks the row modified, and
+    // the toHaveClass assertion fails deterministically until someone repairs
+    // the doc by hand (2026-07-11, after a WebKit engine crash did exactly that).
+    const runTag = Date.now();
+    const testAnim = `https://example.com/anim-${runTag}.json`;
+    const testSound = `https://example.com/sound-${runTag}.mp3`;
+    const testIcon = `https://example.com/icon-${runTag}.png`;
 
     // Set URLs
     await fillAndTrigger(page, row.locator('[data-field="animationUrl"]'), testAnim);

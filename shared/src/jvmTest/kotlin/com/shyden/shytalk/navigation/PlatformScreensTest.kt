@@ -60,18 +60,22 @@ class PlatformScreensTest {
     fun `AppSettingsScreenParams invokes callbacks`() {
         var backCalled = false
         var privacyCalled = false
+        var securityCalled = false
         var signOutCalled = false
         val params =
             AppSettingsScreenParams(
                 onNavigateBack = { backCalled = true },
                 onNavigateToPrivacyPolicy = { privacyCalled = true },
+                onNavigateToSecurity = { securityCalled = true },
                 onSignOut = { signOutCalled = true },
             )
         params.onNavigateBack()
         params.onNavigateToPrivacyPolicy()
+        params.onNavigateToSecurity()
         params.onSignOut()
         assertTrue(backCalled)
         assertTrue(privacyCalled)
+        assertTrue(securityCalled)
         assertTrue(signOutCalled)
     }
 
@@ -81,6 +85,7 @@ class PlatformScreensTest {
             AppSettingsScreenParams(
                 onNavigateBack = {},
                 onNavigateToPrivacyPolicy = {},
+                onNavigateToSecurity = {},
                 onSignOut = {},
             )
         // Default lambdas should be safe no-ops

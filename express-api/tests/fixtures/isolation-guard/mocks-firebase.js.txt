@@ -1,0 +1,8 @@
+// A pure unit test: firebase is doubled, so no emulator is ever reached.
+jest.mock('../../src/utils/firebase', () => ({ db: {}, auth: {} }));
+
+const { db } = require('../../src/utils/firebase');
+
+test('doubles only', () => {
+  expect(db).toBeDefined();
+});

@@ -1,6 +1,6 @@
 ---
 id: SHY-0102
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-15
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 public: false
 mvp: false
+released_in: v0.98.0
 ---
 
 # SHY-0102: Rooms `list` query denied — client query must pin `cohort` to satisfy the read rule

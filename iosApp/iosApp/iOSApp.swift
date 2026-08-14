@@ -96,6 +96,16 @@ struct iOSApp: App {
         let appBuildNumber = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
         let buildVersion = "\(appShortVersion) (\(appBuildNumber))"
         let deviceInfo = "\(UIDevice.current.model) · iOS \(UIDevice.current.systemVersion)"
+        // SHY-0205 — git identity injected via Info.plist's ShyTalkGit*
+        // keys (xcodebuild SHYTALK_GIT_* settings from build-debug-dev.sh
+        // / deploy-dev.yml). Unstamped builds (Xcode GUI, prod) resolve to
+        // "" and the Kotlin side coerces blank → "?". builtAt = the app
+        // binary's modification date — the closest iOS analogue to
+        // Android's PackageInfo.lastUpdateTime.
+        let gitBranch = (Bundle.main.infoDictionary?["ShyTalkGitBranch"] as? String) ?? ""
+        let gitSha = (Bundle.main.infoDictionary?["ShyTalkGitSha"] as? String) ?? ""
+        let gitDirty = ((Bundle.main.infoDictionary?["ShyTalkGitDirty"] as? String) ?? "") == "1"
+        let builtAt = Self.binaryBuiltAt()
 
         let env = AppEnvironment.resolve(variant: variant, personasPassword: personasPassword)
         KoinHelperKt.doInitKoin(
@@ -106,11 +116,35 @@ struct iOSApp: App {
             buildVersion: buildVersion,
             deviceInfo: deviceInfo,
             apiBaseUrl: env.apiBaseUrl,
-            googleWebClientId: env.googleWebClientId
+            googleWebClientId: env.googleWebClientId,
+            gitBranch: gitBranch,
+            gitSha: gitSha,
+            gitDirty: gitDirty,
+            builtAt: builtAt
+        )
+        NSLog(
+            "[ShyTalk] build identity: %@ %@ %@@%@%@ built %@",
+            env.environment, buildVersion, gitBranch.isEmpty ? "?" : gitBranch,
+            gitSha.isEmpty ? "?" : gitSha, gitDirty ? "*" : "", builtAt.isEmpty ? "?" : builtAt
         )
         setupGoogleSignIn()
         setupLiveKit()
         setupStoreKit()
+    }
+
+    /// The app binary's modification date as `MM-dd HH:mm` (device-local
+    /// zone) — the closest iOS analogue to Android's
+    /// `PackageInfo.lastUpdateTime` for the watermark's "built" field
+    /// (SHY-0205). Returns "" (Kotlin coerces to "?") if the executable
+    /// path or its attributes can't be read.
+    private static func binaryBuiltAt() -> String {
+        guard let exePath = Bundle.main.executablePath,
+              let attrs = try? FileManager.default.attributesOfItem(atPath: exePath),
+              let modified = attrs[.modificationDate] as? Date
+        else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd HH:mm"
+        return formatter.string(from: modified)
     }
 
     private func setupLiveKit() {

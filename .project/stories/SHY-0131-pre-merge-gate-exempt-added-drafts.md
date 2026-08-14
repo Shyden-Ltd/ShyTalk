@@ -1,6 +1,6 @@
 ---
 id: SHY-0131
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-19
 priority: P1
@@ -9,6 +9,7 @@ type: infra
 roadmap_ids: []
 public: false
 mvp: false
+released_in: v0.98.0
 ---
 
 # SHY-0131: Pre-Merge Gate must exempt newly-ADDED Draft story files (allow story filing)

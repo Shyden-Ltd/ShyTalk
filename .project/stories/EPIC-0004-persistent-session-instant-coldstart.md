@@ -5,7 +5,7 @@ owner: claude
 created: 2026-07-01
 priority: P1
 title: Persistent session & instant, secure cold-start across all surfaces — retire the FunFact splash
-child_shys: [SHY-0143, SHY-0144, SHY-0145, SHY-0146, SHY-0147, SHY-0148]
+child_shys: [SHY-0143, SHY-0144, SHY-0145, SHY-0146, SHY-0147, SHY-0148, SHY-0187, SHY-0189, SHY-0192]
 ---
 
 # EPIC-0004: Persistent session & instant, secure cold-start (all surfaces) + FunFact splash retirement

@@ -4,6 +4,10 @@ import {
   request as pwRequest,
   APIRequestContext,
 } from "@playwright/test";
+import {
+  deriveOwnerFirebaseUid,
+  buildRoomsCreateFailureHint,
+} from "./helpers/dev-smoke";
 
 /**
  * Dev deployment smoke tests — exercise critical user-facing API
@@ -16,10 +20,12 @@ import {
  * user via Firebase Auth REST and exercises authenticated endpoints
  * end-to-end.
  *
- * Targets:
- *   - dev: API_BASE_URL=https://dev-api.shytalk.shyden.co.uk
- *   - local: API_BASE_URL=http://localhost:3000 (run during pre-push
- *     hook; see playwright.config.ts dev-smoke project)
+ * Target: API_BASE_URL=https://dev-api.shytalk.shyden.co.uk (dev).
+ * Runs ONLY in .github/workflows/deploy-dev.yml's Dev Smoke job —
+ * sign-in is pinned to the production identitytoolkit endpoint (never
+ * the Auth emulator), and without the smoke secret bundle the whole
+ * file self-skips (test.skip below), so plain local
+ * `npx playwright test` runs never execute it.
  *
  * Failure semantics: every assertion must hold, otherwise the deploy
  * job goes red and the operator gets a failure email. There is no
@@ -499,6 +505,12 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
   // rooms-create rule even when the underlying claim *is* set.
   let livekitFreshIdToken: string;
 
+  // Cohort resolved from the fresh JWT in beforeAll. Describe-scoped
+  // because the negative-control tests below must satisfy every
+  // OTHER rooms-create clause (cohort binding included) so that the
+  // only failing clause is the one under test (ownerFirebaseUid).
+  let smokeCohort: string;
+
   test.beforeAll(async () => {
     // 1. Refresh the token via Firebase Identity secureToken endpoint.
     //    This is the same call iOS/Android clients make via
@@ -535,7 +547,19 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     const jwtPayload = JSON.parse(
       Buffer.from(jwtParts[1], "base64url").toString(),
     );
-    const cohort = jwtPayload.cohort === "adult" ? "adult" : "minor";
+    smokeCohort = jwtPayload.cohort === "adult" ? "adult" : "minor";
+
+    // SHY-0029 tightened rooms-create to require `ownerFirebaseUid`
+    // present AND equal to `request.auth.uid` (an omitted field
+    // defaults to '' → denied). Derive the uid from THIS token — the
+    // same JWT that authorizes the write below — so the payload and
+    // the credential can never desync (see helpers/dev-smoke.ts for
+    // the claim-shape rules; covered by dev-smoke-helpers.spec.ts).
+    const ownerFirebaseUid = deriveOwnerFirebaseUid(jwtPayload);
+    expect(
+      ownerFirebaseUid,
+      `smoke JWT must carry a string uid claim (user_id/sub); payload keys: ${Object.keys(jwtPayload).join(",")}`,
+    ).toBeTruthy();
 
     // 3. Create the room doc via Firestore REST as the smoke user —
     //    same path as a real iOS/Android client. The
@@ -543,6 +567,10 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     //      • request.resource.data.cohort == request.auth.token.cohort
     //      • cohort ∈ {'adult', 'minor'}
     //      • String(callerUniqueId) == request.resource.data.ownerId
+    //      • request.resource.data.ownerFirebaseUid == request.auth.uid
+    //        (SHY-0029: strict present-and-matching)
+    //    plus auth-state gates the payload can't fix: signed-in
+    //    (request.auth != null) and not banned (SHY-0150 isBanned()).
     //    If any rule check fails the response is 403.
     const docUrl =
       `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${smokeRoomName}`;
@@ -554,12 +582,14 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
       data: {
         // Firestore REST `fields` syntax — typed values per the v1
         // Document protobuf. We stamp the fields the rooms-create
-        // rule reads (cohort, ownerId) and a few minimum others that
-        // the LiveKit token gate doesn't touch but help operators
-        // identify the doc during cleanup investigations.
+        // rule reads (cohort, ownerId, ownerFirebaseUid) and a few
+        // minimum others that the LiveKit token gate doesn't touch
+        // but help operators identify the doc during cleanup
+        // investigations.
         fields: {
-          cohort: { stringValue: cohort },
+          cohort: { stringValue: smokeCohort },
           ownerId: { stringValue: String(smoke.uniqueId) },
+          ownerFirebaseUid: { stringValue: ownerFirebaseUid },
           name: { stringValue: `[SMOKE] LiveKit test room` },
           state: { stringValue: "ACTIVE" },
           createdAt: { integerValue: String(Date.now()) },
@@ -567,36 +597,117 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
       },
     });
     if (!writeRes.ok()) {
+      // Hint text lives in helpers/dev-smoke.ts and is pinned by
+      // dev-smoke-helpers.spec.ts, so a typo or dropped precondition
+      // in the diagnostic is caught locally — not on the next real
+      // rules regression.
       throw new Error(
-        `Firestore REST write to rooms/${smokeRoomName} failed ` +
-          `(${writeRes.status()}): ${await writeRes.text()}. ` +
-          `Verify FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}" matches the ` +
-          `dev Firebase project, that the smoke account has \`uniqueId\` ` +
-          `+ \`cohort\` custom claims minted (run pm-lock-check or re-sign-in ` +
-          `as the smoke user), and that the rooms-create rule still permits ` +
-          `owner=self + cohort=claim writes.`,
+        buildRoomsCreateFailureHint({
+          roomName: smokeRoomName,
+          status: writeRes.status(),
+          bodyText: await writeRes.text(),
+          projectId: FIREBASE_PROJECT_ID,
+        }),
       );
     }
   });
 
   test.afterAll(async () => {
     if (!smokeRoomName) return;
-    // Best-effort cleanup. A leftover smoke room is harmless (it has
-    // cohort=smoke-cohort, ownerId=smoke and no participants ever
-    // join it), but we delete to keep the dev project tidy across
-    // many CI runs. Use the SAME fresh token from beforeAll so the
-    // rules-layer delete check (owner-only) passes.
+    // Cleanup with teeth (SHY-0178): the delete outcome is asserted —
+    // a silent regression in the owner-only delete rule would
+    // otherwise orphan a `[SMOKE]` room per CI run with no signal.
+    // 404 is tolerated (beforeAll failed before the doc existed, or a
+    // reap won the race). Soft-assert so a real denial marks the run
+    // red without aborting the remaining teardown. Use the SAME fresh
+    // token from beforeAll so the rules-layer delete check
+    // (owner-only) passes.
     const docUrl =
       `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${smokeRoomName}`;
-    await smoke.api
-      .delete(docUrl, {
+    try {
+      const del = await smoke.api.delete(docUrl, {
         headers: {
           Authorization: `Bearer ${livekitFreshIdToken || smoke.idToken}`,
         },
-      })
-      .catch(() => {
-        /* swallow — afterAll cleanup must not fail the run */
       });
+      expect
+        .soft(
+          del.ok() || del.status() === 404,
+          `smoke-room cleanup DELETE rooms/${smokeRoomName} expected 2xx or 404, ` +
+            `got ${del.status()}: ${await del.text()}`,
+        )
+        .toBe(true);
+    } catch (e) {
+      expect.soft(false, `smoke-room cleanup DELETE threw: ${e}`).toBe(true);
+    }
+  });
+
+  // Negative controls (SHY-0178): prove the SHY-0029 ownerFirebaseUid
+  // clause is LIVE on the deployed rules by satisfying every OTHER
+  // rooms-create clause (cohort binding, cohort enum, ownerId binding)
+  // and violating only the clause under test. If a future rules change
+  // lets either write through, these go red — a revert detector for
+  // the exact drift that broke this suite. A denied create writes no
+  // doc, so there is nothing to clean up; if a regression DOES let one
+  // through, it is deleted immediately (owner-only delete matches
+  // ownerId) before the assertion fails the test.
+  async function attemptNegativeRoomCreate(
+    negName: string,
+    ownerFirebaseUidField?: { stringValue: string },
+  ) {
+    const negUrl =
+      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${negName}`;
+    const fields: Record<string, unknown> = {
+      cohort: { stringValue: smokeCohort },
+      ownerId: { stringValue: String(smoke.uniqueId) },
+      name: { stringValue: `[SMOKE] negative-control room` },
+      state: { stringValue: "ACTIVE" },
+      createdAt: { integerValue: String(Date.now()) },
+    };
+    if (ownerFirebaseUidField) fields.ownerFirebaseUid = ownerFirebaseUidField;
+    const res = await smoke.api.post(negUrl, {
+      headers: {
+        Authorization: `Bearer ${livekitFreshIdToken}`,
+        "Content-Type": "application/json",
+      },
+      data: { fields },
+    });
+    if (res.ok()) {
+      await smoke.api
+        .delete(
+          `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${negName}`,
+          { headers: { Authorization: `Bearer ${livekitFreshIdToken}` } },
+        )
+        .catch(() => {
+          /* the assertion below already fails the test; deletion is tidy-up */
+        });
+    }
+    return res;
+  }
+
+  test("rooms-create WITHOUT ownerFirebaseUid is denied (SHY-0029 clause live)", async () => {
+    const res = await attemptNegativeRoomCreate(
+      `smoke-negctl-omit-${Date.now()}`,
+    );
+    expect(
+      res.status(),
+      "omitting ownerFirebaseUid must be denied — a pass means the " +
+        "SHY-0029 present-and-matching clause was reverted",
+    ).toBe(403);
+    expect(await res.text()).toContain("PERMISSION_DENIED");
+  });
+
+  test("rooms-create with a FORGED ownerFirebaseUid is denied", async () => {
+    const res = await attemptNegativeRoomCreate(
+      `smoke-negctl-forge-${Date.now()}`,
+      { stringValue: "not-the-callers-uid" },
+    );
+    expect(
+      res.status(),
+      "a forged ownerFirebaseUid must be denied — the field is bound " +
+        "to the signed JWT uid",
+    ).toBe(403);
+    expect(await res.text()).toContain("PERMISSION_DENIED");
   });
 
   test("POST /api/livekit/token returns a signed JWT with correct grants", async () => {

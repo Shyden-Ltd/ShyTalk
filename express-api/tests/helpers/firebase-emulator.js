@@ -157,9 +157,43 @@ async function clearCollectionGroup(db, groupName, batchSize = 500) {
   return total;
 }
 
+/**
+ * Delete only the documents whose id starts with `prefix`.
+ *
+ * Jest runs test FILES in parallel workers against ONE emulator project, so a
+ * `clearCollection(db, 'deviceBindings')` in worker A deletes documents worker
+ * B seeded moments earlier. The symptom is a suite that passes serially
+ * (`--runInBand`) and fails only under parallel load — and it gets likelier as
+ * files grow. Per-worker projectId namespacing (this file's original
+ * suggestion) does NOT work here: the Auth emulator resolves tokens against
+ * the project it was started with, so a per-worker project makes every minted
+ * ID token 401.
+ *
+ * The workable isolation is per-FILE document namespacing: give each file a
+ * distinct id prefix and clear only that. (SHY-0149)
+ */
+async function clearPrefixed(db, collectionPath, prefix, batchSize = 500) {
+  const { FieldPath } = require('firebase-admin/firestore');
+  for (;;) {
+    const snap = await db
+      .collection(collectionPath)
+      .orderBy(FieldPath.documentId())
+      .startAt(prefix)
+      .endAt(prefix + '\uf8ff') // \uf8ff sorts after every normal character
+      .limit(batchSize)
+      .get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    if (snap.size < batchSize) break;
+  }
+}
+
 module.exports = {
   assertEmulatorReachable,
   clearCollection,
   clearCollectionGroup,
+  clearPrefixed,
   firestoreHostPort,
 };

@@ -80,7 +80,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             object: nil
         )
 
+        // SHY-0187: record when the app backgrounds — the App-Lock timeout is
+        // measured as time-spent-in-background (the iOS counterpart of
+        // MainActivity's ProcessLifecycleOwner onStop observer on Android).
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDidEnterBackground),
+            name: UIApplication.didEnterBackgroundNotification,
+            object: nil
+        )
+
         return true
+    }
+
+    @objc private func handleDidEnterBackground() {
+        KoinHelperKt.recordAppBackgroundedForAppLock()
     }
 
     func application(
