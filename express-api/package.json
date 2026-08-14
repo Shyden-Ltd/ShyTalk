@@ -33,15 +33,15 @@
     "livekit-server-sdk": "^2.15.5",
     "multer": "^2.2.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^9.0.5",
     "otplib": "^13.4.0",
-    "sharp": "^0.35.2"
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.7",
     "@eslint/js": "^10.0.1",
     "@firebase/rules-unit-testing": "^5.0.1",
-    "eslint": "^10.5.0",
+    "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-sonarjs": "^4.0.3",
     "globals": "^17.7.0",

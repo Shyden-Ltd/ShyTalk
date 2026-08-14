@@ -1,6 +1,6 @@
 ---
 id: SHY-0187
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-14
 priority: P1
@@ -9,6 +9,7 @@ effort: L
 roadmap_ids: []
 epic: EPIC-0004
 mvp: true
+released_in: v0.98.0
 ---
 
 # SHY-0187: Wire the PIN/biometric App-Lock into navigation (it is built + tested but never actually locks)

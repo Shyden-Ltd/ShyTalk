@@ -1,6 +1,6 @@
 ---
 id: SHY-0128
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-19
 priority: P2
@@ -8,6 +8,7 @@ effort: L
 type: infra
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1602
+released_in: v0.98.0
 mvp: false
 ---
 
