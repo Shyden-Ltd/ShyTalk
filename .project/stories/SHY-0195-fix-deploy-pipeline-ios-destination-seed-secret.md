@@ -135,7 +135,7 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 - 2026-07-16 ~14:3x WIB — PR [#1614](https://github.com/Shyden-Ltd/ShyTalk/pull/1614) (base main) opened; #1613 closed superseded. Verification run 29478170583 progress: **"Seed Dev Personas / Seed test personas (dev)" GREEN** (red in control — secret fix proven); "Distribute iOS to TestFlight" in progress; all other jobs green.
 - 2026-07-16 ~16:5x WIB — **Root cause #2** from verification run 29478170583: "Distribute iOS to TestFlight" fails with "iOS 26.0 is not installed" (exit 70) — runner image 20260630.0213.1 ships the default Xcode WITHOUT the iOS platform runtime (the earlier EMPTY "Found no destinations" list was the same gap pre-`-destination`). Fix: `sudo xcodebuild -downloadPlatform iOS` ensure-step (`timeout-minutes: 20`) before the archive in BOTH deploy workflows. Idempotency probed empirically (Xcode 27.0 host, platform already installed): exit 0 in 0.745s — NOT the Metal-Toolchain `-importComponent` exit-70 "already installed" mode; probe output also shows the plain invocation auto-resolves the arm64 architecture variant. **Caching decision trail:** Actions cache at 9.76/10 GB (98% of the HARD per-repo quota, stale/dupe entries pending audit); platform dmg size unmeasured; arm64 `-architectureVariant` export probe NOT a fast no-op (~90s locally) — decision: ship the uncached ensure-step now (seconds when present, ~3-10 min fetch, step-capped) and revisit dmg caching under the cache-hygiene task once quota headroom + measured size are known. `code-reviewer` R1: 5 findings (3 Imp / 1 Min / 1 Nit) — ALL fixed: job envelopes 100→120 both workflows (TDD: ≥120 pin RED at 100, GREEN at 120), install-step `timeout-minutes: 20` pinned scoped to its step block (20→50 drift mutant RED), order pin scoped to the real xcodebuild archive invocation + same-job `runs-on` guard (cross-job decoy mutant RED — the R1 whole-file pin PASSED that mutant), idempotency claim replaced with probe evidence, root-cause #1/#2 comment wording disambiguated. R1.1: **ZERO FINDINGS** (reviewer independently grep-verified job boundaries, ARCHIVE_JOBS mapping, mutation soundness across both full workflows). Gates on final tree: 11 workflow pin suites 218/218; prettier + eslint `--max-warnings=0`; actionlint; tree clean at 0887bd52cd2.
 
-Reviewed-up-to: 0887bd52cd2
+Reviewed-up-to: 243c3aa358a
 
 **2026-08-14 — wrongly marked released, and corrected.** The v0.98.0
 bookkeeping sweep (#1741) flipped this story to `Done` + `released_in: v0.98.0`.
@@ -159,3 +159,47 @@ resolved on merit rather than by taking one side wholesale:
 The test conflict is the one worth noting: taking develop's side there would
 have silently dropped two assertions and left the PR weaker than the branch it
 came from.
+
+**2026-08-15 00:5x WIB — pre-merge review of the full `origin/develop...HEAD`
+diff (179+/29-, 5 files).** Read every hunk. The workflow changes are
+symmetric across `deploy-dev.yml` and `deploy-prod.yml` (destination, ensure
+step, 100→120 envelope) with no third copy of the archive invocation anywhere
+in `.github/`. The tests are stronger than line pins: the order test walks back
+from the `archive` action line to its owning `xcodebuild` call and then proves
+no `runs-on:` sits between install and archive, so an install placed in an
+earlier job would still fail; the timeout test scopes to the install step's own
+`- name:` block so the pin cannot drift onto a sibling.
+
+**Cross-PR finding — merge order is NOT arbitrary.** This PR and
+[#1687](https://github.com/Shyden-Ltd/ShyTalk/pull/1687) (SHY-0269) edit the
+same test in `deploy-dev-seed-personas.test.js` with **opposite** assertions:
+
+| PR           | asserts                                                                         |
+| ------------ | ------------------------------------------------------------------------------- |
+| #1614 (here) | `callBlock` matches `…DEV_QA_PERSONAS_PASSWORD:…required: true`                 |
+| #1687        | `callBlock` does **not** match `/required: true/`, and removes it from the YAML |
+
+Both were cut from `develop` independently, so neither one's CI has ever seen
+the other's YAML — a green run on each proves nothing about the pair. **#1687's
+reasoning supersedes this one's:** a `required: true` `workflow_call` secret is
+validated _before_ the job starts, so GitHub fails the call with zero steps and
+zero logs and the reason exists only as a check-run annotation. That is exactly
+how dev persona seeding stayed broken for ~18 days across five deploys — the
+failure mode this story was filed to fix. #1687 replaces the pre-flight
+validation with an explicit in-job preflight step that fails in the run log,
+naming the secret.
+
+This also supersedes an **acceptance criterion of this story** — the Error-paths
+AC "it still fails LOUDLY at call time (the `required: true` contract is kept —
+no silent skip)". That AC assumed call-time validation _is_ loud. It is not:
+call-time failure produces zero steps and zero logs, which is the definition of
+the silent skip the AC was written to prevent. #1687 keeps the AC's intent and
+fixes its mechanism. Recorded here so a later AC audit sees a deliberate
+supersession rather than a regression.
+
+Order: **#1614 merges first**, then #1687 merges `develop` and resolves that
+hunk in its own favour, keeping this PR's two additions (`not.toContain('PERSONAS_PASSWORD_DEV')`
+and the `personas-password:` usage-line pin) — neither of which #1687 contests.
+
+Marker bumped to `243c3aa358a` (the develop merge) to record that the review
+covered the merged tree, not just the last code commit.
