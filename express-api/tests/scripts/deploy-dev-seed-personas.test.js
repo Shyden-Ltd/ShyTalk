@@ -368,4 +368,23 @@ describe('seed outcome reporting (SHY-0269 — silent failure is the real defect
     // exits early on a path that forgets to fail, cannot report success.
     expect(SEED_ACTION).toContain('PROVISION_ALL_OK');
   });
+
+  test('the completion check requires a NON-ZERO count, not merely the marker', () => {
+    // The marker alone is not proof of work: the script prints
+    // `PROVISION_ALL_OK count=` + personas.length unconditionally once the
+    // loop and social-graph write finish, so an EMPTY persona list would
+    // print `count=0` and satisfy a bare `grep PROVISION_ALL_OK`. That is
+    // the exact case the guard's own comment claims to catch ("a script
+    // that no-ops because the persona list came back empty"), so the check
+    // has to read the count.
+    //
+    // Unreachable today — `personas` is a literal array in the script — but
+    // the guard exists precisely for the day that list becomes dynamic
+    // (loaded from a file, filtered by env, fetched). Closing the door.
+    const check = SEED_ACTION.split('\n').find(
+      (l) => /grep/.test(l) && /PROVISION_ALL_OK/.test(l) && /if\s*!/.test(l),
+    );
+    expect(check).toBeDefined();
+    expect(check).toMatch(/PROVISION_ALL_OK count=\[1-9\]/);
+  });
 });
