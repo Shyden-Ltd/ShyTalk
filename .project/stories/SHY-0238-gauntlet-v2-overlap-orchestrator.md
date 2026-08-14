@@ -1,6 +1,6 @@
 ---
 id: SHY-0238
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-24
 priority: P1
@@ -8,6 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 epic: EPIC-0009
+released_in: v0.98.0
 ---
 
 # SHY-0238: Gauntlet v2 orchestrator — overlap state-independent suites with the live device matrix + live console streaming

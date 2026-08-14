@@ -1,6 +1,6 @@
 ---
 id: SHY-0205
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-18
 priority: P1
@@ -8,6 +8,7 @@ effort: L
 type: feature
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 ---
 
 # SHY-0205: Preview watermark build identity + QA context (compact, all platforms)

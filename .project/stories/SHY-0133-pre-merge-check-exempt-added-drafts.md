@@ -1,6 +1,6 @@
 ---
 id: SHY-0133
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-20
 priority: P2
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 public: false
 mvp: false
+released_in: v0.98.0
 ---
 
 # SHY-0133: Local pre-merge gate refuses added-Draft spec PRs — align with the SHY-0131 CI exemption

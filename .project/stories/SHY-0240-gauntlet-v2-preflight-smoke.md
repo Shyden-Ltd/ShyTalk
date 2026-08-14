@@ -1,6 +1,6 @@
 ---
 id: SHY-0240
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-25
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 epic: EPIC-0009
+released_in: v0.98.0
 ---
 
 # SHY-0240: Gauntlet v2 — pre-flight data-plane smoke (abort the run early if the plumbing is dead)

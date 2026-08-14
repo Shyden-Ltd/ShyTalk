@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { injectAuthState } from './helpers/roadmap-auth';
 
 /**
  * Shared header component tests.
@@ -92,25 +93,9 @@ test.describe('Shared Header — Sign In fallback on pages without login modal',
 test.describe('Shared Header — Authenticated state', () => {
   test('shows user display name when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    // Simulate authenticated state
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser', profilePhotoUrl: null },
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: {
-            user: { uid: 'test-123', displayName: 'TestUser' },
-            profile: { uniqueId: 1001, displayName: 'TestUser' },
-          },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'test-123', displayName: 'TestUser' },
+      profile: { uniqueId: 1001, displayName: 'TestUser', profilePhotoUrl: null },
     });
 
     const userInfo = page.locator('[data-testid="header-user-info"]');
@@ -120,24 +105,16 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('shows sign out option when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'test-123' }, profile: { uniqueId: 1001, displayName: 'TestUser' } },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'test-123', displayName: 'TestUser' },
+      profile: { uniqueId: 1001, displayName: 'TestUser' },
     });
 
-    // Click user info area to open dropdown
+    // Click user info area to open dropdown. This is the click that hung for
+    // the full 20s budget on CI — `render()` rebuilds the whole header, so
+    // the page's own sign-in resolution landing mid-click detached the
+    // element out from under Playwright: "element was detached from the DOM,
+    // retrying", forever. Injecting after that resolution removes the race.
     const userInfo = page.locator('[data-testid="header-user-info"]');
     await userInfo.waitFor({ timeout: 5_000 });
     await userInfo.click();
@@ -148,26 +125,18 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('Sign In button hidden when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'test-123' }, profile: { uniqueId: 1001, displayName: 'TestUser' } },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'test-123', displayName: 'TestUser' },
+      profile: { uniqueId: 1001, displayName: 'TestUser' },
     });
 
-    await page.waitForTimeout(1000);
+    // The 1000ms sleep that used to sit here did the opposite of what it was
+    // for: it held the test open long enough for the page's own sign-in
+    // resolution to land and put the Sign In button BACK, so the wait
+    // guaranteed the failure it was meant to prevent. `toHaveCount` retries
+    // against a settled page instead of betting on a duration.
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
-    expect(await signInBtn.count()).toBe(0);
+    await expect(signInBtn).toHaveCount(0);
   });
 });
 
@@ -182,23 +151,10 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     page,
   }) => {
     await page.goto('/roadmap.html');
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'race-789',
-          displayName: 'RacingUser',
-          photoURL: null,
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        // The exact "Firebase auth resolved, ShyTalk profile fetch in-flight" state.
-        profile: null,
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'race-789', displayName: 'RacingUser' }, profile: null },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'race-789', displayName: 'RacingUser', photoURL: null },
+      // The exact "Firebase auth resolved, ShyTalk profile fetch in-flight" state.
+      profile: null,
     });
 
     // The header must show user info (falling back to currentUser.displayName
@@ -208,7 +164,7 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     await expect(userInfo).toContainText('RacingUser');
     // Sign In button must NOT appear.
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
-    expect(await signInBtn.count()).toBe(0);
+    await expect(signInBtn).toHaveCount(0);
   });
 
   test('shows Sign In when Firebase auth has no ShyTalk account (profile === false)', async ({
@@ -220,28 +176,15 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     // Pins the asymmetry between `profile === null` (loading) and
     // `profile === false` (resolved, no account).
     await page.goto('/roadmap.html');
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'noaccount-001',
-          displayName: 'NoAccountUser',
-          photoURL: null,
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: false,
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'noaccount-001' }, profile: false },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'noaccount-001', displayName: 'NoAccountUser', photoURL: null },
+      profile: false,
     });
 
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
     await expect(signInBtn).toBeVisible({ timeout: 5_000 });
     const userInfo = page.locator('[data-testid="header-user-info"]');
-    expect(await userInfo.count()).toBe(0);
+    await expect(userInfo).toHaveCount(0);
   });
 });
 
