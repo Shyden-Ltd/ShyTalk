@@ -19,7 +19,9 @@ const { spawnSync } = require('node:child_process');
 const SCRIPT = path.resolve(__dirname, '../../scripts/gauntlet/gauntlet-v2.sh');
 
 // Run a bash body with the v2 helpers sourced (lib mode) + a fresh RUN_DIR.
-function runLib(body, timeout = 20000) {
+// `env` entries are merged into the child's environment — see probeEnv below
+// for why any process tag MUST arrive that way and never inside `body`.
+function runLib(body, { timeout = 20000, env = {} } = {}) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shy0238-'));
   const script = `
     set -uo pipefail
@@ -29,8 +31,33 @@ function runLib(body, timeout = 20000) {
     source "${SCRIPT}" 2>/dev/null
     ${body}
   `;
-  const result = spawnSync('/bin/bash', ['-c', script], { encoding: 'utf8', timeout });
+  const result = spawnSync('/bin/bash', ['-c', script], {
+    encoding: 'utf8',
+    timeout,
+    env: { ...process.env, ...env },
+  });
   return { result, runDir };
+}
+
+// SHY-0243 — process tags reach the script through the ENVIRONMENT, never
+// interpolated into `body`. On Linux the `bash -c` script text IS the parent's
+// /proc/<pid>/cmdline, so an inlined tag makes `pgrep -f <tag>` match the
+// parent bash itself: PRE=ALIVE becomes a tautology and POST=DEAD becomes
+// unreachable. macOS does not expose the `-c` body to `pgrep -f`, which is why
+// the inlined form passed locally and had never once been green on CI.
+//
+// SHY_NEG_TAG is a negative control that is never started. Every liveness
+// assertion pairs with `NEG=MISSING`, so if the probe ever starts self-matching
+// again the tests fail by name instead of quietly going green.
+// The counter is zero-padded so no tag can ever be a PREFIX of another
+// (`-1` would match `-10` under pgrep's substring semantics).
+let tagSeq = 0;
+function probeEnv() {
+  const n = String(++tagSeq).padStart(3, '0');
+  return {
+    SHY_LIVE_TAG: `shy0243-live-${process.pid}-${n}`,
+    SHY_NEG_TAG: `shy0243-neg-${process.pid}-${n}`,
+  };
 }
 
 describe('start_overlapped / wait_overlapped — real execution (SHY-0238)', () => {
@@ -81,16 +108,20 @@ describe('reap_overlapped — real teardown (SHY-0238)', () => {
     // Start a long stub, wait until pgrep can see it, reap, then assert it is
     // gone via `pgrep` — NOT kill(pid,0): a killed child would zombie and
     // kill(pid,0) would falsely report it alive (reference-node-spawn-zombie-...).
-    const tag = `shy0238-reap-${process.pid}`;
-    const { result } = runLib(`
-      start_overlapped longrun bash -c 'exec -a ${tag} sleep 30'
-      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 && break; sleep 0.05; done
-      pgrep -f ${tag} >/dev/null 2>&1 && echo "PRE=ALIVE" || echo "PRE=MISSING"
+    const { result } = runLib(
+      `
+      start_overlapped longrun bash -c 'exec -a "$SHY_LIVE_TAG" sleep 30'
+      for _ in $(seq 1 60); do pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && break; sleep 0.05; done
+      pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && echo "PRE=ALIVE" || echo "PRE=MISSING"
+      pgrep -f "$SHY_NEG_TAG" >/dev/null 2>&1 && echo "NEG=ALIVE" || echo "NEG=MISSING"
       reap_overlapped
-      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 || break; sleep 0.05; done
-      pgrep -f ${tag} >/dev/null 2>&1 && echo "POST=ALIVE" || echo "POST=DEAD"
-      pkill -f ${tag} 2>/dev/null || true
-    `);
+      for _ in $(seq 1 60); do pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 || break; sleep 0.05; done
+      pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && echo "POST=ALIVE" || echo "POST=DEAD"
+      pkill -f "$SHY_LIVE_TAG" 2>/dev/null || true
+    `,
+      { env: probeEnv() },
+    );
+    expect(result.stdout).toMatch(/NEG=MISSING/); // probe is not self-matching
     expect(result.stdout).toMatch(/PRE=ALIVE/); // fixture really started
     expect(result.stdout).toMatch(/POST=DEAD/); // reap actually killed the tree
   });
@@ -99,17 +130,21 @@ describe('reap_overlapped — real teardown (SHY-0238)', () => {
     // The real tail is `( tail -F | awk ) &`, so TAIL_PID is the subshell — a
     // bare `kill $TAIL_PID` orphans the inner `tail -F` (runs forever). The
     // fixture mirrors that shape (long stub is a GRANDCHILD of TAIL_PID).
-    const tag = `shy0238-tail-${process.pid}`;
-    const { result } = runLib(`
-      ( bash -c 'exec -a ${tag} sleep 30' | cat ) &
+    const { result } = runLib(
+      `
+      ( bash -c 'exec -a "$SHY_LIVE_TAG" sleep 30' | cat ) &
       TAIL_PID=$!
-      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 && break; sleep 0.05; done
-      pgrep -f ${tag} >/dev/null 2>&1 && echo "PRE=ALIVE" || echo "PRE=MISSING"
+      for _ in $(seq 1 60); do pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && break; sleep 0.05; done
+      pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && echo "PRE=ALIVE" || echo "PRE=MISSING"
+      pgrep -f "$SHY_NEG_TAG" >/dev/null 2>&1 && echo "NEG=ALIVE" || echo "NEG=MISSING"
       reap_overlapped
-      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 || break; sleep 0.05; done
-      pgrep -f ${tag} >/dev/null 2>&1 && echo "TAIL=ALIVE" || echo "TAIL=DEAD"
-      pkill -f ${tag} 2>/dev/null || true
-    `);
+      for _ in $(seq 1 60); do pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 || break; sleep 0.05; done
+      pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && echo "TAIL=ALIVE" || echo "TAIL=DEAD"
+      pkill -f "$SHY_LIVE_TAG" 2>/dev/null || true
+    `,
+      { env: probeEnv() },
+    );
+    expect(result.stdout).toMatch(/NEG=MISSING/);
     expect(result.stdout).toMatch(/PRE=ALIVE/);
     expect(result.stdout).toMatch(/TAIL=DEAD/);
   });
@@ -119,15 +154,21 @@ describe('on_signal — a signal actually ABORTS the run (SHY-0238)', () => {
   test('reaps the overlapped suites AND exits with the given code', () => {
     // A bare INT/TERM trap that only reaps would RESUME the run; on_signal must
     // exit. Run it in a subshell so its exit doesn't kill the test harness.
-    const tag = `shy0238-sig-${process.pid}`;
-    const { result } = runLib(`
-      start_overlapped longrun bash -c 'exec -a ${tag} sleep 30'
-      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 && break; sleep 0.05; done
+    const { result } = runLib(
+      `
+      start_overlapped longrun bash -c 'exec -a "$SHY_LIVE_TAG" sleep 30'
+      for _ in $(seq 1 60); do pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && break; sleep 0.05; done
+      pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && echo "PRE=ALIVE" || echo "PRE=MISSING"
+      pgrep -f "$SHY_NEG_TAG" >/dev/null 2>&1 && echo "NEG=ALIVE" || echo "NEG=MISSING"
       ( on_signal 130 ); echo "RC=$?"
-      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 || break; sleep 0.05; done
-      pgrep -f ${tag} >/dev/null 2>&1 && echo "SUITE=ALIVE" || echo "SUITE=DEAD"
-      pkill -f ${tag} 2>/dev/null || true
-    `);
+      for _ in $(seq 1 60); do pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 || break; sleep 0.05; done
+      pgrep -f "$SHY_LIVE_TAG" >/dev/null 2>&1 && echo "SUITE=ALIVE" || echo "SUITE=DEAD"
+      pkill -f "$SHY_LIVE_TAG" 2>/dev/null || true
+    `,
+      { env: probeEnv() },
+    );
+    expect(result.stdout).toMatch(/NEG=MISSING/); // probe is not self-matching
+    expect(result.stdout).toMatch(/PRE=ALIVE/); // fixture really started
     expect(result.stdout).toMatch(/RC=130/); // exited with 128+SIGINT
     expect(result.stdout).toMatch(/SUITE=DEAD/); // and reaped
   });
@@ -138,6 +179,24 @@ describe('wait_overlapped — empty-array safety (SHY-0238)', () => {
     const { result } = runLib(`
       set -u
       wait_overlapped
+      echo "RC=$?"
+    `);
+    expect(result.stdout).toMatch(/RC=0/); // no "unbound variable" abort
+  });
+});
+
+describe('reap_overlapped — empty-state safety (SHY-0243)', () => {
+  // Parity with wait_overlapped above. reap_overlapped carries the SAME two
+  // bash-3.2 guards — `${OVERLAP_PIDS[@]+…}` for the empty array and
+  // `${TAIL_PID:-}` for the never-set scalar — but nothing pinned them, so
+  // either could be dropped and only the operator's Mac would find out.
+  // macOS ships bash 3.2, where `"${arr[@]}"` on an empty array is an
+  // unbound-variable abort under `set -u`; bash 4.4+ (Linux CI) is not, so
+  // a Linux-only probe would stay green through the regression.
+  test('a call with nothing registered returns cleanly under set -u (bash-3.2)', () => {
+    const { result } = runLib(`
+      set -u
+      reap_overlapped
       echo "RC=$?"
     `);
     expect(result.stdout).toMatch(/RC=0/); // no "unbound variable" abort

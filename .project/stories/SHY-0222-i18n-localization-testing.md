@@ -1,6 +1,6 @@
 ---
 id: SHY-0222
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-19
 priority: P0
@@ -160,3 +160,5 @@ Touches app strings (`shared/**`) + web (`public/**`) + email locales → FULL P
 ## Notes
 
 - 2026-07-19 — Created as an EPIC-0008 child (operator: i18n depth candidate). Governs the currently-active 4-locale set ([[project-locales-reduced-to-four]]) via a single source `active-locales.mjs` so it tracks SHY-0194's full-locale decision without a rewrite. Highest-value checks: placeholder safety (a runtime crash class) + missing-key parity + no-hardcoded + pseudo-loc truncation. RTL-ready for when `ar` rejoins. Real-only: parses real resource files, renders real UI.
+
+- 2026-08-06 — **CANCELLED, superseded by EPIC-0010.** The operator replaced every language mechanism with the shyden.co.uk model (real per-locale URLs on the web; device-locale in the app) and narrowed the set to five MVP languages. See EPIC-0010's Notes for the per-ticket disposition table. Specifically: key parity and placeholder safety become build-time guarantees; pseudo-localisation and RTL are moot once the RTL locales are gone.

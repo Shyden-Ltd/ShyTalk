@@ -34,14 +34,14 @@ Three separate defects, and the least interesting one is the trigger:
    `DEV_QA_PERSONAS_PASSWORD`; four other workflows moved with it, this one did
    not.
 2. **The silence — the real defect.** The secret was declared `required: true`
-   on `workflow_call`, so GitHub failed the call during *secrets evaluation*,
+   on `workflow_call`, so GitHub failed the call during _secrets evaluation_,
    before the job had any steps. The result is a failed job with **zero steps
    and zero logs**: `gh run view --log-failed` returns nothing. The reason
    ("Secret PERSONAS_PASSWORD_DEV is required, but not provided while calling")
    existed only as a check-run annotation, which nothing surfaces.
 3. **Nothing was watching.** The seed result sat among seven jobs on a run that
    still deployed the backend, web, APK and TestFlight build. Nothing summarised
-   it, and a *skipped* seed produced a fully green run.
+   it, and a _skipped_ seed produced a fully green run.
 
 And the test that should have caught (1) instead **pinned it**: it asserted the
 workflow contained the literal `PERSONAS_PASSWORD_DEV:` and its comment claimed
@@ -51,56 +51,68 @@ string has no ground truth.
 ## Acceptance Criteria
 
 ### Happy path
+
 - [ ] A dev deploy refreshes the seeded personas and says so in the run summary
 
 ### Error paths
+
 - [ ] A missing secret fails in a step, in the run log, naming the secret
 - [ ] A seed that cannot run makes the consequence explicit: personas are stale
 - [ ] A skipped seed is reported as skipped, not left to look like success
 
 ### Edge cases
+
 - [ ] A provisioning script that exits 0 without completing is treated as failure
 - [ ] A secret that is deliberately absent because it has a fallback is not
       reported as drift
 
 ### Performance
+
 - [ ] N/A — the preflight is a shell test on two variables and the report job is
       a single `echo`; both are seconds against a multi-minute deploy.
 
 ### Security
+
 - [ ] Neither the preflight nor the summary ever prints a secret VALUE — only
       names of secrets that are missing
 - [ ] The service-account credential is still wiped by the existing `trap`
 
 ### UX
+
 - [ ] The operator learns that dev data is stale from the run page, without
       opening a job or reading annotations
 
 ### i18n
+
 - [ ] N/A — CI operator output, English-only by design.
 
 ### Observability
+
 - [ ] Every referenced secret name is checked against a committed inventory, so
       a rename cannot silently disable a job again
 
 ## BDD Scenarios
 
 **Scenario: A missing secret explains itself in the log**
+
 - **Given** a secret the seeding needs is not configured
 - **When** a dev deploy runs the seeding step
 - **Then** the run fails naming the missing secret and says personas are stale
 
 **Scenario: A skipped seeding is reported, not hidden**
+
 - **Given** a dev deploy where the seeding does not run
 - **When** the deploy finishes
 - **Then** the summary states personas were not refreshed
 
 **Scenario: Provisioning that does not complete is a failure**
+
 - **Given** the provisioning finishes without confirming it seeded anyone
 - **When** the seeding step checks the result
 - **Then** the step fails rather than reporting success
 
 **Scenario: A renamed secret cannot silently disable a job**
+
 - **Given** a workflow referring to a secret name that is not in the inventory
 - **When** the test suite runs
 - **Then** it fails naming the workflow and the unknown secret
@@ -182,3 +194,22 @@ time since 2026-07-16.
   configured secret — `SMOKE_FIREBASE_API_KEY` — which turned out to be a
   deliberate `|| DEV_FIREBASE_API_KEY` override with its own preflight. Modelled
   as `optional:` rather than silenced.
+
+**2026-08-14 — retargeted to develop, conflicts resolved.** The merge policy
+moved to develop-first on 2026-07-25; this PR predates it. Five conflicts,
+resolved on merit:
+
+| file / hunk                                  | taken      | why                                                                                                                                                                                                                      |
+| -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `required:` on the two workflow_call secrets | **branch** | `required: false` is the POINT of this story — a `required: true` secret is validated before any step runs, so a missing one fails with no logs. The explicit pre-flight check replaces that with an actionable message. |
+| the secret's `description:`                  | develop    | SHY-0136 landed fuller wording; it does not conflict with the design                                                                                                                                                     |
+| `actions/checkout` pin                       | develop    | v7.0.1 is newer than the branch's v7.0.0                                                                                                                                                                                 |
+| the `known-secrets.yml` comment              | branch     | it references a file this PR adds                                                                                                                                                                                        |
+| `deploy-dev-seed-personas.test.js`           | **branch** | develop's copy asserts _"Both must be required"_ — the exact behaviour this story deliberately changes. Taking develop's side would have left a test contradicting the workflow.                                         |
+
+The test conflict is worth recording: two PRs held directly opposite
+assertions about the same line. Resolving the workflow without moving the test
+would have merged a self-contradicting branch.
+
+Verified after resolution: 24 tests pass in
+`deploy-dev-seed-personas.test.js`, and actionlint is clean on the workflow.

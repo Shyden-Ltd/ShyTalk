@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
@@ -107,6 +107,18 @@ jobs:
 
       - name: Third-party GitHub Actions are SHA-pinned (supply-chain)
         run: bash scripts/check-action-shas.sh
+
+      # SHY-0284. Sibling of the check above: that one enforces that every
+      # action IS SHA-pinned; this one enforces that an action repo is pinned
+      # to exactly ONE SHA across .github/workflows/** AND .github/actions/**.
+      # It belongs HERE, not in the Express Jest suite where the invariant used
+      # to live alone: `test-backend` is gated on `backend_changed`, so a
+      # workflow-only PR — the exact shape of the partial Dependabot bump that
+      # causes this drift — skipped it. setup-node (6.4.0 vs 7.0.0) and
+      # setup-java (5.6.0 vs 5.7.0) both sat split on main for two days. A
+      # guard must run in the same job class as the change it guards.
+      - name: One SHA per GitHub Action repo (partial-bump drift)
+        run: node scripts/check-action-pin-consistency.js
 
       - name: HTML data-i18n keys all have JS translation definitions
         run: bash scripts/check-orphan-i18n-keys.sh

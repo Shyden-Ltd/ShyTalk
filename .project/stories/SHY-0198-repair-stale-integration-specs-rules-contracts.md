@@ -1,12 +1,13 @@
 ---
 id: SHY-0198
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-16
 priority: P1
 effort: XS
 type: bug
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0198: Repair stale integration specs — deviceBindings deny-all + ownerFirebaseUid strict create

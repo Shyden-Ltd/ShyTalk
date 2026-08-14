@@ -159,17 +159,52 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     });
   }
 
+  /**
+   * What `cmd_stop` actually said, for an assertion message.
+   *
+   * `expect(r.status).toBe(0)` on its own reports "Expected: 0, Received: 1"
+   * and nothing else — the script's own stdout/stderr, which say WHY it
+   * refused, are captured by spawnSync and thrown away. That is exactly the
+   * defect SHY-0277 fixed for journeys ("make a failing scenario say why it
+   * failed"), and it cost a full CI round trip here: a failure reproducible
+   * only on the Linux runner, reported as a bare 1.
+   *
+   * Attached to every status assertion below so a CI-only failure arrives
+   * diagnosable the first time.
+   *
+   * Thrown, not passed as a second argument to `expect`: the two-argument
+   * hint form is VITEST's. This suite is Jest, where the extra argument is
+   * not a message and quietly breaks the assertion — three tests that had
+   * been passing went red the moment it was added, which is how that was
+   * caught.
+   */
+  function expectStatus(r, expected) {
+    if (r.status !== expected) throw new Error(why(r));
+    expect(r.status).toBe(expected);
+  }
+
+  function why(r) {
+    const trim = (t) => (t || '').trim().slice(0, 2000) || '(empty)';
+    return [
+      `cmd_stop exited ${r.status}` +
+        (r.signal ? ` (signal ${r.signal})` : '') +
+        (r.error ? ` (spawn error: ${r.error.message})` : ''),
+      `--- stdout ---\n${trim(r.stdout)}`,
+      `--- stderr ---\n${trim(r.stderr)}`,
+    ].join('\n');
+  }
+
   test('clean run (dead pid, no live runners) → exit 0 and reports "0 runners remain"', () => {
     makeRun('clean-xyz', deadPid());
     const r = runStop('clean-xyz');
-    expect(r.status).toBe(0);
+    expectStatus(r, 0);
     expect(r.stdout).toMatch(/0 runners remain/);
   });
 
   test('missing pid file → dies with a clear message (exit 1)', () => {
     makeRun('nopid'); // dir but no pid file
     const r = runStop('nopid');
-    expect(r.status).toBe(1);
+    expectStatus(r, 1);
     expect(r.stderr).toMatch(/no pid file/);
   });
 
@@ -193,7 +228,7 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     makeRun(id, deadPid());
     const r = runStop(id);
 
-    expect(r.status).toBe(0);
+    expectStatus(r, 0);
     expect(r.stdout).toMatch(/0 runners remain/);
     // Liveness via pgrep, NOT process.kill(pid,0): cmd_stop kills the fixture,
     // but Node (its parent) can't reap the zombie while our synchronous calls
