@@ -44,8 +44,12 @@ kotlin {
         }
     }
 
+    // iosX64 (Intel simulator) dropped: Coil 3.5.0 no longer publishes an
+    // iosX64 artifact, and both this machine and CI are arm64. Real devices
+    // use iosArm64; Apple-Silicon simulators use iosSimulatorArm64. This also
+    // removes the :shared:compileKotlinIosX64 and :shared:iosX64Test tasks —
+    // K/N tests now run via :shared:iosSimulatorArm64Test.
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64(),
     ).forEach { target ->
@@ -126,4 +130,22 @@ compose.resources {
     publicResClass = true
     packageOfResClass = "com.shyden.shytalk.resources"
     generateResClass = always
+}
+
+// SHY-0187: AppLockWiringPinTest (jvmTest) reads these navigation sources
+// directly off disk. The app-module + iosMain files are NOT inputs to the
+// jvmTest compilation, so without declaring them here Gradle would treat
+// jvmTest as up-to-date when only they change and skip the pin — leaving the
+// "built but never wired" regression unguarded.
+tasks.named("jvmTest") {
+    inputs
+        .files(
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/MainActivity.kt"),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/navigation/NavGraph.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/MainViewController.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/navigation/IosPlatformScreens.kt"),
+            rootProject.layout.projectDirectory.file("iosApp/iosApp/AppDelegate.swift"),
+        ).withPropertyName("appLockWiringPinnedSources")
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 }

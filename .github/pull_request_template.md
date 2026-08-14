@@ -4,6 +4,14 @@
 ## Test plan
 <!-- How to verify this works -->
 
+## Pre-merge gate (SHY-0127)
+<!-- Run `scripts/pre-merge-check.sh <PR#>` before judgment-merge — it refuses unless these are satisfied. -->
+- [ ] Story flipped to **In Review** (the CI **Pre-Merge Gate** check enforces this)
+- [ ] Re-reviewed since the last code-review — `Reviewed-up-to: <sha>` in the story `## Notes` is current
+- [ ] Definition of Done met
+- [ ] Dev-verified on real devices, or N/A: <reason>
+- [ ] Backend change? the FULL app + web + device gauntlet ran (CI forces the full matrix on `backend_changed`)
+
 ---
 
 <details>

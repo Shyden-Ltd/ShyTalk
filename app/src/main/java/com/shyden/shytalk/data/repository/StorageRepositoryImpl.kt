@@ -70,7 +70,7 @@ class StorageRepositoryImpl(
                 if (!it.isSuccessful) {
                     return Resource.Error("Upload failed: HTTP ${it.code}")
                 }
-                val json = JSONObject(it.body?.string() ?: "{}")
+                val json = JSONObject(it.body.string())
                 val url = json.optString("url", "")
                 if (url.isEmpty()) return Resource.Error("Upload response missing URL")
                 Resource.Success(url)

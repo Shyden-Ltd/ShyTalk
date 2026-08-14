@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Carteira · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Violações contínuas podem resultar na suspensão da sua conta.</string>
+    <string name="warning_acknowledge_failed">Não foi possível remover o seu aviso. Verifique a sua ligação e tente novamente.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Sua conta foi revisada e um aviso foi emitido.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1500,10 +1501,10 @@
     <string name="security_reset_pin">Redefinir PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifique sua identidade para definir um novo PIN</string>
+    <string name="security_set_pin">Definir PIN</string>
+    <string name="security_set_pin_desc">Proteja o aplicativo com um PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Contas vinculadas</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Gerenciar métodos de login</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Faça login com e-mail</string>

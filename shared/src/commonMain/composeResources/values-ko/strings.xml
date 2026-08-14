@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">지갑 · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">계속해서 위반할 경우 계정이 정지될 수 있습니다.</string>
+    <string name="warning_acknowledge_failed">경고를 해제하지 못했습니다. 연결 상태를 확인한 후 다시 시도해 주세요.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">귀하의 계정이 검토되었으며 경고가 발령되었습니다.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1500,10 +1501,10 @@
     <string name="security_reset_pin">PIN 재설정</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">새 PIN을 설정하려면 신원을 확인하세요.</string>
+    <string name="security_set_pin">PIN 설정</string>
+    <string name="security_set_pin_desc">PIN으로 앱을 보호하세요.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">연결된 계정</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">로그인 방법 관리</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">이메일로 로그인</string>

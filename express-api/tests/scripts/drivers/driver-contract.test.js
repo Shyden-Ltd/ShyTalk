@@ -40,6 +40,7 @@ const HELPER_FILES = new Set([
   'android-cdp-helpers.js',
   'ios-driver-loader.js',
   'driver-screenshot-helper.js',
+  'ui-dump-retry.js', // SHY-0154: pure retry helper for androidUiDump — not a driver
 ]);
 
 function discoverDrivers() {

@@ -73,7 +73,7 @@ jobs:
       # input here, because a) for branch refs we need `origin/<branch>`
       # not the raw name, and b) the working tree contents don't matter
       # at this step — only git history does.
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -178,7 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -248,7 +248,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -355,7 +355,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -449,7 +449,7 @@ jobs:
     # the real cause of the apparent slowness, not insufficient minutes).
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -496,7 +496,7 @@ jobs:
       # can hang past timeout-minutes when GitHub's cache backend is slow.
       - name: Restore Kotlin/Native cache (~/.konan)
         id: konan-cache-restore
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -652,7 +652,7 @@ jobs:
         if: always() && steps.konan-cache-restore.outputs.cache-hit != 'true'
         timeout-minutes: 10
         continue-on-error: true
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.konan
           key: ${{ steps.konan-cache-restore.outputs.cache-primary-key }}
@@ -769,7 +769,7 @@ jobs:
       # when deploying a tag cut BEFORE this script existed (run 27388236740:
       # deploying v0.97.12 → "No such file", exit 127). The deployed APP under
       # test is the downloaded APK artifact, not this checked-out tree.
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download debug APK
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -784,7 +784,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Boot emulator and verify app launches
-        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a # v2.37.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 33
           target: google_apis
@@ -834,7 +834,7 @@ jobs:
     # for the boot+launch verification even on the cold-cache worst case.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -852,7 +852,7 @@ jobs:
       # can hang past timeout-minutes.
       - name: Restore Kotlin/Native cache (~/.konan)
         id: konan-cache-restore
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -950,7 +950,7 @@ jobs:
         if: always() && steps.konan-cache-restore.outputs.cache-hit != 'true'
         timeout-minutes: 10
         continue-on-error: true
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.konan
           key: ${{ steps.konan-cache-restore.outputs.cache-primary-key }}
@@ -973,7 +973,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Create critical issue
         env:

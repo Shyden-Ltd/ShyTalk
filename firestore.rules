@@ -39,6 +39,29 @@ service cloud.firestore {
       return request.auth.token.get('admin', false) == true;
     }
 
+    // ── Helper: ban gate (SHY-0150, EPIC-0005) ───────────────────
+    // A server-minted `banned` custom claim (set by the Express
+    // `syncBannedClaim` chokepoint on ban/unban/suspend and lazily by
+    // authMiddleware when a ban verdict meets a stale token) denies
+    // create/update/delete on every user-writable collection below.
+    // READS are deliberately unchanged — the ban screen still renders
+    // the caller's own profile/config. TOKEN-ONLY on purpose: no
+    // `get()`, so a denied write costs zero document reads and the
+    // gate works even when no user doc exists. `== true` (rules do
+    // not coerce): only the server-minted boolean blocks; the ≤1h
+    // stale-token window is bounded by refresh-token revocation and
+    // backstopped per-request by the SHY-0149 API gate. `banned`
+    // OUTRANKS `admin` on every client-writable rule (user-write AND
+    // admin-write surfaces) — the admin console mutates via the Admin
+    // SDK (bypasses rules), never client-side.
+    // An UNLINKED network ban has no enumerable target at ban time,
+    // so its claim arrives via the lazy middleware path when the
+    // banned IP next calls the API (structural limit, documented in
+    // express-api/src/utils/banned-claim.js).
+    function isBanned() {
+      return request.auth.token.get('banned', false) == true;
+    }
+
     // ── Users (keyed by uniqueId, not Firebase UID) ──────────────
     match /users/{uniqueId} {
       // Authed users can read profiles in their own cohort. Own-doc
@@ -55,6 +78,7 @@ service cloud.firestore {
       // Owner can update non-economy fields — verified via firebaseUid field
       allow create: if false; // API only (atomic uniqueId + identity map)
       allow update: if request.auth != null
+        && !isBanned()
         && resource.data.firebaseUid == request.auth.uid
         && !request.resource.data.diff(resource.data).affectedKeys()
             .hasAny(['shyCoins', 'shyBeans', 'isSuperShy', 'superShyExpiry', 'superShyTier',
@@ -67,6 +91,11 @@ service cloud.firestore {
                      'gcsScore', 'gcs_score', 'gcs_last_deduction_at',
                      'warningCount', 'warning_count', 'hasActiveWarning', 'has_active_warning',
                      'hasNewWarning', 'warningReason', 'warning_reason', 'warningIssuedAt',
+                     // Acknowledgement audit — written server-side only (SHY-0097
+                     // acknowledge endpoint, Admin SDK). A client must not forge an
+                     // acknowledgement (would falsify the moderation record).
+                     'warningAcknowledged', 'warning_acknowledged',
+                     'warningAcknowledgedAt', 'warning_acknowledged_at',
                      'suspensionStartDate', 'suspension_start_date', 'suspensionCanAppeal',
                      'suspendedBy', 'is_suspended', 'suspensionReason', 'suspension_reason',
                      'preSuspensionDisplayName', 'preSuspensionProfilePhotoUrl',
@@ -152,6 +181,7 @@ service cloud.firestore {
           && callerUniqueId() == int(uniqueId)
           && cohortMatchesCaller();
         allow create: if request.auth != null
+          && !isBanned()
           && string(callerUniqueId()) == visitorId;
         allow update, delete: if false;
       }
@@ -205,23 +235,24 @@ service cloud.firestore {
       // ownerLeft signals against this field; binding it to the
       // signed JWT uid here makes it unspoofable.
       //
-      // The `.get(field, request.auth.uid)` default is deliberate —
-      // legacy app versions (pre-cron-elim) don't write the field
-      // and we cannot break their createRoom path until Play Store
-      // and App Store rollout completes. Field-missing → default
-      // matches itself → passes; field-present-and-matching →
-      // passes; field-present-and-forged → fails. Forgery is closed
-      // in both branches; the orchestrator's legacy-fallback path
-      // handles rooms that arrive without the field. Follow-up PR
-      // (after rollout) tightens this to a strict
-      // `get('ownerFirebaseUid', '') == request.auth.uid`.
+      // SHY-0029 (2026-07-08) — TIGHTENED to strict present-and-matching. The
+      // default is '' (NOT request.auth.uid): a create that omits the field ->
+      // '' != auth.uid -> DENIED. Previously the request.auth.uid default let a
+      // field-missing create pass (default matched itself), producing a room
+      // with no ownerFirebaseUid and silently breaking the owner-left RTDB
+      // attestation that reads room.ownerFirebaseUid. Removed the legacy
+      // pre-cron-elim shim: safe now — pre-public (no legacy clients in the
+      // wild) and the current app always writes the field (HomeViewModel ->
+      // createRoom). Outcomes: absent -> deny; empty -> deny;
+      // present-and-forged -> deny; present-and-matching -> allow.
       allow create: if request.auth != null
+        && !isBanned()
         && request.resource.data.get('cohort', '')
             == request.auth.token.get('cohort', 'minor')
         && (request.resource.data.get('cohort', '') == 'adult'
             || request.resource.data.get('cohort', '') == 'minor')
         && string(callerUniqueId()) == request.resource.data.ownerId
-        && request.resource.data.get('ownerFirebaseUid', request.auth.uid)
+        && request.resource.data.get('ownerFirebaseUid', '')
             == request.auth.uid;
 
       // POST-LOCKDOWN (PR #858 server-authz cutover, this PR): client-side
@@ -260,6 +291,7 @@ service cloud.firestore {
       allow update: if false;
       // Delete: only owner
       allow delete: if request.auth != null
+        && !isBanned()
         && string(callerUniqueId()) == resource.data.ownerId;
 
       // Room chat messages — same-cohort read (must mirror the parent
@@ -275,9 +307,11 @@ service cloud.firestore {
                  == get(/databases/$(database)/documents/rooms/$(roomId))
                     .data.get('cohort', 'minor'));
         allow create: if request.auth != null
+          && !isBanned()
           && (string(callerUniqueId()) == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/rooms/$(roomId)).data.participantIds);
         allow update, delete: if request.auth != null
+          && !isBanned()
           && string(callerUniqueId()) == resource.data.senderId;
       }
 
@@ -296,8 +330,10 @@ service cloud.firestore {
                  == get(/databases/$(database)/documents/rooms/$(roomId))
                     .data.get('cohort', 'minor'));
         allow create: if request.auth != null
+          && !isBanned()
           && request.resource.data.userId == string(callerUniqueId());
         allow update: if request.auth != null
+          && !isBanned()
           && (string(callerUniqueId()) == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
               || string(callerUniqueId()) == resource.data.userId);
       }
@@ -345,6 +381,7 @@ service cloud.firestore {
       //     bulk-create with cross-cohort members is closed
       //     structurally by forcing single-member create.
       allow create: if request.auth != null
+        && !isBanned()
         && string(callerUniqueId()) in request.resource.data.participantIds
         && request.resource.data.get('crossCohortAtMigration', false) == false
         && request.resource.data.get('frozenAtMigration', false) == false
@@ -389,6 +426,7 @@ service cloud.firestore {
       // unaffected — members can leave / be kicked from frozen
       // groups, and lastMessage / groupName updates flow.
       allow update: if request.auth != null
+        && !isBanned()
         && string(callerUniqueId()) in resource.data.participantIds
         && !request.resource.data.diff(resource.data).affectedKeys()
              .hasAny(['crossCohortAtMigration', 'frozenAtMigration', 'frozenAtMigrationAt'])
@@ -434,9 +472,11 @@ service cloud.firestore {
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow create: if request.auth != null
+          && !isBanned()
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow update, delete: if request.auth != null
+          && !isBanned()
           && (string(callerUniqueId()) == resource.data.senderId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
@@ -446,6 +486,7 @@ service cloud.firestore {
             && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
             && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
           allow create: if request.auth != null
+            && !isBanned()
             && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
             && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         }
@@ -462,14 +503,19 @@ service cloud.firestore {
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow write: if request.auth != null
+          && !isBanned()
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true
           && (string(callerUniqueId()) == settingsId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds);
       }
 
-      // Legacy settings path
+      // Legacy settings path. Read/write split by SHY-0150: the ban gate
+      // covers the write half only — reads stay exactly as before.
       match /settings/{settingsId} {
-        allow read, write: if request.auth != null
+        allow read: if request.auth != null
+          && string(callerUniqueId()) == settingsId;
+        allow write: if request.auth != null
+          && !isBanned()
           && string(callerUniqueId()) == settingsId;
       }
 
@@ -484,6 +530,7 @@ service cloud.firestore {
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow write: if request.auth != null
+          && !isBanned()
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true
           && (string(callerUniqueId()) == muteId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
@@ -496,6 +543,7 @@ service cloud.firestore {
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow create: if request.auth != null
+          && !isBanned()
           && (string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
       }
@@ -513,18 +561,15 @@ service cloud.firestore {
     // exposing every device↔user binding to any authed user (useful
     // for device-fingerprinting / ban-evasion correlation). Now
     // gated to the device's owner OR an admin.
+    // deviceBindings — SERVER-ONLY (SHY-0170, EPIC-0006). The device-lock
+    // (anti-abuse / ban-evasion) binding is owned entirely by the Express API
+    // (POST /api/devices/lock-check + /api/device-info) via the Admin SDK, which
+    // BYPASSES these rules. No client reads or writes it directly — not the app
+    // (migrated to the API) nor the admin console (reads via /api/admin/devices).
+    // Deny ALL client access so a tampered client cannot read or forge a binding
+    // to bypass the device lock. This is defence-in-depth behind the API authz.
     match /deviceBindings/{deviceId} {
-      allow read: if request.auth != null
-        && (resource.data.userId == string(callerUniqueId())
-            || resource.data.uniqueId == string(callerUniqueId())
-            || isAdmin());
-      allow create: if request.auth != null
-        && (request.resource.data.userId == string(callerUniqueId())
-            || request.resource.data.uniqueId == string(callerUniqueId()));
-      allow update: if request.auth != null
-        && (resource.data.userId == string(callerUniqueId())
-            || resource.data.uniqueId == string(callerUniqueId()));
-      allow delete: if false;
+      allow read, write: if false;
     }
 
     // ── Gift catalog — auth read, server write ───────────────────
@@ -575,7 +620,12 @@ service cloud.firestore {
     match /suspensionAppeals/{appealId} {
       allow read: if request.auth != null
         && resource.data.uniqueId == string(callerUniqueId());
+      // SHY-0150: gated like every user write. No client writes this
+      // collection directly (grep: appeals go through the Express routes,
+      // which are ban-exempt by design and write via the Admin SDK) — the
+      // gate only closes the direct-SDK path a tampered client could use.
       allow create: if request.auth != null
+        && !isBanned()
         && request.resource.data.uniqueId == string(callerUniqueId());
     }
 
@@ -679,35 +729,46 @@ service cloud.firestore {
       allow read: if resource.data.status != 'pending'
                   || (request.auth != null && string(callerUniqueId()) == resource.data.submitterUid)
                   || (request.auth != null && isAdmin());
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && !isBanned();
+      // SHY-0150: `!isBanned()` sits OUTSIDE the branch parens so a banned
+      // ADMIN is denied too (banned outranks admin on user-write surfaces;
+      // the admin console mutates via the Admin SDK, which bypasses rules).
       allow update: if request.auth != null
-                    && (string(callerUniqueId()) == resource.data.submitterUid && resource.data.status == 'pending')
-                    || (request.auth != null && isAdmin());
+                    && !isBanned()
+                    && ((string(callerUniqueId()) == resource.data.submitterUid && resource.data.status == 'pending')
+                        || isAdmin());
       allow delete: if request.auth != null
+                    && !isBanned()
                     && string(callerUniqueId()) == resource.data.submitterUid
                     && resource.data.status == 'pending';
 
       match /votes/{voteId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null
+                      && !isBanned()
                       && request.resource.data.voterId == string(callerUniqueId());
         allow update: if request.auth != null
+                      && !isBanned()
                       && resource.data.voterId == string(callerUniqueId());
         allow delete: if request.auth != null
+                      && !isBanned()
                       && resource.data.voterId == string(callerUniqueId());
       }
 
       match /comments/{commentId} {
         allow read: if request.auth != null;
-        allow create: if request.auth != null;
+        allow create: if request.auth != null && !isBanned();
         allow update, delete: if false;
       }
     }
 
     // ── Blocked topics — admin write, public read ───────────────
+    // SHY-0150: banned outranks admin here too — the admin console
+    // mutates via Express + Admin SDK (bypasses rules), so gating the
+    // client-side admin write costs legitimate moderation nothing.
     match /blockedTopics/{topicId} {
       allow read: if true;
-      allow write: if request.auth != null && isAdmin();
+      allow write: if request.auth != null && !isBanned() && isAdmin();
     }
 
     // ── Suggestion disputes — submitter create, admin resolve ───
@@ -717,13 +778,21 @@ service cloud.firestore {
     match /suggestionDisputes/{disputeId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
+        && !isBanned()
         && request.resource.data.submitterUid == string(callerUniqueId());
-      allow update: if request.auth != null && isAdmin();
+      // SHY-0150: admin resolve gated too (banned outranks admin; the
+      // console's real path is Express + Admin SDK, which bypasses rules).
+      allow update: if request.auth != null && !isBanned() && isAdmin();
     }
 
     // ── Subscriptions — owner-only read/write ───────────────────
+    // Read/write split by SHY-0150: the ban gate covers the write half
+    // only — a banned owner still reads their own subscription doc.
     match /subscriptions/{uid} {
-      allow read, write: if request.auth != null && string(callerUniqueId()) == uid;
+      allow read: if request.auth != null && string(callerUniqueId()) == uid;
+      allow write: if request.auth != null
+        && !isBanned()
+        && string(callerUniqueId()) == uid;
     }
 
     // ── Notifications — owner read/update, server create ────────
@@ -731,13 +800,19 @@ service cloud.firestore {
       allow read: if request.auth != null
                   && resource.data.uid == string(callerUniqueId());
       allow update: if request.auth != null
+                    && !isBanned()
                     && resource.data.uid == string(callerUniqueId());
       allow create, delete: if false;
     }
 
     // ── Identity graphs — admin-only ────────────────────────────
+    // Read/write split by SHY-0150 (mirrors settings/subscriptions):
+    // the ban gate covers the write half only — a banned admin still
+    // READS the graph surface; their client-side writes are denied
+    // (banned outranks admin; Admin-SDK moderation is unaffected).
     match /identityGraphs/{graphId} {
-      allow read, write: if request.auth != null && isAdmin();
+      allow read: if request.auth != null && isAdmin();
+      allow write: if request.auth != null && !isBanned() && isAdmin();
     }
 
     // ── Notification queue — server-only ────────────────────────

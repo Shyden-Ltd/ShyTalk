@@ -12,6 +12,8 @@ const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
 const { isLiveAdmin } = require('../middleware/auth');
 const { auditAdminFlagBypass } = require('../utils/segregation-audit');
+const { isAgeGatingEnabled } = require('../safety/age-gating-flag');
+const { checkFeatureAccess } = require('../safety/enforce');
 const log = require('../utils/log');
 
 /**
@@ -293,13 +295,48 @@ router.post('/conversations/:id/messages', async (req, res) => {
     if (!convDoc) return res.status(500).json({ error: 'Corrupted conversation data' });
 
     const participantIds = convDoc.participantIds || [];
-    if (!participantIds.includes(senderId)) {
+    // participantIds are stored as STRINGS (the app writes them, firestore.rules
+    // enforces `string(callerUniqueId()) in participantIds`) but senderId
+    // (req.auth.uniqueId) is a NUMBER — coerce both, as the GET route above
+    // (line ~222) already does, so this check isn't type-fooled into a 403.
+    if (!participantIds.map(String).includes(String(senderId))) {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
+    }
+
+    // SHY-0060 — per-feature age gate on 1:1 DMs (inert unless the operator
+    // flag is ON). A DM with a mutually-followed user is 13+ (bidirectional
+    // consent); a DM with anyone else is 18+ (the stranger predator-vector).
+    // Group conversations are moderated multi-user spaces — out of scope. The
+    // flag is checked first so the sender doc is loaded only when gating is on.
+    // IDs cross a String/Number boundary here: participantIds are stored as
+    // STRINGS (firestore.rules + the app), senderId (req.auth.uniqueId) is a
+    // NUMBER, and followingIds/followerIds are NUMBERS (the follow route
+    // writes parseInt'd ids). Coerce everything to String for comparison —
+    // the same pattern this file's GET route + gateCrossCohortConversation use.
+    const senderIdStr = String(senderId);
+    const dmRecipientIds = participantIds.map(String).filter((pid) => pid !== senderIdStr);
+    if (!convDoc.isGroup && dmRecipientIds.length === 1 && (await isAgeGatingEnabled(db))) {
+      const senderData = (await db.doc(`users/${senderId}`).get()).data() || {};
+      const recipientId = dmRecipientIds[0]; // String
+      const mutualFollow =
+        Array.isArray(senderData.followingIds) &&
+        Array.isArray(senderData.followerIds) &&
+        senderData.followingIds.map(String).includes(recipientId) &&
+        senderData.followerIds.map(String).includes(recipientId);
+      const dmFeature = mutualFollow
+        ? 'DIRECT_MESSAGE_WITH_FOLLOWED_USER'
+        : 'DIRECT_MESSAGE_WITH_STRANGER';
+      const dmBlock = await checkFeatureAccess(db, dmFeature, senderData);
+      if (dmBlock) return res.status(dmBlock.status).json(dmBlock.body);
     }
 
     if (await gateCrossCohortConversation(req, res, convDoc)) return;
 
-    const recipientIds = participantIds.filter((pid) => pid !== senderId);
+    // Same String/Number coercion as the participant check above — without it a
+    // String-typed participantIds array never filters out the Number senderId,
+    // so the sender would be counted as their own recipient (self-unread +
+    // self-notify). Recipient ids feed userSettings doc paths (coercion-safe).
+    const recipientIds = participantIds.map(String).filter((pid) => pid !== String(senderId));
     const isGroup = !!convDoc.isGroup;
     const groupName = convDoc.groupName || null;
 

@@ -1308,6 +1308,7 @@
     <string name="wallet_with_balance">Portefeuille · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Des violations continues peuvent entraîner la suspension de votre compte.</string>
+    <string name="warning_acknowledge_failed">Impossible de lever l\'avertissement. Vérifiez votre connexion et réessayez.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Votre compte a été examiné et un avertissement a été émis.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1497,10 +1498,10 @@
     <string name="security_reset_pin">Réinitialiser le code PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Vérifiez votre identité pour définir un nouveau code PIN</string>
+    <string name="security_set_pin">Définir un code PIN</string>
+    <string name="security_set_pin_desc">Protégez l'application avec un code PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Comptes liés</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Gérer les méthodes de connexion</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Connectez-vous avec e-mail</string>

@@ -18,6 +18,11 @@ module.exports = {
   // Enable per-test retry for transient socket failures (ECONNRESET / hang up
   // from ephemeral port exhaustion). See jest-retry-setup.js for the why.
   setupFiles: ['./tests/_helpers/jest-retry-setup.js'],
+  // jest-git-env-isolation: scrub ambient GIT_* (GIT_DIR/GIT_WORK_TREE/…) BEFORE
+  // workers fork so tests that shell out to git are hermetic. Must be globalSetup,
+  // not setupFiles — the per-file sandbox's process.env edits don't reach
+  // child_process in the worker. See the file for the full why.
+  globalSetup: './tests/_helpers/jest-git-env-isolation.js',
   restoreMocks: true,
   clearMocks: true,
   resetMocks: false,

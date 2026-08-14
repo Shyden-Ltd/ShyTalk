@@ -44,7 +44,7 @@ P1 Tier-3 coverage. Cross-platform parity with Android's existing tests.
   - Each repository method has happy-path coverage (join, leave, takeSeat, acceptInvite, kick, transferOwnership, mute, etc. — enumerate by reading the production interface).
   - Each method's request body shape verified (correct URL, method, headers, body JSON).
   - Each method's response parsing verified (success path returns expected domain object).
-- [ ] All tests pass via `./gradlew :shared:jvmTest --tests "*IosRoomRepository*"` (or iosX64Test equivalent).
+- [ ] All tests pass via `./gradlew :shared:jvmTest --tests "*IosRoomRepository*"` (or iosSimulatorArm64Test equivalent).
 - [ ] Sonar coverage on `IosRoomRepositoryImpl.kt` ≥85%.
 
 ### Error paths
@@ -160,7 +160,7 @@ P1 Tier-3 coverage. Cross-platform parity with Android's existing tests.
 **Not `*.md`-only** (adds iOS repo tests + may fix `iosMain` error-mapping) → the FULL gauntlet applies. This restores **iOS↔Android parity** on the room-mutation data layer; the spec's "iOS simulator" smoke is UPGRADED to a **real iPhone** journey (protocol forbids simulator for the app-level gauntlet).
 
 **Frameworks exercised (RED→GREEN before any production fix):**
-- ✅ **Kotlin/JVM unit (or iOS K/N test)** — `IosRoomRepositoryImplTest` with Ktor `MockEngine` / FakeHttpClient (`./gradlew :shared:jvmTest --tests "*IosRoomRepository*"` or `iosX64Test`); every error-mapping path (net-fail / 401 / 403 / 404 / 409 / 429 / 5xx / malformed); the story's primary RED→GREEN.
+- ✅ **Kotlin/JVM unit (or iOS K/N test)** — `IosRoomRepositoryImplTest` with Ktor `MockEngine` / FakeHttpClient (`./gradlew :shared:jvmTest --tests "*IosRoomRepository*"` or `iosSimulatorArm64Test`); every error-mapping path (net-fail / 401 / 403 / 404 / 409 / 429 / 5xx / malformed); the story's primary RED→GREEN.
 - ✅ **detekt + ktlint + iOS shared compile-check** — `./gradlew :shared:compileKotlinIosArm64` (the iosMain impl must compile + pass static analysis).
 - ✅ **Android instrumented BDD + Manual-QA journey matrix** — voice-room mutation flows (join / leave / takeSeat / kick) walked on a **real iPhone** (the surface this repo backs) AND a **real Android device** to confirm the cross-platform error-UX parity this story restores.
 - ⬜ **Web E2E / integration / eslint / Express Jest** — N/A (no web/API change; the Express endpoints are assumed-existing per [[SHY-0004]]); apps run the regression corpus as the net.

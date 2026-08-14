@@ -1309,6 +1309,7 @@
     <string name="wallet_with_balance">กระเป๋าเงิน · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">การละเมิดอย่างต่อเนื่องอาจส่งผลให้บัญชีของคุณถูกระงับ</string>
+    <string name="warning_acknowledge_failed">ไม่สามารถล้างคำเตือนของคุณได้ โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">บัญชีของคุณได้รับการตรวจสอบแล้วและมีการออกคำเตือนแล้ว</string>
     <!-- google-translated 2026-05-04 -->
@@ -1498,10 +1499,10 @@
     <string name="security_reset_pin">รีเซ็ต PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">ยืนยันตัวตนของคุณเพื่อตั้งค่า PIN ใหม่</string>
+    <string name="security_set_pin">ตั้งค่า PIN</string>
+    <string name="security_set_pin_desc">ปกป้องแอปด้วย PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">บัญชีที่เชื่อมโยง</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">จัดการวิธีการลงชื่อเข้าใช้</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">เข้าสู่ระบบด้วยอีเมล</string>

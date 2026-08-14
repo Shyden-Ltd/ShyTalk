@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Plånbok · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Fortsatta överträdelser kan leda till att ditt konto stängs av.</string>
+    <string name="warning_acknowledge_failed">Det gick inte att ta bort varningen. Kontrollera din anslutning och försök igen.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ditt konto har granskats och en varning har utfärdats.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1499,10 +1500,10 @@
     <string name="security_reset_pin">Återställ PIN-koden</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifiera din identitet för att ange en ny PIN-kod</string>
+    <string name="security_set_pin">Ange PIN-kod</string>
+    <string name="security_set_pin_desc">Skydda appen med en PIN-kod</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Länkade konton</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Hantera inloggningsmetoder</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Logga in med e-post</string>

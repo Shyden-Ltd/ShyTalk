@@ -23,6 +23,7 @@ const bcrypt = require('bcrypt');
 const { db, auth, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { getDoc } = require('../utils/firestore-helpers');
+const { nextUniqueIdFrom } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
 const { clearSuspensionCache, updateUniqueIdCache } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
@@ -173,6 +174,26 @@ function requireOwner(req, res) {
   return false;
 }
 
+// Owner-gated handler helpers (SHY-0097): collapse the repeated
+// "verify owner → load the user doc → 404 if missing" preamble and the
+// 500-error epilogue into one place so new handlers don't re-duplicate
+// the boilerplate. Adopted by acknowledge-warning; the existing handlers
+// can migrate onto these incrementally.
+async function requireOwnedUser(req, res) {
+  if (requireOwner(req, res)) return null; // 400/403 already sent
+  const user = await getDoc(`users/${req.params.uniqueId}`);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return null;
+  }
+  return user;
+}
+
+function failInternal(res, req, action, err) {
+  log.error('users', `${action} failed`, { uniqueId: req.params.uniqueId, error: err.message });
+  return res.status(500).json({ error: 'Internal server error' });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/users — Create new user with identity map
 // ═══════════════════════════════════════════════════════════════════
@@ -255,10 +276,15 @@ router.post('/users', async (req, res) => {
         }
       }
 
-      // Atomic counter increment
-      let current = counterSnap.exists ? counterSnap.data().value || 0 : 0;
-      if (current < MIN_UNIQUE_ID) current = MIN_UNIQUE_ID - 1;
-      const next = current + 1;
+      // Atomic counter increment. counters/uniqueId is shared with the
+      // test-helpers allocator and has been observed string-typed — a string
+      // >= MIN_UNIQUE_ID passed the old `<` floor un-reassigned and `+ 1`
+      // CONCATENATED, minting a real account at users/"100000421".
+      // nextUniqueIdFrom is type-immune; the floor keeps ids >= MIN_UNIQUE_ID.
+      const next = nextUniqueIdFrom(counterSnap.exists ? counterSnap.data().value : undefined, {
+        base: MIN_UNIQUE_ID - 1,
+        floor: MIN_UNIQUE_ID - 1,
+      });
 
       const timestamp = now();
 
@@ -959,6 +985,51 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
       error: err.message,
     });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/users/:uniqueId/acknowledge-warning — user acknowledges their
+// active moderation warning (SHY-0097). Server-authorized: the moderation
+// fields (hasActiveWarning/warningReason/warningCount) are rules-protected
+// from client writes (firestore.rules) — a user must NOT be able to clear
+// their own warning via a direct client write. This endpoint (Admin SDK)
+// clears the ACTIVE warning + records the acknowledgement, but PRESERVES
+// warningCount so strike-escalation history survives.
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/users/:uniqueId/acknowledge-warning', async (req, res) => {
+  try {
+    const user = await requireOwnedUser(req, res);
+    if (!user) return; // 400/403/404 already sent
+
+    const { uniqueId } = req.params;
+    const hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
+    if (!hasActiveWarning) {
+      // Idempotent: acknowledging with no active warning is a no-op success
+      // (covers double-tap / retry without surfacing a spurious error). Logged
+      // for the moderation audit (Observability AC — every acknowledge + outcome).
+      log.info('users', 'Acknowledge warning — already clear (idempotent)', { uniqueId });
+      return res.json({ success: true, alreadyClear: true });
+    }
+
+    log.info('users', 'User acknowledged active warning', { uniqueId });
+
+    await db.doc(`users/${uniqueId}`).update({
+      hasActiveWarning: false,
+      // Clear the "new warning" badge too — the user has now seen + acknowledged
+      // it (issuance sets hasNewWarning:true in admin-users.js). Leaving it true
+      // is stale moderation state.
+      hasNewWarning: false,
+      warningReason: null,
+      warningAcknowledged: true,
+      warningAcknowledgedAt: now(),
+      // warningCount intentionally PRESERVED — strike-escalation history.
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    return failInternal(res, req, 'Acknowledge warning', err);
   }
 });
 

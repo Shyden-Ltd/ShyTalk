@@ -1306,6 +1306,7 @@
     <string name="warning_reviewed_for_reason">គណនីរបស់អ្នកត្រូវបានពិនិត្យសម្រាប់ %1$s ហើយការព្រមានត្រូវបានចេញ។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">ការបន្តបំពានអាចបណ្តាលឱ្យមានការផ្អាកគណនីរបស់អ្នក។</string>
+    <string name="warning_acknowledge_failed">មិនអាចលុបការព្រមានរបស់អ្នកបានទេ។ សូមពិនិត្យការតភ្ជាប់របស់អ្នក ហើយព្យាយាមម្តងទៀត។</string>
 
     <!-- Unsafe device -->
     <!-- google-translated 2026-05-04 -->
@@ -1590,10 +1591,10 @@
     <string name="security_reset_pin">កំណត់កូដ PIN ឡើងវិញ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">ផ្ទៀងផ្ទាត់អត្តសញ្ញាណរបស់អ្នកដើម្បីកំណត់កូដ PIN ថ្មី។</string>
+    <string name="security_set_pin">កំណត់កូដ PIN</string>
+    <string name="security_set_pin_desc">ការពារកម្មវិធីដោយកូដ PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">គណនីដែលបានភ្ជាប់</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">គ្រប់គ្រងវិធីសាស្រ្តចូល</string>
 
     <!-- Email OTP Screen -->
     <!-- google-translated 2026-05-04 -->

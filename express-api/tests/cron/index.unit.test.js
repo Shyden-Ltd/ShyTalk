@@ -1,3 +1,23 @@
+/**
+ * index.unit.test.js — EPIC-0003 / SHY-0120 slice 5 (RECLASSIFY, not rewrite).
+ *
+ * `src/cron/index.js` is the cron REGISTRY: `startCronJobs()` reads NODE_ENV
+ * (prod-guard) and calls `node-cron`'s `schedule(expr, callback)` to wire each
+ * job. It exercises NO real collaborator — `node-cron` is an in-process
+ * scheduler (you cannot "really" wait until 03:00 UTC for a job to fire), the
+ * job modules each have their OWN real-emulator tests, and alertManager's real
+ * behaviour belongs in alertManager's own test. The only thing under test here
+ * is the WIRING: correct schedules, the dev prod-guard, callback delegation,
+ * the error-`.catch` paths, and the age-verif catastrophic-alert path.
+ *
+ * There is no "real" version of a scheduler-wiring test, so per the EPIC-0003
+ * boundary convention (CLAUDE.md "No Stubs" + scripts/check-no-new-stubs.js
+ * isUnitTestLocation) this is a genuine UNIT test: it was moved from
+ * tests/cron/index.test.js to the `*.unit.test.js` location where doubles are
+ * permitted — NOT rewritten against the emulator (which is impossible for a
+ * scheduler). Mocking node-cron + the job modules is the correct unit
+ * isolation, not migration debt.
+ */
 // Mock node-cron
 const mockSchedule = jest.fn();
 jest.mock('node-cron', () => ({

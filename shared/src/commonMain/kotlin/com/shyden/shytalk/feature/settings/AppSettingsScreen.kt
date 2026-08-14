@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
@@ -78,6 +79,7 @@ import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.platform.SettingsType
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -103,6 +105,7 @@ fun AppSettingsScreen(
     onNavigateToCommunityStandards: () -> Unit = {},
     onNavigateToTermsAndConditions: () -> Unit = {},
     onNavigateToCyberBullyingPolicy: () -> Unit = {},
+    onNavigateToSecurity: () -> Unit,
     onSignOut: () -> Unit,
     viewModel: AppSettingsViewModel = koinViewModel(),
     platformSettings: PlatformSettingsService = koinInject(),
@@ -141,6 +144,7 @@ fun AppSettingsScreen(
                     uiState = uiState,
                     onNavigateBack = onNavigateBack,
                     onNavigateToPage = { currentPageName = it.name },
+                    onNavigateToSecurity = onNavigateToSecurity,
                     onSetLanguage = {
                         viewModel.setLanguage(it)
                         platformSettings.restartForLanguageChange()
@@ -242,7 +246,16 @@ fun AppSettingsScreen(
                         showSignOutDialog = false
                         onSignOut()
                     },
-                    modifier = Modifier.testTag("settings_signOutConfirmButton"),
+                    modifier =
+                        Modifier
+                            // AlertDialog renders in a separate Popup window that
+                            // doesn't inherit MainActivity's testTagsAsResourceId,
+                            // so the confirm button's testTag would not reach
+                            // uiautomator without this (mirrors the persona-picker
+                            // dialog in SignInScreen.kt; SHY-0096) — enables the QA
+                            // driver's locale-independent testTag-based sign-out.
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("settings_signOutConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.sign_out), color = MaterialTheme.colorScheme.error)
                 }
@@ -250,7 +263,10 @@ fun AppSettingsScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showSignOutDialog = false },
-                    modifier = Modifier.testTag("settings_signOutCancelButton"),
+                    modifier =
+                        Modifier
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("settings_signOutCancelButton"),
                 ) {
                     Text(stringResource(Res.string.cancel))
                 }
@@ -409,6 +425,7 @@ private fun SettingsMainPage(
     uiState: AppSettingsUiState,
     onNavigateBack: () -> Unit,
     onNavigateToPage: (SettingsPage) -> Unit,
+    onNavigateToSecurity: () -> Unit,
     onSetLanguage: (String) -> Unit,
     onSignOut: () -> Unit,
     snackbarHostState: SnackbarHostState,
@@ -455,6 +472,13 @@ private fun SettingsMainPage(
                 title = stringResource(Res.string.privacy),
                 onClick = { onNavigateToPage(SettingsPage.Privacy) },
                 testTag = "settings_privacyItem",
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            SettingsMenuItem(
+                icon = Icons.Default.Fingerprint,
+                title = stringResource(Res.string.security_title),
+                onClick = onNavigateToSecurity,
+                testTag = "settings_securityItem",
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
             SettingsMenuItem(

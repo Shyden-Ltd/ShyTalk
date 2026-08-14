@@ -5,7 +5,19 @@ import com.shyden.shytalk.core.util.Resource
 import kotlinx.coroutines.flow.Flow
 
 interface RoomRepository {
-    fun getActiveRooms(): Flow<List<ChatRoom>>
+    /**
+     * UK OSA #17 / SHY-0102 — the rooms read rule (`firestore.rules` L192)
+     * gates a collection `list` on `resource.data.cohort ==
+     * request.auth.token.cohort`. Firestore evaluates a `list` rule against
+     * the QUERY (with `resource.data` unbound), so the query MUST pin
+     * `where('cohort','==', cohort)` or be denied — an unconstrained list
+     * returns an empty Rooms screen even when rooms exist. Pass the caller's
+     * own effective cohort (resolve via [UserRepository.resolveEffectiveCohort],
+     * which fails closed to `"minor"`); passing the wrong cohort is rejected by
+     * the rule, never leaked cross-cohort. Proven against the real rules engine
+     * in `room-rules.test.js` (SHY-0129).
+     */
+    fun getActiveRooms(cohort: String): Flow<List<ChatRoom>>
 
     fun getRoomFlow(roomId: String): Flow<ChatRoom?>
 
@@ -125,25 +137,49 @@ interface RoomRepository {
 
     suspend fun closeRoom(roomId: String): Resource<Unit>
 
-    suspend fun findActiveRoomByOwner(ownerId: String): String?
+    /**
+     * SHY-0102 — also a rooms collection `list`, so it carries the same
+     * cohort constraint as [getActiveRooms] (an owner's room shares the
+     * owner's cohort). [cohort] is the caller's effective cohort.
+     */
+    suspend fun findActiveRoomByOwner(
+        ownerId: String,
+        cohort: String,
+    ): String?
 
     suspend fun recordFirstJoinTimestamp(
         roomId: String,
         userId: String,
     ): Resource<Unit>
 
+    /**
+     * SHY-0102 — lists the caller's participated rooms (a rooms `list`), so it
+     * pins [cohort] (the caller's effective cohort) to satisfy the read rule.
+     */
     suspend fun leaveAllRooms(
         userId: String,
+        cohort: String,
         exceptRoomId: String? = null,
     ): Resource<Unit>
 
-    suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit>
+    /**
+     * SHY-0102 — lists the owner's rooms (a rooms `list`), so it pins [cohort]
+     * (the owner's effective cohort, which their rooms share).
+     */
+    suspend fun closeAllRoomsByOwner(
+        ownerId: String,
+        cohort: String,
+    ): Resource<Unit>
 
     suspend fun removeDisconnectedUser(
         roomId: String,
         userId: String,
     ): Resource<Unit>
 
+    /**
+     * SHY-0102 — prefetch feeds [getActiveRooms]; same rooms `list`, same
+     * cohort constraint. [cohort] is the caller's effective cohort.
+     */
     @Suppress("kotlin:S6318")
-    suspend fun prefetchActiveRooms() {}
+    suspend fun prefetchActiveRooms(cohort: String) {}
 }

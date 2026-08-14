@@ -24,6 +24,38 @@ const lastRestartCounts = {};
 // single-threaded model means the read+write in the guard is atomic.
 let inFlight = false;
 
+/**
+ * Pure restart-delta detection (extracted SHY-0120 slice 6, EPIC-0003).
+ *
+ * Given a parsed `pm2 jlist` array and the last-known restart counts (MUTATED
+ * in place to the new counts), return the processes that have NEW restarts
+ * since the last check. A process is flagged only when its count INCREASED
+ * from a previously-seen positive baseline (`lastKnown > 0`) — the first
+ * sighting just records the baseline, so a fresh server start never alerts.
+ * Processes without a `pm2_env` are skipped (and NOT recorded), matching the
+ * original inline behaviour exactly. No real collaborator → unit-tested with
+ * real data arrays; the `execFile` boundary is exercised live in the
+ * integration test (a real `pm2` restart between runs is not CI-inducible).
+ *
+ * @returns {Array<{name: string, newRestarts: number, total: number}>}
+ */
+function detectPm2Restarts(processes, lastCounts) {
+  const restarted = [];
+  for (const proc of processes) {
+    if (!proc.pm2_env) continue;
+    const name = proc.name;
+    const restarts = proc.pm2_env.restart_time || 0;
+    const lastKnown = lastCounts[name] || 0;
+
+    if (restarts > lastKnown && lastKnown > 0) {
+      restarted.push({ name, newRestarts: restarts - lastKnown, total: restarts });
+    }
+
+    lastCounts[name] = restarts;
+  }
+  return restarted;
+}
+
 async function serverHealth(alertManager) {
   if (inFlight) {
     log.debug('server-health', 'check already in flight — skipping concurrent invocation');
@@ -75,33 +107,27 @@ async function runHealthCheck(alertManager) {
           }
           try {
             const processes = JSON.parse(stdout);
-            for (const proc of processes) {
-              if (!proc.pm2_env) continue;
-              const name = proc.name;
-              const restarts = proc.pm2_env.restart_time || 0;
-              const lastKnown = lastRestartCounts[name] || 0;
-
-              if (restarts > lastKnown && lastKnown > 0) {
-                alertManager
-                  .createAlert(
-                    'pm2_restart',
-                    'warning',
-                    `PM2 process restarted: ${name}`,
-                    `${restarts - lastKnown} new restart(s) (total: ${restarts})`,
-                    {
-                      processName: name,
-                      restartCount: restarts,
-                      newRestarts: restarts - lastKnown,
-                    },
-                  )
-                  .catch((alertErr) =>
-                    log.error('server-health', 'Failed to create PM2 restart alert', {
-                      error: alertErr.message,
-                    }),
-                  );
-              }
-
-              lastRestartCounts[name] = restarts;
+            for (const { name, newRestarts, total } of detectPm2Restarts(
+              processes,
+              lastRestartCounts,
+            )) {
+              alertManager
+                .createAlert(
+                  'pm2_restart',
+                  'warning',
+                  `PM2 process restarted: ${name}`,
+                  `${newRestarts} new restart(s) (total: ${total})`,
+                  {
+                    processName: name,
+                    restartCount: total,
+                    newRestarts,
+                  },
+                )
+                .catch((alertErr) =>
+                  log.error('server-health', 'Failed to create PM2 restart alert', {
+                    error: alertErr.message,
+                  }),
+                );
             }
           } catch {
             // PM2 output parsing failed — logged as warning but non-fatal for health check
@@ -123,3 +149,6 @@ async function runHealthCheck(alertManager) {
 }
 
 module.exports = serverHealth;
+// Exported for unit-test access — the pure restart-delta logic is tested with
+// real data arrays (no execFile mock); see tests/cron/serverHealth.unit.test.js.
+module.exports.detectPm2Restarts = detectPm2Restarts;

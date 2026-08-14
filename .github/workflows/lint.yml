@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
@@ -90,12 +90,14 @@ jobs:
       - name: Run actionlint (workflow + embedded shellcheck)
         run: |
           set -euo pipefail
-          # -shellcheck=  passes shellcheck flags into embedded shellcheck.
-          # We disable SC2086 (intentional word-splitting on $RUNNER_TEMP)
-          # repo-wide because GH-managed paths are safe to leave unquoted
-          # in run: blocks where the alternative would be every reference
-          # gaining a quote. Other shellcheck rules apply normally.
-          actionlint -shellcheck='-e SC2086'
+          # SHELLCHECK_OPTS is the documented channel for passing flags into
+          # actionlint's embedded shellcheck. We exclude SC2086 (intentional
+          # word-splitting on GH-managed paths like $RUNNER_TEMP) repo-wide;
+          # every other rule applies normally. NOTE (SHY-0191): actionlint's
+          # -shellcheck flag is NOT for flags — it names the shellcheck
+          # EXECUTABLE, and a non-executable value silently DISABLES the
+          # integration (exit 0, no warning). Never pass that flag here.
+          SHELLCHECK_OPTS='-e SC2086' actionlint
 
       - name: No paid GitHub-hosted runner specs
         run: bash scripts/check-no-paid-runners.sh
@@ -106,11 +108,41 @@ jobs:
       - name: Third-party GitHub Actions are SHA-pinned (supply-chain)
         run: bash scripts/check-action-shas.sh
 
+      # SHY-0284. Sibling of the check above: that one enforces that every
+      # action IS SHA-pinned; this one enforces that an action repo is pinned
+      # to exactly ONE SHA across .github/workflows/** AND .github/actions/**.
+      # It belongs HERE, not in the Express Jest suite where the invariant used
+      # to live alone: `test-backend` is gated on `backend_changed`, so a
+      # workflow-only PR — the exact shape of the partial Dependabot bump that
+      # causes this drift — skipped it. setup-node (6.4.0 vs 7.0.0) and
+      # setup-java (5.6.0 vs 5.7.0) both sat split on main for two days. A
+      # guard must run in the same job class as the change it guards.
+      - name: One SHA per GitHub Action repo (partial-bump drift)
+        run: node scripts/check-action-pin-consistency.js
+
       - name: HTML data-i18n keys all have JS translation definitions
         run: bash scripts/check-orphan-i18n-keys.sh
 
+      - name: Every web page loads the shared language resolver (?lang= flag — SHY-0181)
+        run: bash scripts/check-web-pages-have-lang-resolver.sh public
+
       - name: Release workflow contract (PR-flow + signed commits)
         run: bash scripts/check-release-trigger.sh
+
+      # SHY-0108 (EPIC-0003 Phase X): ratchet guard — the in-process-double
+      # debt (jest.mock / Fake*Repository / page.route) may only SHRINK.
+      # Fails on any NEW double not in scripts/no-stubs-baseline.json, or a
+      # stale baseline entry left behind by a migration.
+      - name: No NEW in-process test doubles (EPIC-0003 ratchet)
+        run: node scripts/check-no-new-stubs.js
+
+      # SHY-0168 (EPIC-0006): ratchet guard — direct client→backend-service
+      # access (Firestore / RTDB / Storage) may only SHRINK. Clients must go
+      # through the Express API (the authz layer). Fails on any NEW direct
+      # Firebase-SDK reference in shipped client code (both the Android-native
+      # and the iOS-gitlive namespaces) not in scripts/direct-backend-baseline.json.
+      - name: No NEW direct client→backend access (EPIC-0006 ratchet)
+        run: node scripts/check-no-direct-backend.js
 
       # SHY-0035: reject any file >5MB added in the diff vs main. Fetch
       # origin/main explicitly because actions/checkout above checks out

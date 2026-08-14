@@ -112,10 +112,12 @@ describe('release.yml — Release App token + tag-only (SHY-0034) contract', () 
   });
 
   describe('Generate app token step', () => {
-    test('pins actions/create-github-app-token@v3.2.0 SHA', () => {
-      expect(appTokenStep).toContain(
-        'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
-      );
+    test('SHA-pins actions/create-github-app-token (version-agnostic)', () => {
+      // SHY-0162: assert SHA-PINNED, not frozen to a specific SHA — a frozen
+      // literal reds the suite on any Dependabot bump. Repo-wide single-SHA
+      // consistency (incl. cross-workflow parity with sync-roadmap-data.yml)
+      // is enforced by ci-action-pin-consistency.test.js.
+      expect(appTokenStep).toMatch(/actions\/create-github-app-token@[0-9a-f]{40}\b/);
     });
 
     test('uses `client-id` input (NOT deprecated `app-id`)', () => {

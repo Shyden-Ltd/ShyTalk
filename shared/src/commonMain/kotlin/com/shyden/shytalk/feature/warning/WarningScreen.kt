@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,6 +47,8 @@ fun WarningScreen(
     reason: String?,
     onAccept: () -> Unit,
     onViewCommunityStandards: () -> Unit,
+    isAcknowledging: Boolean = false,
+    acknowledgeError: String? = null,
 ) {
     DisposableEffect(Unit) {
         EmergencyTonePlayer.play()
@@ -118,11 +121,37 @@ fun WarningScreen(
 
                 Button(
                     onClick = onAccept,
+                    // Disabled while the server-authorized acknowledge is in
+                    // flight (SHY-0097) so it cannot be double-fired into an
+                    // inconsistent state.
+                    enabled = !isAcknowledging,
                     // Tag aligned with manual-qa corpus (j10:29, j11:67):
                     // warning_acknowledgeButton, not warning_acceptButton.
                     modifier = Modifier.fillMaxWidth().testTag("warning_acknowledgeButton"),
                 ) {
-                    Text(stringResource(Res.string.i_understand_and_accept))
+                    if (isAcknowledging) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp).testTag("warning_acknowledgeSpinner"),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text(stringResource(Res.string.i_understand_and_accept))
+                    }
+                }
+
+                // SHY-0097: a failed acknowledge stays on this screen and shows
+                // why — never a silent navigate-then-bounce. The message string
+                // is resolved by the nav graph and passed in.
+                if (acknowledgeError != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = acknowledgeError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("warning_acknowledgeError"),
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

@@ -69,9 +69,24 @@ fi
 # Node-major guard (SHY-0069): abort fast, unconditionally on every push,
 # if the local node major drifted from .nvmrc. brew's floating `node`
 # formula upgraded to 26.3.0 on 2026-06-09 and wedged every full Jest run.
-# Runs before the HAS_CODE path filter so even a config-only push (e.g.
-# someone editing .nvmrc itself) gets the drift check.
+# Runs FIRST — before the ratchet (the hook's first `node` call) and the
+# HAS_CODE path filter — so even a config-only push (e.g. someone editing
+# .nvmrc itself) gets the drift check, and the ratchet runs under a node
+# whose major is already verified.
 bash scripts/check-node-version.sh || exit 1
+
+# SHY-0108 (EPIC-0003 Phase X): the in-process-double debt (jest.mock /
+# Fake*Repository / page.route) may only SHRINK. Fails on any NEW double
+# not in scripts/no-stubs-baseline.json, or a stale baseline entry a
+# migration forgot to remove. Fast (one git ls-files + scan).
+if ! node scripts/check-no-new-stubs.js; then
+  echo ""
+  echo "✗ no-new-stubs ratchet tripped — push blocked (EPIC-0003)"
+  echo "  Migrate the new double to the real local stack, or run"
+  echo "  'node scripts/check-no-new-stubs.js --generate-baseline' after a"
+  echo "  legitimate migration to shrink the baseline."
+  exit 1
+fi
 
 # Block any file >5MB from being added in this push's diff vs origin/main.
 # See SHY-0035 (.project/audit/repo-size-audit-2026-06-08.md). Pre-existing
@@ -103,7 +118,10 @@ fi
 
 if [ "$HAS_WORKFLOW_CHANGES" = "true" ] && command -v actionlint >/dev/null 2>&1; then
   echo "  → actionlint (workflow + embedded shellcheck)..."
-  if ! actionlint -shellcheck='-e SC2086'; then
+  # SHELLCHECK_OPTS (not the -shellcheck flag, which names the shellcheck
+  # EXECUTABLE and silently disables the integration on a non-executable
+  # value — SHY-0191) passes the repo-wide SC2086 exclusion; mirrors lint.yml.
+  if ! SHELLCHECK_OPTS='-e SC2086' actionlint; then
     echo ""
     echo "✗ actionlint failed — push blocked"
     echo "  Install: brew install actionlint  (or see https://github.com/rhysd/actionlint)"
@@ -126,47 +144,70 @@ if [ "$HAS_CODE" = "false" ]; then
   exit 0
 fi
 
-# SONAR_TOKEN is required for code changes
-if [ -z "$SONAR_TOKEN" ]; then
-  echo "✗ SONAR_TOKEN not set — push blocked"
-  echo "  Add SONAR_TOKEN=your_token to .env or set it as an environment variable"
-  exit 1
+# SHY-0164 (2026-07-08): the SonarCloud pre-push scan (Express+Kotlin coverage
+# generation, analysis, and the quality-gate wait) runs ONLY when pushing
+# `main`. SonarCloud's free plan will not expose a NON-main branch's quality
+# gate to the organisation ("Organization is not allowed to access data from
+# non-main branches"), so a local `-Dsonar.qualitygate.wait=true` on a feature
+# branch fails outright — and WITHOUT a branch name it instead grades the
+# working tree against MAIN's gate, so a red main gate (pre-existing debt) blocks
+# every clean feature-branch push. In the develop-flow feature branches push to
+# `develop` constantly, so the scan is gated on branch==main; the quality gate's
+# teeth land at the develop→main promotion, where main IS analysed (wait=true
+# below). CI's own Sonar step is advisory (`sonar.qualitygate.wait=false` in
+# build.gradle.kts — the same free-plan limit), so the main-push path below is
+# the ONLY place the quality gate blocks. The fast local guards above
+# (force-push, paid-runner, node-major, no-stubs, large-file, actionlint) and
+# Playwright below still run on EVERY push regardless of branch.
+# (Operator-approved 2026-07-08 "skip Sonar gate for feature branches"; the
+# earlier branch-scoped attempt was proven unsound against the free plan's
+# non-main-branch access limit.)
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [ "$CURRENT_BRANCH" != "main" ]; then
+  echo "Feature branch ($CURRENT_BRANCH) — skipping SonarCloud pre-push gate (enforced at develop→main promotion)"
+else
+  # SONAR_TOKEN is required to analyse main
+  if [ -z "$SONAR_TOKEN" ]; then
+    echo "✗ SONAR_TOKEN not set — push blocked"
+    echo "  Add SONAR_TOKEN=your_token to .env or set it as an environment variable"
+    exit 1
+  fi
+
+  echo "Running SonarCloud pre-push scan (branch: main)..."
+
+  # Express API tests with coverage. The `--experimental-vm-modules` flag is
+  # needed since express-api/src/utils/data-export-builder.js uses dynamic
+  # `import('archiver')` (archiver v8 is ESM-only); Jest's default CJS VM
+  # rejects `import()` callbacks without that flag. Mirrors the npm `test`
+  # script in express-api/package.json so both call sites stay in sync.
+  # stderr is intentionally NOT discarded (SHY-0069): a wedged/failing run
+  # must be visible — `2>/dev/null` here cost hours of blind diagnosis.
+  echo "  → Express tests with coverage..."
+  cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent
+  cd ..
+
+  # Kotlin JVM tests (for coverage reports)
+  echo "  → Kotlin JVM tests..."
+  ./gradlew :shared:jvmTest --quiet 2>/dev/null
+
+  # Run SonarCloud analysis with the quality-gate wait. Analysed as `main`
+  # (no sonar.branch.name — the free plan can't gate a named non-main branch),
+  # so this only runs on a main push. wait=true is the sole enforcing gate.
+  echo "  → SonarCloud analysis..."
+  if ! ./gradlew sonar \
+    -Dsonar.token="$SONAR_TOKEN" \
+    -Dsonar.qualitygate.wait=true \
+    -x :app:sonar \
+    --no-configuration-cache; then
+    echo ""
+    echo "✗ SonarCloud quality gate FAILED — push blocked"
+    echo "  Fix the issues and try again."
+    echo "  Dashboard: https://sonarcloud.io/dashboard?id=ShydenMcM_ShyTalk"
+    exit 1
+  fi
+
+  echo "✓ SonarCloud quality gate passed"
 fi
-
-echo "Running SonarCloud pre-push scan..."
-
-# Express API tests with coverage. The `--experimental-vm-modules` flag is
-# needed since express-api/src/utils/data-export-builder.js uses dynamic
-# `import('archiver')` (archiver v8 is ESM-only); Jest's default CJS VM
-# rejects `import()` callbacks without that flag. Mirrors the npm `test`
-# script in express-api/package.json so both call sites stay in sync.
-# stderr is intentionally NOT discarded (SHY-0069): a wedged/failing run
-# must be visible — `2>/dev/null` here cost hours of blind diagnosis.
-echo "  → Express tests with coverage..."
-cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent
-cd ..
-
-# Kotlin JVM tests (for coverage reports)
-echo "  → Kotlin JVM tests..."
-./gradlew :shared:jvmTest --quiet 2>/dev/null
-
-# Run SonarCloud analysis with quality gate wait
-echo "  → SonarCloud analysis..."
-./gradlew sonar \
-  -Dsonar.token="$SONAR_TOKEN" \
-  -Dsonar.qualitygate.wait=true \
-  -x :app:sonar \
-  --no-configuration-cache
-
-if [ $? -ne 0 ]; then
-  echo ""
-  echo "✗ SonarCloud quality gate FAILED — push blocked"
-  echo "  Fix the issues and try again."
-  echo "  Dashboard: https://sonarcloud.io/dashboard?id=ShydenMcM_ShyTalk"
-  exit 1
-fi
-
-echo "✓ SonarCloud quality gate passed"
 
 # Run Playwright against a single browser (chromium) if web files changed
 HAS_WEB=false
@@ -183,20 +224,19 @@ if [ "$HAS_WEB" = "true" ]; then
   elif ! curl -s -o /dev/null http://localhost:8888/; then
     echo ""
     echo "⚠ Web changes detected but web server not running on :8888 — skipping Playwright pre-push"
-    echo "  To enable: npx serve public -l 8888 &"
+    echo "  To enable: node local/serve-web.js --port 8888 --root public --quiet &"
   else
     echo "Running Playwright pre-push (chromium only)..."
     # Use --reporter=list: writes one line per test result and flushes per-line.
     # Do NOT use --reporter=line here: it uses ANSI cursor movement that gets
     # swallowed when stdout is captured/piped, producing 0-byte output files.
     # Do NOT pipe to `tail -N`: tail buffers until EOF, hiding live progress.
-    API_BASE_URL=http://localhost:3000 \
-    WEB_BASE_URL=http://localhost:8888 \
-    ADMIN_EMAIL=claude-test@shytalk.dev \
-    ADMIN_PASSWORD=localdev123 \
-    TEST_API_KEY=local-test-key \
-    npx playwright test --project=chromium --reporter=list
-    if [ $? -ne 0 ]; then
+    if ! API_BASE_URL=http://localhost:3000 \
+      WEB_BASE_URL=http://localhost:8888 \
+      ADMIN_EMAIL=claude-test@shytalk.dev \
+      ADMIN_PASSWORD=localdev123 \
+      TEST_API_KEY=local-test-key \
+      npx playwright test --project=chromium --reporter=list; then
       echo ""
       echo "✗ Playwright chromium tests FAILED — push blocked"
       echo "  ALL failing tests must be fixed (including pre-existing failures)."

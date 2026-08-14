@@ -1174,7 +1174,7 @@ build_footer() {
   local now sha
   now="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   sha="$(cd "$REPO_ROOT" && git rev-parse HEAD 2>/dev/null || echo "unknown")"
-  printf -- '---\n\n_Source: https://github.com/Shyden-Ltd/ShyTalk/blob/main/.project/stories/%s.md_\n_Status: %s_\n_Last synced: %s from commit %s body-hash: %s_' \
+  printf -- '---\n\n_Source: https://github.com/Shyden-Ltd/ShyTalk/blob/develop/.project/stories/%s.md_\n_Status: %s_\n_Last synced: %s from commit %s body-hash: %s_' \
     "$slug" "$PS_STATUS" "$now" "$sha" "$hash"
 }
 

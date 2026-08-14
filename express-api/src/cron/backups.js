@@ -107,16 +107,26 @@ async function backupSubcollection(parentCollection, subName) {
 
 /**
  * Run a full database backup.
+ *
+ * The collection scope defaults to the env-derived constants
+ * (TOP_LEVEL_COLLECTIONS + SUBCOLLECTIONS) so a no-arg call behaves exactly as
+ * before. Callers may override either list — e.g. an admin "back up everything
+ * now" action, or a targeted backup — by passing `{ topLevelCollections,
+ * subcollections }`.
+ *
  * Returns { date, manifest } on success.
  */
-async function backups() {
+async function backups({
+  topLevelCollections = TOP_LEVEL_COLLECTIONS,
+  subcollections = SUBCOLLECTIONS,
+} = {}) {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const prefix = `backups/full/${today}`;
   const manifest = { date: today, timestamp: new Date().toISOString(), collections: {} };
 
   // Back up top-level collections (retain users JSON for backwards-compat copy)
   let usersJsonStr = null;
-  for (const collName of TOP_LEVEL_COLLECTIONS) {
+  for (const collName of topLevelCollections) {
     try {
       const { name, docs, count } = await backupCollection(collName);
       const key = `${prefix}/${name}.json`;
@@ -141,7 +151,7 @@ async function backups() {
   }
 
   // Back up subcollections
-  for (const [parent, sub] of SUBCOLLECTIONS) {
+  for (const [parent, sub] of subcollections) {
     try {
       const { name, docs, count } = await backupSubcollection(parent, sub);
       const key = `${prefix}/${name}.json`;

@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Ví · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Việc tiếp tục vi phạm có thể dẫn đến việc đình chỉ tài khoản của bạn.</string>
+    <string name="warning_acknowledge_failed">Không thể xóa cảnh báo của bạn. Vui lòng kiểm tra kết nối và thử lại.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Tài khoản của bạn đã được xem xét và cảnh báo đã được đưa ra.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1500,10 +1501,10 @@
     <string name="security_reset_pin">Đặt lại mã PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Xác minh danh tính của bạn để đặt mã PIN mới</string>
+    <string name="security_set_pin">Đặt mã PIN</string>
+    <string name="security_set_pin_desc">Bảo vệ ứng dụng bằng mã PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Tài khoản được liên kết</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Quản lý phương thức đăng nhập</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Đăng nhập bằng email</string>

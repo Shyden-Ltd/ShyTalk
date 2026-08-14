@@ -89,7 +89,7 @@ class AgeVerificationSubmitScreenTest {
     // ─── Edge cases — default state, minimal state, with arbitrary fields ──
 
     @Test
-    fun `shouldShowTestEnvWarning - false on default-constructed state (Explanation, prod)`() {
+    fun `shouldShowTestEnvWarning - false on default-constructed state Explanation prod`() {
         // Default ctor lands on Explanation + isPreviewBuild=false. Both
         // gate conditions fail; warning is hidden. Pin this so a future
         // default-value drift can't silently flip the watermark on for

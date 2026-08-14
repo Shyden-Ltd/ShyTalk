@@ -1,0 +1,49 @@
+// iosApp/Configurations/Dev.xcconfig
+//
+// Build settings for the iOS "Debug-Dev" variant (SHY-0104) — the sibling
+// of the Android `dev` product flavor declared in `app/build.gradle.kts`.
+//
+// Debug-Dev runs against the PUBLIC dev backend (Firebase project
+// `shytalk-dev` via the bundled GoogleService-Info.plist +
+// `https://dev-api.shytalk.shyden.co.uk`) WITH the test-persona picker
+// enabled, so real-iPhone dev journey/regression gauntlets run exactly as
+// the Android dev flavor does — WITHOUT exposing the local emulator stack to
+// the LAN (which would require the reverted `0.0.0.0` emulator rebind).
+//
+// Registered as the baseConfigurationReference of the project-level
+// Debug-Dev XCBuildConfiguration by scripts/ios/add-dev-configuration.rb.
+//
+// The compile condition that selects iOSApp.swift's dev branch (DEV_BACKEND)
+// is stamped onto the Debug-Dev configs by that script — NOT here — because a
+// cloned config's own SWIFT_ACTIVE_COMPILATION_CONDITIONS would override an
+// xcconfig value that lacks `$(inherited)`. Keeping the flag in the pbxproj
+// (asserted by ios-dev-configuration.test.js) is the reliable single source.
+//
+// Variable contract:
+//   DEV_QA_PERSONAS_PASSWORD — shared credential for the seeded dev test
+//     personas. EMPTY by default so a build WITHOUT the build-time override
+//     fails CLOSED: the picker hides rather than shipping a blank/placeholder
+//     credential. The real value is injected at BUILD TIME, never committed —
+//     scripts/ios/build-debug-dev.sh passes it as an xcodebuild command-line
+//     build-setting override sourced from ~/.shytalk/dev-personas.env
+//     (the PERSONAS_PASSWORD entry). Info.plist exposes the value to Swift as
+//     the `DevQaPersonasPassword` key via `$(DEV_QA_PERSONAS_PASSWORD)`. The
+//     Release config never defines this var, so the key resolves to empty
+//     there — the credential is ABSENT from any distributable IPA (the
+//     security guarantee).
+//
+//   KOTLIN_FRAMEWORK_BUILD_TYPE — the KMP/Compose Gradle plugin's
+//     "Compile Kotlin Framework" build phase infers debug-vs-release from the
+//     Xcode CONFIGURATION name, recognising only the literal `Debug`/`Release`.
+//     A custom name like `Debug-Dev` defeats that heuristic ("Unable to detect
+//     Kotlin framework build type"), so the type MUST be stated explicitly.
+//     Debug-Dev is a debug build → `debug`. (Single-config xcconfig, so this is
+//     unambiguous here — unlike the shared Local.xcconfig, which fronts both
+//     Debug-Local and Release-Local and therefore can't carry one value.)
+//
+// xcconfig syntax: expansion is `$(VAR)` — NOT shell `${VAR}`; `//` comments.
+//
+// Pinned by: express-api/tests/scripts/ios-dev-xcconfig.test.js
+
+DEV_QA_PERSONAS_PASSWORD =
+KOTLIN_FRAMEWORK_BUILD_TYPE = debug

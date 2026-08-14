@@ -22,6 +22,10 @@ data class AppSettingsScreenParams(
     val onNavigateToCommunityStandards: () -> Unit = {},
     val onNavigateToTermsAndConditions: () -> Unit = {},
     val onNavigateToCyberBullyingPolicy: () -> Unit = {},
+    // Deliberately non-defaulted: the Security entry is the ONLY path to
+    // App-Lock enrolment, so a platform that forgets to wire it must fail
+    // to compile rather than ship a dead row (SHY-0187).
+    val onNavigateToSecurity: () -> Unit,
     val onSignOut: () -> Unit,
 )
 
@@ -30,6 +34,10 @@ data class WarningScreenParams(
     val reason: String?,
     val onAccept: () -> Unit,
     val onViewCommunityStandards: () -> Unit,
+    // SHY-0097: acknowledge is server-authorized + awaited; these surface the
+    // in-flight (disabled button) and failure (error text) states.
+    val isAcknowledging: Boolean = false,
+    val acknowledgeError: String? = null,
 )
 
 /** Parameters for the profile screen. */

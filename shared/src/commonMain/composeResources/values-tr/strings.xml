@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Cüzdan · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Devam eden ihlaller hesabınızın askıya alınmasına neden olabilir.</string>
+    <string name="warning_acknowledge_failed">Uyarınız kaldırılamadı. Lütfen bağlantınızı kontrol edip tekrar deneyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Hesabınız incelendi ve bir uyarı verildi.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1500,10 +1501,10 @@
     <string name="security_reset_pin">PIN\'i sıfırla</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Yeni bir PIN belirlemek için kimliğinizi doğrulayın</string>
+    <string name="security_set_pin">PIN belirle</string>
+    <string name="security_set_pin_desc">Uygulamayı PIN ile koruyun</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Bağlı Hesaplar</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Oturum açma yöntemlerini yönetin</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">E-postayla oturum açın</string>

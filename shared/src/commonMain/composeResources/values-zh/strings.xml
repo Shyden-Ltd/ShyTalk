@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">钱包·%1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">持续违规可能会导致您的帐户被暂停。</string>
+    <string name="warning_acknowledge_failed">无法清除您的警告。请检查您的网络连接后重试。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">您的帐户已被审核并已发出警告。</string>
     <!-- google-translated 2026-05-04 -->
@@ -1500,10 +1501,10 @@
     <string name="security_reset_pin">重置密码</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">验证您的身份以设置新的 PIN</string>
+    <string name="security_set_pin">设置 PIN</string>
+    <string name="security_set_pin_desc">使用 PIN 保护应用</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">关联账户</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">管理登录方法</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">使用电子邮件登录</string>

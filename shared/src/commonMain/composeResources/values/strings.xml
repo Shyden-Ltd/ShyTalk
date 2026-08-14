@@ -697,6 +697,7 @@
     <string name="warning_reviewed">Your account has been reviewed and a warning has been issued.</string>
     <string name="warning_reviewed_for_reason">Your account has been reviewed for %1$s and a warning has been issued.</string>
     <string name="warning_consequence">Continued violations may result in suspension of your account.</string>
+    <string name="warning_acknowledge_failed">Couldn\'t clear your warning. Please check your connection and try again.</string>
 
     <!-- Unsafe device -->
     <string name="device_not_supported">Device Not Supported</string>
@@ -873,8 +874,8 @@
     <string name="security_biometric_unavailable">Not available on this device</string>
     <string name="security_reset_pin">Reset PIN</string>
     <string name="security_reset_pin_desc">Verify your identity to set a new PIN</string>
-    <string name="security_linked_accounts">Linked Accounts</string>
-    <string name="security_linked_accounts_desc">Manage sign-in methods</string>
+    <string name="security_set_pin">Set PIN</string>
+    <string name="security_set_pin_desc">Protect the app with a PIN</string>
 
     <!-- Email OTP Screen -->
     <string name="email_sign_in_title">Sign in with email</string>

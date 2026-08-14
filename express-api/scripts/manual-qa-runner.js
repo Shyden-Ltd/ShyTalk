@@ -28,6 +28,8 @@
  *   0 — zero findings of any severity
  *   1 — one or more findings (Blocker / Major / Minor / Polish)
  *   2 — runtime error (missing env, unreachable target, etc.)
+ *   3 — driver init failed (no device / browser app / env var) —
+ *       reserved so a --matrix parent classifies the cell 'skip'
  */
 
 const fs = require('fs');
@@ -836,6 +838,7 @@ async function seedDirectConversation(ctx, p1Name, p2Name) {
   await ctx.db.doc(`conversations/${convId}`).set({
     type: 'DIRECT',
     participantIds: ids,
+    crossCohortAtMigration: false,
     createdAt: Date.now(),
   });
   return { conversationId: convId };
@@ -860,6 +863,7 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   await ctx.db.doc(`conversations/${convId}`).set(
     {
       participantIds: [String(1), String(recipient.uniqueId)],
+      crossCohortAtMigration: false,
       type: 'SYSTEM',
       createdAt: Date.now(),
     },
@@ -1304,6 +1308,37 @@ const matchers = [
             if (!ctx.personaLocales) ctx.personaLocales = new Map();
             ctx.personaLocales.set(name, fields.deviceLocale);
           }
+        }
+      }
+      // Drive the REAL device-app sign-in when this is an Android step and an
+      // adb device driver is wired. The server REST sign-in above only mints a
+      // ctx.sessions token — on a real device that is a FAKE "signed in": the
+      // app itself stays on the persona picker, so later @android-physical
+      // steps (relaunch → warning screen, taps) act on a signed-OUT app. This
+      // wires the genuine picker sign-in (androidPersonaSignIn force-stops,
+      // launches, picks the persona, lands on the tab) so the device is truly
+      // signed in. Guarded on the captured P-NN id (androidPersonaSignIn
+      // requires it) + the "on Android" platform + driver presence, so web /
+      // iOS / driver-less runs are unaffected. (operator 2026-06-14: fill the
+      // gaps, remove the fakes — [[feedback-no-stubs-mocks-fakes-real-only]].)
+      if (
+        m[2] &&
+        /\bon Android\b/.test(m[0]) &&
+        ctx.uiDriver &&
+        ctx.uiDriver.androidPersonaSignIn
+      ) {
+        const tabMatch = m[0].match(/at the "([^"]+)" (?:screen|tab)/);
+        const tab = tabMatch ? tabMatch[1] : 'rooms';
+        try {
+          const signedIn = await ctx.uiDriver.androidPersonaSignIn(m[2], tab, ctx.target);
+          if (signedIn === false) {
+            return {
+              ok: false,
+              error: `androidPersonaSignIn(${m[2]}) returned false — device app not signed in`,
+            };
+          }
+        } catch (e) {
+          return { ok: false, error: `androidPersonaSignIn(${m[2]}) threw: ${e.message}` };
         }
       }
       return { ok: true };
@@ -3689,7 +3724,7 @@ const matchers = [
       if (!ctx.uiDriver.androidKillAndRelaunch) {
         return { ok: false, error: 'ctx.uiDriver.androidKillAndRelaunch not configured' };
       }
-      await ctx.uiDriver.androidKillAndRelaunch(name);
+      await ctx.uiDriver.androidKillAndRelaunch(name, ctx.target);
       return { ok: true };
     },
   },
@@ -6276,6 +6311,7 @@ const matchers = [
           id: convId,
           isGroup: false,
           participantIds: [sp.uniqueId, rp.uniqueId],
+          crossCohortAtMigration: false,
           lastMessage: {
             text: body,
             senderId: sp.uniqueId,
@@ -7528,6 +7564,7 @@ const matchers = [
       await ctx.db.doc(`conversations/${convId}`).set({
         id: convId,
         participantIds: [a.uniqueId, b.uniqueId],
+        crossCohortAtMigration: false,
         frozen: true,
         frozenAt: Date.now(),
       });
@@ -9266,6 +9303,7 @@ const matchers = [
       await ctx.db.doc(`conversations/${convId}`).set({
         id: convId,
         participantIds: sortedIds,
+        crossCohortAtMigration: false,
         createdAt: Date.now(),
       });
       return { ok: true };
@@ -10397,6 +10435,7 @@ const matchers = [
           id: convId,
           isGroup: false,
           participantIds: [recipientUid, SYSTEM_UID],
+          crossCohortAtMigration: false,
           lastMessage: {
             text: placeholderText,
             senderId: SYSTEM_UID,
@@ -12810,6 +12849,7 @@ const matchers = [
         id: convId,
         type: 'direct',
         participantIds: ids,
+        crossCohortAtMigration: false,
         createdAt: Date.now(),
       });
       return { ok: true };
@@ -15473,6 +15513,10 @@ function formatUsage() {
     '  --headed                  Run the browser in headed (visible) mode',
     '  --matrix                  Dispatch every allowed cell in sequence',
     '  --fail-fast               Stop the matrix at the first failing cell',
+    '  --parallel                Dispatch cells per-device-serial, cross-device-',
+    '                              parallel: cells for the same device run one at',
+    '                              a time, but iOS + Android + Mac groups progress',
+    '                              together. Default off (strict-sequential).',
     '  --bail <n>                Stop the matrix after <n> failures (timeouts',
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
@@ -15588,6 +15632,7 @@ function formatListJson(target) {
 // alongside the helper as a single source of truth.
 const PER_CELL_STRIP_FLAGS = new Set([
   '--matrix',
+  '--parallel',
   '--report-dir',
   '--report-format',
   '--report-output',
@@ -15770,7 +15815,23 @@ function formatDryRunJson(opts = {}) {
   if (opts.shardIndex !== undefined && opts.shardCount !== undefined) {
     cells = shardCells(cells, opts.shardIndex, opts.shardCount);
   }
-  return JSON.stringify({ target, cells });
+  // `parallel` previews the dispatch mode so an operator can confirm a
+  // matrix invocation will overlap device groups BEFORE burning a run.
+  return JSON.stringify({ target, cells, parallel: opts.parallel === true });
+}
+
+// buildRunMatrixOptions — maps parsed CLI opts onto runMatrix's option
+// shape (browsers + gates + dispatch mode). Extracted so the mapping is
+// unit-testable at the value level without spawning a real matrix; the
+// clamps mirror the historical inline expressions exactly.
+function buildRunMatrixOptions({ allowed, opts = {} }) {
+  return {
+    browsers: allowed,
+    failFast: opts.failFast === true,
+    bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
+    retry: opts.retry > 0 ? opts.retry : 0,
+    parallel: opts.parallel === true,
+  };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────
@@ -15800,6 +15861,7 @@ async function main() {
     else if (flat[i] === '--browser') opts.browser = flat[++i];
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
+    else if (flat[i] === '--parallel') opts.parallel = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
     else if (flat[i] === '--retry') {
@@ -16041,7 +16103,7 @@ async function main() {
       formatMatrixResultJson,
       formatMatrixResultJunit,
     } = require('./matrix-dispatch');
-    const { spawnSync } = require('child_process');
+    const { createCellDispatcher } = require('./matrix-cell-dispatch');
 
     // --retry-failed: filter `allowed` down to only the cells that
     // failed/timed out in a previous matrix report. Lets the operator
@@ -16091,71 +16153,28 @@ async function main() {
       cellLogs.ensureReportDir(opts.reportDir);
     }
 
+    // Capture mode: pipe stdout+stderr so the dispatcher can both tee
+    // them to the operator's terminal AND write a per-cell log file.
+    // Also forced on under --parallel even without --report-dir:
+    // concurrent cells inheriting the same terminal would interleave
+    // lines mid-cell, so the dispatcher buffers each cell's output and
+    // tees it as one contiguous block at cell end. Inherit mode
+    // (sequential, no --report-dir): zero log overhead, as before.
+    const captureStdio = Boolean(opts.reportDir) || opts.parallel === true;
+    const dispatchOne = createCellDispatcher({
+      runnerPath: __filename,
+      baseArgv,
+      cellTimeoutMs: opts.cellTimeoutMs,
+      captureStdio,
+      reportDir: opts.reportDir || null,
+      cellLogs,
+    });
     const matrixResult = await runMatrix({
-      browsers: allowed,
-      failFast: opts.failFast === true,
-      bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
-      retry: opts.retry > 0 ? opts.retry : 0,
+      ...buildRunMatrixOptions({ allowed, opts }),
       onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
       onCellEnd: (cell) =>
         console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
-      dispatchOne: async ({ browser }) => {
-        const cellArgs = [...baseArgv, '--browser', browser];
-        // Capture mode: pipe stdout+stderr so we can both tee them to
-        // the operator's terminal AND write a per-cell log file. Inherit
-        // mode (no --report-dir): subprocess stdio inherits the runner's
-        // streams as before (zero log overhead).
-        const captureStdio = Boolean(opts.reportDir);
-        // spawnSync's `timeout` option kills the child with SIGTERM
-        // once exceeded; result is `proc.status === null, signal === 'SIGTERM'`.
-        // We translate that to a CELL_TIMEOUT throw so matrix-dispatch's
-        // classifier produces a 'timeout' outcome (distinct from 'fail').
-        const spawnOpts = {
-          stdio: captureStdio ? ['ignore', 'pipe', 'pipe'] : 'inherit',
-          env: process.env,
-        };
-        if (opts.cellTimeoutMs) spawnOpts.timeout = opts.cellTimeoutMs;
-        const proc = spawnSync(process.execPath, [__filename, ...cellArgs], spawnOpts);
-        if (proc.error) {
-          // spawnSync sets proc.error.code = 'ETIMEDOUT' when the
-          // child was killed for exceeding the timeout. Translate to
-          // CELL_TIMEOUT so matrix-dispatch can classify it.
-          if (proc.error.code === 'ETIMEDOUT') {
-            const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
-            e.code = 'CELL_TIMEOUT';
-            throw e;
-          }
-          throw proc.error;
-        }
-        // Some Node versions surface timeout via signal+null-status
-        // instead of proc.error — handle that path too.
-        if (proc.status === null && proc.signal === 'SIGTERM' && opts.cellTimeoutMs) {
-          const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
-          e.code = 'CELL_TIMEOUT';
-          throw e;
-        }
-        if (captureStdio) {
-          // Tee captured stdio to the runner's terminal so the operator
-          // sees the cell's output in real time too — same UX as
-          // 'inherit' mode.
-          const stdout = proc.stdout ? proc.stdout.toString('utf8') : '';
-          const stderr = proc.stderr ? proc.stderr.toString('utf8') : '';
-          if (stdout) process.stdout.write(stdout);
-          if (stderr) process.stderr.write(stderr);
-          // Write per-cell log file. Combined stdout+stderr so a future
-          // operator grep sees both interleaved (close to chronological).
-          cellLogs.writeCellLog({
-            dir: opts.reportDir,
-            cell: {
-              browser,
-              outcome: proc.status === 0 ? 'pass' : 'fail',
-              durationMs: 0, // not measured here; runMatrix sets it on its own cell record
-            },
-            body: stdout + (stderr ? `\n---STDERR---\n${stderr}` : ''),
-          });
-        }
-        return proc.status === 0;
-      },
+      dispatchOne,
     });
     // Always print the human-readable text table to stdout so the
     // operator gets immediate feedback regardless of --report-format.
@@ -16419,6 +16438,7 @@ module.exports = {
   formatVersion,
   formatListJson,
   formatDryRunJson,
+  buildRunMatrixOptions,
   applyFilter,
   shardCells,
   buildDriverFactories,
@@ -16430,7 +16450,13 @@ module.exports = {
 
 if (require.main === module) {
   main().catch((e) => {
-    console.error('RUNNER_CRASH', e?.message || e);
-    process.exit(2);
+    // Driver-init failures (no device / browser app / env var) exit with
+    // the reserved code so a --matrix parent classifies the cell 'skip';
+    // every other crash keeps the historical RUNNER_CRASH exit 2. Lazy
+    // require — the classifier lives beside the matrix outcome taxonomy.
+    const { classifyCrashExit } = require('./matrix-dispatch');
+    const { exitCode, label } = classifyCrashExit(e);
+    console.error(label, e?.message || e);
+    process.exit(exitCode);
   });
 }

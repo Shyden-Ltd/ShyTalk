@@ -35,6 +35,17 @@ interface AuthRepository {
     var resolvedDisplayName: String?
 
     /**
+     * The signed-in user's EFFECTIVE segregation cohort (`"adult"` /
+     * `"minor"`, i.e. `cohortOverride ?: cohort` — the same value every
+     * enforcement layer reads). Cached from the same User-doc fetch that
+     * populates [resolvedDisplayName], for the dev-only `PreviewWatermark`
+     * (SHY-0205): cross-cohort QA screenshots become self-evident when
+     * the badge names the viewer's cohort. Null until the first profile
+     * load, cleared on sign-out alongside the other resolved slots.
+     */
+    var resolvedCohort: String?
+
+    /**
      * Returns the first linked provider's type and identifier from the current
      * Firebase Auth user, or null if not authenticated.
      *

@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Кошелек · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Продолжающиеся нарушения могут привести к блокировке вашего аккаунта.</string>
+    <string name="warning_acknowledge_failed">Не удалось снять предупреждение. Проверьте подключение и повторите попытку.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ваша учетная запись была проверена и вынесено предупреждение.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1500,10 +1501,10 @@
     <string name="security_reset_pin">Сбросить PIN-код</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Подтвердите свою личность, чтобы установить новый PIN-код.</string>
+    <string name="security_set_pin">Установить PIN-код</string>
+    <string name="security_set_pin_desc">Защитите приложение с помощью PIN-кода.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Связанные аккаунты</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Управление способами входа</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Войти с помощью электронной почты</string>

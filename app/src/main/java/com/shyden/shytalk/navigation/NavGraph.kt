@@ -46,10 +46,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.google.firebase.messaging.FirebaseMessaging
 import com.shyden.shytalk.BuildConfig
+import com.shyden.shytalk.core.BuildVariant
+import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.crop.CropContract
 import com.shyden.shytalk.core.crop.CropInput
 import com.shyden.shytalk.core.push.notifyPushPermissionPrompted
 import com.shyden.shytalk.core.room.RoomLifecycleManager
+import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.BillingService
@@ -59,6 +62,7 @@ import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.auth.EmailOtpScreen
+import com.shyden.shytalk.feature.auth.PinSetupScreen
 import com.shyden.shytalk.feature.auth.SignInScreen
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
@@ -86,6 +90,7 @@ import com.shyden.shytalk.feature.profile.ProfileSetupScreen
 import com.shyden.shytalk.feature.profile.RequiredDOBScreen
 import com.shyden.shytalk.feature.room.RoomScreen
 import com.shyden.shytalk.feature.settings.AppSettingsScreen
+import com.shyden.shytalk.feature.settings.SecuritySettingsScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
@@ -122,8 +127,17 @@ fun NavGraph(
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
-        navController.currentBackStackEntryFlow.collect {
+        navController.currentBackStackEntryFlow.collect { entry ->
             currentUserId = authRepository.currentUserId
+            if (BuildVariant.isPreviewBuild) {
+                // Feed the preview watermark's route line (SHY-0205) —
+                // mirrors SharedNavGraph's publisher (Android runs THIS
+                // graph, not the shared one — the on-device walk caught
+                // the omission). Route PATTERNS only (`rooms/{roomId}`),
+                // never filled-in arguments: an id in the watermark
+                // would leak identifiers into shared screenshots.
+                QaContext.setCurrentRoute(entry.destination.route)
+            }
         }
     }
 
@@ -170,11 +184,38 @@ fun NavGraph(
         }
     }
 
+    // SHY-0187: re-interpose the App-Lock over post-auth content when the
+    // lock timeout expires in the background.
+    AppLockResumeGate(navController)
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
         ) {
+            composable(Screen.Lock.route) {
+                com.shyden.shytalk.feature.auth.LockScreen(
+                    onUnlocked = {
+                        // Warm re-lock (Lock pushed over content) → return to that
+                        // content; cold launch (Lock is the stack root) → to Main
+                        // with Lock removed so back cannot re-enter it.
+                        if (navController.previousBackStackEntry != null) {
+                            navController.safePopBackStack()
+                        } else {
+                            navController.navigate(Screen.Main.route) {
+                                popUpTo(Screen.Lock.route) { inclusive = true }
+                            }
+                        }
+                    },
+                    onReauthRequired = {
+                        // Session unrecoverable — full re-auth, nothing beneath kept.
+                        navController.navigate(Screen.SignIn.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
+            }
+
             composable(Screen.SignIn.route) {
                 SignInScreen(
                     pendingEmailLink = pendingEmailLink,
@@ -602,6 +643,7 @@ fun NavGraph(
                     onNavigateToCyberBullyingPolicy = {
                         navController.navigate(Screen.CyberBullyingPolicy.route)
                     },
+                    onNavigateToSecurity = { navController.navigate(Screen.SecuritySettings.route) },
                     onSignOut = {
                         // Remove FCM token before signing out
                         val signOutUserId = authRepository.currentUserId
@@ -627,6 +669,22 @@ fun NavGraph(
                             popUpTo(Screen.Main.route) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            composable(Screen.SecuritySettings.route) {
+                SecuritySettingsScreen(
+                    appLockRepository = koinInject(),
+                    biometricAvailable = koinInject<BiometricAuth>().isAvailable(),
+                    onNavigateBack = { navController.safePopBackStack() },
+                    onResetPin = { navController.navigate(Screen.PinSetup.route) },
+                )
+            }
+
+            composable(Screen.PinSetup.route) {
+                PinSetupScreen(
+                    onCompleted = { navController.safePopBackStack() },
+                    biometricAvailable = koinInject<BiometricAuth>().isAvailable(),
                 )
             }
 
@@ -950,6 +1008,9 @@ fun NavGraph(
 
                 // Read the warning reason from user doc
                 var warningReason by remember { mutableStateOf<String?>(null) }
+                var isAcknowledging by remember { mutableStateOf(false) }
+                var acknowledgeError by remember { mutableStateOf<String?>(null) }
+                val ackFailedMessage = stringResource(Res.string.warning_acknowledge_failed)
                 LaunchedEffect(Unit) {
                     val userId = authRepository.currentUserId ?: return@LaunchedEffect
                     when (val result = warningUserRepo.getWarningReason(userId)) {
@@ -960,13 +1021,34 @@ fun NavGraph(
 
                 WarningScreen(
                     reason = warningReason,
+                    isAcknowledging = isAcknowledging,
+                    acknowledgeError = acknowledgeError,
                     onAccept = {
                         warningScope.launch {
-                            val userId = authRepository.currentUserId ?: return@launch
-                            warningUserRepo.acknowledgeWarning(userId)
-                            navController.navigate(Screen.Main.route) {
-                                popUpTo(Screen.Warning.route) { inclusive = true }
-                            }
+                            // SHY-0097: await the server-authorized acknowledge and
+                            // navigate ONLY on success; on failure stay + show the
+                            // error. The old code navigated unconditionally then got
+                            // bounced back by the reactive gate (silent failure).
+                            isAcknowledging = true
+                            acknowledgeError = null
+                            acknowledgeWarningAndRoute(
+                                userId = authRepository.currentUserId,
+                                acknowledge = warningUserRepo::acknowledgeWarning,
+                                onSuccess = {
+                                    // Reset before navigating: if the navigate is a no-op
+                                    // (the reactive gate may have already moved us) the
+                                    // composable can linger — don't leave it stuck
+                                    // disabled/spinning.
+                                    isAcknowledging = false
+                                    navController.navigate(Screen.Main.route) {
+                                        popUpTo(Screen.Warning.route) { inclusive = true }
+                                    }
+                                },
+                                onError = {
+                                    acknowledgeError = ackFailedMessage
+                                    isAcknowledging = false
+                                },
+                            )
                         }
                     },
                     onViewCommunityStandards = {

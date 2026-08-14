@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
@@ -60,7 +60,7 @@ jobs:
       # restore-keys restores the newest entry. Do NOT set SONAR_USER_HOME
       # — CI and local pre-push scans must share this default path.
       - name: Cache SonarCloud scanner engine
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar-${{ github.run_id }}
@@ -81,6 +81,36 @@ jobs:
       - uses: ./.github/actions/setup-jdk-gradle
 
       - uses: ./.github/actions/setup-node
+
+      # EPIC-0003 / SHY-0120: the express cron Jest tests also exercise the
+      # REAL R2 (MinIO) + email (Mailpit) backends, so provision them here
+      # too (mirrors test-backend.yml + local/docker-compose). Started before
+      # the Firebase emulators so the image pulls overlap with emulator boot.
+      - uses: ./.github/actions/start-local-services
+
+      # EPIC-0003 Phase 3: run the express Jest suite against the REAL
+      # Firebase emulator stack ($0, credential-free under projectId
+      # demo-shytalk) instead of jest.mock(firebase). The JVM the
+      # Firestore/RTDB emulators need is already provided by
+      # setup-jdk-gradle above (no second JVM setup).
+      - uses: ./.github/actions/start-firebase-emulators
+
+      # Block until MinIO + Mailpit answer before running the suite — the
+      # cron tests hit both in beforeAll, so an unready container is a hard
+      # failure, not a flake.
+      - name: Wait for MinIO + Mailpit to be ready
+        shell: bash
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:9002/minio/health/live >/dev/null \
+               && curl -sf http://localhost:8025/api/v1/messages >/dev/null; then
+              echo "MinIO + Mailpit ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::MinIO/Mailpit did not become ready within 60s"
+          exit 1
 
       - name: Run Express API tests with coverage
         # `--experimental-vm-modules` lets Jest resolve dynamic `import()`

@@ -106,5 +106,35 @@
 	-->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!--
+	    SHY-0104 — persona-picker password for the Debug-Dev variant.
+	    Reads the $(DEV_QA_PERSONAS_PASSWORD) build setting: the real value
+	    is injected at build time only on Debug-Dev (xcodebuild command-line
+	    override sourced from ~/.shytalk/dev-personas.env, never committed).
+	    Every other configuration leaves the var undefined, so this resolves
+	    to an EMPTY string — the password literal is absent from any
+	    distributable IPA, and iOSApp.swift's resolver coerces empty → nil so
+	    the picker fails closed. Swift reads it via
+	    Bundle.main.infoDictionary["DevQaPersonasPassword"].
+	-->
+	<key>DevQaPersonasPassword</key>
+	<string>$(DEV_QA_PERSONAS_PASSWORD)</string>
+	<!--
+	    SHY-0205 — build-time git identity for the preview watermark.
+	    Same mechanism as DevQaPersonasPassword above: each key resolves a
+	    SHYTALK_GIT_* build setting passed on the xcodebuild command line by
+	    scripts/ios/build-debug-dev.sh (local device builds) and
+	    deploy-dev.yml (CI archives). Builds without the settings (Xcode
+	    GUI, prod archives) resolve to empty strings; iOSApp.swift forwards
+	    them and BuildVariant coerces blank → "?" — placeholders on an
+	    unstamped build, zero git metadata on prod. GitDirty uses "1" for
+	    dirty, empty/anything-else for clean.
+	-->
+	<key>ShyTalkGitBranch</key>
+	<string>$(SHYTALK_GIT_BRANCH)</string>
+	<key>ShyTalkGitSha</key>
+	<string>$(SHYTALK_GIT_SHA)</string>
+	<key>ShyTalkGitDirty</key>
+	<string>$(SHYTALK_GIT_DIRTY)</string>
 </dict>
 </plist>
