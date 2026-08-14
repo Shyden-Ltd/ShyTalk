@@ -27,48 +27,58 @@ There were **two** GitHub Actions secrets holding the same logical value — the
 - **`DEV_QA_PERSONAS_PASSWORD`** (created 2026-05-21) — the canonical one, read by the **Android app build** (`MainActivity.kt` → `BuildConfig.DEV_QA_PERSONAS_PASSWORD`), the **iOS app build** (`$(DEV_QA_PERSONAS_PASSWORD)` xcconfig), **pr-checks**, **deploy-dev** (APK build) and the **manual-qa journey matrix**.
 - **`PERSONAS_PASSWORD_DEV`** (created 2026-05-29, when the standalone `seed-dev-personas` workflow was added) — read by **exactly one place**: the seed workflow, to set the personas' password.
 
-Nothing enforced the two equal. They drifted, so the personas got seeded with one value while every client signed in with the other → Firebase `INVALID_CREDENTIALS` → the app's generic *"Persona sign-in failed"* (the `DevSignInHelper` swallows the specific error). This blocked the SHY-0130 dev device-test session on 2026-06-20.
+Nothing enforced the two equal. They drifted, so the personas got seeded with one value while every client signed in with the other → Firebase `INVALID_CREDENTIALS` → the app's generic _"Persona sign-in failed"_ (the `DevSignInHelper` swallows the specific error). This blocked the SHY-0130 dev device-test session on 2026-06-20.
 
 The redundant secret created a **manual synchronisation obligation with no enforcement** — the textbook duplicated-config failure. This story removes it: the seed workflow now reads the canonical `DEV_QA_PERSONAS_PASSWORD`, so there is **one** persona-password secret used everywhere.
 
 ## Acceptance Criteria
 
 ### Happy path
+
 - [ ] `seed-dev-personas.yml` reads `secrets.DEV_QA_PERSONAS_PASSWORD` (not `PERSONAS_PASSWORD_DEV`) for both invocation paths (`workflow_call` from deploy-dev + direct `workflow_dispatch`).
 - [ ] A repo-wide grep for `PERSONAS_PASSWORD_DEV` returns **zero** references (workflow + comments + tests) — the secret name is fully retired in code.
 - [ ] After deploy, the freshly-built APK (bakes `DEV_QA_PERSONAS_PASSWORD`) and the freshly-seeded personas (now seeded from the same secret) share one value → persona sign-in succeeds on a real device.
 
 ### Error paths
+
 - [ ] The `workflow_call` `secrets:` block still declares the persona-password secret `required: true`, so a future caller that forgets `secrets: inherit` fails at workflow_call validation, not silently at runtime.
 
 ### Edge cases
+
 - [ ] The direct `workflow_dispatch` path still resolves the secret from repo-level Actions secrets (it now resolves `DEV_QA_PERSONAS_PASSWORD`, which exists repo-wide).
 
 ### Performance
+
 - N/A — CI config rename; no runtime path changed.
 
 ### Security
+
 - [ ] No secret VALUE is committed or logged; only the secret NAME reference in YAML changes. Retiring the redundant `PERSONAS_PASSWORD_DEV` reduces the secret surface (one fewer credential to rotate/leak).
 - [ ] The change does not alter what the seed script does or which project it targets (still dev-only, `assertSafeProject()` unchanged).
 
 ### UX
+
 - N/A — no user-facing surface.
 
 ### i18n
+
 - N/A — no user-facing strings.
 
 ### Observability
+
 - [ ] The pin test `deploy-dev-seed-personas.test.js` asserts the canonical secret name, so a future re-introduction of a divergent name fails CI loudly.
 
 ## BDD Scenarios
 
 **Scenario: seed workflow reads the canonical secret**
+
 - **Given** the consolidated `seed-dev-personas.yml`
 - **When** the `deploy-dev` workflow calls it with `secrets: inherit`
 - **Then** the seed action receives `personas-password` from `secrets.DEV_QA_PERSONAS_PASSWORD`
 - **And** the personas are seeded with the same value the app build bakes in
 
 **Scenario: the redundant secret name is gone (regression guard)**
+
 - **Given** the repo after this change
 - **When** `deploy-dev-seed-personas.test.js` runs
 - **Then** it asserts `DEV_QA_PERSONAS_PASSWORD:` is declared `required: true` in the workflow
@@ -108,3 +118,23 @@ The redundant secret created a **manual synchronisation obligation with no enfor
 ## Notes (running log)
 
 - 2026-06-20 — Filed live while unblocking the SHY-0130 dev device-test (persona sign-in failed on a real Android device). Root cause traced to the two-secret drift (`DEV_QA_PERSONAS_PASSWORD` 2026-05-21 vs `PERSONAS_PASSWORD_DEV` 2026-05-29). Fix is TDD'd (red→green on the pin test, 20/20) + actionlint clean + repo grep clean. Architect step skipped (XS config rename, low-risk; per rate-limit-slowdown guidance). Deployed to dev via `gh workflow run deploy-dev.yml --ref chore/SHY-0136-... -f ref=story/SHY-0130-...` so the re-seed + APK rebuild both read the single secret before the PR merges. After merge: delete the redundant `PERSONAS_PASSWORD_DEV` GitHub secret.
+
+**2026-08-14 — review + rebase onto develop.**
+
+Retargeted from `main` to `develop` (the merge policy moved to develop-first on
+2026-07-25; this PR predated it). `develop` merged into the branch, which
+cleared a `lint / Lint` failure caused by the branch carrying pre-promotion
+workflow files — actionlint was linting stale copies, not this PR's changes.
+
+Reviewed the diff. Three files, one coherent change: the seeded-persona secret
+renamed `PERSONAS_PASSWORD_DEV` → `DEV_QA_PERSONAS_PASSWORD`, with
+`deploy-dev-seed-personas.test.js` updated in lockstep so the tests assert the
+new name rather than the old.
+
+The one risk in a secret rename is that the new name does not exist, which
+fails at `workflow_call` secrets validation rather than anywhere obvious.
+Checked: `DEV_QA_PERSONAS_PASSWORD` IS provisioned on the repo (secret names
+only — values are never readable), and no `PERSONAS_PASSWORD_DEV` remains.
+Safe to merge.
+
+Reviewed-up-to: 1a02a01fe6745c030e595b447bae4121969a4051
