@@ -1,6 +1,6 @@
 ---
 id: SHY-0194
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-16
 priority: P1
@@ -126,3 +126,5 @@ Exactly four languages selectable and fully rendering on app + web; retired-loca
 ## Notes
 
 - 2026-07-16 — Filed from the operator's mid-session directive (verbatim in Why). Queued behind the SHY-0187/0192 stack close-out and the Deploy-To-Dev fix per WIP=1. Interim four-locale rule for new strings starts NOW (this session's earlier `security_set_pin` strings landed in all 21 files while the 20-locale contract was still in force; SHY-0194's sweep deletes the 17 retired copies wholesale — no pre-work needed).
+
+- 2026-08-06 — **CANCELLED, superseded by EPIC-0010.** The operator replaced every language mechanism with the shyden.co.uk model (real per-locale URLs on the web; device-locale in the app) and narrowed the set to five MVP languages. See EPIC-0010's Notes for the per-ticket disposition table. Specifically: superseded by SHY-0289, which retires 15 locales and keeps FIVE — 0194 named only four.

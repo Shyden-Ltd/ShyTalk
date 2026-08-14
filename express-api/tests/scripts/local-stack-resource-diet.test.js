@@ -177,8 +177,13 @@ describe('Local-stack resource diet', () => {
     // blocks at the firebase emulators:start call indefinitely and
     // never reaches Step 3 onward. `FIREBASE_PID=$!` would capture
     // the wrong PID (the shell's, not firebase's).
+    // Matched on the FLAG and the trailing `&`, not on the literal path.
+    // The path became a variable when FRESH mode was added, and this
+    // assertion reddened -- pinning `local/firebase-emulator-data` was
+    // incidental to what it is actually about, which is that the launch is
+    // backgrounded at all.
     test('firebase emulator launch is backgrounded with trailing &', () => {
-      expect(scriptText).toMatch(/^ {2}--export-on-exit=local\/firebase-emulator-data &$/m);
+      expect(scriptText).toMatch(/^ {2}--export-on-exit=\S+ &$/m);
     });
 
     // Coverage gap (round 2): pin the FIREBASE_PID=$! capture
@@ -187,9 +192,7 @@ describe('Local-stack resource diet', () => {
     // (the trap function relies on FIREBASE_PID being valid).
     test('FIREBASE_PID is captured on the line immediately after the firebase & command', () => {
       const lines = scriptText.split('\n');
-      const ampLineIdx = lines.findIndex((l) =>
-        l.match(/^ {2}--export-on-exit=local\/firebase-emulator-data &$/),
-      );
+      const ampLineIdx = lines.findIndex((l) => l.match(/^ {2}--export-on-exit=\S+ &$/));
       expect(ampLineIdx).toBeGreaterThanOrEqual(0);
       expect(lines[ampLineIdx + 1]).toMatch(/^FIREBASE_PID=\$!$/);
     });
@@ -554,5 +557,60 @@ describe('Local-stack resource diet', () => {
         /Could not find service "livekit\.\*nonexistent"/,
       );
     });
+  });
+});
+
+/**
+ * Emulator data compounds, and the failure it causes is invisible where it
+ * bites.
+ *
+ * `--import` and `--export-on-exit` name the same path, so every run of
+ * local/start.sh imports the previous run's leftovers and writes its own on
+ * top. On 2026-08-13 that dataset had reached 7.9 MB and 843 Auth users, and
+ * `adminLogin` plus the admin tabs were slow enough to exceed Playwright's
+ * 20s test timeout: the pre-push gate reported 66 failing admin specs. None
+ * was a defect. The same spec on a clean emulator passed 11 of 11 in 24s.
+ *
+ * What is pinned here is the pair of guards that make that self-explaining:
+ * a way to start clean, and a warning before the wall rather than after it.
+ */
+describe('local/start.sh — emulator data does not compound silently', () => {
+  const startSh = () => fs.readFileSync(START_SH_PATH, 'utf-8');
+
+  it('offers FRESH=1 to start with no imported data', () => {
+    const sh = startSh();
+    expect(sh).toMatch(/FRESH:?-?/);
+    // The import flag must be OMITTED under FRESH, not merely pointed
+    // elsewhere: importing a different stale path is the same bug again.
+    expect(sh).toMatch(/IMPORT_ARGS=\(\)/);
+  });
+
+  it('still exports on exit under FRESH, so a clean run leaves clean data', () => {
+    // A FRESH run that also stopped exporting would leave the next run with
+    // nothing at all — which works, but silently discards the seeded state
+    // every time and hides that FRESH was ever used.
+    expect(startSh()).toMatch(/--export-on-exit="?\$EMULATOR_DATA/);
+  });
+
+  it('preserves the previous data rather than deleting it', () => {
+    // 7.9 MB of local state is not ours to throw away on a flag.
+    expect(startSh()).toMatch(/mv "\$EMULATOR_DATA" .*pre-fresh/);
+  });
+
+  it('warns while the dataset is still recoverable, not once tests fail', () => {
+    const sh = startSh();
+    // 4 MB: measured, not guessed. 7.9 MB was already failing and a freshly
+    // seeded export is under 1 MB, so the warning lands with room to act.
+    expect(sh).toMatch(/-gt 4096/);
+    expect(sh).toMatch(/FRESH=1 bash local\/start\.sh/);
+  });
+
+  it('names the symptom the operator will actually see', () => {
+    // A warning that says "data is large" teaches nothing. The failure
+    // presents as dozens of unrelated admin test failures, and the warning
+    // has to say so or it will be read past.
+    const sh = startSh();
+    expect(sh).toMatch(/time out|timeout/i);
+    expect(sh).toMatch(/pre-push|admin/i);
   });
 });

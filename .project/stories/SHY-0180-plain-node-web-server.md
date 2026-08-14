@@ -1,12 +1,13 @@
 ---
 id: SHY-0180
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-13
 priority: P1
 effort: S
 type: infra
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0180: Replace `npx serve` with a zero-dependency static server for the local web tier

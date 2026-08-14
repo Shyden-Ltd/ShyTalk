@@ -29,53 +29,65 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 ## Acceptance Criteria
 
 ### Happy path
+
 - [ ] `deploy-dev.yml`'s archive step carries `-destination 'generic/platform=iOS'`; a dispatched Deploy-To-Dev run's "Distribute iOS to TestFlight" job passes (archive + export + upload).
 - [ ] `deploy-prod.yml`'s archive step carries the same explicit destination (latent-fix; proven by the pin test — prod is NOT dispatched for this story).
 - [ ] `seed-dev-personas.yml` requires + consumes `DEV_QA_PERSONAS_PASSWORD`; the "Seed Dev Personas" job passes on the same dispatched run.
 - [ ] `setup-jdk-gradle/action.yml` pins the same setup-java SHA as every workflow (`0f481fcb613427c0f801b606911222b5b6f3083a`); `ci-action-pin-consistency.test.js` is green.
 
 ### Error paths
+
 - [ ] If the seed workflow is invoked without the canonical secret available, it still fails LOUDLY at call time (the `required: true` contract is kept — no silent skip).
 - [ ] N/A beyond that — the changes remove failure modes rather than adding branches.
 
 ### Edge cases
+
 - [ ] `seed-dev-personas.yml`'s `workflow_dispatch` path (standalone re-seed without a deploy) resolves the renamed secret from repo secrets — comment updated to match.
 - [ ] Every OTHER `actions/setup-java` reference repo-wide stays on the one canonical SHA (the consistency test enumerates workflows + composite actions).
 
 ### Performance
+
 - [ ] N/A — flag + name changes only; no added steps.
 
 ### Security
+
 - [ ] The secret RENAME does not widen access: same secret material, same scopes; `secrets: inherit` forwards by name to the reusable workflow exactly as before. No secret value is ever echoed.
 - [ ] The SHA bump is dependabot's own reviewed 5.5.0 SHA already trusted in `test-backend.yml` — no new supply-chain surface.
 
 ### UX
+
 - [ ] N/A — no user-facing surface (CI plumbing only).
 
 ### i18n
+
 - [ ] N/A — no strings.
 
 ### Observability
+
 - [ ] The dispatched verification run's job list is the proof artifact: previously-failing jobs green, recorded in Notes with the run id.
 
 ## BDD Scenarios
 
 **Scenario: the dev deploy distributes iOS again**
+
 - **Given** the fix branch carries the destination fix
 - **When** Deploy-To-Dev is dispatched with the fix branch as its `ref` (Phase-3 unmerged-branch pattern)
 - **Then** the "Distribute iOS to TestFlight" job completes successfully (no "Found no destinations" error)
 
 **Scenario: personas reseed on deploy again**
+
 - **Given** the same dispatched run
 - **When** the "Seed Dev Personas" job executes
 - **Then** it resolves `DEV_QA_PERSONAS_PASSWORD` and completes successfully
 
 **Scenario: the pin suite enforces the fixed state**
+
 - **Given** the repo after the fix
 - **When** the express script-pin tests run
 - **Then** the seed-personas pins assert the CANONICAL secret name, the archive pins assert the explicit generic destination on BOTH deploy workflows, and the action-SHA consistency test passes
 
 **Scenario: prod carries no latent copy of the bug**
+
 - **Given** `deploy-prod.yml` after the fix
 - **When** its archive invocation is inspected (pin test)
 - **Then** it carries `-destination 'generic/platform=iOS'` identically
@@ -85,6 +97,7 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 **CI-config-only classification:** changes confined to `.github/workflows/deploy-dev.yml`, `.github/workflows/deploy-prod.yml`, `.github/workflows/seed-dev-personas.yml`, `.github/actions/setup-jdk-gradle/action.yml`, and their pin tests in `express-api/tests/scripts/` — no app, backend, or website runtime surface → device/browser gauntlet exempt per the protocol's exemption 2. Verification is the REAL dispatch (verified-needs-dispatch).
 
 **Red → Green:**
+
 - **`express-api/tests/scripts/deploy-dev-seed-personas.test.js`**: flip the three `PERSONAS_PASSWORD_DEV` expectations (lines ~93/122/129) to `DEV_QA_PERSONAS_PASSWORD` — RED against current YAML → rename in `seed-dev-personas.yml` → GREEN.
 - **`express-api/tests/scripts/ios-deploy-archive-signing.test.js`**: new `test.each(WORKFLOWS)` asserting the archive invocation (existing `archiveInvocation` helper) contains `-destination 'generic/platform=iOS'` — RED on both workflows → add the flag → GREEN.
 - **`express-api/tests/scripts/ci-action-pin-consistency.test.js`**: ALREADY RED on develop (the drift) → bump the composite action's SHA → GREEN. No test edit needed (the ratchet is the test).
@@ -124,5 +137,28 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 
 - 2026-07-16 ~18:5x WIB — Develop-side drift half: the device-return gauntlet's express battery failed exactly ci-action-pin-consistency (setup-java pinned to 2 SHAs — the drift THIS story fixed on the main-based branch never reached develop after #1613 was closed superseded). Aligned `.github/actions/setup-jdk-gradle/action.yml` to the SAME SHA #1614 uses (0f481fcb… v5.5.0) so the eventual main→develop back-merge cannot conflict or re-drift. RED = the canonical full express run (13,495/13,496, sole failure named this drift + fix verbatim); GREEN = pin suite 15/15. One-line test-prescribed alignment, self-verified per the agent-frugality rule (the R1/R1.1-reviewed main-side fix is byte-identical on this SHA).
 
-Reviewed-up-to: 2238d4e3640
+Reviewed-up-to: 264c2ed2ebfe435263151142993acd5cb324d49b
 
+**2026-08-14 — correction.** This story was flipped to `Done` +
+`released_in: v0.98.0` by the v0.98.0 bookkeeping sweep (PR #1741) and that
+was WRONG. Reverted here.
+
+The sweep derived membership from "the story ID appears in `git log v0.98.0`".
+SHY-0195 appears there via PR #1617 — whose own title says it is _"the drift
+half of the main-based fix"_. A partial fix carries the story ID exactly as
+loudly as a complete one.
+
+The other half is still open in **PR #1614**, and its changes are demonstrably
+not on develop: `deploy-dev.yml`, `.github/actions/setup-jdk-gradle/action.yml`
+and `deploy-dev-seed-personas.test.js` all differ between develop and that
+branch. The branch's own copy of this story still reads `In Review`, which is
+the honest status.
+
+Checked for the same fault across the whole sweep: cross-referencing all 59
+flipped stories against open PRs found SHY-0195 and nothing else.
+
+The `Reviewed-up-to` marker above was bumped from `2238d4e3640` — 52 commits
+stale, from this story's original implementation round. It now points at the
+status-correction commit, which is the only thing reviewed on this branch. The
+story's IMPLEMENTATION is still unreviewed-since and still open in PR #1614;
+this marker says nothing about that, and must be bumped again there.

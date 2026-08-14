@@ -1,6 +1,6 @@
 ---
 id: SHY-0185
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-13
 priority: P0
@@ -8,6 +8,7 @@ type: bug
 effort: S
 roadmap_ids: []
 mvp: true
+released_in: v0.98.0
 ---
 
 # SHY-0185: iOS app crashes (SIGABRT) when the user-flags Firestore listener errors after sign-in
