@@ -301,4 +301,50 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     expect(code).not.toBe(0);
     expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
   });
+
+  // ── SHY-0297: the release-bookkeeping exemption ────────────────────────
+  //
+  // A story becomes Done when a release carries it, so the PR that records
+  // `released_in:` necessarily contains Done stories. Before this, the gate
+  // refused that PR — and refused it ALONE, because CI's own
+  // check-pr-story-status.js accepts Done/Cancelled. The local gate was
+  // blocking what the required PR Gate had already passed.
+  const storyAt = (dir, status, extra = '') =>
+    fs.writeFileSync(
+      path.join(dir, '.project/stories/SHY-0999-x.md'),
+      `---\nid: SHY-0999\nstatus: ${status}\npr:\nreleased_in: v0.98.0\n---\n\n# SHY-0999\n${extra}\n## Notes\n`,
+    );
+
+  test('a released story flipped to Done (status + released_in only) is exempt', () => {
+    const dir = mainThenFeature((d) =>
+      fs.writeFileSync(
+        path.join(d, '.project/stories/SHY-0999-x.md'),
+        '---\nid: SHY-0999\nstatus: In Review\npr:\n---\n\n# SHY-0999\n\n## Notes\n',
+      ),
+    );
+    storyAt(dir, 'Done');
+    commit(dir, 'chore(release): mark SHY-0999 released in v0.98.0');
+    const { code, stdout, stderr } = run(dir);
+    expect(code).toBe(0);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+    // Named, not silently waived — the operator can see what was exempted.
+    expect(stderr).toContain('release bookkeeping');
+  });
+
+  // The half that keeps the exemption honest. A Done story carrying ANY other
+  // change is not bookkeeping, and the original rule must still bite —
+  // otherwise "flip it to Done" becomes a way to smuggle an edit past Gate 1.
+  test('REFUSES a Done story whose diff is more than status + released_in', () => {
+    const dir = mainThenFeature((d) =>
+      fs.writeFileSync(
+        path.join(d, '.project/stories/SHY-0999-x.md'),
+        '---\nid: SHY-0999\nstatus: In Review\npr:\n---\n\n# SHY-0999\n\n## Notes\n',
+      ),
+    );
+    storyAt(dir, 'Done', '\nA body line that has no business in a release flip.\n');
+    commit(dir, 'chore(release): flip + sneak a body edit');
+    const { code, stdout } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
+  });
 });

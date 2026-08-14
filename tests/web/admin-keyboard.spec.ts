@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
-import type { Page } from '@playwright/test';
+import type { Page, Locator } from '@playwright/test';
 
 /** Wait for the reports list to finish loading. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
@@ -34,8 +34,34 @@ async function selectFirstReportCard(page: Page): Promise<void> {
   await expect(firstCard).toHaveClass(/selected/, { timeout: 5_000 });
 }
 
+/**
+ * Press a report action-shortcut key (w/s/d) and wait for the card's
+ * action-select to reflect it. WebKit intermittently drops the single
+ * synthetic keydown — the async card render/scroll can land between the
+ * ArrowDown selection and the letter press, so the document handler sees a
+ * transiently-invalid state and the key is a no-op. The product shortcut is
+ * reliable for a real user; this re-presses until the value sticks, absorbing
+ * the test-side timing race without masking a product defect.
+ */
+async function pressReportActionKey(
+  page: Page,
+  actionSelect: Locator,
+  key: string,
+  expectedValue: string,
+): Promise<void> {
+  await expect(async () => {
+    await page.keyboard.press(key);
+    await expect(actionSelect).toHaveValue(expectedValue, { timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+}
+
 test.describe('Admin Keyboard Shortcuts', () => {
-  test.describe.configure({ mode: 'serial' });
+  // Serial + a widened timeout: several tests chain multi-step interactions
+  // that each retry via pressReportActionKey's `toPass` (up to 10s apiece —
+  // the W-key test chains two), which would otherwise crowd the default 20s
+  // budget. The headroom guarantees a genuinely-broken shortcut surfaces the
+  // clean inner `toHaveValue` assertion rather than an opaque test-timeout.
+  test.describe.configure({ mode: 'serial', timeout: 45_000 });
 
   // Defensive isolation: alphabetically-earlier files that touch
   // suspension state — admin-appeals.spec.ts (suspends in beforeAll
@@ -89,11 +115,11 @@ test.describe('Admin Keyboard Shortcuts', () => {
     const uid = await firstCard.getAttribute('data-uid');
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
 
-    // Press W
-    await page.keyboard.press('w');
-
-    // Verify "warn" is selected
-    await expect(actionSelect).toHaveValue('warn');
+    // The select DEFAULTS to 'warn' (its first <option>), so asserting 'warn'
+    // straight away would pass even if the W shortcut never fired — a tautology.
+    // Move it off the default with S first, then prove W brings it back.
+    await pressReportActionKey(page, actionSelect, 's', 'suspend');
+    await pressReportActionKey(page, actionSelect, 'w', 'warn');
   });
 
   // ── Test 2: Reports — S key selects suspend action ──
@@ -113,11 +139,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     const uid = await firstCard.getAttribute('data-uid');
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
 
-    // Press S
-    await page.keyboard.press('s');
-
-    // Verify "suspend" is selected
-    await expect(actionSelect).toHaveValue('suspend');
+    // Press S — 'suspend' differs from the select's 'warn' default, so this
+    // genuinely proves the shortcut fired (see pressReportActionKey re: the
+    // WebKit keydown race this absorbs).
+    await pressReportActionKey(page, actionSelect, 's', 'suspend');
   });
 
   // ── Test 3: Reports — D key selects dismiss action ──
@@ -137,11 +162,9 @@ test.describe('Admin Keyboard Shortcuts', () => {
     const uid = await firstCard.getAttribute('data-uid');
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
 
-    // Press D
-    await page.keyboard.press('d');
-
-    // Verify "dismiss" is selected
-    await expect(actionSelect).toHaveValue('dismiss');
+    // Press D — 'dismiss' differs from the 'warn' default, so this genuinely
+    // proves the shortcut fired.
+    await pressReportActionKey(page, actionSelect, 'd', 'dismiss');
   });
 
   // ── Test 3b: Reports — D key after tab re-entry resets stale index ──
@@ -192,8 +215,7 @@ test.describe('Admin Keyboard Shortcuts', () => {
     // D on the freshly selected card 0 sets its action-select to dismiss
     const uid = await firstCardAfter.getAttribute('data-uid');
     const actionSelect = firstCardAfter.locator(`select[data-action-select="${uid}"]`);
-    await page.keyboard.press('d');
-    await expect(actionSelect).toHaveValue('dismiss');
+    await pressReportActionKey(page, actionSelect, 'd', 'dismiss');
   });
 
   // ── Test 4: Reports — Enter key triggers resolve ──
@@ -245,17 +267,20 @@ test.describe('Admin Keyboard Shortcuts', () => {
     const searchInput = page.getByRole('spinbutton', { name: 'ShyTalk User ID' });
     await searchInput.fill(String(testData.user.uniqueId));
 
-    // Press Enter instead of clicking Search
-    await searchInput.press('Enter');
-
-    // Button changes to "Searching..." then back to "Search" when complete.
-    // Wait for the full round-trip (guarantees populateFormFull finished).
-    await expect(searchBtn).not.toHaveText('Search', { timeout: 5_000 }).catch(() => {});
-    await expect(searchBtn).toHaveText('Search', { timeout: 15_000 });
-
-    // Verify user data loaded — form must be fully populated by now
-    const displayNameInput = page.locator('[data-field="displayName"]');
-    await expect(displayNameInput).toHaveValue(testData.user.displayName, { timeout: 5_000 });
+    // Press Enter to search and wait for the loaded user's uniqueId to appear —
+    // the true end-state that proves the search ran AND loaded the right user.
+    // Assert on `#field-uniqueId` (IMMUTABLE) rather than displayName: the
+    // worker-scoped testData.user is shared across the whole suite and other
+    // tests mutate its displayName (e.g. a suspension test can leave it reading
+    // "Suspended Account"), so a displayName assertion is fragile to test order.
+    // The uniqueId can never be mutated, and the form starts blank, so this
+    // cannot pass on stale data or a dropped Enter. WebKit — and occasionally
+    // Chromium — drops the single synthetic Enter, so re-press until it settles.
+    const uniqueIdDisplay = page.locator('#field-uniqueId');
+    await expect(async () => {
+      await searchInput.press('Enter');
+      await expect(uniqueIdDisplay).toHaveText(String(testData.user.uniqueId), { timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
   });
 
   // ── Test 6: Lightbox — Esc key closes evidence lightbox ──

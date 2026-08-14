@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.BannerActionType
 import com.shyden.shytalk.core.model.FunFact
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.FunFactRepository
@@ -11,7 +12,9 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.testutil.MainDispatcherRule
+import com.shyden.shytalk.testutil.TestData
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -197,5 +200,42 @@ class FunFactSplashViewModelTest {
             advanceUntilIdle()
 
             assertTrue(vm.warmUpComplete.value)
+        }
+
+    // SHY-0102 — the splash rooms prefetch is a `list`, so it must pin the
+    // caller's cohort or be denied. These pin the threaded value.
+
+    @Test
+    fun `prefetchActiveRooms is pinned to the resolved adult cohort`() =
+        runTest {
+            coEvery { userRepository.getUser("test-user") } returns
+                Resource.Success(TestData.createTestUser(uid = "test-user", cohort = "adult"))
+
+            createViewModel()
+            advanceUntilIdle()
+
+            coVerify { roomRepository.prefetchActiveRooms("adult") }
+        }
+
+    @Test
+    fun `prefetchActiveRooms fails closed to minor when the user cannot be resolved`() =
+        runTest {
+            coEvery { userRepository.getUser("test-user") } returns Resource.Error("no user")
+
+            createViewModel()
+            advanceUntilIdle()
+
+            coVerify { roomRepository.prefetchActiveRooms("minor") }
+        }
+
+    @Test
+    fun `prefetchActiveRooms is not called when currentUserId is null`() =
+        runTest {
+            every { authRepository.currentUserId } returns null
+
+            createViewModel()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { roomRepository.prefetchActiveRooms(any()) }
         }
 }

@@ -67,7 +67,7 @@ class RoomCohortGateTest {
     }
 
     @Test
-    fun `owner missing from cache fails closed (drops room)`() {
+    fun `owner missing from cache fails closed drops room`() {
         // No cached owner doc → cannot prove same-cohort → drop (most
         // restrictive). The active-rooms query batch-loads owners, so
         // a miss usually means the doc was deleted (account reaped).

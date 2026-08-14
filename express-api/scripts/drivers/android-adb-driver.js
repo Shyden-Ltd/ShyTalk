@@ -34,6 +34,7 @@
  * runner surfaces a finding listing the matcher and the missing call.
  */
 const { execSync } = require('child_process');
+const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
 
 function selectSerial(preferredSerial) {
   let devices;
@@ -274,14 +275,41 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // the raw XML string. Used by tag-targeted tap + assertion matchers
   // that scan for resource-id + bounds.
   driver.androidUiDump = async () => {
-    try {
-      adb(['shell', 'uiautomator', 'dump', '--compressed', '/sdcard/dump.xml']);
-      const xml = adb(['shell', 'cat', '/sdcard/dump.xml']);
-      return xml;
-    } catch (e) {
-      console.error(`[android-driver] androidUiDump failed: ${e.message}`);
+    // `uiautomator dump` exits non-zero (throws) while the UI is non-idle
+    // (app cold-start, animations). dumpWithRetry retries on the throw with a
+    // short backoff until a dump succeeds or the budget is spent — returning
+    // the first successful result (idle screens return on attempt 1). See
+    // ./ui-dump-retry.js.
+    const result = await dumpWithRetry(
+      () => {
+        adb(['shell', 'uiautomator', 'dump', '--compressed', '/sdcard/dump.xml']);
+        return adb(['shell', 'cat', '/sdcard/dump.xml']);
+      },
+      { backoffMs: resolveDumpBackoffMs() },
+    );
+    if (!result.ok) {
+      console.error(
+        `[android-driver] androidUiDump failed after ${result.attempts} attempts: ${result.lastErr}`,
+      );
+      // SHY-0236: after the transient-retry budget is spent, a persistent dump
+      // failure is most often a STALE UiAutomation holder — a hung on-device
+      // `uiautomator` process (the EXIT=137 SIGKILL loop) that every retry AND
+      // every app-relaunch leaves stuck, so the caller relaunches the app
+      // forever (the "phone opens/closes the app endlessly" thrash). Kill the
+      // holder so the NEXT dump rebinds a fresh UiAutomation instead of looping.
+      // Fires ONLY on the already-failed path, so the cold-start retry above is
+      // untouched. See the matrix-orphans / hung-uiautomator memory.
+      try {
+        adb(['shell', 'pkill', '-f', 'uiautomator']);
+        console.error(
+          '[android-driver] cleared a possibly-stale uiautomator holder after dump failure — next dump rebinds fresh',
+        );
+      } catch (_e) {
+        /* pkill non-zero = no holder to clear; nothing to do */
+      }
       return '';
     }
+    return result.xml;
   };
 
   // Tap at coordinate. Matchers compute (x, y) from the view dump's

@@ -26,6 +26,48 @@ android {
         versionCode = 176
         versionName = "0.97.15"
 
+        // SHY-0205: bake the git identity into EVERY flavour's BuildConfig
+        // so the preview watermark can name the exact code on a device.
+        // providers.exec is configuration-cache-safe (same mechanism as
+        // the dev versionNameSuffix); any git failure (no repo, shallow
+        // CI clone) degrades to "" which BuildVariant coerces to "?".
+        // Values are sanitised to the BuildConfig-literal-safe charset —
+        // branch names are operator-controlled but a stray quote must
+        // corrupt the watermark, not the generated BuildConfig.java.
+        val gitBranch =
+            (
+                System.getenv("GITHUB_REF_NAME")
+                    ?: runCatching {
+                        providers
+                            .exec { commandLine("git", "rev-parse", "--abbrev-ref", "HEAD") }
+                            .standardOutput.asText
+                            .get()
+                            .trim()
+                    }.getOrDefault("")
+            ).replace(Regex("[^A-Za-z0-9._/-]"), "-")
+                // Detached HEAD prints the LITERAL "HEAD" (exit 0) —
+                // that's "branch unknown", shown as "?" not "HEAD".
+                .takeUnless { it == "HEAD" } ?: ""
+        val gitSha =
+            runCatching {
+                providers
+                    .exec { commandLine("git", "rev-parse", "--short", "HEAD") }
+                    .standardOutput.asText
+                    .get()
+                    .trim()
+            }.getOrDefault("").replace(Regex("[^0-9a-fA-F]"), "")
+        val gitDirty =
+            runCatching {
+                providers
+                    .exec { commandLine("git", "status", "--porcelain") }
+                    .standardOutput.asText
+                    .get()
+                    .isNotBlank()
+            }.getOrDefault(false)
+        buildConfigField("String", "GIT_BRANCH", "\"$gitBranch\"")
+        buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
+        buildConfigField("Boolean", "GIT_DIRTY", "$gitDirty")
+
         testInstrumentationRunner = "com.shyden.shytalk.ShyTalkTestRunner"
 
         ndk {
@@ -363,8 +405,8 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation("io.insert-koin:koin-test:4.2.1")
-    androidTestImplementation("io.insert-koin:koin-test-junit4:4.2.1")
+    androidTestImplementation("io.insert-koin:koin-test:4.2.2")
+    androidTestImplementation("io.insert-koin:koin-test-junit4:4.2.2")
     androidTestImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation("androidx.navigation:navigation-testing:2.9.8")
     androidTestImplementation(libs.allure.kotlin.android)

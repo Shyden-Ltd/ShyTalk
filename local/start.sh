@@ -101,10 +101,51 @@ cd "$PROJECT_ROOT"
 # 1g would OOM the build). `$!` after `env … cmd &` still captures
 # the right PID because env exec()s into cmd via execvp.
 # Pinned by tests/scripts/local-stack-resource-diet.test.js.
+# ---------------------------------------------------------------------------
+# Emulator data COMPOUNDS. `--import` and `--export-on-exit` name the same
+# path, so every run imports the last run's leftovers and writes its own on
+# top. Left alone the dataset grows without limit: on 2026-08-13 it had
+# reached 7.9 MB and 843 Auth users, at which point `adminLogin` and the
+# admin tabs were slow enough to blow Playwright's 20s test timeout, and the
+# pre-push gate reported 66 failing admin specs — one environment, presenting
+# as sixty-six defects. A clean emulator ran the same spec 11-passed in 24s.
+#
+# Two guards, because the failure is invisible at the point it bites:
+#   FRESH=1 bash local/start.sh   start from nothing (does not import)
+#   otherwise                      import as before, but SAY how big it is
+# The export still happens either way, so a FRESH run leaves a small, clean
+# dataset behind rather than a missing one.
+# ---------------------------------------------------------------------------
+EMULATOR_DATA="local/firebase-emulator-data"
+IMPORT_ARGS=(--import="$EMULATOR_DATA")
+
+if [ "${FRESH:-0}" = "1" ]; then
+  if [ -d "$EMULATOR_DATA" ]; then
+    STAMP="$(date +%Y%m%d-%H%M%S)"
+    mv "$EMULATOR_DATA" "${EMULATOR_DATA}.pre-fresh-${STAMP}"
+    echo "  FRESH=1 — previous emulator data kept at ${EMULATOR_DATA}.pre-fresh-${STAMP}"
+  fi
+  IMPORT_ARGS=()
+  echo "  FRESH=1 — starting emulators with NO imported data."
+elif [ -d "$EMULATOR_DATA" ]; then
+  DATA_KB="$(du -sk "$EMULATOR_DATA" 2>/dev/null | cut -f1)"
+  # 4 MB. Chosen from the measurement above, not guessed: 7.9 MB was already
+  # failing and a freshly-seeded export is well under 1 MB, so this warns with
+  # room to act rather than at the point tests start timing out.
+  if [ "${DATA_KB:-0}" -gt 4096 ]; then
+    echo ""
+    echo "  ⚠ Emulator data is $((DATA_KB / 1024)) MB and grows every run."
+    echo "    Past ~8 MB the admin Playwright specs time out in beforeEach and"
+    echo "    the pre-push gate reports dozens of failures that are not real."
+    echo "    Start clean with:  FRESH=1 bash local/start.sh"
+    echo ""
+  fi
+fi
+
 env JAVA_TOOL_OPTIONS="-Xmx1g" npx firebase emulators:start \
   --project=demo-shytalk \
-  --import=local/firebase-emulator-data \
-  --export-on-exit=local/firebase-emulator-data &
+  "${IMPORT_ARGS[@]}" \
+  --export-on-exit="$EMULATOR_DATA" &
 FIREBASE_PID=$!
 
 # =============================================================================
@@ -211,10 +252,22 @@ echo "  Express API ready."
 # local/test-playwright.sh now also relies on this serve rather than
 # starting its own redundant one on 8080.
 #
-# `serve` is pinned as a root devDependency so `npx serve` resolves
-# deterministically (no registry fetch needed on a fresh clone).
+# SHY-0180: launches the zero-dependency `local/serve-web.js` (Node core only)
+# instead of `npx serve`. `npx serve` DIED ~15 min into a heavy Chromium suite
+# — its `npm exec` wrapper caught a SIGINT/SIGTERM and the graceful-shutdown
+# path crashed on an in-flight EBADF, drowning the suite tail in
+# ERR_CONNECTION_REFUSED (blocked SHY-0095's push 3×; ~5 deaths). A plain-node
+# server (no npm-exec wrapper, per-stream error handling) is empirically immune.
 echo "==> Step 6b/8: Serving static web app on localhost:8888..."
-npx serve public --no-clipboard -l 8888 > >(sed 's/^/[WEB] /') 2>&1 &
+# Raise the fd cap in THIS shell (not a subshell) so SERVE_PID=$! below still
+# points at the server. Guarded: under `set -e` a bare failing ulimit (hard cap
+# < 10240 on a managed machine) would abort BEFORE cleanup() and orphan Docker/
+# emulators; warn-and-continue keeps the run alive with a visible signal.
+if ! ulimit -n 10240 2>/dev/null; then
+  echo "WARNING: could not raise fd limit to 10240 (hard limit lower on this machine?)." >&2
+fi
+node "$PROJECT_ROOT/local/serve-web.js" --port 8888 --root "$PROJECT_ROOT/public" --quiet \
+  > >(sed 's/^/[WEB] /') 2>&1 &
 SERVE_PID=$!
 
 # Readiness probe -- mirrors Step 6's wait-for-API pattern. Without
@@ -226,7 +279,7 @@ echo "  Waiting for web serve (localhost:8888)..."
 MAX_WAIT=30; WAITED=0
 until curl -s http://localhost:8888 > /dev/null 2>&1; do
   if ! kill -0 "$SERVE_PID" 2>/dev/null; then
-    echo "ERROR: npx serve died -- check [WEB] log lines (port 8888 in use?)"
+    echo "ERROR: serve-web.js died -- check [WEB] log lines (port 8888 in use?)"
     cleanup
     exit 1
   fi
