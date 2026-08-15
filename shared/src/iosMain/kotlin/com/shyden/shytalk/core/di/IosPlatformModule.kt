@@ -137,7 +137,7 @@ val iosPlatformModule =
         single { CryptoKeyPair() }
 
         // Repositories
-        single<AuthRepository> { IosAuthRepositoryImpl(get(), get<SessionCache>()) }
+        single<AuthRepository> { IosAuthRepositoryImpl(get(), get<SessionCache>(), get<IosApiClient>()) }
         single<UserRepository> { IosUserRepositoryImpl(get(), get()) }
         single<RoomRepository> { IosRoomRepositoryImpl(get(), get()) }
         single<MessageRepository> { IosMessageRepositoryImpl(get()) }

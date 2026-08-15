@@ -232,9 +232,12 @@ class MainActivity : AppCompatActivity() {
                         // mount before then.
                         var initialRoute by remember { mutableStateOf<String?>(null) }
 
-                        // SHY-0143 — gates the nav graph's user-flag
-                        // subscription. False until a token refresh actually
-                        // confirms the cohort claim.
+                        // SHY-0143 — gates the background cohort reconcile,
+                        // which is only worth running once the claim has been
+                        // confirmed fresh. NOT the nav graph's user-flag
+                        // subscription: that keys on `resolvedUniqueId`, since
+                        // reading one's own user doc is not a cohort-scoped
+                        // read and this value never changes after startup.
                         var cohortVerified by remember { mutableStateOf(false) }
 
                         // SHY-0143 — the pre-routing ban gate. Resolved inside the
@@ -579,7 +582,21 @@ class MainActivity : AppCompatActivity() {
                                     banType = if (coldStartBan.deviceBanned) "device" else "network",
                                     reason = coldStartBan.reason,
                                     expiresAt = coldStartBan.expiresAt,
-                                    onSignOut = { lifecycleScope.launch { authRepository.signOut() } },
+                                    // Process-scoped: signing out rearranges the
+                                    // UI, which can destroy this Activity
+                                    // mid-call. `signOut()` itself clears the
+                                    // API token cache (R3).
+                                    onSignOut = {
+                                        ProcessLifecycleOwner.get().lifecycleScope.launch {
+                                            try {
+                                                authRepository.signOut()
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "ban-screen sign-out failed", e)
+                                            }
+                                        }
+                                    },
                                 )
                             }
 
@@ -808,7 +825,6 @@ class MainActivity : AppCompatActivity() {
                                         pendingEmailLink = pendingEmailLink,
                                         onEmailLinkConsumed = { pendingEmailLinkState.value = null },
                                         onSignOut = {
-                                            workerApiClient.clearTokenCache()
                                             // Process-scoped: sign-out must finish even if this
                                             // Activity is destroyed by the navigation it triggers.
                                             // Rethrow CancellationException to keep structured

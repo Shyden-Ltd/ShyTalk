@@ -197,8 +197,10 @@ private fun IosApp() {
                 // the room list before being stopped.
                 var coldStartBan by remember { mutableStateOf(BanState()) }
 
-                // SHY-0143 — gates the nav graph's user-flag subscription.
-                // False until a token refresh actually confirms the claim.
+                // SHY-0143 — gates the background cohort reconcile, which is
+                // only worth running once the claim has been confirmed fresh.
+                // NOT the nav graph's user-flag subscription: that keys on
+                // `resolvedUniqueId`.
                 var cohortVerified by remember { mutableStateOf(false) }
 
                 // SHY-0143 — sign-out is a suspend call and `onSignOut` is not
@@ -343,18 +345,16 @@ private fun IosApp() {
                         // start routed them straight back to Main. Android's
                         // equivalent has always signed out.
                         onSignOut = {
-                            val job =
-                                signOutScope.launch {
-                                    try {
-                                        authRepo.signOut()
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        logW("MainViewController", "sign-out failed: ${e.message}")
-                                    }
-                                    navController.navigate(Screen.SignIn.route) { popUpTo(0) }
+                            signOutScope.launch {
+                                try {
+                                    authRepo.signOut()
+                                } catch (e: CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    logW("MainViewController", "sign-out failed: ${e.message}")
                                 }
-                            check(job.isActive || job.isCompleted) { "sign-out job was never scheduled" }
+                                navController.navigate(Screen.SignIn.route) { popUpTo(0) }
+                            }
                         },
                         coldStartBan = coldStartBan,
                         platformCallbacks = platformCallbacks,

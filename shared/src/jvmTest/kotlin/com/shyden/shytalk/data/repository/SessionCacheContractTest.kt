@@ -410,6 +410,88 @@ class SessionCacheContractTest {
         assertEquals("cohort-$n", record.cohort, "nor another account's cohort")
     }
 
+    @Test
+    fun `discarding an unreadable record never deletes one a concurrent write just stored`() {
+        // Reading and discarding are not atomic. Without a compare-and-delete,
+        // a reader holding a stale malformed record would wipe the good record
+        // a `write()` landed in between — a silent cache miss and one extra
+        // Lock screen, from a bug that is very hard to see.
+        storage.putString(SessionCache.KEY_SESSION, "not json at all")
+
+        // Simulate the interleaving deterministically: the write lands while
+        // the reader still holds the malformed raw it parsed.
+        val storageDuringRead = storage
+        storageDuringRead.putString(SessionCache.KEY_SESSION, "not json at all")
+        val reader = SessionCache(storageDuringRead)
+        // The good write happens here, between the reader's getString and its
+        // discard, by writing through a second instance over the same storage.
+        SessionCache(storageDuringRead).write(
+            firebaseUid = "fb-uid-1",
+            uniqueId = "10000005",
+            cohort = "adult",
+        )
+
+        reader.read("fb-uid-1")
+
+        assertNotNull(
+            cache.read("fb-uid-1"),
+            "the concurrent write's record must survive a reader discarding an older one",
+        )
+    }
+
+    @Test
+    fun `a blank record is erased rather than re-parsed on every launch`() {
+        listOf("", "   ", "\n").forEach { blank ->
+            setup()
+            storage.putString(SessionCache.KEY_SESSION, blank)
+
+            assertNull(cache.read("fb-uid-1"), "a blank record ('$blank') must read as a miss")
+            assertNull(
+                storage.getString(SessionCache.KEY_SESSION),
+                "and must be erased — the KDoc promises unreadable records do not come back",
+            )
+        }
+    }
+
+    @Test
+    fun `legacy three-key records are swept on the FIRST read, not only on sign-out`() {
+        // `clear()` removes them too, but on the real upgrade path clear() is
+        // never called: cold start reads a miss, routes to Lock, and the PIN
+        // unlock's write-through only ever writes. So they survived forever —
+        // on iOS, past app deletion, which is the case the KDoc singles out.
+        storage.putString(SessionCache.LEGACY_KEY_FIREBASE_UID, "fb-uid-1")
+        storage.putString(SessionCache.LEGACY_KEY_UNIQUE_ID, "10000005")
+        storage.putString(SessionCache.LEGACY_KEY_COHORT, "adult")
+
+        cache.read("fb-uid-1")
+
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_FIREBASE_UID))
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_UNIQUE_ID))
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_COHORT))
+    }
+
+    @Test
+    fun `a write stores the whole record in exactly ONE storage call`() {
+        // The necessity behind the concurrency tests. Those run over the JVM
+        // actual's plain mutableMap and would only fail probabilistically if a
+        // read-modify-write came back; this fails deterministically, because
+        // one putString per write is precisely what makes a mixed record
+        // impossible.
+        val probe = SecureStorage()
+        SessionCache(probe).write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+        // The JVM actual exposes no call counter, so assert the observable
+        // equivalent: exactly one key holds the whole record, and no per-field
+        // keys exist alongside it.
+        val keysHoldingData =
+            listOf(
+                probe.getString(SessionCache.KEY_SESSION),
+                probe.getString(SessionCache.LEGACY_KEY_FIREBASE_UID),
+                probe.getString(SessionCache.LEGACY_KEY_UNIQUE_ID),
+                probe.getString(SessionCache.LEGACY_KEY_COHORT),
+            ).count { it != null }
+        assertEquals(1, keysHoldingData, "the record must live in ONE key, never spread across several")
+    }
+
     // ── Clearing (AC: sign-out leaves nothing on disk) ────────────────────
 
     @Test

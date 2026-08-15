@@ -116,6 +116,29 @@ describe('cache', () => {
     expect(recovered.asn).toBe('AS64500');
   });
 
+  test('an HTTP 200 with status:"fail" is NOT cached', async () => {
+    // ip-api reports failures — reserved ranges, invalid queries, and the
+    // OVER-QUOTA response — as HTTP 200 with `status: "fail"`. That took the
+    // success path, so a null ASN got cached and ASN-scoped bans stayed off
+    // for the full TTL: the exact degradation this cache exists to prevent,
+    // caused by the cache. The `ok:false` test above does not reach it.
+    let failing = true;
+    calls = [];
+    global.fetch = jest.fn(async (url) => {
+      calls.push(url);
+      return failing
+        ? ok({ status: 'fail', message: 'reserved range' })
+        : ok({ status: 'success', as: 'AS64500 Example' });
+    });
+
+    expect(await getIpGeo('198.51.100.20')).toEqual({});
+    failing = false;
+    const recovered = await getIpGeo('198.51.100.20');
+
+    expect(calls).toHaveLength(2);
+    expect(recovered.asn).toBe('AS64500');
+  });
+
   test('clearIpGeoCache actually clears', async () => {
     stubFetch(ok({ as: 'AS64500 Example' }));
     await getIpGeo('198.51.100.14');

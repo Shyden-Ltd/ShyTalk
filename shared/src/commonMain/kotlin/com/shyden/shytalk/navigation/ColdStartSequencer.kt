@@ -68,13 +68,19 @@ class ColdStartSequencer(
     /**
      * Whether the cohort claim in the current token was CONFIRMED fresh.
      *
-     * The nav graphs gate their user-flag subscription on this, and that is not
-     * belt-and-braces: returning a non-`Main` destination does not stop the
-     * graph mounting, and both graphs subscribe to `users/<id>` the instant
-     * they compose. So "the sequencer returned early" and "nothing reads" were
-     * two different claims, and only the first was true. False unless a refresh
-     * actually completed — a ban, a Lock start, or an unverifiable refresh all
-     * leave it false.
+     * Its ONE consumer is the background cohort reconcile: reconciling makes
+     * sense only when the claim was confirmed fresh, because the reconcile's
+     * whole job is to act on a claim it can trust.
+     *
+     * It briefly also gated the nav graphs' user-flag subscription. That was
+     * wrong twice over — reading one's own user document is not a cross-cohort
+     * read, so the cohort claim never gated it; and this is a one-shot value
+     * written once per process, so on the App-Lock and sign-in paths it stayed
+     * false forever and the suspension listener never subscribed at all. The
+     * graphs key on `resolvedUniqueId` instead.
+     *
+     * False unless a refresh actually completed — a ban, a Lock start, or an
+     * unverifiable refresh all leave it false.
      */
     var cohortVerified: Boolean = false
         private set

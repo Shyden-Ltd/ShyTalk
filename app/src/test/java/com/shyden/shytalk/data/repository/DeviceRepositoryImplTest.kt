@@ -156,6 +156,30 @@ class DeviceRepositoryImplTest {
         }
 
     @Test
+    fun `checkBanStatus URL-encodes the deviceId into the query string`() {
+        // The existing endpoint test uses `device-1`, which needs no encoding —
+        // so deleting the encode call left it green. A `&` splits the parameter
+        // and a `#` truncates at the fragment, which would make the server
+        // ban-check a DIFFERENT deviceId than the caller's and still answer
+        // 200. `isValidDeviceId` cannot see that, because the mangled value it
+        // receives is well-formed. A silent evasion primitive.
+        val path = slot<String>()
+        coEvery { workerApiClient.getPublic(capture(path)) } returns
+            JSONObject().apply {
+                put("success", true)
+                put("banStatus", JSONObject().apply { put("isBanned", false) })
+            }
+
+        runTest { repo.checkBanStatus("dev&id=x#frag +é") }
+
+        val query = path.captured.substringAfter("deviceId=")
+        assertFalse("a raw & would split the parameter: ${path.captured}", query.contains("&"))
+        assertFalse("a raw # would truncate at the fragment: ${path.captured}", query.contains("#"))
+        assertFalse("a raw space is not valid in a query string: ${path.captured}", query.contains(" "))
+        assertTrue("the value must actually be encoded: ${path.captured}", query.contains("%"))
+    }
+
+    @Test
     fun `checkBanStatus returns device ban`() =
         runTest {
             val response =

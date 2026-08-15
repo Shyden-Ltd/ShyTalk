@@ -192,6 +192,14 @@ class AuthRepositoryImpl(
         resolvedUniqueId = null
         resolvedDisplayName = null
         resolvedCohort = null
+        // SHY-0143 R3 — the API token cache is cleared HERE, not at each call
+        // site. `WorkerApiClient` caches the bearer token for 50 minutes, and
+        // signing out did not touch it, so a signed-out (or banned) process
+        // kept a working token in memory. The invariant was being copied per
+        // call site and had reached 2 of 4 on Android and 0 of 3 on iOS —
+        // including the ban screen Android actually renders. Owning it here
+        // makes every present and future sign-out correct by default.
+        workerApiClient.clearTokenCache()
         // SHY-0143 — deliberately redundant, and mutation testing says so:
         // deleting this line leaves the suite green, because nulling the two
         // slots above already drove `SessionCache.write` into its erase branch.

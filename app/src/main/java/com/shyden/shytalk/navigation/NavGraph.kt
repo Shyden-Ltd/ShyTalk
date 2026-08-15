@@ -60,7 +60,6 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.PmSyncService
 import com.shyden.shytalk.data.remote.VoiceService
-import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -223,34 +222,31 @@ fun NavGraph(
         // not the account, so signing out must clear the session and leave the
         // user exactly where they are. iOS proved a caller-supplied lambda
         // cannot be trusted with that — it passed one that navigated away.
-        val workerApiClient: WorkerApiClient = koinInject()
+        // SHY-0143 — the ban screens' sign-out is owned by the graph rather
+        // than taken from `onSignOut`: a device or network ban follows the
+        // hardware or the IP, not the account, so signing out must clear the
+        // session and leave the user exactly where they are. iOS proved a
+        // caller-supplied lambda cannot be trusted with that — it passed one
+        // that navigated away.
+        //
+        // It does NOT clear the API token cache here. R3 moved that invariant
+        // into `AuthRepository.signOut()` itself, because copying it per call
+        // site had already reached 2 of 4 sites on Android and 0 of 3 on iOS.
         val signOutAndStay: () -> Unit =
-            remember(authRepository, workerApiClient) {
+            remember(authRepository) {
                 {
-                    // `WorkerApiClient` caches the ID token for 50 minutes and
-                    // `signOut()` does not touch it, so without this a banned
-                    // user keeps a working bearer token in memory. The caller's
-                    // handler did this; taking ownership of the lambda meant
-                    // taking ownership of everything it did.
-                    workerApiClient.clearTokenCache()
                     // Process-scoped, like MainActivity's own sign-out: the
-                    // composition scope dies with the Activity, which can
-                    // happen mid-sign-out precisely because signing out
-                    // rearranges the UI.
-                    // The Job is deliberately dropped — nothing awaits a
-                    // sign-out — but naming it keeps the lambda's last
-                    // expression Unit rather than a discarded value.
-                    val job =
-                        ProcessLifecycleOwner.get().lifecycleScope.launch {
-                            try {
-                                authRepository.signOut()
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                Log.e("NavGraph", "ban-screen sign-out failed", e)
-                            }
+                    // composition scope dies with the Activity, which signing
+                    // out can itself cause.
+                    ProcessLifecycleOwner.get().lifecycleScope.launch {
+                        try {
+                            authRepository.signOut()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("NavGraph", "ban-screen sign-out failed", e)
                         }
-                    check(job.isActive || job.isCompleted) { "sign-out job was never scheduled" }
+                    }
                 }
             }
 

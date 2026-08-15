@@ -15,8 +15,12 @@
 
 const { skipsAuth } = require('../../src/middleware/auth-skip');
 
-const get = (path) => skipsAuth({ method: 'GET', path });
-const post = (path) => skipsAuth({ method: 'POST', path });
+// `headers` is required — the anonymous-translate rule reads
+// `req.headers.authorization`, and the JSDoc used to omit it, so helpers built
+// to the documented shape threw a TypeError instead of asserting. That is why
+// the widest branch in this file had no unit coverage.
+const get = (path, headers = {}) => skipsAuth({ method: 'GET', path, headers });
+const post = (path, headers = {}) => skipsAuth({ method: 'POST', path, headers });
 
 describe('the cold-start ban check (SHY-0143)', () => {
   test('GET /ban-status skips auth', () => {
@@ -50,6 +54,53 @@ describe('device-info stays authenticated', () => {
 
   test('GET /device-info does NOT skip auth either', () => {
     expect(get('/device-info')).toBe(false);
+  });
+});
+
+describe('the trailing-slash normalisation must not un-skip the prefix rules', () => {
+  // Normalising the path before EVERY comparison silently broke the three
+  // `startsWith('…/')` rules: '/auth/' became '/auth', which does not start
+  // with '/auth/'. Those exact paths flipped from public to auth-required
+  // inside a fix that only claimed to normalise '/ban-status/'.
+  test.each([['/auth/'], ['/portal/totp-recovery/']])('%s still skips auth', (path) => {
+    expect(get(path)).toBe(true);
+  });
+
+  test('/test/ still skips auth outside production', () => {
+    const prior = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'local';
+    try {
+      expect(get('/test/')).toBe(true);
+      expect(get('/test/seed')).toBe(true);
+    } finally {
+      process.env.NODE_ENV = prior;
+    }
+  });
+
+  test('/test/ does NOT skip auth in production', () => {
+    const prior = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(get('/test/seed')).toBe(false);
+    } finally {
+      process.env.NODE_ENV = prior;
+    }
+  });
+});
+
+describe('the anonymous-translate rule (needs headers)', () => {
+  test('a header-less POST /translate skips auth', () => {
+    expect(post('/translate')).toBe(true);
+  });
+
+  test('a POST /translate WITH a token does not skip', () => {
+    // Callers presenting a token flow through authMiddleware and keep the
+    // chat contract; only the public flow is anonymous.
+    expect(post('/translate', { authorization: 'Bearer x' })).toBe(false);
+  });
+
+  test('GET /translate does not skip', () => {
+    expect(get('/translate')).toBe(false);
   });
 });
 

@@ -15,6 +15,7 @@ import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -504,7 +505,13 @@ class AuthRepositoryImplTest {
 
             repo.refreshIdToken()
 
-            verify { workerApiClient.clearTokenCache() }
+            // ORDER is load-bearing, and the production comment says so:
+            // clearing AFTER the rotate leaves the stale token in place
+            // whenever `getIdToken(true)` throws.
+            verifyOrder {
+                workerApiClient.clearTokenCache()
+                user.getIdToken(true)
+            }
         }
 
     // endregion

@@ -73,6 +73,9 @@ class AppLockWiringPinTest {
     // resolver. Pinning only "the platform mentions the sequencer" would pass
     // if the sequencer stopped consulting the resolver.
     private val coldStartSequencer = "ColdStartSequencer("
+    private val androidAuthRepo = "app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt"
+    private val iosAuthRepo =
+        "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosAuthRepositoryImpl.kt"
     private val sequencerSource = "shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/ColdStartSequencer.kt"
 
     @Test
@@ -635,39 +638,66 @@ class AppLockWiringPinTest {
     }
 
     @Test
-    fun `the ban sign-out clears the API token cache`() {
-        // `WorkerApiClient` caches the bearer token for 50 minutes and
-        // `signOut()` does not touch it, so a banned user kept a working token
-        // in memory. Taking ownership of the lambda from the caller meant
-        // taking ownership of everything the caller's version did.
-        val src = read(appNavGraph)
-        val at = src.indexOf("val signOutAndStay")
-        assertTrue(at >= 0, "$appNavGraph must define signOutAndStay")
-        val body = src.substring(at, minOf(at + 1200, src.length))
-        assertTrue(
-            body.contains("clearTokenCache()"),
-            "$appNavGraph's ban sign-out must clear the cached bearer token",
-        )
-        assertTrue(
-            body.contains("ProcessLifecycleOwner"),
-            "$appNavGraph's ban sign-out must be process-scoped — the composition scope dies " +
-                "with the Activity, which signing out can itself cause",
-        )
+    fun `BOTH platforms clear the API token cache inside signOut itself`() {
+        // The invariant was being copied per call site and had reached 2 of 4
+        // sites on Android and 0 of 3 on iOS — including the ban screen Android
+        // actually renders, which lives in MainActivity, not the nav graph. A
+        // pin that read only the nav graph was green against the wrong file.
+        //
+        // `signOut()` owns it now, so every present and future sign-out is
+        // correct by default. That is the property worth pinning: not "the call
+        // sites remember", but "they no longer have to".
+        listOf(androidAuthRepo, iosAuthRepo).forEach { path ->
+            val src = read(path)
+            val at = src.indexOf("override suspend fun signOut()")
+            assertTrue(at >= 0, "$path must implement signOut")
+            val body = src.substring(at, minOf(at + 1400, src.length))
+            assertTrue(
+                body.contains("clearTokenCache()"),
+                "$path's signOut must clear the cached bearer token — it survives 50 minutes, so " +
+                    "a signed-out or banned process otherwise keeps a working one",
+            )
+        }
     }
 
     @Test
-    fun `refreshIdToken invalidates the API token cache`() {
-        // Rotating Firebase's token while WorkerApiClient serves a 50-minute
-        // cached one leaves every Express call on the PRE-flip cohort claim —
-        // the window this story exists to close, reopened by the refresh.
-        val src = read("app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt")
-        val at = src.indexOf("override suspend fun refreshIdToken()")
-        assertTrue(at >= 0, "AuthRepositoryImpl must implement refreshIdToken")
-        val body = src.substring(at, minOf(at + 1400, src.length))
-        assertTrue(
-            body.contains("clearTokenCache()"),
-            "refreshIdToken must invalidate the API client's cached token before rotating",
-        )
+    fun `BOTH platforms clear the API token cache inside refreshIdToken`() {
+        // Rotating the Firebase JWT while the API client serves a 50-minute
+        // cached one leaves every Express call on the PRE-flip cohort claim.
+        // Fixed on Android and left open on iOS, where GATE 2 and the
+        // background reconcile both reach it.
+        listOf(androidAuthRepo, iosAuthRepo).forEach { path ->
+            val src = read(path)
+            val at = src.indexOf("override suspend fun refreshIdToken()")
+            assertTrue(at >= 0, "$path must implement refreshIdToken")
+            val body = src.substring(at, minOf(at + 1400, src.length))
+            assertTrue(
+                body.contains("clearTokenCache()"),
+                "$path's refreshIdToken must invalidate the cached token before rotating",
+            )
+        }
+    }
+
+    @Test
+    fun `every ban screen on both platforms signs out rather than navigating`() {
+        // Android renders its ban screen ABOVE the NavHost (MainActivity); iOS
+        // routes to it (SharedNavGraph). Pinning one file covered one platform
+        // while reading as though it covered both.
+        listOf(mainActivity, sharedNavGraph).forEach { path ->
+            val src = read(path)
+            val at = src.indexOf("BanScreen(")
+            assertTrue(at >= 0, "$path must render BanScreen")
+            val body = src.substring(at, minOf(at + 1600, src.length))
+            assertTrue(
+                body.contains("signOut()") || body.contains("signOutAndStay"),
+                "$path's BanScreen must sign out; Sign-In is the one destination a ban must never reach",
+            )
+            assertFalse(
+                body.contains("navigate(Screen.SignIn.route)"),
+                "$path's BanScreen must not navigate to Sign-In — a device or network ban follows " +
+                    "the hardware or the IP, not the account",
+            )
+        }
     }
 
     @Test

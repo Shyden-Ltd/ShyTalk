@@ -69,6 +69,13 @@ async function getIpGeo(ip) {
     });
     if (!resp.ok) return {};
     const data = await resp.json();
+    // ip-api reports a failed lookup as HTTP **200** with `status: "fail"` —
+    // reserved ranges, invalid queries, and (critically) the over-quota
+    // response. Without this check that took the success path, so a null ASN
+    // got CACHED and ASN-scoped bans stayed off for the full TTL: exactly the
+    // degradation the cache exists to prevent, caused by the cache.
+    if (data.status && data.status !== 'success') return {};
+
     const geo = {
       isp: data.isp || null,
       asn: data.as ? data.as.split(' ')[0] : null,

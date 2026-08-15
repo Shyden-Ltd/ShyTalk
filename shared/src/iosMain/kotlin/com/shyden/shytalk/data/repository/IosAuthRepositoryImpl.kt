@@ -2,6 +2,7 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.GoogleAuthProvider
 import dev.gitlive.firebase.auth.OAuthProvider
@@ -9,6 +10,7 @@ import dev.gitlive.firebase.auth.OAuthProvider
 class IosAuthRepositoryImpl(
     private val auth: FirebaseAuth,
     private val sessionCache: SessionCache,
+    private val apiClient: IosApiClient,
     private val emailLinkDomain: String = "shytalk.shyden.co.uk",
 ) : AuthRepository {
     // SHY-0143 — identical write-through to Android. See AuthRepositoryImpl for
@@ -127,6 +129,11 @@ class IosAuthRepositoryImpl(
         resolvedUniqueId = null
         resolvedDisplayName = null
         resolvedCohort = null
+        // SHY-0143 R3 — same as Android: the invariant lives in signOut(), not
+        // at each call site. `IosApiClient` caches the bearer token with the
+        // identical 50-minute TTL, and none of the three iOS sign-out sites
+        // cleared it.
+        apiClient.clearTokenCache()
         // SHY-0143 — redundant with the setters' erase, kept for the same
         // reason as Android's, and it matters more here: the Keychain survives
         // app deletion, so anything left behind outlives the uninstall itself.
@@ -136,6 +143,13 @@ class IosAuthRepositoryImpl(
 
     override suspend fun refreshIdToken(): Resource<Unit> =
         firebaseCall("Failed to refresh ID token") {
+            // SHY-0143 R3 — invalidate the API client's cached bearer token
+            // FIRST, exactly as Android does. Rotating the Firebase JWT while
+            // IosApiClient serves a 50-minute cached one left every Express
+            // call on the PRE-flip cohort claim: the SHY-0132/0137 window this
+            // story closes, still open on iPhone. Both GATE 2 and the
+            // background reconcile reach this.
+            apiClient.clearTokenCache()
             // UK OSA #17 PR 2: GitLive's `getIdToken(forceRefresh)`
             // mirrors the Firebase Android `getIdToken(boolean)`
             // contract. Force-refresh after a server-side cohort
