@@ -142,7 +142,13 @@ app.use('/api', (req, res, next) => {
     // not send one). Without this skip, every notification would 401.
     (req.method === 'POST' && req.path === '/apple-notifications/v2') ||
     // Portal TOTP recovery (unauthenticated — user has lost their TOTP device)
-    req.path.startsWith('/portal/totp-recovery/')
+    req.path.startsWith('/portal/totp-recovery/') ||
+    // Cold-start ban gate (SHY-0143). Read-only and unauthenticated by
+    // necessity: the client must learn it is banned BEFORE it routes, and at
+    // that moment there may be no session — a signed-out user, or one whose
+    // ban is why they were signed out. Auth-gating it made a banned user with
+    // no session reach the sign-in screen. GET only; it writes nothing.
+    (req.method === 'GET' && req.path === '/ban-status')
   )
     return next();
   authMiddleware(req, res, next);
@@ -162,6 +168,9 @@ app.use('/api', (req, res, next) => {
 // (bind on lock-check / telemetry upsert) — cap per-user churn (SHY-0170).
 app.use('/api/devices', writeLimiter);
 app.use('/api/device-info', writeLimiter);
+// Unauthenticated + on every cold start, so it is rate-limited by IP. It is a
+// pure read, hence generalLimiter rather than writeLimiter.
+app.use('/api/ban-status', generalLimiter);
 app.use('/api/conversations', writeLimiter);
 app.use('/api/economy/gacha', writeLimiter);
 app.use('/api/economy/gift', writeLimiter);
@@ -258,6 +267,7 @@ app.use('/api', require('./routes/admin-logs'));
 app.use('/api', require('./routes/admin-log-config'));
 app.use('/api', require('./routes/storage'));
 app.use('/api', require('./routes/device-info'));
+app.use('/api', require('./routes/ban-status'));
 app.use('/api', require('./routes/devices'));
 app.use('/api', require('./routes/admin-bans'));
 app.use('/api', require('./routes/admin-devices'));

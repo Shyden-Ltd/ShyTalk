@@ -17,35 +17,10 @@ const {
   MAX_BOUND_DEVICES,
   BINDING_TRANSACTION_OPTIONS,
 } = require('../utils/bans');
+const { getIpGeo } = require('../utils/ip-geo');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
-
-/**
- * Fetch IP geolocation data from ip-api.com.
- * Returns { isp, asn, country, region } or empty object on failure.
- */
-async function getIpGeo(ip) {
-  try {
-    // Validate IPv4 format to prevent URL injection
-    if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return {};
-    // Bounded: geo is best-effort telemetry — a hung ip-api must not hang
-    // the device-info request (and with it, sign-in). SHY-0149.
-    const resp = await fetch(`http://ip-api.com/json/${ip}?fields=isp,as,country,regionName`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!resp.ok) return {};
-    const data = await resp.json();
-    return {
-      isp: data.isp || null,
-      asn: data.as ? data.as.split(' ')[0] : null,
-      country: data.country || null,
-      region: data.regionName || null,
-    };
-  } catch {
-    return {};
-  }
-}
 
 // ─── Route ───────────────────────────────────────────────────────
 

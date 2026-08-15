@@ -137,6 +137,16 @@ class IosApiClient(
         body: JsonObject?,
     ): JsonObject = request("DELETE", path, body)
 
+    /**
+     * GET an endpoint that requires NO authentication — Android's
+     * `WorkerApiClient.getPublic` is the counterpart.
+     *
+     * SHY-0143 made this load-bearing: the cold-start ban gate runs before
+     * routing, and at that moment there may be no Firebase session — a
+     * signed-out user, or one whose ban is why they were signed out. Going
+     * through [request] would throw `Not authenticated` before the call was
+     * made, and the repository's catch would report "not banned".
+     */
     suspend fun getPublic(path: String): JsonObject {
         val response =
             client.get("$baseUrl$path") {

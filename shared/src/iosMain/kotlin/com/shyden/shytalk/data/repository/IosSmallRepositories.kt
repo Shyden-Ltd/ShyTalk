@@ -45,10 +45,21 @@ class IosDeviceRepositoryImpl(
             Resource.Error("Device lock-check failed: ${e.message}")
         }
 
+    /**
+     * SHY-0143 — reads the UNAUTHENTICATED `/api/ban-status`, not
+     * `/api/device-info`.
+     *
+     * `/api/device-info` sits behind `authMiddleware`, so with no Firebase
+     * session `getIdToken()` threw before the request was built and the catch
+     * below reported "not banned" — a banned user who was signed out reached
+     * the sign-in screen, which the story's AC names as the thing that must
+     * never happen. `/api/ban-status` answers the same question with no token,
+     * and writes nothing (device-info upserts a binding and runs a cap
+     * transaction, which has no business running on every cold start).
+     */
     override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
         try {
-            val body = JsonObject(mapOf("deviceId" to JsonPrimitive(deviceId)))
-            val response = api.post("/api/device-info", body)
+            val response = api.getPublic("/api/ban-status?deviceId=$deviceId")
             val banObj = response["banStatus"]
             if (banObj != null) {
                 val ban = (banObj as? kotlinx.serialization.json.JsonObject) ?: JsonObject(emptyMap())
