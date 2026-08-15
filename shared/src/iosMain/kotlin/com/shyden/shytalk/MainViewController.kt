@@ -30,12 +30,13 @@ import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
 import com.shyden.shytalk.navigation.BanState
+import com.shyden.shytalk.navigation.ColdStartSequencer
 import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
+import com.shyden.shytalk.navigation.LaunchState
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
 import com.shyden.shytalk.navigation.createIosPlatformScreens
 import com.shyden.shytalk.navigation.isNavigationLockGated
-import com.shyden.shytalk.navigation.resolveColdStartDestination
 import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import kotlinx.coroutines.flow.filterNotNull
@@ -224,32 +225,51 @@ private fun IosApp() {
                             logI("MainViewController", "Cold-start identity cache miss — resolve-then-route fallback")
                         }
 
-                        // Lenient on a transient failure, matching Android and
-                        // the behaviour AuthViewModelBanTest pins: a real ban is
-                        // authoritative, an unreachable ban service is not
-                        // evidence of one.
-                        val bans =
-                            when (val banResult = deviceRepo.checkBanStatus(deviceId)) {
-                                is Resource.Success -> banResult.data.toBanState()
-                                else -> BanState()
-                            }
-                        coldStartBan = bans
-
-                        val destination =
-                            resolveColdStartDestination(
-                                deviceBanned = bans.deviceBanned,
-                                networkBanned = bans.networkBanned,
-                                hasStoredCredential = appLockRepo.hasCredential,
-                                isAppLockEnabled = appLockRepo.isAppLockEnabled,
-                                isLockRequired = appLockRepo.isLockRequired(),
-                                isAuthenticated = authRepo.isAuthenticated,
-                                hasResolvedUser = authRepo.resolvedUniqueId != null,
+                        // SHY-0143 — the same ColdStartSequencer Android runs,
+                        // so the two platforms cannot drift on the ORDER of the
+                        // startup gates any more than they can on the routing
+                        // decision.
+                        //
+                        // `startCohortScopedReads` is a no-op because in Compose
+                        // that event IS the nav graph mounting, and the graph
+                        // below does not mount until this produceState yields a
+                        // non-null route — which happens after `run()` returns.
+                        val sequencer =
+                            ColdStartSequencer(
+                                // Lenient on a transient failure, matching Android
+                                // and the behaviour AuthViewModelBanTest pins: a
+                                // real ban is authoritative, an unreachable ban
+                                // service is not evidence of one.
+                                checkBans = {
+                                    when (val banResult = deviceRepo.checkBanStatus(deviceId)) {
+                                        is Resource.Success -> banResult.data.toBanState()
+                                        else -> BanState()
+                                    }
+                                },
+                                // A restored session's token carries LAST
+                                // session's cohort claim. Rendering a
+                                // cohort-scoped room list on it is the
+                                // SHY-0132/0137 cross-cohort leak.
+                                refreshToken = { authRepo.refreshIdToken() is Resource.Success },
+                                startCohortScopedReads = {},
+                                signOut = { authRepo.signOut() },
+                                launchState = {
+                                    LaunchState(
+                                        hasStoredCredential = appLockRepo.hasCredential,
+                                        isAppLockEnabled = appLockRepo.isAppLockEnabled,
+                                        isLockRequired = appLockRepo.isLockRequired(),
+                                        isAuthenticated = authRepo.isAuthenticated,
+                                        hasResolvedUser = authRepo.resolvedUniqueId != null,
+                                    )
+                                },
                             )
+                        val destination = sequencer.run()
+                        coldStartBan = sequencer.lastBan
                         logI(
                             "MainViewController",
                             "Cold-launch destination: ${destination.route} " +
                                 "(lockGated=${destination == Screen.Lock}, " +
-                                "banned=${bans.deviceBanned || bans.networkBanned})",
+                                "banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
                         )
                         value = destination.route
                     }

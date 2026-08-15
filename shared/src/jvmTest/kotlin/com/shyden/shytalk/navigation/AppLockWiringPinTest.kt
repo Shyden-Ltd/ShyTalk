@@ -64,14 +64,30 @@ class AppLockWiringPinTest {
     // SAME resolver rather than merely each using some shared one.
     private val coldStartResolver = "resolveColdStartDestination("
 
+    // SHY-0143 R2 moved BOTH platforms again, from calling the resolver inline
+    // to running `ColdStartSequencer`, which calls it. The invariant is still
+    // not the name of anything — it is that ONE shared object decides the
+    // cold-start destination for both platforms — so the pins follow it to its
+    // new home and additionally verify the chain: platform → sequencer →
+    // resolver. Pinning only "the platform mentions the sequencer" would pass
+    // if the sequencer stopped consulting the resolver.
+    private val coldStartSequencer = "ColdStartSequencer("
+    private val sequencerSource = "shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/ColdStartSequencer.kt"
+
     @Test
     fun `android cold launch resolves its initial route through the shared resolver`() {
         val src = read(mainActivity)
         assertTrue(
-            src.contains(coldStartResolver),
-            "$mainActivity must consume $coldStartResolver for its initial route " +
+            src.contains(coldStartSequencer),
+            "$mainActivity must run $coldStartSequencer for its initial route " +
                 "(SHY-0187: the pre-fix code skipped the App-Lock entirely on cold launch; " +
-                "SHY-0143: the resolver now also carries the pre-routing ban gate)",
+                "SHY-0143: the sequence now also carries the ban gate and the cohort gate)",
+        )
+        assertTrue(
+            read(sequencerSource).contains(coldStartResolver),
+            "$sequencerSource must consume $coldStartResolver — the platforms delegate " +
+                "their routing decision to it, so a sequencer that stopped calling the " +
+                "resolver would silently restore the SHY-0187 asymmetry",
         )
     }
 
@@ -83,9 +99,9 @@ class AppLockWiringPinTest {
         val android = read(mainActivity)
         val ios = read(mainViewController)
         assertTrue(
-            android.contains(coldStartResolver) && ios.contains(coldStartResolver),
-            "both $mainActivity and $mainViewController must call $coldStartResolver — " +
-                "one decision, one function, or the platforms drift again",
+            android.contains(coldStartSequencer) && ios.contains(coldStartSequencer),
+            "both $mainActivity and $mainViewController must run $coldStartSequencer — " +
+                "one sequence, one object, or the platforms drift again",
         )
         // And neither may keep a second, bypassing route computation.
         assertTrue(
@@ -100,8 +116,8 @@ class AppLockWiringPinTest {
     fun `ios cold launch resolves its start destination through the shared resolver`() {
         val src = read(mainViewController)
         assertTrue(
-            src.contains(coldStartResolver),
-            "$mainViewController must consume $coldStartResolver for its start destination",
+            src.contains(coldStartSequencer),
+            "$mainViewController must run $coldStartSequencer for its start destination",
         )
         assertFalse(
             src.contains("startDestination = Screen.SignIn.route"),
@@ -410,6 +426,59 @@ class AppLockWiringPinTest {
                     "discarding it leaves every downstream read keyed on the Firebase UID",
             )
         }
+    }
+
+    @Test
+    fun `both platforms wire the cohort gate into the cold-start sequence`() {
+        // The gap this catches was live: `ColdStartSequencer` existed, was
+        // covered by nine ordering tests, and was constructed by NOTHING. Its
+        // GATE 2 — refresh the token before any cohort-scoped read — therefore
+        // ran only on the sign-in path, which the optimistic cold start skips.
+        // A restored session rendered its room list on LAST session's cohort
+        // claim: the SHY-0132/0137 cross-cohort leak.
+        //
+        // Nine green tests over an object production never calls read exactly
+        // like coverage, which is why this pin asserts CONSTRUCTION and not
+        // merely the class's existence.
+        listOf(mainActivity, mainViewController).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains(coldStartSequencer),
+                "$path must construct $coldStartSequencer — a sequencer nobody builds gates nothing",
+            )
+            assertTrue(
+                src.contains("refreshToken = "),
+                "$path must supply the sequencer's refreshToken gate; omitting it is how the " +
+                    "cohort claim goes stale on a restored session",
+            )
+            assertTrue(
+                src.contains("refreshIdToken()") || src.contains("forceRefreshToken()"),
+                "$path's refreshToken gate must actually force a token refresh, not return a " +
+                    "constant — the point is re-reading the custom claims",
+            )
+            assertTrue(
+                src.contains("checkBans = "),
+                "$path must supply the sequencer's ban gate",
+            )
+        }
+    }
+
+    @Test
+    fun `the sequencer refuses to start cohort-scoped reads before the refresh`() {
+        // Guards the sequencer's own body, since both platforms now delegate
+        // the ordering to it entirely. If `startCohortScopedReads` were hoisted
+        // above the refresh, every platform would leak at once and the pins
+        // above would all still pass.
+        val src = read(sequencerSource)
+        val refreshAt = src.indexOf("if (!refreshToken())")
+        val readsAt = src.indexOf("startCohortScopedReads()")
+        assertTrue(refreshAt >= 0, "$sequencerSource must gate on refreshToken()")
+        assertTrue(readsAt >= 0, "$sequencerSource must start cohort-scoped reads somewhere")
+        assertTrue(
+            refreshAt < readsAt,
+            "$sequencerSource must refresh the token BEFORE starting cohort-scoped reads " +
+                "(refresh at $refreshAt, reads at $readsAt)",
+        )
     }
 
     @Test

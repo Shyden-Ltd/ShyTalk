@@ -75,10 +75,11 @@ import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.BanState
+import com.shyden.shytalk.navigation.ColdStartSequencer
+import com.shyden.shytalk.navigation.LaunchState
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.isNavigationLockGated
-import com.shyden.shytalk.navigation.resolveColdStartDestination
 import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -220,6 +221,15 @@ class MainActivity : AppCompatActivity() {
                         var updateRequired by remember { mutableStateOf(false) }
                         var checkComplete by remember { mutableStateOf(false) }
 
+                        // SHY-0143 — decided by ColdStartSequencer in the
+                        // pre-routing effect, not at NavHost-mount time. It has to
+                        // be state rather than a `remember { }` because the
+                        // decision now depends on awaited work (the ban verdict and
+                        // the token refresh), and a `remember` block cannot suspend.
+                        // Null until the sequence finishes; the NavHost does not
+                        // mount before then.
+                        var initialRoute by remember { mutableStateOf<String?>(null) }
+
                         // SHY-0143 — the pre-routing ban gate. Resolved inside the
                         // SAME pre-routing phase as the emulator gate + version and
                         // health checks, so it adds no new blocking phase and the
@@ -349,17 +359,68 @@ class MainActivity : AppCompatActivity() {
 
                                 else -> {}
                             }
-                            // Lenient on a transient failure, matching the
-                            // long-standing behaviour AuthViewModelBanTest pins
-                            // ("ban check error is lenient"): a ban-service blip
-                            // must not lock out a legitimate user. A real ban is
-                            // authoritative; an unreachable service is not evidence
-                            // of one.
-                            coldStartBan =
-                                when (val banResult = banDeferred.await()) {
-                                    is Resource.Success -> banResult.data.toBanState()
-                                    else -> BanState()
-                                }
+                            // SHY-0143 — the whole cold-start sequence, in one
+                            // shared object both platforms run.
+                            //
+                            // The two orderings that carry the security are
+                            // enforced by ColdStartSequencer rather than by the
+                            // order these lines happen to appear in:
+                            //   1. bans are known BEFORE the destination is
+                            //      chosen, and
+                            //   2. the cohort claim is refreshed BEFORE any
+                            //      cohort-scoped read is issued.
+                            //
+                            // `startCohortScopedReads` is a no-op here because
+                            // in Compose that event IS the NavHost mounting, and
+                            // the NavHost cannot mount until `checkComplete`
+                            // below — which happens after `run()` returns. The
+                            // ordering is therefore structural, not conventional.
+                            val sequencer =
+                                ColdStartSequencer(
+                                    // Awaits the deferred started above, so the
+                                    // ban round-trip still overlaps the version
+                                    // and health calls rather than adding a leg.
+                                    //
+                                    // Lenient on a transient failure, matching
+                                    // the long-standing behaviour
+                                    // AuthViewModelBanTest pins ("ban check error
+                                    // is lenient"): a ban-service blip must not
+                                    // lock out a legitimate user. A real ban is
+                                    // authoritative; an unreachable service is
+                                    // not evidence of one.
+                                    checkBans = {
+                                        when (val banResult = banDeferred.await()) {
+                                            is Resource.Success -> banResult.data.toBanState()
+                                            else -> BanState()
+                                        }
+                                    },
+                                    // The cheap primitive that re-reads custom
+                                    // claims. A restored session's token carries
+                                    // LAST session's cohort, and rendering a
+                                    // cohort-scoped room list on it is the
+                                    // SHY-0132/0137 cross-cohort leak.
+                                    refreshToken = { authRepository.refreshIdToken() is Resource.Success },
+                                    startCohortScopedReads = {},
+                                    signOut = { authRepository.signOut() },
+                                    launchState = {
+                                        LaunchState(
+                                            hasStoredCredential = appLockRepository.hasCredential,
+                                            isAppLockEnabled = appLockRepository.isAppLockEnabled,
+                                            isLockRequired = appLockRepository.isLockRequired(),
+                                            isAuthenticated = authRepository.isAuthenticated,
+                                            hasResolvedUser = authRepository.resolvedUniqueId != null,
+                                        )
+                                    },
+                                )
+                            val destination = sequencer.run()
+                            coldStartBan = sequencer.lastBan
+                            initialRoute = destination.route
+                            logI(
+                                TAG,
+                                "Cold-launch destination: ${destination.route} " +
+                                    "(lockGated=${destination == Screen.Lock}, " +
+                                    "banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
+                            )
 
                             checkComplete = true
                         }
@@ -676,62 +737,39 @@ class MainActivity : AppCompatActivity() {
 
                                 val pendingEmailLink by pendingEmailLinkState
 
-                                // SHY-0187: shared launch resolver — gates on the
-                                // App-Lock BEFORE any content, silently restores a
-                                // live session (prevents login flash), else Sign-In.
-                                val initialRoute =
-                                    remember {
-                                        // SHY-0143 — the SAME shared resolver iOS
-                                        // uses, ban flags included. The cascade
-                                        // above already renders BanScreen before
-                                        // the NavHost mounts, so this is
-                                        // defence-in-depth rather than the only
-                                        // gate; what it buys is that both
-                                        // platforms compute the cold-start
-                                        // destination through one function, which
-                                        // is the platform asymmetry SHY-0187 set
-                                        // out to kill.
-                                        val destination =
-                                            resolveColdStartDestination(
-                                                deviceBanned = coldStartBan.deviceBanned,
-                                                networkBanned = coldStartBan.networkBanned,
-                                                hasStoredCredential = appLockRepository.hasCredential,
-                                                isAppLockEnabled = appLockRepository.isAppLockEnabled,
-                                                isLockRequired = appLockRepository.isLockRequired(),
-                                                isAuthenticated = authRepository.isAuthenticated,
-                                                hasResolvedUser = authRepository.resolvedUniqueId != null,
-                                            )
-                                        logI(
-                                            TAG,
-                                            "Cold-launch destination: ${destination.route} " +
-                                                "(lockGated=${destination == Screen.Lock})",
-                                        )
-                                        destination.route
-                                    }
-
-                                NavGraph(
-                                    navController = navController,
-                                    startDestination = initialRoute,
-                                    isBackendDegraded = backendDegraded,
-                                    pendingEmailLink = pendingEmailLink,
-                                    onEmailLinkConsumed = { pendingEmailLinkState.value = null },
-                                    onSignOut = {
-                                        workerApiClient.clearTokenCache()
-                                        // Process-scoped: sign-out must finish even if this
-                                        // Activity is destroyed by the navigation it triggers.
-                                        // Rethrow CancellationException to keep structured
-                                        // concurrency intact when the scope is cancelled.
-                                        ProcessLifecycleOwner.get().lifecycleScope.launch {
-                                            try {
-                                                authRepository.signOut()
-                                            } catch (e: CancellationException) {
-                                                throw e
-                                            } catch (e: Exception) {
-                                                Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
+                                // SHY-0187 / SHY-0143: the destination was
+                                // decided by ColdStartSequencer above, which is
+                                // what guarantees the ban verdict and the fresh
+                                // cohort claim both precede this mount. A null
+                                // route means the sequence has not finished — the
+                                // `!checkComplete` branch above is already showing
+                                // the spinner, and mounting a NavHost with no start
+                                // destination would crash.
+                                initialRoute?.let { route ->
+                                    NavGraph(
+                                        navController = navController,
+                                        startDestination = route,
+                                        isBackendDegraded = backendDegraded,
+                                        pendingEmailLink = pendingEmailLink,
+                                        onEmailLinkConsumed = { pendingEmailLinkState.value = null },
+                                        onSignOut = {
+                                            workerApiClient.clearTokenCache()
+                                            // Process-scoped: sign-out must finish even if this
+                                            // Activity is destroyed by the navigation it triggers.
+                                            // Rethrow CancellationException to keep structured
+                                            // concurrency intact when the scope is cancelled.
+                                            ProcessLifecycleOwner.get().lifecycleScope.launch {
+                                                try {
+                                                    authRepository.signOut()
+                                                } catch (e: CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
+                                                }
                                             }
-                                        }
-                                    },
-                                )
+                                        },
+                                    )
+                                }
 
                                 softUpdateAvailable?.let { version ->
                                     AlertDialog(
