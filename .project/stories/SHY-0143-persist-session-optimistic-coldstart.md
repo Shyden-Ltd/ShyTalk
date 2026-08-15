@@ -309,3 +309,74 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
   inverted: not a story wrongly marked shipped, but a story whose premise
   quietly became half-true while it sat in Draft. Re-validating citations at
   pickup is what surfaced it.
+
+- **2026-08-15 15:35 WIB — `code-reviewer` round 1 on the full branch. NOT
+  clean; 6 Critical + 10 Important.** Fixed this round (commit
+  `5b118773878`), each verified before acting:
+
+  1. **The cache never worked for App-Lock users.** The write-through fires
+     per property setter, so `LockScreenViewModel` — which knows only the
+     uniqueId it verified a PIN against — drove `SessionCache.write` into its
+     erase branch. A successful unlock WIPED the cache; with App-Lock on by
+     default the steady state was miss → Lock → PIN → wipe → miss → Lock,
+     permanently. Root cause: cohort was treated as part of the identity. It
+     is not — its only consumer outside the repositories is the dev-only
+     `PreviewWatermark`. Identity is now `{firebaseUid, uniqueId}`; cohort is
+     metadata, written when known and left alone when not. The test
+     `a half-resolved identity is not left in the cache` had PINNED the bug
+     as correct ([[feedback-tests-can-pin-the-bug-as-the-contract]]).
+  2. **The "encrypted at rest" claim was false on Android.**
+     `SecureStorage.android.kt` is plain `SharedPreferences`/`MODE_PRIVATE`
+     by deliberate design (AndroidX deprecated `EncryptedSharedPreferences`;
+     `minSdk = 28` guarantees FBE). `SessionCache`'s KDoc asserted
+     AES-256-GCM, copied from `SecureStorage.kt`'s own stale commonMain
+     KDoc. All three corrected, including the pre-existing one.
+     **OPERATOR DECISION NEEDED:** the Security AC says "encrypted at rest —
+     Android `EncryptedSharedPreferences`/DataStore-with-Tink". As shipped
+     the protection is the app sandbox + device FBE. Either the AC is
+     amended with that rationale, or storage must change. Nothing secret is
+     held here — a uniqueId is the public account number.
+  3. **`TestKoinModule` did not bind `SessionCache`**, so every instrumented
+     test launching `MainActivity` would have died on Koin resolution before
+     its first assertion — including the cold-start legs the DoD requires.
+     Bound to the real impl.
+
+  **STILL OPEN — must be closed before In Review:**
+
+  - **C1 (verified).** The no-session ban gate cannot fire.
+    `/api/device-info` is not in `index.js`'s auth-skip list;
+    `WorkerApiClient.getIdToken()` throws when signed out; and
+    `DeviceRepositoryImpl` catches that and returns `Resource.Success(BanStatus())`
+    — i.e. **"not banned"**. Unmets AC Edge-cases "Banned with no saved
+    session … shows BanScreen, not the SignIn screen", AC Security, and the
+    BDD scenario "stopped even with nobody signed in". This story's own
+    `## Dependencies` predicted it verbatim and the unauthenticated path was
+    never built. Needs an App-Check-protected unauthenticated ban-check
+    endpoint + an Express test.
+  - **C2.** `ColdStartSequencer` returns before `refreshToken()` for any
+    non-`Main` destination, but both nav graphs mount for `Screen.Lock` and
+    immediately call `observeUserFlags(authRepository.currentUserId)`. So a
+    Lock-start cold launch subscribes to `users/<id>` on last session's
+    cohort claim — and on a cache miss `currentUserId` is the Firebase UID,
+    the very wrong-key read this story fixes.
+  - **C3.** iOS passes `onSignOut = { navController.navigate(SignIn) }` into
+    `SharedNavGraph` → `BanScreen`, so a banned iPhone user tapping Sign-out
+    lands on the login screen (the AC's explicit "never") and is not signed
+    out. Android does it correctly.
+  - **C4.** The Android `NavGraph` registers no `ban_device`/`ban_network`
+    destination, yet `initialRoute` can hold one; unreachable today only
+    because a `when` branch above wins. Nothing pins that ordering.
+  - **C5.** `refreshIdToken()` maps ANY exception to `Resource.Error`, so an
+    offline launch is indistinguishable from a revoked token and signs the
+    user out. Android declares no `configChanges`, so rotation re-runs the
+    whole sequence — rotating in airplane mode logs you out.
+  - **I5.** The `checkPmLockOnLogin` reconcile never runs on the optimistic
+    path, so a server `forceSignOut` is never honoured for returning users.
+  - **I6.** The write-through is unsynchronised across dispatchers and
+    writes three keys separately; interleaved writes could persist
+    `{uid_A, uniqueId_B}`. Reviewer's fix — serialise to ONE key — would
+    also retire the two documented-redundant blank guards honestly.
+  - **I8.** iOS `SecureStorage.clear()`'s hand-maintained `ALL_KEYS` list was
+    not extended, so `session_cache_*` survives it on the platform where the
+    Keychain outlives app deletion. Latent (nothing calls it today).
+  - Plus I2/I3/I7/I9/I10 and the coverage gaps — see the handoff.
