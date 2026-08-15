@@ -499,24 +499,32 @@ class AppLockWiringPinTest {
     }
 
     @Test
-    fun `both nav graphs gate their user-flag subscription on a verified cohort`() {
-        // The claim "a non-Main destination starts no reads" was false: the
-        // sequencer returning early does not stop the graph mounting, and both
-        // graphs subscribed to users/<id> the instant they composed. A Lock or
-        // ban start therefore read on LAST session's cohort claim, and on a
-        // cache miss the key was the raw Firebase UID as well.
+    fun `both nav graphs key the user-flag subscription on the RESOLVED uniqueId`() {
+        // The listener used to key on `currentUserId`, which is
+        // `resolvedUniqueId ?: firebaseUid` — so on a cache miss it watched
+        // `users/<firebaseUid>`, a document that does not exist (SHY-0139).
+        //
+        // An earlier attempt gated it on a `cohortVerified` snapshot instead.
+        // That was both the wrong property (reading one's OWN user doc is not
+        // a cross-cohort read) and a one-shot value: the sequencer runs once
+        // per process and returns early for Lock and Sign-In, so after a PIN
+        // unlock or a normal sign-in the flag stayed false and this — the only
+        // real-time suspension and warning listener in the app — never
+        // subscribed. SHY-0024's AC pins that it must keep working.
         listOf(sharedNavGraph, appNavGraph).forEach { path ->
             val src = read(path)
             assertTrue(
-                src.contains("uid != null && cohortVerified"),
-                "$path must gate observeUserFlags on cohortVerified, not merely on a non-null uid",
+                src.contains("mutableStateOf(authRepository.resolvedUniqueId)"),
+                "$path must seed its user id from resolvedUniqueId, not the firebaseUid fallback",
             )
-        }
-        listOf(mainActivity, mainViewController).forEach { path ->
             assertTrue(
-                read(path).contains("cohortVerified = "),
-                "$path must pass the sequencer's cohortVerified into its graph, or the gate is " +
-                    "left at its safe default and NOTHING ever subscribes",
+                src.contains("currentUserId = authRepository.resolvedUniqueId"),
+                "$path must RE-SYNC from resolvedUniqueId too — the re-sync is what picks the id " +
+                    "up after a PIN unlock or a sign-in, neither of which re-runs the sequencer",
+            )
+            assertFalse(
+                src.contains("mutableStateOf(authRepository.currentUserId)"),
+                "$path must not fall back to the Firebase UID for a user-scoped read",
             )
         }
     }
@@ -605,6 +613,60 @@ class AppLockWiringPinTest {
         assertTrue(
             android.indexOf("checkComplete = true") < android.indexOf("reconcileCohortInBackground("),
             "$mainActivity must release the shell BEFORE reconciling",
+        )
+    }
+
+    @Test
+    fun `the iOS onSignOut argument actually signs out`() {
+        // It used to ONLY navigate. `SharedNavGraph` invokes it on the
+        // mid-session suspension path, so a suspended iPhone user was shown
+        // Sign-In with their session, resolvedUniqueId and SessionCache record
+        // intact — and the next cold start put them back on Main. The earlier
+        // ban-screen fix routed AROUND this lambda without repairing it, which
+        // is why a pin that only checks the ban blocks could not see it.
+        val src = read(mainViewController)
+        val at = src.indexOf("onSignOut = ")
+        assertTrue(at >= 0, "$mainViewController must pass onSignOut")
+        val body = src.substring(at, minOf(at + 900, src.length))
+        assertTrue(
+            body.contains("signOut()"),
+            "$mainViewController's onSignOut must call signOut(), not merely navigate",
+        )
+    }
+
+    @Test
+    fun `the ban sign-out clears the API token cache`() {
+        // `WorkerApiClient` caches the bearer token for 50 minutes and
+        // `signOut()` does not touch it, so a banned user kept a working token
+        // in memory. Taking ownership of the lambda from the caller meant
+        // taking ownership of everything the caller's version did.
+        val src = read(appNavGraph)
+        val at = src.indexOf("val signOutAndStay")
+        assertTrue(at >= 0, "$appNavGraph must define signOutAndStay")
+        val body = src.substring(at, minOf(at + 1200, src.length))
+        assertTrue(
+            body.contains("clearTokenCache()"),
+            "$appNavGraph's ban sign-out must clear the cached bearer token",
+        )
+        assertTrue(
+            body.contains("ProcessLifecycleOwner"),
+            "$appNavGraph's ban sign-out must be process-scoped — the composition scope dies " +
+                "with the Activity, which signing out can itself cause",
+        )
+    }
+
+    @Test
+    fun `refreshIdToken invalidates the API token cache`() {
+        // Rotating Firebase's token while WorkerApiClient serves a 50-minute
+        // cached one leaves every Express call on the PRE-flip cohort claim —
+        // the window this story exists to close, reopened by the refresh.
+        val src = read("app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt")
+        val at = src.indexOf("override suspend fun refreshIdToken()")
+        assertTrue(at >= 0, "AuthRepositoryImpl must implement refreshIdToken")
+        val body = src.substring(at, minOf(at + 1400, src.length))
+        assertTrue(
+            body.contains("clearTokenCache()"),
+            "refreshIdToken must invalidate the API client's cached token before rotating",
         )
     }
 

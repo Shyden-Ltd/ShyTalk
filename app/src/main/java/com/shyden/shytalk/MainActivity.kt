@@ -791,7 +791,6 @@ class MainActivity : AppCompatActivity() {
                                         navController = navController,
                                         startDestination = route,
                                         coldStartBan = coldStartBan,
-                                        cohortVerified = cohortVerified,
                                         isBackendDegraded = backendDegraded,
                                         pendingEmailLink = pendingEmailLink,
                                         onEmailLinkConsumed = { pendingEmailLinkState.value = null },

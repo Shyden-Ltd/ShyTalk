@@ -6,12 +6,14 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logE
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.feature.auth.AppleSignInCancelledException
 import kotlinx.coroutines.tasks.await
 
 class AuthRepositoryImpl(
     private val auth: FirebaseAuth,
     private val sessionCache: SessionCache,
+    private val workerApiClient: WorkerApiClient,
     private val applicationId: String = "com.shyden.shytalk",
     private val emailLinkDomain: String = "shytalk.shyden.co.uk",
 ) : AuthRepository {
@@ -202,6 +204,20 @@ class AuthRepositoryImpl(
 
     override suspend fun refreshIdToken(): Resource<Unit> =
         firebaseCall("Failed to refresh ID token") {
+            // SHY-0143 — invalidate the API client's cached bearer token FIRST.
+            //
+            // `WorkerApiClient` caches the ID token for 50 minutes. Rotating
+            // Firebase's token without clearing that cache means every Express
+            // call for the next ~50 minutes still carries the PRE-flip cohort
+            // claim — which is the SHY-0132/0137 window this story exists to
+            // close, reopened by the refresh meant to close it. The
+            // cohort-flip path is the one that makes it reachable: the
+            // pm-lock-check request itself repopulates the cache with the old
+            // token moments before the server mints the new claim.
+            //
+            // `IdentityRepositoryImpl.forceRefreshToken()` already does this;
+            // this method did not, and both are called for the same purpose.
+            workerApiClient.clearTokenCache()
             // UK OSA #17 PR 2: force-refresh after a server-side
             // cohort flip so the rules-layer JWT picks up the new
             // claim immediately rather than waiting for the ~1h

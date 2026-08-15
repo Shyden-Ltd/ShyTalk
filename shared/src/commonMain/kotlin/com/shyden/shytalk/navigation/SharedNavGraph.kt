@@ -108,32 +108,17 @@ fun SharedNavGraph(
      * rendered.
      */
     coldStartBan: BanState = BanState(),
-    /**
-     * SHY-0143 — whether the cold-start sequencer CONFIRMED the cohort claim
-     * in the current token is fresh.
-     *
-     * Gates the user-flag subscription below. Returning a non-`Main`
-     * destination does not stop this graph mounting, and the subscription
-     * fires the instant it composes — so a Lock start, a ban start, or an
-     * offline launch all used to issue `users/<id>` reads on LAST session's
-     * cohort claim (SHY-0132/0137). On a cache miss `currentUserId` is also
-     * still the raw Firebase UID, which is the SHY-0139 wrong-key read.
-     *
-     * Defaults false: a caller that has not run the gate gets no reads, which
-     * is the safe direction to be wrong in.
-     */
-    cohortVerified: Boolean = false,
     platformCallbacks: PlatformNavCallbacks,
     platformScreens: PlatformScreens,
 ) {
     val activeRoomManager: RoomLifecycleManager = koinInject()
     val authRepository: AuthRepository = koinInject()
-    var currentUserId by remember { mutableStateOf(authRepository.currentUserId) }
+    var currentUserId by remember { mutableStateOf(authRepository.resolvedUniqueId) }
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
         navController.currentBackStackEntryFlow.collect { entry ->
-            currentUserId = authRepository.currentUserId
+            currentUserId = authRepository.resolvedUniqueId
             if (BuildVariant.isPreviewBuild) {
                 // Feed the preview watermark's route line (SHY-0205).
                 // Route PATTERNS only (`rooms/{roomId}`), never filled-in
@@ -147,11 +132,21 @@ fun SharedNavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
-    // SHY-0143 — `cohortVerified` is a precondition, not a preference. See the
-    // parameter's docs: without it this subscription fires on every mount,
-    // including the Lock and ban starts the sequencer deliberately returned
-    // early for.
-    if (uid != null && cohortVerified) {
+    // SHY-0143 — `currentUserId` above is now `resolvedUniqueId`, NOT the
+    // `resolvedUniqueId ?: firebaseUid` fallback. That fallback is the whole
+    // hazard: on a cache miss it made this subscribe to `users/<firebaseUid>`,
+    // a document that does not exist (SHY-0139).
+    //
+    // An earlier attempt gated on a `cohortVerified` flag from the cold-start
+    // sequencer. That was the wrong property AND a one-shot snapshot: the
+    // sequencer runs once per process and returns early for Lock and Sign-In,
+    // so after a PIN unlock or a normal sign-in the flag stayed false and this
+    // listener — the ONLY real-time suspension and warning listener in the app
+    // — never subscribed at all. SHY-0024's AC pins that it must.
+    //
+    // Reading one's OWN user document is not a cross-cohort read, so the
+    // cohort claim was never what gated it. Knowing the correct key is.
+    if (uid != null) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
                 if (flags.isSuspended) {

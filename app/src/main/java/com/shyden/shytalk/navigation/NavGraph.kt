@@ -37,7 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -58,6 +60,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.PmSyncService
 import com.shyden.shytalk.data.remote.VoiceService
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -101,6 +104,7 @@ import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.warning.WarningScreen
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.jetbrains.compose.resources.stringResource
@@ -130,30 +134,15 @@ fun NavGraph(
      * about which destinations exist while both were fed the same resolver.
      */
     coldStartBan: BanState = BanState(),
-    /**
-     * SHY-0143 — whether the cold-start sequencer CONFIRMED the cohort claim
-     * in the current token is fresh.
-     *
-     * Gates the user-flag subscription below. Returning a non-`Main`
-     * destination does not stop this graph mounting, and the subscription
-     * fires the instant it composes — so a Lock start, a ban start, or an
-     * offline launch all used to issue `users/<id>` reads on LAST session's
-     * cohort claim (SHY-0132/0137). On a cache miss `currentUserId` is also
-     * still the raw Firebase UID, which is the SHY-0139 wrong-key read.
-     *
-     * Defaults false: a caller that has not run the gate gets no reads, which
-     * is the safe direction to be wrong in.
-     */
-    cohortVerified: Boolean = false,
 ) {
     val activeRoomManager: RoomLifecycleManager = koinInject()
     val authRepository: AuthRepository = koinInject()
-    var currentUserId by remember { mutableStateOf(authRepository.currentUserId) }
+    var currentUserId by remember { mutableStateOf(authRepository.resolvedUniqueId) }
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
         navController.currentBackStackEntryFlow.collect { entry ->
-            currentUserId = authRepository.currentUserId
+            currentUserId = authRepository.resolvedUniqueId
             if (BuildVariant.isPreviewBuild) {
                 // Feed the preview watermark's route line (SHY-0205) —
                 // mirrors SharedNavGraph's publisher (Android runs THIS
@@ -169,11 +158,21 @@ fun NavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
-    // SHY-0143 — `cohortVerified` is a precondition, not a preference. See the
-    // parameter's docs: without it this subscription fires on every mount,
-    // including the Lock and ban starts the sequencer deliberately returned
-    // early for.
-    if (uid != null && cohortVerified) {
+    // SHY-0143 — `currentUserId` above is now `resolvedUniqueId`, NOT the
+    // `resolvedUniqueId ?: firebaseUid` fallback. That fallback is the whole
+    // hazard: on a cache miss it made this subscribe to `users/<firebaseUid>`,
+    // a document that does not exist (SHY-0139).
+    //
+    // An earlier attempt gated on a `cohortVerified` flag from the cold-start
+    // sequencer. That was the wrong property AND a one-shot snapshot: the
+    // sequencer runs once per process and returns early for Lock and Sign-In,
+    // so after a PIN unlock or a normal sign-in the flag stayed false and this
+    // listener — the ONLY real-time suspension and warning listener in the app
+    // — never subscribed at all. SHY-0024's AC pins that it must.
+    //
+    // Reading one's OWN user document is not a cross-cohort read, so the
+    // cohort claim was never what gated it. Knowing the correct key is.
+    if (uid != null) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
                 if (flags.isSuspended) {
@@ -224,10 +223,36 @@ fun NavGraph(
         // not the account, so signing out must clear the session and leave the
         // user exactly where they are. iOS proved a caller-supplied lambda
         // cannot be trusted with that — it passed one that navigated away.
-        val banSignOutScope = rememberCoroutineScope()
-        val signOutAndStay: () -> Unit = {
-            banSignOutScope.launch { authRepository.signOut() }
-        }
+        val workerApiClient: WorkerApiClient = koinInject()
+        val signOutAndStay: () -> Unit =
+            remember(authRepository, workerApiClient) {
+                {
+                    // `WorkerApiClient` caches the ID token for 50 minutes and
+                    // `signOut()` does not touch it, so without this a banned
+                    // user keeps a working bearer token in memory. The caller's
+                    // handler did this; taking ownership of the lambda meant
+                    // taking ownership of everything it did.
+                    workerApiClient.clearTokenCache()
+                    // Process-scoped, like MainActivity's own sign-out: the
+                    // composition scope dies with the Activity, which can
+                    // happen mid-sign-out precisely because signing out
+                    // rearranges the UI.
+                    // The Job is deliberately dropped — nothing awaits a
+                    // sign-out — but naming it keeps the lambda's last
+                    // expression Unit rather than a discarded value.
+                    val job =
+                        ProcessLifecycleOwner.get().lifecycleScope.launch {
+                            try {
+                                authRepository.signOut()
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e("NavGraph", "ban-screen sign-out failed", e)
+                            }
+                        }
+                    check(job.isActive || job.isCompleted) { "sign-out job was never scheduled" }
+                }
+            }
 
         NavHost(
             navController = navController,

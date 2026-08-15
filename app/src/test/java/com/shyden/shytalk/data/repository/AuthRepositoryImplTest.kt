@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserInfo
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -26,18 +27,20 @@ import org.junit.Test
 
 class AuthRepositoryImplTest {
     private lateinit var auth: FirebaseAuth
+    private lateinit var workerApiClient: WorkerApiClient
     private lateinit var repo: AuthRepositoryImpl
 
     @Before
     fun setup() {
         auth = mockk(relaxed = true)
+        workerApiClient = mockk(relaxed = true)
         // SHY-0143 — a real SessionCache over a relaxed storage double. This
         // file tests auth, not caching; the cache's own behaviour is covered
         // by SessionCacheContractTest against the real SecureStorage actual.
         // (`app/src/test` is a host unit-test source set, where CLAUDE.md
         // permits doubles; the Android SecureStorage actual needs a real
         // Context and Keystore and cannot be built here.)
-        repo = AuthRepositoryImpl(auth, SessionCache(mockk(relaxed = true)))
+        repo = AuthRepositoryImpl(auth, SessionCache(mockk(relaxed = true)), workerApiClient)
         mockkStatic(GoogleAuthProvider::class)
     }
 
@@ -421,7 +424,7 @@ class AuthRepositoryImplTest {
         // takes the resolve-then-route fallback forever — the feature silently
         // does nothing while every test about the cache itself stays green.
         val (cache, _) = cacheOverMemory()
-        val repoWithCache = AuthRepositoryImpl(auth, cache)
+        val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
         signedInAs("fb-uid-1")
 
         repoWithCache.resolvedUniqueId = "10000005"
@@ -442,7 +445,7 @@ class AuthRepositoryImplTest {
         // cache into its erase branch, so a successful unlock wiped it. Cohort
         // is metadata, not identity.
         val (cache, _) = cacheOverMemory()
-        val repoWithCache = AuthRepositoryImpl(auth, cache)
+        val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
         signedInAs("fb-uid-1")
 
         repoWithCache.resolvedUniqueId = "10000005"
@@ -459,7 +462,7 @@ class AuthRepositoryImplTest {
         // to route on, and leaving the previous account's record behind would
         // let the next launch trust it.
         val (cache, _) = cacheOverMemory()
-        val repoWithCache = AuthRepositoryImpl(auth, cache)
+        val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
         signedInAs("fb-uid-1")
 
         repoWithCache.resolvedCohort = "adult"
@@ -471,7 +474,7 @@ class AuthRepositoryImplTest {
     fun `signOut leaves no identity on disk`() =
         runTest {
             val (cache, backing) = cacheOverMemory()
-            val repoWithCache = AuthRepositoryImpl(auth, cache)
+            val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
             signedInAs("fb-uid-1")
             repoWithCache.resolvedUniqueId = "10000005"
             repoWithCache.resolvedCohort = "adult"
@@ -484,6 +487,24 @@ class AuthRepositoryImplTest {
                 "no session field may survive sign-out, got ${backing.keys}",
                 backing.keys.none { it.startsWith("session_cache_") },
             )
+        }
+
+    @Test
+    fun `refreshIdToken invalidates the API client's cached bearer token`() =
+        runTest {
+            // Without this, rotating Firebase's token leaves WorkerApiClient
+            // serving the PRE-flip token for up to 50 minutes — so every
+            // Express call still carries the old cohort claim. That is the
+            // SHY-0132/0137 window this story closes, reopened by the refresh
+            // meant to close it. `IdentityRepositoryImpl.forceRefreshToken`
+            // already clears it; this path did not.
+            val user = mockk<FirebaseUser>(relaxed = true)
+            every { auth.currentUser } returns user
+            every { user.getIdToken(true) } returns Tasks.forResult(mockk(relaxed = true))
+
+            repo.refreshIdToken()
+
+            verify { workerApiClient.clearTokenCache() }
         }
 
     // endregion

@@ -154,6 +154,9 @@ tasks.named("jvmTest") {
             rootProject.layout.projectDirectory.file("iosApp/iosApp/AppDelegate.swift"),
             rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt"),
             layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt"),
+            rootProject.layout.projectDirectory.file(
+                "app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt",
+            ),
         ).withPropertyName("appLockWiringPinnedSources")
         .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 }

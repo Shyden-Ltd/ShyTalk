@@ -288,12 +288,50 @@ class SessionCacheContractTest {
     }
 
     @Test
+    fun `a record whose field is not a string reads as a miss instead of throwing`() {
+        // Valid JSON, wrong shape. `JsonElement.jsonPrimitive` THROWS on a
+        // non-primitive, and `read()` is called from MainActivity's
+        // LaunchedEffect and iOS's produceState — so this escaping meant a
+        // crash at launch, repeated on every launch because the bad record
+        // survived. On iOS the Keychain outlives the app.
+        listOf(
+            """{"firebaseUid":"fb-uid-1","uniqueId":["10000005"]}""",
+            """{"firebaseUid":{"x":1},"uniqueId":"10000005"}""",
+            """{"firebaseUid":"fb-uid-1","uniqueId":null}""",
+            """{"firebaseUid":"fb-uid-1","uniqueId":"10000005","cohort":[1,2]}""",
+        ).forEach { record ->
+            setup()
+            storage.putString(SessionCache.KEY_SESSION, record)
+
+            assertNull(cache.read("fb-uid-1"), "a wrong-shaped record ($record) must be a miss, not a throw")
+            assertNull(storage.getString(SessionCache.KEY_SESSION), "and it must be erased, not re-parsed forever")
+        }
+    }
+
+    @Test
+    fun `a record for a DIFFERENT account is a miss but is NOT erased`() {
+        // The one non-erasing miss. A well-formed record belongs to whoever it
+        // names; erasing it because someone else launched would throw away the
+        // previous user's identity on every account switch.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+
+        assertNull(cache.read("fb-uid-2"))
+        assertNotNull(storage.getString(SessionCache.KEY_SESSION), "the other account's record must survive")
+        assertNotNull(cache.read("fb-uid-1"), "and still be readable by its owner")
+    }
+
+    @Test
     fun `an unparseable record reads as a miss and is erased`() {
         listOf("not json at all", "{\"firebaseUid\": ", "[]", "42").forEach { garbage ->
             setup()
             storage.putString(SessionCache.KEY_SESSION, garbage)
 
             assertNull(cache.read("fb-uid-1"), "garbage ('$garbage') must read as a miss")
+            assertNull(
+                storage.getString(SessionCache.KEY_SESSION),
+                "and must be ERASED — the test name said so while asserting nothing of the kind, " +
+                    "so `[]` and `42` sat on disk being re-parsed on every launch",
+            )
         }
     }
 

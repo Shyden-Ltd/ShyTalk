@@ -213,7 +213,12 @@ class DeviceRepositoryImplTest {
     @Test
     fun `checkBanStatus returns not banned on API exception`() =
         runTest {
-            coEvery { workerApiClient.post(any(), any()) } throws RuntimeException("Network error")
+            // Was stubbing `post`, which checkBanStatus stopped calling when
+            // C1 moved it to the unauthenticated GET. `workerApiClient` is
+            // relaxed, so `getPublic` returned a stub object, the test went
+            // down the HAPPY path and asserted "not banned" — proving nothing
+            // about the fail-open catch on a brand-new unauthenticated endpoint.
+            coEvery { workerApiClient.getPublic(any()) } throws RuntimeException("Network error")
 
             val result = repo.checkBanStatus("device-1")
 

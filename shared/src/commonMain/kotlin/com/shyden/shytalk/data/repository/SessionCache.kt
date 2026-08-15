@@ -92,31 +92,40 @@ class SessionCache(
         val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return null
 
         val raw = storage.getString(KEY_SESSION)?.takeIf { it.isNotBlank() } ?: return null
-        val record =
-            try {
-                Json.parseToJsonElement(raw) as? JsonObject ?: return null
-            } catch (e: IllegalArgumentException) {
-                // Anything unparseable is a miss, never a partial identity: a
-                // half-decoded record is exactly what the single-key format
-                // exists to make impossible, so refusing it costs one
-                // resolve-then-route and cannot be wrong.
-                logW(TAG, "Discarding an unreadable session record: ${e.message}")
-                clear()
-                return null
-            }
 
-        fun field(name: String) = record[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+        // The ENTIRE decode is inside the try, field reads included.
+        // `JsonElement.jsonPrimitive` throws when the element is not a
+        // primitive, so a record like `{"uniqueId":["10000005"]}` — valid JSON,
+        // wrong shape — would otherwise propagate out of `read()` into
+        // MainActivity's LaunchedEffect and iOS's produceState and crash the
+        // launch, with the bad record surviving to crash the next one too. On
+        // iOS the Keychain outlives the app, so "it will sort itself out" does
+        // not apply.
+        //
+        // Anything unreadable is a miss, never a partial identity, and it is
+        // erased so it cannot be re-parsed on every launch forever.
+        return try {
+            val record = Json.parseToJsonElement(raw) as? JsonObject ?: return discardRecord("not a JSON object")
 
-        val storedUid = field(FIELD_FIREBASE_UID) ?: return null
-        val uniqueId = field(FIELD_UNIQUE_ID) ?: return null
+            fun field(name: String) = record[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
 
-        if (storedUid != liveUid) return null
+            val storedUid = field(FIELD_FIREBASE_UID) ?: return discardRecord("no usable firebaseUid")
+            val uniqueId = field(FIELD_UNIQUE_ID) ?: return discardRecord("no usable uniqueId")
 
-        return CachedSession(
-            firebaseUid = storedUid,
-            uniqueId = uniqueId,
-            cohort = field(FIELD_COHORT),
-        )
+            // NOT a discard: a record for a different account is perfectly
+            // well-formed and belongs to whoever it names. Erasing it here
+            // would throw away the previous user's identity every time the
+            // current one launches.
+            if (storedUid != liveUid) return null
+
+            CachedSession(
+                firebaseUid = storedUid,
+                uniqueId = uniqueId,
+                cohort = field(FIELD_COHORT),
+            )
+        } catch (e: IllegalArgumentException) {
+            discardRecord("unreadable (${e.message})")
+        }
     }
 
     /**
@@ -179,6 +188,13 @@ class SessionCache(
         // that `read` would happily serve. A single-key record makes both that
         // and the torn-write case impossible rather than merely unlikely.
         storage.putString(KEY_SESSION, record.toString())
+    }
+
+    /** Erases an unusable record and reports a miss, so it cannot come back. */
+    private fun discardRecord(why: String): CachedSession? {
+        logW(TAG, "Discarding the stored session record — $why")
+        clear()
+        return null
     }
 
     private fun storedUidOrNull(): String? = rawField(FIELD_FIREBASE_UID)

@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.ComposeUIViewController
 import androidx.navigation.compose.rememberNavController
@@ -40,7 +41,10 @@ import com.shyden.shytalk.navigation.isNavigationLockGated
 import com.shyden.shytalk.navigation.reconcileCohortInBackground
 import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
 import org.koin.mp.KoinPlatformTools
 
@@ -196,6 +200,11 @@ private fun IosApp() {
                 // SHY-0143 — gates the nav graph's user-flag subscription.
                 // False until a token refresh actually confirms the claim.
                 var cohortVerified by remember { mutableStateOf(false) }
+
+                // SHY-0143 — sign-out is a suspend call and `onSignOut` is not
+                // a suspend lambda, so it needs a scope that outlives the click.
+                val signOutScope = rememberCoroutineScope()
+                val authRepo: AuthRepository = koinInject()
                 val startDestination by
                     produceState<String?>(initialValue = null) {
                         val koin = KoinPlatformTools.defaultContext().get()
@@ -314,9 +323,28 @@ private fun IosApp() {
                     SharedNavGraph(
                         navController = navController,
                         startDestination = route,
-                        onSignOut = { navController.navigate(Screen.SignIn.route) { popUpTo(0) } },
+                        // SHY-0143 — this used to ONLY navigate. `SharedNavGraph`
+                        // invokes it on the mid-session suspension path, so a
+                        // suspended iPhone user was shown the Sign-In screen
+                        // with their Firebase session, resolvedUniqueId and
+                        // SessionCache record all intact — and the next cold
+                        // start routed them straight back to Main. Android's
+                        // equivalent has always signed out.
+                        onSignOut = {
+                            val job =
+                                signOutScope.launch {
+                                    try {
+                                        authRepo.signOut()
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        logW("MainViewController", "sign-out failed: ${e.message}")
+                                    }
+                                    navController.navigate(Screen.SignIn.route) { popUpTo(0) }
+                                }
+                            check(job.isActive || job.isCompleted) { "sign-out job was never scheduled" }
+                        },
                         coldStartBan = coldStartBan,
-                        cohortVerified = cohortVerified,
                         platformCallbacks = platformCallbacks,
                         platformScreens = platformScreens,
                     )
