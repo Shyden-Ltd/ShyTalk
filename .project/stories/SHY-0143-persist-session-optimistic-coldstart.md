@@ -380,3 +380,56 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
     not extended, so `session_cache_*` survives it on the platform where the
     Keychain outlives app deletion. Latent (nothing calls it today).
   - Plus I2/I3/I7/I9/I10 and the coverage gaps — see the handoff.
+
+- **2026-08-15 ~22:15 WIB — review round 1 findings CLOSED.** Commits
+  `06fb115c74c` (C2/C3/C4/C5/I8), `f730b2f80ac` (C1), `5b4058c499f` (I6),
+  `c3b56d507dc` (I5):
+
+  - **C1** — new `GET /api/ban-status`: unauthenticated, read-only,
+    rate-limited, in the auth-skip list. `checkBans(deviceId, ip, asn)`
+    already took no user identity. A new route rather than opening up
+    `/device-info`, which upserts a device binding and runs a cap
+    transaction and must stay authed. Both clients switched to it, which
+    also retires I10 (a Firestore write per cold start and per rotation).
+    `getIpGeo` extracted to `utils/ip-geo.js` so both routes resolve an ASN
+    through one definition. 10 real-emulator tests.
+  - **C2 + C5** were one problem. Both nav graphs now take `cohortVerified`
+    and gate `observeUserFlags` on it; the sequencer gained a third outcome
+    so a failed refresh with a LIVE session renders the shell and issues
+    nothing instead of signing out. Discriminator is `isSessionAlive`,
+    because Firebase clears its local user on a genuine revocation —
+    classifying the exception would mean matching type names across two
+    platforms.
+  - **C3** — both graphs now OWN the ban screens' sign-out. The KDoc had
+    stated the contract for months; a caller-supplied lambda could not
+    enforce it, and iOS passed one that navigated to Sign-In.
+  - **C4** — both graphs register both ban destinations.
+  - **I5** — `reconcileCohortInBackground` in commonMain, launched (not
+    awaited) by both platforms after the shell is released.
+  - **I6** — the cached record is now ONE key holding one JSON value, so a
+    torn or interleaved write cannot produce a complete-looking
+    cross-account record. `clear()` also removes the three superseded keys.
+  - **I8** — iOS `SecureStorage.clear()` deletes by service instead of
+    iterating a hand-maintained key list. The list is gone.
+
+  **OPERATOR DECISIONS still needed:**
+
+  1. **Security AC vs reality.** The AC says the cache is "encrypted at rest
+     — Android `EncryptedSharedPreferences`/DataStore-with-Tink". Android's
+     `SecureStorage` is plain `SharedPreferences`/`MODE_PRIVATE` by
+     deliberate design (AndroidX deprecated the encrypted variant; `minSdk
+     = 28` guarantees FBE). Amend the AC with that rationale, or change the
+     storage. Nothing secret is held — a uniqueId is the public account
+     number.
+  2. **`forceSignOut` does not exist.** The AC requires "the reconcile
+     returns `forceSignOut: true` → sign out → SignIn". `PmLockCheckResult`
+     has no such field; the wire contract is pmLocked / unlocked /
+     alreadyCheckedToday / cohort / cohortChanged / forceTokenRefresh /
+     claimMintFailed. This needs a server change or an AC amendment. Not
+     implemented against an invented field.
+
+  **Still owed before Done:** Android instrumented cold-start `.feature` +
+  steps; an iOS test source set (`shared/src/ios*Test/**` currently has ZERO
+  files, so `IosAuthRepositoryImpl`'s write-through has no coverage of any
+  kind) + the Keychain `SessionCache` round-trip; the LOCAL and DEV
+  gauntlets on real devices.
