@@ -45,9 +45,12 @@ on:
         type: string
         default: "10"
 
-concurrency:
-  group: gh-pages-deploy
-  cancel-in-progress: false
+# NO concurrency group (SHY-0298). This workflow held `gh-pages-deploy` at
+# WORKFLOW level, so the lock covered its history restore and report generation
+# too — minutes, not the seconds of the push. Worse, a group allows only ONE
+# pending entry, so a third contender cancelled the pending second (incidents
+# #568/#570). The publish action now retries against the moving tip, so no
+# writer needs to exclude any other.
 
 jobs:
   generate-report:

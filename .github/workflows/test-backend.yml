@@ -160,9 +160,9 @@ jobs:
     if: ${{ !cancelled() && needs.test-backend.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    concurrency:
-      group: gh-pages-deploy
-      cancel-in-progress: false
+    # NO concurrency group — see pr-checks.yml's publish job. A cancelled job
+    # here would be worse than there: this workflow is in PR Gate's `needs`, so
+    # a cancelled publish fails a REQUIRED check on an innocent PR.
     permissions:
       contents: write
     steps:

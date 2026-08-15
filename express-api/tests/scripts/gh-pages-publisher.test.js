@@ -1,23 +1,29 @@
 /**
- * SHY-0298 — every gh-pages writer shares ONE serialization queue.
+ * SHY-0298 — concurrent gh-pages writers are made SAFE, not prevented.
  *
- * Three workflows push to the `gh-pages` branch via
- * `peaceiris/actions-gh-pages`, which clones `--depth=1`, commits and pushes
- * with NO retry. Before this story only `allure-report.yml` sat inside the
- * `gh-pages-deploy` concurrency group; the Kotlin report (pr-checks.yml) and
- * the Express report (test-backend.yml) were in per-branch and per-ref groups,
- * so they could interleave between clone and push and lose to
- * `! [rejected] … (fetch first)`. Documented at test-backend.yml:122-131 and
- * verified on PR #901.
+ * Three workflows publish to the `gh-pages` branch. `peaceiris/actions-gh-pages`
+ * clones `--depth=1`, commits and pushes with NO retry, so two writers that
+ * interleave between clone and push leave the loser with
+ * `! [rejected] … (fetch first)` — verified on PR #901.
  *
- * The serialization mechanism is MEASURED, not assumed: two probe workflows
- * claiming the same group — one declaring it at workflow level, one at job
- * level, in different workflows — ran strictly sequentially (B started 5s
- * after A ended). See the story's Notes for the timestamps.
+ * The first attempt at this story serialized every writer on one
+ * `gh-pages-deploy` concurrency group. Review found that to be WRONG, and the
+ * repo had already lived the failure: a concurrency group holds exactly ONE
+ * pending entry, so a third contender CANCELS the pending second
+ * (`scripts/check-workflow-concurrency-scoping.sh`, incidents #568/#570). A
+ * single backend PR run has three contenders, and a cancelled
+ * `publish-express-report` propagates through the `test-backend` reusable
+ * workflow into `PR Gate` — a REQUIRED check. The lock would have red-gated
+ * innocent PRs at PR frequency. Per-destination groups do not help either: the
+ * race is on the BRANCH, a single git ref.
  *
- * These pins therefore assert two things that must stay true together:
- *   (a) exactly ONE peaceiris invocation exists, inside the composite action;
- *   (b) every path that reaches it is inside the `gh-pages-deploy` group.
+ * So the vendor action is replaced by an owned push that RETRIES against the
+ * moving tip, and the lock is removed everywhere. Because each publish is a
+ * whole-directory replacement, a retry needs no rebase — re-read the tip and
+ * re-apply.
+ *
+ * These pins assert that both halves stay true: no lock anywhere, and a push
+ * that genuinely loses gracefully to a concurrent writer.
  */
 
 const fs = require('fs');
@@ -81,46 +87,17 @@ const actionSteps = () =>
   yaml.load(fs.readFileSync(PUBLISH_ACTION, 'utf8'), { filename: PUBLISH_ACTION })?.runs?.steps ??
   [];
 
-const peaceirisStep = () => {
-  const step = actionSteps().find(
-    (s) => typeof s?.uses === 'string' && s.uses.startsWith('peaceiris/actions-gh-pages'),
-  );
-  expect(step).toBeDefined();
-  expect(step.with).toBeDefined();
-  return step;
-};
-
-describe('SHY-0298 — exactly one gh-pages writer exists', () => {
-  test('no workflow invokes peaceiris directly', () => {
-    const offenders = workflowFiles()
-      .map((f) => [path.basename(f), invocationsIn(f)])
-      .filter(([, n]) => n > 0);
-    expect(offenders).toEqual([]);
-  });
-
-  test('the ONE invocation lives in the publish-gh-pages composite action', () => {
+describe('SHY-0298 — one owned writer, no vendor action', () => {
+  test('the publish action exists and is the only publishing entry point', () => {
     expect(fs.existsSync(PUBLISH_ACTION)).toBe(true);
-    expect(invocationsIn(PUBLISH_ACTION)).toBe(1);
   });
 
-  test('repo-wide there is exactly one invocation, counted at the definition site', () => {
+  test('peaceiris is gone repo-wide — it cannot retry, and a uses: step cannot be retried', () => {
+    // Counted at the DEFINITION site. A bare substring search over
+    // test-backend.yml scores 2, because one match is a COMMENT explaining the
+    // race — the exact mistake this repo has a rule about.
     const total = [...workflowFiles(), ...actionFiles()].reduce((n, f) => n + invocationsIn(f), 0);
-    expect(total).toBe(1);
-  });
-
-  test('the action preserves keep_files: false (the SHY-0128 invariant)', () => {
-    // peaceiris cleans ONLY destination_dir before copying, so each deploy
-    // replaces that suite/env's latest/ rather than stranding hashed files
-    // forever. Sibling suites, the root landing page and CNAME live outside
-    // destination_dir and must stay untouched.
-    //
-    // Read the PARSED input, not the file text. A `toMatch(/keep_files:\s*false/)`
-    // pin PASSED the mutation that deleted the real setting, because it matched
-    // the neighbouring COMMENT that explains it — measure at the definition
-    // site, not by substring.
-    const step = peaceirisStep();
-    expect(step.with.keep_files).toBe(false);
-    expect(step.with.force_orphan).toBeUndefined();
+    expect(total).toBe(0);
   });
 
   test('the dependabot guard lives in the action, so no caller can forget it', () => {
@@ -162,84 +139,76 @@ const publishingJobs = (doc) =>
 
 const groupOf = (node) => node?.concurrency?.group ?? node?.concurrency;
 
-describe('SHY-0298 — every publishing path is serialized on one queue', () => {
-  test('every job that publishes is covered by the gh-pages-deploy group', () => {
-    // Covered EITHER by its own job-level group OR by its workflow-level one —
-    // the probe proved those two share a queue. Asserting "job-level only"
-    // would wrongly fail allure-report.yml, which is already correct.
-    const uncovered = [];
+// ── C3: the lock is GONE; concurrent pushes are made safe instead ──────────
+//
+// Review found the design error: a concurrency group holds exactly ONE pending
+// entry, so a third contender CANCELS the pending second (this repo's own
+// incident #568/#570, documented in check-workflow-concurrency-scoping.sh).
+// After serializing three writers, a single backend PR run had three
+// contenders — and a cancelled `publish-express-report` propagates through the
+// `test-backend` reusable workflow into `PR Gate`, a REQUIRED check. The lock
+// would have red-gated innocent PRs at PR frequency.
+//
+// A lock cannot be made safe here (per-destination groups do not help: the race
+// is on the BRANCH, one git ref). So the push itself is made concurrency-safe
+// and the group is removed everywhere.
+
+describe('SHY-0298 — the gh-pages-deploy lock is gone', () => {
+  test('no workflow or job anywhere still claims the group', () => {
+    const holders = [];
     for (const file of workflowFiles()) {
       const doc = load(file);
-      const wfGroup = groupOf(doc);
-      for (const [name, def] of publishingJobs(doc)) {
-        if (wfGroup === GROUP) continue;
-        if (groupOf(def) === GROUP) continue;
-        uncovered.push(`${path.basename(file)}:${name}`);
+      if (groupOf(doc) === GROUP) holders.push(`${path.basename(file)}:<workflow>`);
+      for (const [name, def] of Object.entries(doc?.jobs ?? {})) {
+        if (groupOf(def) === GROUP) holders.push(`${path.basename(file)}:${name}`);
       }
     }
-    expect(uncovered).toEqual([]);
+    expect(holders).toEqual([]);
   });
 
-  test('at least one workflow publishes — the sweep above cannot pass vacuously', () => {
-    // Without this, deleting every publish step would make the previous test
-    // pass with an empty list. A guard that cannot fail is decoration.
+  test('at least three jobs publish — the lock sweep above cannot pass vacuously', () => {
+    // Without this, deleting every publish path would make "no job claims the
+    // group" pass trivially. A guard that cannot fail is decoration.
     const total = workflowFiles().reduce((n, f) => n + publishingJobs(load(f)).length, 0);
     expect(total).toBeGreaterThanOrEqual(3);
   });
 
-  test('a publishing job never cancels in progress — queue, never drop a report', () => {
-    for (const file of workflowFiles()) {
-      const doc = load(file);
-      for (const [name, def] of publishingJobs(doc)) {
-        const node = groupOf(def) === GROUP ? def : doc;
-        expect([`${path.basename(file)}:${name}`, node.concurrency['cancel-in-progress']]).toEqual([
-          `${path.basename(file)}:${name}`,
-          false,
-        ]);
-      }
+  test('the publish action retries its push instead of relying on a lock', () => {
+    // peaceiris does NOT retry, and a `uses:` step cannot be retried, which is
+    // why the vendor action was replaced with an owned push.
+    const bodies = actionSteps()
+      .map((s) => stripComments(s?.run ?? ''))
+      .join('\n');
+    expect(bodies).toMatch(/for\s+attempt\b|while\b.*attempt|seq\s+1\s+\$\{?MAX/i);
+    expect(bodies).toMatch(/git push/);
+  });
+
+  test('a retry re-reads the remote tip rather than force-pushing over it', () => {
+    // The whole point is to LOSE gracefully to a concurrent writer and redo the
+    // work on their tip. A force push would silently discard their report.
+    const bodies = actionSteps()
+      .map((s) => stripComments(s?.run ?? ''))
+      .join('\n');
+    expect(bodies).toMatch(/git fetch/);
+    // Line-based rather than one alternation of `.*` runs — `push\s+.*--force`
+    // style patterns trip sonarjs/slow-regex on backtracking.
+    const pushLines = bodies.split('\n').filter((l) => l.includes('git push'));
+    expect(pushLines.length).toBeGreaterThan(0);
+    for (const l of pushLines) {
+      expect(l).not.toContain('--force');
+      expect(l).not.toContain('+refs');
     }
   });
 
-  test('the publish group never sits on a job that runs the test suites', () => {
-    // Serializing the PRODUCERS would queue ~15-min Build & Test and ~5-min
-    // Test Backend across every PR. Only the seconds-long publish may queue.
-    //
-    // Coverage is resolved the SAME way as the sweep above — job group OR
-    // workflow group. An earlier version checked `groupOf(def) !== GROUP` and
-    // skipped every workflow-level holder, which excluded the one job that
-    // actually holds the lock for a long time (allure-report.yml's
-    // generate-report). Adding `npm test` to it left the suite green.
-    const TEST_MARKERS = /(npm (run )?test|gradlew.*[Tt]est|playwright test|jest)/;
-    const offenders = [];
-    for (const file of workflowFiles()) {
-      const doc = load(file);
-      const wfCovered = groupOf(doc) === GROUP;
-      for (const [name, def] of Object.entries(doc?.jobs ?? {})) {
-        if (!wfCovered && groupOf(def) !== GROUP) continue;
-        // Scan `uses:` too — a producer that runs its suite through a local
-        // composite action has no `run:` for the markers to match.
-        const body = (def.steps ?? []).map((s) => `${s?.run ?? ''}\n${s?.uses ?? ''}`).join('\n');
-        if (TEST_MARKERS.test(body)) offenders.push(`${path.basename(file)}:${name}`);
-      }
-    }
-    expect(offenders).toEqual([]);
-  });
-
-  test('no job re-declares the group its own workflow already holds (self-deadlock)', () => {
-    // allure-report.yml holds `gh-pages-deploy` at WORKFLOW level. A job inside
-    // it that also declared the group would wait on a lock its own run holds,
-    // and every allure run would hang to its 20-minute timeout. The workflow
-    // documents this hazard; nothing enforced it, and adding such a job left
-    // the whole suite green.
-    const offenders = [];
-    for (const file of workflowFiles()) {
-      const doc = load(file);
-      if (groupOf(doc) !== GROUP) continue;
-      for (const [name, def] of Object.entries(doc?.jobs ?? {})) {
-        if (groupOf(def) === GROUP) offenders.push(`${path.basename(file)}:${name}`);
-      }
-    }
-    expect(offenders).toEqual([]);
+  test('only the destination directory is replaced, never the whole branch', () => {
+    // The SHY-0128 invariant, now enforced on our own push rather than on
+    // peaceiris' keep_files flag: sibling suites, the root landing page and
+    // CNAME live outside destination_dir and must survive.
+    const bodies = actionSteps()
+      .map((s) => stripComments(s?.run ?? ''))
+      .join('\n');
+    expect(bodies).toMatch(/rm -rf\s+"?\$\{?DESTINATION_DIR|rm -rf\s+"\$TARGET/);
+    expect(bodies).not.toMatch(/git checkout --orphan\b.*\n.*rm -rf \.\s*$/m);
   });
 });
 
@@ -280,7 +249,12 @@ describe('SHY-0298 — the composite action gates every side-effecting step', ()
       const lines = stripComments(step?.run ?? '').split('\n');
       lines.forEach((line, i) => {
         if (!line.includes('::error')) return;
-        const end = lines.findIndex((l, j) => j > i && /^\s*fi\b/.test(l));
+        // A refusal ends at its enclosing `fi`/`done`, or at the end of the
+        // script when it is the terminal failure of a retry loop. Assuming
+        // `fi` only was wrong once the retry-exhausted error was added after a
+        // `done` — the walker found no terminator and silently produced -1.
+        let end = lines.findIndex((l, j) => j > i && /^\s*(fi|done)\b/.test(l));
+        if (end === -1) end = lines.length;
         expect(end).toBeGreaterThan(i);
         guards.push(lines.slice(i, end).join('\n'));
       });

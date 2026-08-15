@@ -85,22 +85,81 @@ runs:
         printf 'Publishing %s file(s) from %s to gh-pages:%s\n' \
           "$(find "$PUBLISH_DIR" -type f | wc -l | tr -d ' ')" "$PUBLISH_DIR" "$DESTINATION_DIR"
 
-    - name: Deploy to gh-pages
+    - name: Publish to gh-pages (retrying against the moving tip)
       if: steps.gate.outputs.skip == 'false'
-      uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-      with:
-        github_token: ${{ inputs.github-token }}
-        publish_dir: ${{ inputs.publish-dir }}
-        destination_dir: ${{ inputs.destination-dir }}
-        # SHY-0128: false — peaceiris cleans ONLY destination_dir before copying
-        # (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
-        # suite/env's latest/ instead of stranding prior hashed files forever
-        # (playwright/pr/latest had accumulated 6.9 GiB / 1.05M files). Sibling
-        # suites, the root landing page and CNAME live outside destination_dir
-        # and are untouched. force_orphan was evaluated and REJECTED: it skips
-        # the clone entirely (src L97-104), so each deploy would wipe every
-        # sibling suite.
-        keep_files: false
+      shell: bash
+      env:
+        PUBLISH_DIR: ${{ inputs.publish-dir }}
+        DESTINATION_DIR: ${{ inputs.destination-dir }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        # Why an owned push instead of peaceiris/actions-gh-pages (SHY-0298):
+        # peaceiris does not retry, and a `uses:` step cannot be retried, so a
+        # losing writer simply fails. The first version of this story fixed that
+        # with a `gh-pages-deploy` concurrency group — WRONG, and this repo had
+        # already lived the consequence: a group holds exactly ONE pending
+        # entry, so a third contender CANCELS the pending second (incidents
+        # #568/#570, see scripts/check-workflow-concurrency-scoping.sh). A
+        # cancelled publish inside test-backend.yml propagates into PR Gate, a
+        # REQUIRED check, so the lock would have red-gated innocent PRs.
+        #
+        # Retrying is the right shape here BECAUSE each publish is a whole
+        # directory replacement: losing to a concurrent writer needs no rebase
+        # and no merge, just "re-read their tip and redo my replacement on it".
+        MAX_ATTEMPTS=6
+        WORK="$(mktemp -d)"
+        SRC="$(cd "$PUBLISH_DIR" && pwd)"
+
+        # Partial + sparse clone. gh-pages is multi-GiB (SHY-0128); `--filter`
+        # skips fetching blobs we never read and the sparse cone materialises
+        # only the one directory we replace, so this stays cheap no matter how
+        # large sibling suites grow.
+        git clone --quiet --no-checkout --filter=blob:none --depth=1 \
+          --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$WORK"
+        cd "$WORK"
+        git sparse-checkout set --cone "$DESTINATION_DIR"
+        git checkout --quiet gh-pages
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        attempt=1
+        while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+          # Replace ONLY this destination. Everything else on the branch —
+          # sibling suites, the root landing page, CNAME, .nojekyll — is
+          # outside the cone and is carried through untouched. This is the
+          # SHY-0128 invariant that `keep_files: false` used to provide.
+          rm -rf "$DESTINATION_DIR"
+          mkdir -p "$DESTINATION_DIR"
+          cp -R "$SRC/." "$DESTINATION_DIR/"
+
+          git add --all -- "$DESTINATION_DIR"
+          if git diff --cached --quiet; then
+            echo "Report is byte-identical to what is already published — nothing to push."
+            exit 0
+          fi
+          git commit --quiet -m "Publish ${DESTINATION_DIR} from ${RUN_URL}"
+
+          if git push --quiet origin "HEAD:gh-pages" 2>/dev/null; then
+            echo "Published ${DESTINATION_DIR} on attempt ${attempt}."
+            exit 0
+          fi
+
+          # Lost the race. Deliberately NOT a force push: the winner's report
+          # must survive. Re-read their tip and redo the replacement on top.
+          echo "Push rejected (attempt ${attempt}/${MAX_ATTEMPTS}) — another writer landed first; re-applying on their tip." >&2
+          git reset --quiet --hard HEAD~1
+          git fetch --quiet --depth=1 origin gh-pages
+          git reset --quiet --hard FETCH_HEAD
+          sleep "$(( attempt * 2 ))"
+          attempt=$(( attempt + 1 ))
+        done
+
+        echo "::error title=Could not publish to gh-pages::Lost the push race ${MAX_ATTEMPTS} times for '${DESTINATION_DIR}'. That is far beyond normal contention — check whether something is pushing to gh-pages in a loop."
+        exit 1
 
     - name: Record where it went
       if: steps.gate.outputs.skip == 'false'

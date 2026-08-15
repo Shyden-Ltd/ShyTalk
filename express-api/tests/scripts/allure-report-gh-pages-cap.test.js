@@ -22,16 +22,15 @@
  *    fetches gh-pages pays for it. Fix: a cap step in allure-report.yml that,
  *    past MAX_GH_PAGES_COMMITS, rebuilds the branch as ONE orphan commit whose
  *    tree IS the current tip tree (content-identical by construction) via the
- *    Git Data API — no multi-GiB fetch — then force-moves the ref. It runs
- *    inside the workflow-level `gh-pages-deploy` concurrency group and
- *    re-checks the tip immediately before the ref update.
+ *    Git Data API — no multi-GiB fetch — then force-moves the ref. Its
+ *    race-safety rests on re-reading the tip immediately before the ref update
+ *    and SKIPPING when another writer landed.
  *
- *    SHY-0298 UPDATE: that re-check used to matter because the kotlin deploy in
- *    pr-checks.yml sat OUTSIDE the group and could land mid-cap. It no longer
- *    can — every writer now shares the one `gh-pages-deploy` queue, so the
- *    cap's skip-on-moved-tip branch is defensive rather than routine. The
- *    re-check stays: it costs one API call and it is the only thing standing
- *    between a future out-of-group writer and a force-moved ref.
+ *    SHY-0298 UPDATE: that re-check is now the ONLY protection, and therefore
+ *    load-bearing rather than defensive. The workflow-level `gh-pages-deploy`
+ *    concurrency group this file used to assert has been REMOVED: a group holds
+ *    exactly one pending entry, so a third contender cancels the pending second
+ *    (incidents #568/#570). Publishing retries against the moving tip instead.
  *
  * These are STRUCTURAL pins on declarative CI config (the cap's behaviour needs
  * a live gh-pages branch + GITHUB_TOKEN); the first post-merge deploy is the
@@ -202,15 +201,36 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
     });
   });
 
-  describe('serialization the cap depends on', () => {
-    test('allure-report.yml holds the workflow-level gh-pages-deploy group, non-cancelling', () => {
-      // The cap's race-safety argument rests on this group serializing every
-      // allure deploy; reusable-workflow-concurrency.test.js deliberately
-      // EXCLUDES allure-report.yml from the cancel-in-progress family, so this
-      // is the one home asserting the group actually exists.
-      expect(allureYaml).toMatch(
-        /^concurrency:\n {2}group: gh-pages-deploy\n {2}cancel-in-progress: false$/m,
-      );
+  describe('race-safety the cap depends on', () => {
+    // SHY-0298 REMOVED the `gh-pages-deploy` concurrency group this block used
+    // to assert. That group was not a safe serializer: a concurrency group
+    // holds exactly ONE pending entry, so a third contender cancels the pending
+    // second — this repo's own incidents #568/#570. Publishing now retries
+    // against the moving tip instead, and no writer excludes any other.
+    //
+    // The cap's race-safety therefore rests entirely on its OWN check, which
+    // was always present and is now load-bearing rather than defensive. That is
+    // what these tests assert: the invariant followed the protection, it was
+    // not dropped with the lock.
+    const capBlock = () =>
+      stepBlock(allureYaml, 'Cap gh-pages history (bounded, content-identical)');
+
+    test('no workflow-level gh-pages-deploy group remains (it was never a safe serializer)', () => {
+      expect(allureYaml).not.toMatch(/^ {2}group: gh-pages-deploy$/m);
+    });
+
+    test('the cap re-reads the tip and SKIPS when another writer landed', () => {
+      const block = capBlock();
+      // Re-read immediately before the ref move, compared against the tip the
+      // count was taken from, and a skip — not a force — when they differ.
+      expect(block).toMatch(/CURRENT=/);
+      expect(block).toMatch(/if \[ "\$CURRENT" != "\$TIP" \]/);
+      expect(block).toMatch(/skipping cap this run/);
+      // The comparison must come BEFORE the ref update, or it guards nothing.
+      const cmpIdx = block.indexOf('"$CURRENT" != "$TIP"');
+      const patchIdx = block.indexOf('git/refs/heads/gh-pages');
+      expect(cmpIdx).toBeGreaterThan(-1);
+      expect(patchIdx).toBeGreaterThan(cmpIdx);
     });
   });
 });

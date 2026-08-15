@@ -358,9 +358,10 @@ jobs:
     if: ${{ !cancelled() && needs.build-and-test.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    concurrency:
-      group: gh-pages-deploy
-      cancel-in-progress: false
+    # NO concurrency group (SHY-0298). Serializing here was the first design
+    # and it was wrong: a group holds exactly ONE pending entry, so a third
+    # contender cancels the pending second — this repo's incidents #568/#570.
+    # The push itself now retries against the moving tip instead.
     permissions:
       contents: write
     steps:
