@@ -338,8 +338,24 @@ jobs:
   publish-kotlin-report:
     name: Publish Kotlin Report
     needs: build-and-test
-    # always(): a test report is most useful when the suite FAILED.
-    if: always()
+    # NOT `always()`. Two ways that goes wrong, both found in review:
+    #
+    #   skipped — `needs: X` + `always()` still runs when X was SKIPPED, and
+    #   build-and-test is conditional on `android_app_changed`. On a
+    #   markdown-only PR (every `In Review` status flip is one) there is no
+    #   artifact, so `download-artifact` with an explicit `name:` FAILS: a
+    #   clean PR goes red and pre-merge-check.sh's blanket `gh pr checks`
+    #   refuses the merge. `sonarcloud` below spells the same guard out.
+    #
+    #   cancelled — `always()` is true on cancellation too (that is why
+    #   `!cancelled()` exists). This workflow is `cancel-in-progress: true`, so
+    #   a routine new push cancels this job's producer mid-run; its own
+    #   `if: always()` upload step still fires, so the artifact can hold a
+    #   HALF-FINISHED report — and keep_files:false wipes the good one before
+    #   copying it.
+    #
+    # A FAILED build still publishes: that is the case a report matters most.
+    if: ${{ !cancelled() && needs.build-and-test.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
@@ -348,7 +364,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Same ref as the producer (build-and-test pins head.sha). Without it
+      # this job checks out refs/pull/N/merge, so a change to the composite
+      # action landing on develop mid-review would publish using DEVELOP's
+      # action rather than the one under review.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: kotlin-report-pages

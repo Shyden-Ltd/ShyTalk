@@ -203,18 +203,182 @@ describe('SHY-0298 — every publishing path is serialized on one queue', () => 
   test('the publish group never sits on a job that runs the test suites', () => {
     // Serializing the PRODUCERS would queue ~15-min Build & Test and ~5-min
     // Test Backend across every PR. Only the seconds-long publish may queue.
+    //
+    // Coverage is resolved the SAME way as the sweep above — job group OR
+    // workflow group. An earlier version checked `groupOf(def) !== GROUP` and
+    // skipped every workflow-level holder, which excluded the one job that
+    // actually holds the lock for a long time (allure-report.yml's
+    // generate-report). Adding `npm test` to it left the suite green.
     const TEST_MARKERS = /(npm (run )?test|gradlew.*[Tt]est|playwright test|jest)/;
     const offenders = [];
     for (const file of workflowFiles()) {
       const doc = load(file);
+      const wfCovered = groupOf(doc) === GROUP;
       for (const [name, def] of Object.entries(doc?.jobs ?? {})) {
-        if (groupOf(def) !== GROUP) continue;
-        const runs = (def.steps ?? []).map((s) => s?.run ?? '').join('\n');
-        if (TEST_MARKERS.test(runs)) offenders.push(`${path.basename(file)}:${name}`);
+        if (!wfCovered && groupOf(def) !== GROUP) continue;
+        // Scan `uses:` too — a producer that runs its suite through a local
+        // composite action has no `run:` for the markers to match.
+        const body = (def.steps ?? []).map((s) => `${s?.run ?? ''}\n${s?.uses ?? ''}`).join('\n');
+        if (TEST_MARKERS.test(body)) offenders.push(`${path.basename(file)}:${name}`);
       }
     }
     expect(offenders).toEqual([]);
   });
+
+  test('no job re-declares the group its own workflow already holds (self-deadlock)', () => {
+    // allure-report.yml holds `gh-pages-deploy` at WORKFLOW level. A job inside
+    // it that also declared the group would wait on a lock its own run holds,
+    // and every allure run would hang to its 20-minute timeout. The workflow
+    // documents this hazard; nothing enforced it, and adding such a job left
+    // the whole suite green.
+    const offenders = [];
+    for (const file of workflowFiles()) {
+      const doc = load(file);
+      if (groupOf(doc) !== GROUP) continue;
+      for (const [name, def] of Object.entries(doc?.jobs ?? {})) {
+        if (groupOf(def) === GROUP) offenders.push(`${path.basename(file)}:${name}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+// ── The action's own gating and refusal must be real, not merely present ───
+
+describe('SHY-0298 — the composite action gates every side-effecting step', () => {
+  test('every step after the gate is conditioned on it', () => {
+    // Deleting the `if:` from the deploy step made a dependabot run attempt a
+    // push with a read-only token; the suite stayed green because the pin only
+    // looked for the STRING `dependabot/` somewhere in the file.
+    const steps = actionSteps();
+    const gateIdx = steps.findIndex((s) => s?.id === 'gate');
+    expect(gateIdx).toBe(0);
+    const rest = steps.slice(gateIdx + 1);
+    expect(rest.length).toBeGreaterThanOrEqual(3);
+    for (const s of rest) {
+      expect(String(s?.if ?? '')).toMatch(/steps\.gate\.outputs\.skip\s*==\s*'false'/);
+    }
+  });
+
+  test('the gate writes skip=true on the dependabot branch, not merely mentions it', () => {
+    // Flipping the then-branch to `skip=false` left the literal `dependabot/`
+    // in the neighbouring echo, so a string pin could not tell the difference.
+    const gate = actionSteps().find((s) => s?.id === 'gate');
+    const body = stripComments(gate?.run ?? '');
+    const thenBranch = body.slice(body.indexOf('dependabot/'), body.indexOf('else'));
+    expect(thenBranch).toMatch(/skip=true/);
+    expect(thenBranch).not.toMatch(/skip=false/);
+  });
+
+  test('EVERY refusal in the action actually fails the step', () => {
+    // Checked per-guard, not once per body. A `toMatch(/exit 1/)` over the
+    // whole step passed the `exit 1`→`exit 0` mutation as soon as a SECOND
+    // guard existed in the same body: the other guard's `exit 1` satisfied it.
+    // Walk from each `::error` to its closing `fi` instead.
+    const guards = [];
+    for (const step of actionSteps()) {
+      const lines = stripComments(step?.run ?? '').split('\n');
+      lines.forEach((line, i) => {
+        if (!line.includes('::error')) return;
+        const end = lines.findIndex((l, j) => j > i && /^\s*fi\b/.test(l));
+        expect(end).toBeGreaterThan(i);
+        guards.push(lines.slice(i, end).join('\n'));
+      });
+    }
+    // Necessity: without this the loop above proves nothing if the guards are
+    // deleted wholesale.
+    expect(guards.length).toBeGreaterThanOrEqual(2);
+    for (const g of guards) {
+      expect(g).toMatch(/exit 1/);
+      expect(g).not.toMatch(/exit 0/);
+    }
+  });
+
+  test('"non-empty" is not enough — a one-file stub must be refused too', () => {
+    // Both producers write metadata.json unconditionally and copy the real
+    // report with `|| true`, so a suite that dies early leaves EXACTLY ONE
+    // file. keep_files:false would wipe a good report and publish the stub.
+    const bodies = actionSteps()
+      .map((s) => stripComments(s?.run ?? ''))
+      .join('\n');
+    expect(bodies).toMatch(/-f\s+"\$PUBLISH_DIR\/index\.html"/);
+  });
+
+  test('a skipped publish says so where it is visible, not only on stderr', () => {
+    // A green check that published nothing, with the reason on stderr, is the
+    // absence-reported-as-success shape this story exists to remove.
+    const gate = actionSteps().find((s) => s?.id === 'gate');
+    expect(stripComments(gate?.run ?? '')).toMatch(/::notice/);
+  });
+});
+
+describe('SHY-0298 — the artifact hand-off names match on both sides', () => {
+  test.each([
+    ['pr-checks.yml', 'kotlin-report-pages'],
+    ['test-backend.yml', 'express-report-pages'],
+  ])('%s uploads and downloads the same artifact name', (file, stem) => {
+    // Renaming one side leaves every publish job permanently red, and nothing
+    // pinned the pairing.
+    const doc = load(path.join(WF_DIR, file));
+    const names = [];
+    for (const [, def] of Object.entries(doc?.jobs ?? {})) {
+      for (const s of def?.steps ?? []) {
+        if (typeof s?.uses !== 'string') continue;
+        if (/actions\/(upload|download)-artifact/.test(s.uses))
+          names.push(String(s.with?.name ?? ''));
+      }
+    }
+    const matching = names.filter((n) => n.startsWith(stem));
+    expect(matching.length).toBe(2);
+    expect(matching[0]).toBe(matching[1]);
+  });
+});
+
+// ── Gating: when a publish job must NOT run ────────────────────────────────
+//
+// Both findings below came from review, and neither could have been caught by
+// this PR's own CI: it touches `express-api/tests/**`, which forces
+// `android_app_changed=true`, so `build-and-test` runs and the artifact exists.
+// The defects only appear on PRs that take the OTHER path.
+
+describe('SHY-0298 — a publish job runs only when there is something to publish', () => {
+  const publishJobsOf = (file) => publishingJobs(load(path.join(WF_DIR, file)));
+
+  test.each([
+    ['pr-checks.yml', 'build-and-test'],
+    ['test-backend.yml', 'test-backend'],
+  ])('%s: the publish job does not run when %s was SKIPPED', (file, producer) => {
+    // `needs: X` + `if: always()` STILL RUNS when X is skipped — that is the
+    // documented semantic, and the reason sibling jobs in pr-checks.yml spell
+    // out `(needs.X.result == 'success' || needs.X.result == 'skipped')`.
+    // `build-and-test` is conditional on `android_app_changed == 'true'`, so a
+    // markdown-only PR (every `In Review` status flip is one) skips it, leaves
+    // no artifact, and `download-artifact` with an explicit `name:` FAILS —
+    // turning a clean PR red and blocking pre-merge-check.sh's blanket
+    // `gh pr checks`.
+    for (const [, def] of publishJobsOf(file)) {
+      const cond = String(def.if ?? '');
+      expect(cond).toMatch(new RegExp(`needs\\.${producer}\\.result`));
+      expect(cond).toMatch(/!=\s*'skipped'|==\s*'success'/);
+    }
+  });
+
+  test.each(['pr-checks.yml', 'test-backend.yml'])(
+    '%s: the publish job does not run on a CANCELLED run',
+    (file) => {
+      // `always()` returns true even when the run is cancelled — that is why
+      // `!cancelled()` exists. Both these workflows sit under
+      // `cancel-in-progress: true`, so a routine new push cancels the producer
+      // mid-flight. Its `if: always()` upload step still fires, so the artifact
+      // can hold a HALF-FINISHED report — and `keep_files: false` wipes the
+      // good report before copying it. Silent data loss, reported green.
+      for (const [, def] of publishJobsOf(file)) {
+        const cond = String(def.if ?? '');
+        expect(cond).toMatch(/!\s*cancelled\(\)/);
+        expect(cond).not.toMatch(/(^|[^!])\balways\(\)/);
+      }
+    },
+  );
 });
 
 // ── The payoff: PR branches get their Express report back ──────────────────

@@ -46,7 +46,10 @@ runs:
         # the token stays read-only.
         if [[ "${HEAD_REF:-}" == dependabot/* ]]; then
           echo "skip=true" >> "$GITHUB_OUTPUT"
-          echo "Dependabot branch '${HEAD_REF}' — GITHUB_TOKEN is read-only, cannot push to gh-pages. Skipping publish." >&2
+          # ::notice, not stderr. A green check that published nothing, with
+          # the reason buried in a log stream, is absence-reported-as-success —
+          # the shape this whole story exists to remove.
+          echo "::notice title=Publish skipped::Dependabot branch '${HEAD_REF}' holds a read-only GITHUB_TOKEN and cannot push to gh-pages. No report was published for this run."
         else
           echo "skip=false" >> "$GITHUB_OUTPUT"
         fi
@@ -65,6 +68,18 @@ runs:
         # as a green run. Fail loudly instead.
         if [ ! -d "$PUBLISH_DIR" ] || [ -z "$(ls -A "$PUBLISH_DIR" 2>/dev/null)" ]; then
           echo "::error title=Nothing to publish::'${PUBLISH_DIR}' is missing or empty. Refusing to publish it over '${DESTINATION_DIR}', which keep_files:false would wipe first. Check the step that produces the report."
+          exit 1
+        fi
+        # "Non-empty" is not "is a report". Both producers write metadata.json
+        # unconditionally (`mkdir -p` + echo) and copy the real report with
+        # `2>/dev/null || true`, so a suite that dies before emitting reports —
+        # a compile error, a detekt failure, a Jest crash — leaves EXACTLY ONE
+        # file. keep_files:false would then wipe a good published report and
+        # replace it with a stub. Every report format here (Allure, Gradle
+        # HTML, Jest HTML coverage) emits an index.html; metadata.json alone is
+        # the signature of the failure case.
+        if [ ! -f "$PUBLISH_DIR/index.html" ]; then
+          echo "::error title=Not a report::'${PUBLISH_DIR}' has no index.html — it holds $(ls -A "$PUBLISH_DIR" | tr '\n' ' '). The producing step almost certainly failed before writing its report. Refusing to publish a stub over '${DESTINATION_DIR}'."
           exit 1
         fi
         printf 'Publishing %s file(s) from %s to gh-pages:%s\n' \
