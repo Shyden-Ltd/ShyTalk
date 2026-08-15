@@ -241,16 +241,22 @@ jobs:
         # commit whose tree IS the current tip tree (omitting the parent list
         # in the createCommit call is what truncates the history), entirely
         # via the Git Data API — nothing multi-GiB is downloaded or checked
-        # out. Race-safety: this step runs inside the workflow-level
-        # gh-pages-deploy concurrency group, and the tip is re-read just before
-        # the ref move — on a moved tip the cap skips and a later run retries.
+        # out.
         #
-        # SHY-0298: that re-check used to be load-bearing, because the kotlin
-        # deploy in pr-checks.yml sat OUTSIDE this group and could land
-        # mid-cap. It no longer can — every gh-pages writer now shares this one
-        # queue, so the skip branch is defensive rather than routine. Keep it:
-        # it costs one API call and is the only thing between a future
-        # out-of-group writer and a force-moved ref.
+        # RACE-SAFETY (SHY-0298 R3). This step FORCE-moves the ref, and its
+        # only protections used to be the workflow-level `gh-pages-deploy`
+        # group plus a re-read of the tip just before the move. C3 removed that
+        # group — publishers now retry instead of queueing — and a re-read is a
+        # check, not a compare-and-swap: a publisher landing between the read
+        # and the PATCH was silently discarded, while its own job exited 0.
+        # Nothing was red; a report just vanished.
+        #
+        # The move is therefore done with `git push --force-with-lease`, which
+        # is a genuine CAS: the SERVER refuses the update unless gh-pages is
+        # still exactly $TIP. A lost race becomes a visible rejection and a
+        # skipped cap, instead of a lost report. The orphan commit is still
+        # built via the API — the push only needs the commit object, so a
+        # shallow blob-less clone sends almost nothing.
         #
         # Same gating as the deploy step: dependabot runs hold a read-only
         # GITHUB_TOKEN and can't write.
@@ -290,13 +296,29 @@ jobs:
           fi
           TREE=$(gh api "repos/${REPO}/git/commits/${TIP}" --jq '.tree.sha')
           NEW=$(gh api -X POST "repos/${REPO}/git/commits" -f message="chore(gh-pages): cap deploy history — content-identical orphan rebuild of ${TIP} (SHY-0128)" -f tree="${TREE}" --jq '.sha')
-          CURRENT=$(gh api "repos/${REPO}/git/ref/heads/gh-pages" --jq '.object.sha')
-          if [ "$CURRENT" != "$TIP" ]; then
-            echo "tip moved (${TIP} -> ${CURRENT}) since the count — skipping cap this run"
-            exit 0
+
+          # Atomic move. `--force-with-lease=<ref>:<expected>` makes the SERVER
+          # reject the update unless gh-pages is still $TIP, so there is no
+          # window between checking and moving. A plain re-read + PATCH had one,
+          # and a publisher landing inside it was overwritten silently.
+          WORK="${RUNNER_TEMP}/gh-pages-cap"
+          rm -rf "$WORK"
+          git clone --quiet --no-checkout --filter=blob:none --depth=1 \
+            --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$WORK"
+          CAP_ERR="${RUNNER_TEMP}/gh-pages-cap-err"
+          if git -C "$WORK" push --quiet \
+               --force-with-lease="refs/heads/gh-pages:${TIP}" \
+               origin "${NEW}:refs/heads/gh-pages" 2>"$CAP_ERR"; then
+            echo "capped gh-pages: ${COUNT} commits -> 1 (tree ${TREE} unchanged)"
+          elif grep -qiE 'stale info|non-fast-forward|\[rejected\]' "$CAP_ERR"; then
+            # Someone published while we were building the orphan. Their report
+            # is intact, which is the whole point; a later run caps again.
+            echo "tip moved since the count — skipping cap this run (a later run retries)"
+          else
+            cat "$CAP_ERR" >&2
+            echo "::error::gh-pages history cap failed for a reason other than a lost race"
+            exit 1
           fi
-          gh api -X PATCH "repos/${REPO}/git/refs/heads/gh-pages" -f sha="${NEW}" -F force=true > /dev/null
-          echo "capped gh-pages: ${COUNT} commits -> 1 (tree ${TREE} unchanged)"
 
       - name: Post report URL in summary
         if: steps.check-existing.outputs.skip != 'true'

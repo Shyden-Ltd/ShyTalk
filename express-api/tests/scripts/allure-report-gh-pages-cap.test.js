@@ -171,8 +171,19 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
     test('commit count comes from the Link header (O(1) — no multi-GiB fetch of gh-pages)', () => {
       expect(block).toContain('per_page=1');
       expect(block).toContain('rel="last"');
-      // belt: the step must NOT clone/fetch gh-pages to count commits
-      expect(block).not.toMatch(/git\s+(clone|fetch)/);
+      // Belt: counting must not pull the branch down. SHY-0298 R3 added a
+      // clone for the ref move, so "no clone at all" is no longer the right
+      // assertion — what matters is that it stays cheap. A clone without
+      // BOTH --depth=1 and --filter=blob:none would drag the multi-GiB
+      // history back, which is the cost this whole step exists to control.
+      const clones = block.match(/git clone[^\n]*(\n\s*[^\n]*)?/g) || [];
+      clones.forEach((c) => {
+        expect(c).toContain('--depth=1');
+        expect(c).toContain('--filter=blob:none');
+        expect(c).toContain('--no-checkout');
+      });
+      // And the count itself must still come from the API, not a local walk.
+      expect(block).not.toMatch(/git rev-list|git log --oneline/);
     });
 
     test('rebuild is an orphan commit of the CURRENT TIP TREE (content-identical by construction)', () => {
@@ -183,16 +194,29 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
       expect(block).not.toMatch(/parents/);
     });
 
-    test('ref update is an explicit force move of refs/heads/gh-pages', () => {
-      expect(block).toContain('-X PATCH');
+    test('the ref move is an atomic compare-and-swap, never an unconditional force', () => {
+      // SHY-0298 R3. The API's ref PATCH with force=true is unconditional, so
+      // the re-read that used to precede it was a check and not a CAS: a
+      // publisher landing in that window was overwritten while its own job
+      // exited 0 — nothing red, a report simply gone.
+      expect(block).toContain('--force-with-lease="refs/heads/gh-pages:${TIP}"');
       expect(block).toContain('refs/heads/gh-pages');
-      expect(block).toContain('force=true');
+      // The unconditional forms must be gone, in both spellings.
+      expect(block).not.toContain('force=true');
+      expect(block).not.toMatch(/git .*push[^\n]*--force(?!-with-lease)/);
     });
 
-    test('cap re-checks the tip immediately before the force move (racing writer ⇒ skip, not clobber)', () => {
-      expect(block).toContain('"$CURRENT" != "$TIP"');
-      // the skip path must exit 0 (self-healing on a later run), not fail the job
-      expect(block).toMatch(/skipping cap[\s\S]*exit 0/);
+    test('a lost race SKIPS quietly; any other push failure is loud', () => {
+      // A skip must exit 0 (a later run caps again), but only for a genuine
+      // lost race. Reporting an auth or quota failure as "tip moved" would
+      // hide a permanently broken cap behind a reassuring message.
+      expect(block).toMatch(/stale info/);
+      expect(block).toMatch(/skipping cap this run/);
+      expect(block).toContain('::error::');
+      const skipIdx = block.indexOf('skipping cap this run');
+      const errIdx = block.indexOf('::error::gh-pages history cap failed for a reason');
+      expect(skipIdx).toBeGreaterThan(-1);
+      expect(errIdx).toBeGreaterThan(skipIdx);
     });
 
     test('missing gh-pages branch (first ever run) is tolerated; other API errors stay loud', () => {
@@ -208,10 +232,14 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
     // second — this repo's own incidents #568/#570. Publishing now retries
     // against the moving tip instead, and no writer excludes any other.
     //
-    // The cap's race-safety therefore rests entirely on its OWN check, which
-    // was always present and is now load-bearing rather than defensive. That is
-    // what these tests assert: the invariant followed the protection, it was
-    // not dropped with the lock.
+    // The cap's race-safety therefore rests entirely on its own mechanism —
+    // and the re-read it used to rely on was NOT one. A read followed by an
+    // unconditional force move has a window one API round-trip wide, and C3
+    // made that window routinely reachable by design. An earlier version of
+    // this comment claimed "the invariant followed the protection"; it had
+    // not. R3 replaced the re-read with `git push --force-with-lease`, which
+    // is a genuine compare-and-swap enforced by the server, so there is no
+    // window for a publisher to be lost in.
     const capBlock = () =>
       stepBlock(allureYaml, 'Cap gh-pages history (bounded, content-identical)');
 
@@ -219,18 +247,21 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
       expect(allureYaml).not.toMatch(/^ {2}group: gh-pages-deploy$/m);
     });
 
-    test('the cap re-reads the tip and SKIPS when another writer landed', () => {
+    test('the lease names the tip the count was taken from', () => {
       const block = capBlock();
-      // Re-read immediately before the ref move, compared against the tip the
-      // count was taken from, and a skip — not a force — when they differ.
-      expect(block).toMatch(/CURRENT=/);
-      expect(block).toMatch(/if \[ "\$CURRENT" != "\$TIP" \]/);
+      // The lease is only meaningful if it names $TIP — the tip the commit
+      // count and the tree read were both taken from. A lease against
+      // anything else, or one refreshed just before the push, would authorise
+      // overwriting work that landed in between, which is the whole defect.
+      expect(block).toMatch(/--force-with-lease="refs\/heads\/gh-pages:\$\{TIP\}"/);
       expect(block).toMatch(/skipping cap this run/);
-      // The comparison must come BEFORE the ref update, or it guards nothing.
-      const cmpIdx = block.indexOf('"$CURRENT" != "$TIP"');
-      const patchIdx = block.indexOf('git/refs/heads/gh-pages');
-      expect(cmpIdx).toBeGreaterThan(-1);
-      expect(patchIdx).toBeGreaterThan(cmpIdx);
+      // $TIP must be captured BEFORE the lease uses it, not refreshed later.
+      const tipIdx = block.indexOf('TIP=$(gh api');
+      const leaseIdx = block.indexOf('--force-with-lease=');
+      expect(tipIdx).toBeGreaterThan(-1);
+      expect(leaseIdx).toBeGreaterThan(tipIdx);
+      // And the unconditional API force move must be gone.
+      expect(block).not.toContain('force=true');
     });
   });
 });

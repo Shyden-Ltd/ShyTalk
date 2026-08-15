@@ -126,6 +126,9 @@ runs:
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+        PUSH_ERR="${RUNNER_TEMP}/gh-pages-push-err"
+        FETCH_ERR="${RUNNER_TEMP}/gh-pages-fetch-err"
+
         attempt=1
         while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
           # Replace ONLY this destination. Everything else on the branch —
@@ -143,21 +146,49 @@ runs:
           fi
           git commit --quiet -m "Publish ${DESTINATION_DIR} from ${RUN_URL}"
 
-          if git push --quiet origin "HEAD:gh-pages" 2>/dev/null; then
+          # stderr is CAPTURED, never discarded. Sending it to /dev/null
+          # classified every failure as "lost the race": a protected-branch
+          # refusal, a quota error, a read-only token or a 5xx would each burn
+          # all six attempts, sleep 42s, and then report the wrong cause with
+          # no evidence left in the log to contradict it.
+          if git push --quiet origin "HEAD:gh-pages" 2>"$PUSH_ERR"; then
             echo "Published ${DESTINATION_DIR} on attempt ${attempt}."
             exit 0
+          fi
+
+          # Only a non-fast-forward is a lost race. Anything else will not be
+          # fixed by retrying, so it fails NOW with git's own message rather
+          # than 42 seconds later under a misleading headline.
+          if ! grep -qiE 'non-fast-forward|fetch first|\[rejected\]|cannot lock ref' "$PUSH_ERR"; then
+            echo "--- git push stderr ---" >&2
+            cat "$PUSH_ERR" >&2
+            echo "::error title=Could not publish to gh-pages::Push to gh-pages failed for '${DESTINATION_DIR}' for a reason that retrying cannot fix (see the git output above — typically a protected branch, a read-only token, or a quota limit)."
+            exit 1
           fi
 
           # Lost the race. Deliberately NOT a force push: the winner's report
           # must survive. Re-read their tip and redo the replacement on top.
           echo "Push rejected (attempt ${attempt}/${MAX_ATTEMPTS}) — another writer landed first; re-applying on their tip." >&2
           git reset --quiet --hard HEAD~1
-          git fetch --quiet --depth=1 origin gh-pages
+          if ! git fetch --quiet --depth=1 origin gh-pages 2>"$FETCH_ERR"; then
+            cat "$FETCH_ERR" >&2
+            echo "::error title=Could not publish to gh-pages::Re-fetching gh-pages failed after a lost race for '${DESTINATION_DIR}'. Without the winner's tip this job cannot re-apply its report."
+            exit 1
+          fi
           git reset --quiet --hard FETCH_HEAD
-          sleep "$(( attempt * 2 ))"
+
+          # No sleep after the LAST attempt — it delays the failure without
+          # buying another try. Jitter matters because this repo now has three
+          # writers per PR: a fixed backoff wakes every loser at the same
+          # instant, so they collide again in lockstep.
+          if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+            sleep "$(( attempt * 2 + RANDOM % 3 ))"
+          fi
           attempt=$(( attempt + 1 ))
         done
 
+        echo "--- last git push stderr ---" >&2
+        cat "$PUSH_ERR" >&2
         echo "::error title=Could not publish to gh-pages::Lost the push race ${MAX_ATTEMPTS} times for '${DESTINATION_DIR}'. That is far beyond normal contention — check whether something is pushing to gh-pages in a loop."
         exit 1
 

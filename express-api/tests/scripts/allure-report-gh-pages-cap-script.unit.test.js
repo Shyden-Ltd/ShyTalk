@@ -111,7 +111,37 @@ case "$*" in
 esac
 `;
 
-/** Run the REAL cap block under GitHub's default bash flags with the shim on
+// The canned `git` CLI. SHY-0298 R3 replaced the cap's `gh api PATCH ...
+// force=true` with `git push --force-with-lease`, because the API's force
+// move is unconditional: the re-read before it was a check, not a
+// compare-and-swap, and a publisher landing in that window was silently
+// discarded. The lease makes the SERVER refuse unless gh-pages is still $TIP.
+//
+// The shim records every invocation and can simulate the three outcomes that
+// matter: the lease holds, the lease is stale (someone published), or the push
+// failed for an unrelated reason.
+const GIT_SHIM = `#!/bin/bash
+echo "$*" >> "$GIT_SHIM_CALLS"
+case "$*" in
+  *clone*)
+    # Last argv is the destination; create it so the later -C succeeds.
+    for a in "$@"; do DEST="$a"; done
+    mkdir -p "$DEST"
+    ;;
+  *push*)
+    case "$GIT_SHIM_PUSH" in
+      stale)  echo "! [rejected] (stale info)" >&2; exit 1 ;;
+      broken) echo "fatal: Authentication failed" >&2; exit 1 ;;
+      *)      exit 0 ;;
+    esac
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+`;
+
+/** Run the REAL cap block under GitHub's default bash flags with the shims on
  * PATH. Returns exit status, combined output, and the recorded gh calls. */
 function runCapStep(shimEnv = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gh-pages-cap-'));
@@ -119,8 +149,11 @@ function runCapStep(shimEnv = {}) {
   fs.mkdirSync(binDir);
   const ghPath = path.join(binDir, 'gh');
   fs.writeFileSync(ghPath, GH_SHIM, { mode: 0o755 });
+  fs.writeFileSync(path.join(binDir, 'git'), GIT_SHIM, { mode: 0o755 });
   const callsFile = path.join(dir, 'calls.log');
   fs.writeFileSync(callsFile, '');
+  const gitCallsFile = path.join(dir, 'git-calls.log');
+  fs.writeFileSync(gitCallsFile, '');
   const runnerTemp = path.join(dir, 'runner-temp');
   fs.mkdirSync(runnerTemp);
 
@@ -144,6 +177,9 @@ function runCapStep(shimEnv = {}) {
         REPO: 'Shyden-Ltd/ShyTalk',
         MAX_GH_PAGES_COMMITS: '25',
         GH_SHIM_CALLS: callsFile,
+        GIT_SHIM_CALLS: gitCallsFile,
+        GIT_SHIM_PUSH: '',
+        GH_TOKEN: 'test-token',
         GH_SHIM_TIPCOUNT: path.join(dir, 'tipcount'),
         GH_SHIM_TIP: 'aaa1111111111111111111111111111111111111',
         GH_SHIM_TREE: 'T123tree456',
@@ -161,13 +197,20 @@ function runCapStep(shimEnv = {}) {
     stderr = String(e.stderr || '');
   }
   const calls = fs.readFileSync(callsFile, 'utf8').split('\n').filter(Boolean);
-  return { status, stdout, stderr, calls };
+  const gitCalls = fs.readFileSync(gitCallsFile, 'utf8').split('\n').filter(Boolean);
+  return { status, stdout, stderr, calls, gitCalls };
 }
 
 const createCommitCalls = (calls) =>
   calls.filter((c) => c.includes('-X POST') && c.includes('git/commits'));
-const forceMoveCalls = (calls) =>
+// SHY-0298 R3: the ref move is a `git push --force-with-lease`, not an API
+// PATCH. Both helpers are kept — `apiForceMoveCalls` must stay EMPTY, because
+// an unconditional force move creeping back is the regression that silently
+// discards a publisher's report.
+const apiForceMoveCalls = (calls) =>
   calls.filter((c) => c.includes('-X PATCH') && c.includes('git/refs/heads/gh-pages'));
+const leasedPushCalls = (gitCalls) =>
+  gitCalls.filter((c) => c.includes('push') && c.includes('--force-with-lease='));
 
 describe('allure-report.yml "Cap gh-pages history" — executed block behavior (SHY-0128 R1)', () => {
   test('extraction sanity: the block contains the count, threshold and move lines', () => {
@@ -181,12 +224,13 @@ describe('allure-report.yml "Cap gh-pages history" — executed block behavior (
     // Kills the `[0-9][0-9]*`→`[0-9]` capture-narrowing mutant: a single-digit
     // capture reads "1" and the cap silently never fires for the real-world
     // count that motivated the story.
-    const { status, stdout, calls } = runCapStep({ GH_SHIM_LINK: linkHeader(1771) });
+    const { status, stdout, calls, gitCalls } = runCapStep({ GH_SHIM_LINK: linkHeader(1771) });
     expect(status).toBe(0);
     expect(stdout).toContain('gh-pages history: 1771 commit(s)');
     expect(stdout).toContain('capped gh-pages: 1771 commits -> 1');
     expect(createCommitCalls(calls)).toHaveLength(1);
-    expect(forceMoveCalls(calls)).toHaveLength(1);
+    expect(leasedPushCalls(gitCalls)).toHaveLength(1);
+    expect(apiForceMoveCalls(calls)).toHaveLength(0);
   });
 
   test('the JSON body cannot poison the count (header-slice guard)', () => {
@@ -200,53 +244,82 @@ describe('allure-report.yml "Cap gh-pages history" — executed block behavior (
   test('exactly AT the threshold (25) the branch is left untouched', () => {
     // Kills the `-le`→`-lt` boundary mutant (story BDD: "Quiet branch stays
     // untouched"). 25 commits ≤ 25 → no rebuild, no ref move.
-    const { status, stdout, calls } = runCapStep({ GH_SHIM_LINK: linkHeader(25) });
+    const { status, stdout, calls, gitCalls } = runCapStep({ GH_SHIM_LINK: linkHeader(25) });
     expect(status).toBe(0);
     expect(stdout).toContain('gh-pages history: 25 commit(s)');
     expect(stdout).not.toContain('capped gh-pages:');
     expect(createCommitCalls(calls)).toHaveLength(0);
-    expect(forceMoveCalls(calls)).toHaveLength(0);
+    expect(leasedPushCalls(gitCalls)).toHaveLength(0);
   });
 
   test('one past the threshold (26) caps to a single orphan commit', () => {
     // Together with the 25-case this kills any `-le`→`-ge`/`-gt` inversion.
-    const { status, stdout, calls } = runCapStep({ GH_SHIM_LINK: linkHeader(26) });
+    const { status, stdout, calls, gitCalls } = runCapStep({ GH_SHIM_LINK: linkHeader(26) });
     expect(status).toBe(0);
     expect(stdout).toContain('capped gh-pages: 26 commits -> 1');
     expect(createCommitCalls(calls)).toHaveLength(1);
-    expect(forceMoveCalls(calls)).toHaveLength(1);
+    expect(leasedPushCalls(gitCalls)).toHaveLength(1);
   });
 
   test('the rebuild commit reuses the TIP TREE SHA verbatim and names the tip in its message', () => {
     // Kills the wrong-variable `-f tree=` mutant: content-identity rests on
     // the createCommit call binding the tree read from the CURRENT tip.
-    const { calls } = runCapStep({ GH_SHIM_LINK: linkHeader(1771) });
+    const { calls, gitCalls } = runCapStep({ GH_SHIM_LINK: linkHeader(1771) });
     const create = createCommitCalls(calls)[0];
     expect(create).toContain('tree=T123tree456');
     expect(create).toContain('aaa1111111111111111111111111111111111111');
-    const move = forceMoveCalls(calls)[0];
-    expect(move).toContain('sha=N456new789');
-    expect(move).toContain('force=true');
+
+    // The move carries BOTH halves of the compare-and-swap: the new commit to
+    // point at, and the tip it is allowed to replace. Dropping the lease turns
+    // this back into an unconditional force move — the exact regression that
+    // silently discarded a publisher's report.
+    const push = leasedPushCalls(gitCalls)[0];
+    expect(push).toContain(
+      '--force-with-lease=refs/heads/gh-pages:aaa1111111111111111111111111111111111111',
+    );
+    expect(push).toContain('N456new789:refs/heads/gh-pages');
+    expect(push).not.toContain('--force ');
   });
 
   test('no Link header (single-commit branch) defaults to COUNT=1 and stays untouched', () => {
     // Kills a deleted `\${COUNT:-1}` default: without it the threshold test
     // gets an empty operand, the guard misbehaves and the cap fires anyway.
-    const { status, stdout, calls } = runCapStep({ GH_SHIM_LINK: '' });
+    const { status, stdout, calls, gitCalls } = runCapStep({ GH_SHIM_LINK: '' });
     expect(status).toBe(0);
     expect(stdout).toContain('gh-pages history: 1 commit(s)');
     expect(createCommitCalls(calls)).toHaveLength(0);
-    expect(forceMoveCalls(calls)).toHaveLength(0);
+    expect(leasedPushCalls(gitCalls)).toHaveLength(0);
   });
 
-  test('a racing writer moving the tip mid-cap is skipped, never clobbered', () => {
-    const { status, stdout, calls } = runCapStep({
+  test('a racing writer is detected by the SERVER and the cap skips, never clobbers', () => {
+    // The race is no longer detected by re-reading the tip and hoping nothing
+    // moves in the microseconds before the write — that window is what silently
+    // discarded a publisher's report. The lease makes the server refuse, so
+    // there is no window at all. Here the shim answers as the server does when
+    // the lease is stale.
+    const { status, stdout, gitCalls } = runCapStep({
       GH_SHIM_LINK: linkHeader(1771),
-      GH_SHIM_MOVED_TIP: 'bbb2222222222222222222222222222222222222',
+      GIT_SHIM_PUSH: 'stale',
     });
     expect(status).toBe(0);
     expect(stdout).toContain('tip moved');
-    expect(forceMoveCalls(calls)).toHaveLength(0);
+    // It ATTEMPTED the leased push — a skip that never tried would also
+    // "not clobber", and would be a cap that never runs.
+    expect(leasedPushCalls(gitCalls)).toHaveLength(1);
+  });
+
+  test('a push failure that is NOT a lost race fails the step loudly', () => {
+    // An auth or quota failure must not be reported as "tip moved" and
+    // swallowed — that would hide a permanently broken cap behind a message
+    // saying everything is fine.
+    const { status, stdout, stderr } = runCapStep({
+      GH_SHIM_LINK: linkHeader(1771),
+      GIT_SHIM_PUSH: 'broken',
+    });
+    expect(status).not.toBe(0);
+    expect(stdout + stderr).toContain('Authentication failed');
+    expect(stdout + stderr).toContain('::error::');
+    expect(stdout).not.toContain('tip moved');
   });
 
   test('missing gh-pages branch (HTTP 404) exits 0 with "nothing to cap"', () => {
