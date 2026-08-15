@@ -434,14 +434,35 @@ class AuthRepositoryImplTest {
     }
 
     @Test
-    fun `a half-resolved identity is not left in the cache`() {
-        // The uniqueId lands before the cohort. Caching that half would let the
-        // next cold start route on an identity whose cohort is unknown.
+    fun `an identity resolved before its cohort is cached anyway`() {
+        // This test used to assert the opposite, and that assertion was the bug
+        // wearing a test's clothes. Because the write-through fires from each
+        // setter independently, requiring a cohort meant `LockScreenViewModel`
+        // — which sets only the uniqueId after verifying a PIN — drove the
+        // cache into its erase branch, so a successful unlock wiped it. Cohort
+        // is metadata, not identity.
         val (cache, _) = cacheOverMemory()
         val repoWithCache = AuthRepositoryImpl(auth, cache)
         signedInAs("fb-uid-1")
 
         repoWithCache.resolvedUniqueId = "10000005"
+
+        val cached = cache.read("fb-uid-1")
+        assertNotNull(cached)
+        assertEquals("10000005", cached!!.uniqueId)
+        assertNull("the cohort is simply not known yet", cached.cohort)
+    }
+
+    @Test
+    fun `an identity with no uniqueId is not cached`() {
+        // The half that IS still forbidden: without a uniqueId there is nothing
+        // to route on, and leaving the previous account's record behind would
+        // let the next launch trust it.
+        val (cache, _) = cacheOverMemory()
+        val repoWithCache = AuthRepositoryImpl(auth, cache)
+        signedInAs("fb-uid-1")
+
+        repoWithCache.resolvedCohort = "adult"
 
         assertNull(cache.read("fb-uid-1"))
     }

@@ -13,7 +13,8 @@ import kotlin.test.assertNull
  * Drives the REAL [SessionCache] over the REAL [SecureStorage] actual. No
  * double stands in for either: on the JVM target `SecureStorage` is a genuine
  * in-memory key-value store with the same read/write/remove semantics the
- * Android (`EncryptedSharedPreferences`) and iOS (Keychain) actuals provide, so
+ * Android (`SharedPreferences`, MODE_PRIVATE) and iOS (Keychain) actuals
+ * provide, so
  * everything with a decision in it — completeness, uid binding, corruption
  * handling — is exercised for real.
  *
@@ -93,15 +94,79 @@ class SessionCacheContractTest {
 
     // ── Completeness (AC: corrupted / partial entry) ──────────────────────
 
+    // ── The identity is {firebaseUid, uniqueId}. Cohort is metadata. ──────
+
+    @Test
+    fun `a caller that does not know the cohort still caches the identity`() {
+        // The bug this pins: cohort used to be part of the identity, so a
+        // caller holding only the uniqueId drove `write` into its erase branch.
+        // `LockScreenViewModel` is exactly that caller — it knows the uniqueId
+        // it just verified a PIN against and has no cohort — so a successful
+        // unlock WIPED the cache. With App-Lock on by default that made the
+        // steady state: miss → Lock → PIN → wipe → miss → Lock, forever.
+        //
+        // Cohort is not identity. Its only consumer outside these repositories
+        // is the dev-only PreviewWatermark; routing never reads it, and cohort
+        // segregation is enforced by the JWT claims and the rules that read
+        // them. Requiring it here bought nothing and cost the whole feature.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = null)
+
+        val read = assertNotNull(cache.read("fb-uid-1"), "the identity is complete without a cohort")
+        assertEquals("10000005", read.uniqueId)
+        assertNull(read.cohort)
+    }
+
+    @Test
+    fun `a cohort-less write preserves a cohort already known for the same account`() {
+        // Sign-in caches the cohort; a later PIN unlock knows only the
+        // uniqueId. Overwriting the cohort with nothing would quietly degrade
+        // the record on every unlock.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = null)
+
+        assertEquals("adult", assertNotNull(cache.read("fb-uid-1")).cohort)
+    }
+
+    @Test
+    fun `a cohort-less write for a DIFFERENT account does not inherit the old cohort`() {
+        // The reason the erase branch existed in the first place. Keeping it
+        // for the account-change case is right; applying it to every partial
+        // write was not.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+
+        cache.write(firebaseUid = "fb-uid-2", uniqueId = "10000009", cohort = null)
+
+        assertNull(cache.read("fb-uid-1"), "the superseded account must be gone")
+        val read = assertNotNull(cache.read("fb-uid-2"))
+        assertEquals("10000009", read.uniqueId)
+        assertNull(read.cohort, "a new account must not inherit the previous one's cohort")
+    }
+
+    @Test
+    fun `hydrating both fields in sequence never leaves the cache erased in between`() {
+        // The cold-start hydration assigns resolvedUniqueId then resolvedCohort,
+        // and each assignment writes through. Under the old rule the first
+        // assignment erased the record it had just read, leaving a window in
+        // which process death lost it. There is now no such window.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = null)
+        assertNotNull(cache.read("fb-uid-1"), "the record must survive the first assignment")
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+
+        assertEquals("adult", assertNotNull(cache.read("fb-uid-1")).cohort)
+    }
+
     @Test
     fun `a partial write persists nothing at all`() {
         // Half a record is not a usable routing hint, and a half-trusted route
         // is the failure mode this story exists to remove. Writing a partial
         // record must leave NOTHING behind — not a partial row for a later read
         // to reject, which would leave the decision to whoever reads next.
-        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = null)
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = null, cohort = "adult")
 
-        assertNull(cache.read("fb-uid-1"), "an incomplete write must not be readable")
+        assertNull(cache.read("fb-uid-1"), "an identity-less write must not be readable")
         assertNull(storage.getString(SessionCache.KEY_UNIQUE_ID), "nor may its fields linger in storage")
         assertNull(storage.getString(SessionCache.KEY_FIREBASE_UID))
         assertNull(storage.getString(SessionCache.KEY_COHORT))
@@ -114,20 +179,22 @@ class SessionCacheContractTest {
         // serving the PREVIOUS user's complete row while the app believes it
         // just cached the current one.
         cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
-        cache.write(firebaseUid = "fb-uid-2", uniqueId = "10000009", cohort = null)
+        cache.write(firebaseUid = "fb-uid-2", uniqueId = null, cohort = "minor")
 
         assertNull(cache.read("fb-uid-1"), "the stale complete row must be gone")
-        assertNull(cache.read("fb-uid-2"), "and the incomplete one was never cached")
+        assertNull(cache.read("fb-uid-2"), "and the identity-less one was never cached")
     }
 
     @Test
     fun `every single-field omission is rejected`() {
         // Exhaustive over which field is missing, so no one field is special-cased.
+        // Cohort is deliberately absent from this list — omitting it is legal
+        // and is covered by `a caller that does not know the cohort still
+        // caches the identity` above. Only the identity fields are required.
         val omissions =
             listOf(
                 Triple(null, "10000005", "adult"),
                 Triple("fb-uid-1", null, "adult"),
-                Triple("fb-uid-1", "10000005", null),
             )
         omissions.forEach { (uid, unique, cohort) ->
             setup()
@@ -149,6 +216,7 @@ class SessionCacheContractTest {
             setup()
             cache.write(firebaseUid = "fb-uid-1", uniqueId = blank, cohort = "adult")
             assertNull(cache.read("fb-uid-1"), "a blank uniqueId ('$blank') must not be readable")
+            assertNull(storage.getString(SessionCache.KEY_COHORT), "nor may its cohort be published alone")
 
             setup()
             cache.write(firebaseUid = blank, uniqueId = "10000005", cohort = "adult")
@@ -165,7 +233,7 @@ class SessionCacheContractTest {
         // half-finished migration, a Keychain item edited out of band. This
         // drives storage directly, which is the only way to reach that path.
         listOf("", "   ").forEach { blank ->
-            listOf(SessionCache.KEY_FIREBASE_UID, SessionCache.KEY_UNIQUE_ID, SessionCache.KEY_COHORT).forEach { key ->
+            listOf(SessionCache.KEY_FIREBASE_UID, SessionCache.KEY_UNIQUE_ID).forEach { key ->
                 setup()
                 cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
                 assertNotNull(cache.read("fb-uid-1"), "precondition: the row must start out readable")
@@ -196,7 +264,7 @@ class SessionCacheContractTest {
         // Storage-level corruption: a partially-cleared keychain, an interrupted
         // migration, a user clearing app data on one platform only. Each field
         // is removed independently to prove no single survivor is enough.
-        listOf(SessionCache.KEY_FIREBASE_UID, SessionCache.KEY_UNIQUE_ID, SessionCache.KEY_COHORT).forEach { key ->
+        listOf(SessionCache.KEY_FIREBASE_UID, SessionCache.KEY_UNIQUE_ID).forEach { key ->
             setup()
             cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
             assertNotNull(cache.read("fb-uid-1"), "precondition: the row must start out readable")
@@ -205,6 +273,16 @@ class SessionCacheContractTest {
 
             assertNull(cache.read("fb-uid-1"), "losing '$key' must read as a miss, not a partial identity")
         }
+
+        // A lost cohort is survivable — the identity is still whole, and the
+        // cohort is metadata. Asserted rather than left implied, so a future
+        // change that starts routing on the cohort has to come here first.
+        setup()
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+        storage.remove(SessionCache.KEY_COHORT)
+        val survivor = assertNotNull(cache.read("fb-uid-1"), "a lost cohort must not lose the identity")
+        assertEquals("10000005", survivor.uniqueId)
+        assertNull(survivor.cohort)
     }
 
     // ── Clearing (AC: sign-out leaves nothing on disk) ────────────────────

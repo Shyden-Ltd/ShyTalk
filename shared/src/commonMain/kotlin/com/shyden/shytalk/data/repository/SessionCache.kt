@@ -5,14 +5,19 @@ import com.shyden.shytalk.core.util.SecureStorage
 /**
  * A resolved identity, cached across process death (SHY-0143).
  *
- * Every field is non-null and non-blank by construction — [SessionCache] never
- * hands out a partial record, so consumers never have to decide what half an
- * identity means.
+ * The IDENTITY — [firebaseUid] and [uniqueId] — is non-null and non-blank by
+ * construction, so consumers never have to decide what half an identity means.
+ * [cohort] is separate: it is metadata, and null simply means "not known yet".
  */
 data class CachedSession(
     val firebaseUid: String,
     val uniqueId: String,
-    val cohort: String,
+    /**
+     * Optional. The identity is the uid/uniqueId pair; the cohort is metadata
+     * that some callers (a PIN unlock) simply do not have. Treating it as part
+     * of the identity is what made a successful unlock erase the record.
+     */
+    val cohort: String?,
 )
 
 /**
@@ -31,7 +36,7 @@ data class CachedSession(
  * uniqueId in place first.
  *
  * **Why not reuse `AppLockRepository.storedUniqueId`.** That already persists a
- * uniqueId to this same encrypted storage, but it is not bound to a Firebase
+ * uniqueId to this same storage, but it is not bound to a Firebase
  * user, so it cannot answer "is this identity the one the live session belongs
  * to?". The binding is not hypothetical: on iOS the Keychain **survives app
  * deletion**, so a reinstall can inherit the previous account's credential.
@@ -45,9 +50,16 @@ data class CachedSession(
  * cache were wholly wrong, the worst case is a wrong-looking shell over data the
  * server refuses to return.
  *
- * Backed by [SecureStorage] — `EncryptedSharedPreferences` (AES-256-GCM) on
- * Android, the Keychain on iOS — so the uniqueId and cohort are encrypted at
- * rest as the story's security AC requires.
+ * **At rest.** Backed by [SecureStorage], which is the iOS Keychain but on
+ * Android is plain `SharedPreferences` with `MODE_PRIVATE` — see
+ * `SecureStorage.android.kt` for why (AndroidX deprecated
+ * `EncryptedSharedPreferences`, and the app's `minSdk = 28` guarantees
+ * file-based encryption). So on Android the protection is the OS sandbox plus
+ * device FBE, NOT an app-level cipher, and the story's "encrypted at rest"
+ * Security AC is met only in that sense. An earlier version of this comment
+ * claimed AES-256-GCM; it was copied from a stale KDoc and was never true of
+ * this storage. Nothing secret lives here in any case — a uniqueId is the
+ * public account number every other user sees, and the cohort is metadata.
  */
 class SessionCache(
     private val storage: SecureStorage,
@@ -77,26 +89,38 @@ class SessionCache(
 
         val storedUid = storage.getString(KEY_FIREBASE_UID)?.takeIf { it.isNotBlank() } ?: return null
         val uniqueId = storage.getString(KEY_UNIQUE_ID)?.takeIf { it.isNotBlank() } ?: return null
-        val cohort = storage.getString(KEY_COHORT)?.takeIf { it.isNotBlank() } ?: return null
 
         if (storedUid != liveUid) return null
 
-        return CachedSession(firebaseUid = storedUid, uniqueId = uniqueId, cohort = cohort)
+        return CachedSession(
+            firebaseUid = storedUid,
+            uniqueId = uniqueId,
+            cohort = storage.getString(KEY_COHORT)?.takeIf { it.isNotBlank() },
+        )
     }
 
     /**
-     * Writes the identity through to encrypted storage — or clears it.
+     * Writes the identity through to storage — or clears it.
      *
-     * Identity is assembled in stages: `resolvedUniqueId` is set when the
-     * backend resolves it, `resolvedCohort` only once the User doc loads. So
-     * this is called at moments when the record may still be incomplete, and
-     * what it does then is the whole design:
+     * The rule turns on WHAT is missing, and getting that distinction wrong is
+     * what broke the feature once already:
      *
-     * An incomplete record [clear]s rather than no-ops. A no-op would leave the
-     * PREVIOUS user's complete row in place while the caller believes it has
-     * just cached the current one — the cache would then confidently serve the
-     * wrong account on the next launch. Erasing costs one extra
-     * resolve-then-route and cannot be wrong.
+     *  - **No uid or no uniqueId** ⇒ [clear]. There is no identity to route on,
+     *    and leaving the previous one behind for the next launch to trust is
+     *    worse than an extra resolve-then-route.
+     *  - **A different uid** ⇒ [clear] first, so the incoming record cannot
+     *    inherit a field from the account it replaces.
+     *  - **No cohort** ⇒ write the identity anyway and leave any known cohort
+     *    alone. Cohort is not identity; its only consumer outside these
+     *    repositories is the dev-only `PreviewWatermark`, and routing never
+     *    reads it.
+     *
+     * That last case is the one that mattered. Because the write-through fires
+     * from each property setter independently, `LockScreenViewModel` — which
+     * knows the uniqueId it just verified a PIN against and no cohort — used to
+     * drive this straight into the erase branch. A successful unlock wiped the
+     * cache, so with App-Lock on by default the steady state became miss → Lock
+     * → PIN → wipe → miss → Lock, permanently.
      */
     fun write(
         firebaseUid: String?,
@@ -105,16 +129,29 @@ class SessionCache(
     ) {
         val uid = firebaseUid?.takeIf { it.isNotBlank() }
         val unique = uniqueId?.takeIf { it.isNotBlank() }
-        val effectiveCohort = cohort?.takeIf { it.isNotBlank() }
 
-        if (uid == null || unique == null || effectiveCohort == null) {
+        // No identity to cache. Erasing rather than no-op'ing is what keeps a
+        // signed-out session, or a half-torn-down one, from leaving a record
+        // behind for the next launch to trust.
+        if (uid == null || unique == null) {
             clear()
             return
         }
 
+        // A different account: drop everything the previous one left, including
+        // its cohort, so the new record cannot inherit a stale field. This is
+        // the case the old blanket erase-on-partial rule existed to cover — it
+        // was right about the danger and wrong about its scope.
+        if (storage.getString(KEY_FIREBASE_UID) != uid) clear()
+
         storage.putString(KEY_FIREBASE_UID, uid)
         storage.putString(KEY_UNIQUE_ID, unique)
-        storage.putString(KEY_COHORT, effectiveCohort)
+
+        // Written when known, LEFT ALONE when not. A caller holding only the
+        // uniqueId — `LockScreenViewModel`, which knows the id it just verified
+        // a PIN against and nothing else — must not degrade a cohort that
+        // sign-in already established.
+        cohort?.takeIf { it.isNotBlank() }?.let { storage.putString(KEY_COHORT, it) }
     }
 
     /**
