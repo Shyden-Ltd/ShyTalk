@@ -18,7 +18,7 @@ import kotlin.test.assertEquals
  */
 class BanStateMappingTest {
     @Test
-    fun `a device ban maps to deviceBanned, carrying reason and expiry`() {
+    fun `a device ban maps to deviceBanned and carries reason and expiry`() {
         val s =
             BanStatus(isBanned = true, banType = "device", reason = "Ban evasion", expiresAt = "2026-09-01T00:00:00Z")
                 .toBanState()
@@ -32,7 +32,7 @@ class BanStateMappingTest {
     }
 
     @Test
-    fun `isBanned false is NOT a ban, even when banType is still populated`() {
+    fun `isBanned false is NOT a ban even when banType is still populated`() {
         // A lifted ban can come back with the old type still set. Reading
         // banType without checking isBanned would lock out a user whose ban was
         // just removed.
@@ -40,7 +40,7 @@ class BanStateMappingTest {
     }
 
     @Test
-    fun `an unrecognised ban type is treated as a NETWORK ban, never as no ban`() {
+    fun `an unrecognised ban type is treated as a NETWORK ban and never as no ban`() {
         // Fail closed. A future server-side type this client does not know must
         // still block: mapping it to "no ban" would turn an unknown ban into a
         // silent bypass, which is precisely the class of hole this story exists

@@ -119,7 +119,7 @@ class ColdStartGateOrderingTest {
         }
 
     @Test
-    fun `a ban with NO session still routes to the ban, never to sign-in`() =
+    fun `a ban with NO session still routes to the ban and never to sign-in`() =
         runTest {
             val rec = Recorder()
             val destination =
@@ -137,7 +137,7 @@ class ColdStartGateOrderingTest {
     // ── The ban's DETAIL must survive to the screen that renders it ────────
 
     @Test
-    fun `the ban reason and expiry reach the caller, not just the fact of a ban`() =
+    fun `the ban reason and expiry reach the caller and not just the fact of a ban`() =
         runTest {
             // BanScreen takes (banType, reason, expiresAt). If the sequencer
             // returns only "banned", the screen can only say so — and a user

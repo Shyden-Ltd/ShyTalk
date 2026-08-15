@@ -70,7 +70,7 @@ class ColdStartRouteDecisionTest {
     }
 
     @Test
-    fun `a banned device with NO session shows the ban, never the login screen`() {
+    fun `a banned device with NO session shows the ban and never the login screen`() {
         // "never shows login" is the story's wording, and it matters: showing
         // SignIn invites a banned user to try another account.
         assertEquals(
@@ -80,7 +80,7 @@ class ColdStartRouteDecisionTest {
     }
 
     @Test
-    fun `a banned network with NO session shows the ban, never the login screen`() {
+    fun `a banned network with NO session shows the ban and never the login screen`() {
         assertEquals(
             Screen.BanNetwork,
             resolve(networkBanned = true, hasStoredCredential = false, isAuthenticated = false, hasResolvedUser = false),
