@@ -21,6 +21,7 @@ import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
@@ -121,7 +122,7 @@ private fun IosApp() {
                                 isAppLockEnabled = lockRepo.isAppLockEnabled,
                                 isLockRequired = lockRepo.isLockRequired(),
                                 isAuthenticated = authRepo.isAuthenticated,
-                                hasResolvedUser = authRepo.currentUserId != null,
+                                hasResolvedUser = authRepo.resolvedUniqueId != null,
                                 currentRoute = navController.currentDestination?.route,
                             )
                         ) {
@@ -197,6 +198,32 @@ private fun IosApp() {
                         val deviceRepo = koin.get<DeviceRepository>()
                         val deviceId = koin.get<String>(named("deviceId"))
 
+                        // SHY-0143 — put the REAL uniqueId in place before the
+                        // routing decision, identically to Android.
+                        //
+                        // `currentUserId` falls back to the raw Firebase UID
+                        // until `resolvedUniqueId` is set, and nothing on the
+                        // cold-start route to Main sets it — `AuthViewModel.init`
+                        // is the only code that does, and no AuthViewModel is
+                        // constructed on that route. The deep-link handler above
+                        // already refuses to trust `currentUserId` for exactly
+                        // this reason; the routing decision now does too.
+                        //
+                        // This matters more on iOS than on Android: the Keychain
+                        // SURVIVES app deletion, so a reinstall can inherit the
+                        // previous account's stored credential. The cache is
+                        // keyed on the live Firebase uid and refuses a record
+                        // belonging to anyone else.
+                        val sessionCache = koin.get<SessionCache>()
+                        val cached = sessionCache.read(authRepo.currentFirebaseUid)
+                        if (cached != null) {
+                            authRepo.resolvedUniqueId = cached.uniqueId
+                            authRepo.resolvedCohort = cached.cohort
+                            logI("MainViewController", "Cold-start identity restored from cache (cohort=${cached.cohort})")
+                        } else {
+                            logI("MainViewController", "Cold-start identity cache miss — resolve-then-route fallback")
+                        }
+
                         // Lenient on a transient failure, matching Android and
                         // the behaviour AuthViewModelBanTest pins: a real ban is
                         // authoritative, an unreachable ban service is not
@@ -216,7 +243,7 @@ private fun IosApp() {
                                 isAppLockEnabled = appLockRepo.isAppLockEnabled,
                                 isLockRequired = appLockRepo.isLockRequired(),
                                 isAuthenticated = authRepo.isAuthenticated,
-                                hasResolvedUser = authRepo.currentUserId != null,
+                                hasResolvedUser = authRepo.resolvedUniqueId != null,
                             )
                         logI(
                             "MainViewController",

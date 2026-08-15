@@ -324,4 +324,105 @@ class AppLockWiringPinTest {
                 "AppSettingsScreen's internal LinkedAccounts page is the real surface",
         )
     }
+
+    // ── SHY-0143: the cold-start identity must be REAL before routing ─────
+    //
+    // `hasResolvedUser` is the resolver's "we know who this is" input, and both
+    // platforms were feeding it `currentUserId != null`. That is not the same
+    // question: `currentUserId` is `resolvedUniqueId ?: firebaseUid`, so it goes
+    // non-null the instant Firebase restores a session, long before any identity
+    // is resolved. The resolver therefore chose Main for a session whose uniqueId
+    // was still unknown, and every read behind it addressed `users/<firebaseUid>`
+    // — the SHY-0139 wrong-key hazard.
+    //
+    // Two things have to hold together, which is why they are pinned together:
+    // the predicate must ask the honest question, AND something must have put a
+    // real answer in place first. Either alone is a regression — an honest
+    // predicate with no hydration sends every returning user to the Lock screen;
+    // hydration with a dishonest predicate leaves the hazard exactly as it was.
+
+    private val androidKoinModule = "app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt"
+    private val iosKoinModule = "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt"
+
+    @Test
+    fun `neither platform passes currentUserId as hasResolvedUser`() {
+        listOf(mainActivity, mainViewController).forEach { path ->
+            val src = read(path)
+            assertFalse(
+                src.contains("hasResolvedUser = authRepository.currentUserId != null") ||
+                    src.contains("hasResolvedUser = authRepo.currentUserId != null"),
+                "$path must not answer hasResolvedUser with currentUserId — it falls back to the " +
+                    "raw Firebase UID, so it reports a resolved user before one exists",
+            )
+        }
+    }
+
+    @Test
+    fun `both platforms answer hasResolvedUser with the resolved uniqueId`() {
+        // The positive half. Pinning only the absence above would be satisfied by
+        // deleting the argument, or by inventing a third, equally dishonest one.
+        listOf(mainActivity, mainViewController).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("hasResolvedUser = authRepository.resolvedUniqueId != null") ||
+                    src.contains("hasResolvedUser = authRepo.resolvedUniqueId != null"),
+                "$path must answer hasResolvedUser with resolvedUniqueId — the only field that " +
+                    "is non-null solely because identity resolution actually happened",
+            )
+        }
+    }
+
+    @Test
+    fun `every hasResolvedUser argument on both platforms uses the honest field`() {
+        // Whole-unit, not first-match: MainActivity passes hasResolvedUser at
+        // four call sites (three deep-link lock gates plus the cold-start
+        // resolver). Fixing one and leaving three is the realistic regression,
+        // and a `contains` pin cannot see it.
+        listOf(mainActivity, mainViewController).forEach { path ->
+            val occurrences =
+                read(path)
+                    .lineSequence()
+                    .filter { it.contains("hasResolvedUser =") }
+                    .map { it.trim() }
+                    .toList()
+            assertTrue(occurrences.isNotEmpty(), "$path should pass hasResolvedUser somewhere")
+            val dishonest = occurrences.filter { it.contains("currentUserId") }
+            assertTrue(
+                dishonest.isEmpty(),
+                "$path has ${dishonest.size} of ${occurrences.size} hasResolvedUser arguments still " +
+                    "keyed on currentUserId: $dishonest",
+            )
+        }
+    }
+
+    @Test
+    fun `both platforms hydrate the cached identity before routing`() {
+        listOf(mainActivity, mainViewController).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("sessionCache.read("),
+                "$path must read the SessionCache before it resolves a destination — without it " +
+                    "the honest hasResolvedUser predicate sends every returning user to the Lock screen",
+            )
+            assertTrue(
+                src.contains("resolvedUniqueId = "),
+                "$path must publish the cached uniqueId onto AuthRepository — reading it and " +
+                    "discarding it leaves every downstream read keyed on the Firebase UID",
+            )
+        }
+    }
+
+    @Test
+    fun `SessionCache is DI-registered on both platforms`() {
+        // A commonMain class nothing constructs is a class nothing uses. Both
+        // modules already register the SecureStorage it is built on, so the
+        // realistic failure is registering it on one platform only — which
+        // presents as iOS-crashes-on-launch, far from this change.
+        listOf(androidKoinModule, iosKoinModule).forEach { path ->
+            assertTrue(
+                read(path).contains("SessionCache("),
+                "$path must register SessionCache, or the platform cannot inject it",
+            )
+        }
+    }
 }

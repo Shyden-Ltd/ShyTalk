@@ -60,6 +60,7 @@ import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
@@ -112,6 +113,10 @@ class MainActivity : AppCompatActivity() {
     // identical question the sign-in path already asked.
     private val deviceRepository: DeviceRepository by inject()
     private val deviceId: String by inject(named("deviceId"))
+
+    // SHY-0143 — the cold-start identity cache, read before routing so
+    // `resolvedUniqueId` is real by the time any destination is chosen.
+    private val sessionCache: SessionCache by inject()
 
     private val navigateToRoomState = mutableStateOf<String?>(null)
     private val navigateToChatState = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
@@ -276,6 +281,35 @@ class MainActivity : AppCompatActivity() {
                             // Anti-emulator / anti-root gate. See UnsafeDeviceGate
                             // for the bypass logic + flavor-by-flavor matrix.
                             isUnsafe = UnsafeDeviceGate.isBlocked()
+
+                            // SHY-0143 — put the REAL uniqueId in place before any
+                            // routing decision is taken.
+                            //
+                            // Every screen behind this gate keys its reads on
+                            // `AuthRepository.currentUserId`, which falls back to
+                            // the raw Firebase UID until `resolvedUniqueId` is set
+                            // — and nothing on the cold-start route to Main sets
+                            // it. `AuthViewModel.init` is the only code that ever
+                            // did, and an AuthViewModel is constructed solely
+                            // inside the Sign-In / e-mail-OTP route composables,
+                            // which SHY-0187 stopped routing cold starts through.
+                            //
+                            // One bounded read of encrypted local storage: no
+                            // network, no suspension, nothing to await. The cache
+                            // rejects a record belonging to a different Firebase
+                            // user, so a miss here is a genuine miss.
+                            val cached = sessionCache.read(authRepository.currentFirebaseUid)
+                            if (cached != null) {
+                                authRepository.resolvedUniqueId = cached.uniqueId
+                                authRepository.resolvedCohort = cached.cohort
+                                logI(TAG, "Cold-start identity restored from cache (cohort=${cached.cohort})")
+                            } else {
+                                // Not an error — first launch after this shipped,
+                                // a cleared cache, or a different account. Routing
+                                // falls back to resolve-then-route via the Lock
+                                // screen, which is what happened before SHY-0187.
+                                logI(TAG, "Cold-start identity cache miss — resolve-then-route fallback")
+                            }
 
                             // SHY-0143 — device + network ban check, hoisted OUT of
                             // the sign-in flow.
@@ -509,7 +543,7 @@ class MainActivity : AppCompatActivity() {
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
                                                 isAuthenticated = authRepository.isAuthenticated,
-                                                hasResolvedUser = authRepository.currentUserId != null,
+                                                hasResolvedUser = authRepository.resolvedUniqueId != null,
                                                 currentRoute = navController.currentDestination?.route,
                                             )
                                         ) {
@@ -545,7 +579,7 @@ class MainActivity : AppCompatActivity() {
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
                                                 isAuthenticated = authRepository.isAuthenticated,
-                                                hasResolvedUser = authRepository.currentUserId != null,
+                                                hasResolvedUser = authRepository.resolvedUniqueId != null,
                                                 currentRoute = navController.currentDestination?.route,
                                             )
                                         ) {
@@ -604,7 +638,7 @@ class MainActivity : AppCompatActivity() {
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
                                                 isAuthenticated = authRepository.isAuthenticated,
-                                                hasResolvedUser = authRepository.currentUserId != null,
+                                                hasResolvedUser = authRepository.resolvedUniqueId != null,
                                                 currentRoute = navController.currentDestination?.route,
                                             )
                                         ) {
@@ -665,7 +699,7 @@ class MainActivity : AppCompatActivity() {
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
                                                 isAuthenticated = authRepository.isAuthenticated,
-                                                hasResolvedUser = authRepository.currentUserId != null,
+                                                hasResolvedUser = authRepository.resolvedUniqueId != null,
                                             )
                                         logI(
                                             TAG,

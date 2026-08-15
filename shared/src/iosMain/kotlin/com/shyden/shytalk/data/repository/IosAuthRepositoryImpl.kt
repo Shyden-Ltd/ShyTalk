@@ -8,11 +8,32 @@ import dev.gitlive.firebase.auth.OAuthProvider
 
 class IosAuthRepositoryImpl(
     private val auth: FirebaseAuth,
+    private val sessionCache: SessionCache,
     private val emailLinkDomain: String = "shytalk.shyden.co.uk",
 ) : AuthRepository {
+    // SHY-0143 — identical write-through to Android. See AuthRepositoryImpl for
+    // why this lives in the setters rather than at each assignment site.
     override var resolvedUniqueId: String? = null
+        set(value) {
+            field = value
+            syncSessionCache()
+        }
+
     override var resolvedDisplayName: String? = null
+
     override var resolvedCohort: String? = null
+        set(value) {
+            field = value
+            syncSessionCache()
+        }
+
+    private fun syncSessionCache() {
+        sessionCache.write(
+            firebaseUid = auth.currentUser?.uid,
+            uniqueId = resolvedUniqueId,
+            cohort = resolvedCohort,
+        )
+    }
 
     override val currentUserId: String?
         get() = resolvedUniqueId ?: auth.currentUser?.uid
@@ -106,6 +127,10 @@ class IosAuthRepositoryImpl(
         resolvedUniqueId = null
         resolvedDisplayName = null
         resolvedCohort = null
+        // SHY-0143 — redundant with the setters' erase, kept for the same
+        // reason as Android's, and it matters more here: the Keychain survives
+        // app deletion, so anything left behind outlives the uninstall itself.
+        sessionCache.clear()
         auth.signOut()
     }
 

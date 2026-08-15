@@ -11,12 +11,46 @@ import kotlinx.coroutines.tasks.await
 
 class AuthRepositoryImpl(
     private val auth: FirebaseAuth,
+    private val sessionCache: SessionCache,
     private val applicationId: String = "com.shyden.shytalk",
     private val emailLinkDomain: String = "shytalk.shyden.co.uk",
 ) : AuthRepository {
+    // SHY-0143 — the two identity slots write through to encrypted storage so a
+    // cold start can key its reads on the real uniqueId. Custom setters rather
+    // than explicit calls at each assignment site: there are four across the
+    // codebase today, and a fifth added later would silently skip the cache.
     override var resolvedUniqueId: String? = null
+        set(value) {
+            field = value
+            syncSessionCache()
+        }
+
     override var resolvedDisplayName: String? = null
+
     override var resolvedCohort: String? = null
+        set(value) {
+            field = value
+            syncSessionCache()
+        }
+
+    /**
+     * Mirrors the resolved identity onto disk.
+     *
+     * Identity arrives in stages — the uniqueId when the backend resolves it,
+     * the cohort only once the User doc loads — so this runs while the record
+     * is still incomplete. [SessionCache.write] erases rather than half-writes
+     * in that case, which is correct: at that instant there genuinely is no
+     * complete identity to cache. The window closes microseconds later, and if
+     * the process dies inside it the next launch simply takes the
+     * resolve-then-route fallback.
+     */
+    private fun syncSessionCache() {
+        sessionCache.write(
+            firebaseUid = auth.currentUser?.uid,
+            uniqueId = resolvedUniqueId,
+            cohort = resolvedCohort,
+        )
+    }
 
     override val currentUserId: String?
         get() = resolvedUniqueId ?: auth.currentUser?.uid
@@ -156,6 +190,13 @@ class AuthRepositoryImpl(
         resolvedUniqueId = null
         resolvedDisplayName = null
         resolvedCohort = null
+        // SHY-0143 — deliberately redundant, and mutation testing says so:
+        // deleting this line leaves the suite green, because nulling the two
+        // slots above already drove `SessionCache.write` into its erase branch.
+        // It stays because the story's requirement is "sign-out leaves nothing
+        // on disk", and a requirement stated at the site that owns it survives
+        // a later refactor of the setters. Costs one no-op storage remove.
+        sessionCache.clear()
         auth.signOut()
     }
 

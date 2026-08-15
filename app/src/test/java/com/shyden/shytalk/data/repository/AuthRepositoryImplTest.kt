@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -30,7 +31,13 @@ class AuthRepositoryImplTest {
     @Before
     fun setup() {
         auth = mockk(relaxed = true)
-        repo = AuthRepositoryImpl(auth)
+        // SHY-0143 — a real SessionCache over a relaxed storage double. This
+        // file tests auth, not caching; the cache's own behaviour is covered
+        // by SessionCacheContractTest against the real SecureStorage actual.
+        // (`app/src/test` is a host unit-test source set, where CLAUDE.md
+        // permits doubles; the Android SecureStorage actual needs a real
+        // Context and Keystore and cannot be built here.)
+        repo = AuthRepositoryImpl(auth, SessionCache(mockk(relaxed = true)))
         mockkStatic(GoogleAuthProvider::class)
     }
 
@@ -379,6 +386,83 @@ class AuthRepositoryImplTest {
             val result = repo.refreshIdToken()
 
             assertTrue(result is Resource.Error)
+        }
+
+    // endregion
+
+    // region SHY-0143 — the resolved identity writes through to the cache
+
+    /**
+     * A real [SessionCache] over an in-memory storage double, so these tests
+     * exercise the REAL write-through path: `AuthRepositoryImpl`'s setters →
+     * `SessionCache.write` → storage. Only the leaf — the Keystore-backed
+     * `SecureStorage` actual, which needs a real Context — is stood in for.
+     */
+    private fun cacheOverMemory(): Pair<SessionCache, MutableMap<String, String>> {
+        val backing = mutableMapOf<String, String>()
+        val storage =
+            mockk<com.shyden.shytalk.core.util.SecureStorage>(relaxed = true) {
+                every { getString(any()) } answers { backing[firstArg()] }
+                every { putString(any(), any()) } answers { backing[firstArg()] = secondArg() }
+                every { remove(any()) } answers { backing -= firstArg<String>() }
+            }
+        return SessionCache(storage) to backing
+    }
+
+    private fun signedInAs(uid: String) {
+        val user = mockk<FirebaseUser>(relaxed = true)
+        every { user.uid } returns uid
+        every { auth.currentUser } returns user
+    }
+
+    @Test
+    fun `a fully resolved identity is written through to the cache`() {
+        // Without this, the cache is never populated and every returning user
+        // takes the resolve-then-route fallback forever — the feature silently
+        // does nothing while every test about the cache itself stays green.
+        val (cache, _) = cacheOverMemory()
+        val repoWithCache = AuthRepositoryImpl(auth, cache)
+        signedInAs("fb-uid-1")
+
+        repoWithCache.resolvedUniqueId = "10000005"
+        repoWithCache.resolvedCohort = "adult"
+
+        val cached = cache.read("fb-uid-1")
+        assertNotNull(cached)
+        assertEquals("10000005", cached!!.uniqueId)
+        assertEquals("adult", cached.cohort)
+    }
+
+    @Test
+    fun `a half-resolved identity is not left in the cache`() {
+        // The uniqueId lands before the cohort. Caching that half would let the
+        // next cold start route on an identity whose cohort is unknown.
+        val (cache, _) = cacheOverMemory()
+        val repoWithCache = AuthRepositoryImpl(auth, cache)
+        signedInAs("fb-uid-1")
+
+        repoWithCache.resolvedUniqueId = "10000005"
+
+        assertNull(cache.read("fb-uid-1"))
+    }
+
+    @Test
+    fun `signOut leaves no identity on disk`() =
+        runTest {
+            val (cache, backing) = cacheOverMemory()
+            val repoWithCache = AuthRepositoryImpl(auth, cache)
+            signedInAs("fb-uid-1")
+            repoWithCache.resolvedUniqueId = "10000005"
+            repoWithCache.resolvedCohort = "adult"
+            assertNotNull(cache.read("fb-uid-1"))
+
+            repoWithCache.signOut()
+
+            assertNull(cache.read("fb-uid-1"))
+            assertTrue(
+                "no session field may survive sign-out, got ${backing.keys}",
+                backing.keys.none { it.startsWith("session_cache_") },
+            )
         }
 
     // endregion
