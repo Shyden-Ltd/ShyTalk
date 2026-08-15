@@ -840,3 +840,75 @@ A scoped re-review of the fix commits (`5b118773878..HEAD`) is running.
 **Gotcha worth keeping:** `npx jest tests/routes/ban-status.test.js` failed all
 10 tests after 323s of Firestore timeouts; `npm test -- <same file>` passes in
 2.7s. The canonical runner is not optional.
+
+---
+
+## 2026-08-16 ~02:00 WIB — SHY-0143 review round 3 closed; SHY-0298 R3 committed
+
+### SHY-0143 (branch `story/SHY-0143-persist-session-optimistic-coldstart`, 26 commits, UNPUSHED)
+
+Round 3: 3 Critical + 12 Important. All closed in `e5472fe84e3`.
+
+**The three Criticals were one finding wearing three hats.** `signOut()` cleared
+nothing on either platform, so "clear the API token cache" was COPIED per call
+site — 2 of 4 on Android, 0 of 3 on iOS. My round-2 fix also hardened the WRONG
+screen: Android renders `BanScreen` above the NavHost, so `MainActivity`'s copy
+is the one a banned user taps, and my pin read only `NavGraph.kt` — green
+against a route Android never renders.
+
+Fix: the invariant moved INTO `signOut()` on both platforms; call-site copies
+deleted. Same for `refreshIdToken()`, which cleared on Android and not on iOS,
+where `IosApiClient` has the identical 50-minute TTL — so on iPhone every
+Express call carried the pre-flip cohort claim for up to 50 minutes.
+
+Pins now read BOTH platform files for every invariant. Reading one file per
+invariant is what let all of this through, twice.
+
+Also closed: I1 (discardRecord could delete a concurrent write's good record —
+compare-and-delete now), I2 (the legacy-key sweep never ran on the real upgrade
+path — swept on read), I3, I4 (ip-api reports failures INCLUDING over-quota as
+HTTP 200 + `status:"fail"`, so a null ASN got cached and ASN bans stayed off for
+the TTL), I6, I7 (my trailing-slash normalisation un-skipped `/auth/`,
+`/test/`, `/portal/totp-recovery/`), I8, I9, I10, I11, I12.
+
+**Verification:** shared jvmTest 1505/0, app unit 2239/0 (both `--rerun-tasks`),
+Express 415 suites / 13810 tests, eslint/ktlint/detekt/both platform
+compiles/instrumented-test compile all clean.
+
+**Three operator decisions still block Done** (in the story Notes): the Security
+AC's `EncryptedSharedPreferences` wording; the missing `forceSignOut` wire
+field; App Check not added for the unauthenticated endpoint.
+
+**Still owed:** Android instrumented cold-start feature; iOS host tests (blocked
+on a `FirebaseCore` link for the K/N test binary — its own story); LOCAL + DEV
+gauntlets.
+
+### SHY-0298 / PR #1751 — R3 committed but NOT pushed
+
+Commit `e986afedeef`, anchored to local branch **`shy0298-r3-pending`** (it was
+made in a detached worktree). To land it:
+`git push origin shy0298-r3-pending:story/SHY-0298-serialize-gh-pages-writers`
+
+- **C1** — the history cap force-moved gh-pages after a plain re-read, which is
+  a check and not a CAS. C3 made that window routinely reachable, so a publisher
+  landing in it was discarded while its own job exited 0. Now
+  `git push --force-with-lease="refs/heads/gh-pages:${TIP}"` — a server-enforced
+  compare-and-swap, no window.
+- **C2** — `git push … 2>/dev/null` classified every failure as a lost race and
+  deleted the evidence. stderr captured; only non-fast-forward retries; jitter
+  added; no sleep after the final attempt.
+- **C3** — the loop had never been executed. New
+  `gh-pages-publisher-loop.unit.test.js` runs it against REAL local git repos
+  with a genuine second clone as the racing writer. 8 tests. Mutation: no-retry,
+  wrong-reset, force-push and no-clear all caught.
+
+**BEFORE MERGING #1751:** the full `express-api` script suite could NOT be run
+from the worktree — several tests locate the repo root and reject a worktree's
+`.git` FILE. Only the four gh-pages suites were run (59 tests, green). Re-run
+`npm test` from a normal checkout. Round 1's I2/I3/I4/I5 are also still open
+(actionlint does not lint composite actions; a failed publish red-gates PR Gate;
+comments and the spec still describe the deleted lock design).
+
+### Worktree
+`…/scratchpad/wt-1751` is still present (detached). Remove with
+`git worktree remove` once #1751 lands.
