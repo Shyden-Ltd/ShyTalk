@@ -249,3 +249,63 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
   take MVP product/safety work ahead of spikes and test-writing, and because
   EPIC-0004 names this story its own prerequisite (SHY-0144 retires the splash
   this replaces; SHY-0145's irreversible delete lands last).
+
+- **2026-08-15 13:2x WIB — MATERIAL CHANGE FOUND AT PICKUP: half this story
+  already SHIPPED, without its safety gate.** The spec predates SHY-0187, and
+  SHY-0187 delivered the optimistic route on its own.
+
+  `MainActivity:578` no longer computes the route inline — it calls
+  `resolveLaunchDestination()`
+  (`shared/src/commonMain/.../navigation/LaunchDestination.kt:22`), added by
+  SHY-0187 to "silently restore a live session (prevents login flash)". Its
+  rule at **:32** is:
+
+  ```kotlin
+  isAuthenticated && hasResolvedUser -> Screen.Main
+  ```
+
+  and `hasResolvedUser` is `authRepository.currentUserId != null`. The
+  `AuthRepository` interface contract (product code, not a test double) states
+  that `currentUserId` returns _"the resolved uniqueId … **falling back to the
+  Firebase UID if identity hasn't been resolved yet**"_. So on a restored
+  session it is non-null **immediately**, and the cold start routes straight to
+  `Screen.Main` before any cohort or identity resolution.
+
+  **The optimistic cold-start this story was written to ADD is already live.
+  What is missing is the gate this story was written to add WITH it.** Verified
+  by enumeration, not inference:
+
+  - `checkAndApplyBan()` — `private`, exactly two call sites, both inside
+    `resolveIdentityAndProceed()`; all **nine** callers of that function are
+    sign-in paths in `AuthViewModel` (:168, :220, :247, :271, :695, :718, :765,
+    :770, :793).
+  - `BanScreen`, `deviceBans`, `checkBans` — **zero** references in
+    `MainActivity.kt` or the `navigation` package.
+
+  ⇒ **A banned device, or a banned IP/subnet/ASN (the same path that blocks
+  VPNs), currently reaches the room list on cold start.** No login, no ban
+  check, no gate.
+
+  **Blast radius — a release-blocker, not a production incident.** The resolver
+  is on `main` AND `develop`, but `git show v0.98.0:…LaunchDestination.kt` does
+  NOT contain the rule — it is not in any cut release. It ships with the NEXT
+  release, i.e. the one this MVP push is working toward. So the gate must land
+  before that cut.
+
+  **Consequences for this story:**
+
+  1. The Happy-path ACs about "no SignIn screen on cold start" are already
+     satisfied by SHY-0187 — they become REGRESSION assertions, not new
+     behaviour.
+  2. The Error-path ban ACs are now the substance of the story, and are
+     closing a REAL open gap rather than pre-empting a hypothetical one.
+  3. The `SessionCache` work keeps its value for a different reason than the
+     spec gives: not "so we can route to Main" (we already do), but so the
+     route to Main carries the correct `uniqueId` instead of the Firebase-UID
+     fallback — the SHY-0139 wrong-key hazard, which the shipped optimistic
+     route currently walks straight into.
+
+  This is [[feedback-story-id-in-released-history-is-not-proof-it-shipped]]
+  inverted: not a story wrongly marked shipped, but a story whose premise
+  quietly became half-true while it sat in Draft. Re-validating citations at
+  pickup is what surfaced it.
