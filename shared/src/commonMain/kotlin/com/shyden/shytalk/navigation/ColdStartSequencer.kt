@@ -1,5 +1,7 @@
 package com.shyden.shytalk.navigation
 
+import com.shyden.shytalk.data.repository.BanStatus
+
 /**
  * SHY-0143 — the cold-start startup sequence, with its two security gates in
  * the right ORDER.
@@ -123,3 +125,32 @@ data class LaunchState(
     val isAuthenticated: Boolean,
     val hasResolvedUser: Boolean,
 )
+
+/**
+ * Maps the server's [BanStatus] onto the cold-start [BanState].
+ *
+ * The classification rule is not new — `AuthViewModel.checkAndApplyBan()`
+ * already treats `banType == "device"` as a device ban and everything else as
+ * network. It lives here so both call sites share one definition rather than
+ * drifting into disagreeing about what a ban means.
+ *
+ * **Fails closed on purpose.** An unrecognised or absent `banType` on a banned
+ * status maps to a NETWORK ban, not to "no ban". A future server-side ban type
+ * this client has never heard of must still block; mapping the unknown to
+ * "allowed" would turn a new ban category into a silent bypass, which is the
+ * exact class of hole this story exists to close.
+ *
+ * `isBanned` is authoritative: a lifted ban can still carry its old `banType`,
+ * and reading the type without the flag would lock out a user whose ban was
+ * just removed.
+ */
+fun BanStatus.toBanState(): BanState =
+    when {
+        !isBanned -> BanState()
+
+        banType == "device" ->
+            BanState(deviceBanned = true, reason = reason, expiresAt = expiresAt)
+
+        else ->
+            BanState(networkBanned = true, reason = reason, expiresAt = expiresAt)
+    }
