@@ -43,6 +43,10 @@ class SessionCacheContractTest {
         cache = SessionCache(storage)
     }
 
+    /** Builds a raw stored record, so tests can drive storage directly. */
+    private fun json(fields: Map<String, String>): String =
+        fields.entries.joinToString(prefix = "{", postfix = "}") { (k, v) -> "\"$k\":\"$v\"" }
+
     // ── Round-trip ────────────────────────────────────────────────────────
 
     @Test
@@ -167,9 +171,7 @@ class SessionCacheContractTest {
         cache.write(firebaseUid = "fb-uid-1", uniqueId = null, cohort = "adult")
 
         assertNull(cache.read("fb-uid-1"), "an identity-less write must not be readable")
-        assertNull(storage.getString(SessionCache.KEY_UNIQUE_ID), "nor may its fields linger in storage")
-        assertNull(storage.getString(SessionCache.KEY_FIREBASE_UID))
-        assertNull(storage.getString(SessionCache.KEY_COHORT))
+        assertNull(storage.getString(SessionCache.KEY_SESSION), "nor may a record linger in storage")
     }
 
     @Test
@@ -216,7 +218,7 @@ class SessionCacheContractTest {
             setup()
             cache.write(firebaseUid = "fb-uid-1", uniqueId = blank, cohort = "adult")
             assertNull(cache.read("fb-uid-1"), "a blank uniqueId ('$blank') must not be readable")
-            assertNull(storage.getString(SessionCache.KEY_COHORT), "nor may its cohort be published alone")
+            assertNull(storage.getString(SessionCache.FIELD_COHORT), "nor may its cohort be published alone")
 
             setup()
             cache.write(firebaseUid = blank, uniqueId = "10000005", cohort = "adult")
@@ -225,64 +227,86 @@ class SessionCacheContractTest {
     }
 
     @Test
-    fun `a session whose fields are BLANKED underneath it reads as a miss`() {
-        // Found by mutation: dropping the read-side blank guard left the suite
-        // green, because `write` already refuses blanks so none ever reach
-        // storage through the front door. The read guard exists for what `write`
-        // cannot police — a value already on disk from another app version, a
-        // half-finished migration, a Keychain item edited out of band. This
-        // drives storage directly, which is the only way to reach that path.
+    fun `a record missing an identity field reads as a miss`() {
+        // Storage-level corruption is now a corrupt RECORD rather than a lost
+        // key, because the whole session is one value. Each identity field is
+        // dropped independently to prove no single survivor is enough.
+        listOf(SessionCache.FIELD_FIREBASE_UID, SessionCache.FIELD_UNIQUE_ID).forEach { missing ->
+            setup()
+            val fields =
+                mapOf(
+                    SessionCache.FIELD_FIREBASE_UID to "fb-uid-1",
+                    SessionCache.FIELD_UNIQUE_ID to "10000005",
+                    SessionCache.FIELD_COHORT to "adult",
+                ).filterKeys { it != missing }
+            storage.putString(SessionCache.KEY_SESSION, json(fields))
+
+            assertNull(cache.read("fb-uid-1"), "a record missing '$missing' must read as a miss")
+        }
+    }
+
+    @Test
+    fun `a record with a BLANK identity field reads as a miss`() {
+        // `write` refuses blanks, so none reach storage through the front door.
+        // These guards exist for what `write` cannot police — a value already
+        // on disk from another app version, or a Keychain item edited out of
+        // band. Driving storage directly is the only way to reach that path.
         listOf("", "   ").forEach { blank ->
-            listOf(SessionCache.KEY_FIREBASE_UID, SessionCache.KEY_UNIQUE_ID).forEach { key ->
+            listOf(SessionCache.FIELD_FIREBASE_UID, SessionCache.FIELD_UNIQUE_ID).forEach { field ->
                 setup()
-                cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
-                assertNotNull(cache.read("fb-uid-1"), "precondition: the row must start out readable")
+                val fields =
+                    mapOf(
+                        SessionCache.FIELD_FIREBASE_UID to "fb-uid-1",
+                        SessionCache.FIELD_UNIQUE_ID to "10000005",
+                        SessionCache.FIELD_COHORT to "adult",
+                    ) + (field to blank)
+                storage.putString(SessionCache.KEY_SESSION, json(fields))
 
-                storage.putString(key, blank)
-
-                assertNull(
-                    cache.read("fb-uid-1"),
-                    "a blanked '$key' ('$blank') must read as a miss, not as a usable identity",
-                )
+                assertNull(cache.read("fb-uid-1"), "a blank '$field' ('$blank') must read as a miss")
             }
         }
     }
 
     @Test
-    fun `a blank uid on disk cannot match a blank live uid`() {
-        // The degenerate match: if both guards were dropped, a blanked stored
-        // uid and a blank live uid would compare EQUAL and hand out the row.
-        // Neither side may be allowed to reach the comparison.
-        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
-        storage.putString(SessionCache.KEY_FIREBASE_UID, "")
+    fun `a blank cohort inside an otherwise good record is simply absent`() {
+        // Cohort is metadata. A blank one must NOT invalidate the identity —
+        // that conflation is what wiped the cache on every PIN unlock.
+        storage.putString(
+            SessionCache.KEY_SESSION,
+            json(
+                mapOf(
+                    SessionCache.FIELD_FIREBASE_UID to "fb-uid-1",
+                    SessionCache.FIELD_UNIQUE_ID to "10000005",
+                    SessionCache.FIELD_COHORT to "   ",
+                ),
+            ),
+        )
 
-        assertNull(cache.read(""), "blank must never equal blank here")
+        val read = assertNotNull(cache.read("fb-uid-1"), "a blank cohort must not cost the identity")
+        assertEquals("10000005", read.uniqueId)
+        assertNull(read.cohort)
     }
 
     @Test
-    fun `a session whose fields are removed underneath it reads as a miss`() {
-        // Storage-level corruption: a partially-cleared keychain, an interrupted
-        // migration, a user clearing app data on one platform only. Each field
-        // is removed independently to prove no single survivor is enough.
-        listOf(SessionCache.KEY_FIREBASE_UID, SessionCache.KEY_UNIQUE_ID).forEach { key ->
+    fun `an unparseable record reads as a miss and is erased`() {
+        listOf("not json at all", "{\"firebaseUid\": ", "[]", "42").forEach { garbage ->
             setup()
-            cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
-            assertNotNull(cache.read("fb-uid-1"), "precondition: the row must start out readable")
+            storage.putString(SessionCache.KEY_SESSION, garbage)
 
-            storage.remove(key)
-
-            assertNull(cache.read("fb-uid-1"), "losing '$key' must read as a miss, not a partial identity")
+            assertNull(cache.read("fb-uid-1"), "garbage ('$garbage') must read as a miss")
         }
+    }
 
-        // A lost cohort is survivable — the identity is still whole, and the
-        // cohort is metadata. Asserted rather than left implied, so a future
-        // change that starts routing on the cohort has to come here first.
-        setup()
-        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
-        storage.remove(SessionCache.KEY_COHORT)
-        val survivor = assertNotNull(cache.read("fb-uid-1"), "a lost cohort must not lose the identity")
-        assertEquals("10000005", survivor.uniqueId)
-        assertNull(survivor.cohort)
+    @Test
+    fun `a legacy three-key record is not readable`() {
+        // Pre-I6 installs have the old shape on disk. It must read as a miss
+        // rather than as a partially-understood identity — the next sign-in
+        // rewrites it in the current format.
+        storage.putString(SessionCache.LEGACY_KEY_FIREBASE_UID, "fb-uid-1")
+        storage.putString(SessionCache.LEGACY_KEY_UNIQUE_ID, "10000005")
+        storage.putString(SessionCache.LEGACY_KEY_COHORT, "adult")
+
+        assertNull(cache.read("fb-uid-1"), "the superseded format must not be trusted")
     }
 
     // ── Clearing (AC: sign-out leaves nothing on disk) ────────────────────
@@ -294,9 +318,12 @@ class SessionCacheContractTest {
         cache.clear()
 
         assertNull(cache.read("fb-uid-1"), "a cleared session must not be readable")
-        assertNull(storage.getString(SessionCache.KEY_FIREBASE_UID), "no uniqueId or cohort may survive sign-out")
-        assertNull(storage.getString(SessionCache.KEY_UNIQUE_ID))
-        assertNull(storage.getString(SessionCache.KEY_COHORT))
+        assertNull(storage.getString(SessionCache.KEY_SESSION), "no record may survive sign-out")
+        // The pre-I6 three-key format. An upgrade over a populated cache must
+        // not leave those behind — on iOS the Keychain outlives the app.
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_FIREBASE_UID))
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_UNIQUE_ID))
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_COHORT))
     }
 
     @Test

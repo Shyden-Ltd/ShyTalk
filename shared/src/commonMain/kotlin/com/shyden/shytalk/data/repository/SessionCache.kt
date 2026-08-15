@@ -1,6 +1,12 @@
 package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.util.SecureStorage
+import com.shyden.shytalk.core.util.logW
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * A resolved identity, cached across process death (SHY-0143).
@@ -77,25 +83,39 @@ class SessionCache(
      * not the live one. Every miss routes the caller into the ordinary
      * resolve-then-route path, which is exactly today's behaviour.
      *
-     * The blank checks on the two uids are deliberately redundant, and mutation
-     * testing says so plainly: dropping either one alone leaves the suite green,
-     * because the other still makes the degenerate blank-equals-blank match
-     * impossible. Both are kept — the property is what is under test, being
-     * over-protected costs nothing, and the four reads then share one shape
-     * instead of one of them being subtly special.
+     * The blank checks on the two uids remain deliberately redundant — dropping
+     * either alone leaves the suite green, because the other still makes the
+     * degenerate blank-equals-blank match impossible. They cost nothing and keep
+     * the reads one shape.
      */
     fun read(liveFirebaseUid: String?): CachedSession? {
         val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return null
 
-        val storedUid = storage.getString(KEY_FIREBASE_UID)?.takeIf { it.isNotBlank() } ?: return null
-        val uniqueId = storage.getString(KEY_UNIQUE_ID)?.takeIf { it.isNotBlank() } ?: return null
+        val raw = storage.getString(KEY_SESSION)?.takeIf { it.isNotBlank() } ?: return null
+        val record =
+            try {
+                Json.parseToJsonElement(raw) as? JsonObject ?: return null
+            } catch (e: IllegalArgumentException) {
+                // Anything unparseable is a miss, never a partial identity: a
+                // half-decoded record is exactly what the single-key format
+                // exists to make impossible, so refusing it costs one
+                // resolve-then-route and cannot be wrong.
+                logW(TAG, "Discarding an unreadable session record: ${e.message}")
+                clear()
+                return null
+            }
+
+        fun field(name: String) = record[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+        val storedUid = field(FIELD_FIREBASE_UID) ?: return null
+        val uniqueId = field(FIELD_UNIQUE_ID) ?: return null
 
         if (storedUid != liveUid) return null
 
         return CachedSession(
             firebaseUid = storedUid,
             uniqueId = uniqueId,
-            cohort = storage.getString(KEY_COHORT)?.takeIf { it.isNotBlank() },
+            cohort = field(FIELD_COHORT),
         )
     }
 
@@ -138,20 +158,46 @@ class SessionCache(
             return
         }
 
-        // A different account: drop everything the previous one left, including
-        // its cohort, so the new record cannot inherit a stale field. This is
-        // the case the old blanket erase-on-partial rule existed to cover — it
-        // was right about the danger and wrong about its scope.
-        if (storage.getString(KEY_FIREBASE_UID) != uid) clear()
+        // Carry the cohort forward when this caller does not know it, but ONLY
+        // for the same account — a different uid must inherit nothing.
+        val existing = if (uid == storedUidOrNull()) storedCohortOrNull() else null
+        val effectiveCohort = cohort?.takeIf { it.isNotBlank() } ?: existing
 
-        storage.putString(KEY_FIREBASE_UID, uid)
-        storage.putString(KEY_UNIQUE_ID, unique)
+        val record =
+            JsonObject(
+                buildMap {
+                    put(FIELD_FIREBASE_UID, JsonPrimitive(uid))
+                    put(FIELD_UNIQUE_ID, JsonPrimitive(unique))
+                    if (effectiveCohort != null) put(FIELD_COHORT, JsonPrimitive(effectiveCohort))
+                },
+            )
 
-        // Written when known, LEFT ALONE when not. A caller holding only the
-        // uniqueId — `LockScreenViewModel`, which knows the id it just verified
-        // a PIN against and nothing else — must not degrade a cohort that
-        // sign-in already established.
-        cohort?.takeIf { it.isNotBlank() }?.let { storage.putString(KEY_COHORT, it) }
+        // ONE key, written once. The previous shape wrote three keys in
+        // sequence, and these setters fire from several dispatchers with no
+        // synchronisation — two interleaved write-throughs for different
+        // accounts could land `{uid_A, uniqueId_B}`, a COMPLETE-looking record
+        // that `read` would happily serve. A single-key record makes both that
+        // and the torn-write case impossible rather than merely unlikely.
+        storage.putString(KEY_SESSION, record.toString())
+    }
+
+    private fun storedUidOrNull(): String? = rawField(FIELD_FIREBASE_UID)
+
+    private fun storedCohortOrNull(): String? = rawField(FIELD_COHORT)
+
+    /** Reads one field WITHOUT the uid binding — internal use only. */
+    private fun rawField(name: String): String? {
+        val raw = storage.getString(KEY_SESSION)?.takeIf { it.isNotBlank() } ?: return null
+        return try {
+            (Json.parseToJsonElement(raw) as? JsonObject)
+                ?.get(name)
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.takeIf { it.isNotBlank() }
+        } catch (e: IllegalArgumentException) {
+            logW(TAG, "Ignoring an unreadable session record while writing: ${e.message}")
+            null
+        }
     }
 
     /**
@@ -164,15 +210,31 @@ class SessionCache(
      * device" and stranding the user at re-registration.
      */
     fun clear() {
-        storage.remove(KEY_FIREBASE_UID)
-        storage.remove(KEY_UNIQUE_ID)
-        storage.remove(KEY_COHORT)
+        storage.remove(KEY_SESSION)
+        // The three-key format this replaced (SHY-0143, pre-I6). Removed here
+        // so an upgrade over a populated cache cannot leave the old keys on
+        // disk forever — on iOS the Keychain outlives the app itself.
+        storage.remove(LEGACY_KEY_FIREBASE_UID)
+        storage.remove(LEGACY_KEY_UNIQUE_ID)
+        storage.remove(LEGACY_KEY_COHORT)
     }
 
     companion object {
-        /** Distinct from `AppLockRepositoryImpl`'s keys, which share this storage. */
-        const val KEY_FIREBASE_UID = "session_cache_firebase_uid"
-        const val KEY_UNIQUE_ID = "session_cache_unique_id"
-        const val KEY_COHORT = "session_cache_cohort"
+        private const val TAG = "SessionCache"
+
+        /**
+         * The whole record, as one value. Distinct from
+         * `AppLockRepositoryImpl`'s keys, which share this storage.
+         */
+        const val KEY_SESSION = "session_cache_record"
+
+        internal const val FIELD_FIREBASE_UID = "firebaseUid"
+        internal const val FIELD_UNIQUE_ID = "uniqueId"
+        internal const val FIELD_COHORT = "cohort"
+
+        /** Superseded by [KEY_SESSION]; cleared on sign-out so nothing lingers. */
+        const val LEGACY_KEY_FIREBASE_UID = "session_cache_firebase_uid"
+        const val LEGACY_KEY_UNIQUE_ID = "session_cache_unique_id"
+        const val LEGACY_KEY_COHORT = "session_cache_cohort"
     }
 }
