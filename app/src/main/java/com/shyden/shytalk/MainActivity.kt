@@ -80,6 +80,7 @@ import com.shyden.shytalk.navigation.LaunchState
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.isNavigationLockGated
+import com.shyden.shytalk.navigation.reconcileCohortInBackground
 import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -433,6 +434,36 @@ class MainActivity : AppCompatActivity() {
                             )
 
                             checkComplete = true
+
+                            // SHY-0143 I5 — the cohort reconcile, AFTER the
+                            // shell is released and deliberately not awaited.
+                            //
+                            // GATE 2 above re-reads whatever claim the server
+                            // has already minted; only `pm-lock-check` makes the
+                            // server RECOMPUTE the cohort. It ran on the sign-in
+                            // path alone, and a returning user never signs in —
+                            // so a user whose birthday passed stayed in the
+                            // minor cohort indefinitely.
+                            //
+                            // Launched rather than awaited because it is a
+                            // server-side recompute: the story requires it off
+                            // the critical path, and nothing routes on it.
+                            if (cohortVerified) {
+                                val reconcileId = authRepository.resolvedUniqueId
+                                if (reconcileId != null) {
+                                    lifecycleScope.launch {
+                                        reconcileCohortInBackground(
+                                            uniqueId = reconcileId,
+                                            checkPmLock = { id ->
+                                                val r = userRepository.checkPmLockOnLogin(id)
+                                                r is Resource.Success && r.data.forceTokenRefresh
+                                            },
+                                            refreshToken = { authRepository.refreshIdToken() is Resource.Success },
+                                            log = { message -> logI(TAG, message) },
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         // Poll health every 5 minutes while degraded; clear when recovered

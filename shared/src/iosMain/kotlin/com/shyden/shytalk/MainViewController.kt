@@ -37,6 +37,7 @@ import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
 import com.shyden.shytalk.navigation.createIosPlatformScreens
 import com.shyden.shytalk.navigation.isNavigationLockGated
+import com.shyden.shytalk.navigation.reconcileCohortInBackground
 import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import kotlinx.coroutines.flow.filterNotNull
@@ -281,6 +282,30 @@ private fun IosApp() {
                                 "banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
                         )
                         value = destination.route
+
+                        // SHY-0143 I5 — the cohort reconcile, after the shell
+                        // is released. `produceState`'s block runs in its own
+                        // coroutine and the graph mounts as soon as `value` is
+                        // set above, so this is already off the critical path;
+                        // it stays LAST so nothing waits on it.
+                        //
+                        // GATE 2 re-reads whatever claim the server has already
+                        // minted; only `pm-lock-check` makes the server
+                        // RECOMPUTE the cohort, and it ran on the sign-in path
+                        // alone — which a returning user never takes.
+                        val reconcileId = authRepo.resolvedUniqueId
+                        if (sequencer.cohortVerified && reconcileId != null) {
+                            val userRepo = koin.get<UserRepository>()
+                            reconcileCohortInBackground(
+                                uniqueId = reconcileId,
+                                checkPmLock = { id ->
+                                    val r = userRepo.checkPmLockOnLogin(id)
+                                    r is Resource.Success && r.data.forceTokenRefresh
+                                },
+                                refreshToken = { authRepo.refreshIdToken() is Resource.Success },
+                                log = { message -> logI("MainViewController", message) },
+                            )
+                        }
                     }
 
                 // Nothing renders until the gate answers, so there is no frame

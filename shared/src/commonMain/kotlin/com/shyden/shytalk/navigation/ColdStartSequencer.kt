@@ -193,3 +193,58 @@ fun BanStatus.toBanState(): BanState =
         else ->
             BanState(networkBanned = true, reason = reason, expiresAt = expiresAt)
     }
+
+/**
+ * The background cohort reconcile, for a cold start that reached Main
+ * (SHY-0143, I5).
+ *
+ * [ColdStartSequencer]'s GATE 2 refreshes the ID token, which re-reads whatever
+ * custom claim the server has already minted. It does NOT make the server
+ * RECOMPUTE the cohort — that is `pm-lock-check`'s job, and it ran only on the
+ * sign-in path. Post-SHY-0187 a returning user never signs in, so a user whose
+ * birthday passed stayed in the minor cohort until they happened to sign in
+ * again. In a minors-facing app that is a safety gap, not a staleness one.
+ *
+ * **Deliberately not part of [ColdStartSequencer.run].** The story requires
+ * this to run AFTER the shell is shown, off the critical path — it is a
+ * server-side recompute and can be slow. Callers LAUNCH it; nothing awaits it,
+ * and nothing routes on it.
+ *
+ * Failure is non-fatal by design and matches the sign-in path's posture: a
+ * reconcile that cannot reach the server is not evidence of anything. The
+ * cohort claim already in the token continues to govern, and Firestore rules
+ * remain the enforcement layer either way.
+ *
+ * @return true when a fresh claim was minted AND the token was rotated to pick
+ *   it up — the only outcome in which the client's view of the cohort changed.
+ */
+suspend fun reconcileCohortInBackground(
+    uniqueId: String,
+    checkPmLock: suspend (String) -> Boolean,
+    refreshToken: suspend () -> Boolean,
+    log: (String) -> Unit = {},
+): Boolean {
+    if (uniqueId.isBlank()) {
+        // Nothing to reconcile against. Reaching here with a blank id would
+        // mean routing had already gone wrong.
+        log("cohort reconcile skipped — no resolved uniqueId")
+        return false
+    }
+
+    val needsFreshToken =
+        try {
+            checkPmLock(uniqueId)
+        } catch (e: IllegalStateException) {
+            log("cohort reconcile failed (non-fatal): ${e.message}")
+            return false
+        }
+
+    if (!needsFreshToken) return false
+
+    // The server minted a new claim, so the token in hand is stale by exactly
+    // one cohort flip. Rotating it here is what closes the window that would
+    // otherwise stay open until Firebase's ~1h auto-refresh.
+    val rotated = refreshToken()
+    if (!rotated) log("cohort claim minted but the token refresh failed (non-fatal)")
+    return rotated
+}

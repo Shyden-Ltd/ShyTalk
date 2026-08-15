@@ -281,3 +281,90 @@ class ColdStartGateOrderingTest {
             assertTrue("token-refresh" !in rec.events, "no session ⇒ no token to refresh: ${rec.events}")
         }
 }
+
+/**
+ * SHY-0143 I5 — the background cohort reconcile.
+ *
+ * `pm-lock-check` is what makes the SERVER recompute a user's cohort and mint
+ * a fresh claim. It ran only on the sign-in path, which the optimistic cold
+ * start skips, so a user whose birthday passed stayed in the minor cohort
+ * until they next signed in.
+ */
+class CohortReconcileTest {
+    @Test
+    fun `a minted claim is followed by a token rotation`() =
+        runTest {
+            val order = mutableListOf<String>()
+            val rotated =
+                reconcileCohortInBackground(
+                    uniqueId = "10000005",
+                    checkPmLock = {
+                        order.add("pm-lock-check")
+                        true
+                    },
+                    refreshToken = {
+                        order.add("token-refresh")
+                        true
+                    },
+                )
+
+            assertTrue(rotated)
+            assertEquals(listOf("pm-lock-check", "token-refresh"), order)
+        }
+
+    @Test
+    fun `no mint means no rotation`() =
+        runTest {
+            // Rotating on every launch would burn Firebase mint quota for a
+            // claim that did not change.
+            var refreshes = 0
+            val rotated =
+                reconcileCohortInBackground(
+                    uniqueId = "10000005",
+                    checkPmLock = { false },
+                    refreshToken = {
+                        refreshes += 1
+                        true
+                    },
+                )
+
+            assertFalse(rotated)
+            assertEquals(0, refreshes)
+        }
+
+    @Test
+    fun `a failing pm-lock check is non-fatal and rotates nothing`() =
+        runTest {
+            var refreshes = 0
+            val rotated =
+                reconcileCohortInBackground(
+                    uniqueId = "10000005",
+                    checkPmLock = { throw IllegalStateException("backend unreachable") },
+                    refreshToken = {
+                        refreshes += 1
+                        true
+                    },
+                )
+
+            assertFalse(rotated, "an unreachable server is not evidence of a cohort change")
+            assertEquals(0, refreshes)
+        }
+
+    @Test
+    fun `a blank uniqueId reconciles nothing rather than querying for an empty id`() =
+        runTest {
+            var checks = 0
+            val rotated =
+                reconcileCohortInBackground(
+                    uniqueId = "   ",
+                    checkPmLock = {
+                        checks += 1
+                        true
+                    },
+                    refreshToken = { true },
+                )
+
+            assertFalse(rotated)
+            assertEquals(0, checks, "a blank id must never reach the server")
+        }
+}

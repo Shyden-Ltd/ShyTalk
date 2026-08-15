@@ -581,6 +581,34 @@ class AppLockWiringPinTest {
     }
 
     @Test
+    fun `both platforms run the cohort reconcile after the shell`() {
+        // GATE 2 re-reads the claim the server already minted; only
+        // `pm-lock-check` makes the server RECOMPUTE the cohort, and it ran on
+        // the sign-in path alone — which post-SHY-0187 a returning user never
+        // takes. A user whose birthday passed stayed in the minor cohort.
+        listOf(mainActivity, mainViewController).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("reconcileCohortInBackground("),
+                "$path must run the cohort reconcile, or a cohort flip never reaches a returning user",
+            )
+            assertTrue(
+                src.contains("checkPmLockOnLogin("),
+                "$path's reconcile must actually call pm-lock-check — that is the only thing that " +
+                    "makes the server recompute the cohort",
+            )
+        }
+        // And it must not become a gate: the reconcile is a server-side
+        // recompute, so anything that awaited it before releasing the shell
+        // would put it back on the critical path the story took it off.
+        val android = read(mainActivity)
+        assertTrue(
+            android.indexOf("checkComplete = true") < android.indexOf("reconcileCohortInBackground("),
+            "$mainActivity must release the shell BEFORE reconciling",
+        )
+    }
+
+    @Test
     fun `SessionCache is DI-registered on both platforms`() {
         // A commonMain class nothing constructs is a class nothing uses. Both
         // modules already register the SecureStorage it is built on, so the
