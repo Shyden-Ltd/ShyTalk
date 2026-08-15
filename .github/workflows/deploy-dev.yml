@@ -187,6 +187,51 @@ jobs:
     uses: ./.github/workflows/seed-dev-personas.yml
     secrets: inherit
 
+  # SHY-0269 — the seed outcome must be readable WITHOUT expanding a job.
+  # Five of the last eight dev deploys ran with a failing seed job and one
+  # ran with a SKIPPED one while the run reported green; in every case the
+  # only trace was a check-run annotation. This job always() runs and puts
+  # the verdict at the top of the run page, naming the consequence (stale
+  # personas) rather than just a status word.
+  seed-personas-report:
+    name: Seed Personas Report
+    needs: seed-dev-personas
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Summarise seed outcome
+        env:
+          SEED_RESULT: ${{ needs.seed-dev-personas.result }}
+          SEED_REQUESTED: ${{ inputs.seed-personas }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Dev test personas (P-02..P-19)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "$SEED_RESULT" in
+            success)
+              echo "✅ Re-seeded — persona state on dev is fresh for this build." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            skipped)
+              echo "⏭️ **Skipped** — personas were NOT refreshed, so dev still holds whatever state the last run left behind. Requested via input: \`$SEED_REQUESTED\`; the job also skips when the backend deploy did not succeed." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            failure | cancelled)
+              {
+                echo "❌ **Seeding $SEED_RESULT — personas on dev are STALE.**"
+                echo ""
+                echo "Journey tests and manual QA that rely on P-02..P-19 may fail for reasons that have nothing to do with the build under test."
+                echo ""
+                echo "Open the \`Seed Dev Personas\` job. If it has no steps at all, the failure happened during secrets evaluation — check the secret names against \`.github/known-secrets.yml\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error title=Dev personas are stale::Seed job result: $SEED_RESULT. See the run summary."
+              ;;
+            *)
+              echo "❔ Unrecognised seed result: \`$SEED_RESULT\`" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+
   deploy-web-dev:
     name: Deploy Web to Dev
     # Web depends on the dev API to function (firebase-config, /api/health,
