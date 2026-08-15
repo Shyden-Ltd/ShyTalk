@@ -134,6 +134,25 @@ class LockScreenViewModel(
             }
         }
         appLockRepository.updateLastActiveTimestamp()
+
+        // SHY-0143 — hydrate the resolved identity before releasing the user to
+        // Main.
+        //
+        // Every screen behind this gate keys its reads on
+        // `AuthRepository.currentUserId`, which by contract falls back to the
+        // raw Firebase UID until `resolvedUniqueId` is set. The only code that
+        // set it on a returning-user path was `AuthViewModel.init`, and an
+        // `AuthViewModel` is constructed solely inside the Sign-In / e-mail-OTP
+        // route composables — which SHY-0187 stopped routing cold starts
+        // through. Unlocking therefore reached Main with every read keyed on
+        // the Firebase UID: the SHY-0139 wrong-key hazard.
+        //
+        // Deliberately here and not beside the `storedUniqueId` read that
+        // precedes PIN/biometric verification: hoisting it there would let
+        // anyone holding the device publish the account's identity with a wrong
+        // PIN. Only a verified unlock may.
+        appLockRepository.storedUniqueId?.let { authRepository.resolvedUniqueId = it }
+
         checkBiometricGracePeriod()
         _state.update { it.copy(isLoading = false, unlocked = true, pinInput = "") }
     }
