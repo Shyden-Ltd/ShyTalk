@@ -58,6 +58,7 @@ import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
@@ -69,12 +70,15 @@ import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
 import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
 import com.shyden.shytalk.feature.starting.StartingScreenCache
 import com.shyden.shytalk.feature.starting.StartingScreenComposable
+import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
+import com.shyden.shytalk.navigation.BanState
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.isNavigationLockGated
 import com.shyden.shytalk.navigation.resolveLaunchDestination
+import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
@@ -83,11 +87,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.android.ext.android.inject
+import org.koin.core.qualifier.named
 
 private const val TAG = "MainActivity"
 
@@ -100,6 +106,12 @@ class MainActivity : AppCompatActivity() {
     private val appConfigService: AppConfigService by inject()
     private val biometricAuth: com.shyden.shytalk.core.util.BiometricAuth by inject()
     private val appLockRepository: AppLockRepository by inject()
+
+    // SHY-0143 — the pre-routing ban gate's collaborators. `deviceId` is the
+    // same named singleton AuthViewModel takes, so the hoisted check asks the
+    // identical question the sign-in path already asked.
+    private val deviceRepository: DeviceRepository by inject()
+    private val deviceId: String by inject(named("deviceId"))
 
     private val navigateToRoomState = mutableStateOf<String?>(null)
     private val navigateToChatState = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
@@ -202,6 +214,13 @@ class MainActivity : AppCompatActivity() {
 
                         var updateRequired by remember { mutableStateOf(false) }
                         var checkComplete by remember { mutableStateOf(false) }
+
+                        // SHY-0143 — the pre-routing ban gate. Resolved inside the
+                        // SAME pre-routing phase as the emulator gate + version and
+                        // health checks, so it adds no new blocking phase and the
+                        // existing `!checkComplete` spinner already prevents ANY
+                        // content rendering while it is outstanding.
+                        var coldStartBan by remember { mutableStateOf(BanState()) }
                         var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
                         var isUnsafe by remember { mutableStateOf(false) }
                         var backendDegraded by remember { mutableStateOf(false) }
@@ -257,6 +276,23 @@ class MainActivity : AppCompatActivity() {
                             // Anti-emulator / anti-root gate. See UnsafeDeviceGate
                             // for the bypass logic + flavor-by-flavor matrix.
                             isUnsafe = UnsafeDeviceGate.isBlocked()
+
+                            // SHY-0143 — device + network ban check, hoisted OUT of
+                            // the sign-in flow.
+                            //
+                            // It used to run only inside AuthViewModel's
+                            // resolveIdentityAndProceed(), so SHY-0187's optimistic
+                            // cold start — which routes a restored session straight
+                            // to Main without signing in — skipped it entirely. A
+                            // banned device, or a banned IP/subnet/ASN (the same
+                            // path that blocks VPNs), reached the room list.
+                            //
+                            // Started with async so it overlaps the version and
+                            // health round-trips rather than adding a serial leg;
+                            // awaited before `checkComplete`, which is what keeps
+                            // any content from rendering ahead of the verdict.
+                            val banDeferred = async { deviceRepository.checkBanStatus(deviceId) }
+
                             when (val result = appConfigService.getLatestVersionInfo()) {
                                 is Resource.Success -> {
                                     val (minVersionCode, latestVersionCode, latestVersionName) = result.data
@@ -279,6 +315,18 @@ class MainActivity : AppCompatActivity() {
 
                                 else -> {}
                             }
+                            // Lenient on a transient failure, matching the
+                            // long-standing behaviour AuthViewModelBanTest pins
+                            // ("ban check error is lenient"): a ban-service blip
+                            // must not lock out a legitimate user. A real ban is
+                            // authoritative; an unreachable service is not evidence
+                            // of one.
+                            coldStartBan =
+                                when (val banResult = banDeferred.await()) {
+                                    is Resource.Success -> banResult.data.toBanState()
+                                    else -> BanState()
+                                }
+
                             checkComplete = true
                         }
 
@@ -362,6 +410,28 @@ class MainActivity : AppCompatActivity() {
 
                             isUnsafe -> {
                                 UnsafeDeviceScreen()
+                            }
+
+                            // SHY-0143 — rendered HERE, above the NavHost, rather
+                            // than routed to. The NavHost never mounts for a banned
+                            // start, so no cohort-scoped subscription can be issued
+                            // and no room-list shell flashes first.
+                            //
+                            // Deliberately BELOW isUnsafe: a rooted or emulated
+                            // device keeps showing UnsafeDeviceScreen exactly as
+                            // before, preserving that gate's precedence unchanged
+                            // (both outcomes block, so nothing is lost).
+                            //
+                            // Signing out does not clear a device or network ban —
+                            // those follow the hardware or the IP/subnet/ASN, not
+                            // the account — so the user stays on this screen.
+                            coldStartBan.deviceBanned || coldStartBan.networkBanned -> {
+                                BanScreen(
+                                    banType = if (coldStartBan.deviceBanned) "device" else "network",
+                                    reason = coldStartBan.reason,
+                                    expiresAt = coldStartBan.expiresAt,
+                                    onSignOut = { lifecycleScope.launch { authRepository.signOut() } },
+                                )
                             }
 
                             updateRequired -> {
