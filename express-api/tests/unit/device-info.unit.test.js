@@ -60,6 +60,7 @@ jest.mock('../../src/utils/bans', () => ({
 const express = require('express');
 const request = require('supertest');
 const deviceInfoRouter = require('../../src/routes/device-info');
+const { clearIpGeoCache } = require('../../src/utils/ip-geo');
 
 const originalFetch = global.fetch;
 const mockFetch = jest.fn();
@@ -83,6 +84,11 @@ function postDeviceInfo({ ip, body } = {}) {
 }
 
 beforeEach(() => {
+  // SHY-0143 gave getIpGeo a 5-minute cache (ip-api's free tier is ~45 req/min
+  // per CALLING ip, shared by every user, and the cold-start path now hits it).
+  // Without clearing, one case's stubbed response is served to the next and the
+  // fetch-branch assertions below stop exercising the branches they name.
+  clearIpGeoCache();
   jest.clearAllMocks();
   mockSet.mockReset();
   mockSet.mockResolvedValue();
