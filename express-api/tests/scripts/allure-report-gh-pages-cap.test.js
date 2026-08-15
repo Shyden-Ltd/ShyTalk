@@ -24,9 +24,14 @@
  *    tree IS the current tip tree (content-identical by construction) via the
  *    Git Data API — no multi-GiB fetch — then force-moves the ref. It runs
  *    inside the workflow-level `gh-pages-deploy` concurrency group and
- *    re-checks the tip immediately before the ref update (the kotlin deploy in
- *    pr-checks.yml is OUTSIDE the group and could land mid-cap; on a moved tip
- *    the cap skips and retries on a later run).
+ *    re-checks the tip immediately before the ref update.
+ *
+ *    SHY-0298 UPDATE: that re-check used to matter because the kotlin deploy in
+ *    pr-checks.yml sat OUTSIDE the group and could land mid-cap. It no longer
+ *    can — every writer now shares the one `gh-pages-deploy` queue, so the
+ *    cap's skip-on-moved-tip branch is defensive rather than routine. The
+ *    re-check stays: it costs one API call and it is the only thing standing
+ *    between a future out-of-group writer and a force-moved ref.
  *
  * These are STRUCTURAL pins on declarative CI config (the cap's behaviour needs
  * a live gh-pages branch + GITHUB_TOKEN); the first post-merge deploy is the
@@ -55,6 +60,16 @@ function stepBlock(yaml, stepName) {
   return out.join('\n');
 }
 
+/** True when a YAML line invokes peaceiris, in EITHER legal step form
+ * (`- uses: peaceiris/...` or a bare `uses:` under a `- name:`). String ops
+ * rather than one regex: two star-quantifiers around an optional `-` trip
+ * sonarjs/slow-regex. */
+function usesPeaceiris(line) {
+  const afterDash = line.trim().replace(/^- +/, '');
+  if (!afterDash.startsWith('uses:')) return false;
+  return afterDash.slice('uses:'.length).trim().startsWith('peaceiris/actions-gh-pages');
+}
+
 describe('gh-pages bloat fixes — SHY-0128', () => {
   let allureYaml;
   let backendYaml;
@@ -66,28 +81,43 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
   });
 
   describe('fix 1 — keep_files: false on every gh-pages deploy', () => {
-    test('allure-report.yml deploy cleans its destination_dir (keep_files: false)', () => {
+    // SHY-0298 moved the single peaceiris invocation (and with it the
+    // `keep_files: false` flag) into `.github/actions/publish-gh-pages`, so
+    // there is now ONE place to assert the flag instead of three — pinned,
+    // parsed rather than text-matched, in gh-pages-publisher.test.js.
+    //
+    // What stays this file's job is the half that is still PER-CALLER and is
+    // the reason keep_files:false is safe at all: each deploy must target its
+    // OWN scoped destination. `keep_files: false` cleans destination_dir before
+    // copying, so a caller that widened its destination would wipe sibling
+    // suites. These pins follow that invariant to its new home rather than
+    // being deleted with the step they used to live on.
+    const KEEP_FILES_OWNER = 'express-api/tests/scripts/gh-pages-publisher.test.js';
+
+    test('the keep_files invariant has an owner (it moved, it did not vanish)', () => {
+      const owner = path.join(__dirname, '..', '..', '..', KEEP_FILES_OWNER);
+      expect(fs.existsSync(owner)).toBe(true);
+      expect(fs.readFileSync(owner, 'utf8')).toMatch(/keep_files/);
+    });
+
+    test('allure-report.yml publishes via the one shared action', () => {
       const block = stepBlock(allureYaml, 'Deploy report to GitHub Pages');
-      expect(block).toMatch(/peaceiris\/actions-gh-pages@/);
-      expect(block).toMatch(/keep_files:\s*false/);
-      expect(block).not.toMatch(/keep_files:\s*true/);
-    });
-
-    test('test-backend.yml express deploy cleans its destination_dir (keep_files: false)', () => {
-      const block = stepBlock(backendYaml, 'Deploy Express report to GitHub Pages');
-      expect(block).toMatch(/peaceiris\/actions-gh-pages@/);
-      expect(block).toMatch(/keep_files:\s*false/);
-      expect(block).not.toMatch(/keep_files:\s*true/);
+      expect(block).toMatch(/uses:\s*\.\/\.github\/actions\/publish-gh-pages/);
+      expect(block).not.toMatch(/peaceiris\/actions-gh-pages@/);
       // layout unchanged — cleaning must stay scoped to this suite/env
-      expect(block).toContain("express/${{ inputs.report_env || 'pr' }}/latest");
+      expect(block).toContain('${{ inputs.suite_name }}/${{ inputs.report_env }}/latest');
     });
 
-    test('pr-checks.yml kotlin deploy cleans its destination_dir (keep_files: false)', () => {
-      const block = stepBlock(prChecksYaml, 'Deploy Kotlin report to GitHub Pages');
-      expect(block).toMatch(/peaceiris\/actions-gh-pages@/);
-      expect(block).toMatch(/keep_files:\s*false/);
-      expect(block).not.toMatch(/keep_files:\s*true/);
-      expect(block).toContain('kotlin/pr/latest');
+    test('test-backend.yml express publish keeps its per-env destination', () => {
+      expect(backendYaml).toMatch(/uses:\s*\.\/\.github\/actions\/publish-gh-pages/);
+      expect(backendYaml.split('\n').filter(usesPeaceiris)).toEqual([]);
+      expect(backendYaml).toContain("express/${{ inputs.report_env || 'pr' }}/latest");
+    });
+
+    test('pr-checks.yml kotlin publish keeps its scoped destination', () => {
+      expect(prChecksYaml).toMatch(/uses:\s*\.\/\.github\/actions\/publish-gh-pages/);
+      expect(prChecksYaml.split('\n').filter(usesPeaceiris)).toEqual([]);
+      expect(prChecksYaml).toContain('kotlin/pr/latest');
     });
 
     test('no keep_files: true survives anywhere in the three deploying workflows', () => {

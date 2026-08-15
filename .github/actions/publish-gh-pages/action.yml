@@ -1,0 +1,101 @@
+name: 'Publish to gh-pages'
+description: |
+  The ONE place this repo pushes to the gh-pages branch (SHY-0298).
+
+  peaceiris/actions-gh-pages clones `--depth=1`, commits and pushes with NO
+  retry, so two writers that interleave between clone and push leave the loser
+  with `! [rejected] … (fetch first)`. Before SHY-0298 there were three separate
+  invocations and only one of them sat inside the `gh-pages-deploy` concurrency
+  group; the race is described at test-backend.yml's publish job and was
+  verified on PR #901.
+
+  Centralising the invocation here does two things a copy-paste step could not:
+  the dependabot skip and the empty-directory refusal become structural, so a
+  new caller cannot forget either. Serialization itself is NOT this action's
+  job — a composite action cannot declare `concurrency`. Every caller must run
+  this from a job (or workflow) carrying `group: gh-pages-deploy`, which
+  `gh-pages-publisher.test.js` enforces.
+
+inputs:
+  publish-dir:
+    description: 'Directory whose contents become the published report (must exist and be non-empty)'
+    required: true
+  destination-dir:
+    description: 'Path WITHIN gh-pages to replace, e.g. express/pr/latest. Only this path is touched.'
+    required: true
+  github-token:
+    description: 'Token used to push to gh-pages — normally secrets.GITHUB_TOKEN'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Decide whether publishing is possible
+      id: gate
+      shell: bash
+      env:
+        HEAD_REF: ${{ github.head_ref }}
+      run: |
+        set -euo pipefail
+        # Dependabot-authored runs hold a READ-ONLY GITHUB_TOKEN (GitHub's 2021
+        # supply-chain tightening), so the push cannot succeed. Skip rather than
+        # fail — a dependency bump must not go red over a report.
+        #
+        # Guard on head_ref (the PR's source branch), NOT github.actor: a human
+        # adding a merge commit to a dependabot PR makes the actor a human while
+        # the token stays read-only.
+        if [[ "${HEAD_REF:-}" == dependabot/* ]]; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+          echo "Dependabot branch '${HEAD_REF}' — GITHUB_TOKEN is read-only, cannot push to gh-pages. Skipping publish." >&2
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Verify there is something to publish
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        PUBLISH_DIR: ${{ inputs.publish-dir }}
+        DESTINATION_DIR: ${{ inputs.destination-dir }}
+      run: |
+        set -euo pipefail
+        # `keep_files: false` means peaceiris CLEANS destination_dir before
+        # copying. Publishing an empty directory would therefore delete a good
+        # report and leave nothing in its place — a silent data loss that reads
+        # as a green run. Fail loudly instead.
+        if [ ! -d "$PUBLISH_DIR" ] || [ -z "$(ls -A "$PUBLISH_DIR" 2>/dev/null)" ]; then
+          echo "::error title=Nothing to publish::'${PUBLISH_DIR}' is missing or empty. Refusing to publish it over '${DESTINATION_DIR}', which keep_files:false would wipe first. Check the step that produces the report."
+          exit 1
+        fi
+        printf 'Publishing %s file(s) from %s to gh-pages:%s\n' \
+          "$(find "$PUBLISH_DIR" -type f | wc -l | tr -d ' ')" "$PUBLISH_DIR" "$DESTINATION_DIR"
+
+    - name: Deploy to gh-pages
+      if: steps.gate.outputs.skip == 'false'
+      uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+      with:
+        github_token: ${{ inputs.github-token }}
+        publish_dir: ${{ inputs.publish-dir }}
+        destination_dir: ${{ inputs.destination-dir }}
+        # SHY-0128: false — peaceiris cleans ONLY destination_dir before copying
+        # (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
+        # suite/env's latest/ instead of stranding prior hashed files forever
+        # (playwright/pr/latest had accumulated 6.9 GiB / 1.05M files). Sibling
+        # suites, the root landing page and CNAME live outside destination_dir
+        # and are untouched. force_orphan was evaluated and REJECTED: it skips
+        # the clone entirely (src L97-104), so each deploy would wipe every
+        # sibling suite.
+        keep_files: false
+
+    - name: Record where it went
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        DESTINATION_DIR: ${{ inputs.destination-dir }}
+      run: |
+        set -euo pipefail
+        # The reviewer should not have to reconstruct the URL scheme by hand.
+        {
+          printf '### Report published\n\n'
+          printf '`%s` → https://shyden-ltd.github.io/ShyTalk/%s/\n' "$DESTINATION_DIR" "$DESTINATION_DIR"
+        } >> "$GITHUB_STEP_SUMMARY"

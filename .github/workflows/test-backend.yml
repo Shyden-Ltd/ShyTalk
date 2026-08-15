@@ -116,37 +116,55 @@ jobs:
           mkdir -p express-api/coverage
           echo "{\"passed\":${PASSED},\"failed\":${FAILED},\"total\":${TOTAL},\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"express\",\"env\":\"${REPORT_ENV}\"}" > express-api/coverage/metadata.json
 
-      - name: Deploy Express report to GitHub Pages
-        # Skip for PR runs (the default 'pr' report_env) and for
-        # dependabot PRs. Three layers of motivation:
-        #   1) Read-only GITHUB_TOKEN: on dependabot-authored runs
-        #      GitHub enforces a read-only token (2021 supply-chain
-        #      tightening), so peaceiris/actions-gh-pages can't push.
-        #   2) gh-pages race condition: when N PRs run CI in the same
-        #      minute (e.g. matrix-completeness batch + dependabot bumps),
-        #      each peaceiris invocation does `git clone gh-pages
-        #      --depth=1`, commits its report, then `git push` — and
-        #      N-1 of those pushes are rejected as non-fast-forward
-        #      because the first push got there first. peaceiris
-        #      doesn't retry. Verified with PR #901's two consecutive
-        #      failures despite the test step itself passing.
-        #   3) PR-branch reports are nice-to-have, not canonical —
-        #      only the dev/prod main-branch reports are linked from
-        #      docs and consumed downstream. Skipping the racey pr
-        #      deploy preserves the deploys that matter.
-        # The condition skips when the resolved report_env is 'pr'
-        # (i.e. neither dev nor prod was supplied), preserving the
-        # main-branch deploy path. We guard on `github.head_ref` (PR's
-        # source branch) instead of `github.actor` so the dependabot
-        # skip applies even when the run is triggered by a non-dependabot
-        # user adding a merge commit to the PR.
-        if: always() && (inputs.report_env == 'dev' || inputs.report_env == 'prod') && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+      # SHY-0298: handed to a separate publish job rather than pushed from here.
+      # This job runs the backend suite; the publish must sit inside the
+      # job-level `gh-pages-deploy` group, and putting that group on THIS job
+      # would serialize the whole suite across every open PR. An artifact is
+      # the hand-off.
+      - name: Upload Express report for publishing
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: express-api/coverage
-          destination_dir: express/${{ inputs.report_env || 'pr' }}/latest
-          # SHY-0128: false — peaceiris cleans ONLY destination_dir before
-          # copying (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
-          # suite/env's latest/ instead of stranding prior hashed files forever.
-          keep_files: false
+          name: express-report-pages-${{ inputs.report_env || 'pr' }}
+          retention-days: 1
+          path: express-api/coverage
+          if-no-files-found: error
+
+  # SHY-0298 — one queue for every gh-pages writer, and PR branches get their
+  # report back.
+  #
+  # The old step skipped publishing unless report_env was dev or prod. That was
+  # AVOIDANCE, not a fix: the race (peaceiris clones --depth=1, commits, pushes,
+  # never retries; N-1 concurrent pushes rejected non-fast-forward — verified on
+  # PR #901) was dodged by switching the PR-branch report OFF, on the grounds
+  # that it was "nice-to-have". With every writer on one queue the race cannot
+  # occur, so the report comes back — which is also the only externally
+  # observable proof that the serialization works.
+  #
+  # `gh-pages-deploy` is the same group `allure-report.yml` declares at WORKFLOW
+  # level; SHY-0298 measured that workflow-level and job-level groups of the
+  # same name share ONE queue across workflows. `cancel-in-progress: false`
+  # because cancelling would DROP a report rather than delay it.
+  publish-express-report:
+    name: Publish Express Report
+    needs: test-backend
+    # always(): a coverage report is most useful when the suite FAILED.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: express-report-pages-${{ inputs.report_env || 'pr' }}
+          path: express-api/coverage
+      - uses: ./.github/actions/publish-gh-pages
+        with:
+          publish-dir: express-api/coverage
+          destination-dir: express/${{ inputs.report_env || 'pr' }}/latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}

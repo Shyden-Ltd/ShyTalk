@@ -211,25 +211,24 @@ jobs:
           echo "Report size: $(du -sh allure-report | cut -f1)"
 
       - name: Deploy report to GitHub Pages
-        # See test-backend.yml for full rationale: skip on dependabot
-        # PRs (read-only token + gh-pages race condition). Guard on
-        # github.head_ref so a merge commit added by a human doesn't
-        # bypass the skip (github.actor would resolve to the human).
-        if: steps.check-existing.outputs.skip != 'true' && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        # SHY-0298: the peaceiris invocation, the dependabot skip and the
+        # empty-directory refusal all moved into the composite action, so this
+        # workflow no longer carries its own copy of any of them. The
+        # `check-existing` skip is this workflow's OWN concern (a rerun whose
+        # report is already published) and stays here.
+        #
+        # Serialization is unchanged and already correct: this workflow declares
+        # `concurrency: gh-pages-deploy` at WORKFLOW level, which SHY-0298
+        # measured to share one queue with the job-level groups the other two
+        # writers now use. Do NOT also add a job-level group here — the run
+        # already holds this group, and a job waiting on a lock its own run
+        # holds would never start.
+        if: steps.check-existing.outputs.skip != 'true'
+        uses: ./.github/actions/publish-gh-pages
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report
-          destination_dir: ${{ inputs.suite_name }}/${{ inputs.report_env }}/latest
-          # SHY-0128 fix 1: false — peaceiris cleans ONLY destination_dir
-          # before copying (v4.1.0 git-utils.ts L127-138), so each deploy
-          # replaces this suite/env's latest/ instead of stranding prior
-          # hashed files forever (playwright/pr/latest had accumulated
-          # 6.9 GiB / 1.05M files). Sibling suites, the root landing page and
-          # CNAME live outside destination_dir and are untouched. force_orphan
-          # was evaluated and rejected: it skips the clone entirely
-          # (src L97-104), so each deploy would wipe every sibling suite.
-          keep_files: false
+          publish-dir: allure-report
+          destination-dir: ${{ inputs.suite_name }}/${{ inputs.report_env }}/latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cap gh-pages history (bounded, content-identical)
         # SHY-0128 fix 2: each deploy adds a gh-pages commit and that history
@@ -240,11 +239,18 @@ jobs:
         # in the createCommit call is what truncates the history), entirely
         # via the Git Data API — nothing multi-GiB is downloaded or checked
         # out. Race-safety: this step runs inside the workflow-level
-        # gh-pages-deploy concurrency group (serializes every allure deploy),
-        # and the tip is re-read just before the ref move — if a writer
-        # outside the group (the kotlin deploy in pr-checks.yml) lands mid-cap
-        # the cap skips and a later run retries. Same gating as the deploy
-        # step: dependabot runs hold a read-only GITHUB_TOKEN and can't write.
+        # gh-pages-deploy concurrency group, and the tip is re-read just before
+        # the ref move — on a moved tip the cap skips and a later run retries.
+        #
+        # SHY-0298: that re-check used to be load-bearing, because the kotlin
+        # deploy in pr-checks.yml sat OUTSIDE this group and could land
+        # mid-cap. It no longer can — every gh-pages writer now shares this one
+        # queue, so the skip branch is defensive rather than routine. Keep it:
+        # it costs one API call and is the only thing between a future
+        # out-of-group writer and a force-moved ref.
+        #
+        # Same gating as the deploy step: dependabot runs hold a read-only
+        # GITHUB_TOKEN and can't write.
         if: steps.check-existing.outputs.skip != 'true' && !startsWith(github.head_ref, 'dependabot/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

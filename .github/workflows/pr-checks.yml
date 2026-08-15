@@ -306,21 +306,58 @@ jobs:
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "{\"passed\":0,\"failed\":0,\"total\":0,\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"kotlin\",\"env\":\"pr\"}" > kotlin-report/metadata.json
 
-      - name: Deploy Kotlin report to GitHub Pages
-        # See test-backend.yml for full rationale: skip on dependabot
-        # PRs (read-only token + gh-pages race condition). Guard on
-        # github.head_ref so a merge commit added by a human doesn't
-        # bypass the skip (github.actor would resolve to the human).
-        if: always() && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+      # SHY-0298: the report is handed to a separate publish job rather than
+      # pushed from here. This job runs the ~15-min Kotlin suite, and the
+      # publish must sit inside the `gh-pages-deploy` concurrency group — which
+      # is job-level, so putting it on THIS job would serialize the whole test
+      # suite across every open PR. An artifact is the hand-off.
+      - name: Upload Kotlin report for publishing
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: kotlin-report
-          destination_dir: kotlin/pr/latest
-          # SHY-0128: false — peaceiris cleans ONLY destination_dir before
-          # copying (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
-          # suite/env's latest/ instead of stranding prior hashed files forever.
-          keep_files: false
+          name: kotlin-report-pages
+          retention-days: 1
+          path: kotlin-report
+          if-no-files-found: error
+
+  # SHY-0298 — one queue for every gh-pages writer.
+  #
+  # Before this story the Kotlin report pushed straight from `build-and-test`,
+  # whose concurrency group is per-BRANCH (`pr-checks-<head_ref>`). Two PRs
+  # finishing together were therefore in different groups and could interleave
+  # between peaceiris' clone and its push, leaving the loser with
+  # `! [rejected] … (fetch first)`; peaceiris does not retry.
+  #
+  # `gh-pages-deploy` is the same group `allure-report.yml` declares at WORKFLOW
+  # level. SHY-0298 measured that workflow-level and job-level groups of the
+  # same name share ONE queue across workflows (two probe workflows, 75s each,
+  # ran strictly sequentially), so all three writers now serialize.
+  #
+  # `cancel-in-progress: false` is required, not incidental: cancelling would
+  # DROP a report rather than delay it.
+  publish-kotlin-report:
+    name: Publish Kotlin Report
+    needs: build-and-test
+    # always(): a test report is most useful when the suite FAILED.
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: gh-pages-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: kotlin-report-pages
+          path: kotlin-report
+      - uses: ./.github/actions/publish-gh-pages
+        with:
+          publish-dir: kotlin-report
+          destination-dir: kotlin/pr/latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   sonarcloud:
     needs: [detect-changes, build-and-test]
