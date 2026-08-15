@@ -230,6 +230,11 @@ class MainActivity : AppCompatActivity() {
                         // mount before then.
                         var initialRoute by remember { mutableStateOf<String?>(null) }
 
+                        // SHY-0143 — gates the nav graph's user-flag
+                        // subscription. False until a token refresh actually
+                        // confirms the cohort claim.
+                        var cohortVerified by remember { mutableStateOf(false) }
+
                         // SHY-0143 — the pre-routing ban gate. Resolved inside the
                         // SAME pre-routing phase as the emulator gate + version and
                         // health checks, so it adds no new blocking phase and the
@@ -400,6 +405,10 @@ class MainActivity : AppCompatActivity() {
                                     // cohort-scoped room list on it is the
                                     // SHY-0132/0137 cross-cohort leak.
                                     refreshToken = { authRepository.refreshIdToken() is Resource.Success },
+                                    // Separates a revoked token from an
+                                    // unreachable network: Firebase drops its
+                                    // local user on a genuine revocation.
+                                    isSessionAlive = { authRepository.isAuthenticated },
                                     startCohortScopedReads = {},
                                     signOut = { authRepository.signOut() },
                                     launchState = {
@@ -414,6 +423,7 @@ class MainActivity : AppCompatActivity() {
                                 )
                             val destination = sequencer.run()
                             coldStartBan = sequencer.lastBan
+                            cohortVerified = sequencer.cohortVerified
                             initialRoute = destination.route
                             logI(
                                 TAG,
@@ -749,6 +759,8 @@ class MainActivity : AppCompatActivity() {
                                     NavGraph(
                                         navController = navController,
                                         startDestination = route,
+                                        coldStartBan = coldStartBan,
+                                        cohortVerified = cohortVerified,
                                         isBackendDegraded = backendDegraded,
                                         pendingEmailLink = pendingEmailLink,
                                         onEmailLinkConsumed = { pendingEmailLinkState.value = null },

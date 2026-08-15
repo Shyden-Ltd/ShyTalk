@@ -2,6 +2,7 @@ package com.shyden.shytalk.navigation
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -470,7 +471,8 @@ class AppLockWiringPinTest {
         // above the refresh, every platform would leak at once and the pins
         // above would all still pass.
         val src = read(sequencerSource)
-        val refreshAt = src.indexOf("if (!refreshToken())")
+        val refreshAt = src.indexOf("if (refreshToken())")
+        val verifiedAt = src.indexOf("cohortVerified = true")
         val readsAt = src.indexOf("startCohortScopedReads()")
         assertTrue(refreshAt >= 0, "$sequencerSource must gate on refreshToken()")
         assertTrue(readsAt >= 0, "$sequencerSource must start cohort-scoped reads somewhere")
@@ -479,6 +481,103 @@ class AppLockWiringPinTest {
             "$sequencerSource must refresh the token BEFORE starting cohort-scoped reads " +
                 "(refresh at $refreshAt, reads at $readsAt)",
         )
+        // Stronger than ordering alone: the reads must live INSIDE the
+        // successful-refresh branch, marked by `cohortVerified = true`. Mere
+        // ordering would still pass if the call were moved below the whole
+        // if/else and ran on the offline path too.
+        assertTrue(
+            verifiedAt in (refreshAt + 1) until readsAt,
+            "$sequencerSource must set cohortVerified inside the successful-refresh branch, " +
+                "immediately before the reads it authorises",
+        )
+        assertEquals(
+            1,
+            Regex(Regex.escape("startCohortScopedReads()")).findAll(src).count(),
+            "$sequencerSource must start cohort-scoped reads from exactly ONE place — a second " +
+                "call site is how the unverified path would quietly regain them",
+        )
+    }
+
+    @Test
+    fun `both nav graphs gate their user-flag subscription on a verified cohort`() {
+        // The claim "a non-Main destination starts no reads" was false: the
+        // sequencer returning early does not stop the graph mounting, and both
+        // graphs subscribed to users/<id> the instant they composed. A Lock or
+        // ban start therefore read on LAST session's cohort claim, and on a
+        // cache miss the key was the raw Firebase UID as well.
+        listOf(sharedNavGraph, appNavGraph).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("uid != null && cohortVerified"),
+                "$path must gate observeUserFlags on cohortVerified, not merely on a non-null uid",
+            )
+        }
+        listOf(mainActivity, mainViewController).forEach { path ->
+            assertTrue(
+                read(path).contains("cohortVerified = "),
+                "$path must pass the sequencer's cohortVerified into its graph, or the gate is " +
+                    "left at its safe default and NOTHING ever subscribes",
+            )
+        }
+    }
+
+    @Test
+    fun `both platforms let the sequencer tell a revoked session from an offline one`() {
+        // `firebaseCall` maps every exception to Resource.Error, so without a
+        // second signal an offline launch is indistinguishable from a revoked
+        // token — and the sequencer signs out on the latter. Rotating the phone
+        // in airplane mode re-runs the whole sequence, so that was a logout.
+        listOf(mainActivity, mainViewController).forEach { path ->
+            assertTrue(
+                read(path).contains("isSessionAlive = "),
+                "$path must supply isSessionAlive, or a transport failure is treated as a revocation",
+            )
+        }
+        val src = read(sequencerSource)
+        val refreshAt = src.indexOf("if (refreshToken())")
+        val aliveAt = src.indexOf("if (!isSessionAlive())")
+        val signOutAt = src.indexOf("signOut()", aliveAt.coerceAtLeast(0))
+        assertTrue(refreshAt >= 0, "$sequencerSource must attempt the refresh")
+        assertTrue(aliveAt > refreshAt, "$sequencerSource must ask isSessionAlive only AFTER a failed refresh")
+        assertTrue(signOutAt > aliveAt, "$sequencerSource must sign out only inside the not-alive branch")
+    }
+
+    @Test
+    fun `both nav graphs register the ban destinations`() {
+        // Android rendered BanScreen above its NavHost and registered no ban
+        // routes, while both platforms fed their NavHost a start destination
+        // from the same resolver — which can be `ban_device`. A NavHost whose
+        // start destination is unregistered throws at launch.
+        listOf(sharedNavGraph, appNavGraph).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("composable(Screen.BanDevice.route)") &&
+                    src.contains("composable(Screen.BanNetwork.route)"),
+                "$path must register both ban destinations — the resolver can name either",
+            )
+            // Whole-unit: walk from each ban registration to the next one and
+            // assert THAT block uses the graph-owned handler. A file-wide
+            // `contains` would pass while one of the two screens still took the
+            // caller's lambda, and a newline-sensitive pin would break the
+            // first time anyone reformats the file.
+            listOf("composable(Screen.BanDevice.route)", "composable(Screen.BanNetwork.route)").forEach { marker ->
+                val start = src.indexOf(marker)
+                assertTrue(start >= 0, "$path must register $marker")
+                val rest = src.substring(start + marker.length)
+                val nextComposable = rest.indexOf("composable(")
+                val body = if (nextComposable > 0) rest.substring(0, nextComposable) else rest.take(400)
+                assertTrue(
+                    body.contains("onSignOut = signOutAndStay"),
+                    "$path's $marker must use the graph-owned sign-out that leaves the user in place",
+                )
+                assertFalse(
+                    body.contains("onSignOut = onSignOut"),
+                    "$path's $marker must not take the caller's onSignOut — iOS passed one that " +
+                        "navigated to Sign-In without signing out, the one destination a ban " +
+                        "must never reach",
+                )
+            }
+        }
     }
 
     @Test

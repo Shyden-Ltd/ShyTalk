@@ -97,6 +97,7 @@ import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
 import com.shyden.shytalk.feature.splash.FunFactSplashScreen
 import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
+import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.warning.WarningScreen
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -120,6 +121,30 @@ fun NavGraph(
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
     onSignOut: () -> Unit,
+    /**
+     * SHY-0143. Android normally renders `BanScreen` ABOVE this NavHost, so
+     * these routes are belt-and-braces — but `initialRoute` can legitimately
+     * hold `ban_device`/`ban_network`, and a NavHost whose start destination
+     * is not registered throws `IllegalArgumentException` at launch. The
+     * routes existed only in `SharedNavGraph`, so the two graphs disagreed
+     * about which destinations exist while both were fed the same resolver.
+     */
+    coldStartBan: BanState = BanState(),
+    /**
+     * SHY-0143 — whether the cold-start sequencer CONFIRMED the cohort claim
+     * in the current token is fresh.
+     *
+     * Gates the user-flag subscription below. Returning a non-`Main`
+     * destination does not stop this graph mounting, and the subscription
+     * fires the instant it composes — so a Lock start, a ban start, or an
+     * offline launch all used to issue `users/<id>` reads on LAST session's
+     * cohort claim (SHY-0132/0137). On a cache miss `currentUserId` is also
+     * still the raw Firebase UID, which is the SHY-0139 wrong-key read.
+     *
+     * Defaults false: a caller that has not run the gate gets no reads, which
+     * is the safe direction to be wrong in.
+     */
+    cohortVerified: Boolean = false,
 ) {
     val activeRoomManager: RoomLifecycleManager = koinInject()
     val authRepository: AuthRepository = koinInject()
@@ -144,7 +169,11 @@ fun NavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
-    if (uid != null) {
+    // SHY-0143 — `cohortVerified` is a precondition, not a preference. See the
+    // parameter's docs: without it this subscription fires on every mount,
+    // including the Lock and ban starts the sequencer deliberately returned
+    // early for.
+    if (uid != null && cohortVerified) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
                 if (flags.isSuspended) {
@@ -189,10 +218,45 @@ fun NavGraph(
     AppLockResumeGate(navController)
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // SHY-0143 — hoisted above the NavHost because the builder lambda is
+        // not a @Composable context. Owned here rather than taken from
+        // `onSignOut`: a device or network ban follows the hardware or the IP,
+        // not the account, so signing out must clear the session and leave the
+        // user exactly where they are. iOS proved a caller-supplied lambda
+        // cannot be trusted with that — it passed one that navigated away.
+        val banSignOutScope = rememberCoroutineScope()
+        val signOutAndStay: () -> Unit = {
+            banSignOutScope.launch { authRepository.signOut() }
+        }
+
         NavHost(
             navController = navController,
             startDestination = startDestination,
         ) {
+            // SHY-0143 — see `coldStartBan`. The sign-out handler is owned
+            // HERE rather than taken from `onSignOut`: a device or network ban
+            // follows the hardware or the IP, not the account, so signing out
+            // must clear the session and leave the user exactly where they
+            // are. iOS proved a caller-supplied lambda cannot be trusted with
+            // that — it passed one that navigated to Sign-In.
+            composable(Screen.BanDevice.route) {
+                BanScreen(
+                    banType = "device",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = signOutAndStay,
+                )
+            }
+
+            composable(Screen.BanNetwork.route) {
+                BanScreen(
+                    banType = "network",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = signOutAndStay,
+                )
+            }
+
             composable(Screen.Lock.route) {
                 com.shyden.shytalk.feature.auth.LockScreen(
                     onUnlocked = {

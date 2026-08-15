@@ -108,6 +108,21 @@ fun SharedNavGraph(
      * rendered.
      */
     coldStartBan: BanState = BanState(),
+    /**
+     * SHY-0143 — whether the cold-start sequencer CONFIRMED the cohort claim
+     * in the current token is fresh.
+     *
+     * Gates the user-flag subscription below. Returning a non-`Main`
+     * destination does not stop this graph mounting, and the subscription
+     * fires the instant it composes — so a Lock start, a ban start, or an
+     * offline launch all used to issue `users/<id>` reads on LAST session's
+     * cohort claim (SHY-0132/0137). On a cache miss `currentUserId` is also
+     * still the raw Firebase UID, which is the SHY-0139 wrong-key read.
+     *
+     * Defaults false: a caller that has not run the gate gets no reads, which
+     * is the safe direction to be wrong in.
+     */
+    cohortVerified: Boolean = false,
     platformCallbacks: PlatformNavCallbacks,
     platformScreens: PlatformScreens,
 ) {
@@ -132,7 +147,11 @@ fun SharedNavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
-    if (uid != null) {
+    // SHY-0143 — `cohortVerified` is a precondition, not a preference. See the
+    // parameter's docs: without it this subscription fires on every mount,
+    // including the Lock and ban starts the sequencer deliberately returned
+    // early for.
+    if (uid != null && cohortVerified) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
                 if (flags.isSuspended) {
@@ -173,6 +192,17 @@ fun SharedNavGraph(
     AppLockResumeGate(navController)
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // SHY-0143 — hoisted above the NavHost because the builder lambda is
+        // not a @Composable context. Owned here rather than taken from
+        // `onSignOut`: a device or network ban follows the hardware or the IP,
+        // not the account, so signing out must clear the session and leave the
+        // user exactly where they are. iOS proved a caller-supplied lambda
+        // cannot be trusted with that — it passed one that navigated away.
+        val banSignOutScope = rememberCoroutineScope()
+        val signOutAndStay: () -> Unit = {
+            banSignOutScope.launch { authRepository.signOut() }
+        }
+
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -215,14 +245,23 @@ fun SharedNavGraph(
             // empty back stack, so Back leaves the app rather than revealing
             // content beneath. Nothing here navigates onward — a device or
             // network ban is not resolved by signing out (it follows the
-            // hardware or the IP/subnet/ASN, not the account), so `onSignOut`
+            // hardware or the IP/subnet/ASN, not the account), so signing out
             // clears the session and the user stays exactly here.
+            //
+            // These deliberately do NOT use the graph's `onSignOut` parameter.
+            // That comment above used to describe an intention a caller-supplied
+            // lambda could not enforce, and iOS duly passed one that navigated
+            // to Sign-In without signing out — so a banned iPhone user tapping
+            // Sign-out reached the login screen with their session intact,
+            // which is the one destination the story says a ban must never
+            // reach. Owning the handler here makes the contract structural:
+            // there is no lambda for a caller to get wrong.
             composable(Screen.BanDevice.route) {
                 BanScreen(
                     banType = "device",
                     reason = coldStartBan.reason,
                     expiresAt = coldStartBan.expiresAt,
-                    onSignOut = onSignOut,
+                    onSignOut = signOutAndStay,
                 )
             }
 
@@ -231,7 +270,7 @@ fun SharedNavGraph(
                     banType = "network",
                     reason = coldStartBan.reason,
                     expiresAt = coldStartBan.expiresAt,
-                    onSignOut = onSignOut,
+                    onSignOut = signOutAndStay,
                 )
             }
 

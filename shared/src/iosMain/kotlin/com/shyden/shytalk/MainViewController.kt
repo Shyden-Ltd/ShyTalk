@@ -191,6 +191,10 @@ private fun IosApp() {
                 // cohort-scoped read could fire, and a banned user would see
                 // the room list before being stopped.
                 var coldStartBan by remember { mutableStateOf(BanState()) }
+
+                // SHY-0143 — gates the nav graph's user-flag subscription.
+                // False until a token refresh actually confirms the claim.
+                var cohortVerified by remember { mutableStateOf(false) }
                 val startDestination by
                     produceState<String?>(initialValue = null) {
                         val koin = KoinPlatformTools.defaultContext().get()
@@ -251,6 +255,10 @@ private fun IosApp() {
                                 // cohort-scoped room list on it is the
                                 // SHY-0132/0137 cross-cohort leak.
                                 refreshToken = { authRepo.refreshIdToken() is Resource.Success },
+                                // Separates a revoked token from an unreachable
+                                // network: Firebase drops its local user on a
+                                // genuine revocation.
+                                isSessionAlive = { authRepo.isAuthenticated },
                                 startCohortScopedReads = {},
                                 signOut = { authRepo.signOut() },
                                 launchState = {
@@ -265,6 +273,7 @@ private fun IosApp() {
                             )
                         val destination = sequencer.run()
                         coldStartBan = sequencer.lastBan
+                        cohortVerified = sequencer.cohortVerified
                         logI(
                             "MainViewController",
                             "Cold-launch destination: ${destination.route} " +
@@ -282,6 +291,7 @@ private fun IosApp() {
                         startDestination = route,
                         onSignOut = { navController.navigate(Screen.SignIn.route) { popUpTo(0) } },
                         coldStartBan = coldStartBan,
+                        cohortVerified = cohortVerified,
                         platformCallbacks = platformCallbacks,
                         platformScreens = platformScreens,
                     )

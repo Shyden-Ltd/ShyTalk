@@ -3,6 +3,7 @@ package com.shyden.shytalk.navigation
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -43,6 +44,7 @@ class ColdStartGateOrderingTest {
         deviceBanned: Boolean = false,
         networkBanned: Boolean = false,
         refreshSucceeds: Boolean = true,
+        sessionStillAlive: Boolean = true,
         isAuthenticated: Boolean = true,
         hasResolvedUser: Boolean = true,
         hasStoredCredential: Boolean = true,
@@ -54,6 +56,10 @@ class ColdStartGateOrderingTest {
         refreshToken = {
             rec.log("token-refresh")
             refreshSucceeds
+        },
+        isSessionAlive = {
+            rec.log("session-alive-check")
+            sessionStillAlive
         },
         startCohortScopedReads = {
             rec.log("subscriptions")
@@ -150,6 +156,7 @@ class ColdStartGateOrderingTest {
                         )
                     },
                     refreshToken = { true },
+                    isSessionAlive = { true },
                     startCohortScopedReads = { rec.subscriptionsStarted += 1 },
                     signOut = { rec.signedOut = true },
                     launchState = {
@@ -188,7 +195,7 @@ class ColdStartGateOrderingTest {
             // be confirmed. Rendering cohort-scoped data on last session's claim
             // is the leak; signing out is the only safe answer.
             val rec = Recorder()
-            val destination = sequencer(rec, refreshSucceeds = false).run()
+            val destination = sequencer(rec, refreshSucceeds = false, sessionStillAlive = false).run()
             assertEquals(Screen.SignIn, destination)
             assertEquals(0, rec.subscriptionsStarted)
             assertTrue(rec.signedOut, "a failed refresh must sign out, not silently continue")
@@ -198,10 +205,68 @@ class ColdStartGateOrderingTest {
     fun `a healthy cold start reaches Main and starts reads exactly once`() =
         runTest {
             val rec = Recorder()
-            val destination = sequencer(rec).run()
+            val seq = sequencer(rec)
+            val destination = seq.run()
             assertEquals(Screen.Main, destination)
             assertEquals(1, rec.subscriptionsStarted)
             assertEquals(listOf("ban-check", "token-refresh", "subscriptions"), rec.events)
+            assertTrue(seq.cohortVerified, "a completed refresh is what makes the claim current")
+        }
+
+    // ── A refresh that FAILS is not automatically a revoked session ───────
+
+    @Test
+    fun `an unverifiable refresh does NOT sign out and does NOT start reads`() =
+        runTest {
+            // `refreshIdToken()` maps EVERY exception to Resource.Error, so an
+            // offline launch looked identical to a revoked token and signed the
+            // user out. Android declares no `configChanges`, so rotating the
+            // phone re-runs this whole sequence — meaning a rotation in
+            // airplane mode logged you out.
+            //
+            // Firebase clears `currentUser` locally when a refresh token is
+            // genuinely revoked, so a still-alive session after a failed
+            // refresh means the failure was transport, not auth. The safe
+            // answer is to render the shell and issue NOTHING.
+            val rec = Recorder()
+            val seq = sequencer(rec, refreshSucceeds = false, sessionStillAlive = true)
+            val destination = seq.run()
+
+            assertEquals(Screen.Main, destination, "an offline launch must not bounce the user to sign-in")
+            assertFalse(rec.signedOut, "a transport failure is not an auth event")
+            assertEquals(0, rec.subscriptionsStarted, "an unverified cohort claim must gate every read")
+            assertFalse(seq.cohortVerified, "the claim was never confirmed, so nothing may act as if it were")
+        }
+
+    @Test
+    fun `a revoked session is still distinguished from an unverifiable one`() =
+        runTest {
+            // The other side of the same branch — this must keep signing out,
+            // or the fix for the offline case would strand a revoked session
+            // on Main forever.
+            val rec = Recorder()
+            val seq = sequencer(rec, refreshSucceeds = false, sessionStillAlive = false)
+
+            assertEquals(Screen.SignIn, seq.run())
+            assertTrue(rec.signedOut)
+            assertEquals(0, rec.subscriptionsStarted)
+            assertFalse(seq.cohortVerified)
+        }
+
+    @Test
+    fun `cohortVerified is false on every destination that is not Main`() =
+        runTest {
+            // The flag the nav graphs gate their user-flag subscription on. A
+            // Lock or ban start MOUNTS the graph, so "we returned early" is not
+            // the same as "nothing reads".
+            listOf(
+                sequencer(Recorder(), deviceBanned = true),
+                sequencer(Recorder(), networkBanned = true),
+                sequencer(Recorder(), hasStoredCredential = false, isAuthenticated = false, hasResolvedUser = false),
+            ).forEach { seq ->
+                seq.run()
+                assertFalse(seq.cohortVerified, "no destination but Main may claim a verified cohort")
+            }
         }
 
     @Test

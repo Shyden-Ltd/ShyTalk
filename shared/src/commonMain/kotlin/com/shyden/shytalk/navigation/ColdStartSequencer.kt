@@ -31,6 +31,19 @@ import com.shyden.shytalk.data.repository.BanStatus
 class ColdStartSequencer(
     private val checkBans: suspend () -> BanState,
     private val refreshToken: suspend () -> Boolean,
+    /**
+     * Whether the platform still holds a signed-in user, asked only AFTER a
+     * failed [refreshToken].
+     *
+     * This is the signal that separates "the token was revoked" from "we could
+     * not reach the network". Firebase clears its local `currentUser` when a
+     * refresh token is genuinely revoked, so a session that is still alive
+     * after a failed refresh failed for transport reasons. Classifying on the
+     * error itself was the alternative and it is worse: `firebaseCall` maps
+     * every exception to `Resource.Error`, and matching exception type names
+     * across two platforms is exactly the stringly-typed contract that drifts.
+     */
+    private val isSessionAlive: () -> Boolean,
     private val startCohortScopedReads: () -> Unit,
     private val signOut: suspend () -> Unit,
     private val launchState: () -> LaunchState,
@@ -49,6 +62,20 @@ class ColdStartSequencer(
      * Read-only to callers, and only ever written by [run].
      */
     var lastBan: BanState = BanState()
+        private set
+
+    /**
+     * Whether the cohort claim in the current token was CONFIRMED fresh.
+     *
+     * The nav graphs gate their user-flag subscription on this, and that is not
+     * belt-and-braces: returning a non-`Main` destination does not stop the
+     * graph mounting, and both graphs subscribe to `users/<id>` the instant
+     * they compose. So "the sequencer returned early" and "nothing reads" were
+     * two different claims, and only the first was true. False unless a refresh
+     * actually completed — a ban, a Lock start, or an unverifiable refresh all
+     * leave it false.
+     */
+    var cohortVerified: Boolean = false
         private set
 
     /**
@@ -81,15 +108,27 @@ class ColdStartSequencer(
 
         // GATE 2 — the cohort claim must be CURRENT before a single
         // cohort-scoped read is issued.
-        if (!refreshToken()) {
-            // The refresh token is expired or revoked, so the cohort claim can
-            // never be confirmed. Continuing would mean rendering data on last
-            // session's claim; signing out is the only safe answer.
+        if (refreshToken()) {
+            cohortVerified = true
+            startCohortScopedReads()
+            return Screen.Main
+        }
+
+        // The refresh failed, and WHY decides everything.
+        if (!isSessionAlive()) {
+            // Firebase dropped the local user, so the refresh token really is
+            // expired or revoked. The claim can never be confirmed and the
+            // session is already gone; signing out makes that explicit.
             signOut()
             return Screen.SignIn
         }
 
-        startCohortScopedReads()
+        // The session survives, so the failure was transport — offline, a
+        // timeout, a blip. Signing out here is what turned "rotate the phone in
+        // airplane mode" into "you are logged out". Render the shell, leave the
+        // session alone, and issue nothing: `cohortVerified` stays false, so the
+        // graphs hold their cohort-scoped subscription until a later refresh
+        // confirms the claim.
         return Screen.Main
     }
 }
