@@ -34,6 +34,22 @@ class ColdStartSequencer(
     private val launchState: () -> LaunchState,
 ) {
     /**
+     * The ban facts from the most recent [run], for the screen that renders
+     * them.
+     *
+     * `BanScreen` takes `(banType, reason, expiresAt)`. A sequencer that
+     * returned only *which* screen would force the ban destination to render a
+     * bare "you are banned" — and a user caught by an IP/subnet/ASN rule they
+     * did not cause would have no idea whether it lasts an hour or forever, or
+     * how to appeal. A correct gate that cannot explain itself is an unusable
+     * one.
+     *
+     * Read-only to callers, and only ever written by [run].
+     */
+    var lastBan: BanState = BanState()
+        private set
+
+    /**
      * Runs the sequence and returns the destination to start at.
      *
      * Deliberately returns the destination rather than navigating: routing is
@@ -43,6 +59,7 @@ class ColdStartSequencer(
     suspend fun run(): Screen {
         // GATE 1 — bans, before anything else can observe or render state.
         val bans = checkBans()
+        lastBan = bans
         val state = launchState()
         val destination =
             resolveColdStartDestination(
@@ -85,6 +102,10 @@ class ColdStartSequencer(
 data class BanState(
     val deviceBanned: Boolean = false,
     val networkBanned: Boolean = false,
+    /** Operator-supplied explanation, surfaced verbatim on the ban screen. */
+    val reason: String? = null,
+    /** ISO-8601 expiry, or null for a permanent ban. */
+    val expiresAt: String? = null,
 )
 
 /**

@@ -128,6 +128,45 @@ class ColdStartGateOrderingTest {
             assertEquals(0, rec.subscriptionsStarted)
         }
 
+    // ── The ban's DETAIL must survive to the screen that renders it ────────
+
+    @Test
+    fun `the ban reason and expiry reach the caller, not just the fact of a ban`() =
+        runTest {
+            // BanScreen takes (banType, reason, expiresAt). If the sequencer
+            // returns only "banned", the screen can only say so — and a user
+            // banned by an IP/subnet/ASN rule they did not cause has no idea
+            // whether it lasts an hour or forever, or how to appeal. Losing the
+            // detail is how a correct gate becomes an unusable one.
+            val rec = Recorder()
+            val seq =
+                ColdStartSequencer(
+                    checkBans = {
+                        rec.log("ban-check")
+                        BanState(
+                            deviceBanned = true,
+                            reason = "Evading a prior suspension",
+                            expiresAt = "2026-09-01T00:00:00Z",
+                        )
+                    },
+                    refreshToken = { true },
+                    startCohortScopedReads = { rec.subscriptionsStarted += 1 },
+                    signOut = { rec.signedOut = true },
+                    launchState = {
+                        LaunchState(
+                            hasStoredCredential = true,
+                            isAppLockEnabled = false,
+                            isLockRequired = false,
+                            isAuthenticated = true,
+                            hasResolvedUser = true,
+                        )
+                    },
+                )
+            assertEquals(Screen.BanDevice, seq.run())
+            assertEquals("Evading a prior suspension", seq.lastBan.reason)
+            assertEquals("2026-09-01T00:00:00Z", seq.lastBan.expiresAt)
+        }
+
     // ── Ordering 2: the cohort gate precedes the first cohort-scoped read ──
 
     @Test

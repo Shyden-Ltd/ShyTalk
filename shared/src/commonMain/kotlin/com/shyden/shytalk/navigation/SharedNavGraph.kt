@@ -72,6 +72,7 @@ import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
 import com.shyden.shytalk.feature.splash.FunFactSplashScreen
 import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
+import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.back
 import com.shyden.shytalk.resources.warning_acknowledge_failed
@@ -100,6 +101,13 @@ fun SharedNavGraph(
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
     onSignOut: () -> Unit,
+    /**
+     * SHY-0143 — the ban facts behind a [Screen.BanDevice] / [Screen.BanNetwork]
+     * start destination. Defaulted so existing callers are unaffected: an
+     * unbanned launch never routes to either screen, so the default is never
+     * rendered.
+     */
+    coldStartBan: BanState = BanState(),
     platformCallbacks: PlatformNavCallbacks,
     platformScreens: PlatformScreens,
 ) {
@@ -191,6 +199,39 @@ fun SharedNavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            // SHY-0143 — ban destinations reachable WITHOUT sign-in.
+            //
+            // The ban UI already existed, but only inside SignInScreen, off
+            // AuthUiState.isDeviceBanned/isNetworkBanned. SHY-0187's optimistic
+            // cold start routes a restored session straight to Main, so that
+            // surface became unreachable exactly when a banned user returns —
+            // which is why hoisting the CHECK alone would not have closed the
+            // gap. These give the check somewhere to land.
+            //
+            // Terminal by construction: they are the start destination with an
+            // empty back stack, so Back leaves the app rather than revealing
+            // content beneath. Nothing here navigates onward — a device or
+            // network ban is not resolved by signing out (it follows the
+            // hardware or the IP/subnet/ASN, not the account), so `onSignOut`
+            // clears the session and the user stays exactly here.
+            composable(Screen.BanDevice.route) {
+                BanScreen(
+                    banType = "device",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = onSignOut,
+                )
+            }
+
+            composable(Screen.BanNetwork.route) {
+                BanScreen(
+                    banType = "network",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = onSignOut,
                 )
             }
 
