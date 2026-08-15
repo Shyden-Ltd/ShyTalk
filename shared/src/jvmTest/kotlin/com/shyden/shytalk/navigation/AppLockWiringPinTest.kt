@@ -53,13 +53,46 @@ class AppLockWiringPinTest {
     private val appNavGraph = "app/src/main/java/com/shyden/shytalk/navigation/NavGraph.kt"
     private val lockScreen = "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/auth/LockScreen.kt"
 
+    // SHY-0143 moved both platforms from `resolveLaunchDestination` to
+    // `resolveColdStartDestination`, which wraps it with the pre-routing ban
+    // gate. The invariant these pins protect is unchanged and is NOT the name
+    // of the function: it is that cold launch resolves through the SHARED
+    // resolver, so the two platforms cannot drift apart (SHY-0187's whole
+    // point — the pre-fix iOS code hardcoded Sign-In and skipped the App-Lock).
+    // The pins follow the invariant to its new home, and the third test below
+    // makes them stricter than before by requiring both platforms to use the
+    // SAME resolver rather than merely each using some shared one.
+    private val coldStartResolver = "resolveColdStartDestination("
+
     @Test
     fun `android cold launch resolves its initial route through the shared resolver`() {
         val src = read(mainActivity)
         assertTrue(
-            src.contains("resolveLaunchDestination("),
-            "$mainActivity must consume resolveLaunchDestination for its initial route " +
-                "(SHY-0187: the pre-fix code skipped the App-Lock entirely on cold launch)",
+            src.contains(coldStartResolver),
+            "$mainActivity must consume $coldStartResolver for its initial route " +
+                "(SHY-0187: the pre-fix code skipped the App-Lock entirely on cold launch; " +
+                "SHY-0143: the resolver now also carries the pre-routing ban gate)",
+        )
+    }
+
+    @Test
+    fun `both platforms resolve cold launch through the SAME shared function`() {
+        // The asymmetry SHY-0187 killed was iOS deciding differently from
+        // Android. Asserting each side uses "a" shared resolver would let them
+        // drift onto two different ones; this asserts they use one.
+        val android = read(mainActivity)
+        val ios = read(mainViewController)
+        assertTrue(
+            android.contains(coldStartResolver) && ios.contains(coldStartResolver),
+            "both $mainActivity and $mainViewController must call $coldStartResolver — " +
+                "one decision, one function, or the platforms drift again",
+        )
+        // And neither may keep a second, bypassing route computation.
+        assertTrue(
+            !android.contains("resolveLaunchDestination(") && !ios.contains("resolveLaunchDestination("),
+            "neither platform may call resolveLaunchDestination directly — that path " +
+                "skips the SHY-0143 ban gate, which is exactly how the optimistic " +
+                "cold start shipped without it",
         )
     }
 
@@ -67,8 +100,8 @@ class AppLockWiringPinTest {
     fun `ios cold launch resolves its start destination through the shared resolver`() {
         val src = read(mainViewController)
         assertTrue(
-            src.contains("resolveLaunchDestination("),
-            "$mainViewController must consume resolveLaunchDestination for its start destination",
+            src.contains(coldStartResolver),
+            "$mainViewController must consume $coldStartResolver for its start destination",
         )
         assertFalse(
             src.contains("startDestination = Screen.SignIn.route"),

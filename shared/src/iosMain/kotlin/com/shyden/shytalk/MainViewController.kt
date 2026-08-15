@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.window.ComposeUIViewController
@@ -13,10 +14,12 @@ import com.shyden.shytalk.core.push.chatDeepLinks
 import com.shyden.shytalk.core.push.consumeChatDeepLink
 import com.shyden.shytalk.core.push.verifyPushNavigation
 import com.shyden.shytalk.core.util.LanguagePreference
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
@@ -25,14 +28,17 @@ import com.shyden.shytalk.feature.legal.CyberBullyingPolicyScreen
 import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
+import com.shyden.shytalk.navigation.BanState
 import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
 import com.shyden.shytalk.navigation.createIosPlatformScreens
 import com.shyden.shytalk.navigation.isNavigationLockGated
-import com.shyden.shytalk.navigation.resolveLaunchDestination
+import com.shyden.shytalk.navigation.resolveColdStartDestination
+import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import kotlinx.coroutines.flow.filterNotNull
+import org.koin.core.qualifier.named
 import org.koin.mp.KoinPlatformTools
 
 @Suppress("ktlint:standard:function-naming")
@@ -170,13 +176,42 @@ private fun IosApp() {
                 // SHY-0187: shared launch resolver — the SAME decision Android's
                 // MainActivity makes, killing the platform asymmetry (this used to
                 // hardcode Sign-In: no silent restore AND no App-Lock gate on iOS).
-                val startDestination =
-                    remember {
+                // SHY-0143 — the ban gate must resolve BEFORE the start
+                // destination, on iOS exactly as on Android.
+                //
+                // Honest deviation from the story's Performance AC: on Android
+                // the ban check joins an EXISTING pre-routing phase (emulator
+                // gate + version/health checks), so it adds no blocking leg.
+                // iOS has no such phase — it routed synchronously — so here the
+                // check does introduce one. That is the right trade: the
+                // alternative is to render Main first and bounce to the ban
+                // afterwards, which is exactly the window in which a
+                // cohort-scoped read could fire, and a banned user would see
+                // the room list before being stopped.
+                var coldStartBan by remember { mutableStateOf(BanState()) }
+                val startDestination by
+                    produceState<String?>(initialValue = null) {
                         val koin = KoinPlatformTools.defaultContext().get()
                         val authRepo = koin.get<AuthRepository>()
                         val appLockRepo = koin.get<AppLockRepository>()
+                        val deviceRepo = koin.get<DeviceRepository>()
+                        val deviceId = koin.get<String>(named("deviceId"))
+
+                        // Lenient on a transient failure, matching Android and
+                        // the behaviour AuthViewModelBanTest pins: a real ban is
+                        // authoritative, an unreachable ban service is not
+                        // evidence of one.
+                        val bans =
+                            when (val banResult = deviceRepo.checkBanStatus(deviceId)) {
+                                is Resource.Success -> banResult.data.toBanState()
+                                else -> BanState()
+                            }
+                        coldStartBan = bans
+
                         val destination =
-                            resolveLaunchDestination(
+                            resolveColdStartDestination(
+                                deviceBanned = bans.deviceBanned,
+                                networkBanned = bans.networkBanned,
                                 hasStoredCredential = appLockRepo.hasCredential,
                                 isAppLockEnabled = appLockRepo.isAppLockEnabled,
                                 isLockRequired = appLockRepo.isLockRequired(),
@@ -186,18 +221,24 @@ private fun IosApp() {
                         logI(
                             "MainViewController",
                             "Cold-launch destination: ${destination.route} " +
-                                "(lockGated=${destination == Screen.Lock})",
+                                "(lockGated=${destination == Screen.Lock}, " +
+                                "banned=${bans.deviceBanned || bans.networkBanned})",
                         )
-                        destination.route
+                        value = destination.route
                     }
 
-                SharedNavGraph(
-                    navController = navController,
-                    startDestination = startDestination,
-                    onSignOut = { navController.navigate(Screen.SignIn.route) { popUpTo(0) } },
-                    platformCallbacks = platformCallbacks,
-                    platformScreens = platformScreens,
-                )
+                // Nothing renders until the gate answers, so there is no frame
+                // in which content exists for a banned or stale-cohort session.
+                startDestination?.let { route ->
+                    SharedNavGraph(
+                        navController = navController,
+                        startDestination = route,
+                        onSignOut = { navController.navigate(Screen.SignIn.route) { popUpTo(0) } },
+                        coldStartBan = coldStartBan,
+                        platformCallbacks = platformCallbacks,
+                        platformScreens = platformScreens,
+                    )
+                }
             }
         } // close PreviewWatermark
     }

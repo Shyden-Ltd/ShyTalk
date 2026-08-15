@@ -77,7 +77,7 @@ import com.shyden.shytalk.navigation.BanState
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.isNavigationLockGated
-import com.shyden.shytalk.navigation.resolveLaunchDestination
+import com.shyden.shytalk.navigation.resolveColdStartDestination
 import com.shyden.shytalk.navigation.toBanState
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -647,8 +647,20 @@ class MainActivity : AppCompatActivity() {
                                 // live session (prevents login flash), else Sign-In.
                                 val initialRoute =
                                     remember {
+                                        // SHY-0143 — the SAME shared resolver iOS
+                                        // uses, ban flags included. The cascade
+                                        // above already renders BanScreen before
+                                        // the NavHost mounts, so this is
+                                        // defence-in-depth rather than the only
+                                        // gate; what it buys is that both
+                                        // platforms compute the cold-start
+                                        // destination through one function, which
+                                        // is the platform asymmetry SHY-0187 set
+                                        // out to kill.
                                         val destination =
-                                            resolveLaunchDestination(
+                                            resolveColdStartDestination(
+                                                deviceBanned = coldStartBan.deviceBanned,
+                                                networkBanned = coldStartBan.networkBanned,
                                                 hasStoredCredential = appLockRepository.hasCredential,
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
