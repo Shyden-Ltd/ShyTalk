@@ -190,10 +190,23 @@ describe('anonymous public flow — input rejection (400s)', () => {
 });
 
 describe('wiring pins', () => {
-  test('index.js skip-list lets header-less POST /translate through (static pin)', () => {
+  test('the skip-list lets header-less POST /translate through', () => {
+    // SHY-0143 moved the skip predicate out of index.js into
+    // middleware/auth-skip.js so it could be unit-tested. The invariant is
+    // unchanged and is not the name of the file it lives in — so this pin
+    // follows it, and is now BEHAVIOURAL rather than a substring match, which
+    // is strictly stronger: a commented-out condition would still satisfy the
+    // old regex.
+    const { skipsAuth } = require('../../src/middleware/auth-skip');
+
+    expect(skipsAuth({ method: 'POST', path: '/translate', headers: {} })).toBe(true);
+    expect(
+      skipsAuth({ method: 'POST', path: '/translate', headers: { authorization: 'Bearer x' } }),
+    ).toBe(false);
+
+    // And index.js must still consult it, or the predicate is decoration.
     const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'index.js'), 'utf-8');
-    expect(src).toMatch(/\/translate'/);
-    expect(src).toMatch(/!req\.headers\.authorization/);
+    expect(src).toMatch(/skipsAuth\(req\)/);
   });
 
   test('GET /api/system/health exposes translationQueueLength (static pin on system.js)', () => {

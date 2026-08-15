@@ -308,8 +308,20 @@ private fun IosApp() {
                             reconcileCohortInBackground(
                                 uniqueId = reconcileId,
                                 checkPmLock = { id ->
-                                    val r = userRepo.checkPmLockOnLogin(id)
-                                    r is Resource.Success && r.data.forceTokenRefresh
+                                    // A Resource.Error used to collapse into the same `false`
+                                    // as "no refresh needed", so a permanently broken
+                                    // pm-lock endpoint was invisible on this path while the
+                                    // sign-in path logged it. Observability AC.
+                                    when (val r = userRepo.checkPmLockOnLogin(id)) {
+                                        is Resource.Success -> r.data.forceTokenRefresh
+
+                                        is Resource.Error -> {
+                                            logW("MainViewController", "PM-lock check failed (non-fatal): ${r.message}")
+                                            false
+                                        }
+
+                                        else -> false
+                                    }
                                 },
                                 refreshToken = { authRepo.refreshIdToken() is Resource.Success },
                                 log = { message -> logI("MainViewController", message) },

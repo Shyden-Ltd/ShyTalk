@@ -1,6 +1,7 @@
 package com.shyden.shytalk.navigation
 
 import com.shyden.shytalk.data.repository.BanStatus
+import kotlinx.coroutines.CancellationException
 
 /**
  * SHY-0143 — the cold-start startup sequence, with its two security gates in
@@ -231,20 +232,29 @@ suspend fun reconcileCohortInBackground(
         return false
     }
 
-    val needsFreshToken =
-        try {
-            checkPmLock(uniqueId)
-        } catch (e: IllegalStateException) {
-            log("cohort reconcile failed (non-fatal): ${e.message}")
-            return false
-        }
+    // The catch is deliberately broad. It used to name IllegalStateException
+    // only, which is a shape the production lambdas cannot even produce — they
+    // map `Resource` to `Boolean` — so it caught nothing real while a genuine
+    // failure (any other exception, or anything at all from `refreshToken`)
+    // escaped into `lifecycleScope.launch` on Android and `produceState` on
+    // iOS. An uncaught coroutine exception there crashes the app, which is the
+    // opposite of the "non-fatal by design" this function documents.
+    //
+    // CancellationException is deliberately NOT swallowed: it is structured
+    // concurrency doing its job, not a reconcile failure.
+    return try {
+        if (!checkPmLock(uniqueId)) return false
 
-    if (!needsFreshToken) return false
-
-    // The server minted a new claim, so the token in hand is stale by exactly
-    // one cohort flip. Rotating it here is what closes the window that would
-    // otherwise stay open until Firebase's ~1h auto-refresh.
-    val rotated = refreshToken()
-    if (!rotated) log("cohort claim minted but the token refresh failed (non-fatal)")
-    return rotated
+        // The server minted a new claim, so the token in hand is stale by
+        // exactly one cohort flip. Rotating it here is what closes the window
+        // that would otherwise stay open until Firebase's ~1h auto-refresh.
+        val rotated = refreshToken()
+        if (!rotated) log("cohort claim minted but the token refresh failed (non-fatal)")
+        rotated
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        log("cohort reconcile failed (non-fatal): ${e.message}")
+        false
+    }
 }

@@ -14,6 +14,7 @@ import dev.gitlive.firebase.firestore.FirebaseFirestore
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.contentType
+import io.ktor.http.encodeURLQueryComponent
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -59,7 +60,7 @@ class IosDeviceRepositoryImpl(
      */
     override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
         try {
-            val response = api.getPublic("/api/ban-status?deviceId=$deviceId")
+            val response = api.getPublic("/api/ban-status?deviceId=${deviceId.encodeURLQueryComponent()}")
             val banObj = response["banStatus"]
             if (banObj != null) {
                 val ban = (banObj as? kotlinx.serialization.json.JsonObject) ?: JsonObject(emptyMap())

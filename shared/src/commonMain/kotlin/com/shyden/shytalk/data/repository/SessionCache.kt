@@ -167,10 +167,7 @@ class SessionCache(
             return
         }
 
-        // Carry the cohort forward when this caller does not know it, but ONLY
-        // for the same account — a different uid must inherit nothing.
-        val existing = if (uid == storedUidOrNull()) storedCohortOrNull() else null
-        val effectiveCohort = cohort?.takeIf { it.isNotBlank() } ?: existing
+        val effectiveCohort = cohort?.takeIf { it.isNotBlank() }
 
         val record =
             JsonObject(
@@ -181,12 +178,21 @@ class SessionCache(
                 },
             )
 
-        // ONE key, written once. The previous shape wrote three keys in
-        // sequence, and these setters fire from several dispatchers with no
-        // synchronisation — two interleaved write-throughs for different
-        // accounts could land `{uid_A, uniqueId_B}`, a COMPLETE-looking record
-        // that `read` would happily serve. A single-key record makes both that
-        // and the torn-write case impossible rather than merely unlikely.
+        // ONE key, ONE write, and — deliberately — no read beforehand.
+        //
+        // The previous shape wrote three keys in sequence, so two interleaved
+        // write-throughs for different accounts could land `{uid_A,
+        // uniqueId_B}`: a COMPLETE-looking record that `read` would serve. A
+        // single key makes the loser's record vanish whole rather than mix.
+        //
+        // An intermediate version carried an existing cohort forward for the
+        // same uid, which made this a read-modify-write and reintroduced the
+        // problem as a lost update — needing a lock that commonMain cannot
+        // cheaply have, since the callers are property setters and cannot
+        // suspend. Dropping the carry-forward costs a cohort on the unlock
+        // path only, and the cohort's sole consumer outside these repositories
+        // is the dev-only PreviewWatermark. Trading invisible metadata for a
+        // whole class of concurrency bug is the right way round.
         storage.putString(KEY_SESSION, record.toString())
     }
 
@@ -195,25 +201,6 @@ class SessionCache(
         logW(TAG, "Discarding the stored session record — $why")
         clear()
         return null
-    }
-
-    private fun storedUidOrNull(): String? = rawField(FIELD_FIREBASE_UID)
-
-    private fun storedCohortOrNull(): String? = rawField(FIELD_COHORT)
-
-    /** Reads one field WITHOUT the uid binding — internal use only. */
-    private fun rawField(name: String): String? {
-        val raw = storage.getString(KEY_SESSION)?.takeIf { it.isNotBlank() } ?: return null
-        return try {
-            (Json.parseToJsonElement(raw) as? JsonObject)
-                ?.get(name)
-                ?.jsonPrimitive
-                ?.contentOrNull
-                ?.takeIf { it.isNotBlank() }
-        } catch (e: IllegalArgumentException) {
-            logW(TAG, "Ignoring an unreadable session record while writing: ${e.message}")
-            null
-        }
     }
 
     /**

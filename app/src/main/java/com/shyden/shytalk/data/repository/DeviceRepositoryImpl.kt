@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import org.json.JSONObject
+import java.net.URLEncoder
 
 private fun JSONObject.optStringOrNull(key: String): String? {
     if (!has(key) || isNull(key)) return null
@@ -45,7 +46,10 @@ class DeviceRepositoryImpl(
      */
     override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
         try {
-            val response = workerApiClient.getPublic("/api/ban-status?deviceId=$deviceId")
+            val response =
+                workerApiClient.getPublic(
+                    "/api/ban-status?deviceId=" + URLEncoder.encode(deviceId, "UTF-8"),
+                )
             val banObj = response.optJSONObject("banStatus")
             if (banObj != null && banObj.optBoolean("isBanned", false)) {
                 Resource.Success(

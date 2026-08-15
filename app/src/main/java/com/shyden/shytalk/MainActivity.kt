@@ -53,6 +53,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UnsafeDeviceGate
 import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logI
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.data.remote.WorkerApiClient
@@ -455,8 +456,20 @@ class MainActivity : AppCompatActivity() {
                                         reconcileCohortInBackground(
                                             uniqueId = reconcileId,
                                             checkPmLock = { id ->
-                                                val r = userRepository.checkPmLockOnLogin(id)
-                                                r is Resource.Success && r.data.forceTokenRefresh
+                                                // A Resource.Error used to collapse into the same `false`
+                                                // as "no refresh needed", so a permanently broken
+                                                // pm-lock endpoint was invisible on this path while the
+                                                // sign-in path logged it. Observability AC.
+                                                when (val r = userRepository.checkPmLockOnLogin(id)) {
+                                                    is Resource.Success -> r.data.forceTokenRefresh
+
+                                                    is Resource.Error -> {
+                                                        logW(TAG, "PM-lock check failed (non-fatal): ${r.message}")
+                                                        false
+                                                    }
+
+                                                    else -> false
+                                                }
                                             },
                                             refreshToken = { authRepository.refreshIdToken() is Resource.Success },
                                             log = { message -> logI(TAG, message) },

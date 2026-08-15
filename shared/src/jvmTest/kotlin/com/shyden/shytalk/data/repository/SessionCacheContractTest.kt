@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * SHY-0143 — the cold-start identity cache.
@@ -121,15 +122,22 @@ class SessionCacheContractTest {
     }
 
     @Test
-    fun `a cohort-less write preserves a cohort already known for the same account`() {
-        // Sign-in caches the cohort; a later PIN unlock knows only the
-        // uniqueId. Overwriting the cohort with nothing would quietly degrade
-        // the record on every unlock.
+    fun `a cohort-less write keeps the IDENTITY and drops only the cohort`() {
+        // An intermediate version carried the existing cohort forward, which
+        // made `write` a read-modify-write and so a lost update — needing a
+        // lock commonMain cannot cheaply have, since the callers are property
+        // setters and cannot suspend. Dropping the carry-forward costs a
+        // cohort on the unlock path only, and the cohort's sole consumer
+        // outside these repositories is the dev-only PreviewWatermark. What
+        // must NOT be dropped is the identity, which is what the unlock path
+        // actually needs.
         cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
 
         cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = null)
 
-        assertEquals("adult", assertNotNull(cache.read("fb-uid-1")).cohort)
+        val read = assertNotNull(cache.read("fb-uid-1"), "the identity must survive an unlock")
+        assertEquals("10000005", read.uniqueId)
+        assertNull(read.cohort)
     }
 
     @Test
@@ -345,6 +353,61 @@ class SessionCacheContractTest {
         storage.putString(SessionCache.LEGACY_KEY_COHORT, "adult")
 
         assertNull(cache.read("fb-uid-1"), "the superseded format must not be trusted")
+    }
+
+    // ── Concurrency ───────────────────────────────────────────────────────
+
+    @Test
+    fun `interleaved writes for one account never mix two records`() {
+        // `write` reads the stored uid and cohort before writing, so without a
+        // lock it is a lost update: two concurrent writes for the SAME account
+        // can interleave and leave the loser's uniqueId under the winner's uid
+        // — where the uid binding cannot catch it, because the uid is right.
+        //
+        // The write-through fires from two independent property setters on a
+        // Koin singleton, from several dispatchers, so this is the real shape.
+        val pairs = (1..40).map { "1000000$it" to "cohort-$it" }
+        val threads =
+            pairs.map { (unique, cohort) ->
+                Thread {
+                    repeat(25) {
+                        cache.write(firebaseUid = "fb-uid-1", uniqueId = unique, cohort = cohort)
+                    }
+                }
+            }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+
+        val read = assertNotNull(cache.read("fb-uid-1"), "some record must survive")
+        // The surviving record must be ONE of the written pairs, never a mix.
+        // A mixed record — a uniqueId from one write beside a cohort from
+        // another — is the exact defect the single atomic write removes.
+        assertTrue(
+            pairs.any { (unique, cohort) -> read.uniqueId == unique && read.cohort == cohort },
+            "the surviving record must be one written pair, got ${read.uniqueId}/${read.cohort}",
+        )
+    }
+
+    @Test
+    fun `interleaved writes for DIFFERENT accounts never cross-contaminate`() {
+        val threads =
+            (1..20).map { n ->
+                Thread {
+                    repeat(20) {
+                        cache.write(firebaseUid = "fb-uid-$n", uniqueId = "unique-$n", cohort = "cohort-$n")
+                    }
+                }
+            }
+        threads.forEach { it.start() }
+        threads.forEach { it.join() }
+
+        // Exactly one account can win, and whichever it is must be internally
+        // consistent — its uniqueId and cohort must both be its own.
+        val winners = (1..20).mapNotNull { n -> cache.read("fb-uid-$n")?.let { n to it } }
+        assertEquals(1, winners.size, "only one account's record can be stored, got ${winners.size}")
+        val (n, record) = winners.single()
+        assertEquals("unique-$n", record.uniqueId, "the winner must not carry another account's uniqueId")
+        assertEquals("cohort-$n", record.cohort, "nor another account's cohort")
     }
 
     // ── Clearing (AC: sign-out leaves nothing on disk) ────────────────────
