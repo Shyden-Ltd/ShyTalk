@@ -386,3 +386,5 @@ playwright`) and both probe branches are gone local and remote.
   configured not to invoke agents unless asked. The diff was self-reviewed
   instead, and the mutation matrix is the substantive check. Flag for the
   operator if a formal agent review is wanted before merge.
+
+Reviewed-up-to: e2ec9445396
