@@ -1,6 +1,6 @@
 ---
 id: SHY-0305
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-17
 priority: P0
@@ -309,3 +309,5 @@ that archives iOS successfully.
 - Verification after review: **150 suites / 7551 tests** green; eslint
   `--max-warnings=0`, prettier, shellcheck and actionlint clean; **10/10
   mutants killed** across both rounds.
+
+Reviewed-up-to: 0f6f79253b8101b4d42a1ceff306dd941dbfc2e7
