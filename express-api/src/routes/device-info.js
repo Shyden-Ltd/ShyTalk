@@ -24,6 +24,28 @@ const log = require('../utils/log');
 
 // ─── Route ───────────────────────────────────────────────────────
 
+/**
+ * Drop keys whose value is absent, so a `{ merge: true }` write LEAVES the
+ * stored value alone instead of overwriting it with null.
+ *
+ * Firestore treats an explicit `null` under merge as "set this field to
+ * null" — the same as any other value. Only OMITTING the key preserves what
+ * is there. Empty strings count as absent: `getIpGeo` already maps ip-api's
+ * `as: ""` (an unrouted address) to null, and an empty ASN would be stored
+ * looking recorded while matching nothing.
+ *
+ * @param {Record<string, unknown>} doc
+ * @returns {Record<string, unknown>} a new object with the absent keys gone
+ */
+function withoutAbsent(doc) {
+  const out = {};
+  for (const [key, value] of Object.entries(doc)) {
+    if (value === null || value === undefined || value === '') continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 router.post('/device-info', async (req, res) => {
   try {
     const body = req.body;
@@ -48,7 +70,26 @@ router.post('/device-info', async (req, res) => {
     // Enrich with IP geolocation
     const geo = await getIpGeo(ip);
 
-    // Build device doc
+    // Build device doc.
+    //
+    // SHY-0299: absent values are OMITTED, never written as null. The write
+    // below is `tx.set(..., { merge: true })`, and under merge an explicit
+    // null OVERWRITES the stored value — it is not the same as leaving the
+    // key out. So `asn: geo.asn || null` replaced a known-good ASN with null
+    // on any request whose geo lookup failed, and `bans.js` builds its ASN
+    // list with `.filter((asn) => !!asn)` — a nulled binding contributes no
+    // ASN, so an `asn`-typed ban stopped matching that device. With
+    // `getUserDeviceStanding` caching the standing for 5 minutes, one blip
+    // disabled ASN-ban matching for that device for up to ~5.5 minutes.
+    //
+    // SHY-0143's negative cache made it deterministic rather than
+    // intermittent: a failed lookup is now held for 30 seconds, so every
+    // launch inside that window nulled the field, where previously each
+    // request re-rolled and a success could repair it.
+    //
+    // The geo fields are LAST-KNOWN telemetry: none has a "clear it" use
+    // case, and a device that genuinely changes network gets a new value on
+    // the next successful lookup.
     const timestamp = now();
     const baseDoc = {
       deviceId,
@@ -65,13 +106,31 @@ router.post('/device-info', async (req, res) => {
       networkType: body.networkType || null,
       carrierName: body.carrierName || null,
       firebaseInstallationId: body.firebaseInstallationId || null,
+      // The record of THIS request: nothing to preserve, and omitting them
+      // would be the bug in reverse.
       lastIp: ip,
-      isp: geo.isp || null,
-      asn: geo.asn || null,
-      country: geo.country || null,
-      region: geo.region || null,
       lastSeenAt: timestamp,
+      // GEO ONLY. The body-derived fields above keep writing null when
+      // absent, deliberately: `stores null for optional fields that are not
+      // provided` is an existing, intentional contract with its own test, and
+      // those fields have no security consumer. Reversing it here would be an
+      // unrelated behaviour change smuggled in under a ban-matching fix.
+      ...withoutAbsent({
+        isp: geo.isp,
+        asn: geo.asn,
+        country: geo.country,
+        region: geo.region,
+      }),
     };
+
+    // Both spellings matter: getIpGeo returns {} on a hard failure (undefined)
+    // and null for a success that carried no ASN.
+    if (geo.asn === null || geo.asn === undefined) {
+      // Answers "why is this device still banned?" from logs. The stored ASN
+      // is deliberately left in place, so the ban that matches it is not
+      // visible in this request's data.
+      log.debug('device-info', 'geo unresolved — preserving any stored geo fields', { deviceId });
+    }
 
     const docRef = db.doc(`deviceBindings/${deviceId}`);
 

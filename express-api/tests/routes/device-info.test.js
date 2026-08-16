@@ -46,6 +46,12 @@ const ID_PREFIX = 'dvi-';
 const DEVICE_BANS = 'deviceBans';
 const NETWORK_BANS = 'networkBans';
 
+// SHY-0299: both caches are module state and would carry a previous test's
+// answer into the next one — the geo cache in particular holds a FAILURE for
+// 30s, which is exactly the window these tests exercise.
+const { clearIpGeoCache } = require('../../src/utils/ip-geo');
+const { clearBanCache, checkUserBans } = require('../../src/utils/bans');
+
 const CLIENT_IP = '198.51.100.42'; // TEST-NET-2 — real IPv4 shape, geo-inert
 const OTHER_IP = '198.51.100.77';
 
@@ -317,5 +323,124 @@ describe('sign-in ban report (banStatus)', () => {
       { ip: `${OTHER_IP}, ${CLIENT_IP}` }, // clean decoy left, real IP right
     ).expect(200);
     expect(res.body.banStatus).toMatchObject({ isBanned: true, banType: 'network_ip' });
+  });
+});
+
+/**
+ * SHY-0299 — a geo blip must not erase a device's known ASN.
+ *
+ * Real emulator, real ban engine, real documents. `fetch` is stubbed for the
+ * geo lookup ONLY, because ip-api is a third party whose failure cannot be
+ * induced for real — the same necessity the `getIpGeo branches` block in
+ * `tests/unit/device-info.unit.test.js` documents. Everything the security
+ * claim rests on (the stored binding, `networkBanMatches`, the response) is
+ * genuine.
+ *
+ * The unit tests assert which KEYS are written. This asserts the thing that
+ * actually matters: that an ASN-scoped ban still MATCHES. A document-shape
+ * assertion could be satisfied by a fix that is wrong in some way the shape
+ * does not capture, and the four assertions this story flipped are proof that
+ * shape-only reasoning can pin a bug as the contract.
+ */
+describe('SHY-0299 — a failed geo lookup preserves the recorded ASN', () => {
+  const GEO_IP = '203.0.113.77'; // routable shape, so getIpGeo really calls out
+  const originalFetch = global.fetch;
+
+  const geoOk = (asn) =>
+    jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ status: 'success', as: `${asn} Example Networks`, isp: 'ExampleNet' }),
+    }));
+  const geoDown = () => jest.fn(async () => ({ ok: false, json: async () => ({}) }));
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    clearIpGeoCache();
+    clearBanCache();
+  });
+
+  beforeEach(() => {
+    clearIpGeoCache();
+    clearBanCache();
+  });
+
+  test('the stored ASN survives a failed lookup, and the ASN ban still matches', async () => {
+    const caller = await mintRealUser({ uniqueId: '7299' });
+    const deviceId = `${ID_PREFIX}asn-survivor`;
+
+    // 1. A good lookup records AS64500.
+    global.fetch = geoOk('AS64500');
+    await submit(caller, { deviceId }, { ip: GEO_IP }).expect(200);
+    expect(await readBinding(deviceId)).toMatchObject({ asn: 'AS64500' });
+
+    // 2. ip-api goes down. The negative cache holds the failure for 30s, so
+    //    without the fix EVERY launch in that window nulls the field.
+    clearIpGeoCache();
+    global.fetch = geoDown();
+    await submit(caller, { deviceId }, { ip: GEO_IP }).expect(200);
+
+    // 3. The ASN is still on the binding — this is the whole story.
+    expect(await readBinding(deviceId)).toMatchObject({ asn: 'AS64500' });
+
+    // 4. And the ban that depends on it still matches.
+    //
+    //    The consumer is `authMiddleware` → `checkUserBans(uniqueId, ip)` →
+    //    `getUserDeviceStanding`, which builds its ASN list from the stored
+    //    BINDINGS (`bans.js:346`) — NOT this route's own `banStatus`, which
+    //    uses the LIVE lookup and is therefore blind to the stored value by
+    //    design. An earlier version of this test asserted the route's
+    //    response and failed for that reason: it was testing a claim the code
+    //    does not make ([[feedback-detector-must-report-not-guess]]).
+    //
+    //    Asserted by calling that consumer directly. Going through a route
+    //    is not an option here: `/device-info` is BAN-EXEMPT by design
+    //    (`auth.js:300`), so a banned user can still reach the ban screen —
+    //    it can never answer 403, and a test expecting one would be asserting
+    //    something the system deliberately does not do. `checkUserBans` is
+    //    the exported function `authMiddleware` calls on every non-exempt
+    //    authenticated request, and it reads the real emulator.
+    await db.doc(`${NETWORK_BANS}/${ID_PREFIX}asn-ban`).set({
+      type: 'asn',
+      value: '64500',
+      reason: 'Hosting provider used for evasion',
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+    });
+    clearBanCache();
+
+    const verdict = await checkUserBans('7299', GEO_IP);
+    expect(verdict.isBanned).toBe(true);
+    expect(verdict.banType).toBe('network_asn');
+  });
+
+  test('a later SUCCESSFUL lookup updates the ASN — last-known, not append-only', async () => {
+    // The other direction. Omitting keys under merge means a field can never
+    // be cleared, so the risk is a stale value outliving a genuine network
+    // change (roaming, VPN on). It must be overwritten by the next success.
+    const caller = await mintRealUser({ uniqueId: '7298' });
+    const deviceId = `${ID_PREFIX}asn-roamer`;
+
+    global.fetch = geoOk('AS64500');
+    await submit(caller, { deviceId }, { ip: GEO_IP }).expect(200);
+
+    clearIpGeoCache();
+    global.fetch = geoOk('AS64999');
+    await submit(caller, { deviceId }, { ip: GEO_IP }).expect(200);
+
+    expect(await readBinding(deviceId)).toMatchObject({ asn: 'AS64999' });
+  });
+
+  test('a first-ever binding with a failed lookup is still created', async () => {
+    const caller = await mintRealUser({ uniqueId: '7297' });
+    const deviceId = `${ID_PREFIX}asn-firsttime`;
+
+    global.fetch = geoDown();
+    await submit(caller, { deviceId }, { ip: GEO_IP }).expect(200);
+
+    const stored = await readBinding(deviceId);
+    expect(stored).not.toBeNull();
+    expect(stored).not.toHaveProperty('asn');
+    // The binding's real work still happened.
+    expect(stored).toMatchObject({ deviceId, lastIp: GEO_IP });
   });
 });

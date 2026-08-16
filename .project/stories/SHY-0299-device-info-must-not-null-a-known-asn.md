@@ -1,6 +1,6 @@
 ---
 id: SHY-0299
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-16
 priority: P1
@@ -208,3 +208,46 @@ per CLAUDE.md's backend rule, not a CI-config exemption.
   pin the current behaviour. Filed rather than folded into SHY-0143 because
   that story was already In Review with a PR open and a `Reviewed-up-to:`
   marker; per the repo's fix-pre-existing rule this is the follow-up PR.
+
+- **2026-08-16 — built.** `withoutAbsent()` drops null/undefined/empty-string
+  keys, applied to the FOUR geo fields only. The four assertions that pinned
+  the clobber as the contract are flipped from "the field is null" to "the
+  field is absent".
+
+  **Narrowed from the filed scope, deliberately.** The story said to fix the
+  body-derived `|| null` fields "in the same edit for consistency". Doing so
+  broke an existing test — `storage › stores null for optional fields that are
+  not provided` — which is a deliberate contract with no security consumer.
+  Reversing it would have been an unrelated behaviour change smuggled in under
+  a ban-matching fix, so those fields keep writing null and the reason is in
+  the code.
+
+  **Two tests were asserting things the system does not do**, both caught by
+  running them rather than by reading:
+
+  1. The first end-to-end version asserted `/api/device-info`'s own
+     `banStatus`. That route calls `checkBans(deviceId, ip, geo.asn)` with the
+     LIVE lookup, so it is blind to the stored value by design; the consumer
+     of the stored ASN is `authMiddleware` →
+     `checkUserBans` → `getUserDeviceStanding` (`bans.js:346`).
+  2. The second version asserted a 403 from an authenticated request to
+     `/device-info`. That route is BAN-EXEMPT (`auth.js:300`) so a banned user
+     can still reach the ban screen — it can never answer 403.
+
+     Final form calls `checkUserBans` directly: the exported function
+     `authMiddleware` runs on every non-exempt request, against the real
+     emulator.
+
+  **A harness gap surfaced too:** the unit file's `jest.mock` of `utils/log`
+  defined `info`/`warn`/`error` but not `debug`, so the new observability line
+  was `undefined()` — a TypeError caught by the route and served as a 500. The
+  route was right; the mirror was incomplete.
+
+  **Mutation-verified:** restoring `asn: geo.asn || null` reddens 5 unit tests
+  AND both end-to-end tests, including the `checkUserBans` verdict — so the
+  suite genuinely catches the original defect and not merely a document shape.
+
+  Full Express suite: 169 suites / 4,428 tests green; eslint
+  `--max-warnings=0` and prettier clean.
+
+Reviewed-up-to: PLACEHOLDER
