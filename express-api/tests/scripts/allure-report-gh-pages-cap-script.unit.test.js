@@ -67,6 +67,53 @@ function extractRunBlock(yaml, stepName) {
   return body.join('\n');
 }
 
+/**
+ * The LITERAL `env:` entries of a named step, as GitHub would export them.
+ *
+ * The harness runs the extracted `run:` body directly, so anything the step
+ * declares in `env:` has to be applied here or the block runs with a different
+ * environment than CI gives it. Values containing a `${{ }}` expression are
+ * skipped — the harness supplies those itself (token, repo, threshold).
+ *
+ * This exists because the cap's `git commit-tree` runs in a fresh clone with
+ * no identity and the runner has no global one, so it died with `fatal: empty
+ * ident name`. Reading the env from the workflow rather than hardcoding it
+ * means DELETING the identity reddens these tests instead of shipping.
+ */
+const isEnvName = (k) =>
+  k.length > 0 && [...k].every((c, i) => /[A-Za-z_]/.test(c) || (i > 0 && c >= '0' && c <= '9'));
+const unquote = (v) =>
+  (v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))
+    ? v.slice(1, -1)
+    : v;
+
+function extractStepEnv(yaml, stepName) {
+  const lines = yaml.split('\n');
+  const nameIdx = lines.findIndex((l) => l.includes(`- name: ${stepName}`));
+  if (nameIdx === -1) throw new Error(`step not found: ${stepName}`);
+  const envIdx = lines.findIndex((l, i) => i > nameIdx && /^\s+env:\s*$/.test(l));
+  if (envIdx === -1 || envIdx > nameIdx + 40) return {};
+  const indent = lines[envIdx].length - lines[envIdx].trimStart().length + 2;
+  const out = {};
+  for (let i = envIdx + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.trim() === '' || l.trim().startsWith('#')) continue;
+    if (l.length - l.trimStart().length < indent) break;
+    // Split on the FIRST colon by hand rather than with a regex: a pattern
+    // like /^\s*(\w+):\s*(.*)$/ is flagged sonarjs/slow-regex for
+    // super-linear backtracking, and indexOf is both faster and clearer.
+    const trimmed = l.trim();
+    const colon = trimmed.indexOf(':');
+    if (colon <= 0) break;
+    const key = trimmed.slice(0, colon);
+    if (!isEnvName(key)) break;
+    const raw = trimmed.slice(colon + 1).trim();
+    if (raw.includes('${{')) continue; // supplied by the harness
+    out[key] = unquote(raw);
+  }
+  return out;
+}
+
 /** A GitHub commits-API Link header whose rel="last" page number IS the
  * total commit count under per_page=1 (mirrors the real header shape). */
 function linkHeader(count) {
@@ -174,6 +221,8 @@ function runCapStep(shimEnv = {}) {
       encoding: 'utf8',
       stdio: 'pipe',
       env: {
+        // The step's own literal env first; every harness value below wins.
+        ...extractStepEnv(yaml, STEP_NAME),
         PATH: `${binDir}:${process.env.PATH}`,
         HOME: dir,
         RUNNER_TEMP: runnerTemp,
@@ -237,6 +286,21 @@ describe('allure-report.yml "Cap gh-pages history" — executed block behavior (
     expect(commitTreeCalls(gitCalls)).toHaveLength(1);
     expect(leasedPushCalls(gitCalls)).toHaveLength(1);
     expect(gitDataApiCalls(calls)).toHaveLength(0);
+  });
+
+  test('the step supplies a git author identity for commit-tree', () => {
+    // `commit-tree` runs in a fresh clone under $RUNNER_TEMP with no local
+    // identity, and a GitHub runner has no global one — so it died with
+    // `fatal: empty ident name`, caught by the real-git test below. Asserted
+    // here as well so a deletion fails with a sentence instead of with git's
+    // error five hundred lines into a log.
+    const env = extractStepEnv(fs.readFileSync(WORKFLOW, 'utf8'), STEP_NAME);
+    expect(env.GIT_AUTHOR_NAME).toBeTruthy();
+    expect(env.GIT_AUTHOR_EMAIL).toContain('@');
+    // COMMITTER too: git needs BOTH, and only the author one is the obvious
+    // half to remember.
+    expect(env.GIT_COMMITTER_NAME).toBeTruthy();
+    expect(env.GIT_COMMITTER_EMAIL).toContain('@');
   });
 
   test('the JSON body cannot poison the count (header-slice guard)', () => {
@@ -481,6 +545,12 @@ esac
           PATH: `${binDir}:${process.env.PATH}`,
           HOME: home,
           RUNNER_TEMP: runnerTemp,
+          // Whatever the STEP declares — notably the git author identity,
+          // without which commit-tree dies in the identity-less fresh clone.
+          // FIRST, so the harness's own values below win: the step also
+          // declares MAX_GH_PAGES_COMMITS: 25, and letting that through would
+          // silently disable the cap for a 5-commit fixture.
+          ...extractStepEnv(fs.readFileSync(WORKFLOW, 'utf8'), STEP_NAME),
           REPO: 'Shyden-Ltd/ShyTalk',
           MAX_GH_PAGES_COMMITS: '3',
           GH_TOKEN: 'test-token',

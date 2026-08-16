@@ -281,6 +281,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           MAX_GH_PAGES_COMMITS: 25
+          # `git commit-tree` runs in a FRESH clone under $RUNNER_TEMP, which
+          # has no local identity, and the runner has no global one — so it
+          # died with `fatal: empty ident name`. Found by the real-git test,
+          # which is the point of running the real block instead of pinning it.
+          #
+          # Set explicitly rather than via `git config --global`: the identity
+          # then belongs to this step, cannot be perturbed by an earlier step,
+          # and the commit is attributable to the bot that made it.
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
           set -euo pipefail
           TIP_ERR="${RUNNER_TEMP}/gh-pages-tip-err"
