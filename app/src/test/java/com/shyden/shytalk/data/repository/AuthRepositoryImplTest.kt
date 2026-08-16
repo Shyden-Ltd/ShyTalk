@@ -491,6 +491,34 @@ class AuthRepositoryImplTest {
         }
 
     @Test
+    fun `signOut invalidates the API token cache BEFORE dropping the Firebase session`() =
+        runTest {
+            // The root fix behind three Criticals, and it had only a
+            // source-text pin — which cannot see whether the call executes, or
+            // in what order. Order matters: clearing after `auth.signOut()`
+            // leaves a live bearer token in memory for any window in which the
+            // platform call throws.
+            repo.signOut()
+
+            verifyOrder {
+                workerApiClient.clearTokenCache()
+                auth.signOut()
+            }
+        }
+
+    @Test
+    fun `signOut still clears the token cache when the platform sign-out throws`() =
+        runTest {
+            // The window the ordering protects. A banned or compromised session
+            // must not keep a working token because Firebase happened to fail.
+            every { auth.signOut() } throws RuntimeException("platform failure")
+
+            runCatching { repo.signOut() }
+
+            verify { workerApiClient.clearTokenCache() }
+        }
+
+    @Test
     fun `refreshIdToken invalidates the API client's cached bearer token`() =
         runTest {
             // Without this, rotating Firebase's token leaves WorkerApiClient

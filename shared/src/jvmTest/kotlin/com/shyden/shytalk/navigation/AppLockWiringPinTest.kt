@@ -701,6 +701,31 @@ class AppLockWiringPinTest {
     }
 
     @Test
+    fun `every ban sign-out guards its own failure and outlives the composition`() {
+        // Round 3 hardened Android's two sites and left the shared graph — the
+        // one iOS actually routes ban screens from — with neither guard.
+        // `rememberCoroutineScope()` has no CoroutineExceptionHandler, and
+        // `signOut()` reaches the Keychain and Firebase, so an uncaught throw
+        // crashed the app ON a ban screen. Pinning one platform's file is what
+        // let that through, twice.
+        listOf(appNavGraph, sharedNavGraph, mainActivity).forEach { path ->
+            val src = read(path)
+            val at =
+                src
+                    .indexOf("signOutAndStay")
+                    .takeIf { it >= 0 }
+                    ?: src.indexOf("onSignOut = {")
+            assertTrue(at >= 0, "$path must define a ban sign-out")
+            val body = src.substring(at, minOf(at + 1600, src.length))
+            assertTrue(
+                body.contains("CancellationException"),
+                "$path's ban sign-out must rethrow CancellationException and catch the rest — " +
+                    "an uncaught throw here crashes the app on the ban screen",
+            )
+        }
+    }
+
+    @Test
     fun `SessionCache is DI-registered on both platforms`() {
         // A commonMain class nothing constructs is a class nothing uses. Both
         // modules already register the SecureStorage it is built on, so the

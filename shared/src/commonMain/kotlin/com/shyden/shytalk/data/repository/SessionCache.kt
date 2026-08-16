@@ -98,13 +98,11 @@ class SessionCache(
 
         val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return null
 
-        val stored = storage.getString(KEY_SESSION)
-        if (stored != null && stored.isBlank()) {
-            // Present but blank is unreadable, and the KDoc promises unreadable
-            // records are erased rather than re-parsed on every launch forever.
-            return discardRecord(stored, "blank record")
-        }
-        val raw = stored ?: return null
+        // No separate blank-string branch: `Json.parseToJsonElement("")` throws,
+        // and the catch below already routes that to the same miss. A branch
+        // whose only observable difference is a log string is a branch whose
+        // test cannot fail.
+        val raw = storage.getString(KEY_SESSION) ?: return null
 
         // The ENTIRE decode is inside the try, field reads included.
         // `JsonElement.jsonPrimitive` throws when the element is not a
@@ -118,12 +116,12 @@ class SessionCache(
         // Anything unreadable is a miss, never a partial identity, and it is
         // erased so it cannot be re-parsed on every launch forever.
         return try {
-            val record = Json.parseToJsonElement(raw) as? JsonObject ?: return discardRecord(raw, "not a JSON object")
+            val record = Json.parseToJsonElement(raw) as? JsonObject ?: return unusableRecord("not a JSON object")
 
             fun field(name: String) = record[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
 
-            val storedUid = field(FIELD_FIREBASE_UID) ?: return discardRecord(raw, "no usable firebaseUid")
-            val uniqueId = field(FIELD_UNIQUE_ID) ?: return discardRecord(raw, "no usable uniqueId")
+            val storedUid = field(FIELD_FIREBASE_UID) ?: return unusableRecord("no usable firebaseUid")
+            val uniqueId = field(FIELD_UNIQUE_ID) ?: return unusableRecord("no usable uniqueId")
 
             // NOT a discard: a record for a different account is perfectly
             // well-formed and belongs to whoever it names. Erasing it here
@@ -137,7 +135,7 @@ class SessionCache(
                 cohort = field(FIELD_COHORT),
             )
         } catch (e: IllegalArgumentException) {
-            discardRecord(raw, "unreadable (${e.message})")
+            unusableRecord("unreadable (${e.message})")
         }
     }
 
@@ -224,20 +222,22 @@ class SessionCache(
     }
 
     /**
-     * Erases an unusable record and reports a miss, so it cannot come back.
+     * Reports an unusable record as a miss.
      *
-     * Compare-and-delete rather than a plain [clear]: reading and discarding
-     * are not atomic, so a `write()` landing in between would otherwise have
-     * its brand-new, perfectly good record deleted by a reader still holding
-     * the old malformed one. The cost of that is only an extra Lock screen,
-     * but it is a bug that would be very hard to see and trivial to avoid.
+     * Deliberately does NOT erase it. An earlier version did, then a
+     * compare-and-delete version tried to make that safe — and a threaded test
+     * showed it is not: `getString` followed by `clear()` is a read-then-write
+     * with a window in between, so a `write()` landing there still loses its
+     * brand-new record. Exactly the TOCTOU shape SHY-0298's gh-pages cap had.
+     *
+     * `read()` is now a pure read, which closes the class of bug rather than
+     * narrowing it. The cost is that a permanently malformed record is
+     * re-parsed once per launch until the next `write()` overwrites it or a
+     * sign-out clears it — one failed JSON parse, against losing a good
+     * record. Not a close call.
      */
-    private fun discardRecord(
-        raw: String,
-        why: String,
-    ): CachedSession? {
-        logW(TAG, "Discarding the stored session record — $why")
-        if (storage.getString(KEY_SESSION) == raw) clear()
+    private fun unusableRecord(why: String): CachedSession? {
+        logW(TAG, "Ignoring the stored session record — $why")
         return null
     }
 

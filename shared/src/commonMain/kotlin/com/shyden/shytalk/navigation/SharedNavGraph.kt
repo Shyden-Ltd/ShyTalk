@@ -36,6 +36,7 @@ import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -76,6 +77,7 @@ import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.back
 import com.shyden.shytalk.resources.warning_acknowledge_failed
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -194,9 +196,26 @@ fun SharedNavGraph(
         // user exactly where they are. iOS proved a caller-supplied lambda
         // cannot be trusted with that — it passed one that navigated away.
         val banSignOutScope = rememberCoroutineScope()
-        val signOutAndStay: () -> Unit = {
-            banSignOutScope.launch { authRepository.signOut() }
-        }
+        val signOutAndStay: () -> Unit =
+            remember(authRepository, banSignOutScope) {
+                {
+                    banSignOutScope.launch {
+                        // `rememberCoroutineScope()` carries no
+                        // CoroutineExceptionHandler, and `signOut()` reaches the
+                        // Keychain and Firebase — either can throw. Android's
+                        // equivalent guards; this one did not, so an uncaught
+                        // throw here crashed the app on a ban screen. Every
+                        // other sign-out call site in the codebase guards too.
+                        try {
+                            authRepository.signOut()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logW("SharedNavGraph", "ban-screen sign-out failed: ${e.message}")
+                        }
+                    }
+                }
+            }
 
         NavHost(
             navController = navController,

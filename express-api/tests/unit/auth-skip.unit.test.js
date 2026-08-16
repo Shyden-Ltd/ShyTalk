@@ -13,14 +13,37 @@
  * banned, signed-out user sees the ban screen or the login screen.
  */
 
+const http = require('node:http');
 const { skipsAuth } = require('../../src/middleware/auth-skip');
+
+/**
+ * A REAL `IncomingMessage`, because the shape is the whole point.
+ *
+ * `headers` is an accessor on `IncomingMessage.prototype`, not an own key.
+ * A version of this predicate did `req = { ...req, path }` to normalise the
+ * trailing slash — and object spread copies only OWN enumerable keys, so the
+ * copy had no `headers` and the `/translate` rule threw
+ * `TypeError: Cannot read properties of undefined` INSIDE the auth
+ * middleware. Every `POST /api/translate` 500'd, anonymous and authenticated.
+ *
+ * The plain-object helpers these tests used before could not see it: they
+ * carried `headers` as an own key, which is exactly what a real request does
+ * not do. Building the real type is the only shape that would have failed.
+ */
+function request(method, path, headers) {
+  const req = new http.IncomingMessage(null);
+  req.method = method;
+  req.path = path;
+  if (headers) req.headers = headers;
+  return req;
+}
 
 // `headers` is required — the anonymous-translate rule reads
 // `req.headers.authorization`, and the JSDoc used to omit it, so helpers built
 // to the documented shape threw a TypeError instead of asserting. That is why
 // the widest branch in this file had no unit coverage.
-const get = (path, headers = {}) => skipsAuth({ method: 'GET', path, headers });
-const post = (path, headers = {}) => skipsAuth({ method: 'POST', path, headers });
+const get = (path, headers) => skipsAuth(request('GET', path, headers));
+const post = (path, headers) => skipsAuth(request('POST', path, headers));
 
 describe('the cold-start ban check (SHY-0143)', () => {
   test('GET /ban-status skips auth', () => {
@@ -54,6 +77,30 @@ describe('device-info stays authenticated', () => {
 
   test('GET /device-info does NOT skip auth either', () => {
     expect(get('/device-info')).toBe(false);
+  });
+});
+
+describe('it reads the LIVE request, never a copy', () => {
+  test('a real IncomingMessage does not throw on the header-reading rule', () => {
+    // The regression this file exists to prevent. A copy loses `headers`,
+    // and the failure lands inside the auth middleware as a 500.
+    expect(() => post('/translate')).not.toThrow();
+    expect(post('/translate')).toBe(true);
+  });
+
+  test('the header-reading rule still distinguishes an authenticated caller', () => {
+    // Proves the rule is genuinely reading headers off the real request,
+    // rather than merely not throwing.
+    expect(post('/translate', { authorization: 'Bearer x' })).toBe(false);
+  });
+
+  test('every other prototype accessor survives too', () => {
+    // `query`, `ip`, `get()`, `originalUrl` are accessors as well. A future
+    // rule reading one must not silently see undefined inside an auth
+    // decision, which is what the copy would have caused.
+    const req = request('GET', '/health');
+    expect(() => skipsAuth(req)).not.toThrow();
+    expect(req.headers).toBeDefined();
   });
 });
 

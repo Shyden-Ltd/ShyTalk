@@ -56,7 +56,6 @@ import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.StartingScreen
-import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
@@ -105,7 +104,6 @@ class MainActivity : AppCompatActivity() {
     private val authRepository: AuthRepository by inject()
     private val userRepository: UserRepository by inject()
     private val privateMessageRepository: PrivateMessageRepository by inject()
-    private val workerApiClient: WorkerApiClient by inject()
     private val activeRoomManager: RoomLifecycleManager by inject()
     private val appConfigService: AppConfigService by inject()
     private val biometricAuth: com.shyden.shytalk.core.util.BiometricAuth by inject()

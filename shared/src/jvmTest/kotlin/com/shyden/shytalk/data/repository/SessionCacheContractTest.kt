@@ -312,7 +312,6 @@ class SessionCacheContractTest {
             storage.putString(SessionCache.KEY_SESSION, record)
 
             assertNull(cache.read("fb-uid-1"), "a wrong-shaped record ($record) must be a miss, not a throw")
-            assertNull(storage.getString(SessionCache.KEY_SESSION), "and it must be erased, not re-parsed forever")
         }
     }
 
@@ -329,16 +328,16 @@ class SessionCacheContractTest {
     }
 
     @Test
-    fun `an unparseable record reads as a miss and is erased`() {
+    fun `an unparseable record reads as a miss and is left for the next write`() {
         listOf("not json at all", "{\"firebaseUid\": ", "[]", "42").forEach { garbage ->
             setup()
             storage.putString(SessionCache.KEY_SESSION, garbage)
 
             assertNull(cache.read("fb-uid-1"), "garbage ('$garbage') must read as a miss")
-            assertNull(
+            assertNotNull(
                 storage.getString(SessionCache.KEY_SESSION),
-                "and must be ERASED — the test name said so while asserting nothing of the kind, " +
-                    "so `[]` and `42` sat on disk being re-parsed on every launch",
+                "and must be LEFT ALONE — `read()` is a pure read, because erasing from it lost " +
+                    "races with a concurrent write. The next write overwrites it.",
             )
         }
     }
@@ -411,45 +410,55 @@ class SessionCacheContractTest {
     }
 
     @Test
-    fun `discarding an unreadable record never deletes one a concurrent write just stored`() {
-        // Reading and discarding are not atomic. Without a compare-and-delete,
-        // a reader holding a stale malformed record would wipe the good record
-        // a `write()` landed in between — a silent cache miss and one extra
-        // Lock screen, from a bug that is very hard to see.
-        storage.putString(SessionCache.KEY_SESSION, "not json at all")
+    fun `a read never deletes a record a concurrent write just stored`() {
+        // `read()` is a PURE read. Two earlier designs tried to erase an
+        // unusable record from inside it — first unconditionally, then with a
+        // compare-and-delete — and this test proved the second one still lost
+        // races: `getString` followed by `clear()` is a read-then-write with a
+        // window in between, the same TOCTOU shape SHY-0298's gh-pages cap had.
+        //
+        // Closing the class beat narrowing it. A malformed record is now
+        // re-parsed until the next write overwrites it; that costs one failed
+        // JSON parse per launch and cannot cost a good record.
+        repeat(40) { round ->
+            setup()
+            storage.putString(SessionCache.KEY_SESSION, "not json at all")
 
-        // Simulate the interleaving deterministically: the write lands while
-        // the reader still holds the malformed raw it parsed.
-        val storageDuringRead = storage
-        storageDuringRead.putString(SessionCache.KEY_SESSION, "not json at all")
-        val reader = SessionCache(storageDuringRead)
-        // The good write happens here, between the reader's getString and its
-        // discard, by writing through a second instance over the same storage.
-        SessionCache(storageDuringRead).write(
-            firebaseUid = "fb-uid-1",
-            uniqueId = "10000005",
-            cohort = "adult",
-        )
+            val stop =
+                java.util.concurrent.atomic
+                    .AtomicBoolean(false)
+            val barrier = java.util.concurrent.CyclicBarrier(4)
+            val readers =
+                (1..3).map {
+                    Thread {
+                        barrier.await()
+                        while (!stop.get()) cache.read("fb-uid-1")
+                    }
+                }
+            readers.forEach { it.start() }
+            barrier.await()
+            cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+            Thread.sleep(2)
+            stop.set(true)
+            readers.forEach { it.join() }
 
-        reader.read("fb-uid-1")
-
-        assertNotNull(
-            cache.read("fb-uid-1"),
-            "the concurrent write's record must survive a reader discarding an older one",
-        )
+            assertNotNull(
+                cache.read("fb-uid-1"),
+                "round $round: a concurrent read destroyed the writer's record",
+            )
+        }
     }
 
     @Test
-    fun `a blank record is erased rather than re-parsed on every launch`() {
+    fun `a blank record reads as a miss`() {
+        // There is no special blank branch any more: `parseToJsonElement("")`
+        // throws and the catch routes it to the same miss. A branch whose only
+        // observable difference was a log string could not be tested.
         listOf("", "   ", "\n").forEach { blank ->
             setup()
             storage.putString(SessionCache.KEY_SESSION, blank)
 
             assertNull(cache.read("fb-uid-1"), "a blank record ('$blank') must read as a miss")
-            assertNull(
-                storage.getString(SessionCache.KEY_SESSION),
-                "and must be erased — the KDoc promises unreadable records do not come back",
-            )
         }
     }
 
@@ -468,6 +477,39 @@ class SessionCacheContractTest {
         assertNull(storage.getString(SessionCache.LEGACY_KEY_FIREBASE_UID))
         assertNull(storage.getString(SessionCache.LEGACY_KEY_UNIQUE_ID))
         assertNull(storage.getString(SessionCache.LEGACY_KEY_COHORT))
+    }
+
+    @Test
+    fun `the sweep fires when ANY single legacy key is present`() {
+        // The guard is a three-way `&&`, and seeding all three leaves each
+        // conjunct individually unfalsifiable — flip any one to a constant and
+        // the all-three test stays green. A partially-migrated install is also
+        // the realistic shape: a crash mid-clear leaves exactly one behind.
+        listOf(
+            SessionCache.LEGACY_KEY_FIREBASE_UID,
+            SessionCache.LEGACY_KEY_UNIQUE_ID,
+            SessionCache.LEGACY_KEY_COHORT,
+        ).forEach { onlyKey ->
+            setup()
+            storage.putString(onlyKey, "leftover")
+
+            cache.read("fb-uid-1")
+
+            assertNull(storage.getString(onlyKey), "a lone '$onlyKey' must still be swept")
+        }
+    }
+
+    @Test
+    fun `the sweep leaves a valid current record alone`() {
+        // A partially-migrated install can hold both. Sweeping the legacy keys
+        // must not take the working record with them.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+        storage.putString(SessionCache.LEGACY_KEY_UNIQUE_ID, "99999999")
+
+        val read = assertNotNull(cache.read("fb-uid-1"), "the current record must survive the sweep")
+
+        assertEquals("10000005", read.uniqueId)
+        assertNull(storage.getString(SessionCache.LEGACY_KEY_UNIQUE_ID))
     }
 
     @Test
