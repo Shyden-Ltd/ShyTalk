@@ -99,6 +99,15 @@ jobs:
           # integration (exit 0, no warning). Never pass that flag here.
           SHELLCHECK_OPTS='-e SC2086' actionlint
 
+      # SHY-0298 R1/I3. The step above lints `.github/workflows/**` ONLY —
+      # bare `actionlint` takes no path arguments and composite action metadata
+      # files are not workflow files. Every line of shell under
+      # `.github/actions/**` was unlinted, which SHY-0298 then added ~65 lines
+      # to. Verified by mutation: a valid-YAML `rm -rf "$UNSET/"` injected into
+      # a composite action leaves the step above exiting 0.
+      - name: Composite-action shell is shellcheck-clean
+        run: bash scripts/check-action-shell.sh
+
       - name: No paid GitHub-hosted runner specs
         run: bash scripts/check-no-paid-runners.sh
 

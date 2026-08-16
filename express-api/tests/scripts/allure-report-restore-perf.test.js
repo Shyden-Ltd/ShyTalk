@@ -77,12 +77,17 @@ describe('allure-report.yml gh-pages restore perf — SHY-0127', () => {
     expect(block).not.toMatch(/^[ \t]*filter:/m);
   });
 
-  test('the deploy step still publishes via peaceiris to the per-suite/env/latest layout', () => {
+  test('the deploy step still publishes to the per-suite/env/latest layout', () => {
     // Regression guard: the perf change touches only the restore + timeout, not
     // the multi-suite/multi-env deploy layout. (The keep_files value is owned
     // by allure-report-gh-pages-cap.test.js — SHY-0128 flipped it to false.)
+    //
+    // SHY-0298 moved the peaceiris invocation into the shared
+    // `.github/actions/publish-gh-pages` composite action so every writer
+    // shares one `gh-pages-deploy` concurrency queue. The layout this test
+    // owns is unchanged; only the thing that performs the push moved.
     const block = stepBlock(yaml, 'Deploy report to GitHub Pages');
-    expect(block).toMatch(/peaceiris\/actions-gh-pages@/);
+    expect(block).toMatch(/uses:\s*\.\/\.github\/actions\/publish-gh-pages/);
     // full per-suite/env/latest layout (not just suite_name) — a truncation
     // would make pr/deploy envs overwrite each other. Exact-substring pin
     // (no regex) — avoids ReDoS heuristics and matches the real YAML verbatim.
