@@ -331,3 +331,68 @@ recorded in the Notes so the next session can re-run it.
   assertion is intermittent: it distinguishes "the thing I am looking for is
   there" from "something that looks like it is there", which no amount of
   re-reading the assertion can.
+
+- **2026-08-17 — `code-reviewer` round 1: 3 Critical, 4 Important, 5 Minor.**
+  Every claim was verified before being acted on; three changed the code.
+
+  1. **The tree gate was untested and a plausible regression passed 31/31.**
+     Every test wrote a DEAD pid to the run's pid file, so every fixture was
+     reached through the orphan path and `_pid_tree` was never driven through
+     `cmd_stop`. Narrowing the gate to `runner_pids` — the exact change the
+     code comment warns against — survived as a mutant. Now covered by a test
+     that builds a real 2-level tree, writes the LIVE parent pid, and uses a
+     fixture that is deliberately NOT runner-shaped so the gate is the only
+     route by which it can die. Mutant now killed.
+
+  2. **A real parsing bug, found by the test written for the review finding.**
+     A `ps` continuation line beginning with digits is shape-identical to a
+     new record. Fed `["5150 bash -c ", "99999 node …/manual-qa-runner.js"]`
+     the filter reported **99999** — a pid no process owns, on its way to
+     `kill` — and MISSED the real 5150. The parse is now anchored on pids that
+     actually exist rather than on line shape.
+
+  3. **Two fold tests were decorations.** macOS `ps` renders an embedded
+     newline as the escape `\012` and keeps every record on one line, so the
+     folding branch is unreachable on this machine: a spawn-a-fixture test
+     passed identically with the folding deleted. Both mutants survived. The
+     filter was split out (`_runner_filter`, reading records on stdin) so the
+     branch can be driven with the record text a `ps` that does emit newlines
+     would produce — the real awk program, real record text, no stand-in.
+
+  Also applied: `[ \t]` instead of `[[:space:]]` (Ubuntu CI resolves `awk` to
+  mawk, whose POSIX-class support has varied, and an unrecognised class would
+  silently match NOTHING on Linux only); `node(js)?` for Debian's binary name;
+  `|| true` on the `ps` pipeline so a `ps` failure cannot abort a `set -e`
+  cleanup mid-sweep; assertions on the survivor report's PAYLOAD and on the
+  success line naming its run; an adversarial run-id injection test.
+
+- **Known limitation, deliberate.** `qa-cleanup-orphans.sh`'s killing branch is
+  never executed against a real target anywhere in the suite. It is
+  machine-wide by design, Jest runs ~150 suites in parallel, and five siblings
+  spawn real runners — so a clean-mode run inside the suite would kill THEIR
+  processes, which is the exact interference this story removes. Buying
+  coverage by reintroducing the defect is a bad trade. What is enforced instead
+  is the property that makes `--dry-run` a faithful preview: the kill branch
+  must consume the same variable the report printed and derive nothing of its
+  own. Mutant (a kill branch that re-derives its own set) killed.
+
+- **Two harness lessons, both of which produced a false result before being
+  caught.** A mutation harness using paths relative to a `cd` silently failed
+  to restore and left a mutated production file on disk. And a mutation whose
+  `-t` filter matched no test after a rename reported `16 skipped, 16 total`
+  and was scored as a SURVIVOR — zero tests ran. The harness now uses absolute
+  paths, verifies the restore against git, and fails loudly when a mutation
+  runs no tests.
+
+- **Exemption-2 classification, consciously taken.** CLAUDE.md's examples name
+  `.github/workflows/**` and CI-only helpers; these are operator-invoked local
+  tooling. The exemption's anti-loophole boundary is the deciding text — it
+  asks whether the PR touches app (`shared/**`, `app/**`, `iosApp/**`), backend
+  (`express-api/src/**`, rules) or website (`public/**`), and this touches none
+  of them — and its stated rationale ("no user-observable behaviour to walk")
+  applies exactly. Recorded as a judgment, not a rubber stamp.
+
+- Verification after review: full `express-api tests/scripts/` **150 suites /
+  7549 tests** green; the reproduction command green **3/3** (2033 tests);
+  **7/7 mutants killed**; shellcheck, eslint `--max-warnings=0` and prettier
+  clean.

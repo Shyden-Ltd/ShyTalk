@@ -37,6 +37,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const MATRIX = path.join(REPO_ROOT, 'express-api/scripts/gauntlet/50-matrix.sh');
 const CLEANUP = path.join(REPO_ROOT, 'express-api/scripts/qa-cleanup-orphans.sh');
 const RUNNER = path.join(REPO_ROOT, 'express-api/scripts/manual-qa-runner.js');
+const HELPER = path.join(REPO_ROOT, 'express-api/scripts/lib/runner-pids.sh');
 const NO_ADB_PATH = '/usr/bin:/bin';
 
 /** A pid that is certainly dead: a subshell that prints its own pid and exits. */
@@ -52,11 +53,46 @@ function pgrepFull(needle) {
   return spawnSync('/usr/bin/pgrep', ['-f', needle], { encoding: 'utf8' }).stdout.trim();
 }
 
-/** The full command line of a pid, or '' if it is gone. */
+/** The full command line of a pid, or '' if it is gone.
+ *  `-ww` matches the production helper — without it `ps` may truncate to the
+ *  terminal width, which would silently drop the very token being asserted. */
 function commandOf(pid) {
-  return spawnSync('/bin/ps', ['-o', 'command=', '-p', String(pid)], {
+  return spawnSync('/bin/ps', ['-ww', '-o', 'command=', '-p', String(pid)], {
     encoding: 'utf8',
   }).stdout.trim();
+}
+
+/** The REAL record filter, fed `ps -o pid=,command=` lines on stdin.
+ *  Lets a test drive record shapes this platform cannot produce — see the
+ *  multi-line describe block for why that is necessary rather than a shortcut. */
+function runnerFilter(lines, scope = '', live = '') {
+  const r = spawnSync(
+    '/bin/bash',
+    ['-c', 'source "$1"; _runner_filter "$2" "" "$3"', 'bash', HELPER, scope, live],
+    {
+      encoding: 'utf8',
+      input: `${lines.join('\n')}\n`,
+      env: { ...process.env, PATH: NO_ADB_PATH },
+    },
+  );
+  return r.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** The REAL shell predicate, called directly, so a test can assert on what
+ *  `runner_pids` itself selects rather than only on what its callers do with
+ *  the answer. */
+function runnerPids(scope = '') {
+  const r = spawnSync('/bin/bash', ['-c', 'source "$1"; runner_pids "$2"', 'bash', HELPER, scope], {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: NO_ADB_PATH },
+  });
+  return r.stdout
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 const spawned = [];
@@ -138,10 +174,11 @@ describe('SHY-0304 — a runner is identified by what it is, not what it mention
     return dir;
   }
 
-  function runStop(id) {
+  function runStop(id, cwd) {
     return spawnSync('/bin/bash', [MATRIX, 'stop', id], {
       encoding: 'utf8',
       timeout: 40000,
+      ...(cwd ? { cwd } : {}),
       env: { ...process.env, GAUNTLET_TMP: tmpRoot, PATH: NO_ADB_PATH },
     });
   }
@@ -235,6 +272,174 @@ describe('SHY-0304 — a runner is identified by what it is, not what it mention
       // Still running WITH its argv. A killed child would zombie (argv gone)
       // and `kill(pid, 0)` would falsely report it alive, so read the command.
       expect(commandOf(tail.pid)).toContain(`matrix-${id}`);
+    });
+
+    test('the recorded pid’s WHOLE process tree is killed (the tree gate fires)', () => {
+      // Review finding. Every other test in this story writes a DEAD pid to
+      // the run's pid file, so every fixture is reached through the ORPHAN
+      // path and the tree gate is never exercised end to end. That left the
+      // change's most consequential line untested: replacing
+      // `by_runid="$(pgrep -f "$run_id")"` with `runner_pids "$run_id"` — the
+      // exact narrowing the code comment warns against — passed all 31 tests
+      // while, in production, silently stopping the descendant walk on EVERY
+      // stop and regressing straight back to the SHY-0236 orphan thrash.
+      //
+      // The fixture is deliberately NOT runner-shaped: it carries the run id
+      // but no `manual-qa-runner.js` token, so `runner_pids` cannot see it and
+      // the tree gate is the ONLY route by which it can die. That is what
+      // makes this test fail under the narrowing mutant.
+      const id = `tree-${process.pid}`;
+      const runId = `matrix-${id}`;
+
+      // `sleep & wait` forces a real fork, giving a genuine parent→child tree
+      // rather than bash exec'ing the single command in place.
+      const parent = track(
+        spawn('/bin/bash', ['-c', `sleep 40 & wait # ${runId}`], { stdio: 'ignore' }),
+      );
+      let childPid = '';
+      const start = Date.now();
+      while (!childPid && Date.now() - start < 5000) {
+        childPid = spawnSync('/usr/bin/pgrep', ['-P', String(parent.pid)], {
+          encoding: 'utf8',
+        }).stdout.trim();
+        if (!childPid) spawnSync('/bin/sleep', ['0.05']);
+      }
+      expect(childPid).toMatch(/^\d+$/); // a real 2-level tree exists
+      expect(commandOf(parent.pid)).toContain(runId); // and the gate can see it
+      expect(runnerPids(runId)).not.toContain(String(parent.pid)); // but identity cannot
+
+      makeRun(id, parent.pid); // the LIVE pid — this is the whole point
+      const r = runStop(id);
+
+      expectStatus(r, 0);
+      // "Gone" means gone-or-zombie, not absent from the table: Node is the
+      // parent of the killed process and cannot reap it while these
+      // synchronous calls hold the event loop, so `ps` reports `<defunct>`.
+      // A zombie has lost its argv, which is the honest, race-free signal —
+      // the same reason this file reads commands rather than `kill(pid, 0)`.
+      expect(commandOf(parent.pid)).not.toContain(runId); // parent killed
+      expect(commandOf(childPid)).not.toContain('sleep 40'); // descendant too
+      // Guard against the above passing because the fixture never existed.
+      expect(String(parent.pid)).toMatch(/^\d+$/);
+      expect(childPid).toMatch(/^\d+$/);
+    });
+  });
+
+  describe('a hostile run id', () => {
+    test('shell metacharacters in the run directory name cannot execute', () => {
+      // The Security AC says `$run_id` reaches pgrep as a single argument and
+      // is never interpolated into a shell string. That was true by
+      // inspection and untested. `resolve_run_dir` requires a real directory,
+      // so the attack surface is a directory NAME — which an operator can
+      // create by accident as easily as on purpose.
+      // The payload must contain NO slashes. A `/` in the run id turns
+      // `makeRun` into a nested mkdir, and `basename` then returns only the
+      // last path component — which strips the payload entirely and makes the
+      // test pass against deliberately vulnerable code. The first version of
+      // this test embedded an absolute canary path and did exactly that: an
+      // `eval`-based mutant survived it. The cwd carries the location instead.
+      const canary = path.join(tmpRoot, 'canary-was-executed');
+      const id = 'evil-$(touch canary-was-executed)-`touch canary-was-executed`';
+      makeRun(id, deadPid());
+
+      const r = runStop(id, tmpRoot);
+
+      expect(fs.existsSync(canary)).toBe(false); // nothing ran
+      expectStatus(r, 0); // and it still did its job
+      expect(r.stdout).toMatch(/0 runners remain/);
+    });
+  });
+
+  // ------------------------------------------------- multi-line ps records
+
+  describe('records whose command line contains newlines', () => {
+    // `cmd_launch` builds its detached job as `nohup bash -c "<newline> …node
+    // scripts/manual-qa-runner.js …<newline>"`, so the wrapper's argv really
+    // does contain newlines.
+    //
+    // Whether that becomes a MULTI-LINE `ps` record is platform-dependent, and
+    // this machine cannot produce one: macOS `ps` escapes an embedded newline
+    // as the literal `\012` and keeps the record on one line (measured). The
+    // first attempt at these tests spawned a fixture with a real newline in
+    // its argv and asserted it was found — and passed identically with the
+    // folding logic deleted, and with the new-record test corrupted. Both
+    // mutants survived, because the branch was never reached.
+    //
+    // So the records are fed to the real filter directly. This is not a stand-
+    // in for the parser: it is the parser, running the real awk program over
+    // the exact record text a `ps` that does emit newlines would hand it.
+
+    test('folds a continuation line back into the record it belongs to', () => {
+      // The runner token sits on the SECOND physical line — exactly where the
+      // launcher puts it. Without folding, the first line has `node` but no
+      // script token and the second has the script but no `node`, so NEITHER
+      // matches and a genuine runner is silently missed.
+      const record = [
+        '4242 bash -c ',
+        `  node ${RUNNER} --matrix --report-dir=/tmp/matrix-x/report`,
+      ];
+
+      expect(runnerFilter(record, '', '4242')).toEqual(['4242']);
+    });
+
+    test('a continuation line that looks like a pid column does not split the record', () => {
+      // The new-record test is /^[ \t]*[0-9]+[ \t]/, so a continuation line
+      // beginning with digits and whitespace LOOKS like a new process. If it
+      // were treated as one, the record would be cut in half — the fragment
+      // carrying the script token has no `node`, so the runner escapes, and a
+      // phantom pid that no process owns could be emitted into a list that is
+      // passed to `kill`.
+      // 5150 exists; 99999 does not. That distinction is the fix: the parse is
+      // anchored on pids that ACTUALLY EXIST, because shape alone cannot tell
+      // a continuation line from a record. Before this, the filter reported
+      // 99999 — a pid nothing owns, on its way to `kill` — and missed 5150.
+      const record = ['5150 bash -c ', `99999 node ${RUNNER} --matrix`];
+
+      const found = runnerFilter(record, '', '5150');
+      expect(found).toEqual(['5150']); // whole record, real pid
+      expect(found).not.toContain('99999'); // no phantom invented
+    });
+
+    test('a genuinely new record after a folded one is still recognised', () => {
+      // The control: folding must not swallow the NEXT process. Without it
+      // this suite would pass with a filter that simply concatenated
+      // everything into one record.
+      const records = [
+        '4242 bash -c ',
+        `  node ${RUNNER} --matrix`,
+        `7777 node ${RUNNER} --matrix --target local`,
+        '8888 tail -f /tmp/matrix-x/log',
+      ];
+
+      expect(runnerFilter(records, '', '4242 7777 8888')).toEqual(['4242', '7777']);
+    });
+
+    test('scope still applies across a folded record', () => {
+      // The run id can land on either physical line; scoping must see the
+      // whole command, not just the line the pid was on.
+      const record = ['4242 bash -c ', `  node ${RUNNER} --report-dir=/tmp/matrix-abc/report`];
+
+      expect(runnerFilter(record, 'matrix-abc', '4242')).toEqual(['4242']);
+      expect(runnerFilter(record, 'matrix-zzz', '4242')).toEqual([]);
+    });
+
+    test('every pid it reports is a real, live process — never a parsing artefact', () => {
+      // A universal property, and the one the earlier "no impostors" test
+      // could not express: that test excused any pid whose command re-query
+      // came back empty, treating a parsing artefact and a process that simply
+      // exited as the same thing. Here a reported pid must be present in the
+      // process table AT REPORT TIME, which a fabricated number never is.
+      const marker = `shy0304-real-${process.pid}`;
+      spawnVisible(`node ${RUNNER} --matrix ${marker}`, marker);
+
+      const live = new Set(
+        spawnSync('/bin/ps', ['-Aww', '-o', 'pid='], { encoding: 'utf8' })
+          .stdout.split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
+      const phantoms = runnerPids().filter((pid) => !live.has(pid));
+      expect(phantoms).toEqual([]);
     });
   });
 

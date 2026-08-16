@@ -158,6 +158,39 @@ describe('qa-cleanup-orphans.sh — safety invariants', () => {
     expect(code).not.toMatch(/pgrep\s+-f\s+"?manual-qa-runner/);
   });
 
+  test('clean mode kills exactly the set it reported — it computes nothing of its own', () => {
+    // Review finding. Every executing test of this script runs `--dry-run`,
+    // so the KILLING branch — the highest-consequence path in SHY-0304, the
+    // one that selected 50 innocent processes — is never executed against a
+    // real target anywhere in the suite.
+    //
+    // It is deliberately NOT executed here either, and that is a considered
+    // choice rather than an omission: this script is machine-wide BY DESIGN,
+    // Jest runs ~150 suites in parallel workers, and five sibling suites spawn
+    // real `manual-qa-runner.js` processes. A clean-mode run inside the suite
+    // would kill THEIR runners — which is precisely the cross-suite
+    // interference this story exists to remove. Buying coverage by
+    // reintroducing the defect is a bad trade.
+    //
+    // What IS enforceable statically is the property that makes dry-run a
+    // faithful preview: the clean branch must kill the SAME variable the
+    // report printed, never re-derive its own set. That is the regression the
+    // reviewer named — a future machine-wide fallback added to the kill branch
+    // alone, invisible to every --dry-run assertion.
+    const code = src
+      .split('\n')
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n');
+
+    const section = code.slice(code.indexOf('RUNNER_PIDS='), code.indexOf('Playwright temp dirs'));
+    expect(section).toMatch(/RUNNER_PIDS=\$\(runner_pids\)/);
+    expect(section).toMatch(/say "\s*found runner PIDs: \$RUNNER_PIDS"/);
+    expect(section).toMatch(/echo "\$RUNNER_PIDS" \| xargs -r kill/);
+    // exactly one assignment: the kill branch cannot be fed a different set
+    expect(section.match(/RUNNER_PIDS=/g)).toHaveLength(1);
+    expect(section).not.toMatch(/pgrep/);
+  });
+
   test('uses SIGTERM first, SIGKILL only as fallback (graceful shutdown)', () => {
     // kill (SIGTERM default) appears before kill -9 in the Appium section.
     expect(src).toMatch(/xargs -r kill 2>\/dev\/null/);

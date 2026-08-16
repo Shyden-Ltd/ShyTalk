@@ -214,6 +214,11 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     const r = runStop('clean-xyz');
     expectStatus(r, 0);
     expect(r.stdout).toMatch(/0 runners remain/);
+    // The success line must NAME the run it stopped. Asserting only the
+    // generic tail would let `$run_id` be dropped from the message without a
+    // single test noticing — and with the report now scoped to one run,
+    // saying WHICH run is the whole point.
+    expect(r.stdout).toMatch(/stopped run matrix-clean-xyz\b/);
   });
 
   test('missing pid file → dies with a clear message (exit 1)', () => {
@@ -303,6 +308,12 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
 
     expect(r.status).not.toBe(0); // honest failure, not a false success
     expect(r.stderr).toMatch(/STILL alive/);
+    // The PAYLOAD, not just the headline. cmd_stop prints the warning and then
+    // separately calls runner_ps_lines to emit pid + command line; the AC is
+    // "so the operator can act on it". Asserting only the headline would let a
+    // broken runner_ps_lines ship a warning with nothing actionable in it.
+    expect(r.stderr).toMatch(/manual-qa-runner\.js/);
+    expect(r.stderr).toMatch(new RegExp(`\\b\\d+\\b[^\\n]*${runId}`));
     // A replacement child is present at verification time, still carrying the
     // run id — which is what makes the honest failure correct rather than
     // stale. pgrep, not kill(pid,0): a killed child would zombie (unreaped,
