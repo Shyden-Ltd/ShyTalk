@@ -514,10 +514,14 @@ jobs:
           ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
 
       - name: Install CocoaPods
+        # --deployment, matching deploy-dev: refuse a Podfile.lock that does not
+        # describe the committed Podfile rather than silently regenerating one.
+        # Plain `pod install` here would have MASKED the SHY-0305 breakage on
+        # prod while dev failed, which is the worst of both.
         run: |
           set -euo pipefail
           cd iosApp
-          pod install
+          pod install --deployment
 
       # Mirror of deploy-dev.yml's pre-xcodebuild daemon stop. See that file
       # for the full forensic explanation (run 26196249351 hang analysis).
@@ -876,7 +880,8 @@ jobs:
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --max-workers=1
 
       - name: Install CocoaPods
-        run: cd iosApp && pod install
+        # --deployment — see the note on the distribute-ios job above.
+        run: cd iosApp && pod install --deployment
 
       # Same gradle-daemon-collision prevention as distribute-ios — the
       # smoke-test xcodebuild invocation also triggers the

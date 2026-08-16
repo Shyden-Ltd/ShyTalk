@@ -174,6 +174,17 @@ jobs:
           ALLOW_LARGE_FILE_BODY: ${{ inputs.pr_body }}
         run: bash scripts/check-large-files.sh --against origin/main
 
+      # SHY-0305 — refuse a Podfile whose Podfile.lock does not describe it.
+      # CI installs pods with `pod install --deployment`, which fails on a
+      # lock mismatch, but that step is SKIPPED on a Pods cache hit and the
+      # cache key is derived from the lock — so a stale lock is invisible to
+      # the guard that checks the lock. SHY-0300 shipped one and every iOS
+      # build failed with "Unable to resolve module dependency" until a deploy
+      # reached the Swift compiler. This check needs no CocoaPods, no macOS and
+      # no network, so it runs here, on the PR, where the mistake is made.
+      - name: Validate Podfile.lock is in sync with Podfile
+        run: bash scripts/check-podfile-lock-sync.sh
+
       # SHY user-story frontmatter validator — pinned LAST so a story-
       # validation failure cannot mask earlier actionlint / shellcheck /
       # SHA-pin / i18n / release-contract / large-file findings on the
