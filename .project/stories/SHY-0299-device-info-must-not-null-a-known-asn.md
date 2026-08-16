@@ -1,6 +1,6 @@
 ---
 id: SHY-0299
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-16
 priority: P1
@@ -208,3 +208,68 @@ per CLAUDE.md's backend rule, not a CI-config exemption.
   pin the current behaviour. Filed rather than folded into SHY-0143 because
   that story was already In Review with a PR open and a `Reviewed-up-to:`
   marker; per the repo's fix-pre-existing rule this is the follow-up PR.
+
+- **2026-08-16 — built.** `withoutAbsent()` drops null/undefined/empty-string
+  keys, applied to the FOUR geo fields only. The four assertions that pinned
+  the clobber as the contract are flipped from "the field is null" to "the
+  field is absent".
+
+  **Narrowed from the filed scope, deliberately.** The story said to fix the
+  body-derived `|| null` fields "in the same edit for consistency". Doing so
+  broke an existing test — `storage › stores null for optional fields that are
+  not provided` — which is a deliberate contract with no security consumer.
+  Reversing it would have been an unrelated behaviour change smuggled in under
+  a ban-matching fix, so those fields keep writing null and the reason is in
+  the code.
+
+  **Two tests were asserting things the system does not do**, both caught by
+  running them rather than by reading:
+
+  1. The first end-to-end version asserted `/api/device-info`'s own
+     `banStatus`. That route calls `checkBans(deviceId, ip, geo.asn)` with the
+     LIVE lookup, so it is blind to the stored value by design; the consumer
+     of the stored ASN is `authMiddleware` →
+     `checkUserBans` → `getUserDeviceStanding` (`bans.js:346`).
+  2. The second version asserted a 403 from an authenticated request to
+     `/device-info`. That route is BAN-EXEMPT (`auth.js:300`) so a banned user
+     can still reach the ban screen — it can never answer 403.
+
+     Final form calls `checkUserBans` directly: the exported function
+     `authMiddleware` runs on every non-exempt request, against the real
+     emulator.
+
+  **A harness gap surfaced too:** the unit file's `jest.mock` of `utils/log`
+  defined `info`/`warn`/`error` but not `debug`, so the new observability line
+  was `undefined()` — a TypeError caught by the route and served as a 500. The
+  route was right; the mirror was incomplete.
+
+  **Mutation-verified:** restoring `asn: geo.asn || null` reddens 5 unit tests
+  AND both end-to-end tests, including the `checkUserBans` verdict — so the
+  suite genuinely catches the original defect and not merely a document shape.
+
+  Full Express suite: 169 suites / 4,428 tests green; eslint
+  `--max-warnings=0` and prettier clean.
+
+- **2026-08-16 — the end-to-end tests were rewritten to use NO doubles.** The
+  first version stubbed `global.fetch` with `jest.fn` and the pre-push
+  no-new-stubs ratchet refused the push, correctly: `tests/routes/` is not a
+  unit-test location. The failure is now INDUCED instead — `getIpGeo` returns
+  `{}` for any address that is not dotted-quad IPv4 (`ip-geo.js:103`) BEFORE
+  it makes an outbound call, so an IPv6 caller produces a genuine geo-less
+  request, deterministically and offline.
+
+  This is a better test than the stub was: it exercises the real short-circuit
+  and cannot drift from `getIpGeo`'s actual behaviour. A CONTROL was added at
+  the same time — the same ban against a binding with NO stored ASN must come
+  back clean — so the positive assertion is about the preserved value and not
+  about something else in the ban engine.
+
+  The one case that cannot be induced this way, "a later success updates the
+  ASN", moved to `tests/unit/device-info.unit.test.js`, where a geo stub is
+  already sanctioned by necessity.
+
+  Re-verified after the rewrite: restoring `asn: geo.asn || null` reddens 5
+  unit tests and both double-free end-to-end tests, including the
+  `checkUserBans` verdict.
+
+Reviewed-up-to: c00b69bf76be230cea9216fefb36d3ab073ea9fc
