@@ -250,4 +250,26 @@ per CLAUDE.md's backend rule, not a CI-config exemption.
   Full Express suite: 169 suites / 4,428 tests green; eslint
   `--max-warnings=0` and prettier clean.
 
+- **2026-08-16 — the end-to-end tests were rewritten to use NO doubles.** The
+  first version stubbed `global.fetch` with `jest.fn` and the pre-push
+  no-new-stubs ratchet refused the push, correctly: `tests/routes/` is not a
+  unit-test location. The failure is now INDUCED instead — `getIpGeo` returns
+  `{}` for any address that is not dotted-quad IPv4 (`ip-geo.js:103`) BEFORE
+  it makes an outbound call, so an IPv6 caller produces a genuine geo-less
+  request, deterministically and offline.
+
+  This is a better test than the stub was: it exercises the real short-circuit
+  and cannot drift from `getIpGeo`'s actual behaviour. A CONTROL was added at
+  the same time — the same ban against a binding with NO stored ASN must come
+  back clean — so the positive assertion is about the preserved value and not
+  about something else in the ban engine.
+
+  The one case that cannot be induced this way, "a later success updates the
+  ASN", moved to `tests/unit/device-info.unit.test.js`, where a geo stub is
+  already sanctioned by necessity.
+
+  Re-verified after the rewrite: restoring `asn: geo.asn || null` reddens 5
+  unit tests and both double-free end-to-end tests, including the
+  `checkUserBans` verdict.
+
 Reviewed-up-to: 71b634d33c614aa2b329da1e0c9edb698db299c8

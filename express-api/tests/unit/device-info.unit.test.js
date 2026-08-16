@@ -236,6 +236,21 @@ describe('getIpGeo branches (third-party HTTP — unit-mocked by necessity)', ()
     });
   });
 
+  test('a later SUCCESSFUL lookup writes the NEW asn — last-known, not append-only', async () => {
+    // The other direction of the fix. Omitting keys under merge means a field
+    // can never be CLEARED, so the risk is a stale value outliving a genuine
+    // network change (roaming, VPN on). It must be overwritten by the next
+    // success. This case lives here rather than in the route suite because
+    // inducing a real ip-api SUCCESS needs a real answer from a third party.
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'success', as: 'AS64999 Someone Else' }),
+    });
+
+    await postDeviceInfo({ ip: '203.0.113.9' }).expect(200);
+    expect(mockSet.mock.calls[0][0]).toMatchObject({ asn: 'AS64999' });
+  });
+
   test('an EMPTY-STRING asn is treated as absent, not written as an empty ASN', async () => {
     // `getIpGeo` maps ip-api's `as: ""` (an unrouted address) to null. An
     // empty string reaching the document would be stored, then filtered out
