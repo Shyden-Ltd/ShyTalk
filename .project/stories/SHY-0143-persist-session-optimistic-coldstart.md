@@ -433,3 +433,57 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
   files, so `IosAuthRepositoryImpl`'s write-through has no coverage of any
   kind) + the Keychain `SessionCache` round-trip; the LOCAL and DEV
   gauntlets on real devices.
+
+- **2026-08-16 — `code-reviewer` rounds 2–5.** Four further rounds, each
+  finding real defects; every finding verified before acting.
+
+  **Round 2** (7C + 9I) — `06fb115c74c`, `f730b2f80ac`, `5b4058c499f`,
+  `c3b56d507dc`. Both nav graphs gate their user-flag subscription; the
+  sequencer gained a third outcome so an offline launch renders the shell
+  instead of signing out; iOS's ban sign-out signs out; both graphs register
+  the ban destinations; iOS `SecureStorage.clear()` deletes by service; the
+  unauthenticated `GET /api/ban-status` (C1); the cached record became one
+  atomic key; the cohort reconcile runs on the optimistic path.
+
+  **Round 3** (3C + 12I) — `e5472fe84e3`. The three Criticals were ONE
+  finding: `signOut()` cleared nothing, so "clear the API token cache" was
+  copied per call site — 2 of 4 on Android, 0 of 3 on iOS. My round-2 fix had
+  hardened the wrong screen (Android renders `BanScreen` above the NavHost,
+  so `MainActivity`'s copy is the one a banned user taps) and the pin read
+  only `NavGraph.kt`. The invariant moved INTO `signOut()`; pins now read both
+  platform files for every invariant.
+
+  **Round 4** (2C + 11I) — `f02441c8f18`. **A live 500 I introduced**:
+  `req = { ...req, path }` in the auth-skip extraction dropped `req.headers`
+  (a prototype accessor, not an own key), so every `POST /api/translate`
+  threw inside the auth middleware. My tests could not see it — they passed
+  plain objects with `headers` as an own key. Also: round 3's ban-sign-out
+  hardening had landed on Android only.
+
+  **Round 5** (1C + 13I) — this commit. The composition layer that produced
+  that 500 still had ZERO executing coverage, and the plain-object fixture
+  survived in a second file. New `tests/middleware/auth-skip-composition.test.js`
+  asserts status codes through the real gate; restoring the spread reddens 8
+  of its tests.
+
+  **Two of my own fixes were themselves wrong, and the tests caught both:**
+
+  - The `discardRecord` compare-and-delete still lost races —
+    `getString`-then-`clear()` is read-then-write, the identical TOCTOU shape
+    SHY-0298's gh-pages cap had. `read()` is a pure read now.
+  - The `status` guard on `getIpGeo` was inert: `status` was not in the
+    request's `fields` mask, so it was never returned. Confirmed against the
+    live service.
+
+  Also this round: the two platforms had drifted onto different URL encoders
+  (Ktor's default leaves `&`, `=`, `#`, `+` literal — measured), so a hostile
+  `deviceId` could split the iOS ban-status query. Both platforms, and every
+  other client query interpolation, now use one shared
+  `encodeUrlQueryComponent`, pinned project-wide.
+
+  **Verification:** shared jvmTest 1520 / 0, app unit 2243 / 0 (both
+  `--rerun-tasks`); Express 416 suites / 13833 tests; eslint
+  `--max-warnings=0`, ktlint, detekt, both platform compiles and the
+  instrumented-test compile all clean. Every fix mutation-verified.
+
+Reviewed-up-to: f02441c8f1861a6e6f41067d183c1f19313ef6a2

@@ -197,14 +197,31 @@ describe('wiring pins', () => {
     // follows it, and is now BEHAVIOURAL rather than a substring match, which
     // is strictly stronger: a commented-out condition would still satisfy the
     // old regex.
+    const http = require('node:http');
     const { skipsAuth } = require('../../src/middleware/auth-skip');
 
-    expect(skipsAuth({ method: 'POST', path: '/translate', headers: {} })).toBe(true);
-    expect(
-      skipsAuth({ method: 'POST', path: '/translate', headers: { authorization: 'Bearer x' } }),
-    ).toBe(false);
+    // A REAL request. These two lines used to pass PLAIN OBJECTS carrying
+    // `headers` as an own key — the one shape a real request never has,
+    // because `headers` is an accessor on `IncomingMessage.prototype`. That
+    // is exactly how a `{ ...req }` copy inside the predicate 500'd every
+    // POST /api/translate while this pin stayed green. Fixed in the unit
+    // suite and missed here, which is the whole point of sweeping a fix
+    // across the project rather than the file it was found in.
+    const request = (headers) => {
+      const req = new http.IncomingMessage(null);
+      req.method = 'POST';
+      req.path = '/translate';
+      if (headers) req.headers = headers;
+      return req;
+    };
+
+    expect(skipsAuth(request())).toBe(true);
+    expect(skipsAuth(request({ authorization: 'Bearer x' }))).toBe(false);
 
     // And index.js must still consult it, or the predicate is decoration.
+    // NOTE this line was green throughout the 500 — index.js DID call
+    // `skipsAuth(req)`; the defect was inside the callee. Behaviour is what
+    // catches that, which is why auth-skip-composition.test.js exists.
     const src = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'index.js'), 'utf-8');
     expect(src).toMatch(/skipsAuth\(req\)/);
   });

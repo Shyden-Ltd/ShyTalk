@@ -64,17 +64,22 @@ async function getIpGeo(ip) {
     if (cached !== undefined) return cached;
     // Bounded: geo is best-effort telemetry — a hung ip-api must not hang
     // the device-info request (and with it, sign-in). SHY-0149.
-    const resp = await fetch(`http://ip-api.com/json/${ip}?fields=isp,as,country,regionName`, {
-      signal: AbortSignal.timeout(3000),
-    });
+    // `status` and `message` are in the mask DELIBERATELY. ip-api only returns
+    // the fields you ask for, so without them the failure guard below could
+    // never fire — measured: `?fields=isp,as,country,regionName`answers with no
+    // `status` key at all, and the guard was inert.
+    const resp = await fetch(
+      `http://ip-api.com/json/${ip}?fields=status,message,isp,as,country,regionName`,
+      {
+        signal: AbortSignal.timeout(3000),
+      },
+    );
     if (!resp.ok) return {};
     const data = await resp.json();
-    // ip-api reports a failed lookup as HTTP **200** with `status: "fail"` —
-    // reserved ranges, invalid queries, and (critically) the over-quota
-    // response. Without this check that took the success path, so a null ASN
-    // got CACHED and ASN-scoped bans stayed off for the full TTL: exactly the
-    // degradation the cache exists to prevent, caused by the cache.
-    if (data.status && data.status !== 'success') return {};
+    // ip-api reports a failed lookup — reserved range, invalid query — as
+    // HTTP 200 with `status: "fail"`. (Rate limiting is a 429, already caught
+    // by `resp.ok` above.) Without this the failure took the success path.
+    if (data.status !== 'success') return {};
 
     const geo = {
       isp: data.isp || null,
@@ -82,9 +87,16 @@ async function getIpGeo(ip) {
       country: data.country || null,
       region: data.regionName || null,
     };
-    // Only SUCCESSES are cached. Caching a failure would pin `asn` to null for
-    // the TTL and keep ASN bans off for that IP even after the quota recovers.
-    cacheSet(ip, geo);
+    // Cache only a result that carries an ASN.
+    //
+    // "Only successes are cached" was not enough: ip-api answers `success`
+    // with an EMPTY `as` for addresses it has no routing data for, so a null
+    // `asn` was being cached anyway — and a cached null asn means
+    // `networkBanMatches` refuses every ASN-scoped ban for that IP for the
+    // full TTL. The reason the ASN is missing does not change the harm, so
+    // the cache key is "did we learn the thing the bans need", not "did the
+    // request succeed".
+    if (geo.asn) cacheSet(ip, geo);
     return geo;
   } catch {
     return {};

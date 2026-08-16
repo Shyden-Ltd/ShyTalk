@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.util.SecureStorage
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -226,7 +227,11 @@ class SessionCacheContractTest {
             setup()
             cache.write(firebaseUid = "fb-uid-1", uniqueId = blank, cohort = "adult")
             assertNull(cache.read("fb-uid-1"), "a blank uniqueId ('$blank') must not be readable")
-            assertNull(storage.getString(SessionCache.FIELD_COHORT), "nor may its cohort be published alone")
+            assertNull(
+                storage.getString(SessionCache.KEY_SESSION),
+                "nor may a partial record be published — this used to read FIELD_COHORT, a JSON " +
+                    "field NAME that is never a storage key, so it passed under every mutation",
+            )
 
             setup()
             cache.write(firebaseUid = blank, uniqueId = "10000005", cohort = "adult")
@@ -411,19 +416,27 @@ class SessionCacheContractTest {
 
     @Test
     fun `a read never deletes a record a concurrent write just stored`() {
-        // `read()` is a PURE read. Two earlier designs tried to erase an
-        // unusable record from inside it — first unconditionally, then with a
-        // compare-and-delete — and this test proved the second one still lost
+        // `read()` is a pure read of the record. Two earlier designs erased an
+        // unusable one from inside it — first unconditionally, then with a
+        // compare-and-delete — and this test proved the second still lost
         // races: `getString` followed by `clear()` is a read-then-write with a
-        // window in between, the same TOCTOU shape SHY-0298's gh-pages cap had.
+        // window between, the same TOCTOU shape SHY-0298's gh-pages cap had.
         //
-        // Closing the class beat narrowing it. A malformed record is now
-        // re-parsed until the next write overwrites it; that costs one failed
-        // JSON parse per launch and cannot cost a good record.
+        // No `Thread.sleep`: the writer waits for the readers to make OBSERVED
+        // progress, so the interleaving is real rather than hoped for. Worker
+        // throws are captured and asserted — three readers that died on their
+        // first iteration would otherwise leave this green having exercised
+        // no concurrency at all.
         repeat(40) { round ->
             setup()
             storage.putString(SessionCache.KEY_SESSION, "not json at all")
 
+            val reads =
+                java.util.concurrent.atomic
+                    .AtomicInteger()
+            val failure =
+                java.util.concurrent.atomic
+                    .AtomicReference<Throwable?>()
             val stop =
                 java.util.concurrent.atomic
                     .AtomicBoolean(false)
@@ -432,16 +445,29 @@ class SessionCacheContractTest {
                 (1..3).map {
                     Thread {
                         barrier.await()
-                        while (!stop.get()) cache.read("fb-uid-1")
-                    }
+                        while (!stop.get()) {
+                            cache.read("fb-uid-1")
+                            reads.incrementAndGet()
+                        }
+                    }.apply { setUncaughtExceptionHandler { _, t -> failure.set(t) } }
                 }
             readers.forEach { it.start() }
             barrier.await()
+
+            // One write, into the middle of the readers' flight.
             cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
-            Thread.sleep(2)
+
+            // Condition-based, not time-based: let the readers run far enough
+            // past the write that one of them must have held a stale raw.
+            val target = reads.get() + 200
+            while (reads.get() < target && failure.get() == null) {
+                Thread.yield()
+            }
             stop.set(true)
             readers.forEach { it.join() }
 
+            assertNull(failure.get(), "round $round: a reader thread threw")
+            assertTrue(reads.get() > 0, "round $round: the readers never ran")
             assertNotNull(
                 cache.read("fb-uid-1"),
                 "round $round: a concurrent read destroyed the writer's record",
@@ -532,6 +558,25 @@ class SessionCacheContractTest {
                 probe.getString(SessionCache.LEGACY_KEY_COHORT),
             ).count { it != null }
         assertEquals(1, keysHoldingData, "the record must live in ONE key, never spread across several")
+    }
+
+    @Test
+    fun `the legacy sweep does NOTHING when there are no legacy keys`() {
+        // The early return. `storage.remove()` on an absent key is
+        // unobservable through the storage API, so the guard could be deleted
+        // — costing three Keychain deletes on every iOS launch, on the very
+        // cold-start path this story exists to shorten — with the whole suite
+        // green. Hence the sweep reports whether it swept.
+        //
+        // An earlier version of this test built a "recording" object that
+        // recorded nothing and asserted 0 == 0.
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+
+        assertFalse(cache.sweepLegacyKeys(), "a clean store must not be swept")
+
+        storage.putString(SessionCache.LEGACY_KEY_COHORT, "leftover")
+        assertTrue(cache.sweepLegacyKeys(), "one leftover key must trigger the sweep")
+        assertFalse(cache.sweepLegacyKeys(), "and the sweep must be idempotent")
     }
 
     // ── Clearing (AC: sign-out leaves nothing on disk) ────────────────────

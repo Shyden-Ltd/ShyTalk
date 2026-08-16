@@ -542,5 +542,46 @@ class AuthRepositoryImplTest {
             }
         }
 
+    @Test
+    fun `refreshIdToken with no signed-in user errors AND still clears the token cache`() =
+        runTest {
+            // Reachable from ColdStartSequencer's GATE 2 and from the
+            // background reconcile whenever Firebase drops the user between
+            // reading the launch state and the refresh. The load-bearing part
+            // is that the clear happens BEFORE the throw, so the process loses
+            // its bearer token even on this path.
+            every { auth.currentUser } returns null
+
+            val result = repo.refreshIdToken()
+
+            assertTrue(result is Resource.Error)
+            verify { workerApiClient.clearTokenCache() }
+        }
+
+    @Test
+    fun `signOut leaves no identity on disk even when the platform sign-out throws`() =
+        runTest {
+            // The ban screen swallows this throw and leaves the user in place,
+            // so the untested question was whether the NEXT cold start would
+            // restore an identity. The existing throw test asserts only the
+            // token cache, over a relaxed-mock SessionCache that cannot see a
+            // record at all.
+            val (cache, backing) = cacheOverMemory()
+            val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
+            signedInAs("fb-uid-1")
+            repoWithCache.resolvedUniqueId = "10000005"
+            repoWithCache.resolvedCohort = "adult"
+            assertNotNull(cache.read("fb-uid-1"))
+
+            every { auth.signOut() } throws RuntimeException("platform failure")
+            runCatching { repoWithCache.signOut() }
+
+            assertNull("a failed platform sign-out must still clear the record", cache.read("fb-uid-1"))
+            assertTrue(
+                "no session field may survive, got ${backing.keys}",
+                backing.keys.none { it.startsWith("session_cache_") },
+            )
+        }
+
     // endregion
 }

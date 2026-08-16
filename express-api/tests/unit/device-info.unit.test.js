@@ -112,7 +112,11 @@ describe('getIpGeo branches (third-party HTTP — unit-mocked by necessity)', ()
   test('a successful geo response maps isp/asn/country/region onto the stored doc', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
+      // `status` is part of the real wire shape now: SHY-0143 added it to the
+      // request's `fields` mask so the fail-closed guard can actually fire.
+      // A fixture without it is a fixture of a response ip-api never sends.
       json: async () => ({
+        status: 'success',
         isp: 'ExampleNet',
         as: 'AS64500 ExampleNet Ltd',
         country: 'Sweden',
@@ -140,7 +144,10 @@ describe('getIpGeo branches (third-party HTTP — unit-mocked by necessity)', ()
   });
 
   test('missing fields in the geo payload store as nulls', async () => {
-    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ country: 'Sweden' }) });
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'success', country: 'Sweden' }),
+    });
 
     await postDeviceInfo({ ip: '203.0.113.9' }).expect(200);
     expect(mockSet.mock.calls[0][0]).toMatchObject({

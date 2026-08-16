@@ -723,6 +723,35 @@ class AppLockWiringPinTest {
                     "an uncaught throw here crashes the app on the ban screen",
             )
         }
+        // The other half of this test's own name. Asserting only the guard left
+        // both `remember(...)` and the process scope deletable with the pin
+        // green.
+        //
+        // `remember` applies to the two NAV GRAPHS only: there the lambda is
+        // captured by the `NavHost` builder, which `NavHost` uses as a
+        // `remember` KEY — an unmemoized lambda is a fresh instance per
+        // recomposition and rebuilds the whole graph. MainActivity's ban screen
+        // is an ordinary composable argument, where that does not apply.
+        listOf(appNavGraph, sharedNavGraph).forEach { path ->
+            val src = read(path)
+            val at = src.indexOf("val signOutAndStay")
+            assertTrue(at >= 0, "$path must define signOutAndStay")
+            assertTrue(
+                src.substring(at, minOf(at + 400, src.length)).contains("remember("),
+                "$path's signOutAndStay must be remembered — NavHost keys its graph on the builder",
+            )
+        }
+        // Android's two sites must ALSO outlive the composition: signing out
+        // rearranges the UI, which can destroy the Activity mid-call.
+        listOf(appNavGraph, mainActivity).forEach { path ->
+            val src = read(path)
+            val at = src.indexOf("BanScreen(").takeIf { it >= 0 } ?: src.indexOf("signOutAndStay")
+            val body = src.substring(maxOf(0, at - 1400), minOf(at + 1600, src.length))
+            assertTrue(
+                body.contains("ProcessLifecycleOwner"),
+                "$path's ban sign-out must be process-scoped, not composition-scoped",
+            )
+        }
     }
 
     @Test

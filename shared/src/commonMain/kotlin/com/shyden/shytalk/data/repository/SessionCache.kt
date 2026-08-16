@@ -89,14 +89,18 @@ class SessionCache(
      * the reads one shape.
      */
     fun read(liveFirebaseUid: String?): CachedSession? {
+        val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return null
+
         // The pre-I6 three-key format. `clear()` also removes these, but on the
         // real upgrade path clear() is NEVER called: a cold start reads a miss,
         // routes to Lock, and the PIN unlock's write-through only ever writes.
-        // So the sweep has to happen on the read that every launch performs, or
-        // the old keys survive indefinitely — on iOS, past app deletion.
+        // So the sweep happens on the read that every launch performs, or the
+        // old keys survive indefinitely — on iOS, past app deletion.
+        //
+        // BELOW the uid guard deliberately. Above it, a signed-out launch paid
+        // three Keychain `SecItemCopyMatching` calls for nothing, on the very
+        // cold-start path this story exists to shorten.
         sweepLegacyKeys()
-
-        val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return null
 
         // No separate blank-string branch: `Json.parseToJsonElement("")` throws,
         // and the catch below already routes that to the same miss. A branch
@@ -207,18 +211,27 @@ class SessionCache(
         storage.putString(KEY_SESSION, record.toString())
     }
 
-    /** Removes the superseded three-key record if any of it is still present. */
-    private fun sweepLegacyKeys() {
+    /**
+     * Removes the superseded three-key record if any of it is still present.
+     *
+     * Returns whether it actually swept. `internal` and non-Unit purely so the
+     * early return is testable: `storage.remove()` on an absent key is
+     * unobservable through the storage API, so without this the guard could be
+     * deleted — costing three Keychain deletes on every iOS launch — with the
+     * whole suite green.
+     */
+    internal fun sweepLegacyKeys(): Boolean {
         if (storage.getString(LEGACY_KEY_FIREBASE_UID) == null &&
             storage.getString(LEGACY_KEY_UNIQUE_ID) == null &&
             storage.getString(LEGACY_KEY_COHORT) == null
         ) {
-            return
+            return false
         }
         logW(TAG, "Removing a superseded three-key session record")
         storage.remove(LEGACY_KEY_FIREBASE_UID)
         storage.remove(LEGACY_KEY_UNIQUE_ID)
         storage.remove(LEGACY_KEY_COHORT)
+        return true
     }
 
     /**
@@ -230,8 +243,10 @@ class SessionCache(
      * with a window in between, so a `write()` landing there still loses its
      * brand-new record. Exactly the TOCTOU shape SHY-0298's gh-pages cap had.
      *
-     * `read()` is now a pure read, which closes the class of bug rather than
-     * narrowing it. The cost is that a permanently malformed record is
+     * `read()` no longer touches the record at all, which closes the class of
+     * bug rather than narrowing it. (The legacy sweep below is the one write
+     * `read()` performs, and it is safe for a different reason: nothing writes
+     * those keys any more, so there is no writer to race with.) The cost is that a permanently malformed record is
      * re-parsed once per launch until the next `write()` overwrites it or a
      * sign-out clears it — one failed JSON parse, against losing a good
      * record. Not a close call.
