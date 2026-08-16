@@ -130,14 +130,32 @@ describe('qa-cleanup-orphans.sh — safety invariants', () => {
     expect(src).toMatch(/find\s+\/tmp\s+[^\n]{0,200}-mmin\s+\+60/);
   });
 
-  test('excludes own PID from manual-qa-runner orphan kill', () => {
-    // Without this guard, the script could match itself via pgrep
-    // ancestry and try to kill its own PID (it wouldn't, because
-    // qa-cleanup-orphans doesn't have "manual-qa-runner" in args —
-    // but the guard documents intent + protects against future
-    // refactors that rename the script).
-    expect(src).toMatch(/\bSELF_PID\b/);
-    expect(src).toMatch(/grep -v "\^\$SELF_PID\$"/);
+  test('selects orphan runners by identity, never by a bare name match', () => {
+    // SHY-0304 replaced `pgrep -f "manual-qa-runner"` + a `$$`-only exclusion.
+    // That predicate matched any process whose command line merely NAMED the
+    // runner — Jest running its test files, the npm wrapper, the invoking
+    // shell — and `clean` is the DEFAULT mode, so each match was a real kill
+    // (50 innocent processes in one measured sweep). The old exclusion could
+    // not help: it covered `$$` alone, while the hazard is the ANCESTRY, and
+    // BSD pgrep hides ancestors for free so the guard was a no-op on macOS and
+    // absent on Linux.
+    //
+    // Structural pins are weak on their own — this one only checks the bare
+    // name match is gone and the shared helper is in use. The behaviour is
+    // covered for real, against real processes, in
+    // `runner-process-identity.test.js`.
+    // Asserted over CODE lines only. The first draft of this pin failed
+    // against its own comment, which quotes the very call it forbids — the
+    // repeat of a trap already recorded in `.claude_learnings.md` ("a
+    // source-reading pin must read CODE, not text").
+    const code = src
+      .split('\n')
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n');
+
+    expect(code).toMatch(/source\s+"\$HERE\/lib\/runner-pids\.sh"/);
+    expect(code).toMatch(/RUNNER_PIDS=\$\(runner_pids\)/);
+    expect(code).not.toMatch(/pgrep\s+-f\s+"?manual-qa-runner/);
   });
 
   test('uses SIGTERM first, SIGKILL only as fallback (graceful shutdown)', () => {

@@ -25,7 +25,17 @@ const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 
 const MATRIX = path.resolve(__dirname, '../../scripts/gauntlet/50-matrix.sh');
+const RUNNER = path.resolve(__dirname, '../../scripts/manual-qa-runner.js');
 const NO_ADB_PATH = '/usr/bin:/bin'; // excludes /opt/homebrew/bin/adb — see header
+
+// Spawn a fixture with a chosen command line, without interpolating it into
+// the script text — it contains spaces, and inline interpolation makes bash
+// read the second word as the command to exec, producing no fixture at all.
+function spawnAs(commandLine) {
+  return spawn('/bin/bash', ['-c', 'exec -a "$1" sleep 30', 'bash', commandLine], {
+    stdio: 'ignore',
+  });
+}
 
 // A definitely-dead PID: a subshell that prints its own pid and exits. Safe even
 // if the number is later reused — cmd_stop's I1 guard only walks a cached pid's
@@ -133,6 +143,11 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
   afterAll(() => {
     for (const c of spawned) {
       try {
+        process.kill(-c.pid, 'SIGKILL'); // group first: the supervisor has children
+      } catch {
+        /* not a group leader */
+      }
+      try {
         process.kill(c.pid, 'SIGKILL');
       } catch {
         /* already gone */
@@ -209,15 +224,19 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
   });
 
   test('reaps a process tagged with THIS run_id (the orphaned-cell-runner kill) → exit 0', () => {
-    // A process whose argv carries the run_id IS an orphaned cell runner; the
-    // run-scoped `pgrep -f "$run_id"` must find and kill it. Tagged WITHOUT the
-    // "manual-qa-runner" token so it can't collide with the leftover fixture
-    // below (and so a kill race can't falsely trip that run's verification).
+    // An orphaned cell runner is a node process running manual-qa-runner.js
+    // whose argv carries this run's id (the launcher puts it there via
+    // --report-dir). cmd_stop must find and kill it.
+    //
+    // SHY-0304 made this fixture faithful. It used to be a renamed `sleep`
+    // carrying only the run id, which passed while the kill set was a bare
+    // substring match on that id — the same looseness that put an operator's
+    // `tail -f` on the run's log into the kill set. Now that the orphan sweep
+    // requires the runner's identity, a fixture that is not shaped like a
+    // runner would prove nothing about runners.
     const id = `killme-${process.pid}`;
     const runId = `matrix-${id}`; // == basename(run dir) == cmd_stop's $run_id
-    const child = spawn('/bin/bash', ['-c', `exec -a shy0236-${runId}-cell sleep 30`], {
-      stdio: 'ignore',
-    });
+    const child = spawnAs(`node ${RUNNER} --matrix --report-dir=/tmp/${runId}/report`);
     spawned.push(child);
     const seen = () =>
       spawnSync('/usr/bin/pgrep', ['-f', runId], { encoding: 'utf8' }).stdout.trim();
@@ -238,28 +257,56 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     expect(seen()).toBe('');
   });
 
-  test('a surviving manual-qa-runner-tagged process → honest exit 1 (never a false "stopped")', () => {
-    // Spawn a process that `pgrep -fl manual-qa-runner` matches, but whose argv
-    // does NOT carry the run_id — so cmd_stop's run-scoped kill passes correctly
-    // leave it alone, and the honest verification MUST catch it and return
-    // non-zero instead of printing the old reassuring "stopped pid N" lie.
-    const tag = `manual-qa-runner-shy0236-fixture-${process.pid}`;
-    const child = spawn('/bin/bash', ['-c', `exec -a ${tag} sleep 30`], { stdio: 'ignore' });
-    spawned.push(child);
-    const seen = () => spawnSync('/usr/bin/pgrep', ['-f', tag], { encoding: 'utf8' }).stdout.trim();
+  test('a survivor of THIS run → honest exit 1 (never a false "stopped")', () => {
+    // SHY-0236's contract, preserved: a runner that outlives every kill pass is
+    // REPORTED, never papered over with a reassuring "stopped pid N".
+    //
+    // SHY-0304 changed how this is provoked. The fixture used to be a process
+    // carrying the "manual-qa-runner" token but NOT the run id — which only
+    // failed the stop because verification was machine-wide. That pinned the
+    // defect as the contract: it is precisely why `stop A` reported failure
+    // when run B was alive, and why running the gauntlet's own test suite made
+    // this file red (Jest, npm and the invoking shell all carry the runner's
+    // name when they run its tests). A survivor of ANOTHER run is not this
+    // run's failure, so provoking it that way asserted the wrong thing.
+    //
+    // A survivor of THIS run cannot simply be an unkillable process — SIGKILL
+    // always wins. It is the case the production code's own comment names: "a
+    // runner can respawn a child between passes". The supervisor's own argv
+    // does not carry the run id (it reads the tag from a file), so the kill
+    // passes never target it; each pass kills its child and it immediately
+    // spawns another, and the verification finds one alive.
+    const id = `leftover-${process.pid}`;
+    const runId = `matrix-${id}`;
+    const tagFile = path.join(tmpRoot, `tag-${id}`);
+    fs.writeFileSync(tagFile, `node ${RUNNER} --matrix --report-dir=/tmp/${runId}/report\n`);
+
+    // Wall-clock bounded, so it can never outlive the test run.
+    spawned.push(
+      spawn(
+        '/bin/bash',
+        [
+          '-c',
+          `T=$(cat "${tagFile}"); e=$((SECONDS+90)); while [ $SECONDS -lt $e ]; do ( exec -a "$T" sleep 5 ); done`,
+        ],
+        { stdio: 'ignore', detached: true },
+      ),
+    );
+    const seen = () =>
+      spawnSync('/usr/bin/pgrep', ['-f', runId], { encoding: 'utf8' }).stdout.trim();
     const start = Date.now();
-    while (!seen() && Date.now() - start < 3000) spawnSync('/bin/sleep', ['0.05']);
+    while (!seen() && Date.now() - start < 5000) spawnSync('/bin/sleep', ['0.05']);
     expect(seen()).not.toBe(''); // fixture is live + pgrep-visible
 
-    makeRun('leftover-xyz', deadPid());
-    const r = runStop('leftover-xyz');
+    makeRun(id, deadPid());
+    const r = runStop(id);
 
     expect(r.status).not.toBe(0); // honest failure, not a false success
     expect(r.stderr).toMatch(/STILL alive/);
-    expect(r.stderr).toContain(String(child.pid)); // it flagged OUR survivor
-    // Still running with its argv intact (pgrep-visible) — proving cmd_stop did
-    // NOT kill it (it isn't run-scoped). pgrep, not kill(pid,0): a killed child
-    // would zombie (unreaped, argv gone) and kill(pid,0) would falsely say alive.
+    // A replacement child is present at verification time, still carrying the
+    // run id — which is what makes the honest failure correct rather than
+    // stale. pgrep, not kill(pid,0): a killed child would zombie (unreaped,
+    // argv gone) and kill(pid,0) would falsely report it alive.
     expect(seen()).not.toBe('');
-  });
+  }, 60000);
 });
