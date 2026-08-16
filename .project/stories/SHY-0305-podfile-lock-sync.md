@@ -260,3 +260,52 @@ that archives iOS successfully.
   works ([[feedback-absence-of-work-reported-as-success]]).
 - `sha1(Podfile) == PODFILE CHECKSUM` verified against a known-good commit
   (SHY-0300's parent) before being relied on as the guard's basis.
+
+- **2026-08-17 — `code-reviewer` round 1: 0 Critical, 9 Important, 3 Minor.**
+  Every claim was checked before being acted on. The reviewer had no git access
+  and could not diff the regenerated lock; that gap is closed here with
+  evidence: **0 pbxproj files changed**, and the whole `Podfile.lock` diff is
+  nine added `FirebaseAppCheck` lines plus the checksum swap — no pod version
+  moved, `COCOAPODS:` unchanged.
+
+  Applied:
+
+  - the guard now runs against the REAL repository in the Jest suite, not only
+    against synthetic temp trees. The live-defect tests had been using a JS
+    reimplementation of the parsing, so a bug unique to the bash sed/awk would
+    have been caught by lint and by nothing in `npm test`;
+  - fixtures for subspecs, version constraints, `:path` pods and quoted lock
+    entries — all claimed in the script's comments, none exercised;
+  - the "no SHA-1 tool available" branch, unreachable on both macOS and CI and
+    therefore never run anywhere, now tested with a PATH-restricted spawn. The
+    dangerous outcome is a guard that cannot hash and reports success anyway;
+  - a vacuity guard on the `pod install` sweep. Its sibling scan had one; this
+    one did not, so a regression in its own matching regex would have made it
+    pass over an empty set and prove nothing;
+  - a pin on the new lint step itself, including that it carries no `if:` —
+    that step is the entire "caught on every PR regardless of surface"
+    guarantee and nothing asserted it existed;
+  - the `ios-derived` cache-key pin, which still read as lock-only while the
+    workflow it documents had both;
+  - "names EVERY missing pod" and "a Podfile declaring no pods" cases;
+  - the script now states its own limits: it reads the Podfile as TEXT and
+    cannot evaluate Ruby, so a conditionally- or dynamically-declared pod is
+    outside its reach. Neither shape exists today; if one appears, the check
+    moves to `pod ipc podfile-json` rather than being loosened.
+
+  Not fixed, with reasons. The guard does not cross-check `PODS:` /
+  `SPEC CHECKSUMS:`, so a hand-crafted lock carrying a genuine checksum would
+  pass it — `pod install --deployment` remains the real backstop in every iOS
+  job, and reimplementing CocoaPods' resolver in bash would be worse than the
+  gap. The narrow TOCTOU between the checksum step and the extraction
+  pipelines requires the Podfile to be deleted mid-run; recorded, not defended
+  against.
+
+  `sonarjs/slow-regex` rejected the first version of the lint-step pin
+  (`[\s\S]*?` with a lookahead, then `^\s*if:` under `/m`). Rewritten as line
+  slicing plus a prefix test rather than suppressed, and re-proven to kill its
+  mutant afterwards.
+
+- Verification after review: **150 suites / 7551 tests** green; eslint
+  `--max-warnings=0`, prettier, shellcheck and actionlint clean; **10/10
+  mutants killed** across both rounds.

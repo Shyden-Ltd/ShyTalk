@@ -25,6 +25,21 @@
 #      looks reassuring because the transitive `FirebaseAppCheckInterop` and
 #      `AppCheckCore` are present while the pod itself is not.
 #
+# Known limitation, stated rather than discovered later: this reads the Podfile
+# as TEXT and cannot evaluate Ruby. A pod declared inside a conditional
+# (`if ENV['X'] … end`) is counted even when CocoaPods would not install it, so
+# a legitimately-absent entry would be reported as missing; a pod declared
+# dynamically (`%w[A B].each { |p| pod p }`) carries no literal `pod 'Name'`
+# token and is invisible here. Neither shape exists in iosApp/Podfile today.
+# If one is ever introduced, this check must move to `pod ipc podfile-json`
+# (which asks CocoaPods itself) rather than being loosened — the whole point is
+# that it costs nothing and runs on every PR.
+#
+# It is also deliberately not a substitute for `pod install --deployment`: a
+# lock hand-crafted with a genuine checksum and a fabricated DEPENDENCIES line
+# would pass here. That remains caught for real in every iOS build job. This is
+# the cheap check that runs where the mistake is MADE.
+#
 # Usage: bash scripts/check-podfile-lock-sync.sh
 #        SHYTALK_REPO=/path/to/repo bash scripts/check-podfile-lock-sync.sh
 set -uo pipefail

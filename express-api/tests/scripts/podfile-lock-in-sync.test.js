@@ -190,6 +190,98 @@ describe('SHY-0305 — the guard script', () => {
     expect(`${r.stdout}${r.stderr}`).not.toMatch(/LiveKitClient/);
   });
 
+  test('accepts the REAL repository, running the real script with no overrides', () => {
+    // Every other case here feeds the guard a synthetic temp tree. Those
+    // fixtures are simple by design, so a bug that only shows against the real
+    // file's structure — its SPEC REPOS section, its subspec entries, its
+    // prose comments — would be caught by lint in CI and by nothing in this
+    // suite. No cwd and no SHYTALK_REPO: the script resolves the repo from its
+    // own BASH_SOURCE, exactly as the lint step invokes it.
+    const r = spawnSync('/bin/bash', [GUARD], { encoding: 'utf8', timeout: 30000 });
+    if (r.status !== 0) throw new Error(`${r.stdout}\n${r.stderr}`);
+    expect(r.status).toBe(0);
+  });
+
+  test('handles subspecs, version constraints and quoted lock entries', () => {
+    // The script claims all three in its comments and none was exercised.
+    // `pod 'A/B'` resolves under its parent; a version constraint is not part
+    // of the name; CocoaPods quotes a lock entry when it carries a version.
+    const pf = path.join(tmp, 'iosApp/Podfile');
+    fs.writeFileSync(
+      pf,
+      "target 'iosApp' do\n" +
+        "  pod 'GoogleUtilities/Environment'\n" +
+        "  pod 'FirebaseCore', '~> 12.14'\n" +
+        "  pod 'Local', :path => '../vendor/Local'\n" +
+        'end\n',
+    );
+    fs.writeFileSync(
+      path.join(tmp, 'iosApp/Podfile.lock'),
+      'PODS:\n  - Whatever (1.0)\n\nDEPENDENCIES:\n' +
+        '  - GoogleUtilities/Environment\n' +
+        '  - "FirebaseCore (~> 12.14)"\n' +
+        '  - Local (from `../vendor/Local`)\n' +
+        `\nSPEC CHECKSUMS:\n  Whatever: abc\n\nPODFILE CHECKSUM: ${sha1OfFile(pf)}\n\nCOCOAPODS: 1.17.0\n`,
+    );
+
+    const r = runGuard(tmp);
+    if (r.status !== 0) throw new Error(`${r.stdout}\n${r.stderr}`);
+    expect(r.status).toBe(0);
+  });
+
+  test('names EVERY missing pod, not just the first', () => {
+    // Exercises the MISSING accumulation. A guard that stopped at the first
+    // would send a developer round the loop once per pod.
+    writePair({
+      podfileBody: "target 'iosApp' do\n  pod 'Alpha'\n  pod 'Beta'\n  pod 'Gamma'\nend\n",
+      dependencies: ['Beta'],
+    });
+
+    const r = runGuard(tmp);
+
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/Alpha/);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/Gamma/);
+  });
+
+  test('a Podfile declaring no pods at all is accepted', () => {
+    // The degenerate path: an empty DECLARED must not loop over one empty
+    // string and report "" as a missing pod.
+    writePair({ podfileBody: "target 'iosApp' do\nend\n", dependencies: [] });
+
+    const r = runGuard(tmp);
+    if (r.status !== 0) throw new Error(`${r.stdout}\n${r.stderr}`);
+    expect(r.status).toBe(0);
+  });
+
+  test('fails loudly when no SHA-1 tool is available, never silently passing', () => {
+    // macOS has shasum and no sha1sum; a minimal Linux image can have neither.
+    // Unreachable in both environments this is normally run in, which is
+    // exactly why it needs asserting: the dangerous outcome is a guard that
+    // cannot hash and reports success anyway.
+    const bin = path.join(tmp, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    for (const tool of ['sed', 'awk', 'grep', 'sort', 'cat', 'printf', 'tail']) {
+      for (const dir of ['/usr/bin', '/bin']) {
+        const src = path.join(dir, tool);
+        if (fs.existsSync(src) && !fs.existsSync(path.join(bin, tool))) {
+          fs.symlinkSync(src, path.join(bin, tool));
+        }
+      }
+    }
+    writePair({ podfileBody: "target 'iosApp' do\n  pod 'FirebaseCore'\nend\n" });
+
+    const r = spawnSync('/bin/bash', [GUARD], {
+      encoding: 'utf8',
+      timeout: 30000,
+      cwd: tmp,
+      env: { PATH: bin, SHYTALK_REPO: tmp },
+    });
+
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/shasum|sha1sum/);
+  });
+
   test('rejects a missing lock outright', () => {
     writePair({ podfileBody: "target 'iosApp' do\n  pod 'FirebaseCore'\nend\n" });
     fs.rmSync(path.join(tmp, 'iosApp/Podfile.lock'));
@@ -249,10 +341,9 @@ describe('SHY-0305 — no iOS cache key may hash the lock without the Podfile', 
     expect(offenders).toEqual([]);
   });
 
-  test('every `pod install` in CI runs with --deployment', () => {
-    // Plain `pod install` silently REGENERATES a mismatched lock instead of
-    // failing, which would have masked this breakage on prod while dev failed.
-    const offenders = fs
+  /** Every non-comment `pod install` invocation across all workflows. */
+  function podInstallSites() {
+    return fs
       .readdirSync(WORKFLOWS)
       .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
       .flatMap((f) =>
@@ -261,10 +352,48 @@ describe('SHY-0305 — no iOS cache key may hash the lock without the Podfile', 
           .split('\n')
           .map((line, i) => ({ file: f, line: i + 1, text: line }))
           .filter(({ text }) => !/^\s*#/.test(text))
-          .filter(({ text }) => /(^|\s|&&)pod install(\s|$)/.test(text))
-          .filter(({ text }) => !text.includes('--deployment')),
-      )
+          .filter(({ text }) => /(^|\s|&&)pod install(\s|$)/.test(text)),
+      );
+  }
+
+  test('CI actually invokes `pod install` somewhere (the scan is not vacuous)', () => {
+    // Without this, a regression in the matching regex above would make the
+    // --deployment assertion pass over an empty set and prove nothing. Its
+    // sibling scan has this guard; this one did not until review.
+    expect(podInstallSites().length).toBeGreaterThan(0);
+  });
+
+  test('every `pod install` in CI runs with --deployment', () => {
+    // Plain `pod install` silently REGENERATES a mismatched lock instead of
+    // failing, which would have masked this breakage on prod while dev failed.
+    const offenders = podInstallSites()
+      .filter(({ text }) => !text.includes('--deployment'))
       .map(({ file, line }) => `${file}:${line}`);
     expect(offenders).toEqual([]);
+  });
+
+  test('the lint job runs the guard, unconditionally', () => {
+    // This step is the PR's whole "caught on every PR regardless of surface"
+    // guarantee. Nothing pinned it — actionlint checks syntax, not presence,
+    // and an `if:` added later would silently restore the blind spot for
+    // exactly the PRs that change only the Podfile.
+    // Line-based rather than a `[\s\S]*?` capture with a lookahead: that shape
+    // is super-linear under backtracking and eslint's sonarjs/slow-regex
+    // rejects it. Slicing lines is both linear and easier to read.
+    const lines = fs.readFileSync(path.join(WORKFLOWS, 'lint.yml'), 'utf8').split('\n');
+    const start = lines.findIndex((l) =>
+      /^\s*- name: Validate Podfile\.lock is in sync with Podfile\s*$/.test(l),
+    );
+    expect(start).toBeGreaterThan(-1);
+
+    const rest = lines.slice(start + 1);
+    const end = rest.findIndex((l) => /^\s*- name: /.test(l));
+    const body = (end === -1 ? rest : rest.slice(0, end)).join('\n');
+
+    expect(body).toMatch(/run: bash scripts\/check-podfile-lock-sync\.sh/);
+    // No regex: `^\s*` under the multiline flag is what sonarjs/slow-regex
+    // objects to, and a plain prefix test says the same thing more directly.
+    const gated = body.split('\n').filter((l) => l.trimStart().startsWith('if:'));
+    expect(gated).toEqual([]); // never gated on a changed-paths filter
   });
 });

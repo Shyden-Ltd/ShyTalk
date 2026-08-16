@@ -716,8 +716,12 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       // committed dirs/files instead.
       expect(derivedDataCacheStep).not.toContain("hashFiles('iosApp/**'");
     });
-    test('key hashes app/test/UI-test sources + project + Podfile.lock + Configurations', () => {
+    test('key hashes app/test/UI-test sources + project + Podfile + lock + Configurations', () => {
       expect(derivedDataCacheStep).toContain("'iosApp/iosApp/**'");
+      // SHY-0305 — the Podfile itself, not just the lock. This block is what
+      // documents this key; leaving it lock-only made the file read as though
+      // the fix had not reached here.
+      expect(derivedDataCacheStep).toContain("'iosApp/Podfile'");
       expect(derivedDataCacheStep).toContain("'iosApp/iosAppTests/**'");
       expect(derivedDataCacheStep).toContain("'iosApp/iosAppUITests/**'");
       expect(derivedDataCacheStep).toContain("'iosApp/iosApp.xcodeproj/**'");
