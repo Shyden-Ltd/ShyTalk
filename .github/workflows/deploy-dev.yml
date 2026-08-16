@@ -681,7 +681,62 @@ jobs:
       # failure mode. Step-capped per this file's hang-detector philosophy
       # (normal case: seconds when present, ~3-10 min to fetch).
       - name: Ensure iOS platform runtime is installed
-        run: sudo xcodebuild -downloadPlatform iOS
+        # QUERY BEFORE DOWNLOADING. The unconditional `sudo xcodebuild
+        # -downloadPlatform iOS` this replaced has now failed in BOTH
+        # directions, from one cause: it never asked what was present.
+        #
+        #  - Wrong by PASSING: an iOS platform was installed but not the
+        #    required version, so the command exited 0 as a no-op and every
+        #    archive died ~20 minutes later with "iOS 26.0 is not installed".
+        #  - Wrong by FAILING: 2026-08-16, runs 31955605141 and 31958212267 on
+        #    the same develop tip, `Finding content... / Unable to connect to
+        #    simulator. / exit 70` — before any build ran. Two runs of the same
+        #    workflow had succeeded ~3 hours earlier, so the runner image or
+        #    the Apple-side service changed state, not the code.
+        #
+        # A DEVICE archive needs the iphoneos SDK. The simulator runtime that
+        # `-downloadPlatform` also fetches is not required for it, which is why
+        # the download can be unreachable while the archive would have been
+        # fine — so an outage must not fail the deploy when the SDK is present.
+        #
+        # Executed by express-api/tests/scripts/ios-runtime-ensure.test.js
+        # against canned tools; a regex over this YAML could not tell a correct
+        # version check from one that matches any runtime, which IS the defect.
+        run: |
+          set -euo pipefail
+          # Minimum the archive can target — IPHONEOS_DEPLOYMENT_TARGET in
+          # iosApp.xcodeproj. Pinned in ios-deployment-target-18.test.js.
+          REQUIRED_MAJOR=18
+
+          # `-showsdks` lists what is actually installed. `|| true` because a
+          # non-zero here must fall through to the download attempt rather than
+          # abort under `set -e` — an unreadable list is not evidence of a
+          # missing SDK.
+          SDKS=$(xcodebuild -showsdks 2>/dev/null || true)
+          # Field 2 of the "iOS <version>" lines. `sort -V | tail -1` picks the
+          # NEWEST by version order; a plain sort calls 26.9 newer than 26.10.
+          FOUND=$(printf '%s\n' "$SDKS" | sed -n 's/^[[:space:]]*iOS \([0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)
+          FOUND_MAJOR="${FOUND%%.*}"
+
+          if [ -n "$FOUND" ] && [ "${FOUND_MAJOR:-0}" -ge "$REQUIRED_MAJOR" ]; then
+            echo "iOS SDK ${FOUND} present (need >= ${REQUIRED_MAJOR}) — skipping the platform download"
+            exit 0
+          fi
+
+          echo "iOS SDK >= ${REQUIRED_MAJOR} not found (found: '${FOUND:-none}') — installing"
+          if ! sudo xcodebuild -downloadPlatform iOS; then
+            echo "::error::iOS platform download failed and no SDK >= ${REQUIRED_MAJOR} is installed (found: '${FOUND:-none}'). The archive cannot succeed without it."
+            exit 1
+          fi
+
+          # Exit 0 is NOT evidence the SDK arrived — that is exactly how the
+          # no-op regression shipped. Re-read and assert.
+          AFTER=$(xcodebuild -showsdks 2>/dev/null | sed -n 's/^[[:space:]]*iOS \([0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)
+          if [ -z "$AFTER" ] || [ "${AFTER%%.*}" -lt "$REQUIRED_MAJOR" ]; then
+            echo "::error::the platform download reported success but no SDK >= ${REQUIRED_MAJOR} is installed (found: '${AFTER:-none}')."
+            exit 1
+          fi
+          echo "iOS SDK ${AFTER} installed"
         timeout-minutes: 20
 
       # Step-level hang detector: the xcodebuild archive (which transitively
