@@ -240,3 +240,5 @@ dispatch proves the runner agrees.
   actionlint is clean under CI'''s own options (`SHELLCHECK_OPTS=-e SC2086`);
   a bare local invocation reports two pre-existing SC2086 infos that CI
   excludes repo-wide by design.
+
+Reviewed-up-to: 45dba1ac2fe6d52832a0c996a64f3a8e1c6c6ddb
