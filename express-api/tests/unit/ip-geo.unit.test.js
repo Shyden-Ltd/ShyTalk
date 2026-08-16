@@ -341,6 +341,65 @@ describe('cache', () => {
     }
   });
 
+  test('a 429 pauses ALL outbound lookups, not just that IP', async () => {
+    // The negative TTL alone inverts the outbound rate at the worst moment:
+    // 0.2 calls/min per IP while healthy, 2/min while failing. Against a
+    // budget shared through one egress IP, that makes a starved state
+    // self-sustaining. ip-api says how long to wait; honour it.
+    calls = [];
+    global.fetch = jest.fn(async (url) => {
+      calls.push(url);
+      return { ok: false, status: 429, headers: { get: () => '30' }, json: async () => ({}) };
+    });
+
+    expect(await getIpGeo('203.0.113.1')).toEqual({});
+    expect(await getIpGeo('203.0.113.2')).toEqual({});
+    expect(await getIpGeo('203.0.113.3')).toEqual({});
+
+    expect(calls).toHaveLength(1);
+  });
+
+  test('the pause lifts after the X-Ttl the server asked for', async () => {
+    calls = [];
+    let limited = true;
+    global.fetch = jest.fn(async (url) => {
+      calls.push(url);
+      return limited
+        ? { ok: false, status: 429, headers: { get: () => '30' }, json: async () => ({}) }
+        : ok({ status: 'success', as: 'AS64500 Example' });
+    });
+
+    await getIpGeo('203.0.113.4');
+    expect(calls).toHaveLength(1);
+    limited = false;
+
+    const realNow = Date.now;
+    try {
+      const base = realNow();
+      Date.now = () => base + 30 * 1000 + 1;
+      const recovered = await getIpGeo('203.0.113.5');
+      expect(calls).toHaveLength(2);
+      expect(recovered.asn).toBe('AS64500');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('a missing or unparseable X-Ttl still pauses, for a default minute', async () => {
+    // Fail-closed on the header: a 429 with no usable hint must not be
+    // treated as "carry on".
+    calls = [];
+    global.fetch = jest.fn(async (url) => {
+      calls.push(url);
+      return { ok: false, status: 429, headers: { get: () => null }, json: async () => ({}) };
+    });
+
+    await getIpGeo('203.0.113.6');
+    await getIpGeo('203.0.113.7');
+
+    expect(calls).toHaveLength(1);
+  });
+
   test('clearIpGeoCache actually clears', async () => {
     stubFetch(ok({ status: 'success', as: 'AS64500 Example' }));
     await getIpGeo('198.51.100.14');

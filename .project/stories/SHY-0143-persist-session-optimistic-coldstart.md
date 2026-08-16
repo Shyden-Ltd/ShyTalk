@@ -486,4 +486,46 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
   `--max-warnings=0`, ktlint, detekt, both platform compiles and the
   instrumented-test compile all clean. Every fix mutation-verified.
 
-Reviewed-up-to: f02441c8f1861a6e6f41067d183c1f19313ef6a2
+- **2026-08-16 — rounds 6 and 7.**
+
+  **Round 6** (2C + 9I) — `545cc7571ea`. Both Criticals were caused by round
+  5's fixes. Not caching an ASN-less geo result meant EVERY failure
+  re-queried, and `/api/ban-status` is unauthenticated at 200/min per IP
+  against an ip-api tier of ~45/min shared through one egress IP — so one
+  anonymous caller could starve the budget and switch every ASN-scoped ban
+  off, globally and indefinitely. A 5-minute per-IP degradation became a
+  remotely-triggerable one. Now every outcome is cached, with a 30s negative
+  TTL against the 5-minute positive one, plus an in-flight map. Separately,
+  the encoder pin could not see 2 of the 5 call sites it claimed to protect.
+
+  **Round 7** (2C + 5I) — this commit. The reviewer's verdict was "not ready,
+  but the blocking list is two items, both small".
+
+  - The geo→ASN wiring on `/api/ban-status` was unpinned: replacing
+    `geo.asn` with `null` left the ENTIRE Express suite green, because the
+    integration suite's client IP is a TEST-NET address that can never yield
+    an ASN. The only reason `getIpGeo` is on that route — an ASN-scoped ban
+    reaching a signed-out cold start — was the one thing untested, on this
+    story's headline security surface. New `tests/unit/ban-status.unit.test.js`
+    covers the match, the `AS`-prefix spelling, a non-matching ASN, and both
+    halves of the geo-failure posture. Two mutants caught.
+  - This entry and the marker below.
+
+  Also: the pin is now FAIL-CLOSED — an unrecognised dynamic value is
+  reported rather than silently accepted, which is the posture that let two
+  shapes through — and it has a test of its own covering every shape that
+  defeated its two predecessors. A 429 from ip-api now pauses all outbound
+  lookups for the `X-Ttl` it asks for, because the negative TTL alone
+  inverted the outbound rate at exactly the moment the budget ran out.
+
+  **Verification:** shared jvmTest 1522 / 0, app unit 2244 / 0 (both
+  `--rerun-tasks`); Express 417 suites / 13844 tests; eslint
+  `--max-warnings=0`, ktlint, detekt, both platform compiles and the
+  instrumented-test compile clean.
+
+  **Deferred, recorded, not blocking:** `device-info.js` writes `asn: null`
+  over a stored ASN under `merge: true` (pre-existing; follow-up this
+  session per the fix-pre-existing rule); `public/**` query building; the
+  ~20 pre-existing unguarded `NODE_ENV` restores under `tests/cron/**`.
+
+Reviewed-up-to: PENDING

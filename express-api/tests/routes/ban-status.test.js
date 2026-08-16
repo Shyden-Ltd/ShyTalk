@@ -71,7 +71,11 @@ beforeEach(async () => {
 });
 
 afterAll(() => {
-  process.env.NODE_ENV = PRIOR_NODE_ENV;
+  // `process.env` coerces, so assigning an undefined PRIOR_NODE_ENV sets the
+  // literal string 'undefined'. Same fix as the sibling composition suite —
+  // this story added both files and only one of them got it.
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
 
 describe('no authentication required', () => {

@@ -44,6 +44,19 @@ const GEO_NEGATIVE_TTL_MS = 30 * 1000;
 const GEO_MAX_ENTRIES = 5000;
 const geoCache = new Map();
 
+// When ip-api rate-limits us, STOP calling it.
+//
+// Without this the negative TTL inverts the outbound rate at the worst moment:
+// 0.2 calls/min per IP while healthy (5-min positive TTL) but 2/min while
+// failing (30s negative TTL) — a 10x increase in demand triggered by the
+// supply running out. Against a ~45/min budget shared through one egress IP,
+// the starved state then sustains itself above roughly 22 concurrently-active
+// IPs and no amount of waiting clears it.
+//
+// ip-api answers a rate limit with HTTP 429 and an `X-Ttl` header saying how
+// many seconds until the window resets. Honour it.
+let pausedUntil = 0;
+
 // Requests in flight, keyed on IP. Without this, N concurrent cold starts from
 // one IP are N outbound lookups even with the cache — the classic stampede.
 // `auth.js` documents the same pattern for uniqueId resolution.
@@ -58,14 +71,17 @@ function cacheGet(ip) {
     geoCache.delete(ip);
     return undefined;
   }
-  return hit.value;
+  // A COPY. Returning the cached object itself hands every caller the same
+  // mutable reference for the whole TTL — latent today (both callers only
+  // read) and a five-minute cache poisoning the first time one does not.
+  return { ...hit.value };
 }
 
 function cacheSet(ip, value) {
   // Evict oldest-inserted first; Map preserves insertion order.
   if (geoCache.size >= GEO_MAX_ENTRIES) {
-    const oldest = geoCache.keys().next().value;
-    if (oldest !== undefined) geoCache.delete(oldest);
+    // `size >= GEO_MAX_ENTRIES` guarantees a key, so no undefined guard.
+    geoCache.delete(geoCache.keys().next().value);
   }
   geoCache.set(ip, { at: Date.now(), value });
 }
@@ -74,6 +90,7 @@ function cacheSet(ip, value) {
 function clearIpGeoCache() {
   geoCache.clear();
   inFlight.clear();
+  pausedUntil = 0;
 }
 
 /**
@@ -87,6 +104,10 @@ async function getIpGeo(ip) {
 
   const cached = cacheGet(ip);
   if (cached !== undefined) return cached;
+
+  // Rate-limited upstream: answer from nothing rather than adding to the
+  // pile. Fail-open is already this function's contract.
+  if (Date.now() < pausedUntil) return {};
 
   // Coalesce concurrent lookups for the same IP into one outbound call.
   const pending = inFlight.get(ip);
@@ -120,6 +141,13 @@ async function fetchGeo(ip) {
         signal: AbortSignal.timeout(3000),
       },
     );
+    if (resp.status === 429) {
+      // `X-Ttl` is seconds until the window resets; default to a minute if
+      // the header is missing or unparseable.
+      const ttl = Number(resp.headers?.get?.('X-Ttl'));
+      pausedUntil = Date.now() + (Number.isFinite(ttl) && ttl > 0 ? ttl : 60) * 1000;
+      return {};
+    }
     if (!resp.ok) return {};
     const data = await resp.json();
     // ip-api reports a failed lookup — reserved range, invalid query — as
