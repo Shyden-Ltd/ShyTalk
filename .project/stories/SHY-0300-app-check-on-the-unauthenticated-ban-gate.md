@@ -235,3 +235,48 @@ gauntlet.
   the decision was about; the framework makes the other thirteen
   unauthenticated paths a one-line addition each, deliberately left out of
   scope so their rollout risks are considered individually.
+- **2026-08-16 — built, both halves.** Server: `app-check.js` classifies into
+  `verified | missing | invalid | error`, `missing`/`invalid` are refusable and
+  `error` never is, `BAD_TOKEN_CODES` is an ALLOW-list so an unknown SDK
+  failure degrades toward availability. Modes `off/monitor/enforce`, default
+  monitor, a misspelled mode warns rather than silently doing nothing. Wired
+  into the `/api` gate AHEAD of `generalLimiter`. Counters on an
+  AUTHENTICATED `GET /api/system/app-check` — NOT `/system/health`, which is
+  public, and publishing `mode` there would tell an abuser exactly when
+  attestation is off.
+
+  Client: `AppCheckTokenProvider` expect/actual (Play Integrity on Android, a
+  Swift `AppCheckBridge` on iOS with App Attest → DeviceCheck fallback, null on
+  JVM), attached in BOTH platforms' `getPublic` so a future unauthenticated
+  endpoint inherits it. Both request a CACHED token; forcing a refresh would
+  put an attestation round trip in front of the cold-start ban check. Every
+  failure is a null and the request goes out unattested — the server decides,
+  and it can be reconfigured without shipping a release.
+
+  The debug provider is confined to debug builds on both platforms:
+  `debugImplementation` plus reflective lookup on Android, `#if DEBUG` on iOS.
+  It mints a token for anyone holding the debug secret, so on a release
+  classpath it would defeat the control completely.
+
+  **Nine mutants verified.** Three of them exposed defects in the PIN rather
+  than the code, all the same family — the pin was matching text that is not
+  code: an `import` line, and twice its own KDoc quoting the call it was
+  checking. Deleting the entire header attach from `IosApiClient` left the pin
+  GREEN. Fixed by filtering comments AND imports and asserting a syntactic
+  form (`header(APP_CHECK_HEADER`) rather than an identifier;
+  [[feedback-comments-are-not-code-references]] extended with both cases.
+
+  **Not done, and it is the acceptance test:** a real token obtained on a real
+  device. Attestation cannot be proven on an emulator or a simulator, so
+  Android instrumented + iOS XCTest on real hardware is what closes this, in
+  the batch gauntlet before the release cut. iOS also needs `pod install` for
+  the new `FirebaseAppCheck` pod. The Swift lives in `AppDelegate.swift`
+  deliberately — a new Swift file would need a `project.pbxproj` change, which
+  is operator-authorised territory, and AppDelegate is where Firebase is
+  already configured and the push bridge already registered.
+
+  **Operator action still outstanding:** Play Integrity and App Attest must be
+  enabled in the Firebase console for `shytalk-dev` and `shytalk-7ba69`, and a
+  debug token registered for local builds. Until then the client obtains no
+  token and the server, in monitor mode, records `missing` — which is the
+  designed-for state, not a failure.
