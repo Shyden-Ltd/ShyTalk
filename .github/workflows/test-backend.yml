@@ -116,11 +116,9 @@ jobs:
           mkdir -p express-api/coverage
           echo "{\"passed\":${PASSED},\"failed\":${FAILED},\"total\":${TOTAL},\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"express\",\"env\":\"${REPORT_ENV}\"}" > express-api/coverage/metadata.json
 
-      # SHY-0298: handed to a separate publish job rather than pushed from here.
-      # This job runs the backend suite; the publish must sit inside the
-      # job-level `gh-pages-deploy` group, and putting that group on THIS job
-      # would serialize the whole suite across every open PR. An artifact is
-      # the hand-off.
+      # SHY-0298: handed to a separate publish job rather than pushed from here,
+      # so a slow or retrying publish cannot hold the backend suite open. An
+      # artifact is the hand-off.
       - name: Upload Express report for publishing
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -130,21 +128,22 @@ jobs:
           path: express-api/coverage
           if-no-files-found: error
 
-  # SHY-0298 — one queue for every gh-pages writer, and PR branches get their
-  # report back.
+  # SHY-0298 — PR branches get their report back.
   #
   # The old step skipped publishing unless report_env was dev or prod. That was
   # AVOIDANCE, not a fix: the race (peaceiris clones --depth=1, commits, pushes,
   # never retries; N-1 concurrent pushes rejected non-fast-forward — verified on
   # PR #901) was dodged by switching the PR-branch report OFF, on the grounds
-  # that it was "nice-to-have". With every writer on one queue the race cannot
-  # occur, so the report comes back — which is also the only externally
-  # observable proof that the serialization works.
+  # that it was "nice-to-have". The publish action now RETRIES against the
+  # moving tip, so a lost race costs a second attempt rather than a report, and
+  # the report comes back — which is also the only externally observable proof
+  # that the retry works.
   #
-  # `gh-pages-deploy` is the same group `allure-report.yml` declares at WORKFLOW
-  # level; SHY-0298 measured that workflow-level and job-level groups of the
-  # same name share ONE queue across workflows. `cancel-in-progress: false`
-  # because cancelling would DROP a report rather than delay it.
+  # NO concurrency group, deliberately. The first version of this story used
+  # one, and that was wrong: a group holds exactly ONE pending entry, so a
+  # third contender cancels the pending second (incidents #568/#570), and a
+  # cancelled publish here propagates into PR Gate, a REQUIRED check — the lock
+  # would have red-gated innocent PRs.
   publish-express-report:
     name: Publish Express Report
     needs: test-backend
@@ -160,9 +159,28 @@ jobs:
     if: ${{ !cancelled() && needs.test-backend.result != 'skipped' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # A publish failure must NOT red-gate the PR (SHY-0298 Error-paths AC:
+    # "a publishing failure must not be reported as a test failure").
+    #
+    # This job lives inside a REUSABLE workflow, and a reusable workflow's
+    # conclusion is the aggregate of its jobs — so without this, a green
+    # backend suite whose report failed to publish made the caller's
+    # `test-backend` job `failure`, and `test-backend` is in PR Gate's `needs`.
+    # A missing coverage HTML would have blocked a merge with no test failure
+    # behind it.
+    #
+    # `continue-on-error` and NOT a moved job: `test-backend.yml` is also
+    # `workflow_dispatch`-able for dev/prod report runs, and moving the publish
+    # into pr-checks.yml (where the Kotlin one lives, naturally outside the
+    # gate) would silently stop those from publishing.
+    #
+    # Visibility is unaffected — the job still reports as failed, with the
+    # publish action's own `::error` annotation. It just stops being a gate.
+    continue-on-error: true
     # NO concurrency group — see pr-checks.yml's publish job. A cancelled job
     # here would be worse than there: this workflow is in PR Gate's `needs`, so
-    # a cancelled publish fails a REQUIRED check on an innocent PR.
+    # a cancelled publish would otherwise fail a REQUIRED check on an innocent
+    # PR.
     permissions:
       contents: write
     steps:

@@ -377,3 +377,37 @@ describe('SHY-0298 — PR-branch Express reports are published again', () => {
     expect(src).toMatch(/destination-dir:\s*express\/\$\{\{\s*inputs\.report_env/);
   });
 });
+
+describe('a publish failure must not red-gate the PR (SHY-0298 Error-paths AC)', () => {
+  const readWf = (name) => fs.readFileSync(path.join(WF_DIR, name), 'utf8');
+
+  test('the express publish cannot fail the reusable workflow it lives in', () => {
+    // `publish-express-report` is a job INSIDE test-backend.yml, and a
+    // reusable workflow's conclusion is the aggregate of its jobs — so
+    // without this, a green backend suite whose coverage HTML failed to
+    // publish made the caller's `test-backend` job `failure`. That job is in
+    // PR Gate's `needs`, so a missing report blocked the merge with no test
+    // failure behind it.
+    const doc = yaml.load(readWf('test-backend.yml'));
+    expect(doc.jobs['publish-express-report']['continue-on-error']).toBe(true);
+  });
+
+  test('the backend SUITE itself still gates', () => {
+    // The other half: making the publish non-gating must not make the tests
+    // non-gating.
+    const doc = yaml.load(readWf('pr-checks.yml'));
+    expect(doc.jobs.gate.needs).toContain('test-backend');
+    expect(doc.jobs['test-backend']['continue-on-error']).toBeUndefined();
+  });
+
+  test('no OTHER job inside the gated reusable workflow is allowed to fail silently', () => {
+    // `continue-on-error` is a sharp tool: it is right for a report and wrong
+    // for a test. Anything else in this workflow acquiring it should be a
+    // deliberate decision, not a copy-paste.
+    const doc = yaml.load(readWf('test-backend.yml'));
+    const lenient = Object.entries(doc.jobs)
+      .filter(([, j]) => j['continue-on-error'] === true)
+      .map(([name]) => name);
+    expect(lenient).toEqual(['publish-express-report']);
+  });
+});
