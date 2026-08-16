@@ -1,6 +1,6 @@
 ---
 id: SHY-0304
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-17
 priority: P1
@@ -439,3 +439,5 @@ recorded in the Notes so the next session can re-run it.
   (2032 tests); **13/13 mutants killed** — every round-1 mutant plus one
   proving an unrecognised line is dropped rather than glued; shellcheck,
   eslint `--max-warnings=0` and prettier clean.
+
+Reviewed-up-to: 9a6213adfd0ab2d81301ee8781b61ec040bb8d9e
