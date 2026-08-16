@@ -272,4 +272,4 @@ per CLAUDE.md's backend rule, not a CI-config exemption.
   unit tests and both double-free end-to-end tests, including the
   `checkUserBans` verdict.
 
-Reviewed-up-to: 71b634d33c614aa2b329da1e0c9edb698db299c8
+Reviewed-up-to: c00b69bf76be230cea9216fefb36d3ab073ea9fc
