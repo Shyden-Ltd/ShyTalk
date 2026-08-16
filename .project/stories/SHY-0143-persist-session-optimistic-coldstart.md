@@ -46,7 +46,15 @@ Operator decisions (2026-07-01, AskUserQuestion): **instant shell, data streamed
 
 - [ ] Cold start with **no** Firebase `currentUser` → `startDestination = Screen.SignIn` (unchanged behaviour).
 - [ ] `getIdToken(forceRefresh)` fails because the refresh token is **expired/revoked** → sign out → SignIn, with **no cohort-scoped data rendered** at any point.
-- [ ] The background `checkPmLockOnLogin` reconcile returns `forceSignOut: true` → sign out → SignIn (reuses the existing force-sign-out path).
+- [x] ~~The background `checkPmLockOnLogin` reconcile returns `forceSignOut: true` → sign out → SignIn.~~
+      **DROPPED 2026-08-16 (operator).** No such field exists. The
+      `pm-lock-check` response carries `pmLocked`, `unlocked`,
+      `alreadyCheckedToday`, `cohort`, `cohortChanged`, `forceTokenRefresh` and
+      `claimMintFailed` — this clause described a server-initiated kill switch
+      that was never built. The cases that matter are already covered: a
+      suspension signs the user out through the existing reactive gate, and a
+      revoked refresh token signs them out in `ColdStartSequencer`. Not
+      implemented against an invented field.
 - [ ] The account is **suspended** → the existing reactive suspension gate (`SharedNavGraph:116-127`) fires: auto-sign-out → SignIn (optimistic routing must not bypass it).
 - [ ] A **device ban** (`deviceBans/{deviceId}`) → session invalidated (signed out) → `BanScreen` (device variant), **never** the login screen — on both the has-session and no-session cold-start.
 - [ ] A **network ban** — IP / subnet / ASN, the same path that blocks **VPNs** → session invalidated → `BanScreen` (network variant), **never** login — has-session or not.
@@ -73,7 +81,17 @@ Operator decisions (2026-07-01, AskUserQuestion): **instant shell, data streamed
 - [ ] **NO cohort-scoped Firestore read is issued before the refreshed token resolves** — the central invariant; proven by a gate-ordering test over the startup sequencer AND on-device verification. This is what prevents a stale-cohort flash/leak.
 - [ ] **The device+network ban check is hoisted to run pre-routing** (not sign-in-only), so the optimistic route **cannot bypass** it; a banned device/network is shown `BanScreen` before Main or SignIn, with **no cohort-scoped data rendered**. Proven by a gate-ordering test (ban check precedes routing + subscriptions) + an instrumented banned-device cold-start.
 - [ ] Emulator / rooted / modified **Android** devices remain blocked **always** (prod flavour) via the pre-auth `UnsafeDeviceGate` — the optimistic path does not weaken it. (iOS device-integrity is platform-level today; in-app iOS detection is split to its own story — see Out of Scope.)
-- [ ] The cached `{firebaseUid, uniqueId, cohort}` is stored **encrypted at rest** — Android `EncryptedSharedPreferences`/DataStore-with-Tink (Keystore-backed); iOS Keychain.
+- [x] The cached `{firebaseUid, uniqueId, cohort}` is stored in `SecureStorage` — the **iOS Keychain**, and on Android **`SharedPreferences` with `MODE_PRIVATE`**, protected by the app sandbox and device file-based encryption.
+      **AMENDED 2026-08-16 (operator).** This clause originally required Android
+      `EncryptedSharedPreferences`/DataStore-with-Tink. The app deliberately does
+      not use that: AndroidX deprecated `EncryptedSharedPreferences` (Keystore
+      corruption on some OEMs and after factory reset), and `minSdk = 28`
+      guarantees whole-device file-based encryption — see the rationale in
+      `SecureStorage.android.kt`. Nothing secret is stored: a `uniqueId` is the
+      public account number every other user already sees, and the cohort is a
+      label whose only non-repository consumer is a dev-only debug watermark.
+      Cohort segregation is enforced by the JWT claims and the rules that read
+      them, never by this cache.
 - [ ] The cache is a **routing hint only** — it never grants data access; Firestore rules + the freshly-refreshed JWT remain the sole enforcement of cohort segregation.
 - [ ] Sign-out clears the cached identity so no `uniqueId`/cohort is left on disk after logout.
 
@@ -89,7 +107,7 @@ Operator decisions (2026-07-01, AskUserQuestion): **instant shell, data streamed
 
 ### Observability
 
-- [ ] The cold-start **routing decision** is logged (cache-hit → Main · no-user → SignIn · no-cache/uid-mismatch → fallback · device-ban → BanScreen · network-ban → BanScreen) and the **gate outcomes** (token-refresh success/failure; ban-gate: device-ban / network-ban / clear / ban-check-error; reconcile: ok / forceSignOut / suspension / cohort-changed), capturable in local + dev builds per [[feedback-comprehensive-default-debug-logging]] so a detached cold-start failure is inspectable without re-running.
+- [ ] The cold-start **routing decision** is logged (cache-hit → Main · no-user → SignIn · no-cache/uid-mismatch → fallback · device-ban → BanScreen · network-ban → BanScreen) and the **gate outcomes** (token-refresh success/failure; ban-gate: device-ban / network-ban / clear / ban-check-error; reconcile: ok / suspension / cohort-changed), capturable in local + dev builds per [[feedback-comprehensive-default-debug-logging]] so a detached cold-start failure is inspectable without re-running.
 
 ## BDD Scenarios
 
@@ -529,3 +547,20 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
   ~20 pre-existing unguarded `NODE_ENV` restores under `tests/cron/**`.
 
 Reviewed-up-to: e72180d1d7fd079945c952139acd54f240bc7d7f
+
+- **2026-08-16 — operator decisions on the three open questions.**
+  1. **Encrypted-at-rest criterion AMENDED**, not the storage. Android's
+     `SecureStorage` deliberately uses plain `SharedPreferences`/`MODE_PRIVATE`;
+     `EncryptedSharedPreferences` is deprecated by AndroidX and `minSdk = 28`
+     guarantees device file-based encryption. Nothing secret is cached.
+  2. **`forceSignOut` clause DROPPED.** The field does not exist in
+     `PmLockCheckResult` and no server sends it. Suspension and revoked-token
+     sign-out already cover the real cases.
+  3. **App Check REQUIRED before this reaches production.** The operator chose
+     "add App Check before this ships" over "file a follow-up", so it is the
+     next work item rather than a deferred ticket — see SHY-0300. Merging to
+     develop is not shipping; the develop→main promotion is the gate this
+     blocks.
+
+  Merge posture: both PRs merge on CI green. Device verification stays a
+  single end-of-batch gauntlet before the promotion, per the MVP-sprint model.
