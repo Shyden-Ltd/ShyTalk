@@ -137,6 +137,12 @@ compose.resources {
 // jvmTest compilation, so without declaring them here Gradle would treat
 // jvmTest as up-to-date when only they change and skip the pin — leaving the
 // "built but never wired" regression unguarded.
+//
+// SHY-0143 added the two Koin modules: the DI pin asserts SessionCache is
+// registered on BOTH platforms, and a registration deleted from either one is
+// precisely the change that would otherwise leave jvmTest up-to-date. This
+// list has to grow whenever a pin learns to read a new file — a pin reading an
+// undeclared file is a pin that does not run.
 tasks.named("jvmTest") {
     inputs
         .files(
@@ -146,6 +152,14 @@ tasks.named("jvmTest") {
             layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt"),
             layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/navigation/IosPlatformScreens.kt"),
             rootProject.layout.projectDirectory.file("iosApp/iosApp/AppDelegate.swift"),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt"),
+            rootProject.layout.projectDirectory.file(
+                "app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosAuthRepositoryImpl.kt",
+            ),
         ).withPropertyName("appLockWiringPinnedSources")
         .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 }

@@ -13,6 +13,7 @@ const {
 } = require('./middleware/rateLimit');
 const portalRoutes = require('./routes/portal');
 const { portalLimiter, recoveryLimiter } = require('./middleware/rateLimit');
+const { skipsAuth } = require('./middleware/auth-skip');
 const { startCronJobs } = require('./cron');
 const { db, rtdb } = require('./utils/firebase'); // Initialize Firebase before routes
 const log = require('./utils/log');
@@ -113,38 +114,9 @@ app.use('/api', generalLimiter, require('./routes/system'));
 
 // Auth middleware for all /api routes (except health, log-config, auth, and pre-auth endpoints)
 app.use('/api', (req, res, next) => {
-  if (
-    req.path === '/health' ||
-    req.path === '/log-config' ||
-    req.path === '/logs' ||
-    req.path === '/firebase-config' ||
-    req.path.startsWith('/auth/') ||
-    (req.method === 'GET' && req.path === '/config/startingScreens') ||
-    (req.path.startsWith('/test/') && process.env.NODE_ENV !== 'production') ||
-    (req.method === 'GET' && /^\/users\/[^/]+\/data-export\/download$/.test(req.path)) ||
-    // Public suggestion endpoints (browsing without login)
-    (req.method === 'GET' && req.path === '/suggestions') ||
-    (req.method === 'GET' && req.path === '/suggestions/search') ||
-    (req.method === 'GET' && req.path === '/suggestions/blocked') ||
-    (req.method === 'GET' && req.path === '/suggestions/tags') ||
-    (req.method === 'GET' &&
-      /^\/suggestions\/[^/]+$/.test(req.path) &&
-      req.path !== '/suggestions/mine') ||
-    // One-click email unsubscribe (token-based, no auth)
-    (req.method === 'POST' && req.path === '/subscriptions/unsubscribe') ||
-    // Anonymous public-content translation (SHY-0072): header-less POSTs
-    // skip auth (the route serves the public flow and 401s chat-shaped
-    // bodies); callers presenting a token still flow through
-    // authMiddleware and keep the chat contract.
-    (req.method === 'POST' && req.path === '/translate' && !req.headers.authorization) ||
-    // Apple App Store Server Notifications V2 webhook — auth is the JWS
-    // signature verified inside the route, not a Bearer token (Apple does
-    // not send one). Without this skip, every notification would 401.
-    (req.method === 'POST' && req.path === '/apple-notifications/v2') ||
-    // Portal TOTP recovery (unauthenticated — user has lost their TOTP device)
-    req.path.startsWith('/portal/totp-recovery/')
-  )
-    return next();
+  // The predicate lives in ./middleware/auth-skip so it can be unit-tested —
+  // see that file for why. Keep it a pure function of (method, path).
+  if (skipsAuth(req)) return next();
   authMiddleware(req, res, next);
 });
 
@@ -162,6 +134,12 @@ app.use('/api', (req, res, next) => {
 // (bind on lock-check / telemetry upsert) — cap per-user churn (SHY-0170).
 app.use('/api/devices', writeLimiter);
 app.use('/api/device-info', writeLimiter);
+// NOTE: /api/ban-status deliberately has NO extra limiter. The `/api` block
+// above already runs generalLimiter for every path, and mounting the same
+// instance again made each cold-start ban check spend TWO tokens of the
+// bucket — halving the effective limit to 100/min and making the two
+// RateLimit-Remaining headers contradict each other. It is a pure read, so
+// generalLimiter is the right tier; it just gets it from there.
 app.use('/api/conversations', writeLimiter);
 app.use('/api/economy/gacha', writeLimiter);
 app.use('/api/economy/gift', writeLimiter);
@@ -258,6 +236,7 @@ app.use('/api', require('./routes/admin-logs'));
 app.use('/api', require('./routes/admin-log-config'));
 app.use('/api', require('./routes/storage'));
 app.use('/api', require('./routes/device-info'));
+app.use('/api', require('./routes/ban-status'));
 app.use('/api', require('./routes/devices'));
 app.use('/api', require('./routes/admin-bans'));
 app.use('/api', require('./routes/admin-devices'));
