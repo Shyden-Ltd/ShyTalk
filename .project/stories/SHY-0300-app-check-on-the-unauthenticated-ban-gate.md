@@ -1,6 +1,6 @@
 ---
 id: SHY-0300
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-16
 priority: P0
@@ -280,3 +280,5 @@ gauntlet.
   debug token registered for local builds. Until then the client obtains no
   token and the server, in monitor mode, records `missing` — which is the
   designed-for state, not a failure.
+
+Reviewed-up-to: 91cb2b56de0f5b8ca23566529e452cf0400c2e4d
