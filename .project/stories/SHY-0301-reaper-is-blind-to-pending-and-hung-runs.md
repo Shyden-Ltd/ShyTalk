@@ -227,6 +227,20 @@ sweep cancel it, with the superseded run then starting.
 
 ## Notes (running log)
 
+- **2026-08-16 — a second, related observation worth its own ticket.**
+  `sonarcloud.yml` sets `timeout-minutes: 15`. Measured durations of the
+  SonarCloud Analysis job: **8m37s**, **9m46s** — and then **15m04s**, killed
+  by the cap, on a commit whose CODE had already passed the same job forty
+  minutes earlier (only two `.md` commits followed). A re-run passed.
+
+  So the cap has roughly five minutes of headroom over a job that is already
+  variable, and when it is exceeded the failure presents as
+  `##[error]The operation was canceled` — which reads like an infrastructure
+  incident, not like a timeout, and sends the reader looking in the wrong
+  place. Either the cap needs headroom or the job needs to get faster; the
+  measurement above says which of those is a guess and which is not. Not
+  folded in here because it is a different file and a different fix.
+
 - **2026-08-16 — filed** from a live incident on PR #1752, not from reading.
   The PR sat `BLOCKED` with no failing check for over two hours; the cause was
   a `pending` run behind a hung `in_progress` one, and the reaper's
