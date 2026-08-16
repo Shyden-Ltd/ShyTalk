@@ -546,6 +546,23 @@ App-only Kotlin/Swift change (no `express-api/**` runtime edit; may add an App-C
   session per the fix-pre-existing rule); `public/**` query building; the
   ~20 pre-existing unguarded `NODE_ENV` restores under `tests/cron/**`.
 
+- **2026-08-16 — MERGED to develop** (squash `a67287ec3a2`), develop deployed
+  to dev. `PRE-MERGE-CHECK: OK` — story In Review, no unreviewed commits,
+  CI green by name.
+
+  **The backend gauntlet was DEFERRED, by operator decision, not skipped.**
+  This is a backend change, so CLAUDE.md's SHY-0127 rule normally demands the
+  full device + all-browser matrix before merge. The operator ruled on
+  2026-08-16: *"merge both on ci green. we already decided to finish all the
+  mvp tickets before running the gauntlet against everything so you can keep
+  moving."* The gauntlet therefore runs ONCE against the whole MVP set before
+  the release cut, and this story is **not** eligible for `Done` until it has
+  passed there ([[feedback-release-gated-on-full-journey-protocol]]).
+
+  Carried into that run: the cold-start path on a real Android device and a
+  real iPhone (ban check, unresolved identity, cohort refresh), because the
+  device-proof for those is what this story's own DoD asks for.
+
 Reviewed-up-to: e72180d1d7fd079945c952139acd54f240bc7d7f
 
 - **2026-08-16 — operator decisions on the three open questions.**
