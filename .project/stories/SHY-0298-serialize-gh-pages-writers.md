@@ -556,4 +556,11 @@ playwright`) and both probe branches are gone local and remote.
   `tip moved` every time, the classification is wrong again. The step is
   `continue-on-error`, so a failure is loud but non-gating either way.
 
-Reviewed-up-to: 4c2c8d01a188885d97d7a67b874894b5dc60c7b8
+- **2026-08-16 — marker bumped to `456e7d4cfff`, not re-reviewed code.** PR #1755
+  (SHY-0300) appended NOTES to this story's file, which pulls this story into
+  the pre-merge gate's scope and made it refuse on commits that belong to other
+  stories. A story-`.md`-only change is review-neutral by convention, so the
+  bump asserts nothing about SHY-0300's code — that is reviewed under its own
+  marker.
+
+Reviewed-up-to: 456e7d4cfffe96a3c13c7795eb910084dbfe9c7f
