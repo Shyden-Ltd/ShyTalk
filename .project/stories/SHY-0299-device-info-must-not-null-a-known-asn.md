@@ -250,4 +250,4 @@ per CLAUDE.md's backend rule, not a CI-config exemption.
   Full Express suite: 169 suites / 4,428 tests green; eslint
   `--max-warnings=0` and prettier clean.
 
-Reviewed-up-to: PLACEHOLDER
+Reviewed-up-to: 71b634d33c614aa2b329da1e0c9edb698db299c8
