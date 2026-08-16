@@ -272,6 +272,51 @@ describe('SHY-0304 — a runner is identified by what it is, not what it mention
       expect(wrapperPid).toMatch(/^\d+$/);
       expect(cleanupTargets(r.stdout)).not.toContain(wrapperPid);
     });
+  });
+
+  // --------------------------------------------------------- loading the lib
+
+  describe('the shared helper is load-bearing', () => {
+    test('50-matrix.sh dies loudly when the helper is missing, never reports clean', () => {
+      // `50-matrix.sh` runs under `set -uo pipefail` WITHOUT -e, so a failed
+      // `source` only warns. `runner_pids` would then be an unknown command
+      // producing empty output — and cmd_stop would report EVERY run clean
+      // forever, which is precisely the reassuring lie SHY-0236 removed. A
+      // silent guard is worse than no guard, so this proves it is loud.
+      //
+      // A real tree with the file genuinely absent: copying the script is the
+      // only way to make `source` fail without mutating the repo.
+      const fake = fs.mkdtempSync(path.join(os.tmpdir(), 'shy0304-nolib-'));
+      fs.mkdirSync(path.join(fake, 'gauntlet'), { recursive: true });
+      fs.mkdirSync(path.join(fake, 'lib'), { recursive: true }); // present but EMPTY
+      for (const f of ['50-matrix.sh', 'lib.sh']) {
+        fs.copyFileSync(
+          path.join(REPO_ROOT, 'express-api/scripts/gauntlet', f),
+          path.join(fake, 'gauntlet', f),
+        );
+      }
+
+      const id = `nolib-${process.pid}`;
+      makeRun(id, deadPid());
+      const r = spawnSync('/bin/bash', [path.join(fake, 'gauntlet', '50-matrix.sh'), 'stop', id], {
+        encoding: 'utf8',
+        timeout: 30000,
+        env: {
+          ...process.env,
+          GAUNTLET_TMP: tmpRoot,
+          SHYTALK_REPO: REPO_ROOT, // else require_repo fails first and masks this
+          PATH: NO_ADB_PATH,
+        },
+      });
+
+      expect(r.status).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(/runner-pids\.sh/);
+      // Specifically NOT the success line — the failure mode being guarded
+      // against is a clean-looking report, not merely a non-zero exit.
+      expect(r.stdout).not.toMatch(/0 runners remain/);
+
+      fs.rmSync(fake, { recursive: true, force: true });
+    });
 
     test('still targets a genuine orphaned runner', () => {
       // The capability the script exists for. Without this, "target nothing"

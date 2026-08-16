@@ -18,7 +18,12 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib.sh"
 # shellcheck source=../lib/runner-pids.sh
-source "$HERE/../lib/runner-pids.sh"
+# `|| die` is load-bearing: this script runs under `set -uo pipefail` WITHOUT
+# -e, so a failed source would only print a warning and carry on. `runner_pids`
+# would then be an unknown command producing empty output, and cmd_stop's
+# verification would report every run clean forever — the exact reassuring lie
+# SHY-0236 removed. Fail loudly instead.
+source "$HERE/../lib/runner-pids.sh" || die "cannot load $HERE/../lib/runner-pids.sh"
 require_repo
 
 SECRETS_ENV="${HOME}/.shytalk/dev-personas.env"
