@@ -37,28 +37,61 @@ class QueryEncodingWiringPinTest {
             .flatMap { it.walkTopDown().filter { f -> f.isFile && f.extension == "kt" }.toList() }
 
     @Test
-    fun `no client source interpolates a raw value into a query string`() {
-        // `?name=$value` or `&name=$value` with a bare `$` — i.e. the value
-        // reaches the URL exactly as held. `${encodeUrlQueryComponent(x)}` and
-        // `$encodedThing` are fine; the pattern below requires the interpolated
-        // identifier NOT to be an encode call and NOT to be named as encoded.
-        val raw = Regex("""[?&][A-Za-z0-9_]+=\$\{?(?!encodeUrlQueryComponent)([A-Za-z_][A-Za-z0-9_]*)""")
-        // Scoped to API calls. A `market://details?id=…` Play Store deep link
-        // is not a request this app makes, and its value is BuildConfig —
-        // flagging it would be noise that teaches people to ignore the pin.
-        val apiCall = Regex("""["(]/?api/""")
+    fun `no client source puts an unencoded value into a query string`() {
+        // Whole-FILE, not line-by-line, and anchored on the query parameter
+        // itself rather than on proximity to "/api/".
+        //
+        // The first version of this pin was defeated by shapes already in the
+        // repo, which mutation testing showed: it required a quote or paren
+        // immediately before `api/` (so `"$workerUrl/api/…"` was never
+        // scanned), it scanned single lines (so a URL concatenated across
+        // three lines was invisible), and it required `=$` (so string
+        // concatenation was invisible). Two of the five call sites this story
+        // fixed had no protection at all — including the iOS one, on the
+        // platform with no host tests.
         val offenders = mutableListOf<String>()
 
         clientSources().forEach { file ->
-            file.readLines().forEachIndexed { i, line ->
-                if (line.trimStart().startsWith("//") || line.trimStart().startsWith("*")) return@forEachIndexed
-                if (!apiCall.containsMatchIn(line)) return@forEachIndexed
-                raw.findAll(line).forEach { m ->
-                    val name = m.groupValues[1]
-                    // A local already named for being encoded is the other
-                    // legitimate shape (`val uid = encodeUrlQueryComponent(...)`).
-                    if (!name.lowercase().contains("encoded") && !name.lowercase().startsWith("enc")) {
-                        offenders.add("${file.relativeTo(repoRoot())}:${i + 1}  ${line.trim()}")
+            val text = file.readText()
+
+            // Locals proven safe by assignment: `val x = encodeUrlQueryComponent(…)`.
+            // This is what makes the check about the VALUE rather than about
+            // an encode call happening to sit nearby — an earlier version
+            // looked backwards for the function name and passed whenever one
+            // existed, so removing the encoding from the interpolation while
+            // leaving the assignment above it went undetected at 2 of 4 sites.
+            val safeLocals =
+                Regex("""val\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*encodeUrlQueryComponent\(""")
+                    .findAll(text)
+                    .map { it.groupValues[1] }
+                    .toSet()
+
+            Regex("""[?&][A-Za-z0-9_]+=""").findAll(text).forEach { m ->
+                val after = text.substring(m.range.last + 1, minOf(m.range.last + 200, text.length))
+                val line = text.substring(0, m.range.first).count { it == '\n' } + 1
+
+                // `${'$'}{ … }` — the expression itself must encode.
+                Regex("""^\$\{([^}]*)}""").find(after)?.let { braced ->
+                    if (!braced.groupValues[1].contains("encodeUrlQueryComponent")) {
+                        offenders.add("${file.relativeTo(repoRoot())}:$line  ${m.value}\${...}")
+                    }
+                    return@forEach
+                }
+
+                // `${'$'}name` — the identifier must be a proven-safe local.
+                Regex("""^\$([A-Za-z_][A-Za-z0-9_]*)""").find(after)?.let { bare ->
+                    val name = bare.groupValues[1]
+                    if (name !in safeLocals) {
+                        offenders.add("${file.relativeTo(repoRoot())}:$line  ${m.value}$$name")
+                    }
+                    return@forEach
+                }
+
+                // `" + expr` — string concatenation.
+                Regex("""^"\s*\+\s*([A-Za-z_][A-Za-z0-9_.]*)""").find(after)?.let { cat ->
+                    val expr = cat.groupValues[1]
+                    if (!expr.contains("encodeUrlQueryComponent") && expr !in safeLocals) {
+                        offenders.add("${file.relativeTo(repoRoot())}:$line  ${m.value}\" + $expr")
                     }
                 }
             }
@@ -66,9 +99,10 @@ class QueryEncodingWiringPinTest {
 
         assertTrue(
             offenders.isEmpty(),
-            "these interpolate a raw value into a query string — route them through " +
-                "encodeUrlQueryComponent(), or a value containing '&' or '#' changes which " +
-                "request the SERVER sees:\n" + offenders.joinToString("\n"),
+            "these put a dynamic value into a query string without encodeUrlQueryComponent() — " +
+                "a value containing '&' or '#' changes which request the SERVER sees, and " +
+                "server-side validation cannot tell, because what arrives is well-formed:\n" +
+                offenders.joinToString("\n"),
         )
     }
 

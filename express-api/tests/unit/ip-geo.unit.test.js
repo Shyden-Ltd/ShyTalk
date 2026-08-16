@@ -58,7 +58,17 @@ describe('lookup', () => {
 
   test('a non-IPv4 value never reaches the network', async () => {
     stubFetch(ok({}));
-    for (const bad of ['not-an-ip', '', '::1', '2001:db8::1', '999.999.999.999.1']) {
+    // null/undefined included: `req.ip` is undefined when there is no socket,
+    // and the repo's convention pins all four input-rejection cases.
+    for (const bad of [
+      'not-an-ip',
+      '',
+      '::1',
+      '2001:db8::1',
+      '999.999.999.999.1',
+      null,
+      undefined,
+    ]) {
       expect(await getIpGeo(bad)).toEqual({});
     }
     expect(calls).toHaveLength(0);
@@ -99,7 +109,7 @@ describe('the request itself', () => {
 });
 
 describe('cache correctness', () => {
-  test('a success with an EMPTY as is not cached', async () => {
+  test('a success with an EMPTY as IS cached, briefly', async () => {
     // ip-api answers `success` with `as: ""` for addresses it has no routing
     // data for. Caching that pins `asn: null` for the whole TTL, and a null
     // asn makes `networkBanMatches` refuse every ASN-scoped ban for that IP —
@@ -116,10 +126,85 @@ describe('cache correctness', () => {
 
     expect((await getIpGeo('198.51.100.21')).asn).toBeNull();
     empty = false;
-    const recovered = await getIpGeo('198.51.100.21');
 
-    expect(calls).toHaveLength(2);
-    expect(recovered.asn).toBe('AS64500');
+    // WITHIN the negative window: still cached, so no second call. An earlier
+    // version skipped caching these entirely, which meant every ASN-less IP
+    // re-queried on every request — one anonymous caller could then exhaust
+    // ip-api's ~45/min shared budget and switch ASN bans off for everyone.
+    expect((await getIpGeo('198.51.100.21')).asn).toBeNull();
+    expect(calls).toHaveLength(1);
+
+    // PAST it: re-queried, so routing data appearing is picked up promptly.
+    const realNow = Date.now;
+    try {
+      const base = realNow();
+      Date.now = () => base + 30 * 1000 + 1;
+      const recovered = await getIpGeo('198.51.100.21');
+      expect(calls).toHaveLength(2);
+      expect(recovered.asn).toBe('AS64500');
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('failures are cached for the SHORT window, not the long one', async () => {
+    // The bound that stops a starved ip-api from being re-queried per request.
+    calls = [];
+    global.fetch = jest.fn(async (url) => {
+      calls.push(url);
+      return { ok: false, json: async () => ({}) };
+    });
+
+    expect(await getIpGeo('198.51.100.23')).toEqual({});
+    expect(await getIpGeo('198.51.100.23')).toEqual({});
+    expect(calls).toHaveLength(1);
+
+    const realNow = Date.now;
+    try {
+      const base = realNow();
+      Date.now = () => base + 30 * 1000 + 1;
+      await getIpGeo('198.51.100.23');
+      expect(calls).toHaveLength(2);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('a SUCCESS with an ASN is cached for the long window', async () => {
+    // The negative TTL must not shorten the positive one.
+    stubFetch(ok({ status: 'success', as: 'AS64500 Example' }));
+
+    await getIpGeo('198.51.100.24');
+    const realNow = Date.now;
+    try {
+      const base = realNow();
+      Date.now = () => base + 60 * 1000; // past the negative TTL, inside the positive
+      await getIpGeo('198.51.100.24');
+      expect(calls).toHaveLength(1);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('concurrent lookups for one IP make exactly ONE outbound call', async () => {
+    // The stampede: N cold starts from one IP arriving together are N calls
+    // even with a cache, because none has completed yet.
+    calls = [];
+    global.fetch = jest.fn(async (url) => {
+      calls.push(url);
+      await new Promise((r) => setTimeout(r, 5));
+      return ok({ status: 'success', as: 'AS64500 Example' });
+    });
+
+    const results = await Promise.all([
+      getIpGeo('198.51.100.25'),
+      getIpGeo('198.51.100.25'),
+      getIpGeo('198.51.100.25'),
+      getIpGeo('198.51.100.25'),
+    ]);
+
+    expect(calls).toHaveLength(1);
+    results.forEach((r) => expect(r.asn).toBe('AS64500'));
   });
 
   test('an entry expires after the TTL', async () => {
@@ -198,9 +283,10 @@ describe('cache', () => {
     expect(b.asn).toBeTruthy();
   });
 
-  test('a FAILED lookup is not cached, so ASN bans recover when the quota does', async () => {
-    // Caching a failure would pin `asn` to null for the whole TTL and keep
-    // ASN-scoped bans switched off for that IP even after ip-api recovers.
+  test('a FAILED lookup recovers once the SHORT window passes', async () => {
+    // Caching a failure for the FULL TTL would keep ASN-scoped bans switched
+    // off for that IP for five minutes after ip-api recovers. Not caching it
+    // at all was worse — see the negative-TTL tests above.
     let failing = true;
     calls = [];
     global.fetch = jest.fn(async (url) => {
@@ -212,13 +298,20 @@ describe('cache', () => {
 
     expect(await getIpGeo('198.51.100.13')).toEqual({});
     failing = false;
-    const recovered = await getIpGeo('198.51.100.13');
 
-    expect(calls).toHaveLength(2);
-    expect(recovered.asn).toBe('AS64500');
+    const realNow = Date.now;
+    try {
+      const base = realNow();
+      Date.now = () => base + 30 * 1000 + 1;
+      const recovered = await getIpGeo('198.51.100.13');
+      expect(calls).toHaveLength(2);
+      expect(recovered.asn).toBe('AS64500');
+    } finally {
+      Date.now = realNow;
+    }
   });
 
-  test('an HTTP 200 with status:"fail" is NOT cached', async () => {
+  test('an HTTP 200 with status:"fail" recovers once the SHORT window passes', async () => {
     // ip-api reports failures — reserved ranges, invalid queries, and the
     // OVER-QUOTA response — as HTTP 200 with `status: "fail"`. That took the
     // success path, so a null ASN got cached and ASN-scoped bans stayed off
@@ -235,10 +328,17 @@ describe('cache', () => {
 
     expect(await getIpGeo('198.51.100.20')).toEqual({});
     failing = false;
-    const recovered = await getIpGeo('198.51.100.20');
 
-    expect(calls).toHaveLength(2);
-    expect(recovered.asn).toBe('AS64500');
+    const realNow = Date.now;
+    try {
+      const base = realNow();
+      Date.now = () => base + 30 * 1000 + 1;
+      const recovered = await getIpGeo('198.51.100.20');
+      expect(calls).toHaveLength(2);
+      expect(recovered.asn).toBe('AS64500');
+    } finally {
+      Date.now = realNow;
+    }
   });
 
   test('clearIpGeoCache actually clears', async () => {

@@ -561,6 +561,31 @@ class SessionCacheContractTest {
     }
 
     @Test
+    fun `a signed-out read does not pay for the sweep`() {
+        // The sweep sits BELOW the uid guard so a signed-out launch does not
+        // spend three Keychain reads on the cold-start path. Nothing pinned
+        // that placement: moving it back above the guard left the whole suite
+        // green, because both sweep tests pass a live uid.
+        //
+        // This is also the retention consequence made explicit — a user who
+        // upgrades and never signs in again keeps the superseded keys until
+        // they do, which the KDoc now states.
+        listOf(null, "", "   ").forEach { noUser ->
+            setup()
+            storage.putString(SessionCache.LEGACY_KEY_FIREBASE_UID, "fb-old")
+            storage.putString(SessionCache.LEGACY_KEY_UNIQUE_ID, "10000005")
+            storage.putString(SessionCache.LEGACY_KEY_COHORT, "adult")
+
+            assertNull(cache.read(noUser))
+
+            assertNotNull(
+                storage.getString(SessionCache.LEGACY_KEY_UNIQUE_ID),
+                "a signed-out read ('$noUser') must return before the sweep",
+            )
+        }
+    }
+
+    @Test
     fun `the legacy sweep does NOTHING when there are no legacy keys`() {
         // The early return. `storage.remove()` on an absent key is
         // unobservable through the storage API, so the guard could be deleted

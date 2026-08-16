@@ -23,13 +23,38 @@
 // A plain Map with a TTL, matching the shape `bans.js` already uses. Bounded so
 // a deliberate walk through many IPs cannot grow it without limit.
 const GEO_TTL_MS = 5 * 60 * 1000;
+
+// EVERY outcome is cached, including failures — just for much less time.
+//
+// An earlier version cached only results carrying an ASN, on the reasoning
+// that a cached null asn switches ASN-scoped bans off for the TTL. True, but
+// it made the problem far worse: with no negative caching, every failure and
+// every ASN-less success re-queried, so a single anonymous caller could issue
+// one outbound ip-api call per request — up to `generalLimiter`'s 200/min,
+// against a free tier of ~45/min shared by the WHOLE app through one egress
+// IP. Once starved, the failures were themselves uncached, so the budget never
+// recovered under load and `networkBanMatches` refused every ASN ban for
+// everyone. A 5-minute per-IP degradation became a global, indefinite,
+// remotely-triggerable one.
+//
+// 30 seconds is short enough that routing data appearing (or a quota
+// recovering) is picked up promptly, and long enough that the outbound rate is
+// bounded by distinct IPs rather than by request volume.
+const GEO_NEGATIVE_TTL_MS = 30 * 1000;
 const GEO_MAX_ENTRIES = 5000;
 const geoCache = new Map();
+
+// Requests in flight, keyed on IP. Without this, N concurrent cold starts from
+// one IP are N outbound lookups even with the cache — the classic stampede.
+// `auth.js` documents the same pattern for uniqueId resolution.
+const inFlight = new Map();
+
+const ttlFor = (value) => (value && value.asn ? GEO_TTL_MS : GEO_NEGATIVE_TTL_MS);
 
 function cacheGet(ip) {
   const hit = geoCache.get(ip);
   if (!hit) return undefined;
-  if (Date.now() - hit.at > GEO_TTL_MS) {
+  if (Date.now() - hit.at > ttlFor(hit.value)) {
     geoCache.delete(ip);
     return undefined;
   }
@@ -48,6 +73,7 @@ function cacheSet(ip, value) {
 /** Test seam — the suite must not inherit another file's cached lookups. */
 function clearIpGeoCache() {
   geoCache.clear();
+  inFlight.clear();
 }
 
 /**
@@ -56,12 +82,32 @@ function clearIpGeoCache() {
  *   the resolved fields, or `{}` when the lookup is impossible or fails.
  */
 async function getIpGeo(ip) {
-  try {
-    // Validate IPv4 format to prevent URL injection
-    if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return {};
+  // Validate IPv4 format to prevent URL injection
+  if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return {};
 
-    const cached = cacheGet(ip);
-    if (cached !== undefined) return cached;
+  const cached = cacheGet(ip);
+  if (cached !== undefined) return cached;
+
+  // Coalesce concurrent lookups for the same IP into one outbound call.
+  const pending = inFlight.get(ip);
+  if (pending) return pending;
+
+  const promise = fetchGeo(ip)
+    .then((geo) => {
+      // EVERY outcome is cached — see GEO_NEGATIVE_TTL_MS. Caching only
+      // successes left failures re-querying without limit.
+      cacheSet(ip, geo);
+      return geo;
+    })
+    .finally(() => inFlight.delete(ip));
+
+  inFlight.set(ip, promise);
+  return promise;
+}
+
+/** The bare lookup. Always resolves; never caches. */
+async function fetchGeo(ip) {
+  try {
     // Bounded: geo is best-effort telemetry — a hung ip-api must not hang
     // the device-info request (and with it, sign-in). SHY-0149.
     // `status` and `message` are in the mask DELIBERATELY. ip-api only returns
@@ -87,16 +133,6 @@ async function getIpGeo(ip) {
       country: data.country || null,
       region: data.regionName || null,
     };
-    // Cache only a result that carries an ASN.
-    //
-    // "Only successes are cached" was not enough: ip-api answers `success`
-    // with an EMPTY `as` for addresses it has no routing data for, so a null
-    // `asn` was being cached anyway — and a cached null asn means
-    // `networkBanMatches` refuses every ASN-scoped ban for that IP for the
-    // full TTL. The reason the ASN is missing does not change the harm, so
-    // the cache key is "did we learn the thing the bans need", not "did the
-    // request succeed".
-    if (geo.asn) cacheSet(ip, geo);
     return geo;
   } catch {
     return {};

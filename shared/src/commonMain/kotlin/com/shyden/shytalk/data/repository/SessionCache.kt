@@ -100,6 +100,13 @@ class SessionCache(
         // BELOW the uid guard deliberately. Above it, a signed-out launch paid
         // three Keychain `SecItemCopyMatching` calls for nothing, on the very
         // cold-start path this story exists to shorten.
+        //
+        // The retention consequence, stated rather than left implied: a user
+        // who upgrades and never signs in again keeps the superseded keys
+        // until they do. That is acceptable — the keys hold a uniqueId, which
+        // is the public account number, and a cohort — but it is a
+        // data-retention statement on a minors-facing app, so it belongs in
+        // writing next to the decision rather than in a commit message.
         sweepLegacyKeys()
 
         // No separate blank-string branch: `Json.parseToJsonElement("")` throws,

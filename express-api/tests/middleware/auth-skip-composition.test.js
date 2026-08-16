@@ -54,7 +54,11 @@ function createApp(routers) {
 const app = () => createApp([require('../../src/routes/ban-status')]);
 
 afterAll(() => {
-  process.env.NODE_ENV = PRIOR_NODE_ENV;
+  // `process.env` coerces, so assigning an undefined PRIOR_NODE_ENV sets the
+  // literal string 'undefined'. Jest's default NODE_ENV='test' masks it here,
+  // but the sibling suites get this right and so should this one.
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
 
 describe('public paths reach the route with no Authorization header', () => {
@@ -63,8 +67,8 @@ describe('public paths reach the route with no Authorization header', () => {
 
     // 500 is the failure being guarded. Anything else means the gate ran and
     // handed off; the route's own contract is tested elsewhere.
-    expect(res.status).not.toBe(500);
-    expect(res.status).not.toBe(401);
+    // Exact: the gate let it through to the terminal handler.
+    expect(res.status).toBe(299);
   });
 
   test('GET /api/ban-status answers 200 with no token at all', async () => {
@@ -78,7 +82,7 @@ describe('public paths reach the route with no Authorization header', () => {
 
   test('GET /api/health is reachable unauthenticated', async () => {
     const res = await request(app()).get('/api/health');
-    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(299);
   });
 });
 
@@ -115,19 +119,23 @@ describe('protected paths are still gated', () => {
 
 describe('the gate itself never throws', () => {
   test.each([
-    ['GET', '/api/ban-status'],
-    ['GET', '/api/ban-status/'],
-    ['POST', '/api/translate'],
-    ['GET', '/api/health'],
-    ['GET', '/api/suggestions'],
-    ['GET', '/api/suggestions/mine'],
-    ['GET', '/api/auth/whatever'],
-    ['GET', '/api/'],
-  ])('%s %s does not 500', async (method, path) => {
+    // EXACT statuses, not merely "not 500". Asserting only the absence of a
+    // 500 passes identically whether the gate denies everything (all 401) or
+    // allows everything (299) — it could not tell a correct gate from a
+    // broken one, while its own comment claimed to make a gate-level
+    // assertion. 299 is the terminal handler: the gate let it through.
+    ['GET', '/api/ban-status', 400], // reaches the route, which demands deviceId
+    ['GET', '/api/ban-status/', 400], // trailing slash: same route, same answer
+    ['POST', '/api/translate', 299], // public, unmounted here
+    ['GET', '/api/health', 299],
+    ['GET', '/api/suggestions', 299],
+    ['GET', '/api/suggestions/mine', 401], // the carve-out stays authenticated
+    ['GET', '/api/auth/whatever', 299],
+    ['GET', '/api/', 401],
+  ])('%s %s answers %i through the real gate', async (method, path, expected) => {
     // A TypeError anywhere in the predicate surfaces as a 500 on EVERY route
-    // it examines, not just the one whose rule threw. Sweeping the shapes is
-    // what turns a single-route symptom into a gate-level assertion.
+    // it examines, not just the one whose rule threw.
     const res = await request(app())[method.toLowerCase()](path).send({});
-    expect(res.status).not.toBe(500);
+    expect(res.status).toBe(expected);
   });
 });
