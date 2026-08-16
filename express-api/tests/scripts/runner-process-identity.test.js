@@ -65,10 +65,10 @@ function commandOf(pid) {
 /** The REAL record filter, fed `ps -o pid=,command=` lines on stdin.
  *  Lets a test drive record shapes this platform cannot produce — see the
  *  multi-line describe block for why that is necessary rather than a shortcut. */
-function runnerFilter(lines, scope = '', live = '') {
+function runnerFilter(lines, scope = '') {
   const r = spawnSync(
     '/bin/bash',
-    ['-c', 'source "$1"; _runner_filter "$2" "" "$3"', 'bash', HELPER, scope, live],
+    ['-c', 'source "$1"; _runner_filter "$2" ""', 'bash', HELPER, scope],
     {
       encoding: 'utf8',
       input: `${lines.join('\n')}\n`,
@@ -355,72 +355,70 @@ describe('SHY-0304 — a runner is identified by what it is, not what it mention
   describe('records whose command line contains newlines', () => {
     // `cmd_launch` builds its detached job as `nohup bash -c "<newline> …node
     // scripts/manual-qa-runner.js …<newline>"`, so the wrapper's argv really
-    // does contain newlines.
+    // does contain newlines, and it is natural to expect its `ps` record to
+    // span several lines. An earlier version of the filter carried a
+    // continuation-folding parser for exactly that.
     //
-    // Whether that becomes a MULTI-LINE `ps` record is platform-dependent, and
-    // this machine cannot produce one: macOS `ps` escapes an embedded newline
-    // as the literal `\012` and keeps the record on one line (measured). The
-    // first attempt at these tests spawned a fixture with a real newline in
-    // its argv and asserted it was found — and passed identically with the
-    // folding logic deleted, and with the new-record test corrupted. Both
-    // mutants survived, because the branch was never reached.
+    // Both supported platforms were then MEASURED and neither produces it:
+    //   macOS 27 (BSD ps)              newline → the literal escape `\012`
+    //   Ubuntu 24.04 (procps-ng 4.0.4) newline → a space
     //
-    // So the records are fed to the real filter directly. This is not a stand-
-    // in for the parser: it is the parser, running the real awk program over
-    // the exact record text a `ps` that does emit newlines would hand it.
+    // The folding was deleted, because it was not free. Telling a continuation
+    // line from a new record needed a second `ps` snapshot listing real pids,
+    // and the two snapshots raced: a process forked between them was missing
+    // from that set, so its line was appended to the PREVIOUS record and made
+    // an innocent neighbour match the runner pattern — which
+    // qa-cleanup-orphans would then KILL in its default mode.
+    //
+    // These tests pin the platform behaviour the deletion rests on. If some
+    // future `ps` does emit a multi-line record, they fail loudly and say to
+    // reinstate folding, rather than letting the parser misread it in silence.
 
-    test('folds a continuation line back into the record it belongs to', () => {
-      // The runner token sits on the SECOND physical line — exactly where the
-      // launcher puts it. Without folding, the first line has `node` but no
-      // script token and the second has the script but no `node`, so NEITHER
-      // matches and a genuine runner is silently missed.
-      const record = [
-        '4242 bash -c ',
-        `  node ${RUNNER} --matrix --report-dir=/tmp/matrix-x/report`,
-      ];
+    test('this platform renders an embedded newline within ONE ps record', () => {
+      const marker = `shy0304-nl-${process.pid}`;
+      const child = track(
+        spawn(
+          '/bin/bash',
+          ['-c', 'exec -a "$1" sleep 45', 'bash', `node --matrix ${marker}\n  x`],
+          {
+            stdio: 'ignore',
+          },
+        ),
+      );
+      const start = Date.now();
+      while (!pgrepFull(marker) && Date.now() - start < 5000) spawnSync('/bin/sleep', ['0.05']);
 
-      expect(runnerFilter(record, '', '4242')).toEqual(['4242']);
+      const record = spawnSync('/bin/ps', ['-ww', '-o', 'command=', '-p', String(child.pid)], {
+        encoding: 'utf8',
+      }).stdout.replace(/\n$/, '');
+
+      expect(record).toContain(marker); // the fixture really is the one measured
+      expect(record.split('\n')).toHaveLength(1); // …and it occupies ONE line
     });
 
-    test('a continuation line that looks like a pid column does not split the record', () => {
-      // The new-record test is /^[ \t]*[0-9]+[ \t]/, so a continuation line
-      // beginning with digits and whitespace LOOKS like a new process. If it
-      // were treated as one, the record would be cut in half — the fragment
-      // carrying the script token has no `node`, so the runner escapes, and a
-      // phantom pid that no process owns could be emitted into a list that is
-      // passed to `kill`.
-      // 5150 exists; 99999 does not. That distinction is the fix: the parse is
-      // anchored on pids that ACTUALLY EXIST, because shape alone cannot tell
-      // a continuation line from a record. Before this, the filter reported
-      // 99999 — a pid nothing owns, on its way to `kill` — and missed 5150.
-      const record = ['5150 bash -c ', `99999 node ${RUNNER} --matrix`];
-
-      const found = runnerFilter(record, '', '5150');
-      expect(found).toEqual(['5150']); // whole record, real pid
-      expect(found).not.toContain('99999'); // no phantom invented
-    });
-
-    test('a genuinely new record after a folded one is still recognised', () => {
-      // The control: folding must not swallow the NEXT process. Without it
-      // this suite would pass with a filter that simply concatenated
-      // everything into one record.
+    test('a record is matched on its own line, never glued to its neighbour', () => {
+      // The precise defect the folding caused. An unrecognised line must be
+      // dropped, not appended to the previous record: appending is what let a
+      // runner's command line be attributed to an innocent pid.
       const records = [
-        '4242 bash -c ',
-        `  node ${RUNNER} --matrix`,
+        '4242 /usr/bin/vim notes.txt',
+        `  node ${RUNNER} --matrix --report-dir=/tmp/matrix-x/report`,
         `7777 node ${RUNNER} --matrix --target local`,
-        '8888 tail -f /tmp/matrix-x/log',
       ];
 
-      expect(runnerFilter(records, '', '4242 7777 8888')).toEqual(['4242', '7777']);
+      const found = runnerFilter(records);
+      expect(found).toEqual(['7777']); // only the genuine one
+      expect(found).not.toContain('4242'); // vim is not a runner
     });
 
-    test('scope still applies across a folded record', () => {
-      // The run id can land on either physical line; scoping must see the
-      // whole command, not just the line the pid was on.
-      const record = ['4242 bash -c ', `  node ${RUNNER} --report-dir=/tmp/matrix-abc/report`];
+    test('scope applies per record', () => {
+      const records = [
+        `4242 node ${RUNNER} --report-dir=/tmp/matrix-abc/report`,
+        `7777 node ${RUNNER} --report-dir=/tmp/matrix-zzz/report`,
+      ];
 
-      expect(runnerFilter(record, 'matrix-abc', '4242')).toEqual(['4242']);
-      expect(runnerFilter(record, 'matrix-zzz', '4242')).toEqual([]);
+      expect(runnerFilter(records, 'matrix-abc')).toEqual(['4242']);
+      expect(runnerFilter(records, 'matrix-zzz')).toEqual(['7777']);
     });
 
     test('every pid it reports is a real, live process — never a parsing artefact', () => {

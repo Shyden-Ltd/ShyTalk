@@ -25,11 +25,26 @@
 #      exclusions on either platform, so the exclusion is explicit here and
 #      behaves identically everywhere.
 #
-#   3. Whole records, not lines. The launcher builds its command with embedded
-#      newlines, so one process occupies several lines of `ps` output.
-#      Continuation lines are folded back into the record they belong to;
-#      matching them independently would both miss the wrapper and emit
-#      non-numeric junk into a list that gets passed to `kill`.
+#   3. One record per line, MEASURED rather than assumed. The launcher does
+#      build its command with embedded newlines, so it is natural to expect a
+#      process to span several lines of `ps` output — and an earlier version of
+#      this file carried a continuation-folding parser for exactly that. Both
+#      supported platforms were then measured and NEITHER produces it:
+#
+#        macOS 27 (BSD ps)             newline → the literal escape `\012`
+#        Ubuntu 24.04 (procps-ng 4.0.4) newline → a space
+#
+#      The folding was therefore guarding a shape that does not occur, and it
+#      was not free: disambiguating a continuation line from a new record
+#      needed a second `ps` snapshot to say which leading integers were real
+#      pids, and the two snapshots race. A process forked between them was
+#      absent from the pid set, so its line failed the new-record test, was
+#      appended to the PREVIOUS record, and made an innocent neighbour match
+#      the runner pattern — which `qa-cleanup-orphans.sh` would then KILL in
+#      its default mode. Speculative defence built a worse bug than the one it
+#      imagined. Deleted; `runner-process-identity.test.js` pins the platform
+#      behaviour that makes it unnecessary, so a future platform that DOES
+#      emit multi-line records fails loudly instead of silently misparsing.
 
 # _runner_self_and_ancestors — this shell's pid and every ancestor of it,
 # space-separated. Bounded so a malformed process table cannot spin.
@@ -48,42 +63,33 @@ _runner_self_and_ancestors() {
 # command line (a run id), scoping the answer to one run. Never returns this
 # shell or any of its ancestors.
 runner_pids() {
-  local excl live
+  local excl
   excl="$(_runner_self_and_ancestors)"
-  # The authoritative set of pids that actually exist. A record's first token
-  # looking like a pid is NOT enough to prove it starts a new record — see
-  # _runner_filter — so the parse is anchored on real pids instead of on shape.
-  live="$(ps -Aww -o pid= 2>/dev/null | tr -d ' ' | tr '\n' ' ')"
+  # ONE snapshot. An earlier version took a second one to list real pids, and
+  # the two raced — see rule 3 in the header.
   # -ww: never truncate. A truncated command line silently loses the script
   # token and turns a genuine runner into a miss.
-  ps -Aww -o pid=,command= 2>/dev/null | _runner_filter "${1:-}" "$excl" "$live"
+  ps -Aww -o pid=,command= 2>/dev/null | _runner_filter "${1:-}" "$excl"
 }
 
-# _runner_filter <scope> <excluded-pids> [live-pids] — the predicate itself,
-# reading `ps -o pid=,command=` records on stdin.
+# _runner_filter <scope> <excluded-pids> — the predicate itself, reading
+# `ps -o pid=,command=` records on stdin, one record per line.
 #
-# Split from runner_pids so the record parsing can be driven with input this
-# machine cannot produce. macOS `ps` renders an embedded newline as the escape
-# `\012`, keeping every record on one line, so the continuation-folding branch
-# below is UNREACHABLE here — and a test that spawns a fixture and asserts it
-# is found passes identically with the folding removed, which is how two such
-# tests were caught being decorations. Feeding records in directly is the only
-# way to exercise the branch on this platform, and it is still the real awk
-# program against real record text, not a stand-in for it.
+# Split out from runner_pids so a test can drive the parser with exact record
+# text rather than only with whatever this machine's process table happens to
+# contain. It is the real awk program either way.
 _runner_filter() {
-  local scope="${1:-}" excl="${2:-}" live="${3:-}"
-  awk -v scope="$scope" -v excl="$excl" -v live="$live" '
+  local scope="${1:-}" excl="${2:-}"
+  awk -v scope="$scope" -v excl="$excl" '
     BEGIN {
       # Built here rather than passed via -v: awk applies escape processing to
       # -v assignments, which would eat the backslash in \. and let
       # "manual-qa-runner-js" match.
       #
-      # `[ \t]` rather than `[[:space:]]`: Ubuntu CI resolves `awk` to mawk,
-      # whose POSIX-class support has varied across versions, and a class it
-      # does not understand degrades to a literal character set — which would
-      # make this pattern match NOTHING and let every genuine runner escape,
-      # silently, on Linux only. Records are folded into a single line before
-      # matching, so space and tab are the only whitespace that can occur.
+      # `[ \t]` rather than `[[:space:]]`: both are correct on the awks in play
+      # (mawk 1.3.4 on Ubuntu CI supports POSIX classes — verified), but every
+      # record is one line, so space and tab are the only whitespace that can
+      # occur and the simpler form has no version surface at all.
       #
       # `node(js)?`: Debian and older Ubuntu ship the binary as `nodejs` with
       # no `node` symlink. This project always launches with a literal `node`,
@@ -92,38 +98,20 @@ _runner_filter() {
       re = "(^|[ \t/])node(js)?[0-9._@-]*[ \t].*[ \t/]manual-qa-runner\\.js([ \t]|$)"
       n = split(excl, e, " ")
       for (i = 1; i <= n; i++) skip[e[i]] = 1
-      have_live = 0
-      m = split(live, L, " ")
-      for (i = 1; i <= m; i++) { alive[L[i]] = 1; have_live = 1 }
-      pid = ""
-      cmd = ""
     }
-    function flush(   ) {
-      if (pid == "") return
-      if (pid in skip) return
-      if (cmd !~ re) return
-      if (scope != "" && index(cmd, scope) == 0) return
-      print pid
-    }
-    # A new record starts with the pid column — but LOOKING like a pid column
-    # is not enough. A continuation line beginning with digits and whitespace
-    # is shape-identical to a new record, and treating one as a record both
-    # invents a pid no process owns (which would be handed to `kill`) and cuts
-    # the real record in half so its runner escapes. Measured: the record
-    # ["5150 bash -c ", "99999 node …/manual-qa-runner.js"] reported 99999 and
-    # missed 5150. So the split is anchored on pids that ACTUALLY EXIST.
-    #
-    # `have_live` keeps the shape-only behaviour when no live set is supplied,
-    # so the function stays usable standalone.
-    /^[ \t]*[0-9]+[ \t]/ && (!have_live || ($1 in alive)) {
-      flush()
+    # One record per line on every supported platform (header rule 3). A line
+    # that is not shaped like a record is ignored rather than folded into its
+    # neighbour: attaching unrecognised text to the PREVIOUS pid is how an
+    # innocent process gets reported — and, via qa-cleanup-orphans, killed.
+    $1 ~ /^[0-9]+$/ {
       pid = $1
       cmd = $0
       sub(/^[ \t]*[0-9]+[ \t]+/, "", cmd)
-      next
+      if (pid in skip) next
+      if (cmd !~ re) next
+      if (scope != "" && index(cmd, scope) == 0) next
+      print pid
     }
-    { cmd = cmd " " $0 }
-    END { flush() }
   ' || true
   # `|| true`: qa-cleanup-orphans.sh runs under `set -e`, and every other
   # shell-out in that script guards itself the same way. A `ps` failure should

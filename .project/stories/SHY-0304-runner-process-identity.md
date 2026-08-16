@@ -392,7 +392,50 @@ recorded in the Notes so the next session can re-run it.
   of them — and its stated rationale ("no user-observable behaviour to walk")
   applies exactly. Recorded as a judgment, not a rubber stamp.
 
-- Verification after review: full `express-api tests/scripts/` **150 suites /
-  7549 tests** green; the reproduction command green **3/3** (2033 tests);
-  **7/7 mutants killed**; shellcheck, eslint `--max-warnings=0` and prettier
-  clean.
+- **2026-08-17 — `code-reviewer` round 2: 2 Critical.** Both were real, both
+  were caused by the round-1 fix, and both were resolved by DELETING that fix
+  rather than defending it further.
+
+  The reviewer traced a TOCTOU between the two `ps` snapshots the round-1
+  change introduced. A process forked between them was absent from the live-pid
+  set, so its line failed the new-record test, was appended to the PREVIOUS
+  record, and made an innocent neighbour match the runner pattern — which
+  `qa-cleanup-orphans.sh` then KILLS in its default mode. The speculative
+  defence had built a worse bug than the one it imagined.
+
+  Rather than add a third mechanism, the premise was measured. The folding
+  existed because the launcher's `bash -c` command contains newlines and its
+  `ps` record was ASSUMED to span several lines. Neither supported platform
+  does that:
+
+  | platform | embedded newline renders as |
+  | --- | --- |
+  | macOS 27, BSD `ps` | the literal escape `\012` |
+  | Ubuntu 24.04, procps-ng 4.0.4 (CI) | a space |
+
+  Measured directly, the Linux side in a real `ubuntu:24.04` container. Every
+  record is one line on both. So the folding, the second `ps` snapshot, the
+  live-pid set and the race all went away together — net −12 lines, and the
+  parser now drops an unrecognised line instead of gluing it to its neighbour,
+  which is the specific behaviour that could have got an innocent process
+  killed. `runner-process-identity.test.js` now PINS the platform behaviour the
+  deletion rests on, so a future `ps` that does emit multi-line records fails
+  loudly and says to reinstate folding.
+
+  The same container run also retired an Important from round 1: mawk 1.3.4 on
+  Ubuntu **does** support POSIX character classes, so `[[:space:]]` was never
+  the hazard it was assumed to be. `[ \t]` is kept because single-line records
+  make it sufficient and it has no version surface at all — but the reason is
+  now a measurement rather than a worry.
+
+  Round 2's other findings (`runner_ps_lines` multi-pid coverage,
+  `_runner_self_and_ancestors`' guard bound, the ERE-vs-literal precision of
+  `pgrep -f "$run_id"`, and the combined tree+orphan invocation) are recorded
+  as follow-ups rather than fixed here; none is a correctness defect on any
+  reachable path, and this story is already carrying a P0's worth of change.
+
+- Verification after review round 2: full `express-api tests/scripts/`
+  **150 suites / 7548 tests** green; the reproduction command green **3/3**
+  (2032 tests); **13/13 mutants killed** — every round-1 mutant plus one
+  proving an unrecognised line is dropped rather than glued; shellcheck,
+  eslint `--max-warnings=0` and prettier clean.
