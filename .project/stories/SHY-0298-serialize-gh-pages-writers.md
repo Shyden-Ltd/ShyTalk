@@ -10,7 +10,7 @@ roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1751
 ---
 
-# SHY-0298: Serialize every gh-pages writer, and give PR branches their reports back
+# SHY-0298: Make every gh-pages writer concurrency-safe, and give PR branches their reports back
 
 ## User Story
 
@@ -48,12 +48,26 @@ published**, on the rationale that they are "nice-to-have". So the race no
 longer fires because the racy path was switched off. Serializing properly is
 what allows it back on.
 
-**Why serialization is the fix and a retry is not.** A retry loop makes each
-writer eventually succeed while still doing redundant clone/push cycles under
-contention, and it cannot fix the `gh-pages` history-cap step in
-`allure-report.yml:234`, which re-reads the tip and skips when an outside writer
-lands mid-cap. One queue removes the interleaving instead of surviving it —
-[[feedback-close-the-door-not-just-the-holes]].
+**Why a retry loop and NOT a shared lock — amended R3, see the Notes.** The
+story was filed to serialize every writer behind one `gh-pages-deploy`
+concurrency group, and that was measured to work. It was still the wrong
+answer, for a reason measurement could not surface:
+
+**a concurrency group holds exactly ONE pending entry.** A third contender does
+not queue behind the second — it CANCELS it. This repo has been bitten by that
+before (incidents #568/#570). A cancelled publish job is a failed job, and
+`allure-report.yml` is reachable from the required **PR Gate** check, so the
+lock would have red-gated innocent PRs in order to protect a report. It also
+cannot serialize against anything outside GitHub Actions.
+
+The retry loop takes the opposite approach: no writer excludes any other, a
+lost race costs one extra attempt against the moving tip, and the history cap
+uses a `--force-with-lease` compare-and-swap so the SERVER refuses it if a
+publisher landed first. Nothing is cancelled and nothing is queued.
+
+The door being closed is "a writer's report can be silently discarded"
+([[feedback-close-the-door-not-just-the-holes]]) — a lock is one way to close
+it, and on this platform a worse one.
 
 ## Acceptance Criteria
 
@@ -66,13 +80,16 @@ lands mid-cap. One queue removes the interleaving instead of surviving it —
       workflow": see the Notes — the reusable route hits GitHub's 4-level
       nesting limit exactly and deadlocks against `allure-report.yml`'s existing
       workflow-level hold on the same group._
-- [ ] Every job that reaches that action is covered by
-      `concurrency: group: gh-pages-deploy` with `cancel-in-progress: false` —
-      either its own job-level group or its workflow's, which SHY-0298 MEASURED
-      to share one queue.
+- [ ] NO gh-pages writer declares a concurrency group. _Amended R3: the
+      original criterion demanded a shared `gh-pages-deploy` group; a group
+      holds one pending entry and cancels the rest, and a cancelled publish
+      propagates into the required PR Gate check._
+- [ ] The action retries a lost push against the tip that beat it, re-applying
+      its own content each time rather than force-overwriting, and reports
+      which attempt won.
 - [ ] `pr-checks.yml` and `test-backend.yml` publish from separate jobs that
-      take the report as an artifact, so the shared group never sits on a job
-      running the test suites.
+      take the report as an artifact, so a retrying publish never holds a
+      ~15-minute test job open.
 - [ ] PR-branch Express reports publish again: the
       `report_env == 'dev' || report_env == 'prod'` restriction at
       `test-backend.yml:143` is removed, leaving only the dependabot guard.
@@ -93,19 +110,31 @@ lands mid-cap. One queue removes the interleaving instead of surviving it —
 - [ ] `keep_files: false` semantics are preserved per destination (peaceiris
       cleans only `destination_dir`), so sibling suites, the root landing page
       and `CNAME` are untouched — the SHY-0128 invariant.
-- [ ] The `gh-pages` history-cap step keeps working: with one queue there is no
-      "writer outside the group", so the cap's skip-on-race branch becomes
-      unreachable rather than merely rare.
+- [ ] The `gh-pages` history-cap step keeps working under concurrency. Its ref
+      move is a `--force-with-lease` compare-and-swap, so a publisher that lands
+      mid-cap makes the SERVER refuse the move; the cap skips quietly and a
+      later run caps again. _Amended R3: the original criterion expected the
+      skip branch to become unreachable under one queue. Without the queue it
+      is reachable and load-bearing, so it is tested rather than assumed._
+- [ ] The cap's orphan commit is built LOCALLY (`git commit-tree`), never
+      through the Git Data API. _Added R4: an API-created commit is referenced
+      by no ref and is therefore absent from the `--depth=1` clone that has to
+      push it — `fatal: bad object`, then `! [remote rejected] … (unpacker
+      error)`, on every capped run._
 - [ ] Two PRs whose CI completes in the same minute both publish successfully,
       in some order — neither is rejected.
 
 ### Performance
 
-- [ ] Serializing must not serialize the PRODUCING jobs. `Build & Test`
-      (~15 min) and `Test Backend` (~5 min) keep running concurrently across
-      PRs; only the seconds-long publish step queues. Verified by asserting the
-      concurrency group appears on the publish job/workflow ONLY, never on a
-      job that runs tests.
+- [ ] Publishing must not hold the PRODUCING jobs. `Build & Test` (~15 min)
+      and `Test Backend` (~5 min) keep running concurrently across PRs; the
+      publish is its own job, fed by an artifact. _Amended R3: this used to be
+      phrased as "only the seconds-long publish step queues" — nothing queues
+      now, so the property is that a retrying publish cannot extend a test
+      job._
+- [ ] The retry backoff grows with the attempt and never follows the LAST
+      attempt (which would delay the failure without retrying it). Asserted on
+      the schedule the loop requests, not on elapsed wall-clock.
 
 ### Security
 
@@ -173,14 +202,29 @@ dispatch (see DoD).
   3 today. Counts at the DEFINITION site, not by substring: `test-backend.yml`
   contains the string `peaceiris/actions-gh-pages` inside a COMMENT, and a naive
   `grep -c` scores it 2 ([[feedback-substring-is-not-existence]]).
-- `the publisher declares the shared concurrency group` — asserts
-  `publish-gh-pages.yml` carries `group: gh-pages-deploy` and
-  `cancel-in-progress: false` at workflow level.
-- `no test-producing job carries the publish concurrency group` — walks each
-  workflow's jobs and asserts `gh-pages-deploy` never appears on a job that also
-  runs a test step, pinning the performance AC.
+- `no gh-pages writer declares a concurrency group` — _amended R3_: asserts
+  `gh-pages-deploy` appears in no `concurrency:` block anywhere. The original
+  pin asserted the opposite; a group holds ONE pending entry and cancels the
+  rest, and a cancelled publish propagates into the required PR Gate check.
 - `pr-checks.yml and test-backend.yml call the publisher` — asserts a
-  `uses: ./.github/workflows/publish-gh-pages.yml` in each.
+  `uses: ./.github/actions/publish-gh-pages` in each.
+- **The loop, EXECUTED** —
+  `express-api/tests/scripts/gh-pages-publisher-loop.unit.test.js` runs the
+  REAL extracted push loop against REAL local bare repos, with a genuine second
+  clone pushing between this loop's clone and its push. The ONE substitution is
+  a git `insteadOf` rewrite pointing the hardcoded GitHub URL at the local bare
+  repo; the script is byte-for-byte what CI runs. Added because the regex pins
+  next door are satisfied by a loop that retries zero times, resets to the wrong
+  commit, or force-pushes on attempt three.
+- `the backoff grows with the attempt, and never follows the last one` —
+  `sleep` is shimmed to RECORD its argument rather than wait, so the schedule
+  is asserted directly. A wall-clock bound would be slow and flaky
+  ([[feedback-tests-must-not-depend-on-wall-clock]], [[feedback-never-use-sleeps-condition-based-waits]]).
+- **The cap, against REAL git** —
+  `express-api/tests/scripts/allure-report-gh-pages-cap-script.unit.test.js`
+  executes the real cap block against a real bare repo and asserts the capped
+  branch's tree is the SAME OBJECT as the tip's, that the commit is an orphan,
+  and that a racing publisher's report survives the lease refusal.
 - `PR-branch Express reports are no longer skipped` — asserts the
   `report_env == 'dev'` restriction is gone from the publish condition while the
   `dependabot/` guard remains. RED today.
@@ -192,11 +236,14 @@ dispatch (see DoD).
 ABSENT proves nothing, [[feedback-verify-the-harness-not-just-the-result]]);
 `eslint --max-warnings=0`; prettier.
 
-**Mutation checks** — each new pin must be shown to fail against a mutant:
-restore one peaceiris invocation (count pin RED); drop `cancel-in-progress:
-false` (group pin RED); move `gh-pages-deploy` onto the `Test Backend` job
-(performance pin RED). A pin that cannot fail is decoration
-([[feedback-mutation-passed-means-investigate]]).
+**Mutation checks** — each new pin must be shown to fail against a mutant. A
+pin that cannot fail is decoration ([[feedback-mutation-passed-means-investigate]]).
+Verified: restore one peaceiris invocation; reintroduce a `gh-pages-deploy`
+group; remove the failure CLASSIFICATION so every failure retries;
+`MAX_ATTEMPTS=1`; chain a parent onto the cap's orphan; swap the lease for an
+unconditional `--force`; run `commit-tree` outside the clone; drop the
+empty-`$NEW` guard; make the backoff constant; sleep after the last attempt;
+hardcode `BACKOFF_BASE`; remove `continue-on-error` from `generate-report`.
 
 **Live proof** — the race is a concurrency defect, so a passing unit suite is
 not evidence: two PRs must actually publish at once (see DoD).
@@ -210,15 +257,24 @@ not evidence: two PRs must actually publish at once (see DoD).
 
 ## Dependencies
 
-- None. `allure-report.yml`'s existing `gh-pages-deploy` workflow-level group is
-  the pattern being generalised, and it is already proven in production.
+- None. _Amended R3: this used to name `allure-report.yml`'s `gh-pages-deploy`
+  group as "the pattern being generalised, already proven in production". It
+  was proven to serialize; it was never proven safe to contend on, and it is
+  not. The group is removed rather than generalised._
 
 ## Risks & Mitigations
 
-- **Risk:** a shared queue becomes a bottleneck if many PRs finish together.
-  **Mitigation:** only the publish step queues (seconds), never the test jobs;
-  the performance AC has its own pin. `cancel-in-progress: false` is required —
-  cancelling would drop reports rather than delay them.
+- **Risk:** under heavy contention a writer exhausts its six attempts and
+  fails. **Mitigation:** each attempt re-applies onto the winner's tip, so
+  progress is real rather than optimistic; six attempts with a growing backoff
+  is far beyond observed contention, and the exhaustion message says so
+  explicitly ("check whether something is pushing to gh-pages in a loop") so
+  the failure reads as a diagnosis and not a flake. The publish job is
+  `continue-on-error`, so even exhaustion cannot red-gate a PR.
+- **Risk:** `continue-on-error` makes a genuinely broken publisher invisible.
+  **Mitigation:** the job's own conclusion is still shown on the run, and the
+  exhaustion path emits an `::error title=…::` annotation. It is
+  non-GATING, not silent ([[feedback-absence-of-work-reported-as-success]]).
 - **Risk:** artifact hand-off adds a failure mode the direct step did not have.
   **Mitigation:** an explicit missing-artifact error path (Error-paths AC #3)
   rather than publishing an empty directory over a good report.
@@ -227,8 +283,10 @@ not evidence: two PRs must actually publish at once (see DoD).
   `latest/` in place rather than accumulating, and the history cap in
   `allure-report.yml:234` still applies. If growth becomes a problem it is
   SHY-0128's scope, and the restriction can be re-applied as one line.
-- **Risk:** nested reusable-workflow depth. **Mitigation:** GitHub allows 4
-  levels; the deepest path here is caller → `allure-report.yml` → publisher = 3.
+- **Risk:** nested reusable-workflow depth. **Mitigation:** moot — the
+  publisher is a composite ACTION, and composite actions add no nesting level.
+  This risk is what drove the reusable-workflow route to be abandoned at
+  pickup.
 
 ## Definition of Done
 
@@ -236,8 +294,8 @@ not evidence: two PRs must actually publish at once (see DoD).
       actionlint (shellcheck present), eslint `--max-warnings=0`, prettier clean
 - [ ] Every new pin proven to fail against its mutant
 - [ ] **Live proof of the actual defect:** two PRs' publishes dispatched to
-      overlap deliberately, both succeeding, with the run logs showing one
-      queued behind the other on `gh-pages-deploy` — a green unit suite does NOT
+      overlap deliberately, both succeeding, with the run logs showing the
+      loser RETRYING onto the winner's tip — a green unit suite does NOT
       close a concurrency story ([[feedback-workflow-verify-by-running]])
 - [ ] A PR-branch Express report is confirmed published and reachable
 - [ ] `code-reviewer` 100% clean; merged to develop; `released_in:` at the next
@@ -387,4 +445,75 @@ playwright`) and both probe branches are gone local and remote.
   instead, and the mutation matrix is the substantive check. Flag for the
   operator if a formal agent review is wanted before merge.
 
-Reviewed-up-to: e2ec9445396
+- **2026-08-16 — R4, and a design reversal recorded in the spec itself.**
+
+  The R3 note above records a contention probe in which one publish queued
+  behind another with **zero overlap**, and reads as a success. It was a
+  successful measurement of the wrong design. A concurrency group holds exactly
+  ONE pending entry: a third contender does not queue, it CANCELS the second
+  (this repo's incidents #568/#570). A cancelled publish is a failed job, and
+  `allure-report.yml` is reachable from the required PR Gate, so the lock
+  would have red-gated innocent PRs to protect a report. The probe used TWO
+  contenders and so could not have seen it. **Two is not enough contenders to
+  test a queue.**
+
+  The spec above has been amended in place — title, Why, four AC bullets, Test
+  Plan, Dependencies, Risks, DoD — rather than left describing a design the
+  code no longer implements ([[feedback-stories-epics-and-two-surface-sync]]).
+
+  **R4 findings, all reproduced before being fixed:**
+
+  1. *The cap could never have capped.* It created the orphan through
+     `gh api -X POST .../git/commits`, which exists only server-side and is
+     referenced by no ref, so the `--depth=1` clone that must push it does not
+     contain the object: `fatal: bad object`, then `! [remote rejected] …
+     (unpacker error)`. That stderr also matched the lost-race pattern
+     `\[rejected\]`, so the step would have reported "tip moved" on every
+     capped run, forever, while never capping once. Now built locally with
+     `git commit-tree "HEAD^{tree}"`, and the pattern is anchored to
+     `! \[rejected\]`.
+  2. *A publish failure could red-gate a PR.* `allure-report.yml` is reachable
+     from `gate.needs` through `playwright-web → playwright-tests.yml`, and a
+     reusable workflow's conclusion aggregates its jobs recursively.
+     `generate-report` is now `continue-on-error`, with a test that walks
+     `uses:` transitively from the gate asserting every reachable publisher is
+     non-gating.
+  3. *The retry loop's failure paths had never executed.* `BACKOFF_BASE` is
+     overridable and `sleep` is shimmed to RECORD rather than wait, which made
+     the schedule assertable and dropped the suite from ~43s to ~8s.
+
+  **Also fixed:** an empty `$NEW` would have made the cap's refspec
+  `:refs/heads/gh-pages` — git's spelling of *delete the branch* — from a step
+  whose purpose is to preserve what it compacts; now refused explicitly.
+  `check-action-shell.sh` no longer reads `SHELLCHECK_OPTS` from the
+  environment (shellcheck reads it natively, so an inherited `--severity=error`
+  silenced the check while it still printed "clean"), and now finds
+  `action.yaml` as well as `action.yml`.
+
+  **Five tests that pinned the old API design as the contract were rewritten,
+  not deleted** — each one's intent survives, and the `gh` shim now REFUSES any
+  Git Data API call so the old design cannot creep back
+  ([[feedback-tests-can-pin-the-bug-as-the-contract]]).
+
+  **Twelve mutants verified.** The cap's content-identity claim is now proven
+  against REAL git: the same extracted block executing against a real bare repo
+  via an `insteadOf` rewrite, asserting the capped branch's tree is the SAME
+  OBJECT and that a racing publisher's report survives.
+
+  **Known-uncovered, stated rather than papered over:** the loop's re-fetch
+  failure branch. Reaching it needs a push that fails with a non-fast-forward
+  (a reachable remote) and then a fetch that fails (an unreachable one), with
+  no injection point in between. It is pinned structurally instead.
+
+  **Not done:** no `code-reviewer` agent dispatched — this session does not
+  invoke agents unless asked. Self-reviewed; the mutation matrix is the
+  substantive check.
+
+  **Follow-up filed (not folded in):** `express-api/scripts/gauntlet/lib.sh:61`
+  tests `[ -d "$REPO/.git" ]`, which is false in a linked worktree (`.git` is a
+  FILE there), so every gauntlet command dies "repo not found". Four tests in
+  `50-matrix-cmd-stop.test.js` fail for this reason when run from a worktree
+  and pass in the main checkout — confirmed pre-existing and unrelated to this
+  diff. Out of SHY-0298's scope.
+
+Reviewed-up-to: 913fe54d5bd3bb4279e57395fd7bd57558bde081
