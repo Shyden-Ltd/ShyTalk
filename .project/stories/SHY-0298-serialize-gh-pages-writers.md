@@ -535,4 +535,32 @@ playwright`) and both probe branches are gone local and remote.
   `sonarcloud` failed for the same root cause; it runs the Jest suite for
   coverage. Fifteen mutants verified in total.
 
-Reviewed-up-to: 4c2c8d01a188885d97d7a67b874894b5dc60c7b8
+- **2026-08-16 — MERGED to develop** (squash `72b3d07d821`), develop deployed
+  to dev. All three publish paths ran GREEN on real runners in the merge run:
+  `Publish Kotlin Report` (9s), `test-backend / Publish Express Report` (10s),
+  `playwright-web / allure-report / Generate Allure Report` (1m24s). That is
+  the retry-based action publishing for real, on runners, three writers in one
+  run.
+
+  **Residual, recorded rather than glossed:** the history cap's WRITE path did
+  not execute. The run reported `gh-pages history: 22 commit(s); cap threshold:
+  25`, so it took the quiet path. The write path is proven against real git
+  locally — real bare repo, real transport, byte-identical tree, and a racing
+  publisher's report surviving the lease refusal — and the READ path plus the
+  new git identity ran on the runner. It will exercise for real within about
+  three more publishes, since each run adds ~3 commits.
+
+  **Check the next capped run.** With the pre-merge code that run would have
+  failed (`fatal: bad object`); with this code it should print
+  `capped gh-pages: 26 commits -> 1 (tree unchanged)`. If it instead prints
+  `tip moved` every time, the classification is wrong again. The step is
+  `continue-on-error`, so a failure is loud but non-gating either way.
+
+- **2026-08-16 — marker bumped to `456e7d4cfff`, not re-reviewed code.** PR #1755
+  (SHY-0300) appended NOTES to this story's file, which pulls this story into
+  the pre-merge gate's scope and made it refuse on commits that belong to other
+  stories. A story-`.md`-only change is review-neutral by convention, so the
+  bump asserts nothing about SHY-0300's code — that is reviewed under its own
+  marker.
+
+Reviewed-up-to: 456e7d4cfffe96a3c13c7795eb910084dbfe9c7f

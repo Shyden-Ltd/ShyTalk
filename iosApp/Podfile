@@ -23,6 +23,9 @@ target 'iosApp' do
   pod 'FirebaseFirestore'
   pod 'FirebaseDatabase'
   pod 'FirebaseMessaging'
+  # SHY-0300 — App Attest / DeviceCheck attestation for the unauthenticated
+  # ban gate. Version tracks the other Firebase pods via the same resolution.
+  pod 'FirebaseAppCheck'
 
   # Google Sign-In
   pod 'GoogleSignIn'

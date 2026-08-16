@@ -91,6 +91,14 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+# App Check (SHY-0300). Versions come from the BOM, like the siblings above —
+# `firebase-appcheck` is the core API and `-playintegrity` is the Android
+# attestation provider. The debug provider is a SEPARATE artifact and is
+# deliberately NOT here: it must never reach a release build, so it is added
+# only to the debug variants.
+firebase-appcheck = { group = "com.google.firebase", name = "firebase-appcheck" }
+firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity" }
+firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 
 # GitLive Firebase KMP (iOS — Android uses native Firebase SDK)
 gitlive-firebase-app = { group = "dev.gitlive", name = "firebase-app", version.ref = "gitliveFirebase" }

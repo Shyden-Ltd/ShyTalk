@@ -13,7 +13,8 @@ const {
 } = require('./middleware/rateLimit');
 const portalRoutes = require('./routes/portal');
 const { portalLimiter, recoveryLimiter } = require('./middleware/rateLimit');
-const { skipsAuth } = require('./middleware/auth-skip');
+const { skipsAuth, requiresAppCheck } = require('./middleware/auth-skip');
+const { appCheckMiddleware } = require('./middleware/app-check');
 const { startCronJobs } = require('./cron');
 const { db, rtdb } = require('./utils/firebase'); // Initialize Firebase before routes
 const log = require('./utils/log');
@@ -114,9 +115,20 @@ app.use('/api', generalLimiter, require('./routes/system'));
 
 // Auth middleware for all /api routes (except health, log-config, auth, and pre-auth endpoints)
 app.use('/api', (req, res, next) => {
-  // The predicate lives in ./middleware/auth-skip so it can be unit-tested —
-  // see that file for why. Keep it a pure function of (method, path).
-  if (skipsAuth(req)) return next();
+  // The predicates live in ./middleware/auth-skip so they can be unit-tested —
+  // see that file for why. Keep them pure functions of (method, path).
+  if (skipsAuth(req)) {
+    // SHY-0300: a few unauthenticated paths must still prove they come from a
+    // genuine app install. App Check runs INSTEAD of auth here, not as well
+    // as — these paths have no session by definition, which is why they are
+    // on the skip list at all.
+    //
+    // It sits AHEAD of generalLimiter below, deliberately: an unattested
+    // flood must not be able to spend a legitimate ip's allowance before
+    // being refused.
+    if (requiresAppCheck(req)) return appCheckMiddleware(req, res, next);
+    return next();
+  }
   authMiddleware(req, res, next);
 });
 

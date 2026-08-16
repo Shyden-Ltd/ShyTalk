@@ -110,6 +110,11 @@ kotlin {
             // (matching the app module's pinned versions).
             implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.auth)
+            // SHY-0300: the App Check API + the Play Integrity provider. The
+            // actual lives in androidMain because the Firebase Android SDK has
+            // no KMP binding; iOS reaches the same API through a Swift bridge.
+            implementation(libs.firebase.appcheck)
+            implementation(libs.firebase.appcheck.playintegrity)
             implementation(libs.kotlinx.coroutines.play.services)
         }
 
@@ -160,6 +165,32 @@ tasks.named("jvmTest") {
             layout.projectDirectory.file(
                 "src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosAuthRepositoryImpl.kt",
             ),
+            // SHY-0300: AppCheckWiringPinTest reads both platforms' public-GET
+            // paths, both actuals, the Android installer, the app-start order,
+            // the gradle variant scoping, and the SERVER's header constant —
+            // the last of which is not a Kotlin source at all, and is exactly
+            // the file whose drift the pin exists to catch.
+            rootProject.layout.projectDirectory.file(
+                "app/src/main/java/com/shyden/shytalk/data/remote/WorkerApiClient.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/data/remote/IosApiClient.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/commonMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/androidMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.android.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.ios.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/androidMain/kotlin/com/shyden/shytalk/core/security/AppCheckInstaller.kt",
+            ),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/ShyTalkApp.kt"),
+            rootProject.layout.projectDirectory.file("app/build.gradle.kts"),
+            rootProject.layout.projectDirectory.file("express-api/src/middleware/app-check.js"),
         ).withPropertyName("appLockWiringPinnedSources")
         .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 }

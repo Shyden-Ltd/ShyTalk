@@ -14,6 +14,16 @@
  *   the anonymous-translate rule and is a prototype accessor, not an own key.
  * @returns {boolean} true when the request must NOT be authenticated
  */
+/**
+ * Strip ONE trailing slash, except from the root. Shared so the two
+ * predicates below cannot drift: `/api/ban-status/` must be classified the
+ * same way by both, or a trailing slash becomes a way to reach the route
+ * while side-stepping the attestation that guards it.
+ */
+function normalisePath(raw) {
+  return raw.length > 1 && raw.endsWith('/') ? raw.slice(0, -1) : raw;
+}
+
 function skipsAuth(req) {
   // Express's default (non-strict) router matches `/api/ban-status/` to the
   // `/ban-status` route, so a trailing slash would otherwise reach an
@@ -34,7 +44,7 @@ function skipsAuth(req) {
   //
   // Two plain locals instead, used explicitly per rule.
   const raw = req.path;
-  const path = raw.length > 1 && raw.endsWith('/') ? raw.slice(0, -1) : raw;
+  const path = normalisePath(raw);
 
   return (
     path === '/health' ||
@@ -73,4 +83,27 @@ function skipsAuth(req) {
   );
 }
 
-module.exports = { skipsAuth };
+/**
+ * Which unauthenticated requests must still prove they come from a genuine
+ * app install (SHY-0300).
+ *
+ * App Check runs INSTEAD of auth for these paths, not as well as: they have
+ * no session by definition, which is the whole reason they are on the skip
+ * list. Attestation is the only remaining control that distinguishes "our app
+ * asking whether this device is banned" from "anyone asking about any device
+ * id".
+ *
+ * Deliberately ONE path for now. The other unauthenticated paths each have
+ * their own caller set and their own rollout risk — most sharply
+ * `/apple-notifications/v2`, which APPLE calls and which can never carry an
+ * App Check token; adding it here would break purchases. Widening this list
+ * is a per-path decision with per-path evidence, not a sweep.
+ *
+ * @param {import('http').IncomingMessage & {path: string}} req the LIVE request
+ * @returns {boolean} true when the request must carry an App Check token
+ */
+function requiresAppCheck(req) {
+  return req.method === 'GET' && normalisePath(req.path) === '/ban-status';
+}
+
+module.exports = { skipsAuth, requiresAppCheck };
