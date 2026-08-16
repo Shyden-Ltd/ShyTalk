@@ -516,4 +516,23 @@ playwright`) and both probe branches are gone local and remote.
   and pass in the main checkout — confirmed pre-existing and unrelated to this
   diff. Out of SHY-0298's scope.
 
-Reviewed-up-to: 913fe54d5bd3bb4279e57395fd7bd57558bde081
+- **2026-08-16 — CI found a third production defect, and it was the tests
+  working.** The two real-git tests failed on CI with `fatal: empty ident
+  name`. Not a harness problem: `git commit-tree` runs in a fresh clone under
+  `$RUNNER_TEMP` with no local identity, and a GitHub runner has no global one.
+  It passed locally only because macOS git could build a fallback from the
+  account. **The cap would have failed on its first real run**, which is the
+  second time in this PR that executing the block found something no
+  structural pin could ([[feedback-verify-the-harness-not-just-the-result]]).
+
+  Fixed by declaring `GIT_AUTHOR_*`/`GIT_COMMITTER_*` on the step. The harness
+  now reads the step's literal `env:` from the workflow rather than hardcoding
+  it, so a deletion reddens these tests. Step env applies FIRST and harness
+  values win — the step also declares `MAX_GH_PAGES_COMMITS: 25`, which would
+  otherwise have silently disabled the cap for the 5-commit fixture (caught by
+  the test, not by reading).
+
+  `sonarcloud` failed for the same root cause; it runs the Jest suite for
+  coverage. Fifteen mutants verified in total.
+
+Reviewed-up-to: 4c2c8d01a188885d97d7a67b874894b5dc60c7b8
