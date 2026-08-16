@@ -187,11 +187,21 @@ describe('gh-pages bloat fixes — SHY-0128', () => {
     });
 
     test('rebuild is an orphan commit of the CURRENT TIP TREE (content-identical by construction)', () => {
-      // createCommit with the tip's tree...
-      expect(block).toMatch(/-f tree=/);
-      // ...and NO parents field — omitting it is what makes the commit an
-      // orphan; a `parents` arg would chain history instead of truncating it.
-      expect(block).not.toMatch(/parents/);
+      // SHY-0298 R4: built by LOCAL `git commit-tree`, in the clone, from the
+      // clone's own HEAD tree. It used to be `gh api -X POST … -f tree=`, but
+      // an API-created commit is referenced by no ref and so is absent from
+      // the `--depth=1` clone that has to push it — `fatal: bad object`, then
+      // `! [remote rejected] … (unpacker error)`, on every capped run.
+      expect(block).toMatch(/git -C "\$WORK" commit-tree "HEAD\^\{tree\}"/);
+      // The Git Data API must be gone entirely: a commit or ref created there
+      // reintroduces exactly that failure.
+      expect(block).not.toMatch(/git\/commits|git\/refs\//);
+      // NO parent — omitting it is what makes the commit an orphan; `-p` would
+      // chain history instead of truncating it.
+      expect(block).not.toMatch(/parents|commit-tree[^\n]*\s-p\s/);
+      // An empty $NEW would make the refspec `:refs/heads/gh-pages` — git's
+      // spelling of DELETE THE BRANCH — so it is refused before the push.
+      expect(block).toContain('refusing to push an empty refspec');
     });
 
     test('the ref move is an atomic compare-and-swap, never an unconditional force', () => {

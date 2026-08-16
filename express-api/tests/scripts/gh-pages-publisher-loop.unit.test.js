@@ -99,9 +99,20 @@ function makeOrigin(dir) {
 }
 
 /** Runs the REAL loop with `origin` rewritten to a local bare repo. */
-function publish({ dir, bare, destination, files, beforePush }) {
+function publish({ dir, bare, destination, files, beforePush, env = {} }) {
   const home = path.join(dir, scratch('home'));
   fs.mkdirSync(home);
+  // A recording `sleep`. The loop's backoff is real time the test would
+  // otherwise spend idling (~42s to exhaust six attempts), and asserting on
+  // elapsed wall-clock would be both slow and flaky on a loaded runner.
+  // Recording the REQUESTED delays instead is faster AND a stronger pin: the
+  // schedule itself becomes assertable.
+  const binDir = path.join(home, 'bin');
+  fs.mkdirSync(binDir);
+  const sleepLog = path.join(home, 'sleeps');
+  fs.writeFileSync(path.join(binDir, 'sleep'), `#!/bin/bash\necho "$1" >> "${sleepLog}"\n`, {
+    mode: 0o755,
+  });
   // The ONE substitution: the hardcoded GitHub URL points at the local bare
   // repo. Everything else in the script is untouched.
   execFileSync('git', ['config', '--global', `url.file://${bare}.insteadOf`, CLONE_URL], {
@@ -147,7 +158,7 @@ function publish({ dir, bare, destination, files, beforePush }) {
     encoding: 'utf8',
     stdio: 'pipe',
     env: {
-      PATH: process.env.PATH,
+      PATH: `${binDir}:${process.env.PATH}`,
       HOME: home,
       RUNNER_TEMP: runnerTemp,
       REPO: REPO_SLUG,
@@ -159,12 +170,20 @@ function publish({ dir, bare, destination, files, beforePush }) {
       // files so a missing one cannot be mistaken for a loop failure.
       GITHUB_OUTPUT: path.join(runnerTemp, 'gh-output'),
       GITHUB_STEP_SUMMARY: path.join(runnerTemp, 'gh-summary'),
+      // Last, so a test can override any of the above. `BACKOFF_BASE: '0'` is
+      // why the exhaustion test is seconds rather than the ~42s of real
+      // sleeping the production defaults would cost.
+      ...env,
     },
   });
   return {
     status: run.status ?? 1,
     stdout: String(run.stdout || ''),
     stderr: String(run.stderr || ''),
+    // Every delay the loop ASKED for, in order. Empty on a first-attempt win.
+    sleeps: fs.existsSync(sleepLog)
+      ? fs.readFileSync(sleepLog, 'utf8').split('\n').filter(Boolean).map(Number)
+      : [],
   };
 }
 
@@ -332,5 +351,131 @@ describe('what this harness deliberately does not cover', () => {
     const script = extractPushScript();
     expect(script).not.toContain('is empty');
     expect(script).toContain('MAX_ATTEMPTS');
+  });
+});
+
+describe('the failure branches — none of which had ever executed', () => {
+  /** Makes every push to the bare repo fail, for a reason that is NOT a race. */
+  function rejectPushes(bareRepo, message) {
+    const hook = path.join(bareRepo, 'hooks', 'pre-receive');
+    fs.writeFileSync(hook, `#!/bin/sh\necho "${message}" >&2\nexit 1\n`, { mode: 0o755 });
+  }
+
+  test('a non-race rejection fails FAST and does not retry', () => {
+    // The headline of the fix: stderr is captured and only a non-fast-forward
+    // is retried. Everything else — a protected branch, a read-only token, a
+    // quota error — used to burn all six attempts and then report the wrong
+    // cause with the real one deleted.
+    rejectPushes(bare, 'GH006: Protected branch update failed');
+
+    const { status, stdout, stderr } = publish({
+      dir,
+      bare,
+      destination: 'kotlin/pr/latest',
+      files: { 'index.html': '<h1>mine</h1>' },
+    });
+
+    expect(status).not.toBe(0);
+    // git's OWN message survives, rather than being sent to /dev/null.
+    expect(stdout + stderr).toContain('GH006');
+    expect(stdout + stderr).toContain('::error title=Could not publish to gh-pages');
+    // And it did NOT retry — this is the half that "fails loudly" alone would
+    // not prove.
+    expect(stderr).not.toMatch(/another writer landed first/);
+    expect(stdout).not.toContain('on attempt 2');
+  });
+
+  test('losing every attempt reports exhaustion, with the last stderr', () => {
+    // A rival that writes UNIQUE content each time, so every attempt is a
+    // genuine lost race rather than a no-op second commit.
+    const rival = path.join(dir, 'rival-unique.sh');
+    fs.writeFileSync(
+      rival,
+      [
+        'RIVAL="$RUNNER_TEMP/rival-$RANDOM"',
+        `git clone --quiet --branch gh-pages "file://${bare}" "$RIVAL"`,
+        'mkdir -p "$RIVAL/other-suite/pr/latest"',
+        'echo "$RANDOM-$(date +%s%N)" > "$RIVAL/other-suite/pr/latest/index.html"',
+        'git -C "$RIVAL" add --all',
+        'git -C "$RIVAL" commit --quiet -m "rival"',
+        'git -C "$RIVAL" push --quiet origin gh-pages',
+      ].join('\n'),
+    );
+
+    const { status, stdout, stderr, sleeps } = publish({
+      dir,
+      bare,
+      destination: 'kotlin/pr/latest',
+      files: { 'index.html': '<h1>mine</h1>' },
+      beforePush: `bash ${rival}`,
+    });
+
+    expect(status).not.toBe(0);
+    expect(stdout + stderr).toContain('Lost the push race 6 times');
+    // FIVE sleeps for SIX attempts: the loop must not wait after the last one,
+    // which would delay the failure without ever retrying it.
+    expect(sleeps).toHaveLength(5);
+  });
+
+  test('the backoff grows with the attempt, and never follows the last one', () => {
+    // The schedule, not the elapsed time. `sleep` is shimmed to record rather
+    // than wait, so this is deterministic and costs nothing — where a
+    // wall-clock bound would be both slow and flaky on a loaded runner.
+    const rival = path.join(dir, 'rival-grow.sh');
+    fs.writeFileSync(
+      rival,
+      [
+        'RIVAL="$RUNNER_TEMP/rival-$RANDOM"',
+        `git clone --quiet --branch gh-pages "file://${bare}" "$RIVAL"`,
+        'mkdir -p "$RIVAL/other-suite/pr/latest"',
+        'echo "$RANDOM-$(date +%s%N)" > "$RIVAL/other-suite/pr/latest/index.html"',
+        'git -C "$RIVAL" add --all',
+        'git -C "$RIVAL" commit --quiet -m "rival"',
+        'git -C "$RIVAL" push --quiet origin gh-pages',
+      ].join('\n'),
+    );
+
+    const { sleeps } = publish({
+      dir,
+      bare,
+      destination: 'kotlin/pr/latest',
+      files: { 'index.html': '<h1>mine</h1>' },
+      beforePush: `bash ${rival}`,
+      // 10 makes the growth term dominate the 0-2s jitter, so the ordering
+      // assertion below cannot be satisfied by luck.
+      env: { BACKOFF_BASE: '10' },
+    });
+
+    expect(sleeps).toHaveLength(5);
+    // attempt * 10 + jitter → 10..12, 20..22, 30..32, 40..42, 50..52.
+    sleeps.forEach((s, i) => {
+      expect(s).toBeGreaterThanOrEqual((i + 1) * 10);
+      expect(s).toBeLessThan((i + 1) * 10 + 3);
+    });
+    // Strictly increasing — a constant backoff would hammer a contended tip.
+    expect([...sleeps].sort((a, b) => a - b)).toEqual(sleeps);
+  });
+
+  test('the re-fetch failure branch is NOT covered here, and this says why', () => {
+    // Reaching `git fetch` inside the loop needs the push to fail with a
+    // non-fast-forward — which requires a reachable remote — and then the
+    // fetch to fail, which requires an unreachable one, with no injection
+    // point in between. Breaking the remote before the push instead makes the
+    // PUSH fail, and the loop then correctly takes the fail-fast branch, which
+    // is what my first attempt at this test actually asserted.
+    //
+    // So the branch is stated as uncovered rather than papered over with a
+    // test that passes for the wrong reason. What IS pinned: the branch emits
+    // an `::error` and exits, checked structurally by the sibling suite's
+    // walk of every `::error` region to its own terminator — which exists
+    // because an earlier version of this loop had a failure path with no
+    // annotation at all.
+    const script = extractPushScript();
+    const fetchIdx = script.indexOf('git fetch');
+    expect(fetchIdx).toBeGreaterThan(-1);
+    const afterFetch = script.slice(fetchIdx, fetchIdx + 400);
+    expect(afterFetch).toContain('::error');
+    expect(afterFetch).toContain('Re-fetching gh-pages failed');
+    expect(afterFetch).toContain('exit 1');
   });
 });

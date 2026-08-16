@@ -11,10 +11,16 @@ description: |
 
   Centralising the invocation here does two things a copy-paste step could not:
   the dependabot skip and the empty-directory refusal become structural, so a
-  new caller cannot forget either. Serialization itself is NOT this action's
-  job — a composite action cannot declare `concurrency`. Every caller must run
-  this from a job (or workflow) carrying `group: gh-pages-deploy`, which
-  `gh-pages-publisher.test.js` enforces.
+  new caller cannot forget either.
+
+  Callers need NO concurrency group, and must not add one. An earlier version
+  of this story serialised every writer behind `gh-pages-deploy` and this
+  paragraph told callers to join it — which `gh-pages-publisher.test.js` now
+  asserts the opposite of. That design was wrong: a concurrency group holds
+  exactly ONE pending entry, so a third contender cancels the pending second
+  (this repo's own incidents #568/#570), and a cancelled publish inside
+  test-backend.yml propagates into PR Gate, a REQUIRED check. This action
+  retries against the moving tip instead, so writers never exclude each other.
 
 inputs:
   publish-dir:
@@ -111,6 +117,11 @@ runs:
         # directory replacement: losing to a concurrent writer needs no rebase
         # and no merge, just "re-read their tip and redo my replacement on it".
         MAX_ATTEMPTS=6
+        # Seconds multiplier for the backoff. Overridable ONLY so the tests can
+        # drive the exhaustion and fail-fast paths at zero delay — without it
+        # exercising all six attempts costs ~40s of real sleeping, which is why
+        # those branches went untested. Unset in CI, so production is unchanged.
+        BACKOFF_BASE="${BACKOFF_BASE:-2}"
         WORK="$(mktemp -d)"
         SRC="$(cd "$PUBLISH_DIR" && pwd)"
 
@@ -182,7 +193,7 @@ runs:
           # writers per PR: a fixed backoff wakes every loser at the same
           # instant, so they collide again in lockstep.
           if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-            sleep "$(( attempt * 2 + RANDOM % 3 ))"
+            sleep "$(( attempt * BACKOFF_BASE + RANDOM % 3 ))"
           fi
           attempt=$(( attempt + 1 ))
         done

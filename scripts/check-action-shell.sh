@@ -21,7 +21,7 @@
 set -euo pipefail
 
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-  sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
   exit 0
 fi
 
@@ -33,6 +33,18 @@ if ! command -v shellcheck >/dev/null 2>&1; then
   exit 2
 fi
 
+# Without these the extraction fails under `set -e` and exits 1, which this
+# script documents as "findings". An environment problem must not be
+# reported as a code problem.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "::error::python3 is not installed — it is required to extract action shell"
+  exit 2
+fi
+if ! python3 -c 'import yaml' >/dev/null 2>&1; then
+  echo "::error::PyYAML is not installed — it is required to parse action.yml"
+  exit 2
+fi
+
 if [ ! -d "$ACTIONS_DIR" ]; then
   echo "no .github/actions directory — nothing to check"
   exit 0
@@ -41,24 +53,26 @@ fi
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-# Same SC2086 suppression the workflow lint uses, and for the same reason:
-# GitHub manages $RUNNER_TEMP and friends, and quoting them repo-wide is noise.
+# Exclusions, named individually rather than a severity floor.
 #
-# `--severity=warning` is a deliberate choice, not laziness. At `info` the
-# existing, device-proven actions report SC2012 ("use find instead of ls") and
-# SC2016 ("expressions don't expand in single quotes") — the first on an
-# `ls` inside an ERROR MESSAGE and on the Xcode-version glob that SHY-0195
-# device-proved, the second on backticks that are deliberately markdown for a
-# step summary. All three are correct as written. Sprinkling `disable=`
-# comments through working code to satisfy an info rule is worse than the rule.
+# SC2086 is the repo-wide one the workflow lint also carries: GitHub manages
+# $RUNNER_TEMP and friends and quoting them everywhere is noise.
 #
-# Measured, not assumed: against the existing actions, `warning` and the
-# default report the SAME real defects — SC2115 (`rm -rf "$X/"` where X may be
-# empty) and SC2045 (iterating `ls`) both fire — and differ only on the three
-# info-level false positives above. Note SC2164 (unchecked `cd`) does NOT fire
-# either way, and correctly so: these blocks run under `set -e`, where a failed
-# cd aborts the step. See the test file for the probes.
-SHELLCHECK_OPTS="${SHELLCHECK_OPTS:--e SC2086 --severity=warning}"
+# SC2012 and SC2016 are the only other findings the existing actions produce,
+# and both are correct as written — an `ls` inside an ERROR MESSAGE, the
+# Xcode-version glob SHY-0195 device-proved, and backticks that are
+# deliberately markdown for a step summary.
+#
+# An earlier version used `--severity=warning` instead. That silenced EVERY
+# info and style rule for ALL future actions — an unbounded suppression
+# justified by a bounded measurement. Three named exclusions reproduce
+# today's result exactly and leave every other rule live.
+#
+# Deliberately NOT read from the environment. `SHELLCHECK_OPTS` is also read
+# natively by shellcheck, so an inherited `--severity=error` would silently
+# downgrade this to nothing while it still printed "clean".
+unset SHELLCHECK_OPTS
+SHELLCHECK_ARGS=(-e SC2086 -e SC2012 -e SC2016)
 
 blocks=0
 expected=0
@@ -118,7 +132,7 @@ PY
   )
   blocks=$((blocks + ${counts%% *}))
   expected=$((expected + ${counts##* }))
-done < <(find "$ACTIONS_DIR" -name action.yml -type f | sort)
+done < <(find "$ACTIONS_DIR" \( -name action.yml -o -name action.yaml \) -type f | sort)
 
 if [ "$blocks" -ne "$expected" ]; then
   # A silent zero is how a checker quietly stops checking. Compare against what
@@ -137,8 +151,7 @@ fi
 for script in "$WORK"/*.sh; do
   [ -e "$script" ] || continue
   origin="$(cat "$script.origin" 2>/dev/null || echo "unknown")"
-  # shellcheck disable=SC2086 # SHELLCHECK_OPTS is a deliberate word-split
-  if ! output=$(shellcheck -s bash $SHELLCHECK_OPTS "$script" 2>&1); then
+  if ! output=$(shellcheck -s bash "${SHELLCHECK_ARGS[@]}" "$script" 2>&1); then
     failed=$((failed + 1))
     printf '::error::shellcheck findings in %s\n' "$origin"
     echo "$output"

@@ -25,18 +25,21 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const SCRIPT = path.join(REPO_ROOT, 'scripts/check-action-shell.sh');
 
 /** Builds a throwaway repo root containing only `.github/actions` fixtures. */
-function withActions(actions) {
+function withActions(actions, env = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'action-shell-'));
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.copyFileSync(SCRIPT, path.join(dir, 'scripts/check-action-shell.sh'));
   for (const [name, body] of Object.entries(actions)) {
-    const adir = path.join(dir, '.github/actions', name);
+    // `name` may carry an explicit filename: 'bad/action.yaml'.
+    const [dirName, file = 'action.yml'] = name.split('/');
+    const adir = path.join(dir, '.github/actions', dirName);
     fs.mkdirSync(adir, { recursive: true });
-    fs.writeFileSync(path.join(adir, 'action.yml'), body);
+    fs.writeFileSync(path.join(adir, file), body);
   }
   const run = spawnSync('bash', [path.join(dir, 'scripts/check-action-shell.sh')], {
     encoding: 'utf8',
     stdio: 'pipe',
+    env: { ...process.env, ...env },
   });
   fs.rmSync(dir, { recursive: true, force: true });
   return {
@@ -146,5 +149,47 @@ describe('it refuses to pass vacuously', () => {
     const out = String(run.stdout || '') + String(run.stderr || '');
     expect(run.status).toBe(0);
     expect(out).toMatch(/clean — [1-9]\d* shell block\(s\)/);
+  });
+});
+
+describe('it cannot be silenced or side-stepped', () => {
+  test('an inherited SHELLCHECK_OPTS cannot downgrade the check', () => {
+    // shellcheck reads SHELLCHECK_OPTS natively, so passing it through meant
+    // anything in the environment won: `--severity=error` silenced the check
+    // while it still printed "clean".
+    const { status, out } = withActions(
+      { bad: action(shellStep('set -euo pipefail\nrm -rf "$MAYBE_EMPTY/"')) },
+      { SHELLCHECK_OPTS: '--severity=error' },
+    );
+    expect(status).toBe(1);
+    expect(out).toContain('SC2115');
+  });
+
+  test('an action defined in action.YAML is checked too', () => {
+    // GitHub accepts both filenames. `find -name action.yml` missed the other
+    // one entirely — and because it contributed 0 to both the found and the
+    // expected counts, the anti-vacuity guard stayed satisfied. The same hole
+    // this script was written to close, one letter over.
+    const { status, out } = withActions({
+      'bad/action.yaml': action(shellStep('set -euo pipefail\nrm -rf "$MAYBE_EMPTY/"')),
+    });
+    expect(status).toBe(1);
+    expect(out).toContain('SC2115');
+  });
+
+  test('--help prints the header and nothing else', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'action-shell-help-'));
+    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+    fs.copyFileSync(SCRIPT, path.join(dir, 'scripts/check-action-shell.sh'));
+    const run = spawnSync('bash', [path.join(dir, 'scripts/check-action-shell.sh'), '--help'], {
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    expect(run.status).toBe(0);
+    expect(run.stdout).toContain('Usage:');
+    // It used to run past the header into the source.
+    expect(run.stdout).not.toContain('set -euo pipefail');
   });
 });

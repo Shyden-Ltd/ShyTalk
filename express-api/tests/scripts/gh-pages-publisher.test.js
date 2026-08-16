@@ -400,6 +400,46 @@ describe('a publish failure must not red-gate the PR (SHY-0298 Error-paths AC)',
     expect(doc.jobs['test-backend']['continue-on-error']).toBeUndefined();
   });
 
+  test('EVERY publisher reachable from PR Gate is non-gating', () => {
+    // The sweep, not a point fix. Making the express publisher non-gating left
+    // an identical defect at a second site: PR Gate also reaches
+    //   gate.needs -> playwright-web -> playwright-tests.yml -> allure-report.yml
+    // and a reusable workflow's conclusion is the aggregate of its jobs
+    // RECURSIVELY, so a failed publish there red-gated every web PR.
+    //
+    // This walks `uses:` transitively from the gate's needs and asserts that
+    // any job invoking the publish action is `continue-on-error`, so a THIRD
+    // site cannot appear without someone deciding about it.
+    const loadWf = (name) => yaml.load(fs.readFileSync(path.join(WF_DIR, name), 'utf8'));
+    const prChecks = loadWf('pr-checks.yml');
+
+    const offenders = [];
+    const seen = new Set();
+
+    const walk = (wfName, jobNames) => {
+      if (seen.has(wfName)) return;
+      seen.add(wfName);
+      const doc = loadWf(wfName);
+      const names = jobNames || Object.keys(doc.jobs);
+      names.forEach((jobName) => {
+        const job = doc.jobs[jobName];
+        if (!job) return;
+        const body = JSON.stringify(job);
+        if (body.includes('publish-gh-pages') && job['continue-on-error'] !== true) {
+          offenders.push(`${wfName}:${jobName}`);
+        }
+        // Follow a reusable-workflow call.
+        const called =
+          typeof job.uses === 'string' && job.uses.match(/\.github\/workflows\/([\w.-]+\.ya?ml)$/);
+        if (called) walk(called[1], null);
+      });
+    };
+
+    walk('pr-checks.yml', prChecks.jobs.gate.needs);
+
+    expect(offenders).toEqual([]);
+  });
+
   test('no OTHER job inside the gated reusable workflow is allowed to fail silently', () => {
     // `continue-on-error` is a sharp tool: it is right for a report and wrong
     // for a test. Anything else in this workflow acquiring it should be a

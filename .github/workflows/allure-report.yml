@@ -54,6 +54,22 @@ on:
 
 jobs:
   generate-report:
+    # A report failure must NOT red-gate the PR (SHY-0298 Error-paths AC:
+    # "a publishing failure must not be reported as a test failure").
+    #
+    # This job is reachable from PR Gate through
+    #   gate.needs → playwright-web → playwright-tests.yml → allure-report.yml
+    # and a reusable workflow's conclusion is the aggregate of its jobs,
+    # RECURSIVELY. So a failed publish, a transient clone, six lost races or
+    # the history cap could each fail a REQUIRED check on a PR whose tests all
+    # passed. The express publisher got this treatment first; this is the same
+    # defect at the second site, which is why the pin below now walks every
+    # publisher reachable from the gate rather than one file.
+    #
+    # The TESTS still gate: they run in `test-playwright`, upstream of this.
+    # Everything in this job is report generation, publication and gh-pages
+    # maintenance — none of it is a statement about whether the code works.
+    continue-on-error: true
     name: Generate Allure Report
     runs-on: ubuntu-latest
     # 20 (was 10): the playwright suite's gh-pages round-trip (history restore +
@@ -294,9 +310,6 @@ jobs:
           if [ "$COUNT" -le "$MAX_GH_PAGES_COMMITS" ]; then
             exit 0
           fi
-          TREE=$(gh api "repos/${REPO}/git/commits/${TIP}" --jq '.tree.sha')
-          NEW=$(gh api -X POST "repos/${REPO}/git/commits" -f message="chore(gh-pages): cap deploy history — content-identical orphan rebuild of ${TIP} (SHY-0128)" -f tree="${TREE}" --jq '.sha')
-
           # Atomic move. `--force-with-lease=<ref>:<expected>` makes the SERVER
           # reject the update unless gh-pages is still $TIP, so there is no
           # window between checking and moving. A plain re-read + PATCH had one,
@@ -305,12 +318,41 @@ jobs:
           rm -rf "$WORK"
           git clone --quiet --no-checkout --filter=blob:none --depth=1 \
             --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$WORK"
+
+          # The orphan is built LOCALLY, not through the Git Data API.
+          #
+          # An API-created commit exists only on the server and is referenced by
+          # no ref, so a `--depth=1` clone does not contain it — and `git push
+          # <oid>:<ref>` has to READ the object to build the pack. Reproduced
+          # against a real transport: `fatal: bad object`, then
+          # `! [remote rejected] … (unpacker error)`. That stderr contains
+          # `[remote rejected]`, not `[rejected]`, so it would not have matched
+          # the lost-race branch either — the step would have failed loudly on
+          # the first capped run and every run after, while never capping.
+          #
+          # `--filter=blob:none` omits blobs but keeps trees, so `HEAD^{tree}`
+          # is present. Omitting the parent list is what truncates the history.
+          # This also deletes two API calls.
+          NEW=$(git -C "$WORK" commit-tree "HEAD^{tree}" \
+            -m "chore(gh-pages): cap deploy history — content-identical orphan rebuild of ${TIP} (SHY-0128)")
+
+          # An EMPTY $NEW makes the refspec below `:refs/heads/gh-pages`, which
+          # is git's spelling of DELETE THE BRANCH — every report ever
+          # published, gone, from a step whose job is to save space. `set -e`
+          # already aborts if commit-tree exits non-zero, so this only fires if
+          # it somehow succeeds with no output; the consequence is severe
+          # enough that "can't happen" is not a good enough reason to omit it.
+          if [ -z "$NEW" ]; then
+            echo "::error::commit-tree produced no SHA — refusing to push an empty refspec"
+            exit 1
+          fi
+
           CAP_ERR="${RUNNER_TEMP}/gh-pages-cap-err"
           if git -C "$WORK" push --quiet \
                --force-with-lease="refs/heads/gh-pages:${TIP}" \
                origin "${NEW}:refs/heads/gh-pages" 2>"$CAP_ERR"; then
-            echo "capped gh-pages: ${COUNT} commits -> 1 (tree ${TREE} unchanged)"
-          elif grep -qiE 'stale info|non-fast-forward|\[rejected\]' "$CAP_ERR"; then
+            echo "capped gh-pages: ${COUNT} commits -> 1 (tree unchanged)"
+          elif grep -qiE 'stale info|non-fast-forward|! \[rejected\]' "$CAP_ERR"; then
             # Someone published while we were building the orphan. Their report
             # is intact, which is the whole point; a later run caps again.
             echo "tip moved since the count — skipping cap this run (a later run retries)"

@@ -307,10 +307,8 @@ jobs:
           echo "{\"passed\":0,\"failed\":0,\"total\":0,\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"kotlin\",\"env\":\"pr\"}" > kotlin-report/metadata.json
 
       # SHY-0298: the report is handed to a separate publish job rather than
-      # pushed from here. This job runs the ~15-min Kotlin suite, and the
-      # publish must sit inside the `gh-pages-deploy` concurrency group — which
-      # is job-level, so putting it on THIS job would serialize the whole test
-      # suite across every open PR. An artifact is the hand-off.
+      # pushed from here, so a retrying publish cannot hold the ~15-min Kotlin
+      # suite open. An artifact is the hand-off.
       - name: Upload Kotlin report for publishing
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -320,7 +318,7 @@ jobs:
           path: kotlin-report
           if-no-files-found: error
 
-  # SHY-0298 — one queue for every gh-pages writer.
+  # SHY-0298 — the Kotlin report publishes from its own job.
   #
   # Before this story the Kotlin report pushed straight from `build-and-test`,
   # whose concurrency group is per-BRANCH (`pr-checks-<head_ref>`). Two PRs
@@ -328,13 +326,16 @@ jobs:
   # between peaceiris' clone and its push, leaving the loser with
   # `! [rejected] … (fetch first)`; peaceiris does not retry.
   #
-  # `gh-pages-deploy` is the same group `allure-report.yml` declares at WORKFLOW
-  # level. SHY-0298 measured that workflow-level and job-level groups of the
-  # same name share ONE queue across workflows (two probe workflows, 75s each,
-  # ran strictly sequentially), so all three writers now serialize.
+  # NO concurrency group, deliberately, and this is the second design. The
+  # first serialised all three writers behind `gh-pages-deploy` — measured to
+  # work (two probe workflows, 75s each, ran strictly sequentially) but wrong
+  # anyway: a group holds exactly ONE pending entry, so a third contender
+  # cancels the pending second (incidents #568/#570). A cancelled publish
+  # propagates into PR Gate, a REQUIRED check, so the lock would have red-gated
+  # innocent PRs to protect a report.
   #
-  # `cancel-in-progress: false` is required, not incidental: cancelling would
-  # DROP a report rather than delay it.
+  # The publish action retries against the moving tip instead, so no writer
+  # excludes any other and a lost race costs one extra attempt.
   publish-kotlin-report:
     name: Publish Kotlin Report
     needs: build-and-test
