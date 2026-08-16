@@ -912,3 +912,55 @@ comments and the spec still describe the deleted lock design).
 ### Worktree
 `…/scratchpad/wt-1751` is still present (detached). Remove with
 `git worktree remove` once #1751 lands.
+
+---
+
+## 2026-08-16 ~14:30 WIB — pre-compact state
+
+### NEW STANDING RULE (operator, this session)
+**After EVERY merge into develop, deploy develop to dev.** Not optional, not
+conditional on being asked — dispatch Deploy-To-Dev as the last step of the
+merge. Supersedes the older "ask first, default NO while AFK" note. Codified as
+`feedback-deploy-dev-after-every-develop-merge`.
+
+### What is actually in flight
+
+**Cold-start security work (SHY-0143)** — branch
+`story/SHY-0143-persist-session-optimistic-coldstart`, 30 commits, **not
+pushed**. Five `code-reviewer` rounds, every one finding real defects. The
+substance: a returning user's cold start now checks bans, resolves the real
+`uniqueId` before any read, and refreshes the cohort claim before any
+cohort-scoped read — none of which happened after SHY-0187 stopped routing
+cold starts through Sign-In.
+
+Round 6 is running against HEAD.
+
+**gh-pages report publishing (SHY-0298 / PR #1751)** — commits on local branch
+`shy0298-r3-pending`, **not pushed**, head `81274217839`. Makes concurrent
+report publishing safe rather than serialised, after the serialised design was
+found to cancel innocent PRs.
+
+### Everything green as of this entry
+shared jvmTest 1520 / 0 · app unit 2243 / 0 (both `--rerun-tasks`) · Express
+416 suites / 13833 tests · eslint `--max-warnings=0`, ktlint, detekt, both
+platform compiles, instrumented-test compile, actionlint, check-action-shell.
+
+### Blocked on the operator (3 decisions, in the SHY-0143 story Notes)
+1. The Security AC names `EncryptedSharedPreferences`; Android deliberately
+   uses plain SharedPreferences + device FBE.
+2. The AC requires honouring `forceSignOut`; `PmLockCheckResult` has no such
+   field — needs a server change or an AC amendment.
+3. Round 1 said the unauthenticated ban endpoint needed App Check. It shipped
+   with IP rate-limiting only; no App Check exists in the repo.
+
+### Blocked on devices
+Android instrumented cold-start feature; iOS host tests (the K/N test binary
+cannot link `FirebaseCore` — that is its own story); LOCAL + DEV gauntlets.
+
+### Immediate next steps
+1. Round 6 findings → fix → re-verify.
+2. `git push` SHY-0143, open the PR, arm the monitor at push.
+3. Push `shy0298-r3-pending` to #1751's branch. **Before merging #1751**, run
+   the full `express-api` suite from a NORMAL checkout — several script tests
+   reject a worktree's `.git` file, so the worktree run is not sufficient.
+4. On each merge to develop: dispatch Deploy-To-Dev against develop.
