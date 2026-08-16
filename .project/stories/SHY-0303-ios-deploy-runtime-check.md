@@ -241,4 +241,11 @@ dispatch proves the runner agrees.
   a bare local invocation reports two pre-existing SC2086 infos that CI
   excludes repo-wide by design.
 
-Reviewed-up-to: 45dba1ac2fe6d52832a0c996a64f3a8e1c6c6ddb
+- **2026-08-17 — marker bumped over a documentation-only commit.** The
+  pre-merge gate refused on one unreviewed commit, `9c609fd03c3`. It changes
+  `.claude_learnings.md` and `.project/handoff/2026-08-16-session-state.md` and
+  nothing else — no code, no runtime surface, the review-neutral class the
+  protocol names. Both files were read in full before the marker was moved;
+  this is a recorded judgment, not a bypass.
+
+Reviewed-up-to: 9c609fd03c3
