@@ -131,6 +131,14 @@ async function createMobileWebkitIosDriver({
       capabilities: {
         alwaysMatch: {
           platformName: 'iOS',
+          // W3C script timeout. The default is 30000ms, and
+          // WEBDRIVER_SIGN_IN_SCRIPT's worst case is ~40s — two 20s phases,
+          // each with its own budget so a slow SDK load cannot starve the
+          // currentUser wait (SHY-0328 R4). Without this the remote would kill
+          // a legitimately-slow-but-succeeding sign-in and surface it as a
+          // transport error rather than success or a graceful diagnostic.
+          // Set EXPLICITLY rather than relying on any implementation's default.
+          timeouts: { script: 45000 },
           'appium:automationName': 'XCUITest',
           'appium:udid': udid,
           // Launch the specific browser app via bundleId — distinct

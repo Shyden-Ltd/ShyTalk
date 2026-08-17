@@ -350,3 +350,83 @@ failure, and the uniform `OK=2 / FAIL=224` shape made it look like product debt.
 4. `ps eww -p <runner-pid>` — confirm the env the runner ACTUALLY got.
 5. Only then the watermark `UID:` field.
 
+
+## Review rounds (2026-08-18) — what the reviewer found that I did not
+
+Four rounds. Recording them because the pattern is more useful than the fixes:
+**every single finding was a test that could not fail, not a product bug.**
+
+### R1 — the coverage was theatre on six of seven drivers
+
+`webSignIn` was wired into all seven web drivers, and only the desktop one had
+any behavioural test. The two files that *appeared* to cover the other six do
+not: `driver-contract.test.js` asserts `listMethods()` equals
+`WEB_METHOD_NAMES`, but `listMethods()` **is** `[...new Set(WEB_METHOD_NAMES)]
+.sort()` — it compares a constant to itself and can never fail for a real
+reason. `driver-interface-pin.test.js` counts string literals in the array's
+source text.
+
+Consequence, measured rather than argued: pointing the firefox driver's
+`executeAsync` at `/execute/sync` — which makes sign-in report success *before*
+the auth Promise settles — turned **0** tests red. It now turns 2 red.
+
+Also unproven: `resolveAuthBase`'s refusal, which was pinned only on the
+exported pure function. Dropping the `.ok` guard at any one of its four call
+sites would have left `authBase` undefined, silently building
+`"undefined/v1/accounts:signInWithPassword?key=..."`, with every test still
+green. Five tests now drive all four call sites through real matcher dispatch.
+
+### R2 — a test-isolation bug I introduced, and a call I got wrong
+
+The new refusal block captured its saved env value as a bare
+`const SAVED = process.env.X` in the `describe` body. **Jest evaluates describe
+callbacks during collection**, before this file's root `beforeAll` sets
+`FIREBASE_AUTH_EMULATOR_HOST` — so it captured `undefined` and its `afterEach`
+then DELETED the variable for every test that followed. Blast radius was zero
+only because the block happened to be last in a file that has grown by
+appending for months. Proven with a probe test, which is kept as a permanent
+isolation guard.
+
+Worth recording: my first attempt to prove it used `-t "PROBE"`, which filtered
+out the block that CAUSES the leak, so the probe passed. **A filtered run
+cannot detect a cross-block interaction bug** — the filter removes the
+interaction.
+
+I had also declared the injected browser script untestable in-process. The
+reviewer pushed back and was right: it is a self-contained state machine whose
+only collaborators are `window.shytalkAuth`, `Date.now` and `setTimeout`, all
+of which a test supplies. It is now exported as `WEBDRIVER_SIGN_IN_SCRIPT` and
+executed for real via `node:vm` against a virtual clock.
+
+### R3 — my harness could not see the bug it existed to catch
+
+The vm drain loop exited on the FIRST result. A script that fires `done()`
+twice schedules the second with a fresh `setTimeout` that lands in the queue
+*after* that iteration captured its batch — so whenever the first fire came
+from a batched timer callback rather than a promise reaction, the second was
+invisible.
+
+The reviewer predicted, from a mechanistic model, that under a narrow
+single-statement mutation the "currentUser materialises late" test would
+SURVIVE. It did. My earlier "5 of 7 killed" had mutated a different statement.
+Exit condition is now "a result AND nothing still pending".
+
+**A test named "fires exactly once" that cannot observe a second call is not a
+weak test — it is an instrument fault, and no number of passing runs would ever
+have revealed it.**
+
+### The one REAL product bug, found only because the coverage got honest
+
+Both phases shared a single 20s deadline. A page whose Firebase SDK is slow to
+appear silently eats the budget the `currentUser` wait needs, so sign-in
+reports `no currentUser after sign-in` when nothing is wrong — a false
+NEGATIVE, worst on the slowest surface we run (a real iPhone over Appium on a
+cold page). `makeWebSignIn`, the Playwright twin, gives each phase its own
+fresh 20000ms timeout, and this module's docstring claimed the two differ only
+in transport. That claim was false. Fixed RED-first: `waitForUser` now has its
+own budget.
+
+### Totals
+
+14038 → **14104** tests. 66 added across the four rounds, every one of them
+mutation-checked rather than assumed.

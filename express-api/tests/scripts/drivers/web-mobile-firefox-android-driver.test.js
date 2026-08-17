@@ -789,3 +789,34 @@ describe('createMobileFirefoxAndroidDriver — webSignIn (SHY-0328)', () => {
     expect(fetchImpl.calls.some((c) => c.url.endsWith('/execute/async'))).toBe(false);
   });
 });
+
+// Script timeout (SHY-0328 R4) ───────────────────────────────────────
+
+describe('createMobileFirefoxAndroidDriver — W3C script timeout is pinned explicitly', () => {
+  // WEBDRIVER_SIGN_IN_SCRIPT's worst case is ~40s: two 20s phases, each with
+  // its OWN budget so a slow SDK load cannot starve the currentUser wait. The
+  // W3C default script timeout is 30000ms, so without an explicit capability
+  // the remote would kill a legitimately-slow-but-succeeding sign-in and
+  // surface it as a transport error instead of success or a diagnostic.
+  //
+  // Asserted against the script's own worst case rather than a bare literal,
+  // so lengthening a phase without raising this ceiling fails HERE.
+  const SCRIPT_WORST_CASE_MS = 20000 * 2;
+
+  test('the session is created with a script timeout above the script’s worst case', async () => {
+    const fetchImpl = makeFetchMock(defaultHandlers({ sessionId: 'sess-firefox' }));
+    const driver = await createMobileFirefoxAndroidDriver({
+      geckodriverPath: '/opt/homebrew/bin/geckodriver',
+      spawnImpl: makeSpawnMock(),
+      fetchImpl,
+      pickPort: async () => 4444,
+      waitForReady: async () => true,
+    });
+    await driver.webUiDump('Alice').catch(() => {});
+
+    const create = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+    const caps = JSON.parse(create.opts.body).capabilities.alwaysMatch;
+    expect(caps.timeouts).toBeDefined();
+    expect(caps.timeouts.script).toBeGreaterThan(SCRIPT_WORST_CASE_MS);
+  });
+});

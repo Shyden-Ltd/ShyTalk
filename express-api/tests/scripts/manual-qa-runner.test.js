@@ -6198,7 +6198,7 @@ describe('Web Admin confirm-with-reason matcher (When <P> on Web Admin confirms 
 
 describe('Web sign-in matcher (When <P> on Web signs in with valid credentials)', () => {
   test('calls webSignIn(persona)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSignIn: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
@@ -6209,13 +6209,48 @@ describe('Web sign-in matcher (When <P> on Web signs in with valid credentials)'
   });
 
   test('P-NN annotation', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSignIn: spy } });
     await executeStep(
       { kind: 'When', text: 'Ines [P-10] on Web signs in with valid credentials' },
       ctx,
     );
     expect(spy).toHaveBeenCalledWith('Ines');
+  });
+
+  test('a FAILED sign-in fails the step — it must not report ok (SHY-0328 R4)', async () => {
+    // This handler used to `await webSignIn(name)` and then `return {ok:true}`
+    // unconditionally. Every refusal the drivers implement — persona not in the
+    // registry, PERSONAS_PASSWORD unset, the transport throwing, Firebase
+    // rejecting the credentials — resolves FALSE, and the step reported PASS.
+    //
+    // The journey then continued unauthenticated and died several steps later
+    // on something unrelated. That is the undiagnosable-failure shape that made
+    // this bug take three weeks to find, reproduced on the one step this story
+    // exists to make work.
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webSignIn: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Lena/);
+    expect(r.error).toMatch(/sign in/i);
+  });
+
+  test('a driver returning undefined is a FAILURE, not a pass', async () => {
+    // webSignIn's contract is to return a boolean. A driver that forgets to
+    // return must not be read as success — that is how the original defect
+    // stayed invisible, since the old test's spy resolved undefined and the
+    // assertion still expected ok:true.
+    const spy = jest.fn(async () => undefined);
+    const ctx = makeCtx({ webDriver: { webSignIn: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
   });
 
   test('missing webSignIn driver method — specific error', async () => {

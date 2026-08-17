@@ -3222,7 +3222,20 @@ const matchers = [
       if (!ctx.webDriver.webSignIn) {
         return { ok: false, error: 'ctx.webDriver.webSignIn not configured' };
       }
-      await ctx.webDriver.webSignIn(name);
+      // HONOUR the result. This used to discard it and return {ok:true}
+      // unconditionally, so every driver-level refusal — persona not in the
+      // registry, PERSONAS_PASSWORD unset, the transport throwing, Firebase
+      // rejecting the credentials — reported the step as PASSED and left the
+      // journey running unauthenticated, to die later on something unrelated.
+      // `=== true` rather than a truthiness check: a driver that forgets to
+      // return must read as failure, not success.
+      const signedIn = await ctx.webDriver.webSignIn(name);
+      if (signedIn !== true) {
+        return {
+          ok: false,
+          error: `${name} failed to sign in on Web — webSignIn returned ${JSON.stringify(signedIn)}. See the driver's console output for the reason.`,
+        };
+      }
       return { ok: true };
     },
   },

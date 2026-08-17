@@ -234,6 +234,9 @@ describe('makeWebSignInViaWebDriver — the REST transport (firefox-Android, Web
     }
     /* eslint-enable no-console */
 
+    // Pin the COUNT, not just the content: without this an unexpected third
+    // diagnostic would slip past every `lines[n]` / `some` / `every` assertion.
+    expect(lines).toHaveLength(2);
     expect(lines[0]).toContain('Nobody');
     expect(lines[0]).toMatch(/not in registry/);
     expect(lines[1]).toContain('Alice');
