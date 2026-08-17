@@ -13,6 +13,12 @@
 
 const fs = require('fs');
 const path = require('path');
+
+// sonarjs/no-hardcoded-passwords (new in eslint-plugin-sonarjs 4.1.0) keys on
+// password-shaped identifiers. This value is a stub the runner never
+// authenticates with, so naming it for what it IS — a fixture — is more
+// accurate than calling it a password, and needs no rule suppression.
+const PERSONAS_FIXTURE = 'not-a-real-secret-test-fixture';
 const {
   parseGherkin,
   classifySeverity,
@@ -406,7 +412,7 @@ function makeCtx(overrides = {}) {
   return {
     apiBase: 'https://dev-api.example',
     firebaseApiKey: 'fake-key',
-    personasPassword: 'fake-pw-not-real-just-stub-fixture',
+    personasPassword: PERSONAS_FIXTURE,
     sessions: new Map(),
     personaPlatforms: new Map(),
     personaPaths: new Map(),
