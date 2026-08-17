@@ -152,7 +152,7 @@ function parseGherkin(text) {
     }
 
     // Linear regex (no nested quantifiers, single .+ on bounded line).
-    const stepMatch = /^(Given|When|Then|And|But)\s+(.+)$/.exec(line); // eslint-disable-line sonarjs/slow-regex
+    const stepMatch = /^(Given|When|Then|And|But)\s+(.+)$/.exec(line);
     if (stepMatch) {
       const step = { kind: stepMatch[1], text: stepMatch[2].trim() };
       if (current === 'background') background.steps.push(step);
@@ -1204,10 +1204,10 @@ const matchers = [
     // The `[^()]+?` class excludes `(`/`)` so it cannot overlap with the
     // surrounding paren groups, making backtracking linear in input length.
     // Inputs are author-controlled Gherkin step text, not user input.
-    /* eslint-disable sonarjs/slow-regex */
+
     pattern:
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+AND\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+with\s+([^()]+?))?(?:\s+\([^)]*\))?(?:\s+\(no admin claim\))?(?:\s+at\s+the\s+"[^"]+"\s+(?:screen|tab))?$/,
-    /* eslint-enable sonarjs/slow-regex */
+
     async handler(m, ctx) {
       const name = m[1];
       const withClause = m[3];
@@ -1352,7 +1352,6 @@ const matchers = [
     // complex bodies into a step var if needed. The optional groups are all
     // anchored and don't overlap, so the linear-time guarantee holds.
     pattern:
-      // eslint-disable-next-line sonarjs/slow-regex
       /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]*)?\s+sends?\s+(GET|POST|PATCH|PUT|DELETE)\s+(\S+)(?:\s+with\s+body\s+(\{[^}]*\}|\[[^\]]*\]))?(?:\s+with\s+(?:her|his|their)\s+ID token)?\.?$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -1419,9 +1418,7 @@ const matchers = [
   // All four matchers populate `ctx.lastResponse.path` so the new
   // path-tagged response assertions (below) can verify the chain.
   {
-    pattern:
-      // eslint-disable-next-line sonarjs/slow-regex
-      /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
+    pattern: /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
     async handler(m, ctx) {
       const name = m[1];
       const apiPath = m[2];
@@ -1460,7 +1457,7 @@ const matchers = [
   {
     pattern:
       // Alt word order: `POST <path> with <kv-list-or-any-payload-or-body> as <Persona>(?: on <Platform>)?`
-      // eslint-disable-next-line sonarjs/slow-regex
+
       /^POST\s+(\S+)\s+with\s+(any payload|body\s+(\{[^}]*\}|\[[^\]]*\])|.+?)\s+as\s+([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\.?$/,
     async handler(m, ctx) {
       const apiPath = m[1];
@@ -2570,7 +2567,7 @@ const matchers = [
     // shape j03/j05/j06 use for known-state setup.
     // `.+$` is greedy and anchored to end-of-string. No nested quantifiers,
     // no character-class overlap with surrounding patterns — match is linear.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+(exists|has user doc) with\s+(.+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
@@ -2892,7 +2889,7 @@ const matchers = [
     // the optional trailing `(?:\s+.+)?$` is anchored to end-of-string with no
     // nested quantifiers. Input is author-controlled (feature files), not
     // untrusted user data. Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -2995,7 +2992,7 @@ const matchers = [
     //
     // Trailing descriptive text accepted (e.g. ` toast`, ` banner`) and
     // ignored — matches the corpus phrasings without forcing rewrites.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s iOS Sim UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -3610,7 +3607,7 @@ const matchers = [
     // text-only view of the page. Trailing descriptive context (e.g.
     // ` toast`, ` indicator on her reply`) accepted and ignored, mirroring
     // Wake-19 Android pattern.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Web UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -3913,7 +3910,7 @@ const matchers = [
     // cohort-rooms scenario shape. Filter is in-memory.
     // `.+$` is greedy + anchored — no overlap with the surrounding pattern
     // pieces, so backtracking is linear.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^a query is run for "([^"]+)\/\*" docs with\s+(.+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
@@ -5121,7 +5118,7 @@ const matchers = [
     // Regex is linear: `.+$` is greedy + anchored to end-of-string, no
     // overlap with preceding tokens. Input is author-controlled (feature
     // files), not untrusted user data. Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)\s+has\s+(\w+)\s+(>=|<=|==|>|<)\s+(\d+)(?:\s+.+)?$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -5830,7 +5827,7 @@ const matchers = [
     //
     // Regex linear: `.+$` greedy + anchored to end-of-string. Input
     // is author-controlled (feature files). Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)\s+on Android POSTs (\/api\/[\w/-]+)(?:\s+(.+))?$/,
     async handler(m, ctx) {
       const endpoint = m[2];
@@ -10278,7 +10275,7 @@ const matchers = [
       // captures). The `\w+` key class is non-overlapping with the space
       // that follows. Linear time despite the alternation-free capture.
       const fields = {};
-      // eslint-disable-next-line sonarjs/slow-regex
+
       for (const match of kvText.matchAll(/(\w+)\s+"([^"]*)"/g)) {
         fields[match[1]] = match[2];
       }
@@ -14747,7 +14744,6 @@ const matchers = [
 // — so backtracking can't recurse). Author-controlled input (Gherkin
 // step text), not untrusted user data. Safe.
 function stripStepAnnotation(text) {
-  // eslint-disable-next-line sonarjs/slow-regex
   return text.replace(/\s+\([^()]*\)$/, '');
 }
 
@@ -15300,7 +15296,7 @@ function parseUserDocFields(text) {
 function parseSignInWithClause(text) {
   // `[^)]*` excludes `)` so it cannot overlap with the literal `\)` that
   // follows; anchored to end-of-string. Linear match.
-  // eslint-disable-next-line sonarjs/slow-regex
+
   const stripped = text.replace(/\s*\([^)]*\)\s*$/, '').trim();
   const pairs = [];
   let buf = '';
@@ -16383,7 +16379,7 @@ async function main() {
     ? [path.join(opts.planDir, opts.journey)]
     : fs
         .readdirSync(opts.planDir)
-        // eslint-disable-next-line sonarjs/slow-regex
+
         .filter((f) => /^j\d+[^.]*\.feature$/.test(f))
         .map((f) => path.join(opts.planDir, f));
 
