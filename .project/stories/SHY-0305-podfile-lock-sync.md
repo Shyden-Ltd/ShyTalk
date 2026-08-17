@@ -310,7 +310,7 @@ that archives iOS successfully.
   `--max-warnings=0`, prettier, shellcheck and actionlint clean; **10/10
   mutants killed** across both rounds.
 
-Reviewed-up-to: 0f6f79253b8101b4d42a1ceff306dd941dbfc2e7
+Reviewed-up-to: d234d03d3ab0acb223cda83a26ae3a23ee81dd89
 
 - **2026-08-17 — the outstanding DoD item is now MET, with evidence.**
   Deploy-To-Dev run `32000510087` against develop `5bcc9989291`:

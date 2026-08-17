@@ -346,7 +346,7 @@ generated `shared.h` contains the new facade with the method; then the deploy.
   `AppCheckWiringPinTest` re-run and confirmed to re-run on a content change to
   the file it reads. **9/9 mutants killed across the story.**
 
-Reviewed-up-to: 084e2495bd28ca95096a1329ccd8d83f26242d8e
+Reviewed-up-to: d234d03d3ab0acb223cda83a26ae3a23ee81dd89
 
 - **2026-08-17 — the outstanding DoD item is now MET, with evidence.**
   Deploy-To-Dev run `32000510087` against develop `5bcc9989291`:
