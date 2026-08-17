@@ -218,4 +218,6 @@ environment that no longer exists), fixed here with 6 added pins, all mutation-v
   (`called but not joined, ignoring`). Voice works regardless. Worth its own story if room-entry
   latency is ever investigated.
 
-Reviewed-up-to: 5ba491a87deba3322f41ac354211ca179bf7f3c3
+- **2026-08-17 — `code-reviewer` round 1 on `1727417b9d3`; findings applied in `de58319835d`. Full detail in SHY-0272's log.**
+
+Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89

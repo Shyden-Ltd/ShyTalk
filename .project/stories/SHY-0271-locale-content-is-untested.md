@@ -239,4 +239,6 @@ ratchet clean.
   walk and stayed green if the sweep shrank), covers the Explanation step it previously skipped,
   and the parity test now uses the shared parser instead of a second private regex.
 
-Reviewed-up-to: f853bce3caaebb17abf51910deac60686875ad59
+- **2026-08-17 — `code-reviewer` round 1 on `1727417b9d3`; findings applied in `de58319835d`. Full detail in SHY-0272's log.**
+
+Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
