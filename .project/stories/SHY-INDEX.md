@@ -146,6 +146,9 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0322](SHY-0322-remove-gacha-age-verification-gate.md) | P1 | M | refactor | Remove the gacha age-verification gate, and keep cohort segregation exactly as it is | 📝 Draft | — | — |
 | [SHY-0323](SHY-0323-manifest-awareness-in-future-stories.md) | P1 | S | chore | Every future story has to say whether its UI is server-driven or native | 📝 Draft | — | — |
 | [SHY-0324](SHY-0324-fcm-registration-to-fid-migration.md) | P1 | L | refactor | Firebase deprecated the FCM token API we target push with, and the build already refuses to compile without it | 📝 Draft | — | blocks #1519 |
+| [SHY-0325](SHY-0325-github-diffs-run-their-guards-vs-workflow-only.md) | P2 | S | infra | A workflow-only change can either skip CI or run its guards, and right now it silently does the first | 📝 Draft | — | — |
+| [SHY-0326](SHY-0326-matrix-tests-fail-in-a-linked-worktree.md) | P2 | S | bug | Six gauntlet tests pass in one checkout and fail in another, on byte-identical files | 📝 Draft | — | — |
+| [SHY-0327](SHY-0327-triage-dependabot-alerts-against-what-ships.md) | P1 | S | chore | The "2 critical, 12 high" security banner is mostly the un-promoted main, and the fix is the promotion | 📝 Draft | — | — |
 
 ## Done
 
