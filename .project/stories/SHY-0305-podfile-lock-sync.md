@@ -311,3 +311,29 @@ that archives iOS successfully.
   mutants killed** across both rounds.
 
 Reviewed-up-to: 0f6f79253b8101b4d42a1ceff306dd941dbfc2e7
+
+- **2026-08-17 — the outstanding DoD item is now MET, with evidence.**
+  Deploy-To-Dev run `32000510087` against develop `5bcc9989291`:
+
+  ```
+  success  Install CocoaPods
+  success  Build, archive, and export iOS app
+  success  Upload to TestFlight
+  success  Ensure TestFlight internal-group auto-distribution
+  ```
+
+  iOS builds and ships again. Note `Install CocoaPods` **ran** rather than
+  being skipped — that is SHY-0305's cache-key fix behaving as designed, since
+  adding the Podfile to the key busted the stale Pods cache.
+
+  Timeline across the three attempts, which is the clearest statement of what
+  each fix bought:
+
+  | run | iOS outcome |
+  | --- | --- |
+  | `31964207898` | failed at 9 min — `Unable to resolve module dependency: 'FirebaseAppCheck'` |
+  | `31976285312` | failed at 57 min — `type 'AppCheckTokenProviderKt' has no member 'registerAppCheckBridge'` |
+  | `32000510087` | **success — archived and uploaded to TestFlight** |
+
+  Status stays `In Review`, not `Done`: Done means the release cut
+  ([[feedback-done-equals-release-cut]]).
