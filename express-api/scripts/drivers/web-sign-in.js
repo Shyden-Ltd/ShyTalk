@@ -46,16 +46,51 @@
  * two cannot disagree about who a persona is — only about the lookup key, which
  * is one split() here.
  */
+/**
+ * Build the lookup Map, REFUSING any duplicate key.
+ *
+ * A plain `Map.set` per persona would let a future "Alice Chen" beside
+ * "Alice Anderson" silently overwrite the entry, so every `Alice` step would
+ * sign in as whichever persona the registry listed last. The journey would then
+ * PASS while asserting against the wrong account — a green test proving the
+ * wrong thing, which is more expensive than a red one. First names are a
+ * stringly-typed key over a registry nobody edits with this collision in mind,
+ * so the collision has to be loud at build time rather than latent.
+ *
+ * Exported (and pure — array in, Map out) so the refusal is directly testable
+ * on a colliding array without touching the real registry.
+ *
+ * @param {Array<{id: string, displayName: string}>} personas
+ * @returns {Map<string, object>}
+ */
+function buildPersonaIndex(personas) {
+  const index = new Map();
+  const claimedBy = new Map();
+  const claim = (key, persona) => {
+    const existing = claimedBy.get(key);
+    if (existing && existing !== persona.id) {
+      throw new Error(
+        `persona lookup key "${key}" is claimed by BOTH ${existing} and ${persona.id} — ` +
+          `journeys naming "${key}" would sign in as whichever was registered last. ` +
+          `Give one of them a distinct first name in provision-test-personas.js.`,
+      );
+    }
+    claimedBy.set(key, persona.id);
+    index.set(key, persona);
+  };
+  for (const persona of personas) {
+    claim(persona.displayName.split(/\s+/)[0], persona);
+    claim(persona.id, persona);
+  }
+  return index;
+}
+
 let _personaByName = null;
 function resolvePersona(name) {
   if (!name) return null;
   if (!_personaByName) {
     const { personas } = require('../provision-test-personas');
-    _personaByName = new Map();
-    for (const persona of personas) {
-      _personaByName.set(persona.displayName.split(/\s+/)[0], persona);
-      _personaByName.set(persona.id, persona);
-    }
+    _personaByName = buildPersonaIndex(personas);
   }
   return _personaByName.get(name) || null;
 }
@@ -82,7 +117,10 @@ function makeWebSignIn({ pageFor, baseURL, label }) {
       return false;
     }
     try {
-      const page = await pageFor(name || 'default');
+      // `name` is guaranteed non-empty: resolvePersona returns null for a falsy
+      // name and we have already refused above. No `|| 'default'` fallback —
+      // it would only mislead a reader into thinking an empty name reaches here.
+      const page = await pageFor(name);
       await page.goto(`${baseURL.replace(/\/$/, '')}/roadmap.html`);
       // shytalkAuth is built asynchronously, after the Firebase SDK loads.
       await page.waitForFunction(
@@ -189,4 +227,4 @@ function makeWebSignInViaWebDriver({ navigateTo, executeAsync, baseURL, label })
   };
 }
 
-module.exports = { makeWebSignIn, makeWebSignInViaWebDriver, resolvePersona };
+module.exports = { makeWebSignIn, makeWebSignInViaWebDriver, resolvePersona, buildPersonaIndex };
