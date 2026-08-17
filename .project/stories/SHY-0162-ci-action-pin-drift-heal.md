@@ -1,6 +1,6 @@
 ---
 id: SHY-0162
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-07
 priority: P1
@@ -9,6 +9,7 @@ type: infra
 roadmap_ids: []
 public: false
 mvp: false
+released_in: v0.98.0
 ---
 
 # SHY-0162: Heal CI action-SHA pin drift + make the pin tests version-agnostic

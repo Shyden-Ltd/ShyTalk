@@ -5,6 +5,7 @@ import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -120,13 +121,63 @@ class DeviceRepositoryImplTest {
                         },
                     )
                 }
-            coEvery { workerApiClient.post(any(), any()) } returns response
+            coEvery { workerApiClient.getPublic(any()) } returns response
 
             val result = repo.checkBanStatus("device-1")
 
             assertTrue(result is Resource.Success)
             assertFalse((result as Resource.Success).data.isBanned)
         }
+
+    @Test
+    fun `checkBanStatus calls the UNAUTHENTICATED ban endpoint, never device-info`() =
+        runTest {
+            // SHY-0143 C1. `/api/device-info` is auth-gated, so with no Firebase
+            // session `getIdToken()` throws before the request is built and the
+            // repository's catch reports "not banned" — a banned user who was
+            // signed out reached the sign-in screen. The endpoint is the fix, so
+            // the endpoint is what must be pinned; asserting only the parsed
+            // result would stay green if this regressed to the authed POST.
+            val path = slot<String>()
+            coEvery { workerApiClient.getPublic(capture(path)) } returns
+                JSONObject().apply {
+                    put("success", true)
+                    put("banStatus", JSONObject().apply { put("isBanned", false) })
+                }
+
+            repo.checkBanStatus("device-1")
+
+            assertTrue(
+                "must read the unauthenticated ban endpoint, got ${path.captured}",
+                path.captured.startsWith("/api/ban-status"),
+            )
+            assertTrue("the deviceId must reach the server", path.captured.contains("deviceId=device-1"))
+            coVerify(exactly = 0) { workerApiClient.post(any(), any()) }
+        }
+
+    @Test
+    fun `checkBanStatus URL-encodes the deviceId into the query string`() {
+        // The existing endpoint test uses `device-1`, which needs no encoding —
+        // so deleting the encode call left it green. A `&` splits the parameter
+        // and a `#` truncates at the fragment, which would make the server
+        // ban-check a DIFFERENT deviceId than the caller's and still answer
+        // 200. `isValidDeviceId` cannot see that, because the mangled value it
+        // receives is well-formed. A silent evasion primitive.
+        val path = slot<String>()
+        coEvery { workerApiClient.getPublic(capture(path)) } returns
+            JSONObject().apply {
+                put("success", true)
+                put("banStatus", JSONObject().apply { put("isBanned", false) })
+            }
+
+        runTest { repo.checkBanStatus("dev&id=x#frag +é") }
+
+        val query = path.captured.substringAfter("deviceId=")
+        assertFalse("a raw & would split the parameter: ${path.captured}", query.contains("&"))
+        assertFalse("a raw # would truncate at the fragment: ${path.captured}", query.contains("#"))
+        assertFalse("a raw space is not valid in a query string: ${path.captured}", query.contains(" "))
+        assertTrue("the value must actually be encoded: ${path.captured}", query.contains("%"))
+    }
 
     @Test
     fun `checkBanStatus returns device ban`() =
@@ -144,7 +195,7 @@ class DeviceRepositoryImplTest {
                         },
                     )
                 }
-            coEvery { workerApiClient.post(any(), any()) } returns response
+            coEvery { workerApiClient.getPublic(any()) } returns response
 
             val result = repo.checkBanStatus("device-1")
 
@@ -172,7 +223,7 @@ class DeviceRepositoryImplTest {
                         },
                     )
                 }
-            coEvery { workerApiClient.post(any(), any()) } returns response
+            coEvery { workerApiClient.getPublic(any()) } returns response
 
             val result = repo.checkBanStatus("device-1")
 
@@ -186,7 +237,12 @@ class DeviceRepositoryImplTest {
     @Test
     fun `checkBanStatus returns not banned on API exception`() =
         runTest {
-            coEvery { workerApiClient.post(any(), any()) } throws RuntimeException("Network error")
+            // Was stubbing `post`, which checkBanStatus stopped calling when
+            // C1 moved it to the unauthenticated GET. `workerApiClient` is
+            // relaxed, so `getPublic` returned a stub object, the test went
+            // down the HAPPY path and asserted "not banned" — proving nothing
+            // about the fail-open catch on a brand-new unauthenticated endpoint.
+            coEvery { workerApiClient.getPublic(any()) } throws RuntimeException("Network error")
 
             val result = repo.checkBanStatus("device-1")
 

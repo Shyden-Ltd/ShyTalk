@@ -1,12 +1,13 @@
 ---
 id: SHY-0200
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-17
 priority: P1
 effort: S
 type: bug
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0200: Stop the WebKit-only Playwright admin-test timeout cascade (trace DOM-snapshot cost)

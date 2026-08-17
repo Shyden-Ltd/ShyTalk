@@ -1,6 +1,6 @@
 ---
 id: SHY-0207
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-18
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 ---
 
 # SHY-0207: iOS local device builds get a real version identity (kill the hardcoded 1.0 (1))

@@ -1,6 +1,6 @@
 ---
 id: SHY-0174
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-10
 priority: P2
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 epic: EPIC-0003
 mvp: false
+released_in: v0.98.0
 ---
 
 # SHY-0174: 100 Playwright tests assert nothing, and every one of them reports as passing

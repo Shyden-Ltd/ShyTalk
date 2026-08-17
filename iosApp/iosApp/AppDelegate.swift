@@ -1,5 +1,6 @@
 import UIKit
 import UserNotifications
+import FirebaseAppCheck
 import FirebaseCore
 import FirebaseMessaging
 import shared
@@ -22,7 +23,7 @@ import shared
 /// Also implements the `PushPermissionBridge` protocol so the shared
 /// `PushPermissionStore` can call back into Swift to open the iOS Settings
 /// app at the app-specific notifications page (closes the TODO(v2) below).
-final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate, PushTokenBridge, PushPermissionBridge {
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate, PushTokenBridge, PushPermissionBridge, AppCheckBridge {
     static let currentTokenKey = "shytalk.fcm.currentToken"
     static let lastRegisteredTokenKey = "shytalk.fcm.lastRegisteredToken"
 
@@ -32,6 +33,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         Messaging.messaging().delegate = self
+
+        // SHY-0300 — App Check, installed BEFORE anything can reach an
+        // unauthenticated endpoint. The cold-start ban gate is the first such
+        // call and it runs before routing, so a later install would leave the
+        // one request attestation exists to protect unattested on every launch.
+        //
+        // The provider factory must be set before FirebaseApp is used, which
+        // on iOS means before `FirebaseApp.configure()` in iOSApp.swift has
+        // taken effect for App Check purposes — setting it here, at the top of
+        // didFinishLaunching, is the earliest point that is still after
+        // configure().
+        installAppCheck()
+        AppCheckBridgeKt.registerAppCheckBridge(bridge: self)
 
         // Register self as the Kotlin-side bridge so PushTokenManager can read
         // the cached FCM token from NSUserDefaults via this AppDelegate.
@@ -430,5 +444,63 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return truncated.unicodeScalars
             .filter { $0.isASCII && $0.value >= 0x20 && $0.value < 0x7F }
             .reduce(into: "") { $0.append(Character($1)) }
+    }
+    // MARK: - App Check (SHY-0300)
+
+    /// Installs App Attest, or the debug provider on a simulator/debug build.
+    ///
+    /// `AppAttestProvider` requires a real device and iOS 14+; `DeviceCheck`
+    /// is the documented fallback below that, and Firebase's
+    /// `AppCheckProviderFactory` picks between them when given
+    /// `DeviceCheckProviderFactory`. We ask for App Attest explicitly and let
+    /// Firebase fall back, rather than branching on `#available`, because the
+    /// fallback also covers devices where App Attest is unsupported for
+    /// reasons the OS version does not express.
+    private func installAppCheck() {
+        #if DEBUG
+        // The debug provider mints a token for anyone holding the debug
+        // secret, so it is compiled out of release builds entirely rather
+        // than selected at runtime.
+        AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
+        NSLog("[AppCheck] installed DEBUG provider — local/dev only")
+        #else
+        AppCheck.setAppCheckProviderFactory(ShyTalkAppCheckProviderFactory())
+        NSLog("[AppCheck] installed App Attest provider")
+        #endif
+    }
+
+    /// `AppCheckBridge` — hand Kotlin a CACHED token, never a fresh one.
+    ///
+    /// `token(forcingRefresh: false)` returns what is already held and only
+    /// attests when there is nothing valid. Passing `true` would put an App
+    /// Attest round trip in front of the cold-start ban check, which is the
+    /// critical-path cost the story forbids.
+    ///
+    /// Every failure is a `nil`: App Attest is unsupported on older devices,
+    /// the device may be offline, and Apple has incidents. None of those is
+    /// evidence this install is illegitimate, and none should stop the user
+    /// opening the app — the SERVER decides what an unattested request means.
+    func currentToken(callback: @escaping (String?) -> Void) {
+        AppCheck.appCheck().token(forcingRefresh: false) { token, error in
+            if let error = error {
+                NSLog("[AppCheck] token unavailable: \(error.localizedDescription)")
+                callback(nil)
+                return
+            }
+            callback(token?.token)
+        }
+    }
+}
+
+/// App Attest with a DeviceCheck fallback, for iOS below 14 and for devices
+/// where App Attest is unavailable.
+private final class ShyTalkAppCheckProviderFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        if #available(iOS 14.0, *) {
+            if let provider = AppAttestProvider(app: app) {
+                return provider
+            }
+        }
+        return DeviceCheckProvider(app: app)
     }
 }

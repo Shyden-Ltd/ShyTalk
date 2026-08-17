@@ -3,6 +3,7 @@ package com.shyden.shytalk.data.repository
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -17,7 +18,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import org.json.JSONObject
 import java.io.IOException
-import java.net.URLEncoder
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -89,7 +89,7 @@ class StorageRepositoryImpl(
                     ?.getIdToken(false)
                     ?.await()
                     ?.token ?: return
-            val encodedKey = URLEncoder.encode(key, "UTF-8")
+            val encodedKey = encodeUrlQueryComponent(key)
             httpClient
                 .newCall(
                     Request

@@ -102,4 +102,195 @@ describe('iOS deploy archive timing instrumentation (SHY-0088)', () => {
       expect(occurrences).toBe(1);
     },
   );
+
+  // SHY-0195: the macOS runner image 20260630.0213.1 stopped inferring a
+  // destination from `-sdk iphoneos` alone — `xcodebuild … archive` died with
+  // "Found no destinations for the scheme 'iosApp' and action archive"
+  // (an EMPTY destination list) on every dev deploy from 2026-07-11. The
+  // explicit generic device destination is the canonical, version-proof form;
+  // this pins it on the archive invocation of BOTH deploy workflows so the
+  // prod workflow's identical latent copy can never regress back either.
+  test.each(WORKFLOWS)(
+    "%s archives with an explicit -destination 'generic/platform=iOS'",
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      const archive = archiveInvocation(src);
+      expect(archive).not.toBeNull();
+      expect(archive).toMatch(/-destination ['"]generic\/platform=iOS['"]/);
+    },
+  );
+
+  test.each(WORKFLOWS)(
+    '%s does not leak -destination onto the -exportArchive call (review SHY-0195 Imp #1)',
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      // Mirror of the -showBuildTimingSummary exclusivity guard above: the
+      // destination belongs to the archive compile only; the export step
+      // operates on the finished .xcarchive and takes no destination.
+      const exportIdx = src.indexOf('-exportArchive');
+      expect(exportIdx).toBeGreaterThan(-1);
+      expect(src.slice(exportIdx, exportIdx + 500)).not.toMatch(/-destination\b/);
+    },
+  );
+
+  // SHY-0195 root cause #2 (verification run 29478170583): runner image
+  // 20260630.0213.1 ships the default Xcode WITHOUT the iOS platform runtime
+  // (Apple split platform runtimes out of the Xcode bundle) — the archive
+  // then dies with "iOS 26.0 is not installed" (exit 70) even with the
+  // explicit generic destination; the original "Found no destinations" empty
+  // list was the same gap pre-destination. The workflow must assert its own
+  // dependency: `sudo xcodebuild -downloadPlatform iOS` BEFORE the archive
+  // invocation, so the pipeline is image-proof instead of trusting what the
+  // runner pre-installs. Idempotency verified empirically (2026-07-16, review
+  // finding #1): on a host with the platform already installed the command
+  // exits 0 in <1s — it does NOT share the Metal-Toolchain -importComponent
+  // exit-70 "already installed" failure mode. Line-order pin, matching the
+  // line-based style above.
+  test.each(WORKFLOWS)(
+    '%s installs the iOS platform runtime BEFORE the archive invocation, in the same job',
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      const lines = src.split('\n');
+      const installLine = lines.findIndex((l) => /sudo xcodebuild -downloadPlatform iOS\b/.test(l));
+      const archiveActionLine = lines.findIndex((l) => l.trim() === 'archive');
+      expect(installLine).toBeGreaterThan(-1);
+      expect(archiveActionLine).toBeGreaterThan(-1);
+      // Walk back from the action line to its owning xcodebuild call (same
+      // isolation archiveInvocation uses) so the order pin compares against
+      // the REAL archive invocation, not merely any line spelling `archive`.
+      let archiveStart = archiveActionLine;
+      while (archiveStart >= 0 && !/^\s*xcodebuild\b/.test(lines[archiveStart])) archiveStart -= 1;
+      expect(archiveStart).toBeGreaterThan(-1);
+      expect(installLine).toBeLessThan(archiveStart);
+      // No job boundary in the span: `runs-on:` only ever appears at a job's
+      // top level, so its absence proves install + archive live in the SAME
+      // job (an install in an earlier job would leave the archive job on a
+      // fresh runner without the platform). Per-line test, not an /m span
+      // regex, per this file's slow-regex convention.
+      const between = lines.slice(installLine + 1, archiveStart);
+      expect(between.some((l) => /^\s*runs-on:/.test(l))).toBe(false);
+    },
+  );
+
+  // Hang-mitigation steps pin their own cap (ios-konan-cache-no-hang.test.js
+  // convention): the install step exists to bound a potentially-slow network
+  // fetch, so losing its timeout-minutes would only ever resurface as a real
+  // multi-hour CI hang.
+  test.each(WORKFLOWS)('%s bounds the platform-install step with timeout-minutes: 20', (name) => {
+    const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+    const lines = src.split('\n');
+    const installLine = lines.findIndex((l) => /sudo xcodebuild -downloadPlatform iOS\b/.test(l));
+    expect(installLine).toBeGreaterThan(-1);
+    // Scope to the install step's own block (walk to its `- name:` header
+    // and to the next step header) so the pin can't drift onto a sibling
+    // step's timeout.
+    let start = installLine;
+    while (start >= 0 && !/^\s*- name:/.test(lines[start])) start -= 1;
+    let end = installLine + 1;
+    while (end < lines.length && !/^\s*- name:/.test(lines[end])) end += 1;
+    expect(start).toBeGreaterThan(-1);
+    expect(lines.slice(start, end).join('\n')).toMatch(/timeout-minutes:\s*20\b/);
+  });
+
+  // The install step's 20-min cap stacks with the archive step's 50-min cap
+  // plus ~35-55 min of other legitimate job overhead (see the job's tuning
+  // comment): a slow-but-not-hung worst case can exceed the old 100-min job
+  // envelope, which would fire the OPAQUE outer job timeout the step-level
+  // fuses exist to pre-empt. ≥120 keeps the step caps as the first fuse.
+  const ARCHIVE_JOBS = { 'deploy-dev.yml': 'distribute-ios', 'deploy-prod.yml': 'deploy-ios-prod' };
+  test.each(WORKFLOWS)('%s archive job envelope is ≥ 120 min so step fuses fire first', (name) => {
+    const src = fs.readFileSync(workflowPath(name), 'utf8');
+    const lines = src.split('\n');
+    const jobStart = lines.findIndex((l) => new RegExp(`^ {2}${ARCHIVE_JOBS[name]}:\\s*$`).test(l));
+    expect(jobStart).toBeGreaterThan(-1);
+    let jobEnd = jobStart + 1;
+    while (jobEnd < lines.length && !/^ {2}[\w-]+:/.test(lines[jobEnd])) jobEnd += 1;
+    const job = lines.slice(jobStart, jobEnd).join('\n');
+    const match = job.match(/^ {4}timeout-minutes:[ \t]*(\d+)/m);
+    expect(match).not.toBeNull();
+    expect(parseInt(match[1], 10)).toBeGreaterThanOrEqual(120);
+  });
+});
+
+// ── SHY-0195 root cause #3: the Xcode SELECTION picked the oldest ──────────
+//
+// Verification run 31832143087 (2026-08-14) failed with the SAME
+// "iOS 26.0 is not installed" (exit 70) that root cause #2 was meant to fix,
+// even with the platform-runtime ensure step in place. The ensure step ran,
+// exited 0, and printed "iOS is already downloaded as universal … iOS 26.5" —
+// a no-op, because AN iOS platform was present. It just wasn't the one the
+// selected Xcode needs.
+//
+// The selection is why. `macos-latest` is now `macos-26-arm64` image
+// 20260728.0273.1, which ships SEVEN Xcode 26.x builds: 26.6 (default), 26.5,
+// 26.4.1, 26.3, 26.2, 26.1.1, 26.0.1. `ls -d /Applications/Xcode_26*.app |
+// head -1` sorts LEXICOGRAPHICALLY, so "26.0.1" wins over "26.5" ('0' < '5')
+// and the job ran on the OLDEST Xcode on the box. Per the image manifest,
+// iOS 26.0 belongs to Xcode 26.0.1 while the pre-installed device platform is
+// iphoneos26.5 (Xcode 26.5/26.6) — so the one Xcode we picked is the one whose
+// platform is absent.
+//
+// This is [[feedback-no-string-ordering-for-security-decisions]] in a new
+// costume: a version compared as a string. `sort -V | tail -1` picks 26.6.
+const SETUP_IOS_SIGNING = path.join(
+  __dirname,
+  '../../../.github/actions/setup-ios-signing/action.yml',
+);
+
+describe('setup-ios-signing — Xcode selection (SHY-0195 root cause #3)', () => {
+  test('selects the NEWEST matching Xcode by version, never the lexicographically first', () => {
+    const src = stripComments(fs.readFileSync(SETUP_IOS_SIGNING, 'utf8'));
+    const line = src.split('\n').find((l) => /XCODE=\$\(/.test(l));
+    expect(line).toBeDefined();
+    expect(line).toMatch(/sort -V/);
+    expect(line).toMatch(/tail -1/);
+    // The specific defect: a bare `head -1` over an lexicographic listing.
+    expect(line).not.toMatch(/head -1/);
+  });
+
+  // Behavioural, not textual: runs the ACTUAL pipeline from the action over a
+  // fixture list. `pipeline` is spliced out of the repo's own action.yml (not
+  // user input) and the fixture is passed via $INPUT rather than interpolated,
+  // so nothing untrusted reaches the shell.
+  const runSelection = (versions) => {
+    const src = stripComments(fs.readFileSync(SETUP_IOS_SIGNING, 'utf8'));
+    const line = src.split('\n').find((l) => /XCODE=\$\(/.test(l));
+    expect(line).toBeDefined();
+    // Reuse the action's own sort/select tail, so a future change to the
+    // ordering strategy is exercised here rather than merely described.
+    // indexOf/slice rather than a regex: `^.*?\|` is a lazy scan to an
+    // alternation char and trips sonarjs/slow-regex, the same backtracking
+    // hazard this file already avoids in archiveInvocation().
+    const firstPipe = line.indexOf('|');
+    const orTrue = line.lastIndexOf('|| true');
+    expect(firstPipe).toBeGreaterThan(-1);
+    const pipeline = line.slice(firstPipe + 1, orTrue > firstPipe ? orTrue : undefined).trim();
+    return require('child_process')
+      .execSync(`printf '%s\\n' "$INPUT" | ${pipeline}`, {
+        env: {
+          ...process.env,
+          INPUT: versions.map((v) => `/Applications/Xcode_${v}.app`).join('\n'),
+        },
+        shell: '/bin/bash',
+      })
+      .toString()
+      .trim();
+  };
+
+  test('picks 26.6 out of the real macos-26-arm64 Xcode list', () => {
+    expect(runSelection(['26.0.1', '26.1.1', '26.2', '26.3', '26.4.1', '26.5', '26.6'])).toBe(
+      '/Applications/Xcode_26.6.app',
+    );
+  });
+
+  test('orders by VERSION, not text — a two-digit minor must still sort last', () => {
+    // The list above cannot tell `sort -V` from a plain lexicographic `sort`:
+    // text-ordering happens to put 26.6 last there too, so that mutant passes
+    // it (verified — 1 failed / 1 passed). This case discriminates, because
+    // "26.10" sorts BEFORE "26.2" as text ('1' < '2') and AFTER it as a
+    // version. Without it the behavioural test proves nothing about ordering,
+    // and a lexicographic sort would ship — breaking on the first two-digit
+    // minor Apple publishes.
+    expect(runSelection(['26.2', '26.6', '26.10'])).toBe('/Applications/Xcode_26.10.app');
+  });
 });

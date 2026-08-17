@@ -1,6 +1,6 @@
 ---
 id: SHY-0060
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -10,6 +10,7 @@ roadmap_ids: []
 phase: Safety & Compliance
 public: false
 pr:
+released_in: v0.98.0
 mvp: true
 ---
 

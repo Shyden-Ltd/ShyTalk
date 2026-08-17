@@ -5,7 +5,13 @@ package com.shyden.shytalk.core.util
  * Uses an in-memory map (not persistent).
  */
 actual class SecureStorage {
-    private val store = mutableMapOf<String, String>()
+    // ConcurrentHashMap, not mutableMapOf. SHY-0143's concurrency tests drive
+    // this from several threads, and the contract test's KDoc claims it has
+    // "the same read/write/remove semantics" as Android's synchronized
+    // SharedPreferences and the thread-safe iOS Keychain. A plain LinkedHashMap
+    // made that claim false — the tests could flake on a HashMap data race and
+    // could not prove anything about either shipping actual.
+    private val store = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     actual fun getString(key: String): String? = store[key]
 

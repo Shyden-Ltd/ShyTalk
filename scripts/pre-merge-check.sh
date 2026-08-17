@@ -67,6 +67,26 @@ while IFS= read -r line; do
     FILINGS=$((FILINGS + 1))
     continue
   fi
+  # Release-bookkeeping exemption (SHY-0297). Flipping a released story to Done
+  # is the ONE legitimate way a Done story reaches a PR: the lifecycle says a
+  # story becomes Done when a release carries it, so the PR that records
+  # `released_in:` necessarily contains Done stories. Without this, the gate
+  # refuses the very bookkeeping the lifecycle demands — and refuses it alone,
+  # because CI does NOT agree: check-pr-story-status.js accepts Done/Cancelled,
+  # so the local gate was blocking what the required PR Gate had already passed.
+  #
+  # Deliberately narrow. The story's ENTIRE diff must be those two frontmatter
+  # lines; one other changed line (a body edit, an AC, a Notes entry) and this
+  # is not bookkeeping, so the original rule applies and a Done story refuses.
+  if [ "$code" = "M" ] && [ "$status" = "Done" ]; then
+    other=$(git diff "${BASE_REF}...HEAD" -- "$story" |
+      grep -E '^[+-]' | grep -vE '^(\+\+\+|---)' |
+      grep -cvE '^[+-](status|released_in):' || true)
+    if [ "${other:-1}" -eq 0 ]; then
+      printf '  release bookkeeping: %s → Done (status + released_in only)\n' "$story" >&2
+      continue
+    fi
+  fi
   [ "$status" = "In Review" ] || fail "$story status is \"$status\" — must be \"In Review\" before merge"
   rs=$(grep -m1 '^Reviewed-up-to:' "$story" | sed 's/^Reviewed-up-to:[[:space:]]*//' | tr -d '\r')
   [ -n "$rs" ] || fail "$story has no 'Reviewed-up-to: <sha>' marker in its Notes — record the reviewed commit then re-run"
