@@ -1,6 +1,6 @@
 ---
 id: SHY-0272
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-04
 priority: P0
@@ -216,3 +216,5 @@ button enabled, content-description "Mute", tap registered, no API call, no stat
 - **2026-08-04 01:2x BST** — Local end-to-end blocked by LiveKit `Broken pipe` over the USB
   tunnel (`isVoiceUnavailable` correctly disables the control). Environment, not product;
   recorded in Out of Scope and deferred to the dev walk.
+
+Reviewed-up-to: 5ba491a87deba3322f41ac354211ca179bf7f3c3

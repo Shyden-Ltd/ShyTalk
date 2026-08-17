@@ -1,6 +1,6 @@
 ---
 id: SHY-0275
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-04
 priority: P1
@@ -228,3 +228,5 @@ first can happen without the second being checked.
   then caught a stand-in `Bundle` added for a test; rather than whitelist it, resolution now
   takes the raw plist value and is tested with real strings.
   `Reviewed-up-to: ea75d9d6175`
+
+Reviewed-up-to: 5ba491a87deba3322f41ac354211ca179bf7f3c3

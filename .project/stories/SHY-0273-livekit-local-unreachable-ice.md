@@ -1,6 +1,6 @@
 ---
 id: SHY-0273
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-04
 priority: P1
@@ -217,3 +217,5 @@ environment that no longer exists), fixed here with 6 added pins, all mutation-v
   and `setMicrophoneEnabled` is called before join completes so the first calls are dropped
   (`called but not joined, ignoring`). Voice works regardless. Worth its own story if room-entry
   latency is ever investigated.
+
+Reviewed-up-to: 5ba491a87deba3322f41ac354211ca179bf7f3c3
