@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { publishAuthIdentity } from './helpers/auth-identity';
+import { injectAuthState } from './helpers/roadmap-auth';
 
 /**
  * Shared header component tests.
@@ -40,7 +40,8 @@ test.describe('Shared Header — Presence on all pages', () => {
       await p.goto(page.path);
       const logo = p.locator('[data-testid="header-logo"]');
       await expect(logo).toBeVisible({ timeout: 10_000 });
-      await expect.poll(async () => await logo.getAttribute('href')).toBe('/');
+      const href = await logo.getAttribute('href');
+      expect(href).toBe('/');
     });
   }
 });
@@ -64,13 +65,9 @@ test.describe('Shared Header — Unauthenticated state', () => {
   });
 
   test('no user avatar or name shown when not authenticated', async ({ page }) => {
-    // The header settles into its unauthenticated state by rendering Sign In.
-    // That happens on BOTH bootstrap paths in roadmap-auth.js — the normal
-    // onAuthStateChanged(null), and the config-never-loads fallback — so it is
-    // the honest anchor. The old 3s sleep was tuned to that fallback's timer
-    // and lost the race on slower runners (SHY-0245).
-    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible();
-    await expect(page.locator('[data-testid="header-user-info"]')).toHaveCount(0);
+    await page.waitForTimeout(3_000);
+    const userInfo = page.locator('[data-testid="header-user-info"]');
+    expect(await userInfo.count()).toBe(0);
   });
 });
 
@@ -97,25 +94,9 @@ test.describe('Shared Header — Sign In fallback on pages without login modal',
 test.describe('Shared Header — Authenticated state', () => {
   test('shows user display name when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    // Simulate authenticated state
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser', profilePhotoUrl: null },
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: {
-            user: { uid: 'test-123', displayName: 'TestUser' },
-            profile: { uniqueId: 1001, displayName: 'TestUser' },
-          },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'test-123', displayName: 'TestUser' },
+      profile: { uniqueId: 1001, displayName: 'TestUser', profilePhotoUrl: null },
     });
 
     const userInfo = page.locator('[data-testid="header-user-info"]');
@@ -125,23 +106,16 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('shows sign out option when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    await publishAuthIdentity(page, {
-      uid: 'test-123',
-      displayName: 'TestUser',
+    await injectAuthState(page, {
+      currentUser: { uid: 'test-123', displayName: 'TestUser' },
       profile: { uniqueId: 1001, displayName: 'TestUser' },
     });
-    await page.evaluate(() => {
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: {
-            user: { uid: 'test-123' },
-            profile: { uniqueId: 1001, displayName: 'TestUser' },
-          },
-        }),
-      );
-    });
 
-    // Click user info area to open dropdown
+    // Click user info area to open dropdown. This is the click that hung for
+    // the full 20s budget on CI — `render()` rebuilds the whole header, so
+    // the page's own sign-in resolution landing mid-click detached the
+    // element out from under Playwright: "element was detached from the DOM,
+    // retrying", forever. Injecting after that resolution removes the race.
     const userInfo = page.locator('[data-testid="header-user-info"]');
     await userInfo.waitFor({ timeout: 5_000 });
     await userInfo.click();
@@ -152,33 +126,18 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('Sign In button hidden when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    // shared-header.js re-renders on every `shytalk-auth-changed`, so a late
-    // onAuthStateChanged(null) landing AFTER the injection restores the Sign In
-    // button. Waiting for the signed-out render (as this test used to) is NOT
-    // enough — it proves the header rendered once, not that the app's
-    // updateGlobalAuth() has already run, so a later one still clobbers. That
-    // is why this kept failing on webkit/mobile-safari in CI. publishAuthIdentity
-    // pins the identity across reassignment, so ordering stops mattering.
-    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible();
-    await publishAuthIdentity(page, {
-      uid: 'test-123',
-      displayName: 'TestUser',
+    await injectAuthState(page, {
+      currentUser: { uid: 'test-123', displayName: 'TestUser' },
       profile: { uniqueId: 1001, displayName: 'TestUser' },
     });
-    await page.evaluate(() => {
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: {
-            user: { uid: 'test-123' },
-            profile: { uniqueId: 1001, displayName: 'TestUser' },
-          },
-        }),
-      );
-    });
 
-    // Retrying assertion: the header re-renders asynchronously off the event,
-    // so this waits for the button to GO — it does not snapshot once.
-    await expect(page.locator('[data-testid="header-signin-btn"]')).toHaveCount(0);
+    // The 1000ms sleep that used to sit here did the opposite of what it was
+    // for: it held the test open long enough for the page's own sign-in
+    // resolution to land and put the Sign In button BACK, so the wait
+    // guaranteed the failure it was meant to prevent. `toHaveCount` retries
+    // against a settled page instead of betting on a duration.
+    const signInBtn = page.locator('[data-testid="header-signin-btn"]');
+    await expect(signInBtn).toHaveCount(0);
   });
 });
 
@@ -193,23 +152,10 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     page,
   }) => {
     await page.goto('/roadmap.html');
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'race-789',
-          displayName: 'RacingUser',
-          photoURL: null,
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        // The exact "Firebase auth resolved, ShyTalk profile fetch in-flight" state.
-        profile: null,
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'race-789', displayName: 'RacingUser' }, profile: null },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'race-789', displayName: 'RacingUser', photoURL: null },
+      // The exact "Firebase auth resolved, ShyTalk profile fetch in-flight" state.
+      profile: null,
     });
 
     // The header must show user info (falling back to currentUser.displayName
@@ -231,22 +177,9 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     // Pins the asymmetry between `profile === null` (loading) and
     // `profile === false` (resolved, no account).
     await page.goto('/roadmap.html');
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'noaccount-001',
-          displayName: 'NoAccountUser',
-          photoURL: null,
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: false,
-      };
-      document.dispatchEvent(
-        new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'noaccount-001' }, profile: false },
-        }),
-      );
+    await injectAuthState(page, {
+      currentUser: { uid: 'noaccount-001', displayName: 'NoAccountUser', photoURL: null },
+      profile: false,
     });
 
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
@@ -283,13 +216,15 @@ test.describe('Shared Header — Accessibility', () => {
     await page.goto('/roadmap.html');
     const header = page.locator('[data-testid="shared-header"]');
     await expect(header).toBeVisible({ timeout: 10_000 });
-    await expect.poll(async () => await header.getAttribute('role')).toBe('banner');
+    const role = await header.getAttribute('role');
+    expect(role).toBe('banner');
   });
 
   test('logo has descriptive text', async ({ page }) => {
     await page.goto('/roadmap.html');
     const logo = page.locator('[data-testid="header-logo"]');
     await expect(logo).toBeVisible({ timeout: 10_000 });
-    await expect.poll(async () => (await logo.textContent())?.toLowerCase()).toContain('shytalk');
+    const text = await logo.textContent();
+    expect(text?.toLowerCase()).toContain('shytalk');
   });
 });

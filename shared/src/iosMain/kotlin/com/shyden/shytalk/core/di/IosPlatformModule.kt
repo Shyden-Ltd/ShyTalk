@@ -66,6 +66,7 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
@@ -140,7 +141,7 @@ val iosPlatformModule =
         single { CryptoKeyPair() }
 
         // Repositories
-        single<AuthRepository> { IosAuthRepositoryImpl(get()) }
+        single<AuthRepository> { IosAuthRepositoryImpl(get(), get<SessionCache>(), get<IosApiClient>()) }
         single<UserRepository> { IosUserRepositoryImpl(get(), get()) }
         single<RoomRepository> { IosRoomRepositoryImpl(get(), get()) }
         single<MessageRepository> { IosMessageRepositoryImpl(get()) }
@@ -167,6 +168,8 @@ val iosPlatformModule =
         single<BiometricRepository> { IosBiometricRepositoryImpl(get()) }
         single { SecureStorage() }
         single<AppLockRepository> { AppLockRepositoryImpl(get<SecureStorage>()) }
+        // SHY-0143 — shares the App-Lock's Keychain storage, under its own keys.
+        single { SessionCache(get<SecureStorage>()) }
 
         // Services
         single<TokenService> { IosTokenServiceImpl(get()) }

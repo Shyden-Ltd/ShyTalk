@@ -1,6 +1,6 @@
 ---
 id: SHY-0125
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-17
 priority: P0
@@ -9,6 +9,7 @@ type: refactor
 roadmap_ids: []
 epic: EPIC-0003
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1469
+released_in: v0.98.0
 mvp: false
 ---
 

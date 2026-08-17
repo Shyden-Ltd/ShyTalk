@@ -17,6 +17,13 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib.sh"
+# shellcheck source=../lib/runner-pids.sh
+# `|| die` is load-bearing: this script runs under `set -uo pipefail` WITHOUT
+# -e, so a failed source would only print a warning and carry on. `runner_pids`
+# would then be an unknown command producing empty output, and cmd_stop's
+# verification would report every run clean forever — the exact reassuring lie
+# SHY-0236 removed. Fail loudly instead.
+source "$HERE/../lib/runner-pids.sh" || die "cannot load $HERE/../lib/runner-pids.sh"
 require_repo
 
 SECRETS_ENV="${HOME}/.shytalk/dev-personas.env"
@@ -104,41 +111,7 @@ cmd_launch() {
   # bundle id (pbxproj never applies the .local suffix).
   # dev: explicit RTDB URL (region-specific) or every cell dies at init.
   local env_prefix=""
-  # PERSONAS_PASSWORD=localdev123 is FORCED for local, matching what
-  # 20-reseed.sh seeds with (the .local app flavour bakes that value in).
-  # Without it, the 32-char DEV password exported by `set -a; source
-  # dev-personas.env` above wins, personas are seeded with one password and
-  # signed in with another, and EVERY persona sign-in returns INVALID_PASSWORD.
-  # Seen 2026-07-31: both device cells stalled at 0 scenarios while the phone
-  # thrashed on the persona picker. Auth wiring, not product debt.
-  [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
-  # Scope the matrix to the hardware actually plugged in. Devices come and go;
-  # an absent one is a normal operating condition, not a reason to spend
-  # driver-init time on cells that cannot possibly work. All three are unset by
-  # default, so this block is inert unless the operator asks for narrowing.
-  #
-  # EVERY scoping variable MUST be listed here. The runner is forked detached
-  # through `nohup bash -c "<env_prefix>node ..."`, so anything not named in the
-  # prefix simply does not reach it — `GAUNTLET_DEVICES=mac,android` would look
-  # like it worked and the iPhone cells would run anyway. A silently-ignored
-  # scope is worse than a rejected one.
-  #
-  #   GAUNTLET_DEVICES  mac,android,iphone — what is plugged in. The honest knob:
-  #                     "the iPhone is out of action" is one word here, versus
-  #                     seven browser slugs, where a typo runs too little.
-  #   GAUNTLET_BROWSERS the pre-cell knob, still honoured. Scopes the BROWSER
-  #                     side only — an app cell has no browser and survives it.
-  #   GAUNTLET_CELLS    exact cell slugs, for a targeted re-run.
-  #   GAUNTLET_PHASE_GATE  report (default) | stop — see scripts/matrix-phases.js.
-  # Explicit `if`, not `[ … ] && …`: as the last statement in a loop body the
-  # `&&` form leaves $? = 1 whenever the variable is unset, which under a future
-  # `set -e` would end the script silently right before the dispatch.
-  for scope_var in GAUNTLET_DEVICES GAUNTLET_BROWSERS GAUNTLET_CELLS GAUNTLET_PHASE_GATE; do
-    scope_val="$(eval "printf '%s' \"\${${scope_var}:-}\"")"
-    if [ -n "$scope_val" ]; then
-      env_prefix="${env_prefix}${scope_var}='${scope_val}' "
-    fi
-  done
+  [ "$target" = "local" ] && env_prefix="NODE_ENV=local WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------
@@ -156,7 +129,6 @@ cmd_launch() {
         --cell-timeout=7200 \
         --retry=1 \
         --bail=3 \
-        --bail-scope=resource \
         && touch '$tmpdir/DONE' \
         || touch '$tmpdir/FAIL'
     " >"$logf" 2>&1 </dev/null &
@@ -165,47 +137,9 @@ cmd_launch() {
   )
   ln -sfn "$tmpdir" "$GAUNTLET_TMP/matrix-latest"
 
-  # --- progress dashboard ------------------------------------------------------
-  # Operator 2026-07-31: "i have no visibility of what it's done and still to do".
-  # A `tail -f` shows what HAS happened; over a multi-hour sequential matrix most
-  # of the answer is what has NOT happened yet.
-  #
-  # Strictly read-only and strictly optional: it parses this run dir and never
-  # writes to it, never signals the runner, never touches a device. Every failure
-  # path here is swallowed — the viewer must never be able to take down the run
-  # it exists to watch.
-  local ui_port="${GAUNTLET_UI_PORT:-4310}"
-  if [ "${GAUNTLET_UI:-1}" = "1" ]; then
-    # SUPERVISED: the viewer respawns if it dies, so a crash self-heals instead
-    # of leaving the operator on "progress server unreachable" for the rest of a
-    # multi-hour run. Stops on its own once the run reaches a sentinel, and the
-    # loop is capped so a permanently-broken viewer cannot spin forever.
-    (
-      cd "$REPO/express-api" || exit 0
-      nohup bash -c '
-        run_dir="$1"; port="$2"; first=1; restarts=0
-        while [ "$restarts" -lt 200 ]; do
-          [ -f "$run_dir/DONE" ] || [ -f "$run_dir/FAIL" ] && [ "$first" = "0" ] && break
-          if [ "$first" = "1" ]; then
-            node scripts/gauntlet/progress-server.js --run-dir "$run_dir" --port "$port" --open
-            first=0
-          else
-            node scripts/gauntlet/progress-server.js --run-dir "$run_dir" --port "$port"
-          fi
-          restarts=$((restarts + 1))
-          echo "[gauntlet-ui] exited; respawning (#$restarts)"
-          sleep 2
-        done
-      ' _ "$tmpdir" "$ui_port" >"$tmpdir/ui.log" 2>&1 </dev/null &
-      echo $! >"$tmpdir/ui.pid"
-      disown
-    ) || true
-  fi
-
   cat <<EOF
 Launched detached. run-id: $run_id
 PID:        $(cat "$pid_file")
-Dashboard:  http://127.0.0.1:$ui_port   ← live progress (opens automatically)
 Log:        $logf
 Report dir: $report_dir
 Status:     bash $HERE/50-matrix.sh status $run_id
@@ -240,14 +174,14 @@ cmd_stop() {
   [ -f "$dir/pid" ] || die "no pid file in $dir"
   local pid; pid="$(cat "$dir/pid" 2>/dev/null)"
   local run_id; run_id="$(basename "$dir")"
-  local self=$$ p targets serial leftover by_runid
+  local self=$$ pass p targets serial by_runid orphans mine others
 
   # SHY-0236 permanent fix (matrix-orphans / hung-uiautomator thrash): the old
   # `kill $pid` killed ONLY the nohup wrapper, orphaning the manual-qa-runner +
   # its --parallel cell runners — which keep driving the phone forever. Kill the
   # WHOLE process tree AND every runner still tagged with THIS run dir, looping
   # until quiet (a runner can respawn a child between passes). Never our shell.
-  for _ in 1 2 3; do
+  for pass in 1 2 3; do
     # Re-derive the run-scoped match set fresh each pass (a runner can respawn a
     # child between passes). Only treat the file-cached $pid as a tree root if it
     # INDEPENDENTLY still belongs to THIS run — i.e. its argv still carries $run_id.
@@ -255,9 +189,20 @@ cmd_stop() {
     # unrelated live process, and recursively kill -9'ing that stale pid's subtree
     # would take down an innocent tree. The run_id-scoped pgrep is the identity
     # cross-check (kill-servers-by-port-not-pkill / pkill-hits-your-own-waiters).
+    #
+    # Two sources, deliberately different (SHY-0304):
+    #  - the TREE GATE stays a plain run-id match. The recorded pid is the
+    #    `bash -c` wrapper, not a node process, so narrowing this predicate to
+    #    the runner's identity would fail the gate and stop the whole
+    #    descendant tree from ever being walked.
+    #  - the ORPHAN additions require the runner's identity. Anything else
+    #    carrying the run id is an OBSERVER, not a participant: the run's log
+    #    path contains the run id, so `tail -f .../matrix-<id>/log` was on the
+    #    kill list and was being SIGKILLed out from under the operator.
     by_runid="$(pgrep -f "$run_id" 2>/dev/null || true)"
+    orphans="$(runner_pids "$run_id")"
     targets="$( { [ -n "$pid" ] && printf '%s\n' "$by_runid" | grep -qxF "$pid" && _pid_tree "$pid"; \
-                  printf '%s\n' "$by_runid"; } \
+                  printf '%s\n' "$orphans"; } \
                  | sort -u | grep -vw "$self" || true)"
     [ -n "$targets" ] || break
     for p in $targets; do kill -TERM "$p" 2>/dev/null || true; done
@@ -274,14 +219,29 @@ cmd_stop() {
     adb -s "$serial" shell 'pkill -f uiautomator; pkill -f androidx.test' >/dev/null 2>&1 || true
   done
 
-  # Honest verification — never the old reassuring "stopped pid N" lie.
-  leftover="$(pgrep -fl manual-qa-runner 2>/dev/null | grep -v ' grep' | grep -vw "$self" || true)"
-  if [ -n "$leftover" ]; then
-    warn "stop: runner(s) STILL alive after 3 kill passes — manual check needed:"
-    printf '%s\n' "$leftover" >&2
+  # Honest verification — never the old reassuring "stopped pid N" lie, but
+  # scoped to the run we were asked about (SHY-0304). The old check was
+  # machine-wide, so `stop A` returned 1 because run B was alive: the run it
+  # was asked about HAD stopped and the message said it had not. It also
+  # matched anything merely naming the runner, which is why running the
+  # gauntlet's own test suite made this fail — Jest, npm and the invoking
+  # shell all carry `manual-qa-runner` when they run its tests.
+  mine="$(runner_pids "$run_id")"
+  if [ -n "$mine" ]; then
+    warn "stop: run $run_id still has runner(s) STILL alive after 3 kill passes — manual check needed:"
+    runner_ps_lines "$mine" >&2
     return 1
   fi
-  echo "stopped run $run_id — full process tree killed, devices force-stopped, uiautomator cleared; 0 runners remain"
+  echo "stopped run $run_id — full process tree killed, devices force-stopped, uiautomator cleared; 0 runners remain for this run"
+
+  # Other runs are reported, never charged to this one. Dropping the signal
+  # entirely would trade a false alarm for a blind spot: a runner from another
+  # run is still driving the phone, and the operator needs to know.
+  others="$(runner_pids)"
+  if [ -n "$others" ]; then
+    warn "note: $(printf '%s\n' "$others" | grep -c .) runner(s) from OTHER run(s) still live — not this run, not stopped by it:"
+    runner_ps_lines "$others" >&2
+  fi
 }
 
 cmd_results() {

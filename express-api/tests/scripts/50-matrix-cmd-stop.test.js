@@ -25,40 +25,25 @@ const path = require('node:path');
 const { spawnSync, spawn } = require('node:child_process');
 
 const MATRIX = path.resolve(__dirname, '../../scripts/gauntlet/50-matrix.sh');
+const RUNNER = path.resolve(__dirname, '../../scripts/manual-qa-runner.js');
 const NO_ADB_PATH = '/usr/bin:/bin'; // excludes /opt/homebrew/bin/adb — see header
 
-/**
- * A PID the OS can never allocate.
- *
- * This used to spawn a subshell, take its pid and let it exit — a pid that is
- * dead *at that instant*. A pid is a reusable integer, not a durable identity:
- * macOS wraps at 99999 and this machine sits near 97000 during a full run, so a
- * just-freed number gets handed back out within seconds. cmd_stop's run_id
- * scoping means a recycled pid does not actually break these tests (verified by
- * mutation — forcing a live pid here still passes), so this is hygiene rather
- * than a fix: the helper's name promises "dead" and should not depend on the
- * kernel's allocation pointer to keep that promise.
- *
- * A value above the platform ceiling is never issued: `pid_max` on Linux is
- * exclusive, and macOS never goes above 99999.
- */
-function unallocatablePid() {
-  let pid = 100_000; // macOS PID_MAX is 99999
-  try {
-    const max = parseInt(fs.readFileSync('/proc/sys/kernel/pid_max', 'utf8').trim(), 10);
-    if (Number.isFinite(max)) pid = max;
-  } catch {
-    /* not Linux — the macOS ceiling above applies */
-  }
-  // Fail loudly rather than silently reverting to a racy pid: a helper that
-  // quietly stops guaranteeing its one property is worse than no helper.
-  const probe = spawnSync('/bin/bash', ['-c', `kill -0 ${pid} 2>/dev/null`], { encoding: 'utf8' });
-  if (probe.status === 0) {
-    throw new Error(
-      `unallocatablePid picked ${pid}, which is live — the ceiling assumption is wrong`,
-    );
-  }
-  return pid;
+// Spawn a fixture with a chosen command line, without interpolating it into
+// the script text — it contains spaces, and inline interpolation makes bash
+// read the second word as the command to exec, producing no fixture at all.
+function spawnAs(commandLine) {
+  return spawn('/bin/bash', ['-c', 'exec -a "$1" sleep 30', 'bash', commandLine], {
+    stdio: 'ignore',
+  });
+}
+
+// A definitely-dead PID: a subshell that prints its own pid and exits. Safe even
+// if the number is later reused — cmd_stop's I1 guard only walks a cached pid's
+// tree when that pid independently still matches the run_id, which a reused,
+// unrelated process never will.
+function deadPid() {
+  const r = spawnSync('/bin/bash', ['-c', 'echo $$'], { encoding: 'utf8' });
+  return parseInt(r.stdout.trim(), 10);
 }
 
 describe('50-matrix.sh _pid_tree — real recursive descendant walk (SHY-0236)', () => {
@@ -158,6 +143,11 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
   afterAll(() => {
     for (const c of spawned) {
       try {
+        process.kill(-c.pid, 'SIGKILL'); // group first: the supervisor has children
+      } catch {
+        /* not a group leader */
+      }
+      try {
         process.kill(c.pid, 'SIGKILL');
       } catch {
         /* already gone */
@@ -185,76 +175,73 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
   }
 
   /**
-   * `manual-qa-runner` processes on this machine that are not ours.
+   * What `cmd_stop` actually said, for an assertion message.
    *
-   * cmd_stop verifies its own honesty with a MACHINE-WIDE
-   * `pgrep -fl manual-qa-runner` — correct for the real gauntlet, where any
-   * surviving runner means the stop lied. Under `npm test` it is also a shared
-   * resource: four sibling files (manual-qa-runner-dry-run, -help-version,
-   * -list-flag, and manual-qa-runner.test.js) spawn real runner processes in
-   * parallel Jest workers. This file then asks a global question and gets a
-   * truthful answer about somebody else's process, so "0 runners remain" fails
-   * — only ever inside the full run, never in isolation, because in isolation
-   * there are no siblings.
+   * `expect(r.status).toBe(0)` on its own reports "Expected: 0, Received: 1"
+   * and nothing else — the script's own stdout/stderr, which say WHY it
+   * refused, are captured by spawnSync and thrown away. That is exactly the
+   * defect SHY-0277 fixed for journeys ("make a failing scenario say why it
+   * failed"), and it cost a full CI round trip here: a failure reproducible
+   * only on the Linux runner, reported as a bare 1.
+   *
+   * Attached to every status assertion below so a CI-only failure arrives
+   * diagnosable the first time.
+   *
+   * Thrown, not passed as a second argument to `expect`: the two-argument
+   * hint form is VITEST's. This suite is Jest, where the extra argument is
+   * not a message and quietly breaks the assertion — three tests that had
+   * been passing went red the moment it was added, which is how that was
+   * caught.
    */
-  function foreignRunners() {
-    const r = spawnSync('/bin/bash', ['-c', 'pgrep -fl manual-qa-runner 2>/dev/null || true'], {
-      encoding: 'utf8',
-    });
-    return (r.stdout || '')
-      .split('\n')
-      .map((l) => l.trim())
-      .filter((l) => l && !l.includes(' grep') && !l.includes(String(process.pid)));
+  function expectStatus(r, expected) {
+    if (r.status !== expected) throw new Error(why(r));
+    expect(r.status).toBe(expected);
   }
 
-  /**
-   * Wait for the machine to be quiet enough for a global assertion to mean
-   * something. Bounded, and it FAILS with the offending pids named rather than
-   * skipping — "Expected 0, Received 1" told us nothing about why for two full
-   * suite runs.
-   */
-  function awaitQuiescence(budgetMs = 20_000) {
-    const deadline = Date.now() + budgetMs;
-    let seen = foreignRunners();
-    while (seen.length > 0 && Date.now() < deadline) {
-      spawnSync('/bin/bash', ['-c', 'sleep 0.25']);
-      seen = foreignRunners();
-    }
-    if (seen.length > 0) {
-      throw new Error(
-        'Another test file still has manual-qa-runner processes alive, so the ' +
-          'machine-wide "0 runners remain" check cannot be trusted:\n  ' +
-          seen.join('\n  '),
-      );
-    }
+  function why(r) {
+    const trim = (t) => (t || '').trim().slice(0, 2000) || '(empty)';
+    return [
+      `cmd_stop exited ${r.status}` +
+        (r.signal ? ` (signal ${r.signal})` : '') +
+        (r.error ? ` (spawn error: ${r.error.message})` : ''),
+      `--- stdout ---\n${trim(r.stdout)}`,
+      `--- stderr ---\n${trim(r.stderr)}`,
+    ].join('\n');
   }
 
   test('clean run (dead pid, no live runners) → exit 0 and reports "0 runners remain"', () => {
-    // The only assertion here that reaches outside this test's own fixtures.
-    awaitQuiescence();
-    makeRun('clean-xyz', unallocatablePid());
+    makeRun('clean-xyz', deadPid());
     const r = runStop('clean-xyz');
-    expect(r.status).toBe(0);
+    expectStatus(r, 0);
     expect(r.stdout).toMatch(/0 runners remain/);
+    // The success line must NAME the run it stopped. Asserting only the
+    // generic tail would let `$run_id` be dropped from the message without a
+    // single test noticing — and with the report now scoped to one run,
+    // saying WHICH run is the whole point.
+    expect(r.stdout).toMatch(/stopped run matrix-clean-xyz\b/);
   });
 
   test('missing pid file → dies with a clear message (exit 1)', () => {
     makeRun('nopid'); // dir but no pid file
     const r = runStop('nopid');
-    expect(r.status).toBe(1);
+    expectStatus(r, 1);
     expect(r.stderr).toMatch(/no pid file/);
   });
 
   test('reaps a process tagged with THIS run_id (the orphaned-cell-runner kill) → exit 0', () => {
-    // A process whose argv carries the run_id IS an orphaned cell runner; the
-    // run-scoped `pgrep -f "$run_id"` must find and kill it. Tagged WITHOUT the
-    // "manual-qa-runner" token so it can't collide with the leftover fixture
-    // below (and so a kill race can't falsely trip that run's verification).
+    // An orphaned cell runner is a node process running manual-qa-runner.js
+    // whose argv carries this run's id (the launcher puts it there via
+    // --report-dir). cmd_stop must find and kill it.
+    //
+    // SHY-0304 made this fixture faithful. It used to be a renamed `sleep`
+    // carrying only the run id, which passed while the kill set was a bare
+    // substring match on that id — the same looseness that put an operator's
+    // `tail -f` on the run's log into the kill set. Now that the orphan sweep
+    // requires the runner's identity, a fixture that is not shaped like a
+    // runner would prove nothing about runners.
     const id = `killme-${process.pid}`;
     const runId = `matrix-${id}`; // == basename(run dir) == cmd_stop's $run_id
-    const child = spawn('/bin/bash', ['-c', `exec -a shy0236-${runId}-cell sleep 30`], {
-      stdio: 'ignore',
-    });
+    const child = spawnAs(`node ${RUNNER} --matrix --report-dir=/tmp/${runId}/report`);
     spawned.push(child);
     const seen = () =>
       spawnSync('/usr/bin/pgrep', ['-f', runId], { encoding: 'utf8' }).stdout.trim();
@@ -262,10 +249,10 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     while (!seen() && Date.now() - start < 3000) spawnSync('/bin/sleep', ['0.05']);
     expect(seen()).not.toBe(''); // fixture live + run-id-visible
 
-    makeRun(id, unallocatablePid());
+    makeRun(id, deadPid());
     const r = runStop(id);
 
-    expect(r.status).toBe(0);
+    expectStatus(r, 0);
     expect(r.stdout).toMatch(/0 runners remain/);
     // Liveness via pgrep, NOT process.kill(pid,0): cmd_stop kills the fixture,
     // but Node (its parent) can't reap the zombie while our synchronous calls
@@ -275,28 +262,62 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     expect(seen()).toBe('');
   });
 
-  test('a surviving manual-qa-runner-tagged process → honest exit 1 (never a false "stopped")', () => {
-    // Spawn a process that `pgrep -fl manual-qa-runner` matches, but whose argv
-    // does NOT carry the run_id — so cmd_stop's run-scoped kill passes correctly
-    // leave it alone, and the honest verification MUST catch it and return
-    // non-zero instead of printing the old reassuring "stopped pid N" lie.
-    const tag = `manual-qa-runner-shy0236-fixture-${process.pid}`;
-    const child = spawn('/bin/bash', ['-c', `exec -a ${tag} sleep 30`], { stdio: 'ignore' });
-    spawned.push(child);
-    const seen = () => spawnSync('/usr/bin/pgrep', ['-f', tag], { encoding: 'utf8' }).stdout.trim();
+  test('a survivor of THIS run → honest exit 1 (never a false "stopped")', () => {
+    // SHY-0236's contract, preserved: a runner that outlives every kill pass is
+    // REPORTED, never papered over with a reassuring "stopped pid N".
+    //
+    // SHY-0304 changed how this is provoked. The fixture used to be a process
+    // carrying the "manual-qa-runner" token but NOT the run id — which only
+    // failed the stop because verification was machine-wide. That pinned the
+    // defect as the contract: it is precisely why `stop A` reported failure
+    // when run B was alive, and why running the gauntlet's own test suite made
+    // this file red (Jest, npm and the invoking shell all carry the runner's
+    // name when they run its tests). A survivor of ANOTHER run is not this
+    // run's failure, so provoking it that way asserted the wrong thing.
+    //
+    // A survivor of THIS run cannot simply be an unkillable process — SIGKILL
+    // always wins. It is the case the production code's own comment names: "a
+    // runner can respawn a child between passes". The supervisor's own argv
+    // does not carry the run id (it reads the tag from a file), so the kill
+    // passes never target it; each pass kills its child and it immediately
+    // spawns another, and the verification finds one alive.
+    const id = `leftover-${process.pid}`;
+    const runId = `matrix-${id}`;
+    const tagFile = path.join(tmpRoot, `tag-${id}`);
+    fs.writeFileSync(tagFile, `node ${RUNNER} --matrix --report-dir=/tmp/${runId}/report\n`);
+
+    // Wall-clock bounded, so it can never outlive the test run.
+    spawned.push(
+      spawn(
+        '/bin/bash',
+        [
+          '-c',
+          `T=$(cat "${tagFile}"); e=$((SECONDS+90)); while [ $SECONDS -lt $e ]; do ( exec -a "$T" sleep 5 ); done`,
+        ],
+        { stdio: 'ignore', detached: true },
+      ),
+    );
+    const seen = () =>
+      spawnSync('/usr/bin/pgrep', ['-f', runId], { encoding: 'utf8' }).stdout.trim();
     const start = Date.now();
-    while (!seen() && Date.now() - start < 3000) spawnSync('/bin/sleep', ['0.05']);
+    while (!seen() && Date.now() - start < 5000) spawnSync('/bin/sleep', ['0.05']);
     expect(seen()).not.toBe(''); // fixture is live + pgrep-visible
 
-    makeRun('leftover-xyz', unallocatablePid());
-    const r = runStop('leftover-xyz');
+    makeRun(id, deadPid());
+    const r = runStop(id);
 
     expect(r.status).not.toBe(0); // honest failure, not a false success
     expect(r.stderr).toMatch(/STILL alive/);
-    expect(r.stderr).toContain(String(child.pid)); // it flagged OUR survivor
-    // Still running with its argv intact (pgrep-visible) — proving cmd_stop did
-    // NOT kill it (it isn't run-scoped). pgrep, not kill(pid,0): a killed child
-    // would zombie (unreaped, argv gone) and kill(pid,0) would falsely say alive.
+    // The PAYLOAD, not just the headline. cmd_stop prints the warning and then
+    // separately calls runner_ps_lines to emit pid + command line; the AC is
+    // "so the operator can act on it". Asserting only the headline would let a
+    // broken runner_ps_lines ship a warning with nothing actionable in it.
+    expect(r.stderr).toMatch(/manual-qa-runner\.js/);
+    expect(r.stderr).toMatch(new RegExp(`\\b\\d+\\b[^\\n]*${runId}`));
+    // A replacement child is present at verification time, still carrying the
+    // run id — which is what makes the honest failure correct rather than
+    // stale. pgrep, not kill(pid,0): a killed child would zombie (unreaped,
+    // argv gone) and kill(pid,0) would falsely report it alive.
     expect(seen()).not.toBe('');
-  });
+  }, 60000);
 });

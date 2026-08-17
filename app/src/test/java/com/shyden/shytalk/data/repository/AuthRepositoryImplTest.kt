@@ -8,16 +8,19 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserInfo
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -25,12 +28,20 @@ import org.junit.Test
 
 class AuthRepositoryImplTest {
     private lateinit var auth: FirebaseAuth
+    private lateinit var workerApiClient: WorkerApiClient
     private lateinit var repo: AuthRepositoryImpl
 
     @Before
     fun setup() {
         auth = mockk(relaxed = true)
-        repo = AuthRepositoryImpl(auth)
+        workerApiClient = mockk(relaxed = true)
+        // SHY-0143 — a real SessionCache over a relaxed storage double. This
+        // file tests auth, not caching; the cache's own behaviour is covered
+        // by SessionCacheContractTest against the real SecureStorage actual.
+        // (`app/src/test` is a host unit-test source set, where CLAUDE.md
+        // permits doubles; the Android SecureStorage actual needs a real
+        // Context and Keystore and cannot be built here.)
+        repo = AuthRepositoryImpl(auth, SessionCache(mockk(relaxed = true)), workerApiClient)
         mockkStatic(GoogleAuthProvider::class)
     }
 
@@ -379,6 +390,197 @@ class AuthRepositoryImplTest {
             val result = repo.refreshIdToken()
 
             assertTrue(result is Resource.Error)
+        }
+
+    // endregion
+
+    // region SHY-0143 — the resolved identity writes through to the cache
+
+    /**
+     * A real [SessionCache] over an in-memory storage double, so these tests
+     * exercise the REAL write-through path: `AuthRepositoryImpl`'s setters →
+     * `SessionCache.write` → storage. Only the leaf — the Keystore-backed
+     * `SecureStorage` actual, which needs a real Context — is stood in for.
+     */
+    private fun cacheOverMemory(): Pair<SessionCache, MutableMap<String, String>> {
+        val backing = mutableMapOf<String, String>()
+        val storage =
+            mockk<com.shyden.shytalk.core.util.SecureStorage>(relaxed = true) {
+                every { getString(any()) } answers { backing[firstArg()] }
+                every { putString(any(), any()) } answers { backing[firstArg()] = secondArg() }
+                every { remove(any()) } answers { backing -= firstArg<String>() }
+            }
+        return SessionCache(storage) to backing
+    }
+
+    private fun signedInAs(uid: String) {
+        val user = mockk<FirebaseUser>(relaxed = true)
+        every { user.uid } returns uid
+        every { auth.currentUser } returns user
+    }
+
+    @Test
+    fun `a fully resolved identity is written through to the cache`() {
+        // Without this, the cache is never populated and every returning user
+        // takes the resolve-then-route fallback forever — the feature silently
+        // does nothing while every test about the cache itself stays green.
+        val (cache, _) = cacheOverMemory()
+        val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
+        signedInAs("fb-uid-1")
+
+        repoWithCache.resolvedUniqueId = "10000005"
+        repoWithCache.resolvedCohort = "adult"
+
+        val cached = cache.read("fb-uid-1")
+        assertNotNull(cached)
+        assertEquals("10000005", cached!!.uniqueId)
+        assertEquals("adult", cached.cohort)
+    }
+
+    @Test
+    fun `an identity resolved before its cohort is cached anyway`() {
+        // This test used to assert the opposite, and that assertion was the bug
+        // wearing a test's clothes. Because the write-through fires from each
+        // setter independently, requiring a cohort meant `LockScreenViewModel`
+        // — which sets only the uniqueId after verifying a PIN — drove the
+        // cache into its erase branch, so a successful unlock wiped it. Cohort
+        // is metadata, not identity.
+        val (cache, _) = cacheOverMemory()
+        val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
+        signedInAs("fb-uid-1")
+
+        repoWithCache.resolvedUniqueId = "10000005"
+
+        val cached = cache.read("fb-uid-1")
+        assertNotNull(cached)
+        assertEquals("10000005", cached!!.uniqueId)
+        assertNull("the cohort is simply not known yet", cached.cohort)
+    }
+
+    @Test
+    fun `an identity with no uniqueId is not cached`() {
+        // The half that IS still forbidden: without a uniqueId there is nothing
+        // to route on, and leaving the previous account's record behind would
+        // let the next launch trust it.
+        val (cache, _) = cacheOverMemory()
+        val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
+        signedInAs("fb-uid-1")
+
+        repoWithCache.resolvedCohort = "adult"
+
+        assertNull(cache.read("fb-uid-1"))
+    }
+
+    @Test
+    fun `signOut leaves no identity on disk`() =
+        runTest {
+            val (cache, backing) = cacheOverMemory()
+            val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
+            signedInAs("fb-uid-1")
+            repoWithCache.resolvedUniqueId = "10000005"
+            repoWithCache.resolvedCohort = "adult"
+            assertNotNull(cache.read("fb-uid-1"))
+
+            repoWithCache.signOut()
+
+            assertNull(cache.read("fb-uid-1"))
+            assertTrue(
+                "no session field may survive sign-out, got ${backing.keys}",
+                backing.keys.none { it.startsWith("session_cache_") },
+            )
+        }
+
+    @Test
+    fun `signOut invalidates the API token cache BEFORE dropping the Firebase session`() =
+        runTest {
+            // The root fix behind three Criticals, and it had only a
+            // source-text pin — which cannot see whether the call executes, or
+            // in what order. Order matters: clearing after `auth.signOut()`
+            // leaves a live bearer token in memory for any window in which the
+            // platform call throws.
+            repo.signOut()
+
+            verifyOrder {
+                workerApiClient.clearTokenCache()
+                auth.signOut()
+            }
+        }
+
+    @Test
+    fun `signOut still clears the token cache when the platform sign-out throws`() =
+        runTest {
+            // The window the ordering protects. A banned or compromised session
+            // must not keep a working token because Firebase happened to fail.
+            every { auth.signOut() } throws RuntimeException("platform failure")
+
+            runCatching { repo.signOut() }
+
+            verify { workerApiClient.clearTokenCache() }
+        }
+
+    @Test
+    fun `refreshIdToken invalidates the API client's cached bearer token`() =
+        runTest {
+            // Without this, rotating Firebase's token leaves WorkerApiClient
+            // serving the PRE-flip token for up to 50 minutes — so every
+            // Express call still carries the old cohort claim. That is the
+            // SHY-0132/0137 window this story closes, reopened by the refresh
+            // meant to close it. `IdentityRepositoryImpl.forceRefreshToken`
+            // already clears it; this path did not.
+            val user = mockk<FirebaseUser>(relaxed = true)
+            every { auth.currentUser } returns user
+            every { user.getIdToken(true) } returns Tasks.forResult(mockk(relaxed = true))
+
+            repo.refreshIdToken()
+
+            // ORDER is load-bearing, and the production comment says so:
+            // clearing AFTER the rotate leaves the stale token in place
+            // whenever `getIdToken(true)` throws.
+            verifyOrder {
+                workerApiClient.clearTokenCache()
+                user.getIdToken(true)
+            }
+        }
+
+    @Test
+    fun `refreshIdToken with no signed-in user errors AND still clears the token cache`() =
+        runTest {
+            // Reachable from ColdStartSequencer's GATE 2 and from the
+            // background reconcile whenever Firebase drops the user between
+            // reading the launch state and the refresh. The load-bearing part
+            // is that the clear happens BEFORE the throw, so the process loses
+            // its bearer token even on this path.
+            every { auth.currentUser } returns null
+
+            val result = repo.refreshIdToken()
+
+            assertTrue(result is Resource.Error)
+            verify { workerApiClient.clearTokenCache() }
+        }
+
+    @Test
+    fun `signOut leaves no identity on disk even when the platform sign-out throws`() =
+        runTest {
+            // The ban screen swallows this throw and leaves the user in place,
+            // so the untested question was whether the NEXT cold start would
+            // restore an identity. The existing throw test asserts only the
+            // token cache, over a relaxed-mock SessionCache that cannot see a
+            // record at all.
+            val (cache, backing) = cacheOverMemory()
+            val repoWithCache = AuthRepositoryImpl(auth, cache, workerApiClient)
+            signedInAs("fb-uid-1")
+            repoWithCache.resolvedUniqueId = "10000005"
+            repoWithCache.resolvedCohort = "adult"
+            assertNotNull(cache.read("fb-uid-1"))
+
+            every { auth.signOut() } throws RuntimeException("platform failure")
+            runCatching { repoWithCache.signOut() }
+
+            assertNull("a failed platform sign-out must still clear the record", cache.read("fb-uid-1"))
+            assertTrue(
+                "no session field may survive, got ${backing.keys}",
+                backing.keys.none { it.startsWith("session_cache_") },
+            )
         }
 
     // endregion

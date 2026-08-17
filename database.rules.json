@@ -5,8 +5,8 @@
         "presence": {
           ".read": "auth != null",
           "$userId": {
-            ".write": "auth != null && auth.uid == $userId",
-            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
+            ".write": "auth != null && auth.token.uniqueId + '' === $userId",
+            ".validate": "newData.isBoolean()"
           }
         },
         "events": {
@@ -22,7 +22,7 @@
         "typing": {
           ".read": "auth != null",
           "$userId": {
-            ".write": "auth != null && auth.uid == $userId",
+            ".write": "auth != null && auth.token.uniqueId + '' === $userId",
             ".validate": "newData.isBoolean()"
           }
         },

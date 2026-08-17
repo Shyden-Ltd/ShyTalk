@@ -77,6 +77,27 @@ sealed class Screen(
 
     data object Lock : Screen("lock")
 
+    /**
+     * SHY-0143 — ban destinations reachable BEFORE the route decision.
+     *
+     * The ban UI used to exist only inside `SignInScreen`, driven by
+     * `AuthUiState.isDeviceBanned/isNetworkBanned`. That was sufficient while
+     * every session started at sign-in, but SHY-0187's optimistic cold start
+     * routes a restored session straight to [Main] — so the only surface that
+     * could render a ban became unreachable exactly when a banned user
+     * returns. These are top-level destinations so the ban can be shown
+     * without the user passing through, or even seeing, the login screen.
+     *
+     * Two variants rather than one parameterised screen because they are
+     * different facts with different copy and different appeal routes: a
+     * device ban follows the hardware, a network ban follows the IP / subnet /
+     * ASN (which is also how VPNs are blocked, and is far more likely to catch
+     * an innocent bystander on shared infrastructure).
+     */
+    data object BanDevice : Screen("ban_device")
+
+    data object BanNetwork : Screen("ban_network")
+
     data object PinSetup : Screen("pin_setup")
 
     data object SecuritySettings : Screen("security_settings")

@@ -96,7 +96,10 @@ fun PrivateChatScreen(
     onPickImages: (() -> Unit)? = null,
     onPickStickerImage: (() -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
-    onNavigateToAgeVerification: () -> Unit = {},
+    // Deliberately NOT defaulted (SHY-0268) — see RoomScreen for the rationale.
+    // Every host of this screen renders the 18+ wall, so every host must be
+    // able to route its "Verify now" CTA somewhere real.
+    onNavigateToAgeVerification: () -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     conversationId: String? = null,

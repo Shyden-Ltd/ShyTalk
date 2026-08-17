@@ -36,6 +36,7 @@ import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -73,9 +74,11 @@ import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
 import com.shyden.shytalk.feature.splash.FunFactSplashScreen
 import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
+import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.back
 import com.shyden.shytalk.resources.warning_acknowledge_failed
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -101,17 +104,24 @@ fun SharedNavGraph(
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
     onSignOut: () -> Unit,
+    /**
+     * SHY-0143 — the ban facts behind a [Screen.BanDevice] / [Screen.BanNetwork]
+     * start destination. Defaulted so existing callers are unaffected: an
+     * unbanned launch never routes to either screen, so the default is never
+     * rendered.
+     */
+    coldStartBan: BanState = BanState(),
     platformCallbacks: PlatformNavCallbacks,
     platformScreens: PlatformScreens,
 ) {
     val activeRoomManager: RoomLifecycleManager = koinInject()
     val authRepository: AuthRepository = koinInject()
-    var currentUserId by remember { mutableStateOf(authRepository.currentUserId) }
+    var currentUserId by remember { mutableStateOf(authRepository.resolvedUniqueId) }
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
         navController.currentBackStackEntryFlow.collect { entry ->
-            currentUserId = authRepository.currentUserId
+            currentUserId = authRepository.resolvedUniqueId
             if (BuildVariant.isPreviewBuild) {
                 // Feed the preview watermark's route line (SHY-0205).
                 // Route PATTERNS only (`rooms/{roomId}`), never filled-in
@@ -125,6 +135,20 @@ fun SharedNavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
+    // SHY-0143 — `currentUserId` above is now `resolvedUniqueId`, NOT the
+    // `resolvedUniqueId ?: firebaseUid` fallback. That fallback is the whole
+    // hazard: on a cache miss it made this subscribe to `users/<firebaseUid>`,
+    // a document that does not exist (SHY-0139).
+    //
+    // An earlier attempt gated on a `cohortVerified` flag from the cold-start
+    // sequencer. That was the wrong property AND a one-shot snapshot: the
+    // sequencer runs once per process and returns early for Lock and Sign-In,
+    // so after a PIN unlock or a normal sign-in the flag stayed false and this
+    // listener — the ONLY real-time suspension and warning listener in the app
+    // — never subscribed at all. SHY-0024's AC pins that it must.
+    //
+    // Reading one's OWN user document is not a cross-cohort read, so the
+    // cohort claim was never what gated it. Knowing the correct key is.
     if (uid != null) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
@@ -166,6 +190,34 @@ fun SharedNavGraph(
     AppLockResumeGate(navController)
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // SHY-0143 — hoisted above the NavHost because the builder lambda is
+        // not a @Composable context. Owned here rather than taken from
+        // `onSignOut`: a device or network ban follows the hardware or the IP,
+        // not the account, so signing out must clear the session and leave the
+        // user exactly where they are. iOS proved a caller-supplied lambda
+        // cannot be trusted with that — it passed one that navigated away.
+        val banSignOutScope = rememberCoroutineScope()
+        val signOutAndStay: () -> Unit =
+            remember(authRepository, banSignOutScope) {
+                {
+                    banSignOutScope.launch {
+                        // `rememberCoroutineScope()` carries no
+                        // CoroutineExceptionHandler, and `signOut()` reaches the
+                        // Keychain and Firebase — either can throw. Android's
+                        // equivalent guards; this one did not, so an uncaught
+                        // throw here crashed the app on a ban screen. Every
+                        // other sign-out call site in the codebase guards too.
+                        try {
+                            authRepository.signOut()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            logW("SharedNavGraph", "ban-screen sign-out failed: ${e.message}")
+                        }
+                    }
+                }
+            }
+
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -192,6 +244,48 @@ fun SharedNavGraph(
                             popUpTo(0) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            // SHY-0143 — ban destinations reachable WITHOUT sign-in.
+            //
+            // The ban UI already existed, but only inside SignInScreen, off
+            // AuthUiState.isDeviceBanned/isNetworkBanned. SHY-0187's optimistic
+            // cold start routes a restored session straight to Main, so that
+            // surface became unreachable exactly when a banned user returns —
+            // which is why hoisting the CHECK alone would not have closed the
+            // gap. These give the check somewhere to land.
+            //
+            // Terminal by construction: they are the start destination with an
+            // empty back stack, so Back leaves the app rather than revealing
+            // content beneath. Nothing here navigates onward — a device or
+            // network ban is not resolved by signing out (it follows the
+            // hardware or the IP/subnet/ASN, not the account), so signing out
+            // clears the session and the user stays exactly here.
+            //
+            // These deliberately do NOT use the graph's `onSignOut` parameter.
+            // That comment above used to describe an intention a caller-supplied
+            // lambda could not enforce, and iOS duly passed one that navigated
+            // to Sign-In without signing out — so a banned iPhone user tapping
+            // Sign-out reached the login screen with their session intact,
+            // which is the one destination the story says a ban must never
+            // reach. Owning the handler here makes the contract structural:
+            // there is no lambda for a caller to get wrong.
+            composable(Screen.BanDevice.route) {
+                BanScreen(
+                    banType = "device",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = signOutAndStay,
+                )
+            }
+
+            composable(Screen.BanNetwork.route) {
+                BanScreen(
+                    banType = "network",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = signOutAndStay,
                 )
             }
 
@@ -707,6 +801,9 @@ fun SharedNavGraph(
                         }
                     },
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
+                    onNavigateToAgeVerification = {
+                        navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
                     activeRoomId = groupActiveRoomId,
                     activeRoomName = groupActiveRoom?.name,
                     viewModel = groupChatViewModel,

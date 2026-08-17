@@ -33,18 +33,6 @@ import platform.Security.kSecValueData
 
 private const val SERVICE_NAME = "com.shyden.shytalk.secure"
 
-private val ALL_KEYS =
-    listOf(
-        "credentialVersion",
-        "uniqueId",
-        "deviceId",
-        "appLockEnabled",
-        "biometricEnabled",
-        "lockTimeoutMinutes",
-        "lastActiveTimestamp",
-        "localPinHash",
-    )
-
 actual class SecureStorage {
     private fun createQuery(
         key: String,
@@ -138,8 +126,25 @@ actual class SecureStorage {
 
     actual fun remove(key: String) = delete(key)
 
+    /**
+     * Deletes every item this app owns under [SERVICE_NAME].
+     *
+     * Deliberately NOT `ALL_KEYS.forEach { delete(it) }`. That list is
+     * hand-maintained, and it had already drifted: SHY-0143 added three
+     * `session_cache_*` keys that a `clear()` would have left behind — on the
+     * one platform where the Keychain SURVIVES app deletion, so the leftovers
+     * outlive the uninstall. A list you must remember to update is a list that
+     * will be wrong again.
+     *
+     * Omitting `kSecAttrAccount` from the query makes it match every item for
+     * the service, which is what "clear" is supposed to mean. `errSecItemNotFound`
+     * on an already-empty keychain is success, not failure.
+     */
     actual fun clear() {
-        ALL_KEYS.forEach { delete(it) }
+        val dict = CFDictionaryCreateMutable(null, 0, null, null)!!
+        CFDictionarySetValue(dict, kSecClass, kSecClassGenericPassword)
+        CFDictionarySetValue(dict, kSecAttrService, CFBridgingRetain(SERVICE_NAME))
+        SecItemDelete(dict)
     }
 
     private fun delete(key: String) {

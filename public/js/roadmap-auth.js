@@ -29,27 +29,8 @@
   var currentUser = null;
   var shytalkProfile = null;
   var authStateKnown = false;
-  // Sticky: someone signed in with a Firebase identity that has no ShyTalk
-  // account. The branch that handles this signs them straight back out, which
-  // fires onAuthStateChanged(null) and re-renders — so without remembering it
-  // the explanation is overwritten by the generic prompt and the person is
-  // bounced with no idea why (SHY-0245). Cleared on the next sign-in attempt
-  // and on an explicit sign-out.
-  var noShyTalkAccount = false;
 
   // ─── Auth state container rendering ───────────────────────────
-
-  var DOWNLOAD_LINKS_HTML =
-    '<div class="auth-download-links">' +
-      '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
-        '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
-        '<span>Google Play</span>' +
-      '</a>' +
-      '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
-        '<span>App Store</span>' +
-      '</a>' +
-    '</div>';
 
   function renderAuthUI() {
     var container = document.getElementById('auth-container');
@@ -82,22 +63,42 @@
           '<button class="auth-signout-btn" data-testid="auth-signout-btn" aria-label="Sign out">Sign out</button>' +
         '</div>';
       container.querySelector('.auth-signout-btn').addEventListener('click', signOut);
-    } else if (noShyTalkAccount) {
-      // Signed in with a Firebase identity that has no ShyTalk account. The
-      // sign-out that accompanies this lives in checkShyTalkAccount, not here
-      // — a render must not mutate auth state, because the state change it
-      // triggers re-enters this function and overwrites what it just drew.
+    } else if (currentUser && shytalkProfile === false) {
+      // Signed in but no ShyTalk account — sign out silently, show download prompt
+      if (auth) auth.signOut().catch(function (err) {
+        console.warn('Auto sign-out failed:', err && err.code);
+      });
+      currentUser = null;
+      updateGlobalAuth();
       container.innerHTML =
-        '<div class="auth-login-prompt auth-no-account" data-testid="auth-no-account">' +
-          '<p class="auth-prompt-text" data-i18n="auth_no_account_prompt">We couldn\'t find a ShyTalk account linked to that login. Create your free account in the app, then come back to get involved!</p>' +
-          DOWNLOAD_LINKS_HTML +
+        '<div class="auth-login-prompt" data-testid="auth-login-prompt">' +
+          '<p class="auth-prompt-text">We couldn\'t find a ShyTalk account linked to that login. Create your free account in the app, then come back to get involved!</p>' +
+          '<div class="auth-download-links">' +
+            '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
+              '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
+              '<span>Google Play</span>' +
+            '</a>' +
+            '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
+              '<span>App Store</span>' +
+            '</a>' +
+          '</div>' +
         '</div>';
     } else {
       // Not logged in — friendly welcome with download links, login happens on action
       container.innerHTML =
         '<div class="auth-login-prompt" data-testid="auth-login-prompt">' +
           '<p class="auth-prompt-text" data-i18n="auth_login_prompt">Want to vote, suggest features, or subscribe to updates? Sign in with your ShyTalk account. Don\'t have one yet? Download the app to get started — or feel free to look around!</p>' +
-          DOWNLOAD_LINKS_HTML +
+          '<div class="auth-download-links">' +
+            '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
+              '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
+              '<span>Google Play</span>' +
+            '</a>' +
+            '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
+              '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
+              '<span>App Store</span>' +
+            '</a>' +
+          '</div>' +
         '</div>';
     }
   }
@@ -130,7 +131,7 @@
       firebaseConfig.apiKey.indexOf('fake') === -1 &&
       firebaseConfig.apiKey.indexOf('placeholder') === -1;
     if (!hasRealKey && !isLocal) {
-      authStateKnown = true;
+      markAuthStateKnown();
       renderAuthUI();
       return;
     }
@@ -151,7 +152,7 @@
       }
     } catch (err) {
       console.warn('Firebase auth unavailable:', err && err.code, err && err.message);
-      authStateKnown = true;
+      markAuthStateKnown();
       renderAuthUI();
       return;
     }
@@ -167,27 +168,27 @@
     });
 
     auth.onAuthStateChanged(function (user) {
-      authStateKnown = true;
       currentUser = user;
+      // Publish the Firebase auth state IMMEDIATELY (with profile still
+      // null) so click-handlers triggered before the async ShyTalk
+      // account fetch resolves can see that the user is signed in.
+      // Without this synchronous publish, `window.shytalkAuth.currentUser`
+      // stayed null until checkShyTalkAccount finished its fetch — any
+      // bell/subscribe click during that window incorrectly opened the
+      // login modal for an already-signed-in user (W1 bundled bug).
+      // The bell handler treats `profile === null` as "loading" and
+      // routes to the subscribe modal which has its own loading state.
+      shytalkProfile = null;
+      // ONE publish for both branches. Marking the state known and
+      // publishing were previously separate steps, so adding the flag to the
+      // published object would have cost a SECOND dispatch here — and every
+      // dispatch makes the shared header remove and rebuild itself, which is
+      // what detaches `header-user-info` from under a click in progress.
+      markAuthStateKnown();
       if (user) {
-        // Publish the Firebase auth state IMMEDIATELY (with profile still
-        // null) so click-handlers triggered before the async ShyTalk
-        // account fetch resolves can see that the user is signed in.
-        // Without this synchronous publish, `window.shytalkAuth.currentUser`
-        // stayed null until checkShyTalkAccount finished its fetch — any
-        // bell/subscribe click during that window incorrectly opened the
-        // login modal for an already-signed-in user (W1 bundled bug).
-        // The bell handler treats `profile === null` as "loading" and
-        // routes to the subscribe modal which has its own loading state.
-        shytalkProfile = null;
-        // A new sign-in attempt supersedes any earlier no-account verdict.
-        noShyTalkAccount = false;
-        updateGlobalAuth();
         checkShyTalkAccount(user);
       } else {
-        shytalkProfile = null;
         renderAuthUI();
-        updateGlobalAuth();
       }
     });
   }
@@ -209,20 +210,6 @@
     } catch (err) {
       console.error('Failed to check ShyTalk account:', err);
       shytalkProfile = null;
-    }
-
-    if (shytalkProfile === false) {
-      // Half-authenticated is not a state we keep: there is a Firebase
-      // identity but nothing for it to act as, so drop the session. The
-      // sticky flag is what survives, so the re-render this triggers still
-      // explains itself instead of silently reverting to the generic prompt.
-      noShyTalkAccount = true;
-      currentUser = null;
-      if (auth) {
-        auth.signOut().catch(function (err) {
-          console.warn('Auto sign-out failed:', err && err.code);
-        });
-      }
     }
 
     renderAuthUI();
@@ -247,10 +234,6 @@
     auth.signOut().then(function () {
       currentUser = null;
       shytalkProfile = null;
-      // An explicit sign-out is a fresh start — the "no ShyTalk account"
-      // explanation belongs to the sign-in that provoked it, not to the
-      // signed-out page the user is left on.
-      noShyTalkAccount = false;
       renderAuthUI();
       updateGlobalAuth();
     }).catch(function (err) {
@@ -263,10 +246,26 @@
     return auth.signInWithEmailAndPassword(email, password);
   }
 
+  // Four paths in this module can conclude that the sign-in state is known:
+  // Firebase answering, a placeholder API key off-local, an SDK init throw,
+  // and the 3s "config never arrived" fallback. Routing all four through one
+  // function is what makes the flag trustworthy — a path that set it WITHOUT
+  // publishing would leave every consumer waiting on a signal that had
+  // already happened, with nothing to observe. (SHY-0279)
+  function markAuthStateKnown() {
+    authStateKnown = true;
+    updateGlobalAuth();
+  }
+
   function updateGlobalAuth() {
     window.shytalkAuth = {
       currentUser: currentUser,
       profile: shytalkProfile,
+      // Lets a consumer tell "signed out" apart from "we don't know yet".
+      // Both look like `currentUser === null`, which is why the shared header
+      // renders Sign In during the unknown window and why every web check
+      // that faked a signed-in visitor was racing this module (SHY-0279).
+      authStateKnown: authStateKnown,
       getToken: getToken,
       signOut: signOut,
       signInWithGoogle: signInWithGoogle,
@@ -316,7 +315,7 @@
     // If config never loads (API down), show login buttons after 3s
     setTimeout(function () {
       if (!authStateKnown) {
-        authStateKnown = true;
+        markAuthStateKnown();
         renderAuthUI();
       }
     }, 3000);

@@ -1,6 +1,6 @@
 ---
 id: SHY-0184
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-13
 priority: P2
@@ -99,3 +99,5 @@ Touches `shared/**` (bundled content + acceptance flow) → **full protocol**.
 ## Notes
 
 - 2026-07-13 — Filed as the recommended compliance follow-up from the EPIC-0007 WebView-vs-bundled assessment (operator asked me to assess; I recommend bundling the *gate* specifically). `mvp: false` until the operator prioritises; the acute wrong-language/cross-env bugs are fixed by [[SHY-0181]]/[[SHY-0182]] first.
+
+- 2026-08-06 — **CANCELLED, superseded by EPIC-0010.** The operator replaced every language mechanism with the shyden.co.uk model (real per-locale URLs on the web; device-locale in the app) and narrowed the set to five MVP languages. See EPIC-0010's Notes for the per-ticket disposition table. Specifically: legal copy becomes build-time strings in five locales like every other page (SHY-0286).

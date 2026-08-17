@@ -1,6 +1,8 @@
 package com.shyden.shytalk.data.remote
 
 import com.google.firebase.auth.FirebaseAuth
+import com.shyden.shytalk.core.security.APP_CHECK_HEADER
+import com.shyden.shytalk.core.security.AppCheckTokenProvider
 import com.shyden.shytalk.core.util.TraceManager
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
@@ -47,6 +49,8 @@ class WorkerApiClient(
         return token
     }
 
+    private val appCheckTokenProvider = AppCheckTokenProvider()
+
     fun clearTokenCache() {
         cachedToken = null
         tokenExpiresAt = 0L
@@ -65,12 +69,21 @@ class WorkerApiClient(
     /** GET without authentication — for public endpoints like /api/health. */
     suspend fun getPublic(path: String): JSONObject {
         val url = "$baseUrl$path"
+        // SHY-0300: attest that this is a genuine install. Attached HERE
+        // rather than at each call site so a future unauthenticated endpoint
+        // inherits it without anyone remembering to. A null token means
+        // attestation was unavailable — Play Integrity throttled, offline,
+        // Firebase not yet initialised — and the request goes out WITHOUT the
+        // header, fail-open by design: the server decides what that means, and
+        // it can be reconfigured without shipping a release.
+        val appCheckToken = appCheckTokenProvider.currentToken()
         val request =
             Request
                 .Builder()
                 .url(url)
                 .header("x-session-trace-id", TraceManager.sessionTraceId)
                 .header("X-Device-Id", deviceId)
+                .apply { appCheckToken?.let { header(APP_CHECK_HEADER, it) } }
                 .get()
                 .build()
         val response = httpClient.newCall(request).executeAsync()

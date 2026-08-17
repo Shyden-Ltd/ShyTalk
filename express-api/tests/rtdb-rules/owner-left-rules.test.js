@@ -93,7 +93,14 @@ describe('database.rules.json — ownerLeft rule', () => {
   test('rule does not accidentally widen reads/writes on adjacent paths', () => {
     // Pin the existing structure so this PR did not regress the presence
     // or events rules on rooms/{roomId}.
-    expect(RULES.rules.rooms.$roomId.presence.$userId['.write']).toContain('auth.uid == $userId');
+    // Presence must stay authenticated + self-owned. The IDENTITY it checks
+    // is owned by presence-rules.test.js: SHY-0270 moved it from `auth.uid`
+    // (the Firebase uid) to the `uniqueId` claim, because the client keys
+    // presence by uniqueId and the old comparison could never be true.
+    // Pinning the literal old expression here pinned that defect.
+    const presenceWrite = RULES.rules.rooms.$roomId.presence.$userId['.write'];
+    expect(presenceWrite).toContain('auth != null');
+    expect(presenceWrite).toContain('$userId');
     expect(RULES.rules.rooms.$roomId.events.lastEvent['.write']).toBe(false);
     expect(RULES.rules['.read']).toBe(false);
     expect(RULES.rules['.write']).toBe(false);

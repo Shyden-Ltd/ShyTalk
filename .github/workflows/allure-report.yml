@@ -45,12 +45,31 @@ on:
         type: string
         default: "10"
 
-concurrency:
-  group: gh-pages-deploy
-  cancel-in-progress: false
+# NO concurrency group (SHY-0298). This workflow held `gh-pages-deploy` at
+# WORKFLOW level, so the lock covered its history restore and report generation
+# too — minutes, not the seconds of the push. Worse, a group allows only ONE
+# pending entry, so a third contender cancelled the pending second (incidents
+# #568/#570). The publish action now retries against the moving tip, so no
+# writer needs to exclude any other.
 
 jobs:
   generate-report:
+    # A report failure must NOT red-gate the PR (SHY-0298 Error-paths AC:
+    # "a publishing failure must not be reported as a test failure").
+    #
+    # This job is reachable from PR Gate through
+    #   gate.needs → playwright-web → playwright-tests.yml → allure-report.yml
+    # and a reusable workflow's conclusion is the aggregate of its jobs,
+    # RECURSIVELY. So a failed publish, a transient clone, six lost races or
+    # the history cap could each fail a REQUIRED check on a PR whose tests all
+    # passed. The express publisher got this treatment first; this is the same
+    # defect at the second site, which is why the pin below now walks every
+    # publisher reachable from the gate rather than one file.
+    #
+    # The TESTS still gate: they run in `test-playwright`, upstream of this.
+    # Everything in this job is report generation, publication and gh-pages
+    # maintenance — none of it is a statement about whether the code works.
+    continue-on-error: true
     name: Generate Allure Report
     runs-on: ubuntu-latest
     # 20 (was 10): the playwright suite's gh-pages round-trip (history restore +
@@ -61,7 +80,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check if report already generated for this run
         id: check-existing
@@ -120,7 +139,7 @@ jobs:
 
       - name: Restore history from gh-pages
         if: steps.check-existing.outputs.skip != 'true'
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: gh-pages
           path: gh-pages
@@ -211,25 +230,24 @@ jobs:
           echo "Report size: $(du -sh allure-report | cut -f1)"
 
       - name: Deploy report to GitHub Pages
-        # See test-backend.yml for full rationale: skip on dependabot
-        # PRs (read-only token + gh-pages race condition). Guard on
-        # github.head_ref so a merge commit added by a human doesn't
-        # bypass the skip (github.actor would resolve to the human).
-        if: steps.check-existing.outputs.skip != 'true' && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        # SHY-0298: the peaceiris invocation, the dependabot skip and the
+        # empty-directory refusal all moved into the composite action, so this
+        # workflow no longer carries its own copy of any of them. The
+        # `check-existing` skip is this workflow's OWN concern (a rerun whose
+        # report is already published) and stays here.
+        #
+        # Serialization is unchanged and already correct: this workflow declares
+        # `concurrency: gh-pages-deploy` at WORKFLOW level, which SHY-0298
+        # measured to share one queue with the job-level groups the other two
+        # writers now use. Do NOT also add a job-level group here — the run
+        # already holds this group, and a job waiting on a lock its own run
+        # holds would never start.
+        if: steps.check-existing.outputs.skip != 'true'
+        uses: ./.github/actions/publish-gh-pages
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: allure-report
-          destination_dir: ${{ inputs.suite_name }}/${{ inputs.report_env }}/latest
-          # SHY-0128 fix 1: false — peaceiris cleans ONLY destination_dir
-          # before copying (v4.1.0 git-utils.ts L127-138), so each deploy
-          # replaces this suite/env's latest/ instead of stranding prior
-          # hashed files forever (playwright/pr/latest had accumulated
-          # 6.9 GiB / 1.05M files). Sibling suites, the root landing page and
-          # CNAME live outside destination_dir and are untouched. force_orphan
-          # was evaluated and rejected: it skips the clone entirely
-          # (src L97-104), so each deploy would wipe every sibling suite.
-          keep_files: false
+          publish-dir: allure-report
+          destination-dir: ${{ inputs.suite_name }}/${{ inputs.report_env }}/latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cap gh-pages history (bounded, content-identical)
         # SHY-0128 fix 2: each deploy adds a gh-pages commit and that history
@@ -239,17 +257,42 @@ jobs:
         # commit whose tree IS the current tip tree (omitting the parent list
         # in the createCommit call is what truncates the history), entirely
         # via the Git Data API — nothing multi-GiB is downloaded or checked
-        # out. Race-safety: this step runs inside the workflow-level
-        # gh-pages-deploy concurrency group (serializes every allure deploy),
-        # and the tip is re-read just before the ref move — if a writer
-        # outside the group (the kotlin deploy in pr-checks.yml) lands mid-cap
-        # the cap skips and a later run retries. Same gating as the deploy
-        # step: dependabot runs hold a read-only GITHUB_TOKEN and can't write.
+        # out.
+        #
+        # RACE-SAFETY (SHY-0298 R3). This step FORCE-moves the ref, and its
+        # only protections used to be the workflow-level `gh-pages-deploy`
+        # group plus a re-read of the tip just before the move. C3 removed that
+        # group — publishers now retry instead of queueing — and a re-read is a
+        # check, not a compare-and-swap: a publisher landing between the read
+        # and the PATCH was silently discarded, while its own job exited 0.
+        # Nothing was red; a report just vanished.
+        #
+        # The move is therefore done with `git push --force-with-lease`, which
+        # is a genuine CAS: the SERVER refuses the update unless gh-pages is
+        # still exactly $TIP. A lost race becomes a visible rejection and a
+        # skipped cap, instead of a lost report. The orphan commit is still
+        # built via the API — the push only needs the commit object, so a
+        # shallow blob-less clone sends almost nothing.
+        #
+        # Same gating as the deploy step: dependabot runs hold a read-only
+        # GITHUB_TOKEN and can't write.
         if: steps.check-existing.outputs.skip != 'true' && !startsWith(github.head_ref, 'dependabot/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           MAX_GH_PAGES_COMMITS: 25
+          # `git commit-tree` runs in a FRESH clone under $RUNNER_TEMP, which
+          # has no local identity, and the runner has no global one — so it
+          # died with `fatal: empty ident name`. Found by the real-git test,
+          # which is the point of running the real block instead of pinning it.
+          #
+          # Set explicitly rather than via `git config --global`: the identity
+          # then belongs to this step, cannot be perturbed by an earlier step,
+          # and the commit is attributable to the bot that made it.
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
           set -euo pipefail
           TIP_ERR="${RUNNER_TEMP}/gh-pages-tip-err"
@@ -279,15 +322,57 @@ jobs:
           if [ "$COUNT" -le "$MAX_GH_PAGES_COMMITS" ]; then
             exit 0
           fi
-          TREE=$(gh api "repos/${REPO}/git/commits/${TIP}" --jq '.tree.sha')
-          NEW=$(gh api -X POST "repos/${REPO}/git/commits" -f message="chore(gh-pages): cap deploy history — content-identical orphan rebuild of ${TIP} (SHY-0128)" -f tree="${TREE}" --jq '.sha')
-          CURRENT=$(gh api "repos/${REPO}/git/ref/heads/gh-pages" --jq '.object.sha')
-          if [ "$CURRENT" != "$TIP" ]; then
-            echo "tip moved (${TIP} -> ${CURRENT}) since the count — skipping cap this run"
-            exit 0
+          # Atomic move. `--force-with-lease=<ref>:<expected>` makes the SERVER
+          # reject the update unless gh-pages is still $TIP, so there is no
+          # window between checking and moving. A plain re-read + PATCH had one,
+          # and a publisher landing inside it was overwritten silently.
+          WORK="${RUNNER_TEMP}/gh-pages-cap"
+          rm -rf "$WORK"
+          git clone --quiet --no-checkout --filter=blob:none --depth=1 \
+            --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$WORK"
+
+          # The orphan is built LOCALLY, not through the Git Data API.
+          #
+          # An API-created commit exists only on the server and is referenced by
+          # no ref, so a `--depth=1` clone does not contain it — and `git push
+          # <oid>:<ref>` has to READ the object to build the pack. Reproduced
+          # against a real transport: `fatal: bad object`, then
+          # `! [remote rejected] … (unpacker error)`. That stderr contains
+          # `[remote rejected]`, not `[rejected]`, so it would not have matched
+          # the lost-race branch either — the step would have failed loudly on
+          # the first capped run and every run after, while never capping.
+          #
+          # `--filter=blob:none` omits blobs but keeps trees, so `HEAD^{tree}`
+          # is present. Omitting the parent list is what truncates the history.
+          # This also deletes two API calls.
+          NEW=$(git -C "$WORK" commit-tree "HEAD^{tree}" \
+            -m "chore(gh-pages): cap deploy history — content-identical orphan rebuild of ${TIP} (SHY-0128)")
+
+          # An EMPTY $NEW makes the refspec below `:refs/heads/gh-pages`, which
+          # is git's spelling of DELETE THE BRANCH — every report ever
+          # published, gone, from a step whose job is to save space. `set -e`
+          # already aborts if commit-tree exits non-zero, so this only fires if
+          # it somehow succeeds with no output; the consequence is severe
+          # enough that "can't happen" is not a good enough reason to omit it.
+          if [ -z "$NEW" ]; then
+            echo "::error::commit-tree produced no SHA — refusing to push an empty refspec"
+            exit 1
           fi
-          gh api -X PATCH "repos/${REPO}/git/refs/heads/gh-pages" -f sha="${NEW}" -F force=true > /dev/null
-          echo "capped gh-pages: ${COUNT} commits -> 1 (tree ${TREE} unchanged)"
+
+          CAP_ERR="${RUNNER_TEMP}/gh-pages-cap-err"
+          if git -C "$WORK" push --quiet \
+               --force-with-lease="refs/heads/gh-pages:${TIP}" \
+               origin "${NEW}:refs/heads/gh-pages" 2>"$CAP_ERR"; then
+            echo "capped gh-pages: ${COUNT} commits -> 1 (tree unchanged)"
+          elif grep -qiE 'stale info|non-fast-forward|! \[rejected\]' "$CAP_ERR"; then
+            # Someone published while we were building the orphan. Their report
+            # is intact, which is the whole point; a later run caps again.
+            echo "tip moved since the count — skipping cap this run (a later run retries)"
+          else
+            cat "$CAP_ERR" >&2
+            echo "::error::gh-pages history cap failed for a reason other than a lost race"
+            exit 1
+          fi
 
       - name: Post report URL in summary
         if: steps.check-existing.outputs.skip != 'true'

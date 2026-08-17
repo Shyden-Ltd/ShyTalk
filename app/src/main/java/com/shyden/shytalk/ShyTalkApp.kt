@@ -12,8 +12,10 @@ import coil3.disk.DiskCache
 import coil3.gif.AnimatedImageDecoder
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.di.appModule
 import com.shyden.shytalk.core.di.viewModelModule
+import com.shyden.shytalk.core.security.AppCheckInstaller
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.LanguagePreference
 import okio.Path.Companion.toOkioPath
@@ -48,6 +50,13 @@ class ShyTalkApp :
         super.onCreate()
 
         LanguagePreference.init(this)
+
+        // SHY-0300 — install App Check BEFORE anything can call an
+        // unauthenticated endpoint. The cold-start ban gate is the first such
+        // call, and it runs before routing, so a later install would mean the
+        // one request attestation exists to protect goes out unattested.
+        // Installing does not fetch a token; that warms in the background.
+        AppCheckInstaller.install(BuildConfig.DEBUG)
 
         startKoin {
             androidContext(this@ShyTalkApp)
