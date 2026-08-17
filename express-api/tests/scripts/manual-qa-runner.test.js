@@ -26691,6 +26691,12 @@ describe('the refusal block leaves the emulator host intact for later tests', ()
   // has grown by appending for months. This guard turns the coincidence into
   // an assertion. Keep it last; if you append a new describe below, move it.
   test('FIREBASE_AUTH_EMULATOR_HOST is still set after the refusal tests ran', () => {
-    expect(process.env.FIREBASE_AUTH_EMULATOR_HOST).toBe('localhost:9099');
+    // Mirrors the root beforeAll's own expression (`process.env.X || 'localhost:9099'`)
+    // rather than hardcoding the fallback. A developer who already exports a
+    // different emulator host keeps it, and this guard must assert the value
+    // that is actually meant to survive — not fail them for a non-regression.
+    expect(process.env.FIREBASE_AUTH_EMULATOR_HOST).toBe(
+      SAVED_AUTH_EMULATOR_HOST || 'localhost:9099',
+    );
   });
 });

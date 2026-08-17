@@ -196,6 +196,54 @@ describe('makeWebSignInViaWebDriver — the REST transport (firefox-Android, Web
     expect(await makeSignIn({ navigateTo })('Alice')).toBe(false);
   });
 
+  // The project's driver-method convention pins all four input-rejection cases
+  // from the start, precisely so a later refactor that narrows the guard (e.g.
+  // to `name === undefined`) is caught rather than silently letting a blank
+  // persona through to a sign-in attempt.
+  test.each([
+    ['empty string', ''],
+    ['whitespace only', '   '],
+    ['null', null],
+    ['undefined', undefined],
+  ])('refuses a %s persona name without touching the transport', async (_label, name) => {
+    const navigateTo = recorder();
+    const executeAsync = recorder(async () => ({ ok: true }));
+
+    expect(await makeSignIn({ navigateTo, executeAsync })(name)).toBe(false);
+    expect(navigateTo.calls).toHaveLength(0);
+    expect(executeAsync.calls).toHaveLength(0);
+  });
+
+  test('says WHY it refused — the operator reads this line, not a stack trace', async () => {
+    // These console.error lines are the only failure signal a matrix run
+    // surfaces for a refused sign-in. A dropped interpolation would leave the
+    // operator with "webSignIn() — " and nothing to act on.
+    /* eslint-disable no-console -- capturing console.error IS the assertion
+       here; the diagnostic line is the operator-facing contract under test.
+       Restored in `finally` so a failure cannot leak the swap into other
+       tests. Mirrors the same justified disable in web-sign-in.js's header. */
+    const original = console.error;
+    const lines = [];
+    console.error = (...a) => lines.push(a.join(' '));
+    try {
+      await makeSignIn({})('Nobody');
+      delete process.env.PERSONAS_PASSWORD;
+      await makeSignIn({})('Alice');
+    } finally {
+      console.error = original;
+    }
+    /* eslint-enable no-console */
+
+    expect(lines[0]).toContain('Nobody');
+    expect(lines[0]).toMatch(/not in registry/);
+    expect(lines[1]).toContain('Alice');
+    expect(lines[1]).toMatch(/PERSONAS_PASSWORD/);
+    // The driver label is what tells the operator WHICH browser failed.
+    expect(lines.every((l) => l.includes('[unit]'))).toBe(true);
+    // And never the credential itself.
+    expect(lines.some((l) => l.includes(SECRET))).toBe(false);
+  });
+
   test('is re-entrant — signing the SAME persona in twice both succeed', async () => {
     // Drivers cache one page per persona name and Firebase persists the
     // session per origin, so the second call runs against an already-signed-in
@@ -275,7 +323,7 @@ describe('WEBDRIVER_SIGN_IN_SCRIPT — the browser-side state machine', () => {
     // never called" for a script that works. setImmediate yields the macrotask
     // turn that lets those jobs run; it is a yield, not a sleep.
     const drain = async () => {
-      for (let i = 0; i < maxTicks && calls.length === 0; i += 1) {
+      for (let i = 0; i < maxTicks; i += 1) {
         await new Promise((resolve) => setImmediate(resolve));
         const batch = queue;
         queue = [];
@@ -285,6 +333,21 @@ describe('WEBDRIVER_SIGN_IN_SCRIPT — the browser-side state machine', () => {
           refreshAuth();
           cb();
         }
+        // Exit on "a result AND nothing still pending", NOT on the first result.
+        //
+        // This distinction is load-bearing and was proven, not guessed. A script
+        // that fires done() twice schedules its second fire with a fresh
+        // setTimeout, which lands in `queue` AFTER this iteration captured
+        // `batch`. Exiting the moment calls.length went non-zero therefore made
+        // the double-fire invisible whenever the FIRST fire came from a batched
+        // timer callback rather than a promise reaction — measured: removing
+        // only the success-path `return` in waitForUser was caught by the
+        // happy-path and auth-appears-late tests but SURVIVED the
+        // currentUser-materialises-late test, whose first fire is a timer call.
+        //
+        // Costs a correct script nothing: its queue is empty the instant it
+        // legitimately calls done(), so this still breaks on the same iteration.
+        if (calls.length > 0 && queue.length === 0) break;
       }
     };
     return { calls, drain: drain(), elapsed: () => now - 1_000_000 };
@@ -356,6 +419,27 @@ describe('WEBDRIVER_SIGN_IN_SCRIPT — the browser-side state machine', () => {
     });
     await r.drain;
     expect(r.calls).toEqual([{ ok: false, error: 'no currentUser after sign-in' }]);
+  });
+
+  test('a SLOW page still succeeds — each phase gets its own budget', async () => {
+    // The two phases must not share one 20s budget. If they do, a page whose
+    // Firebase SDK is slow to appear silently steals the time the currentUser
+    // wait needs, and sign-in fails with 'no currentUser after sign-in' even
+    // though nothing is actually wrong — a FALSE NEGATIVE, and worst on the
+    // slowest surface we run (a real iPhone over Appium on a cold page).
+    //
+    // makeWebSignIn, the Playwright twin, gives each phase its own fresh
+    // 20000ms waitForFunction. This module's docstring claims the two are the
+    // same sequence differing only in transport, so this pins that claim.
+    //
+    // Auth appears at 19.5s; currentUser 1.5s after that. Under one shared
+    // budget the second wait is cut off at 20s and reports failure.
+    const r = runScript({
+      authAt: (t) =>
+        t >= 195 ? { signInWithEmail: async () => {}, currentUser: t >= 210 } : undefined,
+    });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: true }]);
   });
 
   test('the script names no credential — the secret arrives only as an argument', () => {

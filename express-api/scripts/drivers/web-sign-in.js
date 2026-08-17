@@ -157,24 +157,6 @@ function makeWebSignIn({ pageFor, baseURL, label }) {
 }
 
 /**
- * `webSignIn` for the two drivers that speak WebDriver REST rather than holding
- * a Playwright Page — geckodriver (Firefox on Android) and Appium (WebKit on
- * iOS). They already own `navigateTo(url)` and an `/execute/sync` path; this
- * needs one more capability, `/execute/async`, because
- * `signInWithEmail` returns a Promise and a SYNC script would return before it
- * settles and report a false success.
- *
- * Same auth sequence, same outcome assertion, same refusals as makeWebSignIn —
- * only the transport differs. Kept beside it deliberately so the two can be read
- * against each other rather than drifting in separate files.
- *
- * @param {object} deps
- * @param {(url: string) => Promise<void>} deps.navigateTo
- * @param {(script: string, args?: unknown[]) => Promise<unknown>} deps.executeAsync
- * @param {string} deps.baseURL
- * @param {string} deps.label
- */
-/**
  * The browser-side sign-in state machine, sent verbatim to `/execute/async`.
  *
  * Extracted to a named constant so it can be executed and asserted on directly
@@ -197,9 +179,14 @@ const WEBDRIVER_SIGN_IN_SCRIPT = `
         (function waitForAuth() {
           if (window.shytalkAuth && window.shytalkAuth.signInWithEmail) {
             window.shytalkAuth.signInWithEmail(email, secret).then(function () {
+              // A FRESH budget for the second phase. Sharing one deadline let a
+              // slow-loading SDK eat the time the currentUser wait needs, failing
+              // a sign-in that was fine — and makeWebSignIn, the Playwright twin,
+              // gives each phase its own 20000ms waitForFunction.
+              var userDeadline = Date.now() + 20000;
               (function waitForUser() {
                 if (window.shytalkAuth && window.shytalkAuth.currentUser) return done({ ok: true });
-                if (Date.now() > deadline) return done({ ok: false, error: 'no currentUser after sign-in' });
+                if (Date.now() > userDeadline) return done({ ok: false, error: 'no currentUser after sign-in' });
                 setTimeout(waitForUser, 100);
               })();
             }, function (e) {
@@ -211,6 +198,25 @@ const WEBDRIVER_SIGN_IN_SCRIPT = `
           setTimeout(waitForAuth, 100);
         })();
         `;
+
+/**
+ * `webSignIn` for the two drivers that speak WebDriver REST rather than holding
+ * a Playwright Page — geckodriver (Firefox on Android) and Appium (WebKit on
+ * iOS). They already own `navigateTo(url)` and an `/execute/sync` path; this
+ * needs one more capability, `/execute/async`, because
+ * `signInWithEmail` returns a Promise and a SYNC script would return before it
+ * settles and report a false success.
+ *
+ * Same auth sequence, same outcome assertion, same refusals as makeWebSignIn —
+ * only the transport differs. Kept beside it deliberately so the two can be read
+ * against each other rather than drifting in separate files.
+ *
+ * @param {object} deps
+ * @param {(url: string) => Promise<void>} deps.navigateTo
+ * @param {(script: string, args?: unknown[]) => Promise<unknown>} deps.executeAsync
+ * @param {string} deps.baseURL
+ * @param {string} deps.label
+ */
 
 function makeWebSignInViaWebDriver({ navigateTo, executeAsync, baseURL, label }) {
   return async function webSignIn(name) {
