@@ -121,7 +121,12 @@ function classifyFiles(yamlText, files) {
   }
   const caseBody = caseMatch[1];
   const flagsInit =
-    'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false';
+    // SCRIPTS added by SHY-0226's develop merge. SHY-0284 introduced this
+    // flag in production pr-checks.yml but taught neither behavioural harness
+    // to observe it, so it shipped with no behavioural coverage: a case-arm
+    // change routing a path to SCRIPTS was invisible here, read as undefined,
+    // and passed.
+    'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false SCRIPTS=false WEB=false INTEGRATION=false OTHER=false';
   const fileList = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
   const script = `
 set -e
@@ -133,6 +138,7 @@ echo "ANDROID_APP=$ANDROID_APP"
 echo "IOS_APP=$IOS_APP"
 echo "APP=$APP"
 echo "BACKEND=$BACKEND"
+echo "SCRIPTS=$SCRIPTS"
 echo "WEB=$WEB"
 echo "INTEGRATION=$INTEGRATION"
 echo "OTHER=$OTHER"
@@ -148,7 +154,7 @@ echo "OTHER=$OTHER"
   return result;
 }
 
-describe('SHY-0226: .github/** lights BACKEND so the pin guard cannot be skipped', () => {
+describe('SHY-0226: .github/** lights SCRIPTS so the pin guard cannot be skipped', () => {
   let yamlText;
 
   beforeAll(() => {
@@ -156,28 +162,41 @@ describe('SHY-0226: .github/** lights BACKEND so the pin guard cannot be skipped
   });
 
   describe('behavioral: production case statement classification', () => {
-    test('a workflow file change classifies as BACKEND (the #1646 hole)', () => {
+    test('a workflow file change classifies as SCRIPTS (the #1646 hole)', () => {
       const flags = classifyFiles(yamlText, ['.github/workflows/test-backend.yml']);
-      expect(flags.BACKEND).toBe('true');
+      expect(flags.SCRIPTS).toBe('true');
     });
 
-    test('a composite-action change classifies as BACKEND', () => {
+    test('a composite-action change classifies as SCRIPTS', () => {
       const flags = classifyFiles(yamlText, ['.github/actions/setup-jdk-gradle/action.yml']);
-      expect(flags.BACKEND).toBe('true');
+      expect(flags.SCRIPTS).toBe('true');
     });
 
-    test('a dependabot.yml change classifies as BACKEND', () => {
+    // SHY-0284 superseded SHY-0226's mechanism: CI plumbing now sets the
+    // dedicated SCRIPTS flag rather than BACKEND. The INTENT of this test is
+    // unchanged and is the whole point of the story — `.github/*` must set a
+    // flag that makes the pin guards RUN. It previously set nothing at all,
+    // which is how #1646 shipped a workflow-only bump with test-backend and
+    // sonarcloud both skipped. test-backend runs on BACKEND or SCRIPTS.
+    test('a dependabot.yml change classifies as SCRIPTS', () => {
       const flags = classifyFiles(yamlText, ['.github/dependabot.yml']);
-      expect(flags.BACKEND).toBe('true');
+      expect(flags.SCRIPTS).toBe('true');
     });
 
-    test('.github changes set ONLY backend (no app/web/integration bleed)', () => {
+    // The no-bleed property matters MORE under SCRIPTS than it did under
+    // BACKEND, and is the reason SHY-0284's flag is the right one: the
+    // SHY-0127 block reads BACKEND as "the shared core changed, retest every
+    // client" and would force APP/ANDROID_APP/IOS_APP/WEB/INTEGRATION on,
+    // putting a workflow-only edit through a Gradle build and device E2E.
+    // BACKEND must stay false here for exactly that reason.
+    test('.github changes set ONLY scripts (no app/web/integration/backend bleed)', () => {
       const flags = classifyFiles(yamlText, ['.github/workflows/pr-checks.yml']);
       expect(flags).toMatchObject({
         ANDROID_APP: 'false',
         IOS_APP: 'false',
         APP: 'false',
-        BACKEND: 'true',
+        BACKEND: 'false',
+        SCRIPTS: 'true',
         WEB: 'false',
         INTEGRATION: 'false',
         OTHER: 'false',
@@ -204,7 +223,7 @@ describe('SHY-0226: .github/** lights BACKEND so the pin guard cannot be skipped
       // reordering it after) would silently recreate the #1646 hole for
       // .github markdown-adjacent diffs with every other case still green (R1).
       const flags = classifyFiles(yamlText, ['.github/pull_request_template.md']);
-      expect(flags.BACKEND).toBe('true');
+      expect(flags.SCRIPTS).toBe('true');
     });
 
     test('express-api classification is untouched by the reorder', () => {
