@@ -24,6 +24,7 @@ const {
   makeWebSignInViaWebDriver,
   buildPersonaIndex,
   resolvePersona,
+  WEBDRIVER_SIGN_IN_SCRIPT,
 } = require('../../../scripts/drivers/web-sign-in');
 
 const SECRET = 'unit-test-credential';
@@ -219,5 +220,146 @@ describe('makeWebSignInViaWebDriver — the REST transport (firefox-Android, Web
 
     expect(executeAsync.calls[0][1][0]).toBe('adult-power@shytalk.dev');
     expect(executeAsync.calls[1][1][0]).toBe('minor-power@shytalk.dev');
+  });
+});
+
+describe('WEBDRIVER_SIGN_IN_SCRIPT — the browser-side state machine', () => {
+  // Executed for real via node:vm with a virtual clock. No browser, no sleeps,
+  // no faked service: its only collaborators are window.shytalkAuth, Date.now
+  // and setTimeout, all supplied here. Same class of injection the factory
+  // tests already use for navigateTo/executeAsync.
+  //
+  // The property under test is `done()` fires EXACTLY ONCE on every path.
+  // Firing twice, or firing before auth settles, is a FALSE SUCCESS — a
+  // browser recorded as signed in that is not — which is the failure class
+  // this whole module exists to remove.
+
+  const vm = require('vm');
+
+  /**
+   * Run the script with a virtual clock.
+   * @param {object} opts
+   * @param {(tick: number) => object|undefined} opts.authAt  window.shytalkAuth as of tick N
+   * @param {number} opts.maxTicks  give up after this many 100ms ticks
+   * @returns {{calls: object[], elapsedMs: number}}
+   */
+  function runScript({ authAt, maxTicks = 400 }) {
+    const calls = [];
+    let now = 1_000_000;
+    let tick = 0;
+    let queue = [];
+
+    const sandbox = {
+      window: {},
+      setTimeout: (fn, ms) => queue.push({ fn, ms }),
+      Date: { now: () => now },
+    };
+    // Refresh window.shytalkAuth before each turn so a test can make it appear
+    // (or a currentUser materialise) after N ticks, exactly as a real page does.
+    const refreshAuth = () => {
+      sandbox.window.shytalkAuth = authAt(tick);
+    };
+
+    refreshAuth();
+    const context = vm.createContext(sandbox);
+    const fn = vm.runInContext(`(function () {${WEBDRIVER_SIGN_IN_SCRIPT}})`, context);
+    fn('adult-power@shytalk.dev', SECRET, (r) => calls.push(r));
+
+    // Drain. Each turn: let pending PROMISE jobs land, then run whatever timers
+    // they scheduled, advancing the virtual clock by each timer's own delay.
+    //
+    // Flushing promises first is essential, not cosmetic: the script calls
+    // signInWithEmail() and RETURNS without scheduling anything, so the timer
+    // queue is momentarily empty and a queue-length-driven loop would exit
+    // before .then() ever got to schedule the next poll — reporting "done was
+    // never called" for a script that works. setImmediate yields the macrotask
+    // turn that lets those jobs run; it is a yield, not a sleep.
+    const drain = async () => {
+      for (let i = 0; i < maxTicks && calls.length === 0; i += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+        const batch = queue;
+        queue = [];
+        for (const { fn: cb, ms } of batch) {
+          now += ms;
+          tick += 1;
+          refreshAuth();
+          cb();
+        }
+      }
+    };
+    return { calls, drain: drain(), elapsed: () => now - 1_000_000 };
+  }
+
+  const signedInAuth = () => ({
+    signInWithEmail: async () => {},
+    currentUser: { uid: 'u1' },
+  });
+
+  test('happy path — done() fires exactly once with ok:true', async () => {
+    const r = runScript({ authAt: () => signedInAuth() });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: true }]);
+  });
+
+  test('waits for shytalkAuth to APPEAR, then still succeeds exactly once', async () => {
+    // The SDK loads asynchronously; the script must poll rather than give up.
+    const r = runScript({ authAt: (t) => (t >= 3 ? signedInAuth() : undefined) });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: true }]);
+  });
+
+  test('waits for currentUser to MATERIALISE — never reports success early', async () => {
+    // This is the false-success guard: signInWithEmail RESOLVING is not the
+    // same as the page having an authenticated user.
+    //
+    // Asserting only `[{ok:true}]` is not enough and I proved it — mutating the
+    // script to `if (window.shytalkAuth) return done({ok:true})`, i.e. dropping
+    // the currentUser check entirely, still yields {ok:true} and such a test
+    // stays green. So this also pins WHEN success was reported: the virtual
+    // clock must have advanced past the tick where currentUser appeared.
+    const r = runScript({
+      authAt: (t) => ({
+        signInWithEmail: async () => {},
+        currentUser: t >= 4 ? { uid: 'u1' } : undefined,
+      }),
+    });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: true }]);
+    // 4 polls at 100ms each had to elapse before the user existed.
+    expect(r.elapsed()).toBeGreaterThanOrEqual(400);
+  });
+
+  test('rejected sign-in — done() fires exactly once carrying the reason', async () => {
+    const r = runScript({
+      authAt: () => ({
+        signInWithEmail: async () => {
+          throw new Error('INVALID_PASSWORD');
+        },
+        currentUser: undefined,
+      }),
+    });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: false, error: 'INVALID_PASSWORD' }]);
+  });
+
+  test('shytalkAuth never appears — gives up ONCE at the deadline, not forever', async () => {
+    const r = runScript({ authAt: () => undefined });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: false, error: 'shytalkAuth never appeared' }]);
+    // Bounded by the script's own 20s budget rather than spinning.
+    expect(r.elapsed()).toBeGreaterThan(20000);
+  });
+
+  test('currentUser never materialises — gives up ONCE, distinctly from the above', async () => {
+    const r = runScript({
+      authAt: () => ({ signInWithEmail: async () => {}, currentUser: undefined }),
+    });
+    await r.drain;
+    expect(r.calls).toEqual([{ ok: false, error: 'no currentUser after sign-in' }]);
+  });
+
+  test('the script names no credential — the secret arrives only as an argument', () => {
+    expect(WEBDRIVER_SIGN_IN_SCRIPT).not.toContain(SECRET);
+    expect(WEBDRIVER_SIGN_IN_SCRIPT).toContain('arguments[1]');
   });
 });

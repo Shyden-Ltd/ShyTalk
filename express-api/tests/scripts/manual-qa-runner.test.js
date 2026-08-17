@@ -26619,13 +26619,25 @@ describe('resolveAuthBase refusal reaches every sign-in matcher', () => {
   // test would still pass. These drive each matcher for real and assert the
   // step refuses AND that no network call was attempted.
 
-  const SAVED = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  // Captured in a beforeAll, NOT in the describe body. A describe callback runs
+  // during Jest's COLLECTION phase — before this file's root beforeAll (:29)
+  // sets FIREBASE_AUTH_EMULATOR_HOST — so a bare `const SAVED = process.env...`
+  // here captures the pristine pre-file value (undefined) rather than the
+  // 'localhost:9099' every other test in this file runs against. afterEach
+  // would then DELETE the variable instead of restoring it, and the next
+  // `target: 'local'` test appended after this block would silently get the
+  // refusal error for a reason unrelated to whatever it was testing.
+  // Proven, not theorised: a probe test placed after this block read `undefined`.
+  let saved;
+  beforeAll(() => {
+    saved = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  });
   beforeEach(() => {
     delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
   });
   afterEach(() => {
-    if (SAVED === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
-    else process.env.FIREBASE_AUTH_EMULATOR_HOST = SAVED;
+    if (saved === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    else process.env.FIREBASE_AUTH_EMULATOR_HOST = saved;
   });
 
   // One step text per resolveAuthBase call site in manual-qa-runner.js.
@@ -26662,5 +26674,23 @@ describe('resolveAuthBase refusal reaches every sign-in matcher', () => {
     const ctx = makeCtx({ target: 'dev' });
     const r = await executeStep({ kind: 'Given', text: 'Alice is signed in' }, ctx);
     expect(r.error || '').not.toMatch(/FIREBASE_AUTH_EMULATOR_HOST/);
+  });
+});
+
+// ── Env-isolation guard — keep this LAST (SHY-0328 R2) ───────────────
+
+describe('the refusal block leaves the emulator host intact for later tests', () => {
+  // This exists because it CAUGHT a real leak. The refusal block above deletes
+  // FIREBASE_AUTH_EMULATOR_HOST per test and restores it afterwards; an earlier
+  // draft captured the "saved" value in the describe BODY, which Jest evaluates
+  // during collection — before this file's root beforeAll sets the variable. So
+  // it restored `undefined`, i.e. deleted it, for every test that followed.
+  //
+  // Blast radius was zero at the time only because nothing came after it. That
+  // is not a safety property, it is a coincidence of ordering — and this file
+  // has grown by appending for months. This guard turns the coincidence into
+  // an assertion. Keep it last; if you append a new describe below, move it.
+  test('FIREBASE_AUTH_EMULATOR_HOST is still set after the refusal tests ran', () => {
+    expect(process.env.FIREBASE_AUTH_EMULATOR_HOST).toBe('localhost:9099');
   });
 });

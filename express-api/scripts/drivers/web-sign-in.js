@@ -38,15 +38,6 @@
  */
 
 /**
- * First name (or P-id) → persona registry entry, e.g. "Alice" → the P-02 record.
- *
- * Mirrors manual-qa-runner.js's loadPersonas() mapping rather than importing it:
- * the runner is a 16k-line CLI that CONSTRUCTS drivers, so requiring it from one
- * would invert the dependency. The registry itself is the shared source, so the
- * two cannot disagree about who a persona is — only about the lookup key, which
- * is one split() here.
- */
-/**
  * Build the lookup Map, REFUSING any duplicate key.
  *
  * A plain `Map.set` per persona would let a future "Alice Chen" beside
@@ -85,6 +76,15 @@ function buildPersonaIndex(personas) {
   return index;
 }
 
+/**
+ * First name (or P-id) → persona registry entry, e.g. "Alice" → the P-02 record.
+ *
+ * Mirrors manual-qa-runner.js's loadPersonas() mapping rather than importing it:
+ * the runner is a 16k-line CLI that CONSTRUCTS drivers, so requiring it from one
+ * would invert the dependency. The registry itself is the shared source, so the
+ * two cannot disagree about who a persona is — only about the lookup key, which
+ * is one split() here.
+ */
 let _personaByName = null;
 function resolvePersona(name) {
   if (!name) return null;
@@ -174,24 +174,24 @@ function makeWebSignIn({ pageFor, baseURL, label }) {
  * @param {string} deps.baseURL
  * @param {string} deps.label
  */
-function makeWebSignInViaWebDriver({ navigateTo, executeAsync, baseURL, label }) {
-  return async function webSignIn(name) {
-    const persona = resolvePersona(name);
-    if (!persona) {
-      console.error(`[${label}] webSignIn("${name}") — persona not in registry`);
-      return false;
-    }
-    const password = process.env.PERSONAS_PASSWORD;
-    if (!password) {
-      console.error(`[${label}] webSignIn("${name}") — PERSONAS_PASSWORD not set`);
-      return false;
-    }
-    try {
-      await navigateTo(`${baseURL.replace(/\/$/, '')}/roadmap.html`);
-      // One async script does the waiting too: polling from Node over REST would
-      // cost a round trip per attempt, and the page can settle in well under one.
-      const result = await executeAsync(
-        `
+/**
+ * The browser-side sign-in state machine, sent verbatim to `/execute/async`.
+ *
+ * Extracted to a named constant so it can be executed and asserted on directly
+ * (SHY-0328 R2). It is self-contained — its only collaborators are
+ * `window.shytalkAuth`, `Date.now` and `setTimeout`, all of which a test can
+ * supply — so proving `done()` fires EXACTLY ONCE on every path does not
+ * require a browser, and does not require faking any real service.
+ *
+ * That property is the whole point: `done()` firing twice, or firing early,
+ * is a FALSE SUCCESS — the runner would record a signed-in browser that is not
+ * signed in. That is the exact failure class this module exists to remove, so
+ * it deserves a regression net rather than a once-off device observation.
+ *
+ * Receives `arguments[0]=email, [1]=secret, [2]=done` — the W3C
+ * `/execute/async` calling convention, where the last argument is the callback.
+ */
+const WEBDRIVER_SIGN_IN_SCRIPT = `
         var email = arguments[0], secret = arguments[1], done = arguments[2];
         var deadline = Date.now() + 20000;
         (function waitForAuth() {
@@ -210,9 +210,25 @@ function makeWebSignInViaWebDriver({ navigateTo, executeAsync, baseURL, label })
           if (Date.now() > deadline) return done({ ok: false, error: 'shytalkAuth never appeared' });
           setTimeout(waitForAuth, 100);
         })();
-        `,
-        [persona.email, password],
-      );
+        `;
+
+function makeWebSignInViaWebDriver({ navigateTo, executeAsync, baseURL, label }) {
+  return async function webSignIn(name) {
+    const persona = resolvePersona(name);
+    if (!persona) {
+      console.error(`[${label}] webSignIn("${name}") — persona not in registry`);
+      return false;
+    }
+    const password = process.env.PERSONAS_PASSWORD;
+    if (!password) {
+      console.error(`[${label}] webSignIn("${name}") — PERSONAS_PASSWORD not set`);
+      return false;
+    }
+    try {
+      await navigateTo(`${baseURL.replace(/\/$/, '')}/roadmap.html`);
+      // One async script does the waiting too: polling from Node over REST would
+      // cost a round trip per attempt, and the page can settle in well under one.
+      const result = await executeAsync(WEBDRIVER_SIGN_IN_SCRIPT, [persona.email, password]);
       if (!result || !result.ok) {
         console.error(
           `[${label}] webSignIn("${name}") failed: ${(result && result.error) || 'no result'}`,
@@ -227,4 +243,10 @@ function makeWebSignInViaWebDriver({ navigateTo, executeAsync, baseURL, label })
   };
 }
 
-module.exports = { makeWebSignIn, makeWebSignInViaWebDriver, resolvePersona, buildPersonaIndex };
+module.exports = {
+  makeWebSignIn,
+  makeWebSignInViaWebDriver,
+  resolvePersona,
+  buildPersonaIndex,
+  WEBDRIVER_SIGN_IN_SCRIPT,
+};

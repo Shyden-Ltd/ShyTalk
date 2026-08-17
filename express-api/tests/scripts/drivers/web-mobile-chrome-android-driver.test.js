@@ -719,4 +719,48 @@ describe('createMobileChromeAndroidDriver — webSignIn (SHY-0328)', () => {
     expect(await driver.webSignIn('Alice')).toBe(false);
     expect(pages.Alice.goto).not.toHaveBeenCalled();
   });
+
+  test('returns FALSE when the page THROWS during sign-in, rather than propagating', async () => {
+    // The 20s waitForFunction can reject on a real device (navigation timeout,
+    // network drop). makeWebSignIn catches and returns false; nothing in the
+    // repo exercised that catch until now. A throw escaping here would abort
+    // the whole scenario instead of failing one step.
+    const pages = makeSignInPages(['Alice']);
+    pages.Alice.waitForFunction = jest.fn(async () => {
+      throw new Error('Timeout 20000ms exceeded');
+    });
+    const driver = await driverFor(pages);
+
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('switching persona A->B signs B in on B’s OWN page with B’s credentials', async () => {
+    // pageFor caches one page per persona name, so the second call runs against
+    // a different cached page while the factory closure is shared. A stale
+    // closure would re-authenticate as Alice and the journey would pass while
+    // acting as the wrong user.
+    const pages = makeSignInPages(['Alice', 'Marcus']);
+    const driver = await driverFor(pages);
+
+    await driver.webSignIn('Alice');
+    await driver.webSignIn('Marcus');
+
+    expect(pages.Alice.evaluate).toHaveBeenCalledWith(expect.any(Function), {
+      email: 'adult-power@shytalk.dev',
+      secret: SECRET,
+    });
+    expect(pages.Marcus.evaluate).toHaveBeenCalledWith(expect.any(Function), {
+      email: 'minor-power@shytalk.dev',
+      secret: SECRET,
+    });
+  });
+
+  test('is re-entrant — the SAME persona signed in twice both succeed', async () => {
+    const pages = makeSignInPages(['Alice']);
+    const driver = await driverFor(pages);
+
+    expect(await driver.webSignIn('Alice')).toBe(true);
+    expect(await driver.webSignIn('Alice')).toBe(true);
+    expect(pages.Alice.evaluate).toHaveBeenCalledTimes(2);
+  });
 });
