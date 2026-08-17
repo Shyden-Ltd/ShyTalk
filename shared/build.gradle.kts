@@ -185,6 +185,14 @@ tasks.named("jvmTest") {
             layout.projectDirectory.file(
                 "src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.ios.kt",
             ),
+            // SHY-0306: AppCheckWiringPinTest reads this too, so it MUST be
+            // declared. Proven, not assumed: with it missing, touching only
+            // AppCheckBridge.kt left `:shared:jvmTest UP-TO-DATE` — the pin
+            // that exists to stop the bridge moving back into a *.ios.kt file
+            // would silently not run on the very commit that moved it.
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckBridge.kt",
+            ),
             layout.projectDirectory.file(
                 "src/androidMain/kotlin/com/shyden/shytalk/core/security/AppCheckInstaller.kt",
             ),

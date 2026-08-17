@@ -36,7 +36,10 @@ function walk(dir, ext, acc = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'Pods' || entry.name === 'build') continue;
+      // Pods/build/DerivedData hold third-party checkouts (243+ Swift files
+      // under iosApp/build/dd/SourcePackages alone) — scanning them would be
+      // slow and would resolve references that are not ours.
+      if (['Pods', 'build', 'DerivedData'].includes(entry.name)) continue;
       walk(p, ext, acc);
     } else if (entry.name.endsWith(ext)) {
       acc.push(p);
@@ -55,43 +58,128 @@ function facadeNameFor(kotlinFile) {
 }
 
 /**
- * Top-level functions a Kotlin file EXPORTS to Swift.
+ * Top-level declarations a Kotlin file EXPORTS to Swift.
  *
  * `private` and `internal` are excluded deliberately: Kotlin/Native does not
  * put them on the facade, so accepting one would let this check pass on code
- * that cannot link. Indented `fun`s are members of a class or interface, not
- * top-level, so only column-0 declarations count.
+ * that cannot link. Indented declarations are members of a class or interface,
+ * not top-level, so only column-0 ones count.
+ *
+ * Review caught two gaps in the first version, both of which made the tool
+ * blind rather than noisy — the dangerous direction for a check like this:
+ *
+ *   - it only understood `fun` preceded by a visibility keyword, so the ~20
+ *     real top-level `actual fun` declarations in `*.ios.kt` files were
+ *     invisible. A future Swift call to one would have been reported as
+ *     unresolved WITH a misleading "no Kotlin file exports that" hint;
+ *   - it ignored top-level `val`/`var`, which land on the same facade as
+ *     properties and which the reference scanner does pick up.
  */
-function exportedTopLevelFuns(src) {
-  return src
-    .split('\n')
-    .map((l) =>
-      l.match(/^(?:@\w+\s+)*(?:(public|private|internal)\s+)?fun\s+(?:<[^>]*>\s*)?(\w+)\s*\(/),
-    )
-    .filter((m) => m && m[1] !== 'private' && m[1] !== 'internal')
-    .map((m) => m[2]);
+const KOTLIN_MODIFIERS = new Set([
+  'public',
+  'private',
+  'internal',
+  'protected',
+  'actual',
+  'expect',
+  'suspend',
+  'inline',
+  'external',
+  'operator',
+  'infix',
+  'tailrec',
+  'const',
+  'lateinit',
+]);
+
+function exportedTopLevelDecls(src) {
+  const out = [];
+  for (const line of src.split('\n')) {
+    if (/^\s/.test(line) || line.startsWith('@file:')) continue; // indented = member
+    const words = line.replace(/^(?:@\w+\s+)*/, '').split(/\s+/);
+    let i = 0;
+    let hidden = false;
+    while (i < words.length && KOTLIN_MODIFIERS.has(words[i])) {
+      if (words[i] === 'private' || words[i] === 'internal') hidden = true;
+      i += 1;
+    }
+    const kind = words[i];
+    if (kind !== 'fun' && kind !== 'val' && kind !== 'var') continue;
+    if (hidden) continue;
+    // `fun <T> name(` — skip a generic parameter list before the name.
+    const rest = words
+      .slice(i + 1)
+      .join(' ')
+      .replace(/^<[^>]*>\s*/, '');
+    const name = rest.match(/^(\w+)/);
+    if (name) out.push(name[1]);
+  }
+  return out;
 }
 
-/** Swift source with `//` line comments and string literals removed, so a
- *  facade named in prose or in a log message is not read as a call.
+/**
+ * Swift source reduced to the parts that can actually contain a call.
  *
- *  The string pattern is `"[^"\n]*"` rather than one that understands `\"`:
- *  the escape-aware form uses a nested alternation that eslint's
- *  sonarjs/slow-regex rejects as super-linear. The simple form ends a string
- *  early at an escaped quote, which can leave real code un-stripped — that
- *  direction is safe here, because the worst outcome is an EXTRA reference to
- *  resolve (a loud failure), never a missed one. */
+ * A single left-to-right pass rather than a chain of regexes, because review
+ * found three ways the regex version was wrong and they interact:
+ *
+ *   - stripping `//` BEFORE strings truncated a line at the `//` inside a URL
+ *     literal (`let u = "https://x"; RealKt.call()` lost the call);
+ *   - blanking whole string literals also discarded interpolated expressions,
+ *     so `"wired=\(SomeKt.thing())"` hid a genuine reference;
+ *   - `/* … *\/` block comments were never stripped at all, so a facade named
+ *     in one read as a live call.
+ *
+ * Order and nesting only come out right if the scanner knows which state it is
+ * in, so it tracks four: code, string, line comment, block comment — and
+ * treats the inside of a `\( … )` interpolation as CODE, which is what it is.
+ * Linear, and no regex for eslint's sonarjs/slow-regex to object to.
+ */
 function swiftCodeOnly(src) {
-  const withoutComments = src
-    .split('\n')
-    .map((l) => {
-      // indexOf/slice rather than /\/\/.*$/ — eslint's sonarjs/slow-regex
-      // rejects the `.*$` form, and this is both linear and plainer.
-      const i = l.indexOf('//');
-      return i === -1 ? l : l.slice(0, i);
-    })
-    .join('\n');
-  return withoutComments.replace(/"[^"\n]*"/g, '""');
+  let out = '';
+  let i = 0;
+
+  while (i < src.length) {
+    const two = src.slice(i, i + 2);
+
+    if (two === '//') {
+      while (i < src.length && src[i] !== '\n') i += 1;
+      continue;
+    }
+    if (two === '/*') {
+      i += 2;
+      while (i < src.length && src.slice(i, i + 2) !== '*/') i += 1;
+      i += 2;
+      continue;
+    }
+    if (src[i] === '"') {
+      i += 1;
+      // Skip the literal, but keep what is inside \( … ) — that is real code.
+      while (i < src.length && src[i] !== '"') {
+        if (src.slice(i, i + 2) === '\\(') {
+          i += 2;
+          // interpolation nesting, so `\(f(g()))` closes on the right paren
+          let depth = 1;
+          while (i < src.length && depth > 0) {
+            if (src[i] === '(') depth += 1;
+            else if (src[i] === ')') depth -= 1;
+            if (depth > 0) out += src[i];
+            i += 1;
+          }
+          out += ' ';
+          continue;
+        }
+        if (src[i] === '\\') i += 1; // an escape never ends the literal
+        i += 1;
+      }
+      i += 1;
+      out += '""';
+      continue;
+    }
+    out += src[i];
+    i += 1;
+  }
+  return out;
 }
 
 /**
@@ -124,7 +212,7 @@ describe('SHY-0306 — Swift references a Kotlin facade that exists', () => {
   const exportsByFacade = new Map();
   for (const f of kotlinFiles) {
     const facade = facadeNameFor(f);
-    const funs = exportedTopLevelFuns(fs.readFileSync(f, 'utf8'));
+    const funs = exportedTopLevelDecls(fs.readFileSync(f, 'utf8'));
     if (!funs.length) continue;
     if (!exportsByFacade.has(facade)) exportsByFacade.set(facade, new Set());
     for (const fn of funs) exportsByFacade.get(facade).add(fn);
@@ -149,7 +237,7 @@ describe('SHY-0306 — Swift references a Kotlin facade that exists', () => {
     const unresolved = unresolvedReferences(references, exportsByFacade).map(
       ({ file, facade, member }) => {
         const owner = kotlinFiles.find((f) =>
-          exportedTopLevelFuns(fs.readFileSync(f, 'utf8')).includes(member),
+          exportedTopLevelDecls(fs.readFileSync(f, 'utf8')).includes(member),
         );
         const hint = owner
           ? ` — ${path.relative(REPO_ROOT, owner)} exports it as ${facadeNameFor(owner)}`
@@ -175,6 +263,53 @@ describe('SHY-0306 — Swift references a Kotlin facade that exists', () => {
     expect(unresolvedReferences(refs, exports).map((r) => r.file)).toEqual(['b.swift', 'c.swift']);
   });
 
+  test('an `actual fun` and a top-level val are recognised as exported', () => {
+    // Review finding, and the dangerous direction: the first version only
+    // understood `fun` after a visibility keyword, so ~20 real top-level
+    // `actual fun` declarations in *.ios.kt files were invisible. A future
+    // Swift call to one would have been reported unresolved WITH a misleading
+    // "no Kotlin file exports that" hint. Top-level val/var land on the same
+    // facade and the reference scanner does pick them up.
+    const src = [
+      'actual fun currentTimeMillis(): Long = 0L',
+      'suspend fun fetch(x: Int) {}',
+      'val exportedProp: Int = 1',
+      'internal val hiddenProp: Int = 1',
+      'expect fun declared()',
+      'inline fun <T> generic(x: T) {}',
+    ].join('\n');
+
+    expect(exportedTopLevelDecls(src)).toEqual([
+      'currentTimeMillis',
+      'fetch',
+      'exportedProp',
+      'declared',
+      'generic',
+    ]);
+  });
+
+  test('a reference inside a string INTERPOLATION is still a reference', () => {
+    // Blanking whole string literals hid `"wired=\(SomeKt.thing())"`, which is
+    // real code inside a literal — a silent miss, not a loud one.
+    expect(swiftCodeOnly('NSLog("wired=\\(AppCheckBridgeKt.hasAppCheckBridge())")')).toMatch(
+      /AppCheckBridgeKt\.hasAppCheckBridge/,
+    );
+  });
+
+  test('a // inside a URL literal does not truncate the rest of the line', () => {
+    // Stripping comments before strings chopped the line at the `//` in
+    // `https://`, discarding any call that followed it on the same line.
+    const code = swiftCodeOnly('let u = "https://x.com"; RealKt.call()');
+    expect(code).toMatch(/RealKt\.call/);
+  });
+
+  test('a facade named in a BLOCK comment is not a reference', () => {
+    // `/* */` was never stripped, so prose in one read as a live call.
+    const code = swiftCodeOnly('/* GhostKt.gone() */\nRealKt.call()');
+    expect(code).not.toMatch(/GhostKt\.gone/);
+    expect(code).toMatch(/RealKt\.call/);
+  });
+
   test('the .kt/.ios.kt naming rule is applied, not assumed', () => {
     // The rule this whole check rests on, pinned directly so a change to it is
     // deliberate. Measured against the generated shared.h.
@@ -191,7 +326,7 @@ describe('SHY-0306 — Swift references a Kotlin facade that exists', () => {
       'internal fun alsoHidden(x: Int) {}',
       '    fun memberNotTopLevel(x: Int) {}',
     ].join('\n');
-    expect(exportedTopLevelFuns(src)).toEqual(['exported']);
+    expect(exportedTopLevelDecls(src)).toEqual(['exported']);
   });
 
   test('a facade named in a Swift comment or string is not a reference', () => {

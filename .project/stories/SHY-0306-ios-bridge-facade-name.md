@@ -280,3 +280,68 @@ generated `shared.h` contains the new facade with the method; then the deploy.
   **Still outstanding: the dev deploy that archives iOS and reaches
   TestFlight.** That is the DoD item this story exists for and it cannot be
   claimed until a real run does it.
+
+- **2026-08-17 — `code-reviewer` round 1: 2 Critical, 7 Important, 3 Minor.**
+  Both Criticals were verified before being acted on.
+
+  **C1 — the new pin could silently stop running, and the "10/10 green" was
+  luckier than it looked.** `AppCheckWiringPinTest` now reads
+  `AppCheckBridge.kt`, but `shared/build.gradle.kts`'s explicit
+  `appLockWiringPinnedSources` input list did not include it, so Gradle could
+  call `jvmTest` up-to-date after a change the pin was written to catch. The
+  green result only happened because `AppCheckTokenProvider.ios.kt` — a
+  declared input — was edited in the same commit. Exactly the trap the block's
+  own comment warns about ([[feedback-structural-pins-are-invisible-to-gradle-uptodate]]).
+
+  Proven in BOTH directions rather than asserted, and note the first attempt
+  was itself wrong: `touch` only moves mtime, and Gradle snapshots by content
+  hash, so the initial "proof" was inconclusive. With a real content change:
+
+  | declaration | result |
+  | --- | --- |
+  | absent | `> Task :shared:jvmTest UP-TO-DATE` |
+  | present | `> Task :shared:jvmTest` (runs) |
+
+  **C2 — no behavioural coverage of the bridge, and `hasAppCheckBridge()` has
+  zero callers.** Confirmed: its only occurrences are its own declaration and a
+  comment. Its stated purpose is "so a wiring test can prove Swift registered
+  something", and that test does not exist. This is inherited from SHY-0300
+  rather than introduced here, but it is real.
+
+  **Not fixed here, deliberately, and this is the honest reason:** the only
+  place that logic can be exercised is XCTest, and the iOS Simulator was
+  deleted from this machine on 2026-07-15 by operator decision. Writing a test
+  I cannot run would breach the rule that a test is observed failing before it
+  is trusted ([[feedback-run-the-red-before-implementing-plans-lie]]) — it
+  would be a test shipped on hope. Filed as a follow-up instead of faked, and
+  `hasAppCheckBridge()` is kept rather than deleted because the follow-up needs
+  it.
+
+  Important findings applied — all of them made the tool BLIND rather than
+  noisy, which is the dangerous direction for a checker:
+
+  - `exportedTopLevelDecls` did not understand `actual`/`expect`/`suspend`/
+    `inline` before `fun`, so ~20 real top-level `actual fun` declarations were
+    invisible; a future Swift call to one would have been rejected WITH a
+    misleading "no Kotlin file exports that" hint;
+  - top-level `val`/`var` were ignored although they land on the same facade
+    and the reference scanner does pick them up;
+  - string INTERPOLATION was discarded with the literal, hiding a genuine
+    reference in `"wired=\(SomeKt.thing())"`;
+  - `//` was stripped BEFORE strings, so the `//` inside a URL literal
+    truncated the line and dropped any call after it;
+  - `/* */` block comments were never stripped, so prose in one read as a call
+    — contradicting the story's own AC, which says "comment or string" without
+    qualification;
+  - `DerivedData` was not excluded alongside `Pods`/`build`.
+
+  The three string/comment defects interact, so the regex chain was replaced
+  with a single left-to-right scanner tracking code / string / line comment /
+  block comment, treating the inside of `\( … )` as the code it is. 4 further
+  mutants applied and killed against the new behaviours.
+
+- Verification after review: express **153 suites / 7588 tests**; eslint
+  `--max-warnings=0` (two findings fixed rather than suppressed:
+  `sonarjs/slow-regex`, then `no-useless-assignment`); prettier clean;
+  `AppCheckWiringPinTest` re-run and confirmed to re-run on a content change to
+  the file it reads. **9/9 mutants killed across the story.**
