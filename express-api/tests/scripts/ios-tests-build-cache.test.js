@@ -638,8 +638,12 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
     test('targets ~/.cocoapods/repos', () => {
       expect(cocoaPodsRepoCacheStep).toContain('~/.cocoapods/repos');
     });
-    test('key keyed on Podfile.lock', () => {
-      expect(cocoaPodsRepoCacheStep).toContain("hashFiles('iosApp/Podfile.lock')");
+    test('key keyed on the Podfile AND the lock', () => {
+      // SHY-0305: a Podfile-only change must bust this key too, or a new pod
+      // needing a new spec repo is fetched from a stale cache.
+      expect(cocoaPodsRepoCacheStep).toContain(
+        "hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock')",
+      );
     });
     test('restore-keys is OS-scoped (cocoapods-repos-${{ runner.os }}-)', () => {
       const lines = cocoaPodsRepoCacheStep.split('\n');
@@ -674,8 +678,13 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       // on warm cache — defeating the whole optimisation.
       expect(podsCacheStep).toContain('id: pods-cache');
     });
-    test('key keyed on Podfile.lock', () => {
-      expect(podsCacheStep).toContain("hashFiles('iosApp/Podfile.lock')");
+    test('key keyed on the Podfile AND the lock', () => {
+      // SHY-0305 — load-bearing. This key gates the Install CocoaPods skip
+      // (see the id: pods-cache test above). Keyed on the lock alone, a
+      // Podfile-only change hits the cache and skips the very step that would
+      // have refused the mismatch, so the stale Pods directory is restored and
+      // the new pod is never installed.
+      expect(podsCacheStep).toContain("hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock')");
     });
     test('restore-keys is OS-scoped (pods-${{ runner.os }}-)', () => {
       const lines = podsCacheStep.split('\n');
@@ -707,8 +716,12 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       // committed dirs/files instead.
       expect(derivedDataCacheStep).not.toContain("hashFiles('iosApp/**'");
     });
-    test('key hashes app/test/UI-test sources + project + Podfile.lock + Configurations', () => {
+    test('key hashes app/test/UI-test sources + project + Podfile + lock + Configurations', () => {
       expect(derivedDataCacheStep).toContain("'iosApp/iosApp/**'");
+      // SHY-0305 — the Podfile itself, not just the lock. This block is what
+      // documents this key; leaving it lock-only made the file read as though
+      // the fix had not reached here.
+      expect(derivedDataCacheStep).toContain("'iosApp/Podfile'");
       expect(derivedDataCacheStep).toContain("'iosApp/iosAppTests/**'");
       expect(derivedDataCacheStep).toContain("'iosApp/iosAppUITests/**'");
       expect(derivedDataCacheStep).toContain("'iosApp/iosApp.xcodeproj/**'");

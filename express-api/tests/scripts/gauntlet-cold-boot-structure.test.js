@@ -122,7 +122,19 @@ describe('50-matrix.sh cmd_stop — orphan/thrash prevention (SHY-0236)', () => 
   });
 
   test('VERIFIES quiet + never prints the bare "stopped pid N" lie', () => {
-    expect(body).toMatch(/pgrep -fl manual-qa-runner/);
+    // SHY-0304 replaced the machine-wide `pgrep -fl manual-qa-runner` with a
+    // RUN-SCOPED identity check. The old one answered a different question
+    // from the one `stop <id>` was asked: it returned 1 because some OTHER
+    // run was alive, and it matched anything merely naming the runner — which
+    // is why running the gauntlet's own test suite turned this red.
+    //
+    // The verification itself is unchanged in spirit and still pinned: a
+    // survivor is reported, never papered over. Behavioural coverage against
+    // real processes lives in `runner-process-identity.test.js` and
+    // `50-matrix-cmd-stop.test.js`.
+    expect(body).toMatch(/mine="\$\(runner_pids "\$run_id"\)"/);
+    expect(body).toMatch(/return 1/);
+    expect(body).not.toMatch(/pgrep -fl manual-qa-runner/);
     expect(body).not.toMatch(/echo "stopped pid \$pid"/);
   });
 });

@@ -20,6 +20,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -219,11 +220,42 @@ class StorageRepositoryImplTest {
             repo.deleteImageByUrl("https://images.shytalk.shyden.co.uk/messages/user 1/hello world.jpg")
 
             val url = requestSlot.captured.url.toString()
-            // The key should be URL-encoded (spaces become + or %20)
-            assertTrue(
-                "Expected URL-encoded key but was: $url",
-                !url.contains("user 1") && !url.contains("hello world"),
+            // EXACT, not "the raw substrings are absent". That weaker shape
+            // passed under `URLEncoder` (`+`), under the shared
+            // `encodeUrlQueryComponent` (`%20`), and under any encoder that
+            // silently dropped characters — while the encoder underneath it
+            // changed. Its sibling BiometricRepositoryImplTest was already on
+            // exact equality.
+            assertEquals(
+                "https://api.shytalk.shyden.co.uk/api/storage/delete" +
+                    "?key=messages%2Fuser%201%2Fhello%20world.jpg",
+                url,
             )
+        }
+
+    @Test
+    fun `deleteImageByUrl encodes the characters that would change the request`() =
+        runTest {
+            // The four that matter, none of which this site exercised: `&`
+            // starts a new parameter, `#` starts the fragment (never sent),
+            // `=` ends the name, and a literal `+` is decoded as a SPACE by
+            // form-urlencoded readers. Any of them arriving raw means the
+            // server deletes a different object, or nothing.
+            val requestSlot = slot<Request>()
+            every { httpClient.newCall(capture(requestSlot)) } returns mockCall
+            successEnqueue("""{"ok":true}""")
+
+            repo.deleteImageByUrl("https://images.shytalk.shyden.co.uk/m/a&b=c#d+e.jpg")
+
+            val query =
+                requestSlot.captured.url
+                    .toString()
+                    .substringAfter("?key=")
+            assertFalse("a raw & would split the parameter: $query", query.contains("&"))
+            assertFalse("a raw # would truncate the request: $query", query.contains("#"))
+            assertFalse("a raw = would end the name: $query", query.contains("="))
+            assertFalse("a literal + is decoded as a space: $query", query.contains("+"))
+            assertEquals("m%2Fa%26b%3Dc%23d%2Be.jpg", query)
         }
 
     @Test

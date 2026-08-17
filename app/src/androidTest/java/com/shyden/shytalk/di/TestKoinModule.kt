@@ -23,6 +23,7 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
@@ -85,6 +86,13 @@ val testModule =
         // the test emulator's app private dir; safe because instrumented
         // tests run in a sandboxed package).
         single { SecureStorage(androidContext()) }
+
+        // SHY-0143 — the cold-start identity cache. MainActivity resolves this
+        // with `by inject()` at construction, so without this binding EVERY
+        // instrumented test that launches the Activity dies on Koin resolution
+        // before its first assertion. Real impl over the real SecureStorage
+        // above — there is nothing to fake, it is a wrapper over local storage.
+        single { SessionCache(get()) }
 
         // Pure-logic services (no fake needed)
         single { AgeRestrictionService() }

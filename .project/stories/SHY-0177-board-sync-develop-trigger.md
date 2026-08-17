@@ -1,6 +1,6 @@
 ---
 id: SHY-0177
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-11
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 ---
 
 # SHY-0177: Board sync fires from main — develop-flow story changes never reach the Projects board
