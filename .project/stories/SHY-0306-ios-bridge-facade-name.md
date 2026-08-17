@@ -346,4 +346,30 @@ generated `shared.h` contains the new facade with the method; then the deploy.
   `AppCheckWiringPinTest` re-run and confirmed to re-run on a content change to
   the file it reads. **9/9 mutants killed across the story.**
 
-Reviewed-up-to: 084e2495bd28ca95096a1329ccd8d83f26242d8e
+Reviewed-up-to: d234d03d3ab0acb223cda83a26ae3a23ee81dd89
+
+- **2026-08-17 — the outstanding DoD item is now MET, with evidence.**
+  Deploy-To-Dev run `32000510087` against develop `5bcc9989291`:
+
+  ```
+  success  Install CocoaPods
+  success  Build, archive, and export iOS app
+  success  Upload to TestFlight
+  success  Ensure TestFlight internal-group auto-distribution
+  ```
+
+  iOS builds and ships again. Note `Install CocoaPods` **ran** rather than
+  being skipped — that is SHY-0305's cache-key fix behaving as designed, since
+  adding the Podfile to the key busted the stale Pods cache.
+
+  Timeline across the three attempts, which is the clearest statement of what
+  each fix bought:
+
+  | run | iOS outcome |
+  | --- | --- |
+  | `31964207898` | failed at 9 min — `Unable to resolve module dependency: 'FirebaseAppCheck'` |
+  | `31976285312` | failed at 57 min — `type 'AppCheckTokenProviderKt' has no member 'registerAppCheckBridge'` |
+  | `32000510087` | **success — archived and uploaded to TestFlight** |
+
+  Status stays `In Review`, not `Done`: Done means the release cut
+  ([[feedback-done-equals-release-cut]]).
