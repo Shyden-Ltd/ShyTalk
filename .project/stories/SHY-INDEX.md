@@ -145,6 +145,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0321](SHY-0321-app-check-on-authenticated-routes.md) | P1 | M | bug | A modified build of the app is indistinguishable from the real one on every authenticated route | 📝 Draft | — | — |
 | [SHY-0322](SHY-0322-remove-gacha-age-verification-gate.md) | P1 | M | refactor | Remove the gacha age-verification gate, and keep cohort segregation exactly as it is | 📝 Draft | — | — |
 | [SHY-0323](SHY-0323-manifest-awareness-in-future-stories.md) | P1 | S | chore | Every future story has to say whether its UI is server-driven or native | 📝 Draft | — | — |
+| [SHY-0324](SHY-0324-fcm-registration-to-fid-migration.md) | P1 | L | refactor | Firebase deprecated the FCM token API we target push with, and the build already refuses to compile without it | 📝 Draft | — | blocks #1519 |
 
 ## Done
 
