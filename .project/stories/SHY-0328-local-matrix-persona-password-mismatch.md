@@ -301,3 +301,52 @@ with the driver-gap inventory. This story ends having made the local matrix able
 to *authenticate*, with both env pins test-pinned and the production fallback
 made impossible.
 
+## Layer 4 — the definitive answer (2026-08-18, run 20260818-005216-local)
+
+Two facts settle it.
+
+**`--bail 3`.** The matrix aborts a cell after 3 failures
+(`"error": "matrix aborted by --bail 3 after 3 failure(s)"` in
+`matrix-report.json`). So `FAIL=221` was never 221 attempts — it is a handful of
+real failures plus ~218 scenarios that never ran. That is why three separate
+fixes moved the aggregate barely at all: the FIRST failures were unchanged, and
+everything after them is arithmetic.
+
+**The real reasons.** Running one journey directly and reading the generated
+report (`/tmp/manual-qa-cycle-1.md`) gives what the cell logs never did:
+
+```
+j01 :: Adam signs up with email/password/DOB
+  step:  When Adam on Android taps "signin_signUpLink"
+  error: UI step requires ctx.uiDriver (tag=persona_picker_open)
+
+j01 :: Adam accepts privacy + terms
+  step:  Then within 5000ms Adam's Android UI shows the legal acceptance screen
+  error: ctx.uiDriver.androidShowsNamedKind not configured
+```
+
+**j01 is an ANDROID-first journey.** Its failures are missing *driver methods*,
+not auth and not configuration. Same for the 256 `not implemented yet` entries
+across 5 web stubs. This is the missing-driver-method inventory
+([[project-zero-gap-journey-matrix-inventory]], 114 methods) and nothing else.
+
+### What this story fixed, and what it did not
+
+**Fixed, all real and all test-pinned:**
+1. Persona password mismatch — seed forced `localdev123`, runner got the 32-char dev secret.
+2. Runner authenticated against **production** Identity Toolkit on local runs, because `FIREBASE_AUTH_EMULATOR_HOST` was never set for the runner. Now pinned AND the fallback is refused outright.
+3. `webSignIn` implemented on **all seven** web drivers (two transports: Playwright Page, and WebDriver REST for geckodriver/Appium). Proven against the real stack — `uid: rjSZL33Km1lx7dbJWmblufjlAyCE`, matching a direct emulator REST sign-in for the same persona.
+
+**Not fixed, and not this story:** the driver-method inventory. That is a large,
+already-tracked programme. What changed is that it is now the ONLY thing in the
+way — before tonight it was masked by three layers of auth and configuration
+failure, and the uniform `OK=2 / FAIL=224` shape made it look like product debt.
+
+### The triage ladder that actually works
+
+1. `matrix-report.json` → check for `--bail`. Per-cell FAIL counts are not attempt counts.
+2. Run ONE journey directly and read the generated report — the cell logs carry titles, not reasons.
+3. `grep -c "not implemented yet"` — if it dominates, it is driver debt; stop hunting a config bug.
+4. `ps eww -p <runner-pid>` — confirm the env the runner ACTUALLY got.
+5. Only then the watermark `UID:` field.
+
