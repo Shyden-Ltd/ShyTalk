@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // didFinishLaunching, is the earliest point that is still after
         // configure().
         installAppCheck()
-        AppCheckTokenProviderKt.registerAppCheckBridge(bridge: self)
+        AppCheckBridgeKt.registerAppCheckBridge(bridge: self)
 
         // Register self as the Kotlin-side bridge so PushTokenManager can read
         // the cached FCM token from NSUserDefaults via this AppDelegate.
