@@ -183,3 +183,45 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
 
 - **2026-07-27 ~14:45 WIB** — Root-caused the develop CI deadlock. `test-backend` was RED on every run of this branch (4 tests / 2 suites, deterministic across 7 runs), which made `playwright-web` **skip** — so the SHY-0245 serve-web diagnostic could never produce output. Both failures were pre-existing on develop, and both are exactly what **SHY-0243** fixes: `gauntlet-v2-overlap` interpolated its process tag into the `bash -c` script text (on Linux that IS the parent's `/proc/<pid>/cmdline`, so `pgrep -f <tag>` self-matched → `PRE=ALIVE` tautology, `POST=DEAD` unreachable), and `serve-web-meta-injection` asserted `rev-parse --abbrev-ref HEAD` appears as a meta value, which under `actions/checkout`'s detached HEAD is the literal `"HEAD"` — precisely the value `build-meta.js:71` deliberately degrades to `null`. Neither PR could merge first: #1670 needs green webkit (fixed only here), this PR needs green `test-backend` (fixed only there). Resolved by merging `story/SHY-0243` into this branch (`--no-ff`, no conflicts). `test-backend` now **passes** on CI. This PR must be merged with a **MERGE COMMIT, not a squash**, so SHY-0243's tip stays an ancestor of develop and #1670 closes as genuinely Merged instead of stranded. Local gates after the merge: sleep ratchet OK (205, at baseline), `prettier --check "tests/**/*.ts"` exit 0, story + epic validators exit 0, the two suites 18/18.
 - **2026-07-27 ~14:45 WIB** — Remaining webkit blockers narrowed with evidence, not guesses. All four reproduce **only in CI** — `preview-watermark` ×3 and `lang-flag` ×1 all PASS locally on webkit against the same `serve-web.js`. The CI badge text names the cause pair: `"…api unknown ●**??**Safari 26UID: -en · **/roadmap**"` — both git metas absent AND the route reading `/roadmap` instead of `/roadmap.html`; the `lang-flag` failure is the same shape (`/privacy.html?lang=fr` resolving to `en`, and `getLanguage()` is fully synchronous off `window.location.search`, so the query string was simply not there). Ruled out this session: client-side rewriting (`replaceState` only ever writes a hash), service worker (none exists), job container (none — all four jobs are bare `ubuntu-latest`), and a `serve-web.js` redirect (`curl` returns 200, no `Location`). Notably `preview-watermark` PASSED on #1670's webkit job (PR-triggered) and FAILED on run 30150757612 (dispatch-triggered, `ref: develop`) — so the discriminator may be checkout shape rather than a develop defect. Webkit-only dispatch 30245915287 armed on this branch to capture the `Serve-web log` step.
+
+## Remaining work — measured 2026-08-17 21:40 WIB
+
+`lint / Lint` fails on this branch's OWN strict ratchet (`lint.yml:161`,
+"No fixed-duration waits (SHY-0245, strict)" — no baseline, zero tolerance).
+`bash scripts/check-no-test-sleeps.sh` exits 1 with **116 offending lines**:
+
+| file | count |
+| --- | --- |
+| `tests/web/suggestions-board.spec.ts` | **93** |
+| `tests/web/roadmap-auth.spec.ts` | 10 |
+| `tests/web/admin-audit-log.spec.ts` | 5 |
+| `express-api/scripts/drivers/ios-appium-driver.js` | 2 |
+| `tests/web/shared-header.spec.ts` | 1 |
+| `express-api/tests/unit/ip-geo.unit.test.js` | 1 |
+| `express-api/tests/scripts/matrix-dispatch.test.js` | 1 |
+| `express-api/scripts/drivers/web-playwright-driver.js` | 1 |
+| `express-api/scripts/drivers/web-common-methods.js` | 1 |
+| `express-api/scripts/drivers/device-lock.js` | 1 |
+
+Shape of the 93 in `suggestions-board.spec.ts` (2523 lines, 142 tests):
+`waitForTimeout(500)` ×54, `(300)` ×20, `(1000)` ×10, `(2000)` ×5, `(200)` ×4.
+They are scattered rather than following one pattern, so each needs its own
+judgement about which condition to wait on.
+
+**Why this was NOT batch-converted.** A sleep replaced by a wait on the wrong
+condition is worse than the sleep: it passes trivially and reports green. That
+is the same failure this story exists to eliminate, so 93 mechanical
+substitutions would risk trading 93 slow tests for 93 vacuous ones. The three
+voting tests converted earlier in this branch are the template — each one names
+the state it waits for (`sg-vote-btn--active`) and was mutation-proven.
+
+Note the driver-file sleeps (`ios-appium-driver.js`, `device-lock.js`,
+`web-common-methods.js`, `web-playwright-driver.js`) arrived via the develop
+merge, not from this branch. They are polling loops rather than test waits, so
+they may warrant the documented-marker exemption rather than conversion — decide
+per site; `lint.yml:159` notes an unexplained marker does NOT exempt.
+
+## Notes (running log) — continued
+
+- **2026-08-17 ~21:40 WIB** — CI state after the driver fix: `qa-runner-driver-checks` cause found and fixed (42 tests were passing locally only because a real phone was attached; `selectSerial` substituted it for the requested serial). `lint` remains red on the 116 sleeps above — this story's actual scope. `Pre-Merge Gate` needs a `Reviewed-up-to:` marker, which needs a reviewer pass on the current head.
+
