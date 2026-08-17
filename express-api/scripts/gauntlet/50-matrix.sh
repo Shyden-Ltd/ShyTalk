@@ -111,7 +111,21 @@ cmd_launch() {
   # bundle id (pbxproj never applies the .local suffix).
   # dev: explicit RTDB URL (region-specific) or every cell dies at init.
   local env_prefix=""
-  [ "$target" = "local" ] && env_prefix="NODE_ENV=local WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
+  # PERSONAS_PASSWORD is PINNED to localdev123 for local, and must stay pinned.
+  # This script sources ~/.shytalk/dev-personas.env, which carries the 32-char
+  # DEV password. 20-reseed.sh meanwhile FORCES local personas to localdev123
+  # (:43), because the .local app flavour bakes DEV_QA_PERSONAS_PASSWORD.
+  # Without this override the run SEEDS with one credential and SIGNS IN with
+  # another, so every persona sign-in fails and every journey dies at its first
+  # gate: 0 pass, and per cell exactly OK=2 / FAIL=224. The uniformity across
+  # every browser -- including desktop chromium, which touches no device -- is
+  # the tell that it is auth and not product debt.
+  #
+  # The seed side is already guarded (20-reseed.sh:63 dies on INVALID_PASSWORD).
+  # The runner side was not, which is why this cost two separate investigations.
+  # dev MUST NOT be overridden -- dev personas use the real secret.
+  # Pinned by tests/scripts/gauntlet/matrix-local-persona-password.test.js.
+  [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------
