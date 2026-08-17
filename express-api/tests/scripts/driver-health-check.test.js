@@ -161,9 +161,7 @@ describe('runHealthCheck — per-cell outcomes', () => {
   test('driver without a close method is tolerated + closeMs undefined', async () => {
     // No close method → close phase doesn't run → closeMs is
     // undefined (not 0). Symmetric to other "phase didn't run" pins.
-    const factory = jest.fn(async () => ({
-      /* no close */
-    }));
+    const factory = jest.fn(async () => ({/* no close */}));
     const r = await runHealthCheck({
       browsers: ['chromium'],
       factories: { chromium: factory },
