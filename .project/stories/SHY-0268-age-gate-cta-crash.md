@@ -1,6 +1,6 @@
 ---
 id: SHY-0268
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-03
 priority: P0
@@ -179,3 +179,34 @@ iOS journey walks must run before this leaves In Review.
 - **2026-08-03 07:5x BST** — Fix + tests green. Device gauntlet OWED (devices unavailable).
 - Deferred to follow-up: journey-runner support for `j21`'s declarative steps and an
   "app is still open" liveness assertion; the corpus-wide 6-step Gherkin sweep.
+
+- **2026-08-17 — cherry-picked onto current develop and finished off.** The
+  original PR #1688 carried this fix plus NINE unrelated commits (a Gherkin
+  sweep, a driver-method audit, journey-corpus repairs, and a `50-matrix`
+  cmd_stop fix that SHY-0304 has since solved differently and better). That
+  bundle went 63 commits behind develop, turned DIRTY, and went red on four
+  checks — so the fix never shipped and the crash has been live in every build
+  since 2026-08-03.
+
+  Operator hit it on the TestFlight build cut today and asked how it had
+  "regressed". It had not regressed: it was never merged. Recorded plainly
+  because "the fix exists on a branch" and "the fix shipped" are different
+  facts, and only the second one matters to a user.
+
+  This branch carries the crash-fix commit ALONE, cherry-picked clean onto
+  develop — one story, one PR.
+
+- **The bug, precisely.** `Screen.AgeVerificationSubmit.route` was never
+  registered as a `composable(...)` destination in `NavGraph.kt`, so the 18+
+  dialog's "Verify now" CTA called `navController.navigate(...)` for a route
+  Navigation Compose did not know. That throws, and the app closes.
+
+- **Verified on this branch, not assumed from the old PR.**
+  `NavGraphDestinationCompletenessTest` 5/5 and
+  `AgeVerificationCtaWiringPinTest` 4/4; full `:shared:jvmTest` 1541 tests, 0
+  failures; `:shared:compileKotlinIosArm64` and `detekt` BUILD SUCCESSFUL.
+  Mutation: un-registering the destination reddens **3 of 5** completeness
+  tests, so the guard genuinely catches this crash class rather than this one
+  button.
+
+Reviewed-up-to: ed3b58fa5c573b1a8a4df5cd62958d934ae82322
