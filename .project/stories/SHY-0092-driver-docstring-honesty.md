@@ -1,6 +1,6 @@
 ---
 id: SHY-0092
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-13
 priority: P2
@@ -128,3 +128,5 @@ Touches `.js` (driver tooling) → **NOT `*.md`-only → runs the FULL Pre-Merge
 
 ## Notes (running log)
 - 2026-06-13 — Filed under EPIC-0003 (child build-order item **D**, the warm-up). Evidence captured at filing: `web-playwright-driver.js` falsifying lines 22–23/52/58/204; `android-adb-driver.js` lines 10–11/62–63; devicectl/simctl genuinely have unbuilt UI inspection (non-canonical per the Appium decision). **Interpretation surfaced for operator review (not assumed):** a comment-only `.js` change runs the full device gauntlet because the protocol's sole exemption is `*.md`-only and these are scripts; I did NOT carve a new "comments are exempt" rule. If the operator wants a "comment-only-in-test-tooling" exemption, that's a CLAUDE.md change they decide — flagged, not actioned.
+
+Reviewed-up-to: 01069710d90f3afc161a1c2e57b94f723301f40f
