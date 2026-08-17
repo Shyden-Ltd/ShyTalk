@@ -430,3 +430,77 @@ own budget.
 
 14038 → **14104** tests. 66 added across the four rounds, every one of them
 mutation-checked rather than assumed.
+
+### R4/R5 — the step was lying, and the fix had an unbounded tail
+
+**R4, and this is the story's own headline bug.** The Web sign-in matcher did
+`await ctx.webDriver.webSignIn(name); return { ok: true };` — it DISCARDED the
+result. Every refusal implemented across seven drivers resolves `false`, and the
+step reported PASSED. Two existing tests PINNED the defect: their spies resolved
+`undefined` and asserted `ok: true`, which is proof the result was never
+inspected. Now `signedIn !== true` — strict, so a driver that forgets to return
+reads as failure rather than success.
+
+**R4 also caught a Critical in R3's own fix.** Per-phase deadlines raised the
+script's worst case to ~40s, but the W3C default script timeout is 30000ms and
+none of the three REST drivers set one (verified: zero occurrences). A
+legitimately-slow-but-SUCCEEDING sign-in could be killed server-side and surface
+as a transport error — strictly worse than the bug R3 fixed, and invisible to
+the `node:vm` harness by construction, since that harness models the script's
+logic and has no notion of a remote protocol ceiling. `timeouts: {script: 45000}`
+now pinned on all three, asserted against the script's own worst case rather
+than a literal.
+
+**R5 verdict: clean on this commit.**
+
+## Owed after this story — do NOT lose these
+
+### 1. The discarded-verdict bug class is systemic (file as the next story, P0/P1)
+
+R5's sweep found the same shape at **7 more call sites / 5 driver methods**:
+
+| `manual-qa-runner.js` | Step | Method |
+| --- | --- | --- |
+| :2857 | Android taps "&lt;tag&gt;" | `androidTap` |
+| :2910 | Android types into "&lt;tag&gt;" | `androidTap` |
+| :2996 | iOS taps "&lt;tag&gt;" | `iosTap` |
+| :3128 | Web taps "&lt;tag&gt;" | `webTap` |
+| :3602 | Web refreshes rooms list | `webRefreshRoomsList` |
+| :3734 | Android searches in &lt;screen&gt; | `androidSearchIn` |
+| :3750 | Android types into search | `androidSearchIn` |
+
+Each has a pinned "theatre" test (spy resolving `undefined`, asserting
+`ok: true`). `webFillIn` (:10343) and the `*TapOnCard` family (:10371) already
+do it correctly — use them as the reference.
+
+**`iosTap` (:2996) is the severe one and is a COMPOUND bug.** The runner passes a
+STRING tag. `ios-simctl-driver.js` takes one. But `ios-appium-driver.js` — the
+driver behind `--driver appium`/`all` with `WDA_TEAM_ID`, i.e. the transport
+enabled on 2026-08-18 — defines `iosTap(x, y)` taking **numeric coordinates**;
+its string-based method is `iosTapByTag`. So every iOS tap sends
+`x="<tag>", y=undefined`, Appium rejects it, `iosTap` returns false, and the
+runner discards it. **Every "on iOS taps" step is a guaranteed no-op reporting
+PASS**, and its test asserts `toHaveBeenCalledWith('<string>')`, encoding the
+wrong contract.
+
+This corrupts the triage ladder recorded above: per-cell OK counts cannot be
+trusted while taps that silently no-op are indistinguishable from taps that
+worked. **Do not draw conclusions about matrix health from a run until this
+lands.** R5 called its sweep a floor, not a ceiling — ~150 `androidShows*` /
+`iosShows*` assertion methods were not individually re-verified.
+
+Also fold in `webTypeIntoSearch` (:6457), which deliberately treats `undefined`
+as pass and is now inconsistent with the `!== true` convention.
+
+### 2. Appium may not honour `timeouts.script` — verify on the real iPhone
+
+`timeouts` is a W3C standard capability, so geckodriver is settled. For the two
+Appium/iOS drivers it is confirmed to survive capability validation, but whether
+the XCUITest driver's WEBVIEW `/execute/async` path derives its ceiling from
+session `timeouts.script` or from a separate WebKit RPC timeout
+(`webkitResponseTimeout`, historically well under 45s) is UNVERIFIED. The unit
+test proves the capability is REQUESTED, not that Appium honours it — that is a
+real-device question by construction. Decisive check: slow the Firebase SDK load
+past ~25s on the real iPhone and confirm no early transport timeout.
+
+Reviewed-up-to: 718d49e91cf
