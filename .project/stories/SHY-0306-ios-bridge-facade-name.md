@@ -1,6 +1,6 @@
 ---
 id: SHY-0306
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-17
 priority: P0
@@ -345,3 +345,5 @@ generated `shared.h` contains the new facade with the method; then the deploy.
   `sonarjs/slow-regex`, then `no-useless-assignment`); prettier clean;
   `AppCheckWiringPinTest` re-run and confirmed to re-run on a content change to
   the file it reads. **9/9 mutants killed across the story.**
+
+Reviewed-up-to: 084e2495bd28ca95096a1329ccd8d83f26242d8e
