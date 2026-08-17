@@ -63,45 +63,29 @@ describe('iosApp/Configurations/Local.xcconfig', () => {
     expect(xcconfigText).toMatch(/^LOCAL_HOST\s*=\s*localhost$/m);
   });
 
-  // Variable interpolation in xcconfig uses the `$(VAR)` form. NOT
-  // `${VAR}` — that's the shell idiom and would be a silent no-op in
-  // Xcode build settings (the value would be literal `${LOCAL_HOST}`
-  // instead of being expanded).
-  test('declares LOCAL_API_BASE_URL pointing at $(LOCAL_HOST):3000', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_API_BASE_URL\s*=\s*http:\/\/\$\(LOCAL_HOST\):3000$/m);
-  });
-
-  // LiveKit signalling port. The Docker container also exposes 7881
-  // and 7882 for WebRTC media — the SFU advertises those back during
-  // the signalling handshake, so we only point at 7880 here.
-  test('declares LOCAL_LIVEKIT_URL pointing at $(LOCAL_HOST):7880', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_LIVEKIT_URL\s*=\s*ws:\/\/\$\(LOCAL_HOST\):7880$/m);
-  });
-
-  // Matches the `--project=demo-shytalk` flag in
-  // `firebase emulators:start` (local/start.sh Step 2). The `demo-`
-  // prefix is Firebase's emulator-only namespace.
-  test('declares LOCAL_FIREBASE_PROJECT_ID = demo-shytalk', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_FIREBASE_PROJECT_ID\s*=\s*demo-shytalk$/m);
-  });
-
-  // RTDB emulator endpoint. Sibling of Android's `RTDB_URL` in
-  // app/build.gradle.kts. The `?ns=…` query string is the namespace
-  // selector the Firebase RTDB emulator expects.
-  test('declares LOCAL_FIREBASE_RTDB_URL pointing at $(LOCAL_HOST):9000 with namespace', () => {
-    expect(xcconfigText).toMatch(
-      /^LOCAL_FIREBASE_RTDB_URL\s*=\s*http:\/\/\$\(LOCAL_HOST\):9000\?ns=demo-shytalk-default-rtdb$/m,
-    );
-  });
-
   // Pin the total variable count so a stray addition (typo, copy-paste,
   // experimental key) doesn't silently land alongside the documented
-  // six. Six values × 1 line each, no continuation lines in the
-  // current file.
-  test('contains exactly six variable declarations', () => {
+  // two. BUNDLE_ID_SUFFIX + LOCAL_HOST, one line each.
+  test('contains exactly two variable declarations', () => {
     const varLines = xcconfigText.match(/^[A-Z_][A-Z0-9_]*\s*=/gm);
     expect(varLines).not.toBeNull();
-    expect(varLines.length).toBe(6);
+    expect(varLines.length).toBe(2);
+  });
+
+  // Regression guard for the defect that removed them. These four keys
+  // existed for months, were documented as live operator knobs, and were
+  // read by nothing — every URL is computed in AppEnvironment.swift from
+  // LOCAL_HOST alone. LOCAL_FIREBASE_RTDB_URL was actively misleading: it
+  // documented `?ns=demo-shytalk-default-rtdb` while the app ships
+  // `?ns=demo-shytalk`. Re-adding any of them re-creates a knob that
+  // looks followed and does nothing, so fail loudly instead.
+  test.each([
+    'LOCAL_API_BASE_URL',
+    'LOCAL_LIVEKIT_URL',
+    'LOCAL_FIREBASE_PROJECT_ID',
+    'LOCAL_FIREBASE_RTDB_URL',
+  ])('does NOT declare the dead knob %s', (key) => {
+    expect(xcconfigText).not.toMatch(new RegExp(`^${key}\\s*=`, 'm'));
   });
 
   // Phase 3.2 may add `#include "Pods/Target Support Files/…"` once

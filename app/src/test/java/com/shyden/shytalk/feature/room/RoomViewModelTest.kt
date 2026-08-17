@@ -1412,6 +1412,60 @@ class RoomViewModelTest {
             coVerify { roomRepository.toggleMute("room-1", 0, true) }
         }
 
+    /**
+     * SHY-0272. RoomScreen's `onToggleMic` used to wrap this call in
+     * `if (platformSettings.hasPermission(MICROPHONE)) { … }` with no else, so a
+     * denied-permission tap was swallowed whole — no request, no error, no state
+     * change, which is the operator's original report verbatim. The gate is gone
+     * and the lambda now delegates here unconditionally, which makes THIS the
+     * behaviour that has to be right. It was asserted nowhere.
+     */
+    @Test
+    fun `toggleSelfMute - rejects unmute when mic permission denied, and says so`() =
+        roomTest {
+            viewModel = createViewModel()
+            viewModel.onAudioPermissionResult(false) // denied, or revoked in Settings
+            val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+            seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+            emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+            advanceUntilIdle()
+            connectionStateFlow.value = VoiceConnectionState.CONNECTED
+
+            viewModel.toggleSelfMute(0) // try to unmute without permission
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { roomRepository.toggleMute(any(), any(), any()) }
+            // The refusal must be SURFACED, not swallowed. uiState.error is what
+            // RoomScreen's LaunchedEffect turns into a snackbar.
+            assertEquals(
+                "Microphone permission required. Please grant it in Settings.",
+                viewModel.uiState.value.error,
+            )
+        }
+
+    /**
+     * The other half of the same defect: the old RoomScreen gate was also
+     * over-broad. It blocked BOTH directions, so a user without mic permission
+     * could not even mute themselves — and muting must always be allowed, since
+     * it needs no microphone access at all.
+     */
+    @Test
+    fun `toggleSelfMute - allows mute even when mic permission denied`() =
+        roomTest {
+            viewModel = createViewModel()
+            viewModel.onAudioPermissionResult(false)
+            val seats = TestData.createSeatsWithOwner(currentUserId)
+            emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+            advanceUntilIdle()
+            connectionStateFlow.value = VoiceConnectionState.CONNECTED
+
+            viewModel.toggleSelfMute(0) // muting (isMuted=false→true)
+            advanceUntilIdle()
+
+            coVerify { roomRepository.toggleMute("room-1", 0, true) }
+            assertNull(viewModel.uiState.value.error)
+        }
+
     // ===== Re-entry Tests =====
 
     @Test

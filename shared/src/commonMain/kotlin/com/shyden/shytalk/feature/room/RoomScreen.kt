@@ -731,9 +731,26 @@ fun RoomScreen(
                                 _isOwnerOrHost = isOwnerOrHost,
                                 isVoiceUnavailable = uiState.isVoiceUnavailable,
                                 onToggleMic = { seatIndex ->
-                                    if (platformSettings.hasPermission(AppPermission.MICROPHONE)) {
-                                        viewModel.toggleSelfMute(seatIndex)
-                                    }
+                                    // Refresh from the LIVE OS state first. `hasAudioPermission`
+                                    // is otherwise only ever written by the initial
+                                    // RequestMicPermission callback, so a permission revoked in
+                                    // system Settings mid-session leaves it stale.
+                                    viewModel.onAudioPermissionResult(
+                                        platformSettings.hasPermission(AppPermission.MICROPHONE),
+                                    )
+                                    // Then delegate UNCONDITIONALLY. This call used to sit inside
+                                    // `if (hasPermission) { … }` with no else, which swallowed the
+                                    // tap whole when permission was denied — no snackbar, no state
+                                    // change, nothing. That is the very symptom SHY-0272 was filed
+                                    // to fix, and its AC requires the refusal be surfaced rather
+                                    // than swallowed.
+                                    //
+                                    // The gate was also over-broad: it blocked MUTING as well, and
+                                    // muting yourself must always be allowed. toggleSelfMute gets
+                                    // both right already — it blocks only the unmute direction and
+                                    // sets uiState.error, which the LaunchedEffect above turns into
+                                    // a snackbar.
+                                    viewModel.toggleSelfMute(seatIndex)
                                 },
                                 onSendMessage = { viewModel.sendMessage(it) },
                                 onTapUser = { userId ->

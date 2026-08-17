@@ -30,41 +30,36 @@
 //                             `127.0.0.1` for `ws://`. Overriding to
 //                             an mDNS hostname is rejected at runtime
 //                             until 3.3 extends the allow-list.
-//   LOCAL_API_BASE_URL      — Express API URL. Express listens on
-//                             :3000 per local/start.sh Step 5.
-//   LOCAL_LIVEKIT_URL       — LiveKit signalling URL. LiveKit
-//                             container exposes 7880 (signalling)
-//                             plus 7881/7882 (WebRTC media) per
-//                             local/docker-compose.yml. We point at
-//                             7880 only — the SFU advertises the
-//                             media ports back during the signalling
-//                             handshake.
-//   LOCAL_FIREBASE_PROJECT_ID  — `demo-shytalk` matches the
-//                                `--project=demo-shytalk` flag in
-//                                firebase emulators:start. The
-//                                `demo-` prefix is Firebase's
-//                                emulator-only namespace; no real
-//                                Firebase project with that ID can
-//                                exist.
-//   LOCAL_FIREBASE_RTDB_URL — Realtime Database emulator URL.
-//                             Firebase emulator suite exposes RTDB
-//                             on :9000 (firebase.json `database.port`).
-//                             `?ns=demo-shytalk-default-rtdb` query
-//                             string is the namespace selector the
-//                             emulator expects.
+// LOCAL_HOST IS THE ONLY KNOB. Nothing else here is read at runtime.
 //
-//                             NOTE on iOS-vs-Android divergence: the
-//                             Android Firebase SDK auto-derives the
-//                             namespace from FirebaseOptions, so
-//                             `app/build.gradle.kts`'s Android
-//                             `RTDB_URL` is `http://host:9000` with
-//                             no `?ns=` query. The iOS Firebase SDK
-//                             does NOT auto-derive; pointing it at
-//                             the emulator without an explicit `?ns=`
-//                             selector connects to the wrong default
-//                             namespace. The divergence is in the
-//                             SDKs, not the data — both URLs reach
-//                             the same logical RTDB instance.
+// This file used to also declare LOCAL_API_BASE_URL, LOCAL_LIVEKIT_URL,
+// LOCAL_FIREBASE_PROJECT_ID and LOCAL_FIREBASE_RTDB_URL, documented above
+// as though they were live settings. They were not: only LOCAL_HOST is
+// forwarded into Info.plist (as `ShyTalkLocalHost`), and every URL is
+// computed in Swift from that one value —
+//
+//   AppEnvironment.swift:67  localApiBaseUrl = "http://\(localHost):3000"
+//   AppEnvironment.swift:74  localLiveKitUrl = "ws://\(localHost):7880"
+//   AppEnvironment.swift:77  localRtdbUrl    = "http://\(localHost):9000?ns=demo-shytalk"
+//
+// Editing the deleted keys changed nothing, which is worse than having no
+// knob at all because the recipe looks followed — the exact failure mode
+// SHY-0275 was filed to remove, left standing for these four siblings.
+// Worse, the RTDB key documented a namespace the app does not use:
+// `?ns=demo-shytalk-default-rtdb` here versus the shipping
+// `?ns=demo-shytalk` in Swift. A maintainer trusting this file would have
+// pointed the emulator at the wrong namespace.
+//
+// To change a port, edit AppEnvironment.swift. To change the host, set
+// LOCAL_HOST below. Absence of the four keys is pinned by the test named
+// at the bottom of this comment, so they cannot creep back.
+//
+// WORTH KEEPING — iOS-vs-Android RTDB divergence: the Android Firebase SDK
+// auto-derives the namespace from FirebaseOptions, so `app/build.gradle.kts`'s
+// local `RTDB_URL` is `http://host:9000` with no `?ns=` query. The iOS SDK
+// does NOT auto-derive; without an explicit `?ns=` selector it connects to
+// the wrong default namespace. That is why localRtdbUrl carries `?ns=` and
+// Android's does not. The divergence is in the SDKs, not the data.
 //
 // xcconfig syntax notes for future maintainers:
 //   - Variable expansion uses `$(VAR)` — NOT `${VAR}` (that's shell).
@@ -79,7 +74,3 @@
 
 BUNDLE_ID_SUFFIX = .local
 LOCAL_HOST = localhost
-LOCAL_API_BASE_URL = http://$(LOCAL_HOST):3000
-LOCAL_LIVEKIT_URL = ws://$(LOCAL_HOST):7880
-LOCAL_FIREBASE_PROJECT_ID = demo-shytalk
-LOCAL_FIREBASE_RTDB_URL = http://$(LOCAL_HOST):9000?ns=demo-shytalk-default-rtdb
