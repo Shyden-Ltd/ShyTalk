@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.FunFact
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logW
@@ -45,10 +46,21 @@ class IosDeviceRepositoryImpl(
             Resource.Error("Device lock-check failed: ${e.message}")
         }
 
+    /**
+     * SHY-0143 — reads the UNAUTHENTICATED `/api/ban-status`, not
+     * `/api/device-info`.
+     *
+     * `/api/device-info` sits behind `authMiddleware`, so with no Firebase
+     * session `getIdToken()` threw before the request was built and the catch
+     * below reported "not banned" — a banned user who was signed out reached
+     * the sign-in screen, which the story's AC names as the thing that must
+     * never happen. `/api/ban-status` answers the same question with no token,
+     * and writes nothing (device-info upserts a binding and runs a cap
+     * transaction, which has no business running on every cold start).
+     */
     override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
         try {
-            val body = JsonObject(mapOf("deviceId" to JsonPrimitive(deviceId)))
-            val response = api.post("/api/device-info", body)
+            val response = api.getPublic("/api/ban-status?deviceId=${encodeUrlQueryComponent(deviceId)}")
             val banObj = response["banStatus"]
             if (banObj != null) {
                 val ban = (banObj as? kotlinx.serialization.json.JsonObject) ?: JsonObject(emptyMap())
@@ -349,7 +361,12 @@ class IosBiometricRepositoryImpl(
         deviceId: String,
     ): Result<String> =
         runCatching {
-            val response = api.getPublic("/api/auth/biometric/challenge?uniqueId=$uniqueId&deviceId=$deviceId")
+            val response =
+                api.getPublic(
+                    "/api/auth/biometric/challenge" +
+                        "?uniqueId=${encodeUrlQueryComponent(uniqueId)}" +
+                        "&deviceId=${encodeUrlQueryComponent(deviceId)}",
+                )
             response["challenge"]!!.jsonPrimitive.content
         }
 
@@ -471,7 +488,7 @@ class IosStorageRepositoryImpl(
     override suspend fun deleteImageByUrl(url: String) {
         try {
             val key = url.removePrefix("https://images.shytalk.shyden.co.uk/")
-            api.delete("/api/storage/delete?key=$key")
+            api.delete("/api/storage/delete?key=${encodeUrlQueryComponent(key)}")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

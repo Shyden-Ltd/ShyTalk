@@ -641,6 +641,79 @@ class LockScreenViewModelTest {
             assertEquals(emptyList(), fakeBioRepo.verifiedSignatures, "no challenge round-trip without stored ids")
         }
 
+    // ─── SHY-0143: unlocking must hydrate the RESOLVED identity ──────────
+    //
+    // Unlocking exists to reach Main, and every screen there keys its reads on
+    // `AuthRepository.currentUserId` — which, by documented contract, falls
+    // back to the raw Firebase UID until `resolvedUniqueId` is set.
+    //
+    // The only code that ever set it on a returning-user path was
+    // `AuthViewModel.init`, and an `AuthViewModel` is constructed only inside
+    // the Sign-In / e-mail-OTP route composables. SHY-0187 stopped routing cold
+    // starts through Sign-In, so the unlock path now reaches Main having never
+    // constructed one: `resolvedUniqueId` stays null and all ~69 read sites key
+    // on the Firebase UID. That is the SHY-0139 wrong-key hazard — the room
+    // list, the wallet and the FCM token registration all address a document
+    // that does not exist.
+    //
+    // The uniqueId is not in doubt at this point: `submitPin`/`authenticate`
+    // already read it from the stored credential to verify against, so
+    // hydrating is free.
+
+    @Test
+    fun `submitPin success hydrates resolvedUniqueId before unlocking`() =
+        runTest {
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(customToken = "token-abc"))
+            "1234".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.unlocked, "precondition: the unlock itself must succeed")
+            assertEquals(
+                "12345678",
+                fakeAuthRepo.resolvedUniqueId,
+                "unlocking navigates to Main — resolvedUniqueId must be hydrated from the stored " +
+                    "credential first, or every read on Main keys on the Firebase UID (SHY-0139)",
+            )
+        }
+
+    @Test
+    fun `biometric success hydrates resolvedUniqueId before unlocking`() =
+        runTest {
+            armBiometricSeams()
+            fakeBioRepo.verifyResult = Result.success("bio-token")
+            viewModel.authenticateWithBiometric("Unlock", "Confirm identity")
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.unlocked, "precondition: the unlock itself must succeed")
+            assertEquals(
+                "12345678",
+                fakeAuthRepo.resolvedUniqueId,
+                "the biometric path reaches the same Main screen as the PIN path and must hydrate " +
+                    "identically — a gate fixed on one route only is not fixed",
+            )
+        }
+
+    @Test
+    fun `a FAILED unlock leaves resolvedUniqueId alone`() =
+        runTest {
+            // The mirror image, and the reason hydration belongs on the success
+            // path rather than beside the credential read: a wrong PIN must not
+            // publish an identity. Were hydration hoisted to where the stored
+            // uniqueId is first read, anyone holding the device could promote
+            // the account's identity by tapping four wrong digits.
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(attemptsRemaining = 4))
+            "9999".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+
+            assertFalse(viewModel.state.value.unlocked, "precondition: this unlock must fail")
+            assertNull(
+                fakeAuthRepo.resolvedUniqueId,
+                "a rejected PIN must not hydrate an identity",
+            )
+        }
+
     private class FakeAuthRepository : AuthRepository {
         var fakeAuthenticated: Boolean = true
         var customTokenResult: Resource<String> = Resource.Success("uid-1")

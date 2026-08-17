@@ -306,21 +306,82 @@ jobs:
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "{\"passed\":0,\"failed\":0,\"total\":0,\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"kotlin\",\"env\":\"pr\"}" > kotlin-report/metadata.json
 
-      - name: Deploy Kotlin report to GitHub Pages
-        # See test-backend.yml for full rationale: skip on dependabot
-        # PRs (read-only token + gh-pages race condition). Guard on
-        # github.head_ref so a merge commit added by a human doesn't
-        # bypass the skip (github.actor would resolve to the human).
-        if: always() && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+      # SHY-0298: the report is handed to a separate publish job rather than
+      # pushed from here, so a retrying publish cannot hold the ~15-min Kotlin
+      # suite open. An artifact is the hand-off.
+      - name: Upload Kotlin report for publishing
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: kotlin-report
-          destination_dir: kotlin/pr/latest
-          # SHY-0128: false — peaceiris cleans ONLY destination_dir before
-          # copying (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
-          # suite/env's latest/ instead of stranding prior hashed files forever.
-          keep_files: false
+          name: kotlin-report-pages
+          retention-days: 1
+          path: kotlin-report
+          if-no-files-found: error
+
+  # SHY-0298 — the Kotlin report publishes from its own job.
+  #
+  # Before this story the Kotlin report pushed straight from `build-and-test`,
+  # whose concurrency group is per-BRANCH (`pr-checks-<head_ref>`). Two PRs
+  # finishing together were therefore in different groups and could interleave
+  # between peaceiris' clone and its push, leaving the loser with
+  # `! [rejected] … (fetch first)`; peaceiris does not retry.
+  #
+  # NO concurrency group, deliberately, and this is the second design. The
+  # first serialised all three writers behind `gh-pages-deploy` — measured to
+  # work (two probe workflows, 75s each, ran strictly sequentially) but wrong
+  # anyway: a group holds exactly ONE pending entry, so a third contender
+  # cancels the pending second (incidents #568/#570). A cancelled publish
+  # propagates into PR Gate, a REQUIRED check, so the lock would have red-gated
+  # innocent PRs to protect a report.
+  #
+  # The publish action retries against the moving tip instead, so no writer
+  # excludes any other and a lost race costs one extra attempt.
+  publish-kotlin-report:
+    name: Publish Kotlin Report
+    needs: build-and-test
+    # NOT `always()`. Two ways that goes wrong, both found in review:
+    #
+    #   skipped — `needs: X` + `always()` still runs when X was SKIPPED, and
+    #   build-and-test is conditional on `android_app_changed`. On a
+    #   markdown-only PR (every `In Review` status flip is one) there is no
+    #   artifact, so `download-artifact` with an explicit `name:` FAILS: a
+    #   clean PR goes red and pre-merge-check.sh's blanket `gh pr checks`
+    #   refuses the merge. `sonarcloud` below spells the same guard out.
+    #
+    #   cancelled — `always()` is true on cancellation too (that is why
+    #   `!cancelled()` exists). This workflow is `cancel-in-progress: true`, so
+    #   a routine new push cancels this job's producer mid-run; its own
+    #   `if: always()` upload step still fires, so the artifact can hold a
+    #   HALF-FINISHED report — and keep_files:false wipes the good one before
+    #   copying it.
+    #
+    # A FAILED build still publishes: that is the case a report matters most.
+    if: ${{ !cancelled() && needs.build-and-test.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # NO concurrency group (SHY-0298). Serializing here was the first design
+    # and it was wrong: a group holds exactly ONE pending entry, so a third
+    # contender cancels the pending second — this repo's incidents #568/#570.
+    # The push itself now retries against the moving tip instead.
+    permissions:
+      contents: write
+    steps:
+      # Same ref as the producer (build-and-test pins head.sha). Without it
+      # this job checks out refs/pull/N/merge, so a change to the composite
+      # action landing on develop mid-review would publish using DEVELOP's
+      # action rather than the one under review.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: kotlin-report-pages
+          path: kotlin-report
+      - uses: ./.github/actions/publish-gh-pages
+        with:
+          publish-dir: kotlin-report
+          destination-dir: kotlin/pr/latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   sonarcloud:
     needs: [detect-changes, build-and-test]

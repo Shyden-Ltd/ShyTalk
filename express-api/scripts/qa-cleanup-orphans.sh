@@ -20,6 +20,10 @@
 
 set -euo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/runner-pids.sh
+source "$HERE/lib/runner-pids.sh"
+
 MODE="clean"
 VERBOSE=false
 for arg in "$@"; do
@@ -110,11 +114,15 @@ fi
 # --- 4. Orphan manual-qa-runner subprocesses --------------------------
 
 say "checking manual-qa-runner orphans…"
-RUNNER_PIDS=$(pgrep -f "manual-qa-runner" 2>/dev/null || true)
-# Exclude THIS script's own PID (if launched via npm/node ancestry that
-# happens to grep-match), plus any cleanup we're currently spawning.
-SELF_PID=$$
-RUNNER_PIDS=$(echo "$RUNNER_PIDS" | grep -v "^$SELF_PID$" || true)
+# Identity, not mention (SHY-0304). `pgrep -f manual-qa-runner` matched every
+# process whose command line merely NAMED the runner — Jest running its test
+# files, the npm wrapper, the invoking shell, an editor. Measured at 50
+# innocent processes in a single sweep, and `clean` is the DEFAULT mode, so
+# each one was a real kill. `runner_pids` requires the process to actually be
+# executing manual-qa-runner.js, and excludes this script and all of its
+# ancestors explicitly — BSD pgrep did that silently and GNU pgrep does not,
+# so the old guard was a no-op on macOS and absent on Linux.
+RUNNER_PIDS=$(runner_pids)
 if [ -n "$RUNNER_PIDS" ]; then
   say "  found runner PIDs: $RUNNER_PIDS"
   if [ "$MODE" = "clean" ]; then

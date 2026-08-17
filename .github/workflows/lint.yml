@@ -99,6 +99,15 @@ jobs:
           # integration (exit 0, no warning). Never pass that flag here.
           SHELLCHECK_OPTS='-e SC2086' actionlint
 
+      # SHY-0298 R1/I3. The step above lints `.github/workflows/**` ONLY —
+      # bare `actionlint` takes no path arguments and composite action metadata
+      # files are not workflow files. Every line of shell under
+      # `.github/actions/**` was unlinted, which SHY-0298 then added ~65 lines
+      # to. Verified by mutation: a valid-YAML `rm -rf "$UNSET/"` injected into
+      # a composite action leaves the step above exiting 0.
+      - name: Composite-action shell is shellcheck-clean
+        run: bash scripts/check-action-shell.sh
+
       - name: No paid GitHub-hosted runner specs
         run: bash scripts/check-no-paid-runners.sh
 
@@ -164,6 +173,17 @@ jobs:
         env:
           ALLOW_LARGE_FILE_BODY: ${{ inputs.pr_body }}
         run: bash scripts/check-large-files.sh --against origin/main
+
+      # SHY-0305 — refuse a Podfile whose Podfile.lock does not describe it.
+      # CI installs pods with `pod install --deployment`, which fails on a
+      # lock mismatch, but that step is SKIPPED on a Pods cache hit and the
+      # cache key is derived from the lock — so a stale lock is invisible to
+      # the guard that checks the lock. SHY-0300 shipped one and every iOS
+      # build failed with "Unable to resolve module dependency" until a deploy
+      # reached the Swift compiler. This check needs no CocoaPods, no macOS and
+      # no network, so it runs here, on the PR, where the mistake is made.
+      - name: Validate Podfile.lock is in sync with Podfile
+        run: bash scripts/check-podfile-lock-sync.sh
 
       # SHY user-story frontmatter validator — pinned LAST so a story-
       # validation failure cannot mask earlier actionlint / shellcheck /

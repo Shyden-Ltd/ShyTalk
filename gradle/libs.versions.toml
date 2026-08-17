@@ -1,5 +1,5 @@
 [versions]
-agp = "9.2.1"
+agp = "9.3.1"
 kotlin = "2.4.10"
 composeMultiplatform = "1.10.3"
 composeBom = "2026.06.00"
@@ -8,6 +8,21 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 appcompat = "1.7.1"
 navigationCompose = "2.9.8"
+# HELD at 34.14.1 — do NOT raise until SHY-0244 lands.
+#
+# 34.15.0 pulls firebase-messaging 25.1.0, which deprecates getToken(),
+# deleteToken() and onNewToken() together in favour of V1 Installation-ID
+# registration (register() -> onRegistered(FID)). The two models are mutually
+# exclusive, switched by the firebase_messaging_installation_id_enabled manifest
+# flag, so this is a push-architecture migration — not a bump. Raising it here
+# fails the build under -Werror, and suppressing the warnings is not an option.
+#
+# NOTE this pin freezes the WHOLE Firebase channel: firebase-auth, -database,
+# -firestore and -messaging below all resolve their versions from this BOM (they
+# carry no version of their own). A Firebase security advisory therefore cannot
+# be taken until SHY-0244 is done — which is why that story is next up rather
+# than "someday". Deliberately NOT added to dependabot ignore: an ignore would
+# also hide that security patch.
 firebaseBom = "34.14.1"
 googleServices = "4.5.0"
 coroutines = "1.11.0"
@@ -32,8 +47,8 @@ cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.1.0"
 ktlint = "14.2.0"
-detekt = "2.0.0-alpha.5"
-gitliveFirebase = "2.4.0"
+detekt = "2.0.0-alpha.6"
+gitliveFirebase = "2.6.0"
 
 [libraries]
 # AndroidX Core
@@ -76,6 +91,14 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+# App Check (SHY-0300). Versions come from the BOM, like the siblings above —
+# `firebase-appcheck` is the core API and `-playintegrity` is the Android
+# attestation provider. The debug provider is a SEPARATE artifact and is
+# deliberately NOT here: it must never reach a release build, so it is added
+# only to the debug variants.
+firebase-appcheck = { group = "com.google.firebase", name = "firebase-appcheck" }
+firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity" }
+firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 
 # GitLive Firebase KMP (iOS — Android uses native Firebase SDK)
 gitlive-firebase-app = { group = "dev.gitlive", name = "firebase-app", version.ref = "gitliveFirebase" }
@@ -89,7 +112,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
 # KMP
-firebase-common = { group = "com.google.firebase", name = "firebase-common", version = "22.1.0" }
+firebase-common = { group = "com.google.firebase", name = "firebase-common", version = "22.2.0" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
