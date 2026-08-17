@@ -26607,3 +26607,60 @@ describe('Wake 106 — `<Name>\'s <Plat> Admin UI shows the "<X>" stat`', () => 
     expect(r.error).toMatch(/iosAdminShowsStat/);
   });
 });
+
+// ── resolveAuthBase refusal, THROUGH the real matchers (SHY-0328 R1) ──
+
+describe('resolveAuthBase refusal reaches every sign-in matcher', () => {
+  // The isolated function is pinned in matrix-local-persona-password.test.js.
+  // That does NOT prove the four CALL SITES honour it: dropping the
+  // `if (!authBaseResult.ok) return ...` guard at any one of them would leave
+  // `authBase === undefined` and silently build
+  // "undefined/v1/accounts:signInWithPassword?key=...", which every existing
+  // test would still pass. These drive each matcher for real and assert the
+  // step refuses AND that no network call was attempted.
+
+  const SAVED = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  beforeEach(() => {
+    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  });
+  afterEach(() => {
+    if (SAVED === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    else process.env.FIREBASE_AUTH_EMULATOR_HOST = SAVED;
+  });
+
+  // One step text per resolveAuthBase call site in manual-qa-runner.js.
+  const CALL_SITES = [
+    [
+      'Android physical at a named tab',
+      'Alice [P-02] is signed in on Android physical at the "rooms" tab',
+    ],
+    ['signed in with a device locale', 'Alice is signed in on Android with device locale en'],
+    ['the general signed-in Given', 'Alice is signed in'],
+    // Alice's REAL uniqueId — this matcher validates it against the registry
+    // BEFORE it resolves the auth base, so a placeholder never reaches the
+    // branch under test.
+    [
+      'browser locale + signed in as N',
+      'Alice is on Web with browser locale en, signed in as 50000010',
+    ],
+  ];
+
+  test.each(CALL_SITES)('refuses on a local target — %s', async (_label, text) => {
+    const ctx = makeCtx({ target: 'local' });
+
+    const r = await executeStep({ kind: 'Given', text }, ctx);
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/FIREBASE_AUTH_EMULATOR_HOST/);
+    // The whole point: it must not reach production Identity Toolkit.
+    expect(ctx.fetch).not.toHaveBeenCalled();
+  });
+
+  test('a dev target is unaffected — it has no emulator host by design', async () => {
+    // Guards against someone "fixing" the refusal by applying it everywhere,
+    // which would break every dev run exactly as uniformly.
+    const ctx = makeCtx({ target: 'dev' });
+    const r = await executeStep({ kind: 'Given', text: 'Alice is signed in' }, ctx);
+    expect(r.error || '').not.toMatch(/FIREBASE_AUTH_EMULATOR_HOST/);
+  });
+});

@@ -516,3 +516,108 @@ describe('R4 — WDA signing parity with ios-appium-driver', () => {
     ).rejects.toThrow(/WDA_TEAM_ID env var is required/);
   });
 });
+
+// webSignIn (SHY-0328) ───────────────────────────────────────────────
+
+describe('createMobileSafariIosDriver — webSignIn (SHY-0328)', () => {
+  // Wiring coverage: driver-contract.test.js compares the method-name
+  // constant to itself, so nothing here was ever asserted behaviourally.
+
+  const SESSION = 'sess-abc';
+  const SAVED_PW = process.env.PERSONAS_PASSWORD;
+  const SECRET = 'safari-driver-credential';
+
+  beforeEach(() => {
+    process.env.PERSONAS_PASSWORD = SECRET;
+  });
+  afterEach(() => {
+    if (SAVED_PW === undefined) delete process.env.PERSONAS_PASSWORD;
+    else process.env.PERSONAS_PASSWORD = SAVED_PW;
+  });
+
+  /** /execute/async responder FIRST — this fetch mock is first-match-wins. */
+  function handlersWithAsync(asyncResponse) {
+    return [
+      {
+        match: (url, opts) =>
+          url.endsWith(`/session/${SESSION}/execute/async`) && opts.method === 'POST',
+        respond: () => asyncResponse,
+      },
+      ...defaultHandlers({ sessionId: SESSION }),
+    ];
+  }
+
+  async function driverWith(fetchImpl) {
+    return createMobileSafariIosDriver({
+      wdaTeamId: 'TEAM123',
+      selectUdidImpl: () => 'UDID',
+      fetchImpl,
+    });
+  }
+
+  test('signs in over /execute/ASYNC — never /execute/sync', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    expect(await driver.webSignIn('Alice')).toBe(true);
+
+    const scriptCalls = fetchImpl.calls.filter((c) => c.url.includes('/execute/'));
+    expect(scriptCalls.some((c) => c.url.endsWith('/execute/async'))).toBe(true);
+    expect(scriptCalls.some((c) => c.url.endsWith('/execute/sync'))).toBe(false);
+  });
+
+  test('navigates to /roadmap.html on the driver’s own baseURL', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    await driver.webSignIn('Alice');
+
+    const nav = fetchImpl.calls.find((c) => c.url.endsWith(`/session/${SESSION}/url`));
+    expect(JSON.parse(nav.opts.body).url).toBe('http://localhost:8888/roadmap.html');
+  });
+
+  test('the credential is sent as an ARG and never inside the script source', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    await driver.webSignIn('Alice');
+
+    const body = JSON.parse(
+      fetchImpl.calls.find((c) => c.url.endsWith('/execute/async')).opts.body,
+    );
+    expect(body.script).not.toContain(SECRET);
+    expect(body.script).not.toContain('adult-power@shytalk.dev');
+    expect(body.args).toEqual(['adult-power@shytalk.dev', SECRET]);
+  });
+
+  test('returns FALSE when the page reports the sign-in failed', async () => {
+    const fetchImpl = makeFetchMock(
+      handlersWithAsync(makeJsonResponse({ value: { ok: false, error: 'INVALID_PASSWORD' } })),
+    );
+    const driver = await driverWith(fetchImpl);
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('returns FALSE when Appium rejects /execute/async, rather than throwing', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeTextResponse('script timeout', 500)));
+    const driver = await driverWith(fetchImpl);
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('returns FALSE for an unknown persona without running any script', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    expect(await driver.webSignIn('Nobody')).toBe(false);
+    expect(fetchImpl.calls.some((c) => c.url.endsWith('/execute/async'))).toBe(false);
+  });
+
+  test('returns FALSE when PERSONAS_PASSWORD is unset rather than signing in blank', async () => {
+    delete process.env.PERSONAS_PASSWORD;
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    expect(await driver.webSignIn('Alice')).toBe(false);
+    expect(fetchImpl.calls.some((c) => c.url.endsWith('/execute/async'))).toBe(false);
+  });
+});

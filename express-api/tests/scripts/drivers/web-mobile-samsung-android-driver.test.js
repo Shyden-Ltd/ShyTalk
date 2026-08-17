@@ -377,3 +377,94 @@ describe('createMobileSamsungAndroidDriver — takeScreenshot delegation', () =>
     }
   });
 });
+
+// webSignIn (SHY-0328) ───────────────────────────────────────────────
+
+describe('createMobileSamsungAndroidDriver — webSignIn (SHY-0328)', () => {
+  // Wiring coverage. driver-contract.test.js compares the method-name constant
+  // to itself and driver-interface-pin.test.js counts string literals, so a
+  // wrong pageFor/baseURL/label reaching the shared factory was undetectable.
+
+  const SAVED_PW = process.env.PERSONAS_PASSWORD;
+  const SECRET = 'mobile-samsung-android-driver-credential';
+
+  beforeEach(() => {
+    process.env.PERSONAS_PASSWORD = SECRET;
+  });
+  afterEach(() => {
+    if (SAVED_PW === undefined) delete process.env.PERSONAS_PASSWORD;
+    else process.env.PERSONAS_PASSWORD = SAVED_PW;
+  });
+
+  /** Like makePages, plus the waitForFunction the sign-in sequence needs.
+   *  Local so the shared helper other tests rely on is untouched. */
+  function makeSignInPages(names, { evaluateResult = { ok: true } } = {}) {
+    const pages = {};
+    for (const name of names) {
+      pages[name] = {
+        url: jest.fn(() => 'about:blank'),
+        goto: jest.fn(async () => {}),
+        evaluate: jest.fn(async () => evaluateResult),
+        waitForFunction: jest.fn(async () => true),
+        close: jest.fn(),
+      };
+    }
+    return pages;
+  }
+
+  async function driverFor(pages) {
+    return createMobileSamsungAndroidDriver({
+      execFileSync: makeExecFileSyncMock(),
+      playwrightImpl: makePlaywrightMock(pages),
+      pickPort: async () => 9555,
+    });
+  }
+
+  test('signs the persona in through this driver’s own page', async () => {
+    const pages = makeSignInPages(['Alice']);
+    const driver = await driverFor(pages);
+
+    expect(await driver.webSignIn('Alice')).toBe(true);
+    expect(pages.Alice.goto).toHaveBeenCalledWith('http://localhost:8888/roadmap.html');
+    expect(pages.Alice.evaluate).toHaveBeenCalledWith(expect.any(Function), {
+      email: 'adult-power@shytalk.dev',
+      secret: SECRET,
+    });
+  });
+
+  test('waits for a real currentUser, not merely for sign-in to resolve', async () => {
+    const pages = makeSignInPages(['Alice']);
+    const driver = await driverFor(pages);
+
+    await driver.webSignIn('Alice');
+
+    const waited = pages.Alice.waitForFunction.mock.calls.map((c) => String(c[0]));
+    expect(waited.some((f) => f.includes('signInWithEmail'))).toBe(true);
+    expect(waited.some((f) => f.includes('currentUser'))).toBe(true);
+  });
+
+  test('returns FALSE when Firebase rejects the credentials', async () => {
+    const pages = makeSignInPages(['Alice'], {
+      evaluateResult: { ok: false, error: 'INVALID_PASSWORD' },
+    });
+    const driver = await driverFor(pages);
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('returns FALSE for an unknown persona without opening a page', async () => {
+    const pages = makeSignInPages(['Alice']);
+    const driver = await driverFor(pages);
+
+    expect(await driver.webSignIn('Nobody')).toBe(false);
+    expect(pages.Alice.goto).not.toHaveBeenCalled();
+  });
+
+  test('returns FALSE when PERSONAS_PASSWORD is unset rather than signing in blank', async () => {
+    delete process.env.PERSONAS_PASSWORD;
+    const pages = makeSignInPages(['Alice']);
+    const driver = await driverFor(pages);
+
+    expect(await driver.webSignIn('Alice')).toBe(false);
+    expect(pages.Alice.goto).not.toHaveBeenCalled();
+  });
+});

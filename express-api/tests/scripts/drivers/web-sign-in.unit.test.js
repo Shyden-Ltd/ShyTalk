@@ -194,4 +194,30 @@ describe('makeWebSignInViaWebDriver — the REST transport (firefox-Android, Web
     };
     expect(await makeSignIn({ navigateTo })('Alice')).toBe(false);
   });
+
+  test('is re-entrant — signing the SAME persona in twice both succeed', async () => {
+    // Drivers cache one page per persona name and Firebase persists the
+    // session per origin, so the second call runs against an already-signed-in
+    // page. It must resolve cleanly rather than hang on the stale currentUser
+    // left by the first.
+    const executeAsync = recorder(async () => ({ ok: true }));
+    const signIn = makeSignIn({ executeAsync });
+
+    expect(await signIn('Alice')).toBe(true);
+    expect(await signIn('Alice')).toBe(true);
+    expect(executeAsync.calls).toHaveLength(2);
+  });
+
+  test('switching persona A→B sends B’s credentials, not A’s', async () => {
+    // A stale closure or a memoised persona would silently re-authenticate as
+    // the first persona — the journey would pass while acting as the wrong user.
+    const executeAsync = recorder(async () => ({ ok: true }));
+    const signIn = makeSignIn({ executeAsync });
+
+    await signIn('Alice');
+    await signIn('Marcus');
+
+    expect(executeAsync.calls[0][1][0]).toBe('adult-power@shytalk.dev');
+    expect(executeAsync.calls[1][1][0]).toBe('minor-power@shytalk.dev');
+  });
 });
