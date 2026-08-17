@@ -48,6 +48,7 @@ const path = require('path');
 // concurrent sessions target the same iPhone.
 const REPO_ROOT_DRIVERS = path.resolve(__dirname);
 const { selectUdid } = require(path.join(REPO_ROOT_DRIVERS, 'ios-appium-driver'));
+const { makeWebSignInViaWebDriver } = require('./web-sign-in');
 
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
@@ -190,11 +191,41 @@ async function createMobileSafariIosDriver({
     return body.value || '';
   }
 
+  /**
+   * W3C /execute/async — the callback form. webSignIn needs it because
+   * signInWithEmail returns a Promise, and /execute/sync would return before it
+   * settles and report a false success (SHY-0328).
+   */
+  async function executeAsync(script, args = []) {
+    const sid = await ensureSession();
+    const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/execute/async`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ script, args }),
+    });
+    if (!r.ok) {
+      throw new Error(
+        `Appium /execute/async failed (${r.status}): ${(await r.text()).slice(0, 300)}`,
+      );
+    }
+    const body = await r.json();
+    return body.value;
+  }
+
   const driver = {
     _udid: udid,
     _appiumBaseUrl: appiumBaseUrl,
     _baseURL: baseURL,
   };
+
+  // webSignIn — real Firebase auth over WebDriver REST (Appium), shared
+  // sequence with every other web driver, different transport.
+  driver.webSignIn = makeWebSignInViaWebDriver({
+    navigateTo,
+    executeAsync,
+    baseURL,
+    label: 'mobile-safari-ios-driver',
+  });
 
   // webRefreshRoomsList — same contract as desktop + mobile-chrome drivers.
   driver.webRefreshRoomsList = async (_name) => {
@@ -249,7 +280,13 @@ async function createMobileSafariIosDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
+const WEB_MOBILE_METHOD_NAMES = [
+  'webRefreshRoomsList',
+  'webUiDump',
+  'takeScreenshot',
+  // SHY-0328 — the step existed with no method behind it on any web driver.
+  'webSignIn',
+];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

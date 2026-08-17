@@ -25,6 +25,7 @@
  * real implementations one at a time.
  */
 const path = require('path');
+const { makeWebSignIn } = require('./web-sign-in');
 
 let _playwright;
 function loadPlaywright() {
@@ -148,29 +149,6 @@ const WEB_METHOD_NAMES = [
  * Returns an array of unique method names. Some names repeat above for
  * ergonomic reading; Set normalises.
  */
-/**
- * First name → persona registry entry ("Alice" → the P-02 record with .email).
- *
- * Mirrors manual-qa-runner.js's loadPersonas() mapping deliberately rather than
- * importing it: the runner is a 16k-line CLI and requiring it from a driver
- * would invert the dependency (the runner constructs drivers, not the reverse).
- * The registry itself is the shared source, so the two cannot disagree about
- * WHO a persona is — only about the lookup key, which is one split() here.
- */
-let _personaByName = null;
-function resolvePersona(name) {
-  if (!name) return null;
-  if (!_personaByName) {
-    const { personas } = require('../provision-test-personas');
-    _personaByName = new Map();
-    for (const persona of personas) {
-      _personaByName.set(persona.displayName.split(/\s+/)[0], persona);
-      _personaByName.set(persona.id, persona);
-    }
-  }
-  return _personaByName.get(name) || null;
-}
-
 function listMethods() {
   return [...new Set(WEB_METHOD_NAMES)].sort();
 }
@@ -240,66 +218,9 @@ async function createWebDriver({
   // ── Real implementations (override stubs above) ─────────────────────
   // Each method docs the matcher signature it satisfies.
 
-  // <Name> on Web signs in with valid credentials
-  //
-  // The step this satisfies existed with NO implementation on any web driver —
-  // `webSignIn` was not even in WEB_METHOD_NAMES, so the runner saw `undefined`
-  // and returned "ctx.webDriver.webSignIn not configured". Every journey needing
-  // an authenticated browser therefore died at its first gate, and the only
-  // visible symptom was `UID: —` in the preview watermark (SHY-0328).
-  //
-  // Real Firebase auth, not injected state. `window.shytalkAuth.signInWithEmail`
-  // is exposed by public/js/roadmap-auth.js:273 and calls
-  // `auth.signInWithEmailAndPassword`, with the auth emulator already wired at
-  // :150 when PORTAL_CONFIG.USE_EMULATORS is set. Faking `window.shytalkAuth`
-  // instead does NOT work: `apiFetch(..., { gated: true })` short-circuits
-  // without a real token, so gated writes never leave the browser.
-  //
-  // Firebase persists the session per ORIGIN (IndexedDB), so signing in on
-  // /roadmap.html leaves every other page on :8888 authenticated too.
-  driver.webSignIn = async (name) => {
-    const persona = resolvePersona(name);
-    if (!persona) {
-      console.error(`[web-driver] webSignIn("${name}") — persona not in registry`);
-      return false;
-    }
-    const password = process.env.PERSONAS_PASSWORD;
-    if (!password) {
-      console.error('[web-driver] webSignIn — PERSONAS_PASSWORD not set');
-      return false;
-    }
-    const page = await pageFor(name || 'default');
-    await page.goto(`${baseURL.replace(/\/$/, '')}/roadmap.html`);
-    // The page builds shytalkAuth asynchronously after the Firebase SDK loads.
-    await page.waitForFunction(
-      () => Boolean(window.shytalkAuth && window.shytalkAuth.signInWithEmail),
-      { timeout: 20000 },
-    );
-    const result = await page.evaluate(
-      async ({ email, secret }) => {
-        try {
-          await window.shytalkAuth.signInWithEmail(email, secret);
-          return { ok: true };
-        } catch (e) {
-          return { ok: false, error: (e && e.message) || String(e) };
-        }
-      },
-      { email: persona.email, secret: password },
-    );
-    if (!result.ok) {
-      console.error(`[web-driver] webSignIn("${name}") failed: ${result.error}`);
-      return false;
-    }
-    // Assert the OUTCOME, not the call. signInWithEmail resolving is not the
-    // same as the page having an authenticated user to act on.
-    await page.waitForFunction(
-      () => Boolean(window.shytalkAuth && window.shytalkAuth.currentUser),
-      {
-        timeout: 20000,
-      },
-    );
-    return true;
-  };
+  // <Name> on Web signs in with valid credentials — shared across every web
+  // driver; see web-sign-in.js for why it is a factory and not a base class.
+  driver.webSignIn = makeWebSignIn({ pageFor, baseURL, label: 'web-driver' });
 
   // <Name>'s Web UI document direction is "ltr"|"rtl"|"auto"
   // Reads the dir attribute on <html>. Optional 2nd arg is the locale to

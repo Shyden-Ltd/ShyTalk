@@ -34,6 +34,7 @@ const DRIVERS_DIR = path.resolve(__dirname, '../../../scripts/drivers');
 // takeScreenshot to all 7 web drivers — gap C3).
 // Drift in EITHER direction surfaces a red test for deliberate review.
 const EXPECTED_COUNTS = {
+  // +1 on every web driver after SHY-0328 added webSignIn
   // 79 after SHY-0328 added webSignIn — the step existed with no method behind
   // it, so the runner saw `undefined` and every journey needing an authenticated
   // browser died at its first gate.
@@ -42,12 +43,12 @@ const EXPECTED_COUNTS = {
   'ios-devicectl-driver': 66,
   'ios-simctl-driver': 66,
   'ios-appium-driver': 11,
-  'web-mobile-chrome-android-driver': 3,
-  'web-mobile-samsung-android-driver': 3,
-  'web-mobile-edge-android-driver': 3,
-  'web-mobile-firefox-android-driver': 3,
-  'web-mobile-safari-ios-driver': 3,
-  'web-mobile-webkit-ios-driver': 3,
+  'web-mobile-chrome-android-driver': 4,
+  'web-mobile-samsung-android-driver': 4,
+  'web-mobile-edge-android-driver': 4,
+  'web-mobile-firefox-android-driver': 4,
+  'web-mobile-safari-ios-driver': 4,
+  'web-mobile-webkit-ios-driver': 4,
 };
 
 /**

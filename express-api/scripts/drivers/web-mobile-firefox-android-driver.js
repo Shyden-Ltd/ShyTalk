@@ -40,6 +40,7 @@
 const fs = require('fs');
 const net = require('net');
 const { spawn } = require('child_process');
+const { makeWebSignInViaWebDriver } = require('./web-sign-in');
 
 const FIREFOX_ANDROID_PACKAGE = 'org.mozilla.firefox';
 const FIREFOX_ANDROID_ACTIVITY = 'org.mozilla.fenix.IntentReceiverActivity';
@@ -262,12 +263,42 @@ async function createMobileFirefoxAndroidDriver({
     return body.value || '';
   }
 
+  /**
+   * W3C /execute/async — the callback form. Needed by webSignIn because
+   * signInWithEmail returns a Promise, and /execute/sync would return before it
+   * settles and report a false success (SHY-0328).
+   */
+  async function executeAsync(script, args = []) {
+    const sid = await ensureSession();
+    const r = await fetchImpl(`http://127.0.0.1:${port}/session/${sid}/execute/async`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ script, args }),
+    });
+    if (!r.ok) {
+      throw new Error(
+        `geckodriver /execute/async failed (${r.status}): ${(await r.text()).slice(0, 300)}`,
+      );
+    }
+    const body = await r.json();
+    return body.value;
+  }
+
   const driver = {
     _port: port,
     _baseURL: baseURL,
     _geckoProc: geckoProc,
     _geckodriverPath: gecko,
   };
+
+  // webSignIn — real Firebase auth over WebDriver REST; shared sequence with
+  // every other web driver, different transport.
+  driver.webSignIn = makeWebSignInViaWebDriver({
+    navigateTo,
+    executeAsync,
+    baseURL,
+    label: 'mobile-firefox-android-driver',
+  });
 
   driver.webRefreshRoomsList = async (_name) => {
     try {
@@ -325,7 +356,13 @@ async function createMobileFirefoxAndroidDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
+const WEB_MOBILE_METHOD_NAMES = [
+  'webRefreshRoomsList',
+  'webUiDump',
+  'takeScreenshot',
+  // SHY-0328 — the step existed with no method behind it on any web driver.
+  'webSignIn',
+];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();
