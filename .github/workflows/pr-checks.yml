@@ -133,20 +133,7 @@ jobs:
               # device E2E, which is not what CLAUDE.md's CI-config-only
               # boundary describes. test-backend runs on either flag.
               scripts/*) SCRIPTS=true ;;
-              # SHY-0226. CI plumbing gets its OWN flag rather than BACKEND.
-              # A workflow-only pin bump (#1646) previously merged with
-              # test-backend AND sonarcloud both skipped, reintroducing the
-              # two-SHA drift that failed every queued Dependabot PR — because
-              # `.github/*` set nothing at all. It needs the pin guards to RUN,
-              # which SCRIPTS gives it (test-backend runs on either flag).
-              #
-              # Deliberately NOT BACKEND: per SHY-0284's reasoning below, the
-              # SHY-0127 block reads BACKEND as "the shared core changed,
-              # retest every client", which would put a workflow edit through a
-              # Gradle build and device E2E. That is not what CLAUDE.md's
-              # CI-config-only boundary describes.
-              .github/*) SCRIPTS=true ;;
-              .claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
+              .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
               *) OTHER=true ;;
             esac
           done <<< "$CHANGED"
