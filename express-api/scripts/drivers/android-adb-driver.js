@@ -55,21 +55,40 @@ const {
   parseLayoutDirection,
 } = require('./ui-dump-query');
 
-function selectSerial(preferredSerial) {
+/**
+ * @param preferredSerial the serial the caller asked for, if any.
+ * @param deps injection seam, matching the one android-cdp-helpers already
+ *   documents (`execFileSync — child_process.execFileSync (injectable for
+ *   tests)`). Without it, `android-auth-state.test.js` could only construct a
+ *   driver on a machine with a phone plugged in — so those tests failed on CI
+ *   and, worse, passed locally by SUBSTITUTING the operator's real device:
+ *   `selectSerial('test')` finds 'test' absent from `adb devices` and falls
+ *   through to `serials[0]`, silently returning the attached handset. Tests
+ *   that ask for a fake serial must not be handed a real phone.
+ */
+function selectSerial(preferredSerial, deps = {}) {
+  const execFile = deps.execFileSync || execFileSync;
+  const adbPath = deps.adbPath || resolveAdbPath();
   let devices;
   try {
     // execFileSync + resolved path: no shell, and no PATH search. There is no
     // user input here, but leaving one shell behind invites the next call to
     // be added the same way — and this one was also unbounded, so a wedged
     // adb server hung driver construction before a single scenario ran.
-    devices = execFileSync(resolveAdbPath(), ['devices'], execBounds({ timeoutMs: 15000 }));
+    devices = execFile(adbPath, ['devices'], execBounds({ timeoutMs: 15000 }));
   } catch (_e) {
     return null;
   }
   const lines = devices.split('\n').filter((l) => /\tdevice$/.test(l));
   if (lines.length === 0) return null;
   const serials = lines.map((l) => l.split('\t')[0]);
-  if (preferredSerial && serials.includes(preferredSerial)) return preferredSerial;
+  if (preferredSerial) {
+    // An explicit serial is an INSTRUCTION, not a hint. If it is absent, say so
+    // rather than quietly driving whatever else is plugged in — a caller that
+    // named a device and got a different one is being lied to, and in tests that
+    // meant real adb commands aimed at the operator's handset.
+    return serials.includes(preferredSerial) ? preferredSerial : null;
+  }
   // Prefer wireless TLS-connect device, then emulator.
   const wireless = serials.find((s) => s.includes('_adb-tls-connect'));
   if (wireless) return wireless;
@@ -325,8 +344,8 @@ function listMethods() {
  * return false + log "not implemented" so the runner produces a
  * concrete finding for each step rather than crashing.
  */
-async function createAndroidDriver({ serial: preferred } = {}) {
-  const serial = selectSerial(preferred);
+async function createAndroidDriver({ serial: preferred, ...deps } = {}) {
+  const serial = selectSerial(preferred, deps);
   if (!serial) {
     throw new Error('No Android device connected (adb devices empty)');
   }

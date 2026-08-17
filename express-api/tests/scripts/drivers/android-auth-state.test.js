@@ -26,6 +26,38 @@ const fs = require('fs');
 const path = require('path');
 const { classifyAndroidAuthState } = require('../../../scripts/drivers/android-adb-driver');
 
+/**
+ * An `adb` stand-in that reports exactly the serials given, so a driver can be
+ * constructed with NO phone attached. This is boundary injection, the same seam
+ * `android-cdp-helpers.test.js` already uses (`adbPath` / `execFileSync`), not a
+ * stand-in for a collaborator's behaviour.
+ *
+ * It exists because these tests previously called
+ * `createTestDriver()` with no injection at all. That
+ * failed on CI ("No Android device connected") and passed locally for the WRONG
+ * reason: `selectSerial` found 'test' absent and fell through to `serials[0]`,
+ * handing the tests the operator's real handset. Green because a phone was
+ * plugged in is not green.
+ */
+function adbReporting(serials) {
+  return (_bin, argv) => {
+    if (argv && argv[0] === 'devices') {
+      return ['List of devices attached', ...serials.map((x) => `${x}\tdevice`), ''].join('\n');
+    }
+    return '';
+  };
+}
+
+/** Construct a driver for serial 'test' without requiring a real device. */
+function createTestDriver() {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  return createAndroidDriver({
+    serial: 'test',
+    adbPath: '/nonexistent/adb',
+    execFileSync: adbReporting(['test']),
+  });
+}
+
 const FX = path.join(__dirname, 'fixtures');
 const fixture = (f) => fs.readFileSync(path.join(FX, f), 'utf8');
 
@@ -235,12 +267,11 @@ describe('classifyAndroidAuthState — degraded mode', () => {
  * it on screen.
  */
 describe('androidShowsUserCard — identifies its subject', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const dumpFor = (id) =>
     `<node resource-id="com.shyden.shytalk.local:id/userCard_${id}" bounds="[0,0][100,100]" />`;
 
   function driverWithDump(dump) {
-    return createAndroidDriver({ serial: 'test' }).then((d) => {
+    return createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -287,7 +318,6 @@ describe('androidShowsUserCard — identifies its subject', () => {
  * (PrivateMessageBubble.kt), carrying identity and direction.
  */
 describe('private-chat assertions check messages, not the input box', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const INPUT_ONLY = '<node resource-id="com.x:id/privateChat_messageInput" bounds="[0,0][9,9]" />';
   const sent = (id) =>
     `<node resource-id="com.x:id/privateChat_msg_sent_${id}" bounds="[0,0][9,9]" />`;
@@ -295,7 +325,7 @@ describe('private-chat assertions check messages, not the input box', () => {
     `<node resource-id="com.x:id/privateChat_msg_recv_${id}" bounds="[0,0][9,9]" />`;
 
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -352,11 +382,10 @@ describe('private-chat assertions check messages, not the input box', () => {
  * NewMessageScreen now tags each row `newMessage_result_<uniqueId>`.
  */
 describe('androidShowsInResults — names its subject', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const row = (id, name) =>
     `<node resource-id="com.x:id/newMessage_result_${id}" text="${name || ''}" bounds="[0,0][9,9]" />`;
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -412,9 +441,8 @@ describe('androidShowsInResults — names its subject', () => {
  * always returned false and every message-edit scenario blamed the app.
  */
 describe('androidShowsEditedBodyWithTag — body AND disclosure', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -466,9 +494,8 @@ describe('androidShowsEditedBodyWithTag — body AND disclosure', () => {
  * baseline first.
  */
 describe('androidShowsCountBadge — reads the named count', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -525,9 +552,8 @@ describe('androidShowsCountBadge — reads the named count', () => {
  * the user, navigation with no toast leaves them wondering what happened.
  */
 describe('toast assertions — message AND destination', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -600,9 +626,8 @@ describe('toast assertions — message AND destination', () => {
  * name is exactly what an impersonator controls.
  */
 describe('androidShowsOfficialBadge — a badge that now exists', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -637,9 +662,8 @@ describe('androidShowsOfficialBadge — a badge that now exists', () => {
  * SHY-0266 built it; this asserts it.
  */
 describe('androidShowsInAppGiftNotification — sender AND gift', () => {
-  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
   const withDump = (dump) =>
-    createAndroidDriver({ serial: 'test' }).then((d) => {
+    createTestDriver().then((d) => {
       d.androidUiDump = async () => dump;
       return d;
     });
@@ -678,5 +702,61 @@ describe('androidShowsInAppGiftNotification — sender AND gift', () => {
     const d = await withDump(banner('Alice sent you a crown'));
     expect(await d.androidShowsInAppGiftNotification('Selma', '', 'crown')).toBe(false);
     expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', '')).toBe(false);
+  });
+});
+
+/**
+ * The seam itself. These are the regression guard for a defect that made 42
+ * tests fail on CI while passing locally for the wrong reason.
+ */
+describe('createAndroidDriver — an explicit serial is an instruction, not a hint', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+
+  it('constructs for a named serial with NO device attached, via injection', async () => {
+    const d = await createAndroidDriver({
+      serial: 'test',
+      adbPath: '/nonexistent/adb',
+      execFileSync: adbReporting(['test']),
+    });
+    expect(d._serial).toBe('test');
+  });
+
+  it('REFUSES when the named serial is absent, instead of substituting a real device', async () => {
+    // The whole defect in one assertion. Before the fix this returned a driver
+    // bound to serials[0] — the operator's actual handset — so tests asking for
+    // 'test' silently drove a real phone, and CI (which has none) failed.
+    await expect(
+      createAndroidDriver({
+        serial: 'test',
+        adbPath: '/nonexistent/adb',
+        execFileSync: adbReporting(['3b402284', 'emulator-5554']),
+      }),
+    ).rejects.toThrow('No Android device connected');
+  });
+
+  it('refuses when no device is reported at all', async () => {
+    await expect(
+      createAndroidDriver({
+        serial: 'test',
+        adbPath: '/nonexistent/adb',
+        execFileSync: adbReporting([]),
+      }),
+    ).rejects.toThrow('No Android device connected');
+  });
+
+  it('still auto-selects when NO serial is requested (real-run behaviour intact)', async () => {
+    const d = await createAndroidDriver({
+      adbPath: '/nonexistent/adb',
+      execFileSync: adbReporting(['emulator-5554']),
+    });
+    expect(d._serial).toBe('emulator-5554');
+  });
+
+  it('still prefers a wireless device over an emulator when none is named', async () => {
+    const d = await createAndroidDriver({
+      adbPath: '/nonexistent/adb',
+      execFileSync: adbReporting(['emulator-5554', '192.168.1.9:5555_adb-tls-connect']),
+    });
+    expect(d._serial).toBe('192.168.1.9:5555_adb-tls-connect');
   });
 });
