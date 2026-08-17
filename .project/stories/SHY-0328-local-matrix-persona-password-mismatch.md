@@ -207,3 +207,38 @@ CI-config-only, so no device gauntlet for this change itself.
 - **2026-08-18** — Diagnosed via the documented triage ladder rather than guessed: per-cell `OK`/`FAIL` counts first (`OK=2 / FAIL=224`, uniform), which identifies auth over product debt.
 - **2026-08-18** — The reference note claiming this was fixed on 2026-07-22 was WRONG. `git log -S` finds no history for the pin, and the pinning test does not exist on any ref. Corrected the note in place; it now leads with the correction so the next reader does not trust it again.
 - **2026-08-18** — Filed P0 / `mvp: true`: it invalidates Phase 1 of the Pre-Merge Testing Protocol, so any "local gauntlet green" claim since 2026-07-22 was unachievable.
+
+## ⚠️ IMPORTANT — this fix does NOT make the matrix pass
+
+Verified after landing the pin, on run `20260818-001021-local`:
+
+- The override **reaches the runner**. `ps eww` on the live process showed
+  `NODE_ENV=local PERSONAS_PASSWORD=localdev123` on `manual-qa-runner.js`, and the
+  launched `bash -c` command line carries it too.
+- The matrix is **still 0-pass**: `OK=4-5 / FAIL=221-222` per cell, versus
+  `OK=2 / FAIL=224` before. Marginally different, fundamentally the same.
+- A scenario screenshot still reads **`UID: —`** on a public page
+  (`/community-guidelines.html`, `ar`), i.e. the browser was never signed in.
+
+So the password mismatch was **real and latent** — the two scripts genuinely
+disagreed, and the test proves the fix — but it was **not** the cause of the
+0-pass runs. Do not close this story believing the matrix now works.
+
+Also ruled out, so nobody re-checks them:
+
+- **Stack health.** `:3000 /api/health` → 200, `:8888` → 200, `:9099` auth
+  emulator → 200, all six stack ports listening.
+- **`api unknown` in the watermark is cosmetic.** `/api/health` returns
+  `{"status":"ok","sha":"unknown"}` — the watermark faithfully reports that the
+  API does not know its own git SHA. It is NOT an API-reachability failure.
+
+**Next place to look** (for whoever picks up the remaining 0-pass): what the
+runner's persona sign-in does with `ctx.personasPassword`, and whether the seeded
+accounts actually exist in the auth emulator after `20-reseed.sh` reports
+"complete + verified" — its verification proved ONE sign-in worked, which is not
+the same as the runner's own path working.
+
+The AC "a per-cell shape other than OK=2 / FAIL=224" is technically met and that
+is **not good enough**; treat the real bar as sign-in succeeding, and split the
+remainder into its own story rather than stretching this one.
+
