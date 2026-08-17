@@ -19,19 +19,30 @@ const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 
 /**
- * Cache policy for the two suggestion READ endpoints (SHY-0256).
+ * Cache policy for the two suggestion READ endpoints (SHY-0256, corrected).
  *
- * Express already computes a weak ETag for these bodies, so a repeat fetch of
- * unchanged data gets a 304 — but with no Cache-Control the client still makes
- * the round trip every single time. The board refetches on every open and the
- * app is used on slow connections, so that round trip is the cost worth
- * removing.
+ * Express computes a weak ETag for these bodies, so a repeat fetch of unchanged
+ * data returns a 304 with no payload. That is the saving worth having, and this
+ * keeps it.
+ *
+ * What it no longer does is `max-age=30`. A fresh max-age means the browser
+ * does not even ASK — it serves its copy — so any write became invisible for up
+ * to thirty seconds. Measured: load the board (empty, response cached), seed a
+ * suggestion, reload, and the board still renders "No suggestions yet". Five
+ * web specs timed out waiting for a card that could not appear, and a real user
+ * who submits a suggestion and reloads would have seen the same nothing.
+ *
+ * SHY-0256 wanted to remove the round trip, not just the payload, and that
+ * intent is deliberately traded away: a board that can show a user a version of
+ * itself without their own just-made change is wrong, and no amount of saved
+ * latency buys that back. `no-cache` still revalidates cheaply — it means
+ * "ask first", not "do not cache".
  *
  * `private` is load-bearing, not decoration: the listing embeds the caller's
  * own vote, and an admin caller additionally sees non-public comments. A
  * shared cache would serve one user's view to another.
  */
-const READ_CACHE_CONTROL = 'private, max-age=30, must-revalidate';
+const READ_CACHE_CONTROL = 'private, no-cache';
 
 /**
  * The read shape a client can actually rely on (SHY-0256).

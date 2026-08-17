@@ -159,5 +159,10 @@
     <script src="/js/language-selector.js"></script>
     <script src="/portal/config.js"></script>
     <script src="event-host.js"></script>
+    <!-- SHY-0205: EVERY public page carries the preview watermark. This page and
+         /leaderboard/ were the only two without it — both were added after the
+         convention, and the spec that enforces it discovers pages by walking
+         public/, so it went red the moment it ran against them. -->
+    <script src="/js/preview-watermark.js" defer></script>
   </body>
 </html>

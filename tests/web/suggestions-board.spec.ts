@@ -1,5 +1,12 @@
 import { test, expect, Page } from '@playwright/test';
-import { injectAuthState } from './helpers/roadmap-auth';
+import {
+  createRoadmapUser,
+  createSuggestion,
+  injectAuthState,
+  signInToRoadmap,
+  teardownTestRun,
+  type RoadmapTestUser,
+} from './helpers/roadmap-auth';
 
 /**
  * Suggestions board tests.
@@ -823,31 +830,6 @@ test.describe('Suggestions Board — Voting Flow', () => {
     // When authenticated, count should decrement
   });
 
-  test('toggle: clicking opposite arrow switches vote, counts update', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
-    // Click upvote, then downvote — should toggle
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
-    await downvoteBtn.click();
-    await page.waitForTimeout(300);
-    // Final state should be downvoted
-  });
-
-  test('remove vote: clicking same arrow again removes vote', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    // Click upvote twice — should toggle off
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
-    // Vote should be removed
-  });
-
   test('vote reason: optional modal appears, can choose public/private', async ({ page }) => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
@@ -1171,27 +1153,6 @@ test.describe('Voting Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
     await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
-  });
-
-  test('rapid-fire voting (click up, click down, click up quickly): final state correct', async ({
-    page,
-  }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
-
-    // Rapid clicks
-    await upvoteBtn.click();
-    await downvoteBtn.click();
-    await upvoteBtn.click();
-    await page.waitForTimeout(1000);
-
-    // Final state should be upvoted
-    const isUpvoted = await upvoteBtn.evaluate(
-      (el) => el.classList.contains('active') || el.getAttribute('aria-pressed') === 'true',
-    );
-    // The UI should settle into a consistent state
   });
 
   test('vote on suggestion, navigate away, come back: vote state preserved', async ({ page }) => {
@@ -2461,5 +2422,102 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     expect(source).not.toMatch(
       /return\s+!!\(\s*window\.shytalkAuth\s*&&\s*window\.shytalkAuth\.profile\s*\)\s*;/,
     );
+  });
+});
+
+/**
+ * Voting, against REAL auth and a REAL suggestion (SHY-0245).
+ *
+ * These three cases used to live in the mocked "Voting Flow" describe, where
+ * they asserted nothing at all — each clicked an arrow, slept 300ms, and ended
+ * on a comment saying what "should" happen. They were also signed OUT, so the
+ * first click correctly raised the login modal whose overlay then intercepted
+ * the next click: 20-second timeouts on tests that could not have failed for
+ * the right reason.
+ *
+ * They cannot be fixed in place. `apiFetch(..., { gated: true })` never issues
+ * the request under injected auth, so neither the rendered
+ * `sg-vote-btn--active` class nor the request itself is observable there —
+ * which is why the sibling gate tests only assert "no login modal" and note
+ * that the score does not update.
+ *
+ * The other reason they never worked: casting a NEW vote does not post
+ * anything. It opens the vote-reason modal, and the vote is cast from THERE
+ * (`reason-skip` = cast with no reason, `reason-submit` = cast with one). Only
+ * withdrawing an existing vote calls `submitVote` straight from the arrow. So
+ * a test that clicks an arrow and waits for a score change is waiting on a
+ * request the product was never going to send.
+ */
+test.describe('Suggestions Board — voting with real auth (SHY-0245)', () => {
+  let user: RoadmapTestUser;
+  let seeded: { id: string; title: string };
+
+  /** Cast a NEW vote: arrow → reason modal → skip the reason. */
+  async function castVote(page: Page, direction: 'up' | 'down') {
+    await page.locator(`[data-testid="vote-${direction}-${seeded.id}"]`).click();
+    await page.locator('[data-testid="reason-skip"]').click();
+    await expect(page.locator('[data-testid="vote-reason-modal"]')).toHaveCount(0);
+  }
+
+  test.beforeEach(async ({ page }) => {
+    user = await createRoadmapUser({ prefix: 'votereal' });
+    // submitterUid defaults to the SEEDED persona, not this run's user — the
+    // API rejects a vote on your own suggestion (OWN_SUGGESTION).
+    seeded = await createSuggestion({
+      testRunId: user.testRunId,
+      title: `Vote me ${user.testRunId}`,
+    });
+    await signInToRoadmap(page, user);
+    await expect(page.locator(`[data-testid="vote-up-${seeded.id}"]`)).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test.afterEach(async () => {
+    if (user) await teardownTestRun(user.testRunId);
+  });
+
+  test('toggle: casting the opposite direction switches the vote', async ({ page }) => {
+    const up = page.locator(`[data-testid="vote-up-${seeded.id}"]`);
+    const down = page.locator(`[data-testid="vote-down-${seeded.id}"]`);
+
+    await castVote(page, 'up');
+    await expect(up).toHaveClass(/sg-vote-btn--active/);
+
+    await castVote(page, 'down');
+    // Switched, not accumulated: exactly one direction may hold.
+    await expect(down).toHaveClass(/sg-vote-btn--active/);
+    await expect(up).not.toHaveClass(/sg-vote-btn--active/);
+  });
+
+  test('remove vote: clicking the same arrow again withdraws it', async ({ page }) => {
+    const up = page.locator(`[data-testid="vote-up-${seeded.id}"]`);
+    const down = page.locator(`[data-testid="vote-down-${seeded.id}"]`);
+
+    await castVote(page, 'up');
+    await expect(up).toHaveClass(/sg-vote-btn--active/);
+
+    // Withdrawal asks for no reason, so this click posts (DELETEs) directly —
+    // no modal. Neither direction may be left active afterwards.
+    await up.click();
+    await expect(page.locator('[data-testid="vote-reason-modal"]')).toHaveCount(0);
+    await expect(up).not.toHaveClass(/sg-vote-btn--active/);
+    await expect(down).not.toHaveClass(/sg-vote-btn--active/);
+  });
+
+  test('switching twice lands on the last direction cast', async ({ page }) => {
+    const up = page.locator(`[data-testid="vote-up-${seeded.id}"]`);
+    const down = page.locator(`[data-testid="vote-down-${seeded.id}"]`);
+
+    // The reason modal serialises every new vote, so these cannot overlap —
+    // there is no rapid-fire race to test at this layer. What IS worth pinning
+    // is that two switches in a row leave the LAST one standing rather than
+    // an earlier response landing late and winning.
+    await castVote(page, 'up');
+    await castVote(page, 'down');
+    await castVote(page, 'up');
+
+    await expect(up).toHaveClass(/sg-vote-btn--active/);
+    await expect(down).not.toHaveClass(/sg-vote-btn--active/);
   });
 });
