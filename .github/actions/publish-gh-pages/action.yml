@@ -1,0 +1,217 @@
+name: 'Publish to gh-pages'
+description: |
+  The ONE place this repo pushes to the gh-pages branch (SHY-0298).
+
+  peaceiris/actions-gh-pages clones `--depth=1`, commits and pushes with NO
+  retry, so two writers that interleave between clone and push leave the loser
+  with `! [rejected] … (fetch first)`. Before SHY-0298 there were three separate
+  invocations and only one of them sat inside the `gh-pages-deploy` concurrency
+  group; the race is described at test-backend.yml's publish job and was
+  verified on PR #901.
+
+  Centralising the invocation here does two things a copy-paste step could not:
+  the dependabot skip and the empty-directory refusal become structural, so a
+  new caller cannot forget either.
+
+  Callers need NO concurrency group, and must not add one. An earlier version
+  of this story serialised every writer behind `gh-pages-deploy` and this
+  paragraph told callers to join it — which `gh-pages-publisher.test.js` now
+  asserts the opposite of. That design was wrong: a concurrency group holds
+  exactly ONE pending entry, so a third contender cancels the pending second
+  (this repo's own incidents #568/#570), and a cancelled publish inside
+  test-backend.yml propagates into PR Gate, a REQUIRED check. This action
+  retries against the moving tip instead, so writers never exclude each other.
+
+inputs:
+  publish-dir:
+    description: 'Directory whose contents become the published report (must exist and be non-empty)'
+    required: true
+  destination-dir:
+    description: 'Path WITHIN gh-pages to replace, e.g. express/pr/latest. Only this path is touched.'
+    required: true
+  github-token:
+    description: 'Token used to push to gh-pages — normally secrets.GITHUB_TOKEN'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Decide whether publishing is possible
+      id: gate
+      shell: bash
+      env:
+        HEAD_REF: ${{ github.head_ref }}
+      run: |
+        set -euo pipefail
+        # Dependabot-authored runs hold a READ-ONLY GITHUB_TOKEN (GitHub's 2021
+        # supply-chain tightening), so the push cannot succeed. Skip rather than
+        # fail — a dependency bump must not go red over a report.
+        #
+        # Guard on head_ref (the PR's source branch), NOT github.actor: a human
+        # adding a merge commit to a dependabot PR makes the actor a human while
+        # the token stays read-only.
+        if [[ "${HEAD_REF:-}" == dependabot/* ]]; then
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+          # ::notice, not stderr. A green check that published nothing, with
+          # the reason buried in a log stream, is absence-reported-as-success —
+          # the shape this whole story exists to remove.
+          echo "::notice title=Publish skipped::Dependabot branch '${HEAD_REF}' holds a read-only GITHUB_TOKEN and cannot push to gh-pages. No report was published for this run."
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Verify there is something to publish
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        PUBLISH_DIR: ${{ inputs.publish-dir }}
+        DESTINATION_DIR: ${{ inputs.destination-dir }}
+      run: |
+        set -euo pipefail
+        # `keep_files: false` means peaceiris CLEANS destination_dir before
+        # copying. Publishing an empty directory would therefore delete a good
+        # report and leave nothing in its place — a silent data loss that reads
+        # as a green run. Fail loudly instead.
+        if [ ! -d "$PUBLISH_DIR" ] || [ -z "$(ls -A "$PUBLISH_DIR" 2>/dev/null)" ]; then
+          echo "::error title=Nothing to publish::'${PUBLISH_DIR}' is missing or empty. Refusing to publish it over '${DESTINATION_DIR}', which keep_files:false would wipe first. Check the step that produces the report."
+          exit 1
+        fi
+        # "Non-empty" is not "is a report". Both producers write metadata.json
+        # unconditionally (`mkdir -p` + echo) and copy the real report with
+        # `2>/dev/null || true`, so a suite that dies before emitting reports —
+        # a compile error, a detekt failure, a Jest crash — leaves EXACTLY ONE
+        # file. keep_files:false would then wipe a good published report and
+        # replace it with a stub. Every report format here (Allure, Gradle
+        # HTML, Jest HTML coverage) emits an index.html; metadata.json alone is
+        # the signature of the failure case.
+        if [ ! -f "$PUBLISH_DIR/index.html" ]; then
+          echo "::error title=Not a report::'${PUBLISH_DIR}' has no index.html — it holds $(ls -A "$PUBLISH_DIR" | tr '\n' ' '). The producing step almost certainly failed before writing its report. Refusing to publish a stub over '${DESTINATION_DIR}'."
+          exit 1
+        fi
+        printf 'Publishing %s file(s) from %s to gh-pages:%s\n' \
+          "$(find "$PUBLISH_DIR" -type f | wc -l | tr -d ' ')" "$PUBLISH_DIR" "$DESTINATION_DIR"
+
+    - name: Publish to gh-pages (retrying against the moving tip)
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        PUBLISH_DIR: ${{ inputs.publish-dir }}
+        DESTINATION_DIR: ${{ inputs.destination-dir }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+
+        # Why an owned push instead of peaceiris/actions-gh-pages (SHY-0298):
+        # peaceiris does not retry, and a `uses:` step cannot be retried, so a
+        # losing writer simply fails. The first version of this story fixed that
+        # with a `gh-pages-deploy` concurrency group — WRONG, and this repo had
+        # already lived the consequence: a group holds exactly ONE pending
+        # entry, so a third contender CANCELS the pending second (incidents
+        # #568/#570, see scripts/check-workflow-concurrency-scoping.sh). A
+        # cancelled publish inside test-backend.yml propagates into PR Gate, a
+        # REQUIRED check, so the lock would have red-gated innocent PRs.
+        #
+        # Retrying is the right shape here BECAUSE each publish is a whole
+        # directory replacement: losing to a concurrent writer needs no rebase
+        # and no merge, just "re-read their tip and redo my replacement on it".
+        MAX_ATTEMPTS=6
+        # Seconds multiplier for the backoff. Overridable ONLY so the tests can
+        # drive the exhaustion and fail-fast paths at zero delay — without it
+        # exercising all six attempts costs ~40s of real sleeping, which is why
+        # those branches went untested. Unset in CI, so production is unchanged.
+        BACKOFF_BASE="${BACKOFF_BASE:-2}"
+        WORK="$(mktemp -d)"
+        SRC="$(cd "$PUBLISH_DIR" && pwd)"
+
+        # Partial + sparse clone. gh-pages is multi-GiB (SHY-0128); `--filter`
+        # skips fetching blobs we never read and the sparse cone materialises
+        # only the one directory we replace, so this stays cheap no matter how
+        # large sibling suites grow.
+        git clone --quiet --no-checkout --filter=blob:none --depth=1 \
+          --branch gh-pages "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$WORK"
+        cd "$WORK"
+        git sparse-checkout set --cone "$DESTINATION_DIR"
+        git checkout --quiet gh-pages
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        PUSH_ERR="${RUNNER_TEMP}/gh-pages-push-err"
+        FETCH_ERR="${RUNNER_TEMP}/gh-pages-fetch-err"
+
+        attempt=1
+        while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+          # Replace ONLY this destination. Everything else on the branch —
+          # sibling suites, the root landing page, CNAME, .nojekyll — is
+          # outside the cone and is carried through untouched. This is the
+          # SHY-0128 invariant that `keep_files: false` used to provide.
+          rm -rf "$DESTINATION_DIR"
+          mkdir -p "$DESTINATION_DIR"
+          cp -R "$SRC/." "$DESTINATION_DIR/"
+
+          git add --all -- "$DESTINATION_DIR"
+          if git diff --cached --quiet; then
+            echo "Report is byte-identical to what is already published — nothing to push."
+            exit 0
+          fi
+          git commit --quiet -m "Publish ${DESTINATION_DIR} from ${RUN_URL}"
+
+          # stderr is CAPTURED, never discarded. Sending it to /dev/null
+          # classified every failure as "lost the race": a protected-branch
+          # refusal, a quota error, a read-only token or a 5xx would each burn
+          # all six attempts, sleep 42s, and then report the wrong cause with
+          # no evidence left in the log to contradict it.
+          if git push --quiet origin "HEAD:gh-pages" 2>"$PUSH_ERR"; then
+            echo "Published ${DESTINATION_DIR} on attempt ${attempt}."
+            exit 0
+          fi
+
+          # Only a non-fast-forward is a lost race. Anything else will not be
+          # fixed by retrying, so it fails NOW with git's own message rather
+          # than 42 seconds later under a misleading headline.
+          if ! grep -qiE 'non-fast-forward|fetch first|\[rejected\]|cannot lock ref' "$PUSH_ERR"; then
+            echo "--- git push stderr ---" >&2
+            cat "$PUSH_ERR" >&2
+            echo "::error title=Could not publish to gh-pages::Push to gh-pages failed for '${DESTINATION_DIR}' for a reason that retrying cannot fix (see the git output above — typically a protected branch, a read-only token, or a quota limit)."
+            exit 1
+          fi
+
+          # Lost the race. Deliberately NOT a force push: the winner's report
+          # must survive. Re-read their tip and redo the replacement on top.
+          echo "Push rejected (attempt ${attempt}/${MAX_ATTEMPTS}) — another writer landed first; re-applying on their tip." >&2
+          git reset --quiet --hard HEAD~1
+          if ! git fetch --quiet --depth=1 origin gh-pages 2>"$FETCH_ERR"; then
+            cat "$FETCH_ERR" >&2
+            echo "::error title=Could not publish to gh-pages::Re-fetching gh-pages failed after a lost race for '${DESTINATION_DIR}'. Without the winner's tip this job cannot re-apply its report."
+            exit 1
+          fi
+          git reset --quiet --hard FETCH_HEAD
+
+          # No sleep after the LAST attempt — it delays the failure without
+          # buying another try. Jitter matters because this repo now has three
+          # writers per PR: a fixed backoff wakes every loser at the same
+          # instant, so they collide again in lockstep.
+          if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+            sleep "$(( attempt * BACKOFF_BASE + RANDOM % 3 ))"
+          fi
+          attempt=$(( attempt + 1 ))
+        done
+
+        echo "--- last git push stderr ---" >&2
+        cat "$PUSH_ERR" >&2
+        echo "::error title=Could not publish to gh-pages::Lost the push race ${MAX_ATTEMPTS} times for '${DESTINATION_DIR}'. That is far beyond normal contention — check whether something is pushing to gh-pages in a loop."
+        exit 1
+
+    - name: Record where it went
+      if: steps.gate.outputs.skip == 'false'
+      shell: bash
+      env:
+        DESTINATION_DIR: ${{ inputs.destination-dir }}
+      run: |
+        set -euo pipefail
+        # The reviewer should not have to reconstruct the URL scheme by hand.
+        {
+          printf '### Report published\n\n'
+          printf '`%s` → https://shyden-ltd.github.io/ShyTalk/%s/\n' "$DESTINATION_DIR" "$DESTINATION_DIR"
+        } >> "$GITHUB_STEP_SUMMARY"

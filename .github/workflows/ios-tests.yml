@@ -115,7 +115,7 @@ jobs:
     # tests/scripts/ios-tests-build-cache.test.js (asserts ≥60).
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-inputs.outputs.ref }}
 
@@ -235,7 +235,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cocoapods/repos
-          key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock') }}
           restore-keys: |
             cocoapods-repos-${{ runner.os }}-
 
@@ -249,7 +249,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: iosApp/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock') }}
           restore-keys: |
             pods-${{ runner.os }}-
 
@@ -277,7 +277,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/ios-derived-data
-          key: ios-derived-${{ runner.os }}-${{ hashFiles('iosApp/iosApp/**', 'iosApp/iosAppTests/**', 'iosApp/iosAppUITests/**', 'iosApp/iosApp.xcodeproj/**', 'iosApp/Podfile.lock', 'iosApp/Configurations/**', 'shared/build/bin/iosSimulatorArm64/**') }}
+          key: ios-derived-${{ runner.os }}-${{ hashFiles('iosApp/iosApp/**', 'iosApp/iosAppTests/**', 'iosApp/iosAppUITests/**', 'iosApp/iosApp.xcodeproj/**', 'iosApp/Podfile', 'iosApp/Podfile.lock', 'iosApp/Configurations/**', 'shared/build/bin/iosSimulatorArm64/**') }}
           restore-keys: |
             ios-derived-${{ runner.os }}-
 
@@ -484,7 +484,7 @@ jobs:
       max-parallel: ${{ needs.resolve-inputs.outputs.parallel == 'true' && 99 || 1 }}
       matrix: ${{ fromJSON(needs.resolve-inputs.outputs.ios_matrix) }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.resolve-inputs.outputs.ref }}
 

@@ -29,7 +29,7 @@ The cause is an identity mismatch between the client and the realtime-database r
 
 The client writes presence at `rooms/{roomId}/presence/{uniqueId}` — `RtdbPresenceService`
 is handed the app's numeric uniqueId. The rule required `auth.uid == $userId`, which is the
-*Firebase* uid. Those two are different values for the same person (50000030 vs
+_Firebase_ uid. Those two are different values for the same person (50000030 vs
 `t7BBRjbHXXPIvPAhzwhMKpRqRnt2`), so the comparison could never be true and every presence
 write was denied:
 
@@ -83,41 +83,51 @@ namespace sees no rules at all. Local rooms nonetheless stay open despite identi
 ## Acceptance Criteria
 
 ### Happy path
+
 - [ ] A room created on dev stays open, with the creator recorded as present
 
 ### Error paths
+
 - [ ] A user still cannot write presence under someone else's id
 - [ ] Typing indicators, which use the same identity, are authorised the same way
 
 ### Edge cases
+
 - [ ] The uniqueId claim is a NUMBER and the path key is a STRING — the comparison must
       survive that, not silently never match
 
 ### Performance
+
 - [ ] N/A — a rule expression change; no additional reads or round trips.
 
 ### Security
+
 - [ ] Self-ownership is preserved: authenticated, and only for your own id
 - [ ] No path becomes world-writable; the root deny is untouched
 - [ ] The claim is server-issued, so it cannot be spoofed by the client
 
 ### UX
+
 - [ ] Rooms no longer close underneath the person who just opened them
 
 ### i18n
+
 - [ ] N/A — no user-facing strings.
 
 ### Observability
+
 - [ ] The permission-denied warnings disappear from device logs
 
 ## BDD Scenarios
 
 **Scenario: A newly created room stays open**
+
 - **Given** a member has just created a voice room
 - **When** they wait in it
 - **Then** the room is still open and they are shown as present
 
 **Scenario: Presence cannot be forged for someone else**
+
 - **Given** a signed-in member
 - **When** they try to mark a different member as present
 - **Then** the write is refused
@@ -136,6 +146,7 @@ self-owned) and to leave the identity contract to the new file.
 **Green** — 14/14 rules tests pass.
 
 **Device proof (real OnePlus over USB, dev backend):**
+
 - before: `state=CLOSED`, closed 2.4s after creation, 4+ permission-denied warnings per room
 - after: `state=ACTIVE` at 17.4s, `participantIds=["50000030"]`, RTDB presence
   `{"50000030": true}`, **zero** denials
@@ -191,3 +202,42 @@ self-owned) and to leave the identity contract to the new file.
   is explained by the admin REST bypass plus namespace binding. Separately, local rooms stay
   open under the SAME denials, so presence-denial alone does not close a room — wording
   tightened to separate what is proven from what is inferred.
+
+**2026-08-14 — review + rebase onto develop.**
+
+Retargeted `main` -> `develop` (the merge policy moved to develop-first on
+2026-07-25; this PR predates it) and merged develop in, which cleared a
+`lint / Lint` failure caused by the branch carrying pre-promotion workflow
+files — actionlint was linting stale copies, not this PR's changes.
+
+Reviewed. This changes an RTDB **write-authorisation** rule, so the review
+went past "does the diff read well":
+
+- **The diagnosis holds.** The client writes presence keyed by the uniqueId,
+  the server reads `presenceChecker(roomId, room.ownerId)` — also a uniqueId —
+  and the rule compared `auth.uid`, the Firebase uid. Those never match, so
+  every presence write was denied and the owner-left re-check found an empty
+  room. Each artefact was individually defensible; only the RELATIONSHIP was
+  wrong.
+- **The claim exists, verified independently** of this PR's own comment:
+  `express-api/src/utils/firebase-claims.js` describes itself as the chokepoint
+  "every cohort/uniqueId/admin mint funnels through". Had the uniqueId claim
+  not been minted, the new rule would deny everything — the same outage with a
+  different cause — so this was the one thing worth checking by hand rather
+  than reading.
+- **It does not weaken authorisation.** `auth != null` is retained and the
+  comparison is still self-only; only the IDENTITY compared changes. `typing`
+  moves in step with `presence`, so the two cannot drift apart.
+- **The old test pinning `auth.uid == $userId` was pinning the defect**, and
+  was correctly loosened to assert the invariant (authenticated, self-owned)
+  while `presence-rules.test.js` owns the identity. That is the right split.
+- `presence-contract.test.js` checks the three-party RELATIONSHIP at source
+  level, which is the only shape that could have caught this — no per-file
+  test could see it.
+
+All five Playwright projects passed. The one red check was
+`Generate Allure Report`, which failed on `! [rejected] gh-pages (fetch first)`
+— a push race on the report branch caused by six PRs being pushed at once, not
+by this change. Re-run, green.
+
+Reviewed-up-to: e90da79907808b830dbc92c4c35056dd06611d23

@@ -1,12 +1,13 @@
 ---
 id: SHY-0242
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-25
 priority: P1
 effort: M
 type: infra
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0242: Dependabot → develop + hard-gate every develop PR on CI

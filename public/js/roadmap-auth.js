@@ -131,7 +131,7 @@
       firebaseConfig.apiKey.indexOf('fake') === -1 &&
       firebaseConfig.apiKey.indexOf('placeholder') === -1;
     if (!hasRealKey && !isLocal) {
-      authStateKnown = true;
+      markAuthStateKnown();
       renderAuthUI();
       return;
     }
@@ -152,7 +152,7 @@
       }
     } catch (err) {
       console.warn('Firebase auth unavailable:', err && err.code, err && err.message);
-      authStateKnown = true;
+      markAuthStateKnown();
       renderAuthUI();
       return;
     }
@@ -168,25 +168,27 @@
     });
 
     auth.onAuthStateChanged(function (user) {
-      authStateKnown = true;
       currentUser = user;
+      // Publish the Firebase auth state IMMEDIATELY (with profile still
+      // null) so click-handlers triggered before the async ShyTalk
+      // account fetch resolves can see that the user is signed in.
+      // Without this synchronous publish, `window.shytalkAuth.currentUser`
+      // stayed null until checkShyTalkAccount finished its fetch — any
+      // bell/subscribe click during that window incorrectly opened the
+      // login modal for an already-signed-in user (W1 bundled bug).
+      // The bell handler treats `profile === null` as "loading" and
+      // routes to the subscribe modal which has its own loading state.
+      shytalkProfile = null;
+      // ONE publish for both branches. Marking the state known and
+      // publishing were previously separate steps, so adding the flag to the
+      // published object would have cost a SECOND dispatch here — and every
+      // dispatch makes the shared header remove and rebuild itself, which is
+      // what detaches `header-user-info` from under a click in progress.
+      markAuthStateKnown();
       if (user) {
-        // Publish the Firebase auth state IMMEDIATELY (with profile still
-        // null) so click-handlers triggered before the async ShyTalk
-        // account fetch resolves can see that the user is signed in.
-        // Without this synchronous publish, `window.shytalkAuth.currentUser`
-        // stayed null until checkShyTalkAccount finished its fetch — any
-        // bell/subscribe click during that window incorrectly opened the
-        // login modal for an already-signed-in user (W1 bundled bug).
-        // The bell handler treats `profile === null` as "loading" and
-        // routes to the subscribe modal which has its own loading state.
-        shytalkProfile = null;
-        updateGlobalAuth();
         checkShyTalkAccount(user);
       } else {
-        shytalkProfile = null;
         renderAuthUI();
-        updateGlobalAuth();
       }
     });
   }
@@ -244,10 +246,26 @@
     return auth.signInWithEmailAndPassword(email, password);
   }
 
+  // Four paths in this module can conclude that the sign-in state is known:
+  // Firebase answering, a placeholder API key off-local, an SDK init throw,
+  // and the 3s "config never arrived" fallback. Routing all four through one
+  // function is what makes the flag trustworthy — a path that set it WITHOUT
+  // publishing would leave every consumer waiting on a signal that had
+  // already happened, with nothing to observe. (SHY-0279)
+  function markAuthStateKnown() {
+    authStateKnown = true;
+    updateGlobalAuth();
+  }
+
   function updateGlobalAuth() {
     window.shytalkAuth = {
       currentUser: currentUser,
       profile: shytalkProfile,
+      // Lets a consumer tell "signed out" apart from "we don't know yet".
+      // Both look like `currentUser === null`, which is why the shared header
+      // renders Sign In during the unknown window and why every web check
+      // that faked a signed-in visitor was racing this module (SHY-0279).
+      authStateKnown: authStateKnown,
       getToken: getToken,
       signOut: signOut,
       signInWithGoogle: signInWithGoogle,
@@ -297,7 +315,7 @@
     // If config never loads (API down), show login buttons after 3s
     setTimeout(function () {
       if (!authStateKnown) {
-        authStateKnown = true;
+        markAuthStateKnown();
         renderAuthUI();
       }
     }, 3000);

@@ -1,5 +1,7 @@
 package com.shyden.shytalk.data.remote
 
+import com.shyden.shytalk.core.security.APP_CHECK_HEADER
+import com.shyden.shytalk.core.security.AppCheckTokenProvider
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
@@ -137,10 +139,28 @@ class IosApiClient(
         body: JsonObject?,
     ): JsonObject = request("DELETE", path, body)
 
+    /**
+     * GET an endpoint that requires NO authentication — Android's
+     * `WorkerApiClient.getPublic` is the counterpart.
+     *
+     * SHY-0143 made this load-bearing: the cold-start ban gate runs before
+     * routing, and at that moment there may be no Firebase session — a
+     * signed-out user, or one whose ban is why they were signed out. Going
+     * through [request] would throw `Not authenticated` before the call was
+     * made, and the repository's catch would report "not banned".
+     */
+    private val appCheckTokenProvider = AppCheckTokenProvider()
+
     suspend fun getPublic(path: String): JsonObject {
+        // SHY-0300 — see WorkerApiClient.getPublic for why this is attached
+        // here and why a null token is sent as no header rather than as an
+        // error. Both platforms must use the SAME header name; it is defined
+        // once in commonMain so they cannot drift.
+        val appCheckToken = appCheckTokenProvider.currentToken()
         val response =
             client.get("$baseUrl$path") {
                 header("X-Device-Id", deviceId)
+                appCheckToken?.let { header(APP_CHECK_HEADER, it) }
             }
         return parseResponse(response)
     }

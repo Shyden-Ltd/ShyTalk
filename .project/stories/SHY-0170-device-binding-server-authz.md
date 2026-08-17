@@ -1,6 +1,6 @@
 ---
 id: SHY-0170
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-09
 priority: P0
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 mvp: true
 epic: EPIC-0006
 ---

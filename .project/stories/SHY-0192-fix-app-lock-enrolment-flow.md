@@ -1,6 +1,6 @@
 ---
 id: SHY-0192
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-16
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 epic: EPIC-0004
 mvp: true
+released_in: v0.98.0
 ---
 
 # SHY-0192: Fix App-Lock PIN enrolment — it has never worked end-to-end

@@ -1,12 +1,13 @@
 ---
 id: SHY-0233
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-24
 priority: P1
 effort: S
 type: infra
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0233: Web prod rollback — instant Cloudflare Pages re-promote (no rebuild)
