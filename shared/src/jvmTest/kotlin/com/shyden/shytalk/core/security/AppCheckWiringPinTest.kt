@@ -158,13 +158,31 @@ class AppCheckWiringPinTest {
                 "a Play Integrity round trip on the cold-start critical path",
         )
 
-        val ios =
+        // SHY-0306: the registration entry point must live in AppCheckBridge.kt,
+        // NOT in AppCheckTokenProvider.ios.kt where it started. Kotlin/Native
+        // names a file's top-level facade after the file, so a `.ios.kt` file
+        // exports to Swift as `AppCheckTokenProvider_iosKt` — a name no caller
+        // guesses, and AppDelegate called `AppCheckTokenProviderKt`. Every iOS
+        // build failed with "type has no member". This pin previously asserted
+        // the function was in the `.ios.kt` file, i.e. it encoded the broken
+        // location as the contract.
+        val iosBridge =
+            codeLines(
+                "shared/src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckBridge.kt",
+            )
+        assertTrue(
+            iosBridge.any { it.contains("fun registerAppCheckBridge(") },
+            "iOS must expose a bridge for Swift to register — the Firebase iOS SDK has no KMP binding",
+        )
+
+        val iosActual =
             codeLines(
                 "shared/src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.ios.kt",
             )
         assertTrue(
-            ios.any { it.contains("fun registerAppCheckBridge(") },
-            "iOS must expose a bridge for Swift to register — the Firebase iOS SDK has no KMP binding",
+            iosActual.none { it.contains("fun registerAppCheckBridge(") },
+            "registerAppCheckBridge must NOT live in a *.ios.kt file — its Swift facade would " +
+                "become AppCheckTokenProvider_iosKt and AppDelegate could not call it (SHY-0306)",
         )
     }
 

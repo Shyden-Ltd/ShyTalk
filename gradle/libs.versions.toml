@@ -1,5 +1,5 @@
 [versions]
-agp = "9.2.1"
+agp = "9.3.1"
 kotlin = "2.4.10"
 composeMultiplatform = "1.10.3"
 composeBom = "2026.06.00"
@@ -47,8 +47,8 @@ cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.1.0"
 ktlint = "14.2.0"
-detekt = "2.0.0-alpha.5"
-gitliveFirebase = "2.4.0"
+detekt = "2.0.0-alpha.6"
+gitliveFirebase = "2.6.0"
 
 [libraries]
 # AndroidX Core
@@ -112,7 +112,7 @@ kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
 
 # KMP
-firebase-common = { group = "com.google.firebase", name = "firebase-common", version = "22.1.0" }
+firebase-common = { group = "com.google.firebase", name = "firebase-common", version = "22.2.0" }
 kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlinxDatetime" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
