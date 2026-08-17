@@ -97,6 +97,13 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
+// Deleting device bindings changes which hardware bans reach an account, so
+// the route must invalidate the ban gate's caches (SHY-0149). The route
+// destructures `clearBanCache` at require time, so the mock must be installed
+// here — a later jest.spyOn would not be seen.
+jest.mock('../../src/utils/bans', () => ({ clearBanCache: jest.fn() }));
+const { clearBanCache } = require('../../src/utils/bans');
+
 // ─── App setup ────────────────────────────────────────────────────
 
 const adminCleanupRouter = require('../../src/routes/admin-cleanup');
@@ -230,6 +237,8 @@ describe('POST /api/cleanup/all-device-bindings', () => {
     expect(res.body.deleted).toBe(3);
     expect(mockBatchDelete).toHaveBeenCalledTimes(3);
     expect(mockBatchCommit).toHaveBeenCalled();
+    // Wiping every binding changes everyone's standing → full cache clear.
+    expect(clearBanCache).toHaveBeenCalledWith();
   });
 
   test('returns deleted: 0 with message when collection is empty', async () => {
@@ -243,6 +252,8 @@ describe('POST /api/cleanup/all-device-bindings', () => {
     expect(res.body.deleted).toBe(0);
     expect(res.body.message).toBeDefined();
     expect(mockBatchCommit).not.toHaveBeenCalled();
+    // Nothing was deleted, so nothing about anyone's standing changed.
+    expect(clearBanCache).not.toHaveBeenCalled();
   });
 });
 

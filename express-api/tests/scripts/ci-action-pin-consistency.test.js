@@ -23,101 +23,20 @@
  * All scanning/analysis is pure + injectable so the diagnostic/throw path is
  * covered by synthetic fixtures, not only by a (hopefully-never) broken repo.
  */
-const fs = require('node:fs');
-const path = require('node:path');
-
-const REPO_ROOT = path.resolve(__dirname, '../../..');
-const GITHUB_DIR = path.join(REPO_ROOT, '.github');
-
-// Match a real YAML `uses:` key (optionally list-dashed), NOT a `#`-commented
-// or prose mention: anchored at line start, so `# uses: foo@old` can't leak in.
-// An optional opening quote is tolerated (`uses: "actions/foo@sha"`). Negated
-// char classes only => no backtracking (ReDoS-safe; sonarjs/slow-regex). The
-// action stops at `@`; the ref stops at whitespace/quote/`#`, so a trailing
-// `# v6.1.0` version comment (and any closing quote) is dropped cleanly.
-const USES_LINE_RE = /^\s*(?:-\s*)?uses:\s*['"]?([^\s@'"#]+)@([^\s'"#]+)/;
-const SHA_RE = /^[0-9a-f]{40}$/;
-
-// The action REPO an owner/repo[/sub] ref belongs to (cache/restore + cache/save
-// share the `actions/cache` repo, so they must share one release SHA).
-function repoOf(action) {
-  return action.split('/').slice(0, 2).join('/');
-}
-
-// Pure: extract every third-party pinned `uses:` ref from one file's text.
-// Skips local composite refs (`./…`) and container refs (`docker://…`).
-function collectRefsFromText(file, text) {
-  const refs = [];
-  for (const line of text.split('\n')) {
-    const m = USES_LINE_RE.exec(line);
-    if (!m) continue;
-    const [, action, ref] = m;
-    if (action.startsWith('.') || action.includes('://') || !action.includes('/')) continue;
-    refs.push({ file, action, ref, repo: repoOf(action) });
-  }
-  return refs;
-}
-
-// Every YAML file under `.github/` that can carry a third-party pin — workflows,
-// composite/reusable action manifests, codeql config, anything. Recursive so a
-// pin in a new location is never silently missed (parity with the wider scan in
-// scripts/check-action-shas.sh).
-function listYamlFiles(dir = GITHUB_DIR, acc = []) {
-  if (!fs.existsSync(dir)) return acc;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) listYamlFiles(full, acc);
-    else if (/\.ya?ml$/.test(entry.name)) acc.push(full);
-  }
-  return acc;
-}
-
-function collectAllRefs() {
-  const refs = [];
-  for (const file of listYamlFiles()) {
-    const rel = path.relative(REPO_ROOT, file);
-    refs.push(...collectRefsFromText(rel, fs.readFileSync(file, 'utf8')));
-  }
-  return refs;
-}
-
-// Pure: refs whose pin is not a 40-hex commit SHA (a floating tag / branch).
-function findUnpinned(refs) {
-  return refs.filter((r) => !SHA_RE.test(r.ref)).map((r) => `${r.file}: ${r.action}@${r.ref}`);
-}
-
-// Pure: action repos pinned to >1 distinct SHA, each with a {sha -> [file:action]}
-// map so a partial bump is instantly attributable to the file that introduced it.
-function findInconsistentRepos(refs) {
-  const byRepo = new Map();
-  for (const r of refs) {
-    if (!byRepo.has(r.repo)) byRepo.set(r.repo, new Map());
-    const shaMap = byRepo.get(r.repo);
-    if (!shaMap.has(r.ref)) shaMap.set(r.ref, new Set());
-    shaMap.get(r.ref).add(`${r.file}: ${r.action}`);
-  }
-  const bad = [];
-  for (const [repo, shaMap] of byRepo) {
-    if (shaMap.size > 1) {
-      bad.push({
-        repo,
-        shas: Object.fromEntries([...shaMap].map(([sha, where]) => [sha, [...where].sort()])),
-      });
-    }
-  }
-  return bad.sort((a, b) => a.repo.localeCompare(b.repo));
-}
-
-// Pure: the human-readable drift report thrown by the live-repo guard. Extracted
-// so the message content (repo names, every SHA, the file list) is unit-tested
-// with a synthetic `bad` array, not only when the live repo is actually broken.
-function describeInconsistency(bad) {
-  return (
-    'CI action SHA drift — these action repos are pinned to >1 SHA ' +
-    '(a partial Dependabot bump; bump every ref of the action together):\n' +
-    JSON.stringify(bad, null, 2)
-  );
-}
+// SHY-0284: these were defined here and nowhere else, so the invariant they
+// encode could only run inside this Jest suite — which test-backend skips on
+// workflow-only PRs, the exact shape of the partial Dependabot action bump
+// the guard exists to catch. They now live in scripts/lib/action-pins.js so
+// scripts/check-action-pin-consistency.js (run unconditionally by lint.yml)
+// enforces the SAME scan. This suite keeps the fixture-level coverage.
+const {
+  repoOf,
+  collectRefsFromText,
+  collectAllRefs,
+  findUnpinned,
+  findInconsistentRepos,
+  describeInconsistency,
+} = require('../../../scripts/lib/action-pins');
 
 describe('SHY-0162: every CI action is SHA-pinned + uses ONE SHA repo-wide', () => {
   const refs = collectAllRefs();

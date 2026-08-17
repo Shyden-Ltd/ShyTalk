@@ -7,61 +7,44 @@
 
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
-const { Filter } = require('firebase-admin/firestore');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
+const {
+  checkBans,
+  clearBanCache,
+  countBoundDevices,
+  rollbackBindingIfOverCap,
+  MAX_BOUND_DEVICES,
+  BINDING_TRANSACTION_OPTIONS,
+} = require('../utils/bans');
+const { getIpGeo } = require('../utils/ip-geo');
 const log = require('../utils/log');
-
-// Bound per-request network-ban reads to keep Spark-tier quota safe if
-// the active-ban list ever grows. Matches the cap the old expireBans
-// cron used; 500 simultaneously-active network bans is far above any
-// realistic ShyTalk-scale value.
-const NETWORK_BANS_QUERY_LIMIT = 500;
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
-/**
- * Check whether an IPv4 address falls within a CIDR range.
- */
-function isIpInSubnet(ip, cidr) {
-  try {
-    const [subnet, bits] = cidr.split('/');
-    const prefixLen = Number.parseInt(bits, 10);
-    const mask = prefixLen === 0 ? 0 : (~0 << (32 - prefixLen)) >>> 0;
-    const ipNum =
-      ip.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + Number.parseInt(oct, 10), 0) >>> 0;
-    const subNum =
-      subnet.split('.').reduce((acc, oct) => ((acc << 8) >>> 0) + Number.parseInt(oct, 10), 0) >>>
-      0;
-    return (ipNum & mask) === (subNum & mask);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Fetch IP geolocation data from ip-api.com.
- * Returns { isp, asn, country, region } or empty object on failure.
- */
-async function getIpGeo(ip) {
-  try {
-    // Validate IPv4 format to prevent URL injection
-    if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) return {};
-    const resp = await fetch(`http://ip-api.com/json/${ip}?fields=isp,as,country,regionName`);
-    if (!resp.ok) return {};
-    const data = await resp.json();
-    return {
-      isp: data.isp || null,
-      asn: data.as ? data.as.split(' ')[0] : null,
-      country: data.country || null,
-      region: data.regionName || null,
-    };
-  } catch {
-    return {};
-  }
-}
-
 // ─── Route ───────────────────────────────────────────────────────
+
+/**
+ * Drop keys whose value is absent, so a `{ merge: true }` write LEAVES the
+ * stored value alone instead of overwriting it with null.
+ *
+ * Firestore treats an explicit `null` under merge as "set this field to
+ * null" — the same as any other value. Only OMITTING the key preserves what
+ * is there. Empty strings count as absent: `getIpGeo` already maps ip-api's
+ * `as: ""` (an unrouted address) to null, and an empty ASN would be stored
+ * looking recorded while matching nothing.
+ *
+ * @param {Record<string, unknown>} doc
+ * @returns {Record<string, unknown>} a new object with the absent keys gone
+ */
+function withoutAbsent(doc) {
+  const out = {};
+  for (const [key, value] of Object.entries(doc)) {
+    if (value === null || value === undefined || value === '') continue;
+    out[key] = value;
+  }
+  return out;
+}
 
 router.post('/device-info', async (req, res) => {
   try {
@@ -77,16 +60,38 @@ router.post('/device-info', async (req, res) => {
 
     const { deviceId } = body;
 
-    // Extract client IP
-    const forwarded = req.headers['x-forwarded-for'];
-    const ip = forwarded ? forwarded.split(',')[0].trim() : req.ip;
+    // The REAL edge IP. `req.ip` respects `trust proxy: 1` (index.js), so
+    // the value is the rightmost X-Forwarded-For entry — the one appended
+    // by OUR edge, not a client-forgeable leftmost decoy. Never parse the
+    // XFF header directly here: the old leftmost-split let a forged
+    // `X-Forwarded-For: <clean-ip>, <real-ip>` evade network bans (SHY-0149).
+    const ip = req.ip;
 
     // Enrich with IP geolocation
     const geo = await getIpGeo(ip);
 
-    // Build device doc
+    // Build device doc.
+    //
+    // SHY-0299: absent values are OMITTED, never written as null. The write
+    // below is `tx.set(..., { merge: true })`, and under merge an explicit
+    // null OVERWRITES the stored value — it is not the same as leaving the
+    // key out. So `asn: geo.asn || null` replaced a known-good ASN with null
+    // on any request whose geo lookup failed, and `bans.js` builds its ASN
+    // list with `.filter((asn) => !!asn)` — a nulled binding contributes no
+    // ASN, so an `asn`-typed ban stopped matching that device. With
+    // `getUserDeviceStanding` caching the standing for 5 minutes, one blip
+    // disabled ASN-ban matching for that device for up to ~5.5 minutes.
+    //
+    // SHY-0143's negative cache made it deterministic rather than
+    // intermittent: a failed lookup is now held for 30 seconds, so every
+    // launch inside that window nulled the field, where previously each
+    // request re-rolled and a success could repair it.
+    //
+    // The geo fields are LAST-KNOWN telemetry: none has a "clear it" use
+    // case, and a device that genuinely changes network gets a new value on
+    // the next successful lookup.
     const timestamp = now();
-    const deviceDoc = {
+    const baseDoc = {
       deviceId,
       uniqueId: req.auth.uniqueId,
       manufacturer: body.manufacturer || null,
@@ -101,35 +106,104 @@ router.post('/device-info', async (req, res) => {
       networkType: body.networkType || null,
       carrierName: body.carrierName || null,
       firebaseInstallationId: body.firebaseInstallationId || null,
+      // The record of THIS request: nothing to preserve, and omitting them
+      // would be the bug in reverse.
       lastIp: ip,
-      isp: geo.isp || null,
-      asn: geo.asn || null,
-      country: geo.country || null,
-      region: geo.region || null,
       lastSeenAt: timestamp,
+      // GEO ONLY. The body-derived fields above keep writing null when
+      // absent, deliberately: `stores null for optional fields that are not
+      // provided` is an existing, intentional contract with its own test, and
+      // those fields have no security consumer. Reversing it here would be an
+      // unrelated behaviour change smuggled in under a ban-matching fix.
+      ...withoutAbsent({
+        isp: geo.isp,
+        asn: geo.asn,
+        country: geo.country,
+        region: geo.region,
+      }),
     };
 
-    // Check if doc already exists to set firstSeen/boundAt
-    const docRef = db.doc(`deviceBindings/${deviceId}`);
-    const existing = await docRef.get();
-    if (!existing.exists) {
-      deviceDoc.firstSeen = timestamp;
-      deviceDoc.boundAt = timestamp;
-    } else {
-      // SHY-0170: device-info updates telemetry on every launch, but must NEVER
-      // silently re-bind a device already owned by another account to the caller
-      // — that would defeat the device-lock (see /api/devices/lock-check). The
-      // uniqueId binding is owned by lock-check; here we only re-affirm it when it
-      // is unset or already the caller's, never overwrite a foreign owner.
-      const data = existing.data() || {};
-      const owner = data.uniqueId ?? data.userId ?? null;
-      if (owner !== null && String(owner) !== String(req.auth.uniqueId)) {
-        delete deviceDoc.uniqueId;
-      }
+    // Both spellings matter: getIpGeo returns {} on a hard failure (undefined)
+    // and null for a success that carried no ASN.
+    if (geo.asn === null || geo.asn === undefined) {
+      // Answers "why is this device still banned?" from logs. The stored ASN
+      // is deliberately left in place, so the ban that matches it is not
+      // visible in this request's data.
+      log.debug('device-info', 'geo unresolved — preserving any stored geo fields', { deviceId });
     }
 
-    // Write to Firestore
-    await docRef.set(deviceDoc, { merge: true });
+    const docRef = db.doc(`deviceBindings/${deviceId}`);
+
+    // The cap check runs OUTSIDE the transaction: a count needs a query read,
+    // and a query read inside a bind transaction breaks the document-level
+    // conflict detection the device-lock depends on (see
+    // BINDING_TRANSACTION_OPTIONS). A race can slip past this pre-check —
+    // `rollbackBindingIfOverCap` below closes that window.
+    //
+    // At the cap this route does NOT refuse: it records the telemetry but never
+    // claims the device. An unowned doc carries no uniqueId, so it can never be
+    // a decoy, and the response still carries `banStatus` — refusing outright
+    // would blank the very ban screen this endpoint exists to feed.
+    const caller = req.auth.uniqueId;
+    const callerRegistered = caller !== null && caller !== undefined;
+    const atCap = callerRegistered && (await countBoundDevices(caller)) >= MAX_BOUND_DEVICES;
+
+    let capped = false;
+    let bound = false;
+    await db.runTransaction(async (tx) => {
+      const deviceDoc = { ...baseDoc };
+      capped = false;
+      bound = false;
+
+      const existing = await tx.get(docRef);
+      const data = existing.exists ? existing.data() || {} : null;
+      const owner = data ? (data.uniqueId ?? data.userId ?? null) : null;
+
+      if (!existing.exists) deviceDoc.firstSeen = timestamp;
+
+      if (owner !== null) {
+        // SHY-0170: device-info updates telemetry on every launch, but must NEVER
+        // silently re-bind a device already owned by another account to the caller
+        // — that would defeat the device-lock (see /api/devices/lock-check). An
+        // already-owned device needs no cap check: claiming it costs no new slot.
+        if (String(owner) !== String(caller)) delete deviceDoc.uniqueId;
+      } else if (!callerRegistered) {
+        // A not-yet-registered caller (valid token, no users doc yet) must never
+        // claim a device — the rule /devices/lock-check already enforces.
+        // Otherwise the doc stored a literal `uniqueId: null` alongside a
+        // boundAt, implying an ownership that can never resolve.
+        delete deviceDoc.uniqueId;
+      } else if (atCap) {
+        // UNOWNED and the caller is full: record telemetry, claim nothing.
+        // Keyed on ownership, not existence — an unowned doc this route wrote
+        // earlier must not be bindable for free on a second call (R3-C1).
+        capped = true;
+        delete deviceDoc.uniqueId;
+      } else {
+        deviceDoc.boundAt = timestamp;
+        bound = true;
+      }
+
+      tx.set(docRef, deviceDoc, { merge: true });
+    }, BINDING_TRANSACTION_OPTIONS);
+
+    if (bound && (await rollbackBindingIfOverCap(caller, deviceId))) {
+      // A concurrent bind pushed the account past the cap; the claim was
+      // released. Telemetry stays; the device is simply unclaimed.
+      bound = false;
+      capped = true;
+    }
+
+    if (capped) {
+      log.warn('device-info', 'device-binding cap reached — telemetry stored unbound', {
+        uniqueId: caller,
+        deviceId,
+      });
+    }
+
+    // A newly-bound device can carry a hardware ban, changing the caller's
+    // standing — drop their cached verdict so the gate sees it immediately.
+    if (bound) clearBanCache(caller);
 
     // Check bans
     const banStatus = await checkBans(deviceId, ip, geo.asn || null);
@@ -140,75 +214,5 @@ router.post('/device-info', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-/** Check if a ban is currently active (not expired). */
-function isBanActive(ban) {
-  return !ban.expiresAt || new Date(ban.expiresAt).getTime() > Date.now();
-}
-
-/** Build a ban result object. */
-function buildBanResult(banType, ban) {
-  return { isBanned: true, banType, reason: ban.reason || null, expiresAt: ban.expiresAt || null };
-}
-
-/** Check if a network ban matches the given IP/ASN. */
-function networkBanMatches(ban, ip, asn) {
-  if (ban.type === 'ip') return ban.value === ip;
-  if (ban.type === 'subnet') return isIpInSubnet(ip, ban.value);
-  if (ban.type === 'asn') return ban.value === asn;
-  return false;
-}
-
-/**
- * Check device bans and network bans.
- * Returns { isBanned, banType, reason, expiresAt }.
- */
-async function checkBans(deviceId, ip, asn) {
-  const noBan = { isBanned: false, banType: null, reason: null, expiresAt: null };
-
-  try {
-    const deviceBanSnap = await db.doc(`deviceBans/${deviceId}`).get();
-    if (deviceBanSnap.exists && isBanActive(deviceBanSnap.data())) {
-      return buildBanResult('device', deviceBanSnap.data());
-    }
-
-    // Server-side filter: only fetch currently-active bans. The OR
-    // branch keeps permanent bans (expiresAt == null) AND temporary
-    // bans whose expiry is still in the future. Without this filter,
-    // expired bans would accumulate in the result set, wasting reads
-    // and requiring a sweep cron to delete them. With it, expired bans
-    // simply stop being returned — no cleanup needed.
-    const nowIso = new Date().toISOString();
-    const networkBansSnap = await db
-      .collection('networkBans')
-      .where(
-        Filter.or(Filter.where('expiresAt', '==', null), Filter.where('expiresAt', '>', nowIso)),
-      )
-      .limit(NETWORK_BANS_QUERY_LIMIT)
-      .get();
-
-    if (networkBansSnap.size === NETWORK_BANS_QUERY_LIMIT) {
-      log.warn('device-info', 'checkBans: networkBans hit limit — possible truncation', {
-        limit: NETWORK_BANS_QUERY_LIMIT,
-      });
-    }
-
-    for (const doc of networkBansSnap.docs) {
-      const ban = doc.data();
-      // Query already excludes expired bans; the inline check is
-      // defense-in-depth for the unlikely race between expiry tick
-      // and read (a ban that became expired between query and consume).
-      if (!isBanActive(ban)) continue;
-      if (networkBanMatches(ban, ip, asn)) {
-        return buildBanResult(`network_${ban.type}`, ban);
-      }
-    }
-
-    return noBan;
-  } catch (err) {
-    log.error('device-info', 'Error checking bans', { deviceId, error: err.message });
-    return noBan;
-  }
-}
 
 module.exports = router;

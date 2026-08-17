@@ -23,6 +23,10 @@ data class BuildVariantConfig(
     val buildVersion: String = "?",
     val deviceInfo: String = "?",
     val apiBaseUrl: String? = null,
+    val gitBranch: String = "?",
+    val gitSha: String = "?",
+    val gitDirty: Boolean = false,
+    val builtAt: String = "?",
 )
 
 /**
@@ -155,6 +159,35 @@ object BuildVariant {
     val apiBaseUrl: String? get() = holder.apiBaseUrl
 
     /**
+     * Git branch the binary was built from (SHY-0205). Injected at
+     * BUILD time — Android via `buildConfigField` (`providers.exec git`),
+     * iOS via xcodebuild `SHYTALK_GIT_BRANCH` → Info.plist. Defaults to
+     * `"?"` so a build outside a repo (or an Xcode-GUI build without the
+     * settings) renders a visible placeholder instead of a blank line.
+     */
+    val gitBranch: String get() = holder.gitBranch
+
+    /** Short (or full — the watermark trims to 7) commit SHA. See [gitBranch]. */
+    val gitSha: String get() = holder.gitSha
+
+    /**
+     * Whether the working tree had uncommitted changes at build time
+     * (`git status --porcelain` non-empty). Rendered as a `*` suffix on
+     * the sha so a device screenshot distinguishes "the committed code"
+     * from "the committed code plus whatever was in flight".
+     */
+    val gitDirty: Boolean get() = holder.gitDirty
+
+    /**
+     * Preformatted build/install timestamp (`MM-dd HH:mm`) shown next to
+     * the sha. Android derives it at RUNTIME from
+     * `PackageInfo.lastUpdateTime` (install time — immune to gradle
+     * configuration-cache staleness, which a build-time constant is not);
+     * iOS uses the app binary's modification date. `"?"` when unknown.
+     */
+    val builtAt: String get() = holder.builtAt
+
+    /**
      * Convenience: any environment that isn't prod is a "preview"
      * build. The PreviewWatermark composable / web overlay reads this
      * to decide whether to render.
@@ -252,12 +285,23 @@ object BuildVariant {
         environment: String,
         buildVersion: String,
         deviceInfo: String = "",
+        gitBranch: String = "",
+        gitSha: String = "",
+        gitDirty: Boolean = false,
+        builtAt: String = "",
     ) {
         holder =
             holder.copy(
                 environment = environment.takeIf { it.isNotBlank() } ?: "prod",
                 buildVersion = buildVersion.takeIf { it.isNotBlank() } ?: "?",
                 deviceInfo = deviceInfo.takeIf { it.isNotBlank() } ?: "?",
+                // Blank → "?" (not "preserve previous") so a partial
+                // re-init can never carry a stale git identity forward —
+                // the slots always reflect the LAST initBuildInfo call.
+                gitBranch = gitBranch.takeIf { it.isNotBlank() } ?: "?",
+                gitSha = gitSha.takeIf { it.isNotBlank() } ?: "?",
+                gitDirty = gitDirty,
+                builtAt = builtAt.takeIf { it.isNotBlank() } ?: "?",
             )
     }
 

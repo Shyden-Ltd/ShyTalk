@@ -1,0 +1,10 @@
+// A wiper that names its collections inline and does NOT claim a project.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection, clearCollectionGroup } = require('../helpers/firebase-emulator');
+
+beforeEach(async () => {
+  await clearCollection(db, 'users');
+  await clearCollectionGroup(db, 'backpack');
+});

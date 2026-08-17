@@ -490,7 +490,14 @@ test.describe("Integration — Firestore rules: deviceBindings privacy", () => {
     await assertFails(getDoc(doc(attackerDb, "deviceBindings", "device-victim")));
   });
 
-  test("user CAN read their own device binding", async () => {
+  test("user CANNOT read even their OWN device binding (server-only since SHY-0170)", async () => {
+    // SHY-0198 repair: this test previously asserted the owner COULD read
+    // their own binding (the SHY-0159-era contract). SHY-0170 (#1550) moved
+    // the device-lock decision entirely server-side and locked the collection
+    // to `allow read, write: if false` — no client access at all, owner
+    // included, so a tampered client can neither read nor forge a binding.
+    // This spec now PINS that lockdown: if the rule is ever loosened back to
+    // owner-readable, this goes red and the change must be deliberate.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const adminDb = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(adminDb, "deviceBindings", "device-owner"), {
@@ -503,6 +510,23 @@ test.describe("Integration — Firestore rules: deviceBindings privacy", () => {
       uniqueId: "100000700",
     });
     const ownerDb = owner.firestore() as unknown as Firestore;
-    await assertSucceeds(getDoc(doc(ownerDb, "deviceBindings", "device-owner")));
+    await assertFails(getDoc(doc(ownerDb, "deviceBindings", "device-owner")));
+  });
+
+  test("user CANNOT create or overwrite a device binding directly (write half of the lockdown)", async () => {
+    // SHY-0198 (review finding): the rule is `allow read, write: if false` —
+    // the read half is pinned above; this pins the WRITE half so a tampered
+    // client can't forge a binding to dodge the device lock. Bindings are
+    // written exclusively by the Express API via the Admin SDK (rules-bypass).
+    const owner = testEnv.authenticatedContext("uid-owner-write", {
+      uniqueId: "100000701",
+    });
+    const ownerDb = owner.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(ownerDb, "deviceBindings", "device-owner-write"), {
+        userId: "100000701",
+        deviceId: "device-owner-write",
+      }),
+    );
   });
 });

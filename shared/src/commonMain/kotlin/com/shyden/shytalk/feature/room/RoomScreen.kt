@@ -113,7 +113,10 @@ fun RoomScreen(
     onNavigateToUserProfile: (String) -> Unit = {},
     onNavigateToChat: (String) -> Unit = {},
     onNavigateToWallet: () -> Unit = {},
-    onNavigateToAgeVerification: () -> Unit = {},
+    // Deliberately NOT defaulted (SHY-0268): the age gate's "Verify now" is a
+    // compliance CTA. A default let a call site omit it and ship a dead-end
+    // button; without one the compiler enforces every host wires it.
+    onNavigateToAgeVerification: () -> Unit,
     viewModel: RoomViewModel = koinViewModel { parametersOf(roomId) },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -1105,6 +1108,7 @@ fun RoomScreen(
                 // PM Bottom Sheet
                 if (showPmSheet) {
                     PmBottomSheet(
+                        onNavigateToAgeVerification = onNavigateToAgeVerification,
                         onDismiss = {
                             showPmSheet = false
                             pmSheetPreOpenUserId = null

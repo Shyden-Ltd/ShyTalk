@@ -28,6 +28,7 @@ const accountDeletion = require('../cron/accountDeletion');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 const { getDefaultMissQueue } = require('../utils/translation-miss-queue');
+const { appCheckCounters, appCheckMode } = require('../middleware/app-check');
 
 router.get('/system/health', (req, res) => {
   // Respond immediately so the external monitor sees a fast 200. The
@@ -41,6 +42,26 @@ router.get('/system/health', (req, res) => {
   serverHealth(alertManager).catch((err) => {
     log.error('system', 'serverHealth metrics check failed', { error: err.message });
   });
+});
+
+/**
+ * GET /api/system/app-check — the SHY-0300 rollout instrument.
+ *
+ * The enforcement flip is a config change with no deploy, so the thing most
+ * likely to go wrong is flipping it while a meaningful share of clients still
+ * cannot attest; the symptom is users locked out with a 401 they cannot act
+ * on. Mode plus counts makes a botched flip one curl away instead of a log
+ * dive, and `refused` climbing is the signal to flip back.
+ *
+ * **Authenticated, deliberately.** The obvious home was `/system/health`, but
+ * that is PUBLIC — the Better Stack heartbeat reads it — and publishing
+ * `mode` there would tell an unauthenticated caller precisely when
+ * attestation is off, which is the one thing an abuser of this endpoint needs
+ * to know. The counts are operational, not secret; the MODE is a timing
+ * signal, so the whole block sits behind the shared secret.
+ */
+router.get('/system/app-check', requireSystemAuth, (req, res) => {
+  res.json({ mode: appCheckMode(), ...appCheckCounters() });
 });
 
 const SWEEP_TIMEOUT_DEFAULT_MS = 20 * 60 * 1000;

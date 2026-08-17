@@ -198,7 +198,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosAdminShowsAppealText = async (_viewer, _target) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="adminAppeal_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -211,7 +211,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosAdminShowsDashboardCounters = async (_viewer, _counters) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="adminDashboard_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -223,7 +223,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosAdminShowsStat = async (_viewer, _statName) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="adminStat_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -235,7 +235,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosAlsoShowsInParticipantsList = async (_viewer, _other) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="participantsList_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -247,7 +247,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosApproveSeatRequest = async (_host, _requester) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="seatRequest_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -265,10 +265,10 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosContinuesNormallyInRoom = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const warningRx = /<XCUIElementType\w+[^>]*\bidentifier="warning_[^"]*"[^>]*\/?>/;
     if (warningRx.test(dump)) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const roomRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
     return roomRx.test(dump);
   };
@@ -288,7 +288,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosIsNoLongerInVoiceRoom = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const roomRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
     return !roomRx.test(dump);
   };
@@ -298,7 +298,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosIsStillInRoom = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const roomRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
     return roomRx.test(dump);
   };
@@ -312,7 +312,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosJoinEventRoom = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="roomList_roomCard_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -331,7 +331,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosNavigatesBackToTab = async (_name, _tab) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="main_[^"]*Tab"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -392,7 +392,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosNavigatesToProfileScreen = async (_name, _target) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -403,7 +403,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosNavigatesToRoomScreen = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -415,7 +415,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosNavigatesToWarningScreen = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="warning_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -428,7 +428,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosOpenProfileAndTap = async (_actor, _target, _button) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -442,7 +442,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosOpenProfileFrom = async (_actor, _target, _source) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -460,7 +460,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosOpensTab = async (_name, _tab) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="main_[^"]*Tab"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -481,7 +481,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosRefreshLanguageRail = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="languageRail_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -505,7 +505,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     if (!buttonId || !buttonId.trim()) return false;
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_followButton"[^>]*\/?>/;
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
@@ -537,7 +537,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     if (!balance || !balance.trim()) return false;
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="wallet_balance"[^>]*\/?>/;
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
@@ -595,7 +595,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsBeansPerWeekChart = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="beansChart_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -612,7 +612,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsContributorsList = async (_name) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="giftWall_grid"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -632,7 +632,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsCountBadge = async (_name, _delta, _label) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="countBadge_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -654,7 +654,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsEditedBodyWithTag = async (_name, _body, _tag) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="editedBody_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -672,7 +672,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsFrozenBanner = async (_viewer, _convId, _suffix) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="privateChat_frozenBanner"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -698,7 +698,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
     // Step 1: gift wall must be visible.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const wallRx = /<XCUIElementType\w+[^>]*\bidentifier="giftWall_grid"[^>]*\/?>/;
     if (!wallRx.test(dump)) return false;
     // Step 2: giftId appears with symmetric word-boundary across
@@ -740,7 +740,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsInAppGiftNotification = async (_recipient, _sender, _giftId) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="giftNotification_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -762,7 +762,7 @@ async function createIosDriver({ udid: preferred } = {}) {
   driver.iosShowsInResults = async (_viewer, _target, _displayName) => {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="searchResults_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -783,7 +783,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
     // Step 1: seat-grid must be visible.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const gridRx = /<XCUIElementType\w+[^>]*\bidentifier="room_seatGrid"[^>]*\/?>/;
     if (!gridRx.test(dump)) return false;
     // Step 2: target name appears with symmetric word-boundary.

@@ -419,8 +419,41 @@ async function waitForAuditLogLoaded(page: Page): Promise<void> {
     const tbody = document.getElementById('audit-log-tbody');
     const empty = document.getElementById('audit-log-empty');
     if (!tbody) return false;
-    return tbody.querySelectorAll('tr').length > 0 || (empty && empty.style.display !== 'none');
+    // A REAL data row is required — not just "any <tr>". `load()` in
+    // audit-log.js synchronously inserts a single unclassed "Loading…" <tr>
+    // before it fetches, which would satisfy a bare `tr.length > 0` and let
+    // a caller read the placeholder instead of the rendered data. Every real
+    // row carries an `.audit-admin-name` cell (buildRow); the placeholder
+    // does not. Empty-state shown is also a settled outcome.
+    const hasRealRow = tbody.querySelector('.audit-admin-name') !== null;
+    return hasRealRow || (empty && empty.style.display !== 'none');
   }, { timeout: 15_000 });
+}
+
+/**
+ * Click the audit-log search button and wait for the FILTERED response that
+ * the given query-param substring identifies (e.g. "target=suggestion").
+ *
+ * `waitForAuditLogLoaded` alone is unsafe for a filter test: it returns as
+ * soon as the tbody has *any* rows, which is already true from the previous
+ * test's STALE rows — so an assertion right after it reads pre-filter rows and
+ * fails non-deterministically on whatever data happens to be present
+ * (SHY-0174). Waiting on the specific API response — a signal independent of
+ * the row content the test asserts — settles the filter without making the
+ * wait tautological with the assertion.
+ */
+async function searchAuditLogAndWaitForResponse(page: Page, paramMatch: string): Promise<void> {
+  const responded = page.waitForResponse(
+    (r) =>
+      r.url().includes('/api/admin/audit-log') && r.url().includes(paramMatch) && r.status() === 200,
+    { timeout: 15_000 },
+  );
+  await page.locator('#audit-log-search-btn').click();
+  await responded;
+  // The response handler clears + refills the tbody synchronously in its
+  // microtask, which completes before Playwright's next round-trip; this final
+  // wait just confirms the fresh render settled (rows or empty state).
+  await waitForAuditLogLoaded(page);
 }
 
 async function waitForIdentityGraphLoaded(page: Page): Promise<void> {
@@ -957,41 +990,45 @@ test.describe('Admin Audit Log (11.18)', () => {
 
   test('filter by admin user works', async ({ page }) => {
     await page.locator('#audit-log-filter-admin').fill('admin');
-    await page.locator('#audit-log-search-btn').click();
-    await waitForAuditLogLoaded(page);
+    await searchAuditLogAndWaitForResponse(page, 'admin=admin');
     const rows = page.locator('#audit-log-tbody tr');
-    for (let i = 0; i < Math.min(await rows.count(), 5); i++) {
-      if (await rows.count() > 0) expect((await rows.nth(i).locator('.audit-admin-name').textContent())!.toLowerCase()).toContain('admin');
+    const count = await rows.count();
+    // Non-empty required (no `count > 0` no-op guard — SHY-0174). Once the
+    // real rows have rendered (waitForAuditLogLoaded now waits for an
+    // `.audit-admin-name` cell, not the Loading placeholder), the admin
+    // filter always yields matching rows — the real backend's admin-authored
+    // entries, or the spec's real-first route falling back to the static
+    // MOCK_AUDIT_ENTRIES (all `adminName: 'admin'`). Every row must match.
+    expect(count, 'admin filter must return matching audit rows').toBeGreaterThan(0);
+    for (let i = 0; i < Math.min(count, 5); i++) {
+      expect((await rows.nth(i).locator('.audit-admin-name').textContent())!.toLowerCase()).toContain('admin');
     }
   });
 
   test('filter by action type works', async ({ page }) => {
     await page.locator('#audit-log-filter-action').selectOption('approve');
-    await page.locator('#audit-log-search-btn').click();
-    // Wait specifically for rows containing 'approve' — the previous unfiltered
-    // results may still be visible briefly before the filtered response arrives.
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      if (!tbody) return false;
-      const rows = tbody.querySelectorAll('tr');
-      if (rows.length === 0) return false;
-      // Check that the first row's action cell contains 'approve'
-      const firstAction = rows[0].querySelector('.audit-action');
-      return firstAction && firstAction.textContent!.toLowerCase().includes('approve');
-    }, { timeout: 10_000 });
+    await searchAuditLogAndWaitForResponse(page, 'action=approve');
     const rows = page.locator('#audit-log-tbody tr');
-    for (let i = 0; i < Math.min(await rows.count(), 5); i++) {
+    const count = await rows.count();
+    // Non-empty required (SHY-0174; MOCK_AUDIT_ENTRIES has an
+    // `actionType: 'suggestion_approve'` that tail-matches the 'approve'
+    // filter, so the fallback always yields a match).
+    expect(count, 'approve-action filter must return matching audit rows').toBeGreaterThan(0);
+    for (let i = 0; i < Math.min(count, 5); i++) {
       expect((await rows.nth(i).locator('.audit-action').textContent())!.toLowerCase()).toContain('approve');
     }
   });
 
   test('filter by target type works', async ({ page }) => {
     await page.locator('#audit-log-filter-target').selectOption('suggestion');
-    await page.locator('#audit-log-search-btn').click();
-    await waitForAuditLogLoaded(page);
+    await searchAuditLogAndWaitForResponse(page, 'target=suggestion');
     const rows = page.locator('#audit-log-tbody tr');
-    for (let i = 0; i < Math.min(await rows.count(), 5); i++) {
-      if (await rows.count() > 0) expect((await rows.nth(i).locator('.audit-target-type').textContent())!.toLowerCase()).toContain('suggestion');
+    const count = await rows.count();
+    // Non-empty required (SHY-0174; MOCK_AUDIT_ENTRIES has a
+    // `targetType: 'suggestion'` entry, so the fallback always yields a match).
+    expect(count, 'suggestion-target filter must return matching audit rows').toBeGreaterThan(0);
+    for (let i = 0; i < Math.min(count, 5); i++) {
+      expect((await rows.nth(i).locator('.audit-target-type').textContent())!.toLowerCase()).toContain('suggestion');
     }
   });
 

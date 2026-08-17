@@ -317,3 +317,73 @@ describe('POST /api/system/sweep-account-deletions', () => {
     }
   });
 });
+
+describe('GET /api/system/app-check — the SHY-0300 rollout instrument', () => {
+  const {
+    __resetCountersForTests,
+    __setVerifierForTests,
+    appCheckMiddleware,
+  } = require('../../src/middleware/app-check');
+
+  beforeEach(() => {
+    __resetCountersForTests();
+  });
+
+  afterEach(() => {
+    delete process.env.APP_CHECK_MODE;
+  });
+
+  test('requires the shared secret — the MODE is a timing signal', () => {
+    // The obvious home for this was /system/health, which is PUBLIC. Telling
+    // an unauthenticated caller when attestation is off hands an abuser of
+    // the ban gate the one fact they need.
+    return request(createApp()).get('/api/system/app-check').expect(401);
+  });
+
+  test('a wrong secret is refused', () =>
+    request(createApp())
+      .get('/api/system/app-check')
+      .set('Authorization', 'Bearer not-the-secret')
+      .expect(401));
+
+  test('reports the current mode and zeroed counters', async () => {
+    process.env.APP_CHECK_MODE = 'monitor';
+    const res = await request(createApp())
+      .get('/api/system/app-check')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      mode: 'monitor',
+      verified: 0,
+      missing: 0,
+      invalid: 0,
+      error: 0,
+      off: 0,
+      refused: 0,
+    });
+  });
+
+  test('counts move as requests are classified — a live number, not a shape', async () => {
+    // A zeroed response proves the wiring exists; it cannot tell a live
+    // counter from a frozen one.
+    process.env.APP_CHECK_MODE = 'enforce';
+    __setVerifierForTests(async () => ({}));
+    const noop = { status: () => noop, json: () => noop };
+    await appCheckMiddleware({ method: 'GET', path: '/ban-status', headers: {} }, noop, () => {});
+
+    const res = await request(createApp())
+      .get('/api/system/app-check')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.body).toMatchObject({ mode: 'enforce', missing: 1, refused: 1 });
+  });
+
+  test('the PUBLIC health endpoint still says nothing about App Check', async () => {
+    process.env.APP_CHECK_MODE = 'enforce';
+    const res = await request(createApp()).get('/api/system/health');
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toMatch(/appCheck|enforce|monitor/i);
+  });
+});

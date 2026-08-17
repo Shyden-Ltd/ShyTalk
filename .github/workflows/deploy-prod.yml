@@ -73,7 +73,7 @@ jobs:
       # input here, because a) for branch refs we need `origin/<branch>`
       # not the raw name, and b) the working tree contents don't matter
       # at this step — only git history does.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -178,7 +178,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -248,7 +248,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -357,7 +357,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -449,9 +449,11 @@ jobs:
     # Tuned 2026-05-21 to 100 min. See deploy-dev.yml's distribute-ios
     # timeout comment for the full reasoning (gradle daemon collision was
     # the real cause of the apparent slowness, not insufficient minutes).
-    timeout-minutes: 100
+    # 2026-07-16 (SHY-0195): 100 -> 120 to absorb the new 20-min
+    # platform-install step cap — see deploy-dev.yml's matching note.
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -514,16 +516,28 @@ jobs:
           ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
 
       - name: Install CocoaPods
+        # --deployment, matching deploy-dev: refuse a Podfile.lock that does not
+        # describe the committed Podfile rather than silently regenerating one.
+        # Plain `pod install` here would have MASKED the SHY-0305 breakage on
+        # prod while dev failed, which is the worst of both.
         run: |
           set -euo pipefail
           cd iosApp
-          pod install
+          pod install --deployment
 
       # Mirror of deploy-dev.yml's pre-xcodebuild daemon stop. See that file
       # for the full forensic explanation (run 26196249351 hang analysis).
       # Same gradle-daemon collision pattern would hit prod releases too.
       - name: Stop gradle daemon before xcodebuild
         run: ./gradlew --stop
+
+      # Ensure the iOS platform runtime exists — see deploy-dev.yml's
+      # matching step for the full rationale (runner image 0213.1 ships
+      # Xcode without it; SHY-0195 run 29478170583). Idempotency verified
+      # empirically (exit 0 in <1s when already installed) + step-capped.
+      - name: Ensure iOS platform runtime is installed
+        run: sudo xcodebuild -downloadPlatform iOS
+        timeout-minutes: 20
 
       # Step-level hang detector — see deploy-dev.yml's matching step for
       # the rationale. 50-min cap catches recurrence cheaply.
@@ -563,6 +577,7 @@ jobs:
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -showBuildTimingSummary \
             -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
@@ -771,7 +786,7 @@ jobs:
       # when deploying a tag cut BEFORE this script existed (run 27388236740:
       # deploying v0.97.12 → "No such file", exit 127). The deployed APP under
       # test is the downloaded APK artifact, not this checked-out tree.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download debug APK
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -836,7 +851,7 @@ jobs:
     # for the boot+launch verification even on the cold-cache worst case.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-release.outputs.commit-sha }}
 
@@ -867,7 +882,8 @@ jobs:
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --max-workers=1
 
       - name: Install CocoaPods
-        run: cd iosApp && pod install
+        # --deployment — see the note on the distribute-ios job above.
+        run: cd iosApp && pod install --deployment
 
       # Same gradle-daemon-collision prevention as distribute-ios — the
       # smoke-test xcodebuild invocation also triggers the
@@ -975,7 +991,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Create critical issue
         env:

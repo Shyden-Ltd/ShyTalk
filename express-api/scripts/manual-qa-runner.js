@@ -28,6 +28,8 @@
  *   0 — zero findings of any severity
  *   1 — one or more findings (Blocker / Major / Minor / Polish)
  *   2 — runtime error (missing env, unreachable target, etc.)
+ *   3 — driver init failed (no device / browser app / env var) —
+ *       reserved so a --matrix parent classifies the cell 'skip'
  */
 
 const fs = require('fs');
@@ -150,7 +152,7 @@ function parseGherkin(text) {
     }
 
     // Linear regex (no nested quantifiers, single .+ on bounded line).
-    const stepMatch = /^(Given|When|Then|And|But)\s+(.+)$/.exec(line); // eslint-disable-line sonarjs/slow-regex
+    const stepMatch = /^(Given|When|Then|And|But)\s+(.+)$/.exec(line);
     if (stepMatch) {
       const step = { kind: stepMatch[1], text: stepMatch[2].trim() };
       if (current === 'background') background.steps.push(step);
@@ -1202,10 +1204,10 @@ const matchers = [
     // The `[^()]+?` class excludes `(`/`)` so it cannot overlap with the
     // surrounding paren groups, making backtracking linear in input length.
     // Inputs are author-controlled Gherkin step text, not user input.
-    /* eslint-disable sonarjs/slow-regex */
+
     pattern:
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+AND\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+with\s+([^()]+?))?(?:\s+\([^)]*\))?(?:\s+\(no admin claim\))?(?:\s+at\s+the\s+"[^"]+"\s+(?:screen|tab))?$/,
-    /* eslint-enable sonarjs/slow-regex */
+
     async handler(m, ctx) {
       const name = m[1];
       const withClause = m[3];
@@ -1350,7 +1352,6 @@ const matchers = [
     // complex bodies into a step var if needed. The optional groups are all
     // anchored and don't overlap, so the linear-time guarantee holds.
     pattern:
-      // eslint-disable-next-line sonarjs/slow-regex
       /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]*)?\s+sends?\s+(GET|POST|PATCH|PUT|DELETE)\s+(\S+)(?:\s+with\s+body\s+(\{[^}]*\}|\[[^\]]*\]))?(?:\s+with\s+(?:her|his|their)\s+ID token)?\.?$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -1417,9 +1418,7 @@ const matchers = [
   // All four matchers populate `ctx.lastResponse.path` so the new
   // path-tagged response assertions (below) can verify the chain.
   {
-    pattern:
-      // eslint-disable-next-line sonarjs/slow-regex
-      /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
+    pattern: /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
     async handler(m, ctx) {
       const name = m[1];
       const apiPath = m[2];
@@ -1458,7 +1457,7 @@ const matchers = [
   {
     pattern:
       // Alt word order: `POST <path> with <kv-list-or-any-payload-or-body> as <Persona>(?: on <Platform>)?`
-      // eslint-disable-next-line sonarjs/slow-regex
+
       /^POST\s+(\S+)\s+with\s+(any payload|body\s+(\{[^}]*\}|\[[^\]]*\])|.+?)\s+as\s+([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\.?$/,
     async handler(m, ctx) {
       const apiPath = m[1];
@@ -2568,7 +2567,7 @@ const matchers = [
     // shape j03/j05/j06 use for known-state setup.
     // `.+$` is greedy and anchored to end-of-string. No nested quantifiers,
     // no character-class overlap with surrounding patterns — match is linear.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+(exists|has user doc) with\s+(.+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
@@ -2890,7 +2889,7 @@ const matchers = [
     // the optional trailing `(?:\s+.+)?$` is anchored to end-of-string with no
     // nested quantifiers. Input is author-controlled (feature files), not
     // untrusted user data. Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -2993,7 +2992,7 @@ const matchers = [
     //
     // Trailing descriptive text accepted (e.g. ` toast`, ` banner`) and
     // ignored — matches the corpus phrasings without forcing rewrites.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s iOS Sim UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -3608,7 +3607,7 @@ const matchers = [
     // text-only view of the page. Trailing descriptive context (e.g.
     // ` toast`, ` indicator on her reply`) accepted and ignored, mirroring
     // Wake-19 Android pattern.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Web UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -3911,7 +3910,7 @@ const matchers = [
     // cohort-rooms scenario shape. Filter is in-memory.
     // `.+$` is greedy + anchored — no overlap with the surrounding pattern
     // pieces, so backtracking is linear.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^a query is run for "([^"]+)\/\*" docs with\s+(.+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
@@ -5119,7 +5118,7 @@ const matchers = [
     // Regex is linear: `.+$` is greedy + anchored to end-of-string, no
     // overlap with preceding tokens. Input is author-controlled (feature
     // files), not untrusted user data. Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)\s+has\s+(\w+)\s+(>=|<=|==|>|<)\s+(\d+)(?:\s+.+)?$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -5828,7 +5827,7 @@ const matchers = [
     //
     // Regex linear: `.+$` greedy + anchored to end-of-string. Input
     // is author-controlled (feature files). Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)\s+on Android POSTs (\/api\/[\w/-]+)(?:\s+(.+))?$/,
     async handler(m, ctx) {
       const endpoint = m[2];
@@ -10276,7 +10275,7 @@ const matchers = [
       // captures). The `\w+` key class is non-overlapping with the space
       // that follows. Linear time despite the alternation-free capture.
       const fields = {};
-      // eslint-disable-next-line sonarjs/slow-regex
+
       for (const match of kvText.matchAll(/(\w+)\s+"([^"]*)"/g)) {
         fields[match[1]] = match[2];
       }
@@ -14745,7 +14744,6 @@ const matchers = [
 // — so backtracking can't recurse). Author-controlled input (Gherkin
 // step text), not untrusted user data. Safe.
 function stripStepAnnotation(text) {
-  // eslint-disable-next-line sonarjs/slow-regex
   return text.replace(/\s+\([^()]*\)$/, '');
 }
 
@@ -15298,7 +15296,7 @@ function parseUserDocFields(text) {
 function parseSignInWithClause(text) {
   // `[^)]*` excludes `)` so it cannot overlap with the literal `\)` that
   // follows; anchored to end-of-string. Linear match.
-  // eslint-disable-next-line sonarjs/slow-regex
+
   const stripped = text.replace(/\s*\([^)]*\)\s*$/, '').trim();
   const pairs = [];
   let buf = '';
@@ -15511,6 +15509,10 @@ function formatUsage() {
     '  --headed                  Run the browser in headed (visible) mode',
     '  --matrix                  Dispatch every allowed cell in sequence',
     '  --fail-fast               Stop the matrix at the first failing cell',
+    '  --parallel                Dispatch cells per-device-serial, cross-device-',
+    '                              parallel: cells for the same device run one at',
+    '                              a time, but iOS + Android + Mac groups progress',
+    '                              together. Default off (strict-sequential).',
     '  --bail <n>                Stop the matrix after <n> failures (timeouts',
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
@@ -15626,6 +15628,7 @@ function formatListJson(target) {
 // alongside the helper as a single source of truth.
 const PER_CELL_STRIP_FLAGS = new Set([
   '--matrix',
+  '--parallel',
   '--report-dir',
   '--report-format',
   '--report-output',
@@ -15808,7 +15811,23 @@ function formatDryRunJson(opts = {}) {
   if (opts.shardIndex !== undefined && opts.shardCount !== undefined) {
     cells = shardCells(cells, opts.shardIndex, opts.shardCount);
   }
-  return JSON.stringify({ target, cells });
+  // `parallel` previews the dispatch mode so an operator can confirm a
+  // matrix invocation will overlap device groups BEFORE burning a run.
+  return JSON.stringify({ target, cells, parallel: opts.parallel === true });
+}
+
+// buildRunMatrixOptions — maps parsed CLI opts onto runMatrix's option
+// shape (browsers + gates + dispatch mode). Extracted so the mapping is
+// unit-testable at the value level without spawning a real matrix; the
+// clamps mirror the historical inline expressions exactly.
+function buildRunMatrixOptions({ allowed, opts = {} }) {
+  return {
+    browsers: allowed,
+    failFast: opts.failFast === true,
+    bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
+    retry: opts.retry > 0 ? opts.retry : 0,
+    parallel: opts.parallel === true,
+  };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────
@@ -15838,6 +15857,7 @@ async function main() {
     else if (flat[i] === '--browser') opts.browser = flat[++i];
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
+    else if (flat[i] === '--parallel') opts.parallel = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
     else if (flat[i] === '--retry') {
@@ -16079,7 +16099,7 @@ async function main() {
       formatMatrixResultJson,
       formatMatrixResultJunit,
     } = require('./matrix-dispatch');
-    const { spawnSync } = require('child_process');
+    const { createCellDispatcher } = require('./matrix-cell-dispatch');
 
     // --retry-failed: filter `allowed` down to only the cells that
     // failed/timed out in a previous matrix report. Lets the operator
@@ -16129,71 +16149,28 @@ async function main() {
       cellLogs.ensureReportDir(opts.reportDir);
     }
 
+    // Capture mode: pipe stdout+stderr so the dispatcher can both tee
+    // them to the operator's terminal AND write a per-cell log file.
+    // Also forced on under --parallel even without --report-dir:
+    // concurrent cells inheriting the same terminal would interleave
+    // lines mid-cell, so the dispatcher buffers each cell's output and
+    // tees it as one contiguous block at cell end. Inherit mode
+    // (sequential, no --report-dir): zero log overhead, as before.
+    const captureStdio = Boolean(opts.reportDir) || opts.parallel === true;
+    const dispatchOne = createCellDispatcher({
+      runnerPath: __filename,
+      baseArgv,
+      cellTimeoutMs: opts.cellTimeoutMs,
+      captureStdio,
+      reportDir: opts.reportDir || null,
+      cellLogs,
+    });
     const matrixResult = await runMatrix({
-      browsers: allowed,
-      failFast: opts.failFast === true,
-      bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
-      retry: opts.retry > 0 ? opts.retry : 0,
+      ...buildRunMatrixOptions({ allowed, opts }),
       onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
       onCellEnd: (cell) =>
         console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
-      dispatchOne: async ({ browser }) => {
-        const cellArgs = [...baseArgv, '--browser', browser];
-        // Capture mode: pipe stdout+stderr so we can both tee them to
-        // the operator's terminal AND write a per-cell log file. Inherit
-        // mode (no --report-dir): subprocess stdio inherits the runner's
-        // streams as before (zero log overhead).
-        const captureStdio = Boolean(opts.reportDir);
-        // spawnSync's `timeout` option kills the child with SIGTERM
-        // once exceeded; result is `proc.status === null, signal === 'SIGTERM'`.
-        // We translate that to a CELL_TIMEOUT throw so matrix-dispatch's
-        // classifier produces a 'timeout' outcome (distinct from 'fail').
-        const spawnOpts = {
-          stdio: captureStdio ? ['ignore', 'pipe', 'pipe'] : 'inherit',
-          env: process.env,
-        };
-        if (opts.cellTimeoutMs) spawnOpts.timeout = opts.cellTimeoutMs;
-        const proc = spawnSync(process.execPath, [__filename, ...cellArgs], spawnOpts);
-        if (proc.error) {
-          // spawnSync sets proc.error.code = 'ETIMEDOUT' when the
-          // child was killed for exceeding the timeout. Translate to
-          // CELL_TIMEOUT so matrix-dispatch can classify it.
-          if (proc.error.code === 'ETIMEDOUT') {
-            const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
-            e.code = 'CELL_TIMEOUT';
-            throw e;
-          }
-          throw proc.error;
-        }
-        // Some Node versions surface timeout via signal+null-status
-        // instead of proc.error — handle that path too.
-        if (proc.status === null && proc.signal === 'SIGTERM' && opts.cellTimeoutMs) {
-          const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
-          e.code = 'CELL_TIMEOUT';
-          throw e;
-        }
-        if (captureStdio) {
-          // Tee captured stdio to the runner's terminal so the operator
-          // sees the cell's output in real time too — same UX as
-          // 'inherit' mode.
-          const stdout = proc.stdout ? proc.stdout.toString('utf8') : '';
-          const stderr = proc.stderr ? proc.stderr.toString('utf8') : '';
-          if (stdout) process.stdout.write(stdout);
-          if (stderr) process.stderr.write(stderr);
-          // Write per-cell log file. Combined stdout+stderr so a future
-          // operator grep sees both interleaved (close to chronological).
-          cellLogs.writeCellLog({
-            dir: opts.reportDir,
-            cell: {
-              browser,
-              outcome: proc.status === 0 ? 'pass' : 'fail',
-              durationMs: 0, // not measured here; runMatrix sets it on its own cell record
-            },
-            body: stdout + (stderr ? `\n---STDERR---\n${stderr}` : ''),
-          });
-        }
-        return proc.status === 0;
-      },
+      dispatchOne,
     });
     // Always print the human-readable text table to stdout so the
     // operator gets immediate feedback regardless of --report-format.
@@ -16402,7 +16379,7 @@ async function main() {
     ? [path.join(opts.planDir, opts.journey)]
     : fs
         .readdirSync(opts.planDir)
-        // eslint-disable-next-line sonarjs/slow-regex
+
         .filter((f) => /^j\d+[^.]*\.feature$/.test(f))
         .map((f) => path.join(opts.planDir, f));
 
@@ -16457,6 +16434,7 @@ module.exports = {
   formatVersion,
   formatListJson,
   formatDryRunJson,
+  buildRunMatrixOptions,
   applyFilter,
   shardCells,
   buildDriverFactories,
@@ -16468,7 +16446,13 @@ module.exports = {
 
 if (require.main === module) {
   main().catch((e) => {
-    console.error('RUNNER_CRASH', e?.message || e);
-    process.exit(2);
+    // Driver-init failures (no device / browser app / env var) exit with
+    // the reserved code so a --matrix parent classifies the cell 'skip';
+    // every other crash keeps the historical RUNNER_CRASH exit 2. Lazy
+    // require — the classifier lives beside the matrix outcome taxonomy.
+    const { classifyCrashExit } = require('./matrix-dispatch');
+    const { exitCode, label } = classifyCrashExit(e);
+    console.error(label, e?.message || e);
+    process.exit(exitCode);
   });
 }

@@ -32,6 +32,16 @@
  */
 const PRIOR_NODE_ENV = process.env.NODE_ENV;
 process.env.NODE_ENV = 'local';
+// This suite WIPES 13 shared top-level collections (incl. `users`) AND every
+// Auth account in its project, so it runs against its own emulator project —
+// otherwise it deletes the Firestore docs and the Firebase users behind tokens
+// a parallel Jest worker just minted (SHY-0171). Safe here: the suite and the
+// cron only use Admin-SDK USER MANAGEMENT (createUser/getUser/deleteUser),
+// never `verifyIdToken` — and ID-token resolution is the one thing bound to the
+// project the Auth emulator was STARTED with. Jest gives every test FILE its
+// own cloned `process.env`, so this cannot reach another file.
+const TEST_NAMESPACE = 'acctdel';
+process.env.FIRESTORE_TEST_NAMESPACE = TEST_NAMESPACE;
 
 const crypto = require('node:crypto');
 const { CreateBucketCommand } = require('@aws-sdk/client-s3');
@@ -95,8 +105,13 @@ const MAILPIT = 'http://localhost:8025/api/v1';
 const clearMailpit = () => fetch(`${MAILPIT}/messages`, { method: 'DELETE' });
 const mailpitMessages = async () =>
   (await (await fetch(`${MAILPIT}/messages`)).json()).messages || [];
+// Must target the SAME project the Admin SDK is pointed at, or this wipes the
+// accounts of every other suite instead of its own.
+const AUTH_PROJECT_ID = `demo-shytalk-${TEST_NAMESPACE}`;
 const clearAuthUsers = () =>
-  fetch('http://localhost:9099/emulator/v1/projects/demo-shytalk/accounts', { method: 'DELETE' });
+  fetch(`http://localhost:9099/emulator/v1/projects/${AUTH_PROJECT_ID}/accounts`, {
+    method: 'DELETE',
+  });
 
 async function clearR2() {
   for (const prefix of R2_PREFIXES) {

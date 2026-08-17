@@ -161,9 +161,7 @@ describe('runHealthCheck — per-cell outcomes', () => {
   test('driver without a close method is tolerated + closeMs undefined', async () => {
     // No close method → close phase doesn't run → closeMs is
     // undefined (not 0). Symmetric to other "phase didn't run" pins.
-    const factory = jest.fn(async () => ({
-      /* no close */
-    }));
+    const factory = jest.fn(async () => ({/* no close */}));
     const r = await runHealthCheck({
       browsers: ['chromium'],
       factories: { chromium: factory },
@@ -206,7 +204,7 @@ describe('runHealthCheck — multi-cell aggregation', () => {
       browsers: ['mobile-chrome-android', 'mobile-safari-ios'],
       factories: {
         'mobile-chrome-android': makeFactoryThrowing(new Error('no Android device attached')),
-        'mobile-safari-ios': makeFactoryThrowing(new Error('no connected iPhone found')),
+        'mobile-safari-ios': makeFactoryThrowing(new Error('no physical iPhone found')),
       },
     });
     expect(r.totals.skip).toBe(2);
@@ -323,7 +321,7 @@ describe('formatHealthCheckResult', () => {
       browsers: ['chromium', 'mobile-safari-ios'],
       factories: {
         chromium: makeFactoryReturning(makeFakeDriver()),
-        'mobile-safari-ios': makeFactoryThrowing(new Error('no connected iPhone found')),
+        'mobile-safari-ios': makeFactoryThrowing(new Error('no physical iPhone found')),
       },
     });
     const text = formatHealthCheckResult(r);

@@ -63,6 +63,7 @@ class AuthViewModelIdentityTest {
     ) : AuthRepository {
         override var resolvedUniqueId: String? = null
         override var resolvedDisplayName: String? = null
+        override var resolvedCohort: String? = null
         override val currentUserId: String? get() = resolvedUniqueId ?: firebaseUid
         override val currentFirebaseUid: String? get() = firebaseUid
         var signInResult: Resource<String> = Resource.Success("firebase-uid-1")
@@ -97,6 +98,7 @@ class AuthViewModelIdentityTest {
             signedOut = true
             resolvedUniqueId = null
             resolvedDisplayName = null
+            resolvedCohort = null
             firebaseUid = null
         }
 
@@ -697,6 +699,52 @@ class AuthViewModelIdentityTest {
                 "Alice",
                 authRepo.resolvedDisplayName,
                 "resolvedDisplayName should be set from User.displayName after profile load",
+            )
+        }
+
+    @Test
+    fun afterProfileLoad_resolvedCohortIsSet_fromEffectiveCohort() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val userRepo =
+                FakeUserRepository().apply {
+                    existsResult = Resource.Success(true)
+                    getUserResult =
+                        Resource.Success(
+                            User(
+                                uid = "10000005",
+                                uniqueId = 10000005,
+                                displayName = "Alice",
+                                acceptedLegalVersion = 999,
+                                // effectiveCohort must honour the admin
+                                // override, not the raw cohort — the
+                                // watermark shows what enforcement sees
+                                // (SHY-0205).
+                                cohort = "minor",
+                                cohortOverride = "adult",
+                            ),
+                        )
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = null,
+                    isAuthenticated = false,
+                    currentUserEmail = "alice@gmail.com",
+                )
+
+            val vm = AuthViewModel(authRepo, userRepo, FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            assertEquals(
+                "adult",
+                authRepo.resolvedCohort,
+                "resolvedCohort should be set from User.effectiveCohort (override wins) after profile load",
             )
         }
 

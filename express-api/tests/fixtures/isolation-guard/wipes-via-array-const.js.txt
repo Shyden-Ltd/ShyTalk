@@ -1,0 +1,13 @@
+// A wiper whose collection list lives in an arbitrarily-named constant, and
+// which correctly claims its own emulator project.
+process.env.NODE_ENV = 'local';
+process.env.FIRESTORE_TEST_NAMESPACE = 'fixture';
+
+const { db } = require('../../src/utils/firebase');
+const { clearCollection } = require('../helpers/firebase-emulator');
+
+const COLLECTIONS_TO_WIPE = ['users', 'rooms', 'deviceBans'];
+
+beforeEach(async () => {
+  for (const collection of COLLECTIONS_TO_WIPE) await clearCollection(db, collection);
+});

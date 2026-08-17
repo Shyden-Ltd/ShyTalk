@@ -8,6 +8,8 @@
  */
 
 const { db, FieldValue } = require('../utils/firebase');
+const { clearBanCache } = require('../utils/bans');
+const { restoreUniqueIdCounter } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -99,6 +101,9 @@ async function cleanupLinkedBans(deletedUserUniqueIds) {
       }
     }
   }
+  // Any deleted ban must stop gating immediately — the per-request ban gate
+  // caches verdicts for 5 minutes otherwise (SHY-0149).
+  if (deleted > 0) clearBanCache();
   return deleted;
 }
 
@@ -142,12 +147,11 @@ async function testDataCleanup() {
   totalDeleted += await cleanupLinkedBans(deletedUserUniqueIds);
   totalDeleted += await cleanupTestStartingScreens();
 
-  // Restore counter if test users were deleted
+  // Restore counter if test users were deleted. Type-immune + raise-only —
+  // see utils/unique-id-counter.js (a string-typed uniqueId doc tops the
+  // desc order and once poisoned this counter into string concatenation).
   if (deletedUserUniqueIds.length > 0) {
-    const counterRef = db.doc('counters/uniqueId');
-    const maxSnap = await db.collection('users').orderBy('uniqueId', 'desc').limit(1).get();
-    const maxId = maxSnap.empty ? 100000000 : maxSnap.docs[0].data().uniqueId;
-    await counterRef.set({ value: maxId }, { merge: true });
+    await restoreUniqueIdCounter(db);
   }
 
   if (totalDeleted > 0) {

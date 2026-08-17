@@ -2,6 +2,13 @@ const express = require('express');
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
+const {
+  countBoundDevices,
+  clearBanCache,
+  rollbackBindingIfOverCap,
+  MAX_BOUND_DEVICES,
+  BINDING_TRANSACTION_OPTIONS,
+} = require('../utils/bans');
 const log = require('../utils/log');
 
 const router = express.Router();
@@ -9,6 +16,14 @@ const router = express.Router();
 /** Normalise a uniqueId (which may be stored as String or Number) to a string, or null. */
 function normUniqueId(value) {
   return value === undefined || value === null ? null : String(value);
+}
+
+/** Is this binding already owned by `caller`? (An owned device costs no slot.) */
+async function isBoundTo(ref, caller) {
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  const data = snap.data() || {};
+  return normUniqueId(data.uniqueId ?? data.userId) === caller;
 }
 
 /**
@@ -44,8 +59,31 @@ router.post('/devices/lock-check', async (req, res) => {
     const caller = normUniqueId(req.auth?.uniqueId);
     const ref = db.doc(`deviceBindings/${deviceId}`);
 
+    // Cap binding creation. Unbounded bindings let an attacker bury a
+    // hardware-banned device beneath decoys until the ban gate's scan no longer
+    // reached it — and this route is ban-exempt (SHY-0149 C1).
+    //
+    // The check sits OUTSIDE the transaction on purpose: a count needs a query
+    // read, and a query read inside this transaction breaks the document-level
+    // conflict detection the device-lock depends on (see
+    // BINDING_TRANSACTION_OPTIONS). A concurrent race can therefore slip past
+    // this pre-check — `rollbackBindingIfOverCap` below closes that window.
+    // Re-using an ALREADY-owned device never reaches the bind branch, so a
+    // capped account keeps working on the devices it has.
+    if (caller !== null && (await countBoundDevices(caller)) >= MAX_BOUND_DEVICES) {
+      const boundToCaller = await isBoundTo(ref, caller);
+      if (!boundToCaller) {
+        log.warn('devices', 'device-binding cap reached', { caller, deviceId });
+        return res.status(403).json({
+          error: 'Device limit reached for this account',
+          code: 'device_limit',
+        });
+      }
+    }
+
     // Atomic read → decide → conditional-bind: two concurrent sign-ins on a fresh
-    // device cannot both claim it (exactly one wins the transaction).
+    // device cannot both claim it (exactly one wins the transaction). DOC READS
+    // ONLY — see BINDING_TRANSACTION_OPTIONS.
     const result = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const data = snap.exists ? snap.data() : null;
@@ -59,9 +97,25 @@ router.post('/devices/lock-check', async (req, res) => {
       // registered caller (uniqueId null) must never bind a device.
       if (boundUniqueId === null && caller !== null) {
         tx.set(ref, { uniqueId: caller, boundAt: now() }, { merge: true });
+        return { status: 'allowed', boundToOther: false, bound: true };
       }
-      return { status: 'allowed', boundToOther: false };
-    });
+      return { status: 'allowed', boundToOther: false, bound: false };
+    }, BINDING_TRANSACTION_OPTIONS);
+
+    if (result.bound) {
+      // Close the race the pre-check cannot: if concurrent binds pushed this
+      // account past the cap, release the claim this request just took.
+      if (await rollbackBindingIfOverCap(caller, deviceId)) {
+        return res.status(403).json({
+          error: 'Device limit reached for this account',
+          code: 'device_limit',
+        });
+      }
+      // A newly-claimed device can carry a hardware ban, which changes the
+      // caller's standing. Drop their cached verdict so the ban bites on their
+      // very next request rather than after the cache TTL (SHY-0149).
+      clearBanCache(caller);
+    }
 
     log.info('devices', 'device lock-check', {
       deviceId,
@@ -69,7 +123,9 @@ router.post('/devices/lock-check', async (req, res) => {
       status: result.status,
       boundToOther: result.boundToOther,
     });
-    return res.json(result);
+    // `bound` is an internal signal for cache invalidation, not part of the
+    // client contract — the app only ever reads status/boundToOther.
+    return res.json({ status: result.status, boundToOther: result.boundToOther });
   } catch (err) {
     log.error('devices', 'lock-check failed', { error: err.message });
     return res.status(500).json({ error: 'Internal server error' });

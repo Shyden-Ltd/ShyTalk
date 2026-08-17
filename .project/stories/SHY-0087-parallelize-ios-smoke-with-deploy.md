@@ -1,6 +1,6 @@
 ---
 id: SHY-0087
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-12
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 mvp: false
 ---
 

@@ -118,13 +118,31 @@ fi
 
 if [ "$HAS_WORKFLOW_CHANGES" = "true" ] && command -v actionlint >/dev/null 2>&1; then
   echo "  → actionlint (workflow + embedded shellcheck)..."
-  if ! actionlint -shellcheck='-e SC2086'; then
+  # SHELLCHECK_OPTS (not the -shellcheck flag, which names the shellcheck
+  # EXECUTABLE and silently disables the integration on a non-executable
+  # value — SHY-0191) passes the repo-wide SC2086 exclusion; mirrors lint.yml.
+  if ! SHELLCHECK_OPTS='-e SC2086' actionlint; then
     echo ""
     echo "✗ actionlint failed — push blocked"
     echo "  Install: brew install actionlint  (or see https://github.com/rhysd/actionlint)"
     exit 1
   fi
   echo "  ✓ actionlint passed"
+
+  # SHY-0298 R1/I3. actionlint above reads `.github/workflows/**` ONLY, but
+  # this whole block TRIGGERS on `.github/actions/` too — so changing an
+  # action.yml printed "actionlint passed" having checked nothing in the
+  # changed file. That is worse than no check: it is a check that lies.
+  if command -v shellcheck >/dev/null 2>&1; then
+    echo "  → composite-action shell (shellcheck)..."
+    if ! bash scripts/check-action-shell.sh; then
+      echo ""
+      echo "✗ composite-action shell has shellcheck findings — push blocked"
+      exit 1
+    fi
+  else
+    echo "  ! shellcheck not installed — composite-action shell NOT checked (CI will)"
+  fi
 fi
 
 # Skip SonarCloud for workflow-only changes. Include public/ so changes
@@ -221,7 +239,7 @@ if [ "$HAS_WEB" = "true" ]; then
   elif ! curl -s -o /dev/null http://localhost:8888/; then
     echo ""
     echo "⚠ Web changes detected but web server not running on :8888 — skipping Playwright pre-push"
-    echo "  To enable: npx serve public -l 8888 &"
+    echo "  To enable: node local/serve-web.js --port 8888 --root public --quiet &"
   else
     echo "Running Playwright pre-push (chromium only)..."
     # Use --reporter=list: writes one line per test result and flushes per-line.

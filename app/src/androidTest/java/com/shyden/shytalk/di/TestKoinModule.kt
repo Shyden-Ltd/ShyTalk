@@ -23,6 +23,7 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
@@ -86,6 +87,13 @@ val testModule =
         // tests run in a sandboxed package).
         single { SecureStorage(androidContext()) }
 
+        // SHY-0143 — the cold-start identity cache. MainActivity resolves this
+        // with `by inject()` at construction, so without this binding EVERY
+        // instrumented test that launches the Activity dies on Koin resolution
+        // before its first assertion. Real impl over the real SecureStorage
+        // above — there is nothing to fake, it is a wrapper over local storage.
+        single { SessionCache(get()) }
+
         // Pure-logic services (no fake needed)
         single { AgeRestrictionService() }
 
@@ -130,6 +138,22 @@ val testModule =
         single<com.shyden.shytalk.core.platform.PlatformSettingsService> {
             com.shyden.shytalk.core.platform
                 .AndroidPlatformSettingsService(androidContext())
+        }
+
+        // App-Lock — required by SecuritySettingsScreen (SHY-0187 wired it into
+        // the graph). Real impl over the already-bound (real) SecureStorage, so
+        // instrumented steps can seed/clear a credential; it makes no network
+        // calls. BiometricAuth is a real OS-capability probe. PinRepository is
+        // deliberately NOT bound here: the screen resolves it lazily only when
+        // the verify dialog shows (existing credential), a real-backend path
+        // exercised by the device gauntlet, never by the fake Compose harness.
+        single<com.shyden.shytalk.data.repository.AppLockRepository> {
+            com.shyden.shytalk.data.repository
+                .AppLockRepositoryImpl(get())
+        }
+        single {
+            com.shyden.shytalk.core.util
+                .BiometricAuth(androidContext())
         }
 
         // ActiveRoomManager (concrete) — required by RoomScreen which injects the concrete type directly.
