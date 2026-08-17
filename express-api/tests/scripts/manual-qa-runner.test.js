@@ -14,6 +14,27 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * A `--target=local` run ALWAYS has FIREBASE_AUTH_EMULATOR_HOST set — 50-matrix.sh
+ * pins it, and manual-qa-runner's resolveAuthBase now REFUSES to fall back to
+ * production Identity Toolkit without it (SHY-0328). Tests that construct a ctx
+ * with `target: 'local'` are simulating that run, so they must simulate its
+ * environment too; otherwise they exercise the refusal branch instead of the
+ * sign-in branch they are actually about.
+ *
+ * Their stubbed fetch matches on `url.includes('signInWithPassword')`, so the
+ * host itself is immaterial to them — only its presence is.
+ */
+const SAVED_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+beforeAll(() => {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST =
+    process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+});
+afterAll(() => {
+  if (SAVED_AUTH_EMULATOR_HOST === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  else process.env.FIREBASE_AUTH_EMULATOR_HOST = SAVED_AUTH_EMULATOR_HOST;
+});
+
 // sonarjs/no-hardcoded-passwords (new in eslint-plugin-sonarjs 4.1.0) keys on
 // password-shaped identifiers. This value is a stub the runner never
 // authenticates with, so naming it for what it IS — a fixture — is more

@@ -124,8 +124,17 @@ cmd_launch() {
   # The seed side is already guarded (20-reseed.sh:63 dies on INVALID_PASSWORD).
   # The runner side was not, which is why this cost two separate investigations.
   # dev MUST NOT be overridden -- dev personas use the real secret.
+  #
+  # FIREBASE_AUTH_EMULATOR_HOST is pinned for the SAME reason, one variable
+  # over: 20-reseed.sh:32 sets it for seeding, this script never did, and
+  # manual-qa-runner.js resolved the Identity Toolkit base as
+  # `target === local && FIREBASE_AUTH_EMULATOR_HOST ? emulator : PRODUCTION`.
+  # Unset, every local run therefore signed personas in against REAL Google
+  # auth with a fake-local-key, failed silently, and showed up only as
+  # `UID: —` in a watermark and 224 failures per cell. The runner now REFUSES
+  # that fallback (resolveAuthBase), so this variable is required, not optional.
   # Pinned by tests/scripts/gauntlet/matrix-local-persona-password.test.js.
-  [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
+  [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------

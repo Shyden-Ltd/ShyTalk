@@ -242,3 +242,62 @@ The AC "a per-cell shape other than OK=2 / FAIL=224" is technically met and that
 is **not good enough**; treat the real bar as sign-in succeeding, and split the
 remainder into its own story rather than stretching this one.
 
+## The sign-in path, dug all the way down (2026-08-18)
+
+Operator asked for the runner's persona sign-in path specifically. Three layers,
+each hiding the next.
+
+**Layer 1 — the password.** Fixed and pinned above. Proven insufficient on its own.
+
+**Layer 2 — the runner authenticated against PRODUCTION on a local run.**
+`manual-qa-runner.js` resolved the Identity Toolkit base at four sites as:
+
+```js
+ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
+  ? emulator : 'https://identitytoolkit.googleapis.com'   // ← production
+```
+
+`20-reseed.sh:32` sets `FIREBASE_AUTH_EMULATOR_HOST` for seeding. `50-matrix.sh`
+never set it for the runner. So every local matrix run signed personas in against
+**real Google auth** with a `fake-local-key` API key — the exact same asymmetry as
+the password, one variable over, and equally silent.
+
+This is `if (check) { right thing } else { wrong thing }` with no complaint. Fixed
+two ways: `50-matrix.sh` now pins the host for local, and a new `resolveAuthBase()`
+**refuses** the production fallback on a local target rather than quietly using a
+different URL. A local run must never reach production auth — it cannot succeed,
+and it should not be attempting it.
+
+Both proven against the live process (`ps eww` showed `PERSONAS_PASSWORD=localdev123
+FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 NODE_ENV=local`), and the REST sign-in
+errors disappeared from the run log.
+
+**Layer 3 — the actual dominant cause: the driver surface is incomplete.**
+With auth resolving, the real blocker is visible: **64 `not implemented yet`**
+failures from **5 distinct web-driver stubs** —
+
+    webAdminIssueWarning        webAdminShowsDashboardCounters
+    webFallbackEnStrings        webOpenProfilePanel
+    webShowsNonEmptyLocaleText
+
+— and `webSignIn` is **not implemented on any web driver at all**
+(`grep -rn "webSignIn" scripts/drivers/` returns nothing), so the step
+`^([A-Z][a-z]+) on Web signs in with valid credentials$` can only ever return
+`ctx.webDriver.webSignIn not configured`. That is why the browser is never signed
+in and every watermark reads `UID: —`.
+
+**So the 0-pass matrix was never one bug.** It is the known missing-driver-method
+inventory (see `[[project-zero-gap-journey-matrix-inventory]]`, 114 methods), and
+layers 1 and 2 were masking it — the run failed at auth before it could reach the
+missing methods. Fixing them does not make the matrix pass; it makes the real
+debt visible and attributable, which it was not before.
+
+**Verified after all three changes:** 2017/2017 across 9 runner + gauntlet suites;
+eslint `--max-warnings=0`, prettier, `check-no-new-stubs.js` and `bash -n` all
+clean.
+
+**Scope call:** implementing 5+ web-driver methods is not this story. It belongs
+with the driver-gap inventory. This story ends having made the local matrix able
+to *authenticate*, with both env pins test-pinned and the production fallback
+made impossible.
+

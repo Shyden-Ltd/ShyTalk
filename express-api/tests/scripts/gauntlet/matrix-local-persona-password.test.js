@@ -81,3 +81,88 @@ describe('SHY-0328: the local matrix seeds and signs in with the same password',
     expect(seeded.length).toBeLessThan(32);
   });
 });
+
+/**
+ * The SECOND missing local variable, found the same night and by the same shape.
+ *
+ * `20-reseed.sh:32` sets FIREBASE_AUTH_EMULATOR_HOST for seeding; `50-matrix.sh`
+ * never set it for the runner; and `manual-qa-runner.js` resolved the Identity
+ * Toolkit base as `local && HOST ? emulator : PRODUCTION`. Unset, every local
+ * matrix run signed personas in against REAL Google auth with a
+ * `fake-local-key` API key — failing silently, visible only as `UID: —` in a
+ * watermark and 224 failures per cell.
+ *
+ * Pinning the password alone did NOT fix the matrix. This is what did.
+ */
+
+/** The emulator host 20-reseed.sh seeds against. */
+function seededAuthHost() {
+  const m = reseed.match(/^\s*FIREBASE_AUTH_EMULATOR_HOST=(\S+)/m);
+  return m ? m[1] : null;
+}
+
+/** The emulator host 50-matrix.sh hands the runner for a target. */
+function runnerAuthHost(target) {
+  const line = matrix
+    .split('\n')
+    .find((l) => l.includes(`[ "$target" = "${target}" ]`) && l.includes('env_prefix='));
+  if (!line) return { found: false, value: null };
+  const m = line.match(/FIREBASE_AUTH_EMULATOR_HOST=(\S+?)[\s"]/);
+  return { found: true, value: m ? m[1] : null };
+}
+
+describe('SHY-0328: a local run must reach the auth EMULATOR, never production', () => {
+  it('20-reseed.sh names an explicit emulator host', () => {
+    expect(seededAuthHost()).toBeTruthy();
+  });
+
+  it('the runner auth host for local EQUALS the one used for seeding', () => {
+    // Seeding into one auth instance and signing in against another is the same
+    // class of bug as the password mismatch, and just as silent.
+    expect(runnerAuthHost('local').value).toBe(seededAuthHost());
+  });
+
+  it('does NOT pin an emulator host for dev', () => {
+    expect(runnerAuthHost('dev').value).toBeNull();
+  });
+});
+
+describe('SHY-0328: resolveAuthBase refuses to fall back to production on local', () => {
+  const { resolveAuthBase } = require('../../../scripts/manual-qa-runner');
+  const saved = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    else process.env.FIREBASE_AUTH_EMULATOR_HOST = saved;
+  });
+
+  it('REFUSES on a local target when the emulator host is unset', () => {
+    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    const r = resolveAuthBase({ target: 'local' });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/FIREBASE_AUTH_EMULATOR_HOST/);
+    // The point is that it does not quietly hand back a production URL.
+    expect(r.base).toBeUndefined();
+  });
+
+  it('resolves to the emulator on a local target when the host IS set', () => {
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099';
+    const r = resolveAuthBase({ target: 'local' });
+    expect(r.ok).toBe(true);
+    expect(r.base).toBe('http://localhost:9099/identitytoolkit.googleapis.com');
+  });
+
+  it('uses production for a dev target, and does not require the emulator host', () => {
+    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    const r = resolveAuthBase({ target: 'dev' });
+    expect(r.ok).toBe(true);
+    expect(r.base).toBe('https://identitytoolkit.googleapis.com');
+  });
+
+  it('ignores a stray emulator host on a dev target', () => {
+    // A leftover export in the operator's shell must not silently redirect a
+    // dev run at localhost.
+    process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099';
+    expect(resolveAuthBase({ target: 'dev' }).base).toBe('https://identitytoolkit.googleapis.com');
+  });
+});
