@@ -15,10 +15,11 @@
  * Reads the real workflow file, so it cannot drift from what CI actually runs.
  */
 
-const fs = require('fs');
-const path = require('path');
-
-const WORKFLOW = path.join(__dirname, '../../../.github/workflows/qa-runner-driver-checks.yml');
+const {
+  workflowSource,
+  declaredTimeoutMinutes,
+  runLineContaining,
+} = require('../_helpers/qa-runner-driver-checks-workflow');
 
 /**
  * Observed cost of a COLD `playwright install --with-deps` of three engines,
@@ -33,15 +34,12 @@ const COLD_PLAYWRIGHT_INSTALL_MINUTES = 10;
 /** The job's own work after the install: contract test + 2 diagnostics. */
 const JOB_STEPS_HEADROOM_MINUTES = 8;
 
-function workflowSource() {
-  return fs.readFileSync(WORKFLOW, 'utf8');
-}
-
-function declaredTimeoutMinutes(src) {
-  const m = src.match(/^\s*timeout-minutes:\s*(\d+)\s*$/m);
-  return m ? Number(m[1]) : null;
-}
-
+// This file is the FLOOR of a two-sided bracket. The CEILING — that the budget
+// has not been left to run away — lives in qa-runner-driver-checks-pin.test.js.
+// Neither alone is sufficient: a floor with no ceiling permits a hung job, a
+// ceiling with no floor is what caused SHY-0329. Both read the workflow through
+// tests/_helpers/qa-runner-driver-checks-workflow.js, so there is exactly one
+// parser to keep correct.
 describe('qa-runner-driver-checks job budget (SHY-0329)', () => {
   test('the driver-checks job declares a timeout at all', () => {
     // A job with no ceiling would hang for the runner's 6-hour default rather
@@ -67,11 +65,7 @@ describe('qa-runner-driver-checks job budget (SHY-0329)', () => {
     // trap SHY-0328's pinning test documents ("the FORCING assignment, not a
     // mention in a comment"): documenting a change must not break the test
     // that guards it.
-    const src = workflowSource();
-    const install = src
-      .split('\n')
-      .map((l) => l.trim())
-      .find((l) => l.startsWith('run:') && l.includes('playwright install'));
+    const install = runLineContaining(workflowSource(), 'playwright install');
     expect(install).toBeDefined();
     for (const engine of ['chromium', 'firefox', 'webkit']) {
       expect(install).toContain(engine);

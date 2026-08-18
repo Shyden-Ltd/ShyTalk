@@ -149,8 +149,14 @@ Touches `.github/workflows/qa-runner-driver-checks.yml` and a new test under
 
 ## Out of Scope
 
-- Making the Playwright cache hit more often (a separate question — why the key
-  missed at all, and whether sibling jobs could warm it).
+- Aligning the Playwright cache KEY so misses stop happening. **The cause is now
+  known, not open** (see Notes): this job keys on
+  `playwright-${{ runner.os }}-${{ version }}` while `playwright-tests.yml` —
+  which runs on far more PRs and installs the same browsers to the same path —
+  keys on `playwright-browsers-${{ version }}`. They can never share an entry.
+  Deliberately not fixed here: that change touches three workflows, invalidates
+  existing caches, and affects jobs gating most PRs, so it carries a different
+  blast radius and earns its own story. This one restores *survivability* now.
 - The `publish-unit-test-result-action` 404 blocking #1696/#1651 — different
   job, different cause, its own story.
 - Trimming the browser set, which would narrow `--check-drivers`' coverage.
@@ -189,3 +195,37 @@ Touches `.github/workflows/qa-runner-driver-checks.yml` and a new test under
   10-minute budget.
 - **2026-08-18** — Confirmed the same cancelled job is blocking #1673, so this is
   a queue-wide blocker rather than one PR's bad luck.
+- **2026-08-18** — `code-reviewer` round 1: no Critical. It found the cause-level
+  answer this story had listed as an open question. Three independent reasons
+  the cache can never hit:
+
+  | | `qa-runner-driver-checks.yml:92` | `playwright-tests.yml:132` |
+  | --- | --- | --- |
+  | prefix | `playwright-` | `playwright-browsers-` |
+  | `runner.os` | present | absent |
+  | version source | `require('playwright/package.json').version` → `1.x.y` | `npx playwright --version` → `Version 1.x.y` |
+
+  So the job that would most often warm `~/.cache/ms-playwright` writes to a
+  namespace this one never reads. Filed as a fast-follow rather than fixed here.
+  It also compounds with this workflow's `cancel-in-progress: true`: a
+  fast-iterating PR can cancel itself before a cold run ever self-warms.
+
+- **2026-08-18** — Reviewer findings applied: the workflow readers are now ONE
+  shared helper (`express-api/tests/_helpers/qa-runner-driver-checks-workflow.js`)
+  instead of a regex duplicated byte-for-byte in two files. Two fragilities in
+  that regex were demonstrated rather than argued — `timeout-minutes: 25  # note`
+  returned NULL (reddening three tests for a cosmetic edit) and a second job
+  earlier in the file returned the WRONG job's number. The helper now scopes to
+  the `driver-checks:` job and anchors on exactly four spaces of indent, so a
+  STEP-level budget can no longer masquerade as the job's. Nine direct tests
+  cover it, including the `null` branch nothing reached before.
+
+- **2026-08-18** — **DoD exception, stated rather than glossed.** The DoD line
+  "`cd express-api && npm test` passes" is not literally true right now: the full
+  suite carries ONE pre-existing, unrelated red —
+  `tests/routes/conversations-coverage.test.js` "handles DND with start <= end"
+  passes ALONE (25/25) but fails in-suite, observing an FCM call from a different
+  group-message test. Cross-test mock-state leak, order-dependent (green at
+  05:0x, red at 06:2x on the same code). Nothing in this diff touches
+  conversations, DND, FCM or group messaging. Filed separately; recorded here so
+  the gap is auditable instead of silent.

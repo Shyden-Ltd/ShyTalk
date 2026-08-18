@@ -26,6 +26,11 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const REUSABLE_PATH = path.join(REPO_ROOT, '.github/workflows/qa-runner-driver-checks.yml');
 const PR_CHECKS_PATH = path.join(REPO_ROOT, '.github/workflows/pr-checks.yml');
 
+const {
+  declaredTimeoutMinutes,
+  runLineContaining,
+} = require('../_helpers/qa-runner-driver-checks-workflow');
+
 const reusable = fs.readFileSync(REUSABLE_PATH, 'utf8');
 const prChecks = fs.readFileSync(PR_CHECKS_PATH, 'utf8');
 
@@ -66,7 +71,11 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
   });
 
   test('installs Playwright browsers with --with-deps for headless WebKit', () => {
-    expect(reusable).toMatch(/npx playwright install --with-deps/);
+    // Anchored on the `run:` DIRECTIVE, not a whole-file match. The comment
+    // above the job's timeout names this command, so an unanchored assertion
+    // is one wording tweak away from passing off prose as the real step —
+    // the exact bug SHY-0329 fixed in the sibling floor test.
+    expect(runLineContaining(reusable, 'playwright install')).toContain('--with-deps');
   });
 
   test('runs the driver-contract test suite', () => {
@@ -133,9 +142,9 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     // The FLOOR lives in qa-runner-driver-checks-timeout.test.js, which asserts
     // the budget exceeds the measured cold install plus the job's own steps.
     // The two bracket the budget; neither alone is sufficient.
-    const m = reusable.match(/^\s*timeout-minutes:\s*(\d+)\s*$/m);
-    expect(m).not.toBeNull();
-    expect(parseInt(m[1], 10)).toBeLessThanOrEqual(30);
+    const declared = declaredTimeoutMinutes(reusable);
+    expect(declared).not.toBeNull();
+    expect(declared).toBeLessThanOrEqual(30);
   });
 });
 
