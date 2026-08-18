@@ -14,6 +14,7 @@ import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import kotlinx.coroutines.channels.awaitClose
@@ -752,22 +753,36 @@ class PrivateMessageRepositoryImpl(
 
     // ===== Search =====
 
+    // SHY-0350 — search goes through the API, because the rules refuse it here.
+    //
+    // This used to be a FILTERED Firestore query straight from the client.
+    // `firestore.rules:74` gates a users read on `cohortMatchesCaller()`, a
+    // condition on document CONTENT, and Firestore must decide a filtered
+    // query's permission from the QUERY ALONE — so it refused the whole thing.
+    // The user saw the refusal verbatim: "PERMISSION_DENIED: Null value error.
+    // for 'list' @ L74", on screen, in the search box.
+    //
+    // `GET /api/users/search` already did this properly — same-cohort filtered,
+    // sensitive fields stripped, caller excluded — and was simply never called.
     override suspend fun searchUsers(
         query: String,
         currentUserId: String,
     ): Resource<List<User>> =
         firebaseCall("Failed to search users") {
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .whereGreaterThanOrEqualTo("displayName", query)
-                    .whereLessThan("displayName", query + "\uf8ff")
-                    .get()
-                    .await()
-            snapshot.documents.mapNotNull { doc ->
-                val data = doc.data ?: return@mapNotNull null
-                if (doc.id == currentUserId) return@mapNotNull null
-                User.fromMap(data, doc.id)
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) {
+                emptyList()
+            } else {
+                val json = api.get("/api/users/search?q=" + encodeUrlQueryComponent(trimmed))
+                val arr = json.optJSONArray("users")
+                (0 until (arr?.length() ?: 0)).mapNotNull { i ->
+                    val obj = arr!!.getJSONObject(i)
+                    val uid = obj.optString("uniqueId")
+                    // The server already excludes the caller; belt and braces,
+                    // because a self-row in a "who do you want to message"
+                    // picker is a confusing thing to render.
+                    if (uid == currentUserId) null else User.fromMap(obj.toMap(), uid)
+                }
             }
         }
 
