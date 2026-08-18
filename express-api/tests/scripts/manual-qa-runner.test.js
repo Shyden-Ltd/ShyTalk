@@ -6242,6 +6242,13 @@ describe('Web sign-in matcher (When <P> on Web signs in with valid credentials)'
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Lena/);
     expect(r.error).toMatch(/sign in/i);
+    // The DIAGNOSTIC content, not just the fact of failure. This merge
+    // deliberately kept SHY-0328's richer message over SHY-0330's plainer one
+    // because it names the value the driver returned — and until now nothing
+    // asserted that, so the returned value and the pointer to the driver's
+    // output could both have been deleted with every test still green.
+    expect(r.error).toMatch(/webSignIn returned false/);
+    expect(r.error).toMatch(/driver's console output/);
   });
 
   test('a driver returning undefined is a FAILURE, not a pass', async () => {
@@ -6256,6 +6263,25 @@ describe('Web sign-in matcher (When <P> on Web signs in with valid credentials)'
       ctx,
     );
     expect(r.ok).toBe(false);
+    // This is the R4 regression pin, so it has to say WHAT it saw. `undefined`
+    // is the value that used to read as success; the message must distinguish
+    // "the driver forgot to return" from "the driver said no".
+    expect(r.error).toMatch(/webSignIn returned undefined/);
+  });
+
+  test('a non-boolean return is reported verbatim, not coerced', async () => {
+    // The only case that exercises JSON.stringify's real serialisation rather
+    // than trivial template coercion of true/undefined. A driver returning a
+    // response object instead of a boolean is a plausible mistake, and the
+    // message has to be readable when it happens.
+    const spy = jest.fn(async () => ({ status: 500, body: 'nope' }));
+    const ctx = makeCtx({ webDriver: { webSignIn: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webSignIn returned \{"status":500,"body":"nope"\}/);
   });
 
   test('missing webSignIn driver method — specific error', async () => {

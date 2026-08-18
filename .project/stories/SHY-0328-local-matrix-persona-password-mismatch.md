@@ -455,7 +455,15 @@ than a literal.
 
 ## Owed after this story — do NOT lose these
 
-### 1. The discarded-verdict bug class is systemic (file as the next story, P0/P1)
+### 1. ~~The discarded-verdict bug class is systemic~~ — DELIVERED, SHY-0330 (#1790)
+
+> **Superseded 2026-08-18.** Filed and shipped as **SHY-0330 — "A journey step
+> passes even when the driver did nothing at all"**, merged in PR #1790. The
+> sweep went far wider than the 7 sites listed below: **116** discarded-verdict
+> call sites now check `!== true`, the `iosTap`/`iosTapByTag` contract mismatch
+> is fixed, and the driver stubs THROW instead of returning `false`. The
+> analysis is kept for the record; do not re-file it.
+
 
 R5's sweep found the same shape at **7 more call sites / 5 driver methods**:
 
@@ -492,7 +500,7 @@ lands.** R5 called its sweep a floor, not a ceiling — ~150 `androidShows*` /
 Also fold in `webTypeIntoSearch` (:6457), which deliberately treats `undefined`
 as pass and is now inconsistent with the `!== true` convention.
 
-### 2. Appium may not honour `timeouts.script` — verify on the real iPhone
+### 2. Appium may not honour `timeouts.script` — verify on the real iPhone (STILL OWED)
 
 `timeouts` is a W3C standard capability, so geckodriver is settled. For the two
 Appium/iOS drivers it is confirmed to survive capability validation, but whether
@@ -519,3 +527,20 @@ Reviewed-up-to: 718d49e91cf
   Recorded because it is a real limit on reviewing/testing from worktrees, and
   because the near-miss was expensive: read cold, "10 failures after merging
   develop" in a file this story touches reads as a merge conflict.
+
+- **2026-08-18** — Incremental review of everything after the previous
+  `Reviewed-up-to` marker (the develop merge's conflict resolution plus these
+  Notes). One Important finding, applied: the two failure-path tests for the Web
+  sign-in step asserted only `ok: false` and a loose `/Lena/`, so **the enriched
+  error message this merge deliberately kept could have been deleted with every
+  test still green** — the returned value and the pointer to the driver's output
+  were both unasserted. Three assertions added, plus a test for a non-boolean
+  return, which is the only case that exercises `JSON.stringify` rather than
+  trivial template coercion.
+
+- **2026-08-18** — The reviewer also read this file's post-marker delta as the
+  15 lines AFTER the marker line, when 74 of the 89 added lines sit above it.
+  Reading them myself found the real problem: the "Owed after this story"
+  section still filed the discarded-verdict sweep as future work, and SHY-0330
+  had already delivered it. Marked superseded rather than left to send the next
+  reader chasing finished work.
