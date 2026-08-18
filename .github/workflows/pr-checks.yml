@@ -444,7 +444,20 @@ jobs:
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     uses: ./.github/workflows/playwright-tests.yml
     with:
-      web: 'all'
+      # ONE browser per PR, not five (SHY-0339). The five projects run in
+      # parallel but each pays the WHOLE setup — checkout, JDK/Gradle, node,
+      # npm ci, browser install, apt deps, local services, Firebase emulators,
+      # seeding, Express start. Five times, on every PR that touches web.
+      #
+      # Measured 2026-08-18: recent pr-checks runs took 1/65/147/184/72/8/7/1/
+      # 22/11/44/82 minutes, several cancelled at timeout, four of the last six
+      # running the full matrix.
+      #
+      # This is a DEFERRAL, not a coverage cut: playwright-nightly.yml runs all
+      # five against develop every night, where before this change there was no
+      # scheduled browser run at all. Pinned by
+      # express-api/tests/scripts/pr-checks-playwright-scope.test.js.
+      web: 'chromium'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
       report_env: pr

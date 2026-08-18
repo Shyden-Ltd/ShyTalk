@@ -1,0 +1,42 @@
+name: Playwright Nightly (all browsers)
+
+# Runs the FULL five-project browser matrix against develop once a night.
+#
+# Exists because SHY-0339 cut the per-PR run to chromium. Before that change
+# there was no scheduled browser run anywhere in this repo — the five projects
+# ran ONLY on pull requests. So without this file, that change would have
+# deleted cross-browser coverage rather than moved it.
+#
+# The window it defines: a regression that only manifests in Firefox, WebKit or
+# a mobile viewport is found within a day, by a run whose entire purpose is to
+# find it — rather than by whichever PR happens to touch web next.
+
+on:
+  schedule:
+    # 02:00 UTC daily — after the working day in both operating timezones, so a
+    # failure is waiting at the start of the next one rather than mid-session.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or SHA to test (default: develop)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+concurrency:
+  group: playwright-nightly-${{ inputs.ref || 'develop' }}
+  cancel-in-progress: false
+
+jobs:
+  all-browsers:
+    name: All browsers
+    uses: ./.github/workflows/playwright-tests.yml
+    with:
+      web: 'all'
+      ref: ${{ inputs.ref || 'develop' }}
+    secrets: inherit
