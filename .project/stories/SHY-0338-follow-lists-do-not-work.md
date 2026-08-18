@@ -334,3 +334,42 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   the walk redone on the iPhone. Codified in
   [[feedback-never-substitute-a-simulator-for-a-real-device]] — a blocked device
   path means FIX THE BLOCKER, which is exactly what SHY-0345 turned out to be.
+
+- **2026-08-19 — the journey scenarios are BLOCKED on the harness, not written
+  and forgotten.** The corpus has no step that opens a follow list and asserts
+  the people in it. `j07` gets as far as a profile and its counters
+  (`shows Alice's stats (followers, following, beans)`), and there is a
+  stalkers-counter step at `manual-qa-runner.js:15022` — but nothing opens
+  Followers / Following / Stalkers and reads the NAMES, which is the only
+  assertion worth making here (a count was right while the list was empty).
+
+  Writing them needs, per platform (Android, iOS, Web):
+
+  | Needed | Why |
+  | --- | --- |
+  | `opens the "<tab>" tab on the connections screen` | no navigation step exists |
+  | `UI lists exactly N people in the <tab> list` | count, to catch the all-or-nothing refusal |
+  | `UI shows "<displayName>" in the <tab> list` | the NAME assertion — the one that would have caught this bug |
+  | `UI does NOT show "<displayName>" in the <tab> list` | proves the per-member drop |
+
+  That is 4 steps × 3 platforms of driver work, which is the known missing-driver
+  inventory in miniature — **not something to half-build at the end of a long
+  session.** Recorded as a defined next task rather than left as "journey tests
+  owed".
+
+- **2026-08-19 — the characterisation rules suite STAYS as it is.** An earlier
+  note said its `assertFails` cases must be replaced once the clients stopped
+  issuing those queries. On reflection that is wrong: those tests assert what the
+  Firestore RULES do, and the rules have not changed. They remain accurate, and
+  they now serve as the explanation for why a client must not go direct — which
+  is exactly what a future reader reintroducing a client-side batch query needs
+  to find. Left in place, with this reasoning, rather than churned.
+
+- **2026-08-19 — OPERATOR DECISION NEEDED to merge.** The fix is device-proven on
+  BOTH platforms with names rendered, all backend tests green and ten mutations
+  killed. What is missing is journey AUTOMATION, blocked on the harness gap
+  above. Either: (a) build the 12 driver methods first and merge after, or
+  (b) merge on the device-walk evidence and file the journey coverage as a
+  follow-up. **(b) is my recommendation** — the bug is a live MVP blocker, the
+  evidence is real, and the harness work is a bigger piece that should not ride
+  on this fix. Status stays `Draft` until that is answered.
