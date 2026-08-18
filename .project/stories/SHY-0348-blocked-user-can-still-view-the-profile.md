@@ -263,3 +263,29 @@ sees everything; the API's 403 is never reached.
   the operator asked for *"must be unblocked first"*) and its locale files; the
   journey scenarios; and the device walk. The enforcement half is done; the
   telling-the-user half is not.
+
+- **2026-08-19 — device finding: the block bites EARLIER than this story assumed.**
+  With Theo blocking Alice, on the real OnePlus Alice cannot reach Theo at all:
+  - he is absent from her Followers and Following (the `/users/batch` block
+    filter, SHY-0338),
+  - and he is absent from **search** — `shapeForViewer` drops anyone who has
+    blocked the searcher, so `GET /users/search` never returns him.
+
+  So through the ordinary UI a blocked person cannot navigate to the blocker's
+  profile in the first place. **That is stronger than showing a message**, and it
+  is worth stating plainly rather than leaving the story implying the message is
+  the primary control.
+
+- **2026-08-19 — what the message is actually for, then.** It covers the routes
+  that do NOT go through a list or a search: an existing conversation thread, a
+  seat in a room, a deep link, a stale back-stack entry. Those are exactly the
+  cases where the profile screen opens directly, and where the server's 403 —
+  now consulted — is the only thing standing between a blocked person and the
+  profile.
+
+- **2026-08-19 — STILL OWED, stated honestly.** The message itself has NOT been
+  witnessed rendering on a device. Reaching it needs one of those non-list
+  routes set up (a pre-existing conversation is the easiest), which is a
+  scenario-building job rather than a walk. The enforcement half is unit-tested
+  and mutation-proven; the rendering is verified only in code and in the 21
+  locale files. Not claiming more than that.

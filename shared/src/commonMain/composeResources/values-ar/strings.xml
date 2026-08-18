@@ -944,6 +944,7 @@
     <string name="block_description">لن يتمكنوا من عرض ملفك الشخصي.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">لقد تم حظرك من قبل هذا المستخدم</string>
+    <string name="blocked_unblock_required">يجب أن يلغوا حظرك أولاً حتى تتمكن من عرض ملفهم الشخصي.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">لقد قام أحد المستخدمين في هذه الغرفة بحظرك. قد تكون لديك خبرة محدودة. أدخل على أي حال؟</string>
     <!-- google-translated 2026-05-04 -->
