@@ -354,3 +354,41 @@ Against the **real** local emulator stack, per the real-only rule.
   cross-cohort member is answered for instead of denying the whole request, the
   non-blocker is excluded, and the response carries nothing but the id list.
   Before this change that same room returned "nobody has blocked you".
+
+- **2026-08-19 05:0x WIB — ANDROID DEVICE-PROVEN on the real OnePlus (CPH2653,
+  Android 16), as a controlled A/B rather than a single happy-path tap.** Build
+  `93d656d` of this branch, confirmed by the in-app debug overlay showing
+  `fix/SHY-0351…never-fires`. The staged fixture put the block in the shape that
+  used to be invisible — `blockedUserIds: [50000010]` written as a **number**,
+  verified `typeof === 'number'` after the write — on a non-owner participant, so
+  the join path's `otherParticipantIds` filter would actually include them.
+
+  | leg | condition | result |
+  | --- | --- | --- |
+  | **A** | API up | **"A user in this room has blocked you. You may have a limited experience. Enter anyway?"** with *Choose Another Room* / *Enter* |
+  | **B** | API stopped, nothing else changed | **no warning — straight into the room**, which rendered normally with the blocker visible in a seat |
+
+  Leg B is the part that makes this proof rather than a screenshot. Firestore
+  stayed up throughout (the emulator was never stopped), so the OLD code path
+  would have been unaffected by killing the API. The warning tracking the API's
+  availability is what shows it is now produced by `/api/users/blocked-by`. Leg B
+  also confirms the deliberate failure behaviour: the check errors, and the join
+  proceeds unwarned exactly as before — what changed is that the app no longer
+  *manufactures* the answer "nobody has blocked you".
+
+- **2026-08-19 — an unrelated local-fixture observation, recorded but NOT
+  claimed as a product defect.** A third replication with the seeded
+  harasser/victim pair could not be completed: signed in as Raul (50000050), the
+  room card would not open. `users/50000050` held a **stale `firebaseUid`** that
+  did not match the Auth emulator's uid for `harasser@shytalk.dev`, which
+  surfaced as `ApiException: User profile not found` from the LiveKit token call.
+  Repairing the linkage cleared that error, but the card still would not
+  navigate, and the cause was not established. It could be further local seed
+  drift or something real about that persona; either way it is not this change —
+  the same room, same build and same tap worked for the other account minutes
+  earlier. Worth its own look, because a persona that cannot enter a room would
+  silently weaken any journey test that relies on it.
+
+- **2026-08-19 — STILL OWED: the iOS device leg**, and the journey scenario
+  named in the Test Plan. Android is proven; iOS is not, so this is **not**
+  ready for `In Review`.
