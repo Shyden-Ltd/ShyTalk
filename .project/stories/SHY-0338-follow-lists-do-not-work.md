@@ -180,7 +180,7 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   AC asserts the list is exactly right, which cannot be tested until the
   definition is written down here.
 
-- **2026-08-18 ~21:1x WIB — ROOT CAUSE, proven against the live rules engine.**
+- **2026-08-18 — ROOT CAUSE, proven against the live rules engine.**
   The story asked for WHICH failure, per list. The answer is one mechanism for
   followers and following, and that same mechanism plus two more for stalkers.
 
@@ -247,7 +247,7 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   a client-side query that refuses wholesale. That removes the direct-Firestore
   breach and the silent `emptyList()` in the same change.
 
-- **2026-08-18 ~22:0x WIB — FIX LANDED (server + both clients). Device walk still owed.**
+- **2026-08-18 — FIX LANDED (server + both clients). Device walk still owed.**
 
   | Layer | Change |
   | --- | --- |
