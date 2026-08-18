@@ -617,7 +617,18 @@ class ActiveRoomManager(
             return
         }
 
-        roomRepository.toggleMute(roomId, seatIndex, newMuteState)
+        // Honour the write (SHY-0335). This discarded the Resource and called
+        // setMicrophoneEnabled unconditionally — the same defect this story
+        // fixes on the server, and dangerous in the UNMUTE direction: a failed
+        // unmute would force the mic OPEN with no server confirmation at all.
+        // RoomViewModel.toggleSelfMute already gates on Success; this is its
+        // untested twin, and it is public API on the shared manager, so a
+        // future caller would inherit the bug.
+        val result = roomRepository.toggleMute(roomId, seatIndex, newMuteState)
+        if (result is Resource.Error) {
+            _error.value = result.message
+            return
+        }
         voiceService.setMicrophoneEnabled(!newMuteState)
     }
 

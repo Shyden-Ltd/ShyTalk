@@ -501,11 +501,41 @@ class ActiveRoomManagerTest {
             val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
             manager.updateTrackedRoom(room)
 
+            // A working repository returns Success. Previously unstubbed, which
+            // the SHY-0335 Resource check correctly reads as a failed write —
+            // the test was relying on the mic being set regardless of the
+            // write's outcome, which is exactly the bug.
+            coEvery { roomRepository.toggleMute(any(), any(), any()) } returns Resource.Success(Unit)
+
             // Voice must be connected for unmute, but muting (isMuted=false→true) is always allowed
             manager.toggleSelfMute(3)
 
             coVerify { roomRepository.toggleMute("room-1", 3, true) }
             verify { voiceService.setMicrophoneEnabled(false) }
+        }
+
+    @Test
+    fun `toggleSelfMute - a FAILED write must not change the mic (SHY-0335)`() =
+        runTest {
+            // This path discarded the Resource entirely and called
+            // setMicrophoneEnabled unconditionally — the same bug class this
+            // story fixes on the server. On a failed UNMUTE it would force the
+            // mic OPEN with no server confirmation at all, which is the
+            // dangerous direction. RoomViewModel already gets this right
+            // (see RoomViewModelTest "does not call voiceService on repo error");
+            // this is its untested twin.
+            manager.trackRoom("room-1")
+            val seats = TestData.createDefaultSeats().toMutableMap()
+            seats["3"] = TestData.createTestSeat(userId = currentUserId, isMuted = false)
+            val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
+            manager.updateTrackedRoom(room)
+            coEvery { roomRepository.toggleMute(any(), any(), any()) } returns
+                Resource.Error("Not allowed to mute this seat")
+
+            manager.toggleSelfMute(3)
+
+            coVerify { roomRepository.toggleMute("room-1", 3, true) }
+            verify(exactly = 0) { voiceService.setMicrophoneEnabled(any()) }
         }
 
     @Test
@@ -534,6 +564,10 @@ class ActiveRoomManagerTest {
             seats["3"] = TestData.createTestSeat(userId = currentUserId, isMuted = false)
             val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
             manager.updateTrackedRoom(room)
+
+            // A working repository returns Success (SHY-0335) — previously
+            // unstubbed, so the new Resource check read it as a failed write.
+            coEvery { roomRepository.toggleMute(any(), any(), any()) } returns Resource.Success(Unit)
 
             // connectionState is DISCONNECTED — muting (isMuted=false→true) should still work
             manager.toggleSelfMute(3)
