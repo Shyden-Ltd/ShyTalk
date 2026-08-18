@@ -511,7 +511,7 @@ test proves the capability is REQUESTED, not that Appium honours it — that is 
 real-device question by construction. Decisive check: slow the Firebase SDK load
 past ~25s on the real iPhone and confirm no early transport timeout.
 
-Reviewed-up-to: 718d49e91cf
+Reviewed-up-to: ae898a8fcad
 
 - **2026-08-18** — Merged develop in to pick up the CI fixes that were blocking
   this PR (SHY-0334's apt hardening and SHY-0329's driver-checks budget). The
