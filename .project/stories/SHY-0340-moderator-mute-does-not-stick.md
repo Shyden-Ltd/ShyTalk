@@ -37,10 +37,15 @@ available to the muted person with no privilege of any kind:
 against a non-host. Un-muting is gated by one condition:
 
 ```js
-} else if (!isSelf) {
+} else if (String(seat.userId) !== callerId) {
+  // Unmute: only the seat's own occupant may unmute themselves.
   return { status: 403, body: { error: 'Only the occupant can unmute' } };
 }
 ```
+
+(`room-mutations.js:316-319` on `develop`. SHY-0335 lifts that comparison into a
+local `isSelf` and adds a self-mute branch above it; the unmute rule itself is
+untouched by that story, which is why this one exists.)
 
 The occupant may always unmute. The rule reads as if it were protecting the
 seat, and it is — from *everyone except the one person it needs to hold*.
@@ -52,9 +57,12 @@ the mute even if route 1 were closed. Fixing only the unmute path would move the
 bypass, not remove it.
 
 **The server cannot tell the two apart, because nothing records who muted.**
-`seats.{i}.isMuted` is a bare boolean. `mutedBy`, `forceMuted` and every spelling
-of them appear **nowhere** in `express-api/src`, `shared/src` (non-test),
-`app/src` or `firestore.rules` — grepped. A self-mute and a moderator's mute are
+A room seat is `{ userId, state, isMuted }` — `isMuted` a bare boolean. No
+attribution field of any kind exists on it: `mutedBy` and `forceMuted` appear
+nowhere in `express-api/src` at all, and the only `mutedBy` in the Kotlin tree
+belongs to the **group-chat** mute model discussed below, never to a room seat.
+(Grepped. The narrower claim is the accurate one: the *room* mute schema has no
+per-actor attribution.) A self-mute and a moderator's mute are
 byte-identical in storage, so no rule can be written about one without also
 binding the other. **A user must always be able to silence themselves**
 (SHY-0335 exists because that was broken), so the distinction is not optional.
@@ -237,10 +245,14 @@ failing against today's build before any production line changes.
   as an edge-case AC plus a named Kotlin test. Reading the unmute branch showed
   0335 could not honour it: with `isMuted` a bare boolean there is nothing to
   gate on, so the bullet was either untickable or a licence to widen 0335 into a
-  data-model change mid-flight. Removed there, whole, and pointed here.
+  data-model change mid-flight. Removed there, whole, and pointed here — **on
+  SHY-0335's own branch** (`fix/SHY-0335-self-mute-is-refused`), not in the PR
+  that files this story. So until 0335 merges, `develop`'s copy of 0335 still
+  shows the old bullet. That is branch ordering, not a missed edit.
 
 - **2026-08-18** — Both bypasses verified by reading, not inferred.
-  Route 1: `room-mutations.js` `else if (!isSelf) → 403`, so the occupant always
+  Route 1: `room-mutations.js:316` — `else if (String(seat.userId) !== callerId)`
+  → 403, so the occupant always
   may. Route 2: `claim`/`accept-invite`/`leave` write `isMuted: false` at lines
   181/219/239. A fix to route 1 alone relocates the bypass.
 

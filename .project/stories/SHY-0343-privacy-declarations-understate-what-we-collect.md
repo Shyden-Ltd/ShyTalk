@@ -129,12 +129,6 @@ untrue again.
 - **When** the privacy declarations are reviewed
 - **Then** every one of those appears in them
 
-**Scenario: A new field cannot slip through undeclared**
-
-- **Given** a completed set of privacy declarations
-- **When** a developer adds a new kind of personal data to the user record
-- **Then** a check fails until the declarations are updated
-
 **Scenario: People are asked for permission in their own language**
 
 - **Given** a user whose phone is set to Vietnamese

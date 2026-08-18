@@ -15,7 +15,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0340](SHY-0340-moderator-mute-does-not-stick.md) | P0  | M      | bug      | A moderator mutes someone in a voice room and they simply turn themselves back on | 📝 Draft | — |  |
 | [SHY-0341](SHY-0341-account-deletion-blocked-without-a-pin.md) | P0  | M      | bug      | You cannot delete your account unless you happen to have set a PIN | 📝 Draft | — |  |
 | [SHY-0344](SHY-0344-store-required-urls-and-listing-are-missing.md) | P0  | M      | feature  | The support page a store submission requires does not exist, and neither does the listing | 📝 Draft | — |  |
-| [SHY-0343](SHY-0343-privacy-declarations-understate-what-we-collect.md) | P0  | M      | bug      | Our privacy declarations say we collect a device ID and some audio; we collect far more | 📝 Draft | — |  |
+| [SHY-0343](SHY-0343-privacy-declarations-understate-what-we-collect.md) | P0  | M      | bug      | Our privacy declarations say we collect a device ID and some audio; we collect far more than that | 📝 Draft | — |  |
 | [SHY-0342](SHY-0342-store-age-rating-is-undeclared.md) | P0  | M      | docs     | Nobody has worked out what age rating this app must carry, or checked it matches what we built | 📝 Draft | — |  |
 | [SHY-0330](SHY-0330-steps-pass-when-driver-did-nothing.md) | P0  | M      | bug      | A journey step passes even when the driver did nothing at all | 👀 In Review | — | [#1790](https://github.com/Shyden-Ltd/ShyTalk/pull/1790) |
 | [SHY-0334](SHY-0334-apt-stall-unbounded.md) | P0  | S      | infra    | A stalled package mirror hangs a build until its budget runs out | 👀 In Review | — | [#1784](https://github.com/Shyden-Ltd/ShyTalk/pull/1784) |

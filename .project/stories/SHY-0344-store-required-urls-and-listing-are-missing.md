@@ -131,12 +131,6 @@ be the ones discovered last.
 - **When** they ask for deletion on the website and prove the account is theirs
 - **Then** their deletion is scheduled and they are told when it becomes permanent
 
-**Scenario: A required link that breaks is noticed**
-
-- **Given** the set of links the stores require
-- **When** one of them stops resolving
-- **Then** a check fails and names the broken link
-
 ## Test Plan
 
 **RED first.** Two of these fail the moment they are written: `/support` and the

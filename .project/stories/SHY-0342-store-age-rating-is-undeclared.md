@@ -117,12 +117,6 @@ minimum age without revisiting the rating fails a build.
 - **When** the age rating is decided
 - **Then** each of those features is accounted for in the answers
 
-**Scenario: Adding a feature that changes the rating is noticed**
-
-- **Given** a recorded age rating and the app's own minimum age
-- **When** someone changes the minimum age without revisiting the rating
-- **Then** the build fails and says the two no longer agree
-
 **Scenario: The operator decides, not the developer**
 
 - **Given** a completed set of questionnaire answers and the rating they produce

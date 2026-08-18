@@ -35,12 +35,14 @@ if (!user.pinHash) {
 }
 ```
 
-**Almost nobody has a `pinHash`.** Setting a PIN is not part of signing up. The
-PIN-setup screen is reachable from exactly one place in the whole app —
-`SharedNavGraph.kt:667`, Settings → Security → *Reset PIN* — and `setupPin()` is
-called from exactly one view model, `PinSetupViewModel`. Both verified by
-grepping every caller. **A user who never opened Security Settings has no PIN,
-and therefore no way out.**
+**Almost nobody has a `pinHash`.** Setting a PIN is not part of signing up. Both
+Android navigation graphs register the PIN-setup screen — `SharedNavGraph.kt:667`
+and the legacy `NavGraph.kt:779`, which SHY-0024 is tracked to delete and which
+`MainActivity` still mounts — and **both reach it from the same single place:
+Settings → Security → *Reset PIN*.** `setupPin()` is called from exactly one view
+model, `PinSetupViewModel`. Verified by grepping every caller in every source
+set. **A user who never opened Security Settings has no PIN, and therefore no way
+out.**
 
 What that user experiences: the Delete account button is shown unconditionally
 (`AppSettingsScreen.kt:921`, in the `else` arm of "is a deletion already
@@ -239,11 +241,17 @@ no `pinHash`, call `POST /api/users/:uniqueId/delete`, observe
   story is not "build deletion"; it is that a working feature is gated on a
   credential the signup flow never asks for.
 
-- **2026-08-18** — Established by grep, not assumed: `Screen.PinSetup` is
-  navigated from ONE site (`SharedNavGraph.kt:667`, Settings → Security → Reset
-  PIN) and `setupPin()` is called from ONE view model (`PinSetupViewModel`).
-  There is no enrolment during registration on either platform, so a new account
-  has no `pinHash` and cannot be deleted.
+- **2026-08-18** — Established by grep: `setupPin()` is called from ONE view
+  model (`PinSetupViewModel`), and there is no enrolment during registration on
+  either platform, so a new account has no `pinHash` and cannot be deleted.
+
+- **2026-08-18, corrected in review** — the first draft said `Screen.PinSetup` is
+  navigated from exactly ONE site. It is TWO: `SharedNavGraph.kt:667` and the
+  legacy `NavGraph.kt:779`, which `MainActivity` still mounts and SHY-0024 is
+  tracked to delete. The original grep was scoped to `shared/src/commonMain` and
+  missed `app/src`. Both sites sit behind the same Settings → Security → Reset
+  PIN entry, so the conclusion is unchanged — but a story whose value is "checked
+  rather than assumed" has to be right about what it checked.
 
 - **2026-08-18** — The asymmetry that settles the argument: data **export**
   (`data-export.js:51`) takes `requireOwner` and no PIN; data **erasure**
