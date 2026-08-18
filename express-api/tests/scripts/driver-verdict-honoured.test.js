@@ -20,6 +20,37 @@ const fs = require('fs');
 const path = require('path');
 
 const RUNNER = path.join(__dirname, '../../scripts/manual-qa-runner.js');
+const { executeStep } = require('../../scripts/manual-qa-runner');
+
+/** Minimal ctx for a step that only needs a UI driver. */
+function makeCtx(overrides = {}) {
+  return {
+    apiBase: 'https://dev-api.example',
+    firebaseApiKey: 'fake-key',
+    sessions: new Map(),
+    personaPlatforms: new Map(),
+    personaPaths: new Map(),
+    locale: 'en',
+    fetch: jest.fn(),
+    ...overrides,
+  };
+}
+
+const TAP_STEP = { kind: 'When', text: 'Adam on Android taps "signin_signUpLink"' };
+
+/** The Android tap matcher locates the tag in a UI dump before tapping, so a
+ *  dump containing the tag is part of the minimum viable context. */
+const DUMP_WITH_TAG = '<node resource-id="signin_signUpLink" bounds="[0,0][100,100]" />';
+
+/** ctx wired for the tap step, with androidTap's verdict under test. */
+function tapCtx(tapImpl) {
+  return makeCtx({
+    uiDriver: {
+      androidUiDump: jest.fn(async () => DUMP_WITH_TAG),
+      androidTap: jest.fn(tapImpl),
+    },
+  });
+}
 
 /**
  * Step handlers that `await` a driver call and then unconditionally report
@@ -64,5 +95,42 @@ describe('driver verdicts are honoured (SHY-0330)', () => {
     // `iosTapByTag` has one meaning on both.
     const src = fs.readFileSync(RUNNER, 'utf8');
     expect(src).not.toMatch(/await ctx\.uiDriver\.iosTap\(\s*tag\s*\)/);
+  });
+
+  test('a driver returning TRUE passes the step', async () => {
+    const ctx = tapCtx(async () => true);
+    expect((await executeStep(TAP_STEP, ctx)).ok).toBe(true);
+  });
+
+  test('a driver returning FALSE fails the step', async () => {
+    const ctx = tapCtx(async () => false);
+    const r = await executeStep(TAP_STEP, ctx);
+    expect(r.ok).toBe(false);
+    // The message must name the method, so the run log points at the gap.
+    expect(r.error).toMatch(/androidTap/);
+  });
+
+  test('a driver returning UNDEFINED fails the step — forgetting to return is not success', async () => {
+    // `!== true` rather than `if (!x)`: a driver that forgets to return must
+    // read as failure. This is the case a truthiness check would let through
+    // unchanged, and it is how the original defect stayed invisible.
+    const ctx = tapCtx(async () => undefined);
+    expect((await executeStep(TAP_STEP, ctx)).ok).toBe(false);
+  });
+
+  test('an UNIMPLEMENTED driver method fails the step rather than passing', async () => {
+    // The real stub contract: every driver wires unimplemented methods to one
+    // that now THROWS. Previously it returned false, the handler discarded it,
+    // and the step passed — which is why 256 "not implemented yet" lines could
+    // appear in a run whose steps were not failing on them.
+    const notImplemented = async () => {
+      const err = new Error('[android-driver] androidTap is NOT IMPLEMENTED (device=X)');
+      err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
+      throw err;
+    };
+    const ctx = tapCtx(notImplemented);
+    const r = await executeStep(TAP_STEP, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/NOT IMPLEMENTED/);
   });
 });

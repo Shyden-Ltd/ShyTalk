@@ -211,7 +211,7 @@ describe('ios-simctl-driver — createIosDriver factory', () => {
     expect(typeof driver.simctl).toBe('function');
   });
 
-  test('default stub methods return false', async () => {
+  test('an unimplemented method THROWS rather than returning false (SHY-0330)', async () => {
     mockBooted();
     const driver = await createIosDriver();
     // Pick a name that is NOT later overridden with a real implementation
@@ -225,8 +225,33 @@ describe('ios-simctl-driver — createIosDriver factory', () => {
         n !== 'iosUiDump',
     );
     expect(typeof stubMethod).toBe('string');
-    const result = await driver[stubMethod]('persona', 'arg2');
-    expect(result).toBe(false);
+    // Returning false made an unimplemented method indistinguishable from a
+    // working one: 98 step handlers discarded the verdict and reported PASS,
+    // so the whole missing-driver inventory was invisible in pass/fail terms
+    // and a matrix run could log hundreds of "not implemented yet" lines while
+    // those steps passed. A step calling a method nobody has written has not
+    // happened, and must say so.
+    await expect(driver[stubMethod]('persona', 'arg2')).rejects.toThrow(/NOT IMPLEMENTED/);
+  });
+
+  test('the thrown error is typed and names the method (SHY-0330)', async () => {
+    mockBooted();
+    const driver = await createIosDriver();
+    const stubMethod = IOS_METHOD_NAMES.find(
+      (n) =>
+        n !== 'iosOpenScreen' &&
+        n !== 'iosTap' &&
+        n !== 'iosTapByTag' &&
+        n !== 'iosTypeText' &&
+        n !== 'iosShowsText' &&
+        n !== 'iosUiDump',
+    );
+    const err = await driver[stubMethod]('persona').catch((e) => e);
+    // Typed so a consumer can distinguish "not written yet" from "tried and
+    // failed" without string-matching a message.
+    expect(err.code).toBe('DRIVER_METHOD_NOT_IMPLEMENTED');
+    expect(err.method).toBe(stubMethod);
+    expect(err.message).toContain(stubMethod);
   });
 
   test('default stub methods log to stderr with method name and udid', async () => {
@@ -242,7 +267,7 @@ describe('ios-simctl-driver — createIosDriver factory', () => {
         n !== 'iosShowsText' &&
         n !== 'iosUiDump',
     );
-    await driver[stubMethod]('alice', 42);
+    await driver[stubMethod]('alice', 42).catch(() => {});
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const msg = errorSpy.mock.calls[0][0];
     expect(msg).toContain(stubMethod);

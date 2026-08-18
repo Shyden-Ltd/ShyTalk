@@ -272,7 +272,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // could log hundreds of these while "passing". A step that calls a
       // method nobody has written has not performed the step.
       const err = new Error(
-        `[android-driver] {methodName} is NOT IMPLEMENTED (device=${serial}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+        `[android-driver] ${methodName} is NOT IMPLEMENTED (device=${serial}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
       );
       err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
       err.method = methodName;

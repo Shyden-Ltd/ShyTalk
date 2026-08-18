@@ -142,7 +142,7 @@ async function createIosDriver({ udid: preferred } = {}) {
       // could log hundreds of these while "passing". A step that calls a
       // method nobody has written has not performed the step.
       const err = new Error(
-        `[ios-driver] {methodName} is NOT IMPLEMENTED (udid=${udid}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+        `[ios-driver] ${methodName} is NOT IMPLEMENTED (udid=${udid}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
       );
       err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
       err.method = methodName;
