@@ -1,6 +1,6 @@
 ---
 id: SHY-0329
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -229,3 +229,5 @@ Touches `.github/workflows/qa-runner-driver-checks.yml` and a new test under
   05:0x, red at 06:2x on the same code). Nothing in this diff touches
   conversations, DND, FCM or group messaging. Filed separately; recorded here so
   the gap is auditable instead of silent.
+
+Reviewed-up-to: 78abaa2232a
