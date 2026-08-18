@@ -126,7 +126,7 @@ problem is that the MVP is late.
 **RED first.** The failing state is recorded: run `32141821650`, `.md`-only
 merge, iOS archive 53 minutes, timed out.
 
-### Node / Jest — `express-api/tests/scripts/deploy-dev-change-routing.test.js`
+### Node / Jest — `express-api/tests/scripts/deploy-scope.test.js`
 
 - `a docs-only diff routes to no app or backend deploy` — **the defect, in one assertion**
 - `a backend-only diff routes to backend and not to the apps`
@@ -215,3 +215,40 @@ merge, iOS archive 53 minutes, timed out.
 - **2026-08-19 — mutation-proven.** Reverting `distribute-ios` to `inputs.ios-testers`
   alone kills `distribute-ios is gated on the detected scope` and nothing else.
   18 tests; actionlint and shellcheck clean.
+
+- **2026-08-19 — review round 1: FOUR Criticals, all real, all applied.**
+
+  1. **`functions/*` was classified as backend. It is WEB.** Cloudflare PAGES
+     middleware — `functions/_middleware.js` says so in its own docstring,
+     `firebase.json` has no `functions` key at all, and `wrangler pages deploy
+     public` picks the directory up from the repo root. A fix to the dev-site
+     auth lockdown would have run a pointless API deploy and **never reached the
+     site**: a protected path silently skipped, which this story's own security
+     AC forbids. Moved to the web arm and covered by a test.
+  2. **`gh --jq '.[0].headSha'` prints the literal string `"null"`** on an empty
+     array, so a first-ever run set `BASE="null"`. It reached the fail-safe only
+     because `git cat-file -e "null^{commit}"` happens to fail — correct today by
+     accident, and one plausible cleanup away from `git diff null HEAD` aborting
+     the job and skipping every deploy. Now `// empty`, the idiom this same file
+     already uses in its cached-APK step.
+  3. **The wiring test proved "is referenced somewhere in", not "is gated on".**
+     Swapping the joining `&&` for `||` — deploy if EITHER the operator asked OR
+     the scope matched, destroying the whole "requires both" property — left the
+     asserted substring untouched and the test green. Now anchored as one
+     contiguous `inputs.X && needs...outputs.Y == 'true'` sequence, and
+     mutation-proven: the `||` swap reddens it.
+  4. **Deploy-support scripts were unclassified.** `scripts/stamp-build-meta.mjs`
+     (run by the web job) and `scripts/ensure-testflight-auto-distribution.js`
+     (run by the iOS job) fell to the catch-all, so a fix to either would not
+     redeploy the job it changes.
+
+  Plus: `express-api/scripts/*` folded into backend (it ships in the deploy
+  tarball); `.github/actions/*` marks EVERY area, since a fix there must not be
+  able to skip one — least of all when the operator explicitly asked for it; and
+  the step now traps unanticipated errors and emits the all-true fallback rather
+  than going red, because a red detector job makes every gated `if:` read `''`
+  and skips everything — the precise direction this story exists to prevent.
+
+- **2026-08-19 — 22 tests, mutation-proven on both headline fixes.** Removing
+  `functions/*` from the web arm kills its named test; swapping `&&` for `||`
+  kills the wiring test that previously could not see it.

@@ -96,12 +96,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
+          # NOTE: deliberately NOT `set -e`. Three uncertainty cases are handled
+          # explicitly below, but an UNANTICIPATED failure here would abort the
+          # job — and every deploy job reads these outputs, so an empty output
+          # means `'' == 'true'` is false and EVERY DEPLOY SILENTLY SKIPS. That
+          # is the exact direction this story exists to prevent, so the step
+          # traps instead and emits the all-true fallback.
+          set -uo pipefail
+          emit_failsafe() {
+            {
+              echo "backend=true"; echo "web=true"; echo "android=true"; echo "ios=true"
+              echo "reason=detection-failed-failing-safe"
+              echo "baseline=unresolved"
+            } >> "$GITHUB_OUTPUT"
+            echo "::warning::deploy-scope detection failed; deploying everything (fail-safe)"
+            exit 0
+          }
+          trap 'emit_failsafe' ERR
           # Baseline = the head SHA of the last SUCCESSFUL run of THIS workflow.
           # Not `HEAD~1`: several merges can land between deploys, and comparing
           # against the previous commit would miss everything in between.
+          # `// empty` matters: on an empty array `.[0].headSha` is jq's null,
+          # and `gh --jq` prints the literal four-character string "null".
+          # Without it BASE becomes "null" and only the cat-file guard below
+          # rescues it — by accident. The same file already uses this idiom in
+          # the cached-APK step.
           BASE="$(gh run list --workflow deploy-dev.yml --status success \
-                    --limit 1 --json headSha --jq '.[0].headSha' 2>/dev/null || true)"
+                    --limit 1 --json headSha --jq '.[0].headSha // empty' 2>/dev/null || true)"
           if [ -n "$BASE" ] && ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
             echo "baseline $BASE is not in this checkout — treating as unresolvable"
             BASE=""

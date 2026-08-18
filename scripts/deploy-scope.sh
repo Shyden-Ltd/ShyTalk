@@ -30,12 +30,30 @@ while IFS= read -r path || [ -n "$path" ]; do
   [ -z "$path" ] && continue
   saw_any=true
   case "$path" in
+    # ── composite actions: used by EVERY deploy job ────────────────────────
+    # A fix to `deploy-firebase-rules`, `setup-ios-signing` or friends changes
+    # how each job behaves, so it must not be able to skip one — including when
+    # the operator explicitly asked for that area.
+    .github/actions/*)
+      backend=true; web=true; android=true; ios=true ;;
     # ── backend ────────────────────────────────────────────────────────────
-    express-api/src/*|express-api/package.json|express-api/package-lock.json|firestore.rules|firestore.indexes.json|functions/*|database.rules.json)
+    # `express-api/scripts/*` is INCLUDED: the deploy tarball is `tar czf` over
+    # the whole directory minus node_modules/.env, so those files ship. CLAUDE.md
+    # groups them with `src/**` as backend runtime for the same reason.
+    express-api/src/*|express-api/scripts/*|express-api/package.json|express-api/package-lock.json|firestore.rules|firestore.indexes.json|database.rules.json)
       backend=true ;;
     # ── web ────────────────────────────────────────────────────────────────
-    public/*)
+    # `functions/*` is WEB, not backend. It is Cloudflare PAGES middleware —
+    # `functions/_middleware.js` says so in its own docstring, `firebase.json`
+    # has no `functions` key at all, and `wrangler pages deploy public` picks the
+    # directory up from the repo root. Classifying it as backend meant a fix to
+    # the dev-site auth lockdown ran a pointless API deploy and NEVER REACHED
+    # THE SITE. Caught in review, not in production.
+    public/*|functions/*|scripts/stamp-build-meta.mjs)
       web=true ;;
+    # ── deploy-support scripts a single job invokes directly ───────────────
+    scripts/ensure-testflight-auto-distribution.js)
+      ios=true ;;
     # ── shared Kotlin: BOTH apps ───────────────────────────────────────────
     shared/src/commonMain/*|shared/build.gradle.kts|gradle/libs.versions.toml|gradle/wrapper/*|build.gradle.kts|settings.gradle.kts|gradle.properties)
       android=true; ios=true ;;

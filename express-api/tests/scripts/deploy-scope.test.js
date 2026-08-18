@@ -128,6 +128,47 @@ describe('SHY-0347 — deploy scope from a change set', () => {
     expect(scope(['README.md']).reason).toBe('derived-from-diff');
   });
 
+  test('functions/ is WEB, not backend — it is Cloudflare Pages middleware', () => {
+    // Found in review. `functions/_middleware.js` is the dev-site auth
+    // lockdown, shipped by `wrangler pages deploy public`; `firebase.json` has
+    // no `functions` key at all. Classifying it as backend ran a pointless API
+    // deploy and NEVER REACHED THE SITE — a protected path silently skipped,
+    // which this story's own security AC forbids.
+    expect(scope(['functions/_middleware.js'])).toMatchObject({
+      web: true,
+      backend: false,
+      android: false,
+      ios: false,
+    });
+  });
+
+  test('deploy-support scripts route to the job that runs them', () => {
+    // Each is invoked by exactly one deploy job, so a fix to it must redeploy
+    // that job — and nothing else.
+    expect(scope(['scripts/stamp-build-meta.mjs'])).toMatchObject({ web: true, ios: false });
+    expect(scope(['scripts/ensure-testflight-auto-distribution.js'])).toMatchObject({
+      ios: true,
+      web: false,
+    });
+  });
+
+  test('a composite action deploys EVERY area', () => {
+    // The deploy jobs all consume these. A fix to one must not be able to skip
+    // an area — least of all when the operator explicitly asked for it.
+    expect(scope(['.github/actions/deploy-firebase-rules/action.yml'])).toMatchObject({
+      backend: true,
+      web: true,
+      android: true,
+      ios: true,
+    });
+  });
+
+  test('express-api/scripts ships in the backend tarball, so it is backend', () => {
+    expect(scope(['express-api/scripts/provision-test-personas.js'])).toMatchObject({
+      backend: true,
+    });
+  });
+
   test('tests and workflows deploy nothing', () => {
     const s = scope([
       'express-api/tests/routes/users-batch-cohort.test.js',
@@ -158,17 +199,25 @@ describe('SHY-0347 — every deploy job consults the detection', () => {
   }
 
   test.each([
-    ['deploy-backend-dev', 'backend'],
-    ['deploy-web-dev', 'web'],
-    ['distribute-android', 'android'],
-    ['distribute-ios', 'ios'],
-  ])('%s is gated on the detected scope', (job, area) => {
-    // The assertion that makes the whole story real. Without it a job could
-    // quietly revert to `inputs.X` alone and nothing would notice until the
-    // next hour-long archive of a documentation change.
+    ['deploy-backend-dev', 'backend', 'backend'],
+    ['deploy-web-dev', 'web', 'web'],
+    ['distribute-android', 'android', 'android-testers'],
+    ['distribute-ios', 'ios', 'ios-testers'],
+  ])('%s requires the input AND the detected scope, joined by &&', (job, area, input) => {
+    // Rewritten after review. The first version asserted only that
+    // `needs.detect-deploy-scope.outputs.<area> == 'true'` APPEARED in the
+    // block. Swapping the joining `&&` for `||` — which would deploy whenever
+    // EITHER the operator asked OR the scope matched, defeating the whole
+    // "requires both" property — left that substring untouched and the test
+    // green. It proved "is referenced somewhere in", not "is gated on".
+    //
+    // This anchors both clauses as ONE contiguous sequence with `&&` between
+    // them, so the operator-swap regression reddens.
     const block = jobBlock(job);
     expect(block).toMatch(
-      new RegExp(`needs\\.detect-deploy-scope\\.outputs\\.${area}\\s*==\\s*'true'`),
+      new RegExp(
+        `inputs\\.${input}\\s*&&\\s*needs\\.detect-deploy-scope\\.outputs\\.${area}\\s*==\\s*'true'`,
+      ),
     );
     expect(block).toMatch(/needs:.*detect-deploy-scope|needs: \[[^\]]*detect-deploy-scope/s);
   });
