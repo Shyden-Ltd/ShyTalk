@@ -246,3 +246,51 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   dropping the people a viewer may not see and returning the rest — instead of
   a client-side query that refuses wholesale. That removes the direct-Firestore
   breach and the silent `emptyList()` in the same change.
+
+- **2026-08-18 ~22:0x WIB — FIX LANDED (server + both clients). Device walk still owed.**
+
+  | Layer | Change |
+  | --- | --- |
+  | API | `POST /api/users/batch` — profiles resolved through the Admin SDK, cohort-filtered **per user**. 12 tests. |
+  | API | `GET /api/users/:uniqueId/stalkers` — owner-only; visits AND visitor profiles in one response. 9 tests. |
+  | Android | `getUsers` / `getStalkers` moved onto both endpoints; the swallowing `catch`es deleted. |
+  | iOS | Same, identically. |
+  | Shared | `UserRepository.getStalkers` now returns `StalkerPage(visitors, users)` — one round trip instead of two, and the second was the one that always failed. |
+  | Shared | `FollowListViewModel` carries the failure to `uiState.error` instead of mapping it to `emptyMap()`. |
+
+  **Ten mutations, each killing its own named test**, reverted with a verified
+  clean tree every time. The one that matters: reinstating all-or-nothing cohort
+  refusal on the batch endpoint kills three tests, headed by
+  `ONE cross-cohort member does not empty the batch`.
+
+- **2026-08-18 — A test was passing for the wrong reason, and mutation found it.**
+  `a visitor whose account is gone is dropped rather than returned hollow`
+  survived deleting the `!userSnap.exists` guard: a missing document has no
+  `cohort`, so it defaulted to `'minor'` and the ADULT owner's cohort check
+  dropped the row anyway. Fixed the TEST — it now runs against a MINOR owner so
+  the default cohort MATCHES and only the exists guard can drop the row.
+
+- **2026-08-18 — Two existing tests broke, and they were right to.** Neither
+  stubbed `getStalkers`, so the relaxed mock returned a dummy `Resource.Error("")`
+  that the old `else -> Unit` ate. `getStalkers error keeps empty list` has been
+  renamed and INVERTED: keeping the empty list silently was the defect.
+
+- **2026-08-18 — STILL OWED before this can go to In Review:**
+  1. **The device walk** — real Android and real iPhone, local then dev. Devices
+     are unreachable while the operator is away, so this is the blocker.
+  2. **Journey scenarios** for all three lists, asserting rendered names rather
+     than element counts.
+  3. The characterisation rules suite must have its `assertFails` cases replaced
+     now that the clients no longer issue those queries.
+
+- **2026-08-18 — Deliberately NOT dragged in.** `getUser`, `getBlockedUserIds`
+  and `getAliases` also read Firestore directly from the client — the same
+  no-direct-backend breach — but they are single-document `get()`s covered by
+  the own-doc carve-out, so they WORK. Fixing them here would widen a P0 bug fix
+  into a migration. Worth its own story.
+
+- **2026-08-18 — One decision for the operator.** The stalkers endpoint is
+  **not** block-filtered, unlike `/users/batch`: if somebody has blocked you and
+  is still opening your profile, that is precisely what this screen exists to
+  tell you. Hiding them would turn a safety surface into a blind spot. Say if
+  you read it the other way.
