@@ -209,3 +209,28 @@ new-message search and read `PERMISSION_DENIED … for 'list' @ L74` on screen.
   SHY-0348 (blocked profile) and this. All the client reading Firestore directly.
   Worth treating as a class, not three coincidences — a sweep for remaining
   client-side `firestore.collection(...)` queries would be a sensible follow-up.
+
+- **2026-08-19 — DEVICE-PROVEN on the OnePlus.** Searching `50000020` in the
+  new-message search:
+
+  | stage | what the screen said |
+  | --- | --- |
+  | before | `PERMISSION_DENIED: Null value error. for 'list' @ L74` |
+  | after routing to the API | "No users found" — the API returned a match, the client filtered it away |
+  | after the `shapeForViewer` fix | **`[SEED] Lena (P-05 lapsed)`** |
+
+  That middle row is the SAME trap SHY-0338 hit: `NewMessageViewModel` runs
+  `filterSameCohortAs` over the results and the API strips `cohort`, so every
+  result reads as the 'minor' default and an adult's search filters itself to
+  nothing. Fixed at `shapeForViewer` — the single choke point for
+  `/users/search` AND `/users/discover` — which re-attaches `cohort` after
+  stripping. It discloses nothing, because the line above it guarantees every
+  user returned is same-cohort as the caller.
+
+- **2026-08-19 — 8 endpoint tests, mutation-proven.** Stripping `cohort` again
+  reddens `returns cohort, and it always equals the searcher's` and
+  `strips sensitive fields but keeps cohort`, and nothing else.
+
+- **2026-08-19 — STILL OWED:** the Kotlin unit tests (`searching goes through
+  the API, not Firestore`; the readable-error and empty-query cases), the
+  journey scenarios, and the iOS device leg. Android is walked.
