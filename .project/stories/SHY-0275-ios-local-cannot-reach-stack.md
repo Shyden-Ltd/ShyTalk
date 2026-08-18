@@ -232,3 +232,36 @@ first can happen without the second being checked.
 - **2026-08-17 — `code-reviewer` round 1 on `1727417b9d3`; findings applied in `de58319835d`. Full detail in SHY-0272's log.**
 
 Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
+
+- **2026-08-19 — why this PR is red, diagnosed rather than re-run blindly.**
+  `Build & Test` has been failing since 2026-08-17 and it reads as "the tests
+  fail". It is not. Every substantive step in that job **passed**:
+
+  | step | result |
+  | --- | --- |
+  | Run unit tests, detekt, and build devRelease APK | **success** |
+  | Build localDebug APK | **success** |
+  | Upload localDebug APK | success |
+  | **Publish unit test report** | **FAILURE** |
+  | Upload build outputs for SonarCloud | success |
+  | Prepare + upload Kotlin report | success |
+
+  The only failing step is the **reporting** action
+  (`enricomi/publish-unit-test-result-action`), which runs *after* the tests and
+  publishes their results. So the branch's code compiled, its unit tests passed
+  and both APKs built — and the PR is nonetheless blocked, because a red job is a
+  red job to the gate.
+
+  That matters beyond this ticket: **while this PR sits, the iOS half of the
+  LOCAL gauntlet cannot run for ANY story**, because the three causes it fixes
+  (dead `LOCAL_HOST` knobs vs the real Swift literals, iOS having no local
+  LiveKit URL, and the allow-list rejecting a LAN address) are what stop a real
+  iPhone reaching the Mac's stack. The practical consequence, measured today:
+  every story's iOS leg has to go through a **~50-minute dev deploy** instead of
+  a local install, which is exactly the deploy waste the operator flagged.
+
+- **2026-08-19 — pushed a Notes-only commit to re-run CI on this branch and
+  establish whether the reporter failure is transient or structural.** Deliberately
+  a `.md`-only change so it is review-neutral and cannot itself alter the result.
+  The branch is 22 commits behind `develop`, so this tests the same code that
+  failed before — which is the point: it isolates the reporter from any code drift.
