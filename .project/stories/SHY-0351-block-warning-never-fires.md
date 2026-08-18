@@ -392,3 +392,46 @@ Against the **real** local emulator stack, per the real-only rule.
 - **2026-08-19 — STILL OWED: the iOS device leg**, and the journey scenario
   named in the Test Plan. Android is proven; iOS is not, so this is **not**
   ready for `In Review`.
+
+- **2026-08-19 06:1x WIB — proven on the REAL dev backend, not only locally.**
+  The branch was deployed to dev via Deploy-To-Dev with `ref` set to this branch
+  and the areas **scoped to what actually changed** — backend + both apps, with
+  **web deliberately off**, which the run confirms (`Deploy Web to Dev: skipped`).
+
+  Endpoint reachability first: `POST /api/users/blocked-by` on
+  `dev-api.shytalk.shyden.co.uk` answers **401, not 404** — mounted and
+  auth-gated. Then end-to-end with a real persona token (Identity Toolkit
+  `signInWithPassword`, the canonical journey-auth path — no OAuth, no faked
+  auth):
+
+  ```
+  me=50000050 (adult)  blocker=50000051  innocent=50000060
+  HTTP 200
+  blockedBy    : ["50000051"]
+  response keys: ["blockedBy"]
+  ```
+
+  The block was written as a **number** on dev too, so the dev tier exercises the
+  same type case that was previously discarded. The non-blocker is excluded and
+  the response carries nothing but the id list. Persona state was **restored**
+  afterwards to its prior value rather than left dirty.
+
+- **2026-08-19 — a real infrastructure defect surfaced while doing this, and it
+  is NOT this story's.** The deploy's persona-seed job failed, as it has been
+  doing for some time — the `deploy-dev.yml` source itself notes *"five of the
+  last eight dev deploys ran with a failing seed job"*. Root-caused rather than
+  worked around:
+
+  **`main`'s copy of `seed-dev-personas.yml` references `secrets.PERSONAS_PASSWORD_DEV`;
+  the secret was renamed to `DEV_QA_PERSONAS_PASSWORD`.** develop's copy was
+  updated, main's never was, and main also predates the SHY-0269 guard step — so
+  the run gets all the way to the provision script and dies with an opaque
+  `MISSING_ENV — set PERSONAS_PASSWORD`, which reads like a missing secret rather
+  than a wrong NAME. `gh workflow run` defaults to the default branch, so the
+  documented "quick re-seed between journey runs" is exactly the broken path.
+
+  Proven both ways, same workflow, minutes apart: default ref → the guard step is
+  absent and the run **fails**; `--ref develop` → guard present and passing, run
+  **succeeds**. Dev personas are now freshly seeded as a result, which is what
+  made the dev proof above possible. No new work is needed — develop is already
+  correct and rides to main on the next promotion.
