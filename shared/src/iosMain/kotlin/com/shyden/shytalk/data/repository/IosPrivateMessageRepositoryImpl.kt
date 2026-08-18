@@ -11,8 +11,8 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.encodeUrlQueryComponent
-import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
@@ -23,9 +23,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 private const val TAG = "PMRepository"
 
