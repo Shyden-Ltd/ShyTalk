@@ -14,6 +14,11 @@
  * `not implemented yet` lines and still not fail on them.
  *
  * A pass has to mean the action happened.
+ *
+ * No test doubles: `executeStep` takes its drivers through `ctx`, so a plain
+ * async function IS the injected dependency the dispatcher is documented to
+ * take — nothing is standing in for a real collaborator. That also keeps this
+ * file honest against the no-new-stubs ratchet without needing an exemption.
  */
 
 const fs = require('fs');
@@ -31,7 +36,7 @@ function makeCtx(overrides = {}) {
     personaPlatforms: new Map(),
     personaPaths: new Map(),
     locale: 'en',
-    fetch: jest.fn(),
+    fetch: async () => ({}),
     ...overrides,
   };
 }
@@ -46,8 +51,8 @@ const DUMP_WITH_TAG = '<node resource-id="signin_signUpLink" bounds="[0,0][100,1
 function tapCtx(tapImpl) {
   return makeCtx({
     uiDriver: {
-      androidUiDump: jest.fn(async () => DUMP_WITH_TAG),
-      androidTap: jest.fn(tapImpl),
+      androidUiDump: async () => DUMP_WITH_TAG,
+      androidTap: tapImpl,
     },
   });
 }
