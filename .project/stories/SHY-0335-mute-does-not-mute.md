@@ -53,7 +53,6 @@ short of leaving the room.
 - [ ] Muting before the room has finished connecting is honoured once connected — it must not be dropped.
 - [ ] Backgrounding and foregrounding the app preserves the mute state.
 - [ ] Rapidly toggling mute settles on the final requested state, with no stuck intermediate.
-- [ ] A user muted by a moderator cannot unmute themselves around it.
 
 ### Performance
 
@@ -65,7 +64,7 @@ short of leaving the room.
 
 ### UX
 
-- [ ] The muted state is unmistakable at a glance, and distinguishable from "connecting" and from "moderator-muted".
+- [ ] The muted state is unmistakable at a glance, and distinguishable from "connecting".
 - [ ] Verified on real devices at the smallest supported resolution.
 
 ### i18n
@@ -107,7 +106,6 @@ before a failing test names the defect.
 - `unmute republishes`
 - `a failed mute request leaves the UI state UNMUTED and surfaces the error`
 - `mute requested before connect is applied once connected`
-- `moderator mute cannot be cleared by the participant`
 
 ### Express/Jest — `express-api/tests/routes/`
 
@@ -132,6 +130,13 @@ before a failing test names the defect.
 
 ## Out of Scope
 
+- **Making a moderator's mute stick — SHY-0340.** This story restores the
+  ability to silence yourself. It deliberately does NOT change who may
+  UNMUTE a seat, because doing so needs a field that does not exist:
+  `seats.{i}.isMuted` is a bare boolean, so the server cannot tell a
+  self-mute from a moderator's force-mute and has nothing to gate an
+  unmute on. That is a data-model change with its own migration, its own
+  client surface and its own safety argument, so it is its own story.
 - Push-to-talk, per-participant volume, and any change to the moderator mute UX.
 - Room-join latency — its own story.
 
@@ -199,3 +204,15 @@ before a failing test names the defect.
 
 - **2026-08-18** — STILL OWED: walking both scenarios on real Android + real
   iPhone, local then dev. Not done, so this is NOT ready for In Review.
+
+- **2026-08-18** — **Scope carved out to SHY-0340.** This story carried an AC
+  bullet, a UX bullet and a named test asserting that a moderator's mute cannot
+  be cleared by the participant. Reading the unmute branch showed that is not a
+  test this story can write: the seat model is `seats.{i}.isMuted`, a bare
+  boolean, with no `mutedBy` anywhere in `express-api/src` (grepped). So the
+  server cannot distinguish a self-mute from a force-mute, and the unmute rule
+  is unconditionally "the occupant may unmute" —
+  `room-mutations.js` `else if (!isSelf)`. Leaving the bullet here would have
+  meant either an AC that can never be ticked, or a "fix" that widened this
+  story into a data-model migration mid-flight. Moved WHOLE to SHY-0340 (P0),
+  where it gets its own migration, client surface and safety argument.
