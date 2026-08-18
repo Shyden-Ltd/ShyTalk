@@ -29,7 +29,13 @@ Verified in the tree, not assumed:
 | Age collection | `dateOfBirth` on the user record; per-feature thresholds (SHY-0060) |
 | Reporting / moderation | `feature/report`, warnings, suspensions, room moderation |
 
-**No cash-out exists.** No transfer, withdrawal or payout endpoint — checked.
+**No cash-out exists.** No endpoint converts in-app value back into money —
+no withdrawal, payout or cash-out route exists anywhere in `express-api/src`
+(grepped). Value *does* move between users — `/economy/gift`, `/economy/gift-direct`,
+`/economy/gift-batch`, `/economy/backpack-send` — and that is deliberate and
+separate: it is in-app value moving in-app, and it is one of the questions the
+stores actually ask, so it is stated rather than glossed. What does not exist is
+a route out.
 Winnings stay inside the app. This is the single most important fact on the
 sheet: it keeps the Lucky Spin on the *simulated gambling* side of the line
 rather than the real-money-gambling side, which in Indonesia especially is a

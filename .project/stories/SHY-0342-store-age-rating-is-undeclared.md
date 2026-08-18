@@ -243,3 +243,24 @@ runtime surface changes → no device gauntlet for this change itself.
   Status moves to `In Review` because the work product is complete and awaiting
   exactly that review. It does not move to Done until a rating is actually
   declared.
+
+- **2026-08-19 — self-review of the answer sheet (not an agent review, and
+  labelled as such).** Claims were spot-checked against the tree rather than
+  taken on trust, since the sheet's whole argument rests on them:
+
+  - **"No cash-out exists"** — confirmed. Grepped `express-api/src/routes` for
+    withdraw / payout / cashout / transfer routes: **none**. The economy surface
+    is `daily-reward`, `gacha`, `gift`, `gift-direct`, `gift-batch`,
+    `backpack-send`, `redeem-beans`, `purchase`, `trial-claim`,
+    `trial-activate`, `test-coins`, `balance`. Nothing converts value back to
+    money.
+  - **One wording fix applied.** The sheet said "No transfer, withdrawal or
+    payout endpoint", which reads as contradicting its own gifting rows —
+    `gift-direct`, `gift-batch` and `backpack-send` *are* transfers of in-app
+    value between users. On a document that may inform a store or legal
+    position, that imprecision is worth removing: it now says no endpoint
+    converts in-app value back into money, and states the in-app transfers
+    explicitly, because that is a question the stores actually ask.
+  - `/economy/redeem-beans` and `/economy/purchase` both exist as cited.
+
+  Reviewed-up-to: b656fc2590b
