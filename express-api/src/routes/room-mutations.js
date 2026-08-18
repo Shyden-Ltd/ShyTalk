@@ -308,12 +308,27 @@ router.patch('/rooms/:roomId/seats/:seatIndex/mute', async (req, res) => {
     if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     const seat = (room.seats || {})[String(seatIndex)] || {};
     if (!seat.userId) return { status: 409, body: { error: 'Seat is empty' } };
-    if (isMuted) {
-      // Force-mute: moderator gate (owner/host, not owner/other-host, not already muted).
+    const isSelf = String(seat.userId) === String(callerId);
+    if (isMuted && !isSelf) {
+      // Force-mute SOMEONE ELSE: moderator gate (owner/host, not owner/other-host,
+      // not already muted).
       if (!canForceMute(room, callerId, seatIndex)) {
         return { status: 403, body: { error: 'Not allowed to mute this seat' } };
       }
-    } else if (String(seat.userId) !== callerId) {
+    } else if (isMuted) {
+      // SELF-mute (SHY-0335). There was no branch for this: muting yourself was
+      // judged by canForceMute, the MODERATOR gate, which returns false for an
+      // attendee, false for the owner's own seat, and false for an
+      // already-muted seat. So an ordinary user muting themselves got 403, the
+      // client correctly declined to disable the mic on a failed write, and the
+      // microphone stayed open — while the UI had asked to be muted.
+      //
+      // Anyone may silence themselves, unconditionally. It is a safety control,
+      // not a privilege: there is no room state in which a person must keep
+      // transmitting. Muting when already muted is a no-op success, not a 403,
+      // so a client retrying after a dropped response is not told it is
+      // forbidden.
+    } else if (!isSelf) {
       // Unmute: only the seat's own occupant may unmute themselves.
       return { status: 403, body: { error: 'Only the occupant can unmute' } };
     }

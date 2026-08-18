@@ -547,6 +547,88 @@ describe('PATCH /api/rooms/:roomId/seats/:seatIndex/mute', () => {
     );
   });
 
+  // ── Self-mute (SHY-0335) ─────────────────────────────────────────
+  //
+  // The endpoint had TWO authorisation paths: `isMuted: true` went through
+  // canForceMute() — the MODERATOR gate — and `isMuted: false` through the
+  // self-unmute check. There was no branch for a user muting THEMSELVES, so an
+  // attendee doing so was judged by the moderator gate and got 403. The client
+  // is correct: RoomViewModel only disables the mic on Resource.Success, so on
+  // that 403 the microphone was never disabled — "mute does not mute, the mic
+  // stays open permanently".
+  //
+  // The suite tested force-mute and self-UNMUTE but never self-MUTE, which is
+  // why it shipped.
+
+  test('200 an attendee mutes THEMSELVES', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(88))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.4.isMuted': true }),
+    );
+  });
+
+  test('200 the OWNER mutes themselves', async () => {
+    // canForceMute returns false for the owner's own seat (it exists to stop
+    // moderators muting the owner), so the owner could not mute themselves
+    // either — the person most likely to be hosting and needing to cough.
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({ ownerId: '1', seats: { 2: { userId: '1', state: 'OCCUPIED', isMuted: false } } }),
+      ),
+    );
+    const res = await request(createApp(1))
+      .patch('/api/rooms/room-1/seats/2/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+  });
+
+  test('200 a HOST mutes themselves', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          hostIds: ['77'],
+          seats: { 5: { userId: '77', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(77))
+      .patch('/api/rooms/room-1/seats/5/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+  });
+
+  test('403 an attendee still cannot mute SOMEONE ELSE', async () => {
+    // The fix must not widen force-mute. Self-mute is allowed BECAUSE it is
+    // self; muting another seat still requires the moderator gate.
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(99))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(403);
+  });
+
+  test('200 muting again when already muted is not an error', async () => {
+    // canForceMute refuses an already-muted seat, which is right for a
+    // moderator but wrong for the occupant: a client retrying after a dropped
+    // response must not be told it is forbidden.
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: true } } })),
+    );
+    const res = await request(createApp(88))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+  });
+
   test('403 when a non-occupant tries to unmute someone', async () => {
     mockTxnGet.mockResolvedValue(
       snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: true } } })),
