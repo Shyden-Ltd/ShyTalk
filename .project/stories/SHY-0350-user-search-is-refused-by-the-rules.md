@@ -234,3 +234,35 @@ new-message search and read `PERMISSION_DENIED … for 'list' @ L74` on screen.
 - **2026-08-19 — STILL OWED:** the Kotlin unit tests (`searching goes through
   the API, not Firestore`; the readable-error and empty-query cases), the
   journey scenarios, and the iOS device leg. Android is walked.
+
+- **2026-08-19 — the sweep this story recommended, done. It found exactly one
+  more.** Enumerated every client-side Firestore query with a filter and no
+  cohort constraint (24 sites), then cross-referenced against the rules that
+  actually gate on `cohortMatchesCaller()` — only four paths do:
+  `/users/{uniqueId}`, `/users/{uniqueId}/stalkers/{visitorId}`,
+  `/rooms/{roomId}` and `/giftRankings/{giftId}`.
+
+  | surface | verdict |
+  | --- | --- |
+  | `rooms` queries | **SAFE.** Every one includes `.whereEqualTo("cohort", cohort)`, which is precisely what makes a content-gated rule decidable for a query. This is the distinction: the room queries constrain the field the rule compares; search did not. |
+  | `giftRankings` | **SAFE.** Read via `firestore.document(...)`, a single-doc get — the engine evaluates the real document. |
+  | stalkers | covered by SHY-0338 |
+  | `users` — `getUsers` / search | fixed by SHY-0338 and this story |
+  | **`checkBlockedBy`** (`UserRepositoryImpl:315` / `IosUserRepositoryImpl:~205`) | **STILL BROKEN — the one the sweep found.** |
+
+- **2026-08-19 — `checkBlockedBy` has BOTH defects at once, unfixed.**
+  It runs `whereIn(FieldPath.documentId(), chunk)` on `users` with no cohort
+  constraint, so one member failing the gate denies the whole chunk — the
+  all-or-nothing refusal from SHY-0338. **And** it reads
+  `blockedUserIds` straight off the raw map with
+  `filterIsInstance<String>()`, so numerically-stored blocks are dropped —
+  the defect SHY-0338 fixed in `User.fromMap`, which this code bypasses by not
+  going through the model at all.
+
+  It answers "which of these people have blocked me", so both failure modes push
+  the same way: **it under-reports blocks.** On a minors-facing product that is
+  the wrong direction to be wrong in.
+
+  Deliberately NOT fixed in this PR — it is a different function on a different
+  concern, and this branch is already a search fix. Flagged here with the exact
+  sites so it is a filing decision rather than a rediscovery.
