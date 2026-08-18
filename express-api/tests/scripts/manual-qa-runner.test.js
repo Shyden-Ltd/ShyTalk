@@ -920,6 +920,64 @@ describe('Firestore doc-field equal-to matcher', () => {
     expect(r.ok).toBe(true);
   });
 
+  test('resolves a NESTED field path — the corpus asserts on seats.N.isMuted', async () => {
+    // Before SHY-0335 the handler did a FLAT `snap.data()?.[field]`, looking for
+    // a top-level key literally named "seats.1.isMuted". That never exists, so
+    // this assertion — and every other nested-path assertion in the journey
+    // corpus, including the j09 unmute scenario cited as existing coverage —
+    // was unconditionally false and could NEVER pass. The mirror image of
+    // SHY-0330's steps that always pass.
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'rooms/room-1': { seats: { 1: { isMuted: true, userId: '88' } } } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "rooms/room-1" with field "seats.1.isMuted" equal to true',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('a nested field that DRIFTS still fails — the fix is not vacuous', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'rooms/room-1': { seats: { 1: { isMuted: false } } } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "rooms/room-1" with field "seats.1.isMuted" equal to true',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  test('a nested path through a MISSING parent is undefined, not a crash', async () => {
+    const ctx = makeCtx({ db: makeFakeDb({ 'rooms/room-1': { state: 'OPEN' } }) });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "rooms/room-1" with field "seats.1.isMuted" equal to true',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  test('a TOP-LEVEL field still resolves exactly as before — no regression', async () => {
+    const ctx = makeCtx({ db: makeFakeDb({ 'users/50000010': { cohort: 'adult' } }) });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
   test('fails when string field drifts', async () => {
     const ctx = makeCtx({
       db: makeFakeDb({ 'users/50000010': { cohort: 'minor' } }),

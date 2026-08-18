@@ -73,7 +73,7 @@ Feature: j09 — Theo hosts a public voice room
   Scenario: Ines unmutes her mic — Firestore + both UIs reflect the open mic
     Given Ines is seated in Theo's room with publish permission
     When Ines on iOS Sim taps "room_micToggleButton"
-    Then within 2000ms the database has document "rooms/{roomId}" with field "seats[1].muted" equal to false
+    Then within 2000ms the database has document "rooms/{roomId}" with field "seats.1.isMuted" equal to false
     Then within 2000ms Ines's iOS Sim UI shows mic icon as "open"
     Then within 3000ms Theo's Android UI shows Ines's seat with mic-on indicator
 
@@ -90,7 +90,7 @@ Feature: j09 — Theo hosts a public voice room
     # the other participant's view are what make this real.
     Given Ines is seated and unmuted in Theo's room
     When Ines on iOS Sim taps "room_micToggleButton"
-    Then within 2000ms the database has document "rooms/{roomId}" with field "seats[1].muted" equal to true
+    Then within 2000ms the database has document "rooms/{roomId}" with field "seats.1.isMuted" equal to true
     Then within 3000ms Theo's Android UI shows Ines's seat with mic-off indicator
     Then within 2000ms Ines's iOS Sim UI shows mic icon as "muted"
 
@@ -102,7 +102,7 @@ Feature: j09 — Theo hosts a public voice room
     # cough.
     Given Ines is seated and unmuted in Theo's room
     When Theo on Android taps "room_micToggleButton"
-    Then within 2000ms the database has document "rooms/{roomId}" with field "seats[0].muted" equal to true
+    Then within 2000ms the database has document "rooms/{roomId}" with field "seats.0.isMuted" equal to true
     Then within 3000ms Ines's iOS Sim UI shows Theo's seat with mic-off indicator
 
   @manual @android-physical @ios-sim

@@ -322,6 +322,30 @@ async function clearCrossCohortFollowsForUserDoc(db, uniqueId, newCohort) {
 //      sign-in matchers — so a future persona rename doesn't require
 //      updating Givens.
 
+/**
+ * Read a Firestore field by DOT PATH — `seats.1.isMuted`, not just `cohort`.
+ *
+ * Every field assertion previously did `snap.data()?.[field]`, a FLAT read: it
+ * looked for a top-level property literally named "seats.1.isMuted", which
+ * never exists, because the value is nested at data.seats["1"].isMuted. So
+ * every nested-path assertion in the journey corpus was unconditionally false
+ * and could NEVER pass — including the j09 unmute scenario that had been cited
+ * as existing coverage (SHY-0335).
+ *
+ * The mirror image of SHY-0330: that story found steps that always PASS; these
+ * were assertions that can never pass. Both make the matrix meaningless, from
+ * opposite directions.
+ *
+ * A walk rather than the Admin SDK's `snap.get()`, so the behaviour is the same
+ * for any snapshot shape and is directly unit-testable without a live client.
+ * Identical to the old behaviour for a top-level key.
+ */
+function fieldAtPath(data, fieldPath) {
+  return String(fieldPath)
+    .split('.')
+    .reduce((acc, key) => (acc === null || acc === undefined ? undefined : acc[key]), data);
+}
+
 function roomIdFromTitle(title) {
   // Slug: lowercase, replace non-alphanum with `-`, collapse + trim, cap
   // at 64 chars (Firestore doc IDs prefer short stable strings + this
@@ -1923,7 +1947,19 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      // fieldAtPath(snap.data(), field), NOT snap.data()?.[field] (SHY-0335). The flat read
+      // looked for a TOP-LEVEL property literally named e.g. "seats.1.isMuted",
+      // which never exists — the value is nested at data.seats["1"].isMuted.
+      // Every nested-path assertion in the journey corpus was therefore
+      // unconditionally false and could NEVER pass, including the j09 unmute
+      // scenario cited elsewhere as existing coverage.
+      //
+      // This is the mirror image of SHY-0330: that story found steps that
+      // always PASS; these are assertions that can never pass. Both make the
+      // matrix meaningless. Swept across all sites rather than the one this
+      // story needed — get() is the Admin SDK dot-path accessor and behaves
+      // identically for a top-level key, so it is a strict superset.
+      const actual = fieldAtPath(snap.data(), field);
       if (actual !== expected) {
         return {
           ok: false,
@@ -1944,7 +1980,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (!Array.isArray(actual)) {
         return {
           ok: false,
@@ -1974,7 +2010,7 @@ const matchers = [
       const needle = parseLiteral(m[3].trim());
       const snap = await ctx.db.doc(docPath).get();
       if (!snap.exists) return { ok: true }; // vacuous-true
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (!Array.isArray(actual)) return { ok: true }; // no array to contain N
       if (actual.includes(needle)) {
         return {
@@ -2000,7 +2036,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (actual === undefined) {
         return { ok: false, error: `field "${field}" on "${docPath}" is missing` };
       }
@@ -2046,7 +2082,7 @@ const matchers = [
           error: `document "${docPath}" does not exist (had snapshot ${baseline})`,
         };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (actual !== baseline) {
         return {
           ok: false,
@@ -2085,7 +2121,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (typeof actual !== 'number') {
         return {
           ok: false,
@@ -2214,7 +2250,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (typeof actual !== 'number') {
         return {
           ok: false,
@@ -5135,7 +5171,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `user doc "users/${p.uniqueId}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       const pass = (() => {
         switch (op) {
           case '<':
@@ -5179,7 +5215,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (rawValue.startsWith('[') && rawValue.endsWith(']')) {
         const inner = rawValue.slice(1, -1).trim();
         const expected =
@@ -5443,7 +5479,7 @@ const matchers = [
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
       const snap = await ctx.db.collection(collection).get();
       const offenders = snap.docs.filter((d) => {
-        const f = d.data()?.[field];
+        const f = fieldAtPath(d.data(), field);
         if (Array.isArray(f)) return f.includes(value);
         return f === value;
       });
@@ -6708,7 +6744,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `document "${docPath}" does not exist` };
       }
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       // Field-name duality for the OSA-freeze pair — see Wake 90 matcher
       // comment above. Mirrors probeOsaInvariants' `isFrozen` predicate.
       const data = snap.data() || {};
@@ -13243,7 +13279,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `doc "${docPath}" does not exist` };
       }
-      const current = snap.data()?.[field];
+      const current = fieldAtPath(snap.data(), field);
       const expected = baseline - delta;
       if (current !== expected) {
         return {
@@ -13268,7 +13304,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `doc "${docPath}" does not exist` };
       }
-      const actual = typeof snap.data()?.[field];
+      const actual = typeof fieldAtPath(snap.data(), field);
       if (actual !== expected) {
         return {
           ok: false,
@@ -13291,7 +13327,7 @@ const matchers = [
       if (!snap.exists) {
         return { ok: false, error: `doc "${docPath}" does not exist` };
       }
-      const value = snap.data()?.[field];
+      const value = fieldAtPath(snap.data(), field);
       if (!Array.isArray(value)) {
         return {
           ok: false,
@@ -14300,7 +14336,7 @@ const matchers = [
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
       const snap = await ctx.db.doc(docPath).get();
       if (!snap.exists) return { ok: false, error: `doc "${docPath}" does not exist` };
-      const actual = snap.data()?.[field];
+      const actual = fieldAtPath(snap.data(), field);
       if (typeof actual !== 'number') {
         return {
           ok: false,
@@ -16426,6 +16462,7 @@ module.exports = {
   decodeJwtPayload,
   pickField,
   parseLiteral,
+  fieldAtPath,
   parseKvPairs,
   parseJsonishPredicate,
   probeOsaInvariants,
