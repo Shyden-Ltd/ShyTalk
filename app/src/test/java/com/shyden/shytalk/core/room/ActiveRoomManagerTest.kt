@@ -515,6 +515,54 @@ class ActiveRoomManagerTest {
         }
 
     @Test
+    fun `toggleSelfMute - a successful UNMUTE republishes (SHY-0335)`() =
+        runTest {
+            // The mute direction had four tests; the unmute direction had only
+            // refusals — "rejects unmute when voice not connected". Nothing
+            // asserted that a PERMITTED unmute actually reopens the mic, so the
+            // honour-the-write change could have broken reopening and every
+            // test would still have passed. This is the mirror of
+            // `toggles mute state for own seat`, and the direction where a
+            // regression is silent: the user taps unmute, the write succeeds,
+            // and they keep talking to nobody.
+            manager.trackRoom("room-1")
+            val seats = TestData.createDefaultSeats().toMutableMap()
+            seats["3"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+            val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
+            manager.updateTrackedRoom(room)
+            connectionStateFlow.value = VoiceConnectionState.CONNECTED
+            coEvery { roomRepository.toggleMute(any(), any(), any()) } returns Resource.Success(Unit)
+
+            manager.toggleSelfMute(3)
+
+            coVerify { roomRepository.toggleMute("room-1", 3, false) }
+            verify { voiceService.setMicrophoneEnabled(true) }
+        }
+
+    @Test
+    fun `toggleSelfMute - a FAILED UNMUTE leaves the mic CLOSED (SHY-0335)`() =
+        runTest {
+            // The dangerous half of the discarded-Resource bug. On a failed
+            // MUTE the old code closed a mic that should have stayed open —
+            // annoying. On a failed UNMUTE it opened a mic the server had just
+            // refused to unmute, with no confirmation of any kind. The failure
+            // direction has to be silence.
+            manager.trackRoom("room-1")
+            val seats = TestData.createDefaultSeats().toMutableMap()
+            seats["3"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+            val room = TestData.createTestRoom(ownerId = "owner", seats = seats)
+            manager.updateTrackedRoom(room)
+            connectionStateFlow.value = VoiceConnectionState.CONNECTED
+            coEvery { roomRepository.toggleMute(any(), any(), any()) } returns
+                Resource.Error("Only the occupant can unmute")
+
+            manager.toggleSelfMute(3)
+
+            coVerify { roomRepository.toggleMute("room-1", 3, false) }
+            verify(exactly = 0) { voiceService.setMicrophoneEnabled(any()) }
+        }
+
+    @Test
     fun `toggleSelfMute - a FAILED write must not change the mic (SHY-0335)`() =
         runTest {
             // This path discarded the Resource entirely and called
