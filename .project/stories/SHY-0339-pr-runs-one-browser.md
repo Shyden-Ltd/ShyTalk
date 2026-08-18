@@ -10,7 +10,7 @@ roadmap_ids: []
 mvp: false
 ---
 
-# SHY-0339: Every PR waits on five browser suites to learn what one would tell it
+# SHY-0339: CI runs test suites that the change cannot possibly affect
 
 ## User Story
 
@@ -47,6 +47,8 @@ whole purpose is to find it.
 ### Happy path
 
 - [ ] A PR runs the web suite on chromium only.
+- [ ] A change confined to `express-api/tests/**` runs the backend suite but does NOT force the client matrix.
+- [ ] A change to backend RUNTIME code still forces the full client matrix, exactly as today.
 - [ ] A scheduled nightly run exercises all five projects on develop.
 - [ ] The release path still runs all five before anything reaches production.
 
@@ -159,3 +161,21 @@ No app, backend or website runtime surface → **CI-config-only**.
 - **2026-08-18** — Checked BEFORE proposing the cut: there is no scheduled
   browser run anywhere in the repo, so removing four projects from PRs without
   adding a nightly would have deleted that coverage rather than moved it.
+
+- **2026-08-18** — Operator: *"you also need to be smart when to run certain test
+  suites. for example, a story edit does not require you to run the full
+  playwright suite. no functionality was changed."*
+
+  Investigating that found the real cause, which was not the story file. Story
+  edits ARE already excluded (`.project/*` and `*.md` set no flags). But
+  `detect-changes` classifies the WHOLE PR diff, and this PR contained
+  `express-api/tests/scripts/...`, which matched the generic `express-api/*` arm
+  and set `BACKEND=true` — which the SHY-0127 rule reads as "the shared core
+  changed, retest every client", forcing five browser suites and the device
+  matrix and overriding the E2E skip markers.
+
+  So five browser suites ran because a TEST file changed. Operator approved
+  narrowing the rule to runtime paths only; `express-api/tests/**` now sets its
+  own flag. Deliberately narrow — src, scripts, package.json and the rules files
+  keep the full forcing, because a dependency or config change genuinely can
+  reach a client. CLAUDE.md updated so the documented rule and the code agree.

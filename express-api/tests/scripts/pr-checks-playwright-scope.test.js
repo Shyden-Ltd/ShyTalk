@@ -81,4 +81,45 @@ describe('per-PR browser scope (SHY-0339)', () => {
   test('the nightly runs against develop, the integration branch', () => {
     expect(read('playwright-nightly.yml')).toMatch(/develop/);
   });
+
+  // ── A test-file edit must not retest every client (SHY-0339) ────────
+
+  const prChecks = read('pr-checks.yml');
+
+  test('express-api/tests is routed AWAY from the shared-core forcing rule', () => {
+    // The SHY-0127 rule reads BACKEND as "the shared core changed, retest every
+    // client" and forces APP/ANDROID/IOS/WEB/INTEGRATION on while clearing the
+    // E2E skip markers. A file under express-api/tests/** is never shipped to a
+    // client and cannot cause a client regression, so it must not set BACKEND.
+    expect(prChecks).toMatch(/express-api\/tests\/\*\)\s*BACKEND_TESTS=true/);
+  });
+
+  test('the tests arm is matched BEFORE the generic express-api arm', () => {
+    // shell `case` is first-match. Placed after, it would never fire.
+    const testsAt = prChecks.indexOf('express-api/tests/*)');
+    const genericAt = prChecks.indexOf('express-api/*|firestore.rules');
+    expect(testsAt).toBeGreaterThan(-1);
+    expect(genericAt).toBeGreaterThan(-1);
+    expect(testsAt).toBeLessThan(genericAt);
+  });
+
+  test('a tests-only change STILL runs the backend suite', () => {
+    // Narrowing must not become skipping: the tests themselves have to run.
+    expect(prChecks).toMatch(/test-backend:[\s\S]{0,600}?backend_tests_changed == 'true'/);
+  });
+
+  test('a tests-only change is NOT classified as workflow-only', () => {
+    // workflow_only gates several jobs; letting a tests-only PR claim it would
+    // fix one silent skip by introducing another — the SHY-0284 lesson.
+    expect(prChecks).toMatch(/BACKEND_TESTS" = "false"/);
+  });
+
+  test('runtime backend paths STILL force the full client matrix', () => {
+    // The narrowing is deliberately only tests/. src, scripts, package.json and
+    // the rules files keep BACKEND=true, because a dependency or config change
+    // genuinely can reach a client.
+    expect(prChecks).toMatch(
+      /express-api\/\*\|firestore\.rules\|database\.rules\.json\)\s*BACKEND=true/,
+    );
+  });
 });
