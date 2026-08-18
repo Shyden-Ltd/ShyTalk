@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.tasks.await
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val TAG = "UserRepository"
@@ -284,36 +285,13 @@ class UserRepositoryImpl(
                 .await()
         }
 
-    override suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>> {
+    override suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>> {
         if (userIds.isEmpty()) return Resource.Success(emptySet())
         return firebaseCall("Failed to check blocks") {
-            userIds
-                .chunked(30)
-                .flatMap { chunk ->
-                    try {
-                        val snapshot =
-                            firestore
-                                .collection("users")
-                                .whereIn(FieldPath.documentId(), chunk)
-                                .get()
-                                .await()
-                        snapshot.documents.mapNotNull { doc ->
-                            val data = doc.data ?: return@mapNotNull null
-                            val blockedIds =
-                                (data["blockedUserIds"] as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList()
-                            if (targetUserId in blockedIds) doc.id else null
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to batch-check blocks for ${chunk.size} users", e)
-                        emptyList()
-                    }
-                }.toSet()
+            val body = JSONObject().put("userIds", JSONArray(userIds))
+            val json = api.post("/api/users/blocked-by", body)
+            val ids = json.optJSONArray("blockedBy") ?: JSONArray()
+            (0 until ids.length()).mapNotNull { ids.optString(it).ifEmpty { null } }.toSet()
         }
     }
 

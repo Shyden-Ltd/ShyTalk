@@ -143,33 +143,15 @@ class IosUserRepositoryImpl(
             data["warningReason"] as? String
         }
 
-    override suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>> {
+    override suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>> {
         if (userIds.isEmpty()) return Resource.Success(emptySet())
         return firebaseCall("Failed to check blocks") {
-            userIds
-                .chunked(30)
-                .flatMap { chunk ->
-                    try {
-                        val snapshot =
-                            firestore
-                                .collection("users")
-                                .where { FieldPath.documentId inArray chunk }
-                                .get()
-                        snapshot.documents.mapNotNull { doc ->
-                            val data = doc.dataMap()
-                            val blockedIds =
-                                (data["blockedUserIds"] as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList()
-                            if (targetUserId in blockedIds) doc.id else null
-                        }
-                    } catch (e: Exception) {
-                        logW(TAG, "Failed to batch-check blocks for ${chunk.size} users")
-                        emptyList()
-                    }
-                }.toSet()
+            val body = JsonObject(mapOf("userIds" to JsonArray(userIds.map { JsonPrimitive(it) })))
+            val response = api.post("/api/users/blocked-by", body)
+            (response["blockedBy"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.content }
+                ?.toSet()
+                ?: emptySet()
         }
     }
 
