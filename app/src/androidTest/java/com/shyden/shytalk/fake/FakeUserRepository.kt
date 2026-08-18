@@ -1,6 +1,5 @@
 package com.shyden.shytalk.fake
 
-import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.PmLockCheckResult
@@ -122,7 +121,8 @@ class FakeUserRepository : UserRepository {
         visitorId: String,
     ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> = Resource.Success(emptyList())
+    override suspend fun getStalkers(profileUserId: String): Resource<UserRepository.StalkerPage> =
+        Resource.Success(UserRepository.StalkerPage())
 
     override suspend fun markStalkersViewed(userId: String): Resource<Unit> = Resource.Success(Unit)
 
