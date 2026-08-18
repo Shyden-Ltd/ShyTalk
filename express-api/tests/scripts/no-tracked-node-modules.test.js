@@ -24,8 +24,8 @@
  */
 
 const { execFileSync } = require('node:child_process');
-const { existsSync, readFileSync } = require('node:fs');
-const { join } = require('node:path');
+const { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } = require('node:fs');
+const { join, relative } = require('node:path');
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 
@@ -53,13 +53,17 @@ function git(args) {
 
 /** Every path git currently tracks that mentions node_modules. */
 function trackedNodeModulesPaths() {
-  return git(['ls-files'])
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0)
-    .filter(
-      (l) => l === 'node_modules' || l.includes('/node_modules') || l.startsWith('node_modules/'),
-    );
+  return (
+    git(['ls-files'])
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+      // Segment-anchored. `l.includes('/node_modules')` looked equivalent and was
+      // not: it also matches `docs/node_modules-policy.md`, so a perfectly
+      // legitimate future filename would have failed CI with a confusing message
+      // about tracked node_modules.
+      .filter((l) => l.split('/').includes('node_modules'))
+  );
 }
 
 describe('SHY-0346 — node_modules is never tracked', () => {
@@ -78,12 +82,43 @@ describe('SHY-0346 — node_modules is never tracked', () => {
     expect(ignore).toContain('node_modules');
   });
 
-  test('git actually ignores a node_modules SYMLINK, not just a directory', () => {
-    // Asserts the behaviour rather than the text: `check-ignore` answers the
-    // real question — would git ignore this path if it appeared? A rule that
-    // reads correctly but does not match is the failure mode being guarded.
-    const out = git(['check-ignore', '-v', 'node_modules', 'express-api/node_modules']);
-    expect(out).toMatch(/node_modules/);
-    expect(out.split('\n').filter((l) => l.trim()).length).toBe(2);
+  test('git ignores a real node_modules SYMLINK, not just a directory', () => {
+    // REWRITTEN after review. The first version asked `check-ignore` about
+    // `node_modules` and `express-api/node_modules` — which exist as real
+    // DIRECTORIES on every dev machine and in CI (the job runs `npm ci` right
+    // before this suite). A trailing-slash pattern needs the path to resolve to
+    // `DT_DIR`, and a directory always does, so the OLD rule matched them
+    // already. The test could not tell fixed from reverted, while its name
+    // claimed to prove exactly that distinction.
+    //
+    // The mutation recorded in the story was misleading for the same reason:
+    // `git add -f node_modules` reddened it because `check-ignore` reports a
+    // TRACKED path as not-ignored, nothing to do with symlinks.
+    //
+    // This creates an actual `mode 120000` object, the only thing that
+    // reproduces the defect.
+    const fixtureDir = join(__dirname, '.tmp-shy0346-symlink-fixture');
+    const link = join(fixtureDir, 'node_modules');
+    mkdirSync(fixtureDir, { recursive: true });
+    try {
+      symlinkSync(REPO_ROOT, link, 'dir');
+      // Non-empty output means git would ignore it. Against the pre-fix
+      // `.gitignore` this is EMPTY, because a dir-only rule skips a symlink.
+      expect(git(['check-ignore', '-v', relative(REPO_ROOT, link)]).trim()).not.toBe('');
+    } finally {
+      rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
+  test('a node_modules nested several levels deep is ignored too', () => {
+    // The AC says "at any depth"; every other case only reaches depth 1.
+    const root = join(__dirname, '.tmp-shy0346-deep');
+    const deep = join(root, 'a', 'b', 'node_modules');
+    mkdirSync(deep, { recursive: true });
+    try {
+      expect(git(['check-ignore', '-v', relative(REPO_ROOT, deep)]).trim()).not.toBe('');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

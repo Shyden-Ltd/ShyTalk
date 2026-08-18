@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: []
 mvp: false
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1803
 ---
 
 # SHY-0346: Two symlinks into one developer's home directory are committed on develop
@@ -176,3 +177,39 @@ runtime surface → **CI-config-only**; no device gauntlet for this change.
 
 - **2026-08-19** — Mutation-proven: `git add -f node_modules` kills two of the
   three tests, and the tree was verified clean after reverting.
+
+- **2026-08-19 — review round 1: one Critical, and it was the important kind.**
+  The test named *"git actually ignores a node_modules SYMLINK, not just a
+  directory"* **never created a symlink.** It asked `check-ignore` about
+  `node_modules` and `express-api/node_modules`, which exist as real
+  DIRECTORIES on every dev machine and in CI (the job runs `npm ci` immediately
+  before this suite). A trailing-slash pattern applies once the path resolves to
+  `DT_DIR`, and a directory always does — so the OLD rule matched them already.
+  The test could not tell fixed from reverted, while its name claimed to prove
+  exactly that distinction.
+
+  **The mutation I recorded was misleading for the same reason.** `git add -f
+  node_modules` reddened it because `check-ignore` reports a TRACKED path as
+  not-ignored — nothing to do with symlinks. I had proof of the wrong thing.
+
+  Rewritten to create an actual `mode 120000` object in a temp fixture.
+  **Properly mutation-proven this time:** removing the slash-less rule from
+  `.gitignore` now reddens it. Before, it stayed green.
+
+- **2026-08-19 — three further findings applied.**
+  - `l.includes('/node_modules')` was not segment-anchored, so a legitimate
+    future file called `docs/node_modules-policy.md` would have failed CI with a
+    confusing message. Now `l.split('/').includes('node_modules')`.
+  - Added a depth-3 case; every other assertion only reached depth 1, while the
+    AC says "at any depth".
+  - Removed `node_modules/`, `worker/node_modules/` and `worker-api/node_modules/`
+    — all subsumed by the bare rule, and three overlapping rules are an ordering
+    trap: move the bare one above them and the dir-only rule becomes
+    last-matching again, silently reopening this bug.
+  - Added the missing `pr:` frontmatter field.
+
+- **2026-08-19 — a mistake made while fixing this, worth recording.** A `cp`
+  ran from `express-api/` instead of the repo root and overwrote the root
+  `.gitignore` with the 4-line `express-api/.gitignore`. Caught immediately
+  because two tests went red, and restored with `git checkout --`. The tests
+  earned their keep on their own author.
