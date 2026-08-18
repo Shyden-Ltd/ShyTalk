@@ -294,3 +294,43 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   is still opening your profile, that is precisely what this screen exists to
   tell you. Hiding them would turn a safety surface into a blind spot. Say if
   you read it the other way.
+
+- **2026-08-19 — iOS DEVICE WALK DONE, on the real iPhone.** Sean's iPhone
+  (iPhone Air, iOS 27.0), driven with Appium/XCUITest per the proven recipe,
+  against the local stack over the LAN. Signed in as Alice (P-02 adult power),
+  `UID: 50000010 · adult`, route `follow_list/{userId}/{tab}`:
+
+  ```
+  Following (5)      Followers (6)      Stalkers (0)
+  [SEED] Lena (P-05 lapsed)
+  [SEED] Hayato (P-06 DOB mismatch)
+  [SEED] Theo (P-10 voice host)
+  [SEED] Layla (P-13 ar)
+  [SEED] Kenji (P-14 ja)
+  [SEED] Vexa (P-07 cross-cohort prober)
+  ```
+
+  **7 followers in Firestore, 6 rendered** — the legacy follower with no
+  `cohort` field is dropped on its own and the other six survive. Identical to
+  the Android result. Names asserted, not counts.
+
+- **2026-08-19 — what the iOS walk needed first.** It was blocked by two
+  problems that are not this story's:
+  1. **SHY-0345** (filed, PR #1804) — `Local.xcconfig` had no
+     `KOTLIN_FRAMEWORK_BUILD_TYPE`, so `Debug-Local` could not build at all.
+  2. **SHY-0275** (PR #1696, open) — the Local build hardcodes `localhost` and
+     the Firebase emulators bind `127.0.0.1`, so a physical iPhone cannot reach
+     the stack. #1696 plumbs a build-time `LOCAL_HOST` through Info.plist and
+     binds the emulators to `0.0.0.0`.
+
+  The walk was therefore run on a throwaway verification branch —
+  #1696 + this story's fix + SHY-0345 — built with `LOCAL_HOST=192.168.1.9`.
+  **That branch is never merged.** It exists only to prove this fix on real
+  hardware while #1696 is still in review. Recorded so the next reader knows
+  the evidence is real and how to reproduce it.
+
+- **2026-08-19 — a simulator was used briefly and that was WRONG.** The operator
+  caught it: verification is real-devices-only. The simulator was deleted and
+  the walk redone on the iPhone. Codified in
+  [[feedback-never-substitute-a-simulator-for-a-real-device]] — a blocked device
+  path means FIX THE BLOCKER, which is exactly what SHY-0345 turned out to be.
