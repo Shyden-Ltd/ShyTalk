@@ -420,13 +420,29 @@ describe('discovery primitives', () => {
     expect(invokesApt(body)).toBe(true);
   });
 
-  test('an unterminated quote does not swallow the rest of the line’s meaning', () => {
-    // Malformed YAML should not silently un-discover a site.
+  test('a genuinely unterminated quote keeps everything after it', () => {
+    // Round 5 caught that the previous version never reached the unterminated
+    // state: its `#` came BEFORE the stray quote, so the ordinary truncation
+    // path fired and the quote machine was never consulted — it passed
+    // identically under a naive split('#')[0]. Here the quote opens and never
+    // closes, so the `#` stays inside the string and the line survives whole.
+    // Malformed input must fail toward finding a spurious site, never toward
+    // silently losing a real one.
     const body = [
       '      - name: X',
-      '        run: npx playwright install-deps  # trailing "oops',
+      '        run: echo "never closes # not a real comment && npx playwright install-deps',
     ].join('\n');
     expect(invokesApt(body)).toBe(true);
+  });
+
+  test('the escape skip consumes EXACTLY the escaped character', () => {
+    // An over-skip (i += 2) survives every other quote test here, because in
+    // those fixtures it only eats an innocuous space. It shows up only with
+    // zero gap between the escaped quote and the real closing quote: the
+    // closer is swallowed too, the string never registers as closed, and the
+    // trailing comment is wrongly kept instead of stripped. Mutation-verified.
+    const line = '        run: echo "a\\"" # real comment';
+    expect(stripComments(line)).toBe('        run: echo "a\\"" ');
   });
 
   test('sitesInFile’s jobPrelude stops at the STEP, not at the end of the job', () => {

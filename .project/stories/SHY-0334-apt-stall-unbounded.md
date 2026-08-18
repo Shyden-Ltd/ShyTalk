@@ -1,6 +1,6 @@
 ---
 id: SHY-0334
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -57,42 +57,42 @@ avoidable by caching. (The cache keys are separately broken — see Out of Scope
 
 ### Happy path
 
-- [ ] A stalled mirror connection fails in ~30 s and is retried, rather than waited on indefinitely.
-- [ ] Every step that invokes apt via Playwright is preceded by the hardening action.
-- [ ] Every such step carries its own `timeout-minutes`, so even the bounded retry loop cannot consume a job budget.
+- [x] A stalled mirror connection fails in ~30 s and is retried, rather than waited on indefinitely.
+- [x] Every step that invokes apt via Playwright is preceded by the hardening action.
+- [x] Every such step carries its own `timeout-minutes`, so even the bounded retry loop cannot consume a job budget.
 
 ### Error paths
 
-- [ ] A genuinely unreachable mirror still fails the step — the wait is bounded, not removed.
-- [ ] Removing the hardening from any one site turns exactly one named test RED (mutation-proven).
-- [ ] Removing a step's `timeout-minutes` turns exactly one named test RED (mutation-proven).
+- [x] A genuinely unreachable mirror still fails the step — the wait is bounded, not removed.
+- [x] Removing the hardening from any one site turns exactly one named test RED (mutation-proven).
+- [x] Removing a step's `timeout-minutes` turns exactly one named test RED (mutation-proven).
 
 ### Edge cases
 
-- [ ] A NEW apt site added later is covered automatically — the test discovers sites rather than listing them.
-- [ ] `playwright install` WITHOUT `--with-deps` never touches apt and is correctly exempt.
-- [ ] The guard is not vacuous: it asserts at least one apt site exists, so deleting them all cannot make it pass trivially.
+- [x] A NEW apt site added later is covered automatically — the test discovers sites rather than listing them.
+- [x] `playwright install` WITHOUT `--with-deps` never touches apt and is correctly exempt.
+- [x] The guard is not vacuous: it asserts at least one apt site exists, so deleting them all cannot make it pass trivially.
 
 ### Performance
 
-- [ ] Retries make a transient blip cost ~30 s instead of failing the build; a healthy run is unchanged.
+- [x] Retries make a transient blip cost ~30 s instead of failing the build; a healthy run is unchanged.
 
 ### Security
 
-- [ ] N/A — bounds network waits. No credential, permission or package-source change. Mirrors are unchanged.
+- [x] N/A — bounds network waits. No credential, permission or package-source change. Mirrors are unchanged.
 
 ### UX
 
-- [ ] N/A — CI-internal. The developer-facing outcome is that a network blip stops presenting as a mysterious 2-hour cancellation.
+- [x] N/A — CI-internal. The developer-facing outcome is that a network blip stops presenting as a mysterious 2-hour cancellation.
 
 ### i18n
 
-- [ ] N/A — no user-facing strings.
+- [x] N/A — no user-facing strings.
 
 ### Observability
 
-- [ ] The applied config is echoed in the log, so a future reader can confirm the bound was actually in force.
-- [ ] The action's comment carries both measured incidents, so the next person meets evidence rather than a bare number.
+- [x] The applied config is echoed in the log, so a future reader can confirm the bound was actually in force.
+- [x] The action's comment carries both measured incidents, so the next person meets evidence rather than a bare number.
 
 ## BDD Scenarios
 
@@ -176,13 +176,13 @@ under `express-api/tests/scripts/**`. No app, backend or website runtime surface
 
 ## Definition of Done
 
-- [ ] Every AC checkbox above is met.
-- [ ] Every named test exists, was observed RED first, and is now green.
-- [ ] Every mutation killed its named test and was reverted with a git-verified clean tree.
-- [ ] `npm run lint` clean at `--max-warnings=0`; `actionlint` clean under CI's `SHELLCHECK_OPTS`.
-- [ ] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
-- [ ] CI green by name: **Detect Changes**, **Analyze JavaScript**, **PR Gate**.
-- [ ] Status `In Review` before merge; `Done` on release cut with `released_in:`.
+- [x] Every AC checkbox above is met.
+- [x] Every named test exists, was observed RED first, and is now green.
+- [x] Every mutation killed its named test and was reverted with a git-verified clean tree.
+- [x] `npm run lint` clean at `--max-warnings=0`; `actionlint` clean under CI's `SHELLCHECK_OPTS`.
+- [x] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
+- [x] CI green by name: **Detect Changes**, **Analyze JavaScript**, **PR Gate**.
+- [x] Status `In Review` before merge; `Done` on release cut with `released_in:`.
 
 ## Notes (running log)
 
@@ -229,4 +229,19 @@ under `express-api/tests/scripts/**`. No app, backend or website runtime surface
   block. "Fixing" the parser here would have broken correct code to satisfy a
   wrong expectation.
 
-Reviewed-up-to: b8f1e796498
+Reviewed-up-to: 5d065110798
+
+- **2026-08-18** — Round 5: **merge verdict, zero Critical**. It constructed a
+  mutant I had not: changing the escape skip from `i += 1` to `i += 2` survives
+  ALL FOUR quote tests, because in those fixtures the over-skip only eats an
+  innocuous space. It only misbehaves with zero gap between the escaped quote
+  and the real closer. Added, and mutation-verified to catch it.
+
+  It also caught that my "unterminated quote" test passed for a narrower reason
+  than its name claimed — its `#` came BEFORE the stray quote, so the ordinary
+  truncation path fired and the quote machine was never consulted. Replaced
+  with one that genuinely reaches the unterminated state.
+
+  Known follow-up, pre-existing and NOT introduced here: a bare `\#` OUTSIDE
+  any quotes is still read as a comment start, since the escape handling only
+  runs inside a quoted string. No real apt site uses that shape.
