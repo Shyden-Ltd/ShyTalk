@@ -45,6 +45,7 @@
    manual QA runner (operator-facing CLI), not application code. */
 
 const path = require('path');
+const { makeWebSignIn } = require('./web-sign-in');
 
 // Shared CDP-over-adb plumbing extracted to android-cdp-helpers.js so
 // the Samsung Internet + Mobile Edge drivers can reuse it without
@@ -162,6 +163,9 @@ async function createMobileChromeAndroidDriver({
     pageFor,
   };
 
+  // webSignIn — real Firebase auth, shared with every other web driver.
+  driver.webSignIn = makeWebSignIn({ pageFor, baseURL, label: 'mobile-chrome-android-driver' });
+
   // webRefreshRoomsList — same contract as the desktop web driver.
   driver.webRefreshRoomsList = async (name) => {
     try {
@@ -224,7 +228,13 @@ async function createMobileChromeAndroidDriver({
 // Canonical method surface — the runner-vocabulary methods this driver
 // implements (close() is intentionally excluded; it's lifecycle, not a
 // runner step-binding). Pinned by tests/scripts/drivers/driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
+const WEB_MOBILE_METHOD_NAMES = [
+  'webRefreshRoomsList',
+  'webUiDump',
+  'takeScreenshot',
+  // SHY-0328 — the step existed with no method behind it on any web driver.
+  'webSignIn',
+];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();
