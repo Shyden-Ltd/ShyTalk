@@ -263,4 +263,4 @@ runtime surface changes → no device gauntlet for this change itself.
     explicitly, because that is a question the stores actually ask.
   - `/economy/redeem-beans` and `/economy/purchase` both exist as cited.
 
-  Reviewed-up-to: b656fc2590b
+  Reviewed-up-to: fb67857fe25105d438969de90fff264451196441
