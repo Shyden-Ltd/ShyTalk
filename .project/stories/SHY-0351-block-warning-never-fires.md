@@ -1,6 +1,6 @@
 ---
 id: SHY-0351
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-08-19
 priority: P1
@@ -266,3 +266,68 @@ Against the **real** local emulator stack, per the real-only rule.
 
 - **2026-08-19** — Severity comes from the DIRECTION of the failure, which is the
   same for all three defects: blocks are under-reported, never over-reported.
+
+- **2026-08-19 — server side done, RED first, mutation-proven.** 16 real-services
+  tests written against a 404 before a line of route code existed. The RED run
+  had to be repeated: the first attempt used a bare `npx jest` and died with
+  `SyntaxError: Unexpected token 'export'` from the google-gax ESM chain — a
+  BROKEN harness, not a red test. Re-run through the canonical `npm test` it
+  failed 15/16 with `Expected 200, Received 404`, which is the right reason. The
+  one passing test was the unauthenticated case, which the auth middleware
+  rejects before routing is consulted at all.
+
+- **2026-08-19 — 8 mutations, 8 kills, each by its named test.**
+
+  | Mutation | Killed |
+  | --- | --- |
+  | `viewerIsBlocked` stops coercing the stored side | `recognises a block stored as a NUMBER` (+ the mixed-cohort test, which also stores numerically) |
+  | respond with the whole member document | `returns only ids` |
+  | take the subject from the request body | `answers about the CALLER only` |
+  | re-introduce a 30-id cap | `answers completely for more members than fit in one chunk` |
+  | drop the numeric-id validation | `rejects an id that is not a plain numeric id` |
+  | swallow the failure again | `surfaces a transport failure as an error, not an empty set` |
+  | ignore the response body | `asks the API and returns the ids it reports` |
+  | send an empty id list | `sends every id it was asked about` |
+
+- **2026-08-19 — the first mutation loop was itself defective, and that is the
+  more useful finding.** It reverted with `git checkout --`, which restores to
+  **HEAD** — and the implementation was still uncommitted, so the first revert
+  DELETED it. The remaining three mutations then reported
+  `SKIPPED — anchor matched 0x` rather than pretending to pass, because every
+  anchor carried a `count(old) == 1` assertion. Without that assertion the loop
+  would have reported all five as KILLED, since the still-broken state kept the
+  suite red. Two failure modes fired at once: prettier had also reformatted the
+  inserted code, shifting the anchors. Fixed by committing before mutating and
+  restoring from an in-memory copy instead of git. Codified as
+  `feedback-commit-before-mutation-testing`.
+
+- **2026-08-19 — why one test existed and it was the wrong one.**
+  `UserRepositoryImplTest` carried exactly ONE `checkBlockedBy` test —
+  `returns empty set for empty input` — which returns at the guard clause before
+  any of the three defects execute. The only tested path was the only path that
+  could not fail.
+
+- **2026-08-19 — the parameter was REMOVED, not ignored.** With the subject
+  derived from the auth token, `targetUserId` could no longer change the answer.
+  Leaving it would have invited a caller to ask about somebody else and quietly
+  receive an answer about themselves — the same confusion the endpoint itself
+  refuses. `checkBlockedBy(userIds)` now states the contract, and the KDoc says
+  plainly that an `Error` is not an empty set.
+
+- **2026-08-19 — verification.** `:shared:compileKotlinIosArm64` exit 0.
+  `UserRepositoryImplTest` 30 tests / 0 failures, with all five `checkBlockedBy`
+  cases confirmed **present in the JUnit XML**, not merely reported up-to-date by
+  Gradle. `RoomViewModelTest` + `:shared:jvmTest` green. `ktlintCheck` and
+  `detekt` exit 0, detekt 0 findings. eslint `--max-warnings=0` and
+  `prettier --check` both exit 0. `check-no-direct-backend` clean at 33 remaining
+  — both touched files stay in the baseline legitimately, since each still has
+  other direct Firestore use, so no baseline entry went stale.
+
+- **2026-08-19 — full Express suite: 14210 passed, 10 failed, and the 10 are NOT
+  from this change.** All ten are `50-matrix.sh` process-reaping tests failing on
+  `FAIL repo not found at <path> (set SHYTALK_REPO)`. Root cause:
+  `express-api/scripts/gauntlet/lib.sh:61` tests `[ -d "$REPO/.git" ]`, and in a
+  git **worktree** `.git` is a FILE, not a directory. Proven rather than
+  asserted: the same suite passes 9/9 from the main clone, which has a real
+  `.git` directory. Filed separately — it means the gauntlet library cannot run
+  from a worktree at all, while this project's workflow is worktree-per-branch.

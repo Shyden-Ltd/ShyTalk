@@ -771,8 +771,10 @@ class RoomViewModel(
                             _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByUserInRoom) }
                             return@launch
                         }
+
                     is Resource.Error ->
                         logW(TAG, "Block-check failed before joining room; proceeding unwarned")
+
                     Resource.Loading -> Unit
                 }
             }
