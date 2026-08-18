@@ -43,6 +43,8 @@ const MIN_UNIQUE_ID = 10000000;
 // SHY-0338 — cap on POST /users/batch. A follow page is 30 ids; 200 leaves
 // generous headroom while keeping the read amplification bounded.
 const MAX_BATCH_USER_IDS = 200;
+// SHY-0338 — stalker page size. Mirrors the limit the client already used.
+const MAX_STALKERS = 50;
 const MAX_IDENTIFIERS_PER_PROVIDER = 5;
 
 // UK OSA #17 PR 5 — Discovery + search: shared limits and field hygiene.
@@ -532,6 +534,86 @@ router.get('/users/search', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/users/:uniqueId — Get user profile
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/users/:uniqueId/stalkers — who has been viewing you (SHY-0338)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Stalkers could not be rescued by fixing the batch read, because it fails for
+// two further reasons of its own. `getStalkers()` ran an ORDERED query over
+// `users/{id}/stalkers`, and that rule's second clause reads `resource.data` —
+// the genuine "rules are not filters" case, refused whatever it contains. And a
+// stalker document carries no `cohort` field at all, so `cohortMatchesCaller()`
+// compared an adult caller's claim against the 'minor' default and never
+// matched, killing even a single-document read.
+//
+// Returns the visit records AND the visitor profiles in ONE response. The
+// client previously made two calls, and the second was the one that failed.
+router.get('/users/:uniqueId/stalkers', async (req, res) => {
+  try {
+    const target = String(req.params.uniqueId);
+    // Who is watching you is yours alone — no cohort gate, no existence-hiding
+    // 404 dance: either it is your list or you may not have it.
+    if (String(req.auth.uniqueId) !== target) {
+      return res.status(403).json({ error: 'Only the owner can view their stalkers' });
+    }
+
+    const snap = await db
+      .collection(`users/${target}/stalkers`)
+      .orderBy('lastVisitedAt', 'desc')
+      .limit(MAX_STALKERS)
+      .get();
+    if (snap.empty) return res.json({ stalkers: [], users: [] });
+
+    const entries = snap.docs.map((d) => ({
+      ...d.data(),
+      visitorId: String(d.data().visitorId ?? d.id),
+    }));
+    const visitorIds = [...new Set(entries.map((e) => e.visitorId))].filter((id) =>
+      /^[0-9]+$/.test(id),
+    );
+
+    const callerCohort = cohortFromClaim(req);
+    const userSnaps = visitorIds.length
+      ? await db.getAll(...visitorIds.map((id) => db.doc(`users/${id}`)))
+      : [];
+
+    const visible = new Map();
+    for (const userSnap of userSnaps) {
+      // A visit record outlives its user document after a deletion sweep.
+      // A nameless row is a worse answer than no row.
+      if (!userSnap.exists) continue;
+      const user = userSnap.data();
+      if (effectiveCohort(user) !== callerCohort) continue;
+
+      // DELIBERATELY NOT block-filtered, unlike /users/batch. If somebody has
+      // blocked you and is still opening your profile, that is precisely the
+      // fact this screen exists to tell you. Hiding them would turn a safety
+      // surface into a blind spot.
+      user.blockedUserIds = user.blockedUserIds || [];
+      user.followingIds = user.followingIds || [];
+      user.followerIds = user.followerIds || [];
+      visible.set(String(user.uniqueId ?? userSnap.id), stripSensitiveFields(user));
+    }
+
+    const stalkers = entries
+      .filter((e) => visible.has(e.visitorId))
+      .map((e) => ({
+        visitorId: e.visitorId,
+        visitCount: e.visitCount ?? 0,
+        firstVisitedAt: e.firstVisitedAt ?? 0,
+        lastVisitedAt: e.lastVisitedAt ?? 0,
+      }));
+
+    res.json({ stalkers, users: [...visible.values()] });
+  } catch (err) {
+    log.error('users', 'GET /users/:uniqueId/stalkers failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/users/batch — resolve many profiles at once (SHY-0338)
