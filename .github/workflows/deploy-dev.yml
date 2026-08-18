@@ -1005,7 +1005,7 @@ jobs:
       # 25763744882 cancelled after spending all 5 min downloading).
       - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
-        timeout-minutes: 15
+        timeout-minutes: 6
         run: npx playwright install chromium --with-deps
 
       - name: Run sanity checks against Dev
@@ -1069,7 +1069,7 @@ jobs:
 
       - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
-        timeout-minutes: 15
+        timeout-minutes: 8
         run: npx playwright install chromium --with-deps
 
       - name: Verify smoke-test secrets are present
