@@ -1,6 +1,6 @@
 ---
 id: SHY-0335
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -163,3 +163,39 @@ before a failing test names the defect.
   "unable to mute myself in a chat room, mic stays open permanently."
 - **2026-08-18** — Filed as its own story rather than bundled with the reported
   room-loading delay: different defect, different fix, different tests.
+
+- **2026-08-18** — ROOT CAUSE, found by reading the authorisation rather than
+  guessing. `PATCH /rooms/:id/seats/:i/mute` had exactly two paths:
+  `isMuted: true` went through `canForceMute()` — the MODERATOR gate — and
+  `isMuted: false` through the self-unmute check. **There was no branch for
+  muting yourself**, so a user doing so was judged by the moderator gate.
+  `canForceMute` returns false for an attendee, false for the owner's own seat
+  (it exists to stop moderators muting the owner) and false for an already-muted
+  seat. So self-mute returned 403 "Not allowed to mute this seat".
+
+- **2026-08-18** — The CLIENT WAS ALREADY CORRECT, which is exactly why the
+  symptom was what it was. `RoomViewModel:1205` only calls
+  `setMicrophoneEnabled(false)` on `Resource.Success`. On the 403 it never
+  disabled the microphone — so the UI had asked to be muted and the mic stayed
+  open. It hit attendees, hosts AND the room owner.
+
+- **2026-08-18** — WHY IT SHIPPED, at two layers. The unit suite tested
+  force-mute by an owner, host-vs-host, a non-occupant unmuting, and the
+  occupant UNMUTING themselves — but never the occupant MUTING themselves. The
+  journey corpus (j09) likewise covered Ines UNMUTING and never muting. The one
+  action every real user performs was the one action with no test anywhere.
+
+- **2026-08-18** — Mutation-proven in BOTH directions, which a permission change
+  needs: removing the self-mute branch fails the 3 self-mute tests (the bug
+  reproduced); hardcoding `isSelf = true` fails the 3 force-mute refusals. A fix
+  proving only the first would pass just as happily if it had opened force-mute
+  to everyone.
+
+- **2026-08-18** — Two journey scenarios added to j09, with server state and the
+  OTHER participant's device asserted BEFORE the muter's own screen. Leading
+  with her own screen would have passed against the broken build. Both use steps
+  that already exist, so neither can pass by calling something unimplemented —
+  which after SHY-0330 now throws rather than silently reporting PASS.
+
+- **2026-08-18** — STILL OWED: walking both scenarios on real Android + real
+  iPhone, local then dev. Not done, so this is NOT ready for In Review.
