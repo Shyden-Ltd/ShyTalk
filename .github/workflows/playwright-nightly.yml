@@ -24,7 +24,15 @@ on:
         type: string
 
 permissions:
-  contents: read
+  # WRITE, not read. This workflow calls playwright-tests.yml, which calls
+  # allure-report.yml, which pushes the published report to gh-pages. A called
+  # workflow cannot exceed the permissions granted at the TOP of the chain, so
+  # contents: read here would 403 that push every night. pr-checks.yml grants
+  # write at its top for exactly this reason, which is why the same chain works
+  # on PRs today. The failure would be quiet: allure-report has
+  # continue-on-error, so the test verdict still surfaces and only the report
+  # silently stops updating.
+  contents: write
   checks: write
   pull-requests: write
 

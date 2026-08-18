@@ -49,8 +49,8 @@ function webInputOf(src) {
     // SIBLINGS at the same indent, so a `<=` here breaks immediately and
     // finds nothing — which it did on the first attempt.
     if (line.search(/\S/) < baseIndent) break;
-    const m = line.match(/^\s*web:\s*'([^']+)'/);
-    if (m) return m[1];
+    const m = line.match(/^\s*web:\s*(.+)$/);
+    if (m) return m[1].trim();
   }
   return null;
 }
@@ -59,7 +59,47 @@ describe('per-PR browser scope (SHY-0339)', () => {
   test('the PR path requests ONE browser, not all', () => {
     // The defect in one assertion: `web: 'all'` here is ~4 redundant full
     // environment setups on every PR that touches the website.
-    expect(webInputOf(read('pr-checks.yml'))).toBe('chromium');
+    expect(webInputOf(read('pr-checks.yml'))).toContain("'chromium'");
+    expect(webInputOf(read('pr-checks.yml'))).not.toBe("'all'");
+  });
+
+  test('the RELEASE path still requests all browsers', () => {
+    // This test was NAMED in the story's Test Plan and then silently dropped,
+    // and the behaviour did not exist: `web` was unconditional, so the
+    // develop->main promotion PR — the last gate before production — got
+    // chromium exactly like a feature PR. Before SHY-0339 "the release runs
+    // all five" was true only by ACCIDENT of every PR defaulting to 'all'.
+    //
+    // It must not depend on whether the nightly happened to run against this
+    // exact commit, which matters doubly because a `schedule:` trigger only
+    // fires from the DEFAULT branch — so the nightly is inert until this file
+    // reaches main via a promotion.
+    const web = webInputOf(read('pr-checks.yml'));
+    expect(web).toMatch(/github\.base_ref\s*==\s*'main'/);
+    expect(web).toContain("'all'");
+  });
+
+  test('driver TEST files are treated as tests, not as the shared core', () => {
+    // express-api/tests/scripts/drivers/* was matched by the earlier drivers
+    // arm and inherited BACKEND=true, so editing a driver test still forced
+    // the full client matrix — contradicting this story's own principle on one
+    // of the most frequently edited paths in the repo.
+    const src = read('pr-checks.yml');
+    expect(src).toMatch(
+      /express-api\/tests\/scripts\/drivers\/\*\)\s*QA_RUNNER_DRIVERS=true;\s*BACKEND_TESTS=true/,
+    );
+    // First-match: the test arm must precede the SOURCE drivers arm.
+    expect(src.indexOf('express-api/tests/scripts/drivers/*)')).toBeLessThan(
+      src.indexOf('express-api/scripts/drivers/*)'),
+    );
+  });
+
+  test('the nightly can WRITE contents, so its report publish is not a nightly 403', () => {
+    // A called workflow cannot exceed the permissions granted at the top of
+    // the chain. allure-report pushes to gh-pages; contents: read here would
+    // 403 it every night, quietly — allure-report has continue-on-error, so
+    // only the report would stop updating while the test verdict still passed.
+    expect(read('playwright-nightly.yml')).toMatch(/permissions:[\s\S]{0,600}?contents:\s*write/);
   });
 
   test('a scheduled nightly run exists and requests ALL browsers', () => {
@@ -67,7 +107,8 @@ describe('per-PR browser scope (SHY-0339)', () => {
     const nightly = read('playwright-nightly.yml');
     expect(nightly).toMatch(/^\s*schedule:/m);
     expect(nightly).toMatch(/cron:/);
-    expect(webInputOf(nightly)).toBe('all');
+    // A quoted literal here, unlike the PR path which is now an expression.
+    expect(webInputOf(nightly)).toBe("'all'");
   });
 
   test('the nightly is dispatchable manually for a specific ref', () => {

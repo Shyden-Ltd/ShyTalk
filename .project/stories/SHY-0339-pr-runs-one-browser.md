@@ -139,7 +139,8 @@ No app, backend or website runtime surface → **CI-config-only**.
 
 | Risk | Mitigation |
 | --- | --- |
-| **A cross-browser regression reaches develop unnoticed** | The nightly closes the window to one day, where today there is NO scheduled run at all — this strictly increases scheduled coverage. |
+| **A cross-browser regression reaches develop unnoticed** | Two independent mitigations, because the first has a gap. (1) The develop→main promotion PR runs ALL FIVE — `base_ref == 'main'` gated, mirroring android-e2e/ios-e2e — so nothing reaches production on one browser regardless of the nightly. (2) The nightly closes the develop-side window to a day. |
+| **The nightly does not fire until this file reaches `main`** | **Real, and not hand-waved.** GitHub registers `schedule:` triggers ONLY from the DEFAULT branch. This repo's default is `main`, and everything reaches main via the develop→main promotion, which is currently backlogged. So between merging to develop and the next promotion, the nightly is INERT and this change is a coverage cut rather than a deferral. Mitigated by (1) above — the promotion PR itself runs all five — and by `workflow_dispatch`, which works from any branch. **Fix properly by including this in the next promotion.** |
 | The nightly is red for weeks and nobody looks | It names itself clearly and fails loudly; if that proves insufficient it needs an alert, filed separately rather than assumed. |
 | Someone reverts the PR path to `all` for convenience | Asserted by a named test, and in the mutation table. |
 
@@ -179,3 +180,34 @@ No app, backend or website runtime surface → **CI-config-only**.
   own flag. Deliberately narrow — src, scripts, package.json and the rules files
   keep the full forcing, because a dependency or config change genuinely can
   reach a client. CLAUDE.md updated so the documented rule and the code agree.
+
+- **2026-08-18** — `code-reviewer` round 1: two Criticals, both real, both mine.
+
+  **The nightly would not have fired.** GitHub registers `schedule:` triggers
+  only from the DEFAULT branch. The nightly lives on develop; the default is
+  main; everything reaches main via a backlogged promotion. So for that whole
+  window this change was exactly what the story claimed it was not — a coverage
+  cut — while the Risk table asserted the mitigation unconditionally. Recorded
+  above as its own risk row rather than softened.
+
+  **The release-path AC was unmet and its own named test had been dropped.** The
+  Test Plan named `the release path still requests all browsers`; the shipped
+  file contained a different fourth test instead, with no note. And the
+  behaviour did not exist: `web:` was unconditional, so the develop→main
+  promotion PR — the last gate before production — would have got chromium like
+  any feature PR. Before this story, "the release runs all five" was true only
+  by ACCIDENT of every PR defaulting to `all`. Now `base_ref == 'main'` gated,
+  mirroring android-e2e/ios-e2e, and the promised test exists.
+
+  That is the "written up as done, never landed" pattern SHY-0328 documented,
+  committed by me in the same session I wrote it down.
+
+  Also fixed: `express-api/tests/scripts/drivers/*` was matched by the EARLIER
+  drivers arm and inherited `BACKEND=true`, so a driver test still forced the
+  full matrix — contradicting this story's own principle on one of the most
+  frequently edited paths in the repo. And the nightly's `permissions:
+  contents: read` would have 403'd the Allure publish every night, quietly,
+  since allure-report has `continue-on-error` and only the report would have
+  stopped updating.
+
+  9 → 12 tests.

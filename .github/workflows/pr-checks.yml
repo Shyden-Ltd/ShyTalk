@@ -112,7 +112,14 @@ jobs:
               # the heavier test-backend job. BACKEND is set too so the
               # existing backend test suite still runs (regression safety
               # — driver code is a subset of the backend).
-              express-api/scripts/drivers/*|express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
+              # A driver TEST file is a test, not the shared core (SHY-0339).
+              # Matched BEFORE the source arm because shell `case` is
+              # first-match: combined, a test file inherited BACKEND=true and
+              # still forced the full client matrix — contradicting this
+              # story's own principle, on one of the most frequently edited
+              # paths in the repo.
+              express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND_TESTS=true ;;
+              express-api/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
               # SHY-0339. A file under express-api/tests/** is NOT the shared
               # core. The SHY-0127 rule below reads BACKEND as "the shared core
               # changed, retest every client" and forces APP, ANDROID_APP,
@@ -476,7 +483,15 @@ jobs:
       # five against develop every night, where before this change there was no
       # scheduled browser run at all. Pinned by
       # express-api/tests/scripts/pr-checks-playwright-scope.test.js.
-      web: 'chromium'
+      #
+      # EXCEPT on the develop->main promotion PR, which runs all five. That is
+      # the last gate before production, and it must not depend on whether the
+      # nightly happened to run against this exact commit. Mirrors the
+      # base_ref == 'main' gating android-e2e and ios-e2e already use.
+      #
+      # Before SHY-0339 "the release path runs all five" was true only by
+      # ACCIDENT of every PR defaulting to 'all'. This makes it deliberate.
+      web: ${{ github.base_ref == 'main' && 'all' || 'chromium' }}
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
       report_env: pr
