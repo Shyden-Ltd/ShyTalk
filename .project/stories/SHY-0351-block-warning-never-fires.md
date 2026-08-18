@@ -331,3 +331,26 @@ Against the **real** local emulator stack, per the real-only rule.
   asserted: the same suite passes 9/9 from the main clone, which has a real
   `.git` directory. Filed separately — it means the gauntlet library cannot run
   from a worktree at all, while this project's workflow is worktree-per-branch.
+
+- **2026-08-19 — proven end-to-end over real HTTP against the real local stack**,
+  not only through supertest. The API was restarted from this worktree (the
+  running one was serving a different branch and would have "passed" without the
+  route existing — checked via `lsof -d cwd` rather than assumed), and an
+  unauthenticated probe returned **401, not 404**, confirming the route was
+  actually mounted. Then a real emulator-minted token drove one request
+  representing a four-person room:
+
+  ```
+  room members : 51360002 (blocked me, stored NUMERIC)
+                 51360003 (blocked me, stored STRING)
+                 51360004 (has not blocked me)
+                 51360005 (blocked me, and in the OTHER cohort)
+  HTTP 200
+  blockedBy    : ["51360002","51360003","51360005"]
+  response keys: ["blockedBy"]
+  ```
+
+  Every previously-impossible case now answers: the numeric block is seen, the
+  cross-cohort member is answered for instead of denying the whole request, the
+  non-blocker is excluded, and the response carries nothing but the id list.
+  Before this change that same room returned "nobody has blocked you".
