@@ -1,0 +1,41 @@
+name: 'Harden apt against a stalled mirror'
+description: >-
+  Bound apt's network waits so a dead mirror connection fails in seconds
+  instead of hanging until the job timeout. Use before ANY step that runs
+  `playwright install --with-deps` or `playwright install-deps`.
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Bound apt network waits
+      shell: bash
+      run: |
+        set -euo pipefail
+        # WHY THIS EXISTS — measured twice on 2026-08-18, same signature:
+        #
+        #   PR #1782 webkit  00:50:06 Get: archive.ubuntu.com ... InRelease
+        #                    02:49:10 ##[error]The operation was canceled.
+        #   PR #1781 drivers 03:30:33 Get: archive.ubuntu.com ... InRelease
+        #                    03:54:49 ##[error]The operation was canceled.
+        #
+        # Both hung immediately after reaching archive.ubuntu.com and then
+        # emitted NOTHING until the job budget ran out — 119 and 24 minutes
+        # respectively. That is a dead socket, not a slow one: apt's default
+        # has no acquire timeout, so it waits forever.
+        #
+        # This is why raising a job's `timeout-minutes` cannot fix it. An
+        # unbounded wait consumes whatever budget you give it; the wait itself
+        # has to be bounded. Retries matter as much as the timeout — a single
+        # bad mirror connection should cost ~30s and then be retried, not fail
+        # the build outright.
+        #
+        # NOTE: `playwright install --with-deps` shells out to apt even when the
+        # BROWSER cache hits, so fixing cache keys does not avoid this path.
+        sudo tee /etc/apt/apt.conf.d/99-shytalk-timeouts >/dev/null <<'CONF'
+        Acquire::http::Timeout "30";
+        Acquire::https::Timeout "30";
+        Acquire::ftp::Timeout "30";
+        Acquire::Retries "3";
+        CONF
+        echo "apt acquire timeouts applied:"
+        cat /etc/apt/apt.conf.d/99-shytalk-timeouts

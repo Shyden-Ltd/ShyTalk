@@ -91,10 +91,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
+      - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers (chromium + firefox + webkit)
         # `--with-deps` pulls apt packages on Ubuntu so headless WebKit
         # actually launches; without it WebKit silently fails to start
         # because libgtk/libgstreamer aren't present on the base image.
+        timeout-minutes: 20
         run: npx playwright install --with-deps chromium firefox webkit
         working-directory: express-api
 
