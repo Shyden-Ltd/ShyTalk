@@ -34,10 +34,32 @@ const STEP_HEADER = /^ {6}- (name|uses|run):/;
 const JOB_HEADER = /^ {2}([\w-]+):\s*$/;
 const JOB_TIMEOUT = /^ {4}timeout-minutes:\s*(\d+)/;
 
+/**
+ * Remove YAML comments — whole-line AND trailing.
+ *
+ * Trailing matters most for the harden-apt check: a comment mentioning the
+ * action's path on an unrelated line would otherwise satisfy "preceded by
+ * harden-apt" when the guard is absent — a fail-OPEN. Quote-aware, because a
+ * bare `#` appears legitimately inside shell strings in `run: |` blocks.
+ */
 const stripComments = (text) =>
   text
     .split('\n')
-    .filter((l) => !l.trim().startsWith('#'))
+    .map((line) => {
+      let quote = null;
+      for (let i = 0; i < line.length; i += 1) {
+        const c = line[i];
+        if (quote) {
+          if (c === quote) quote = null;
+        } else if (c === '"' || c === "'") {
+          quote = c;
+        } else if (c === '#') {
+          return line.slice(0, i);
+        }
+      }
+      return line;
+    })
+    .filter((l) => l.trim() !== '')
     .join('\n');
 
 function workflowFiles() {
@@ -87,10 +109,17 @@ function invokesApt(body) {
   return code.includes('playwright install') && code.includes('--with-deps');
 }
 
-/** Every apt-invoking step, attributed to the job that CONTAINS it. */
-function aptSites() {
+/**
+ * Every apt-invoking step in ONE file, attributed to the job that CONTAINS it.
+ *
+ * Extracted so this logic can be driven with synthetic input. Exercising it
+ * only through the real corpus cannot distinguish containment from a naive
+ * backward scan: every real job declares its ceiling BEFORE its steps, so both
+ * algorithms return the same number and a revert would turn nothing red.
+ */
+function sitesInFile(name, src) {
   const out = [];
-  for (const { name, src } of workflowFiles()) {
+  {
     const lines = src.split('\n');
     const jobRanges = jobs(src);
     for (const step of steps(src)) {
@@ -127,6 +156,10 @@ function aptSites() {
     }
   }
   return out;
+}
+
+function aptSites() {
+  return workflowFiles().flatMap(({ name, src }) => sitesInFile(name, src));
 }
 
 const SITES = aptSites();
@@ -282,7 +315,14 @@ describe('discovery primitives', () => {
     expect(invokesApt('      - run: npx playwright install')).toBe(false);
   });
 
-  test('a job with no timeout-minutes yields null, never a neighbour’s ceiling', () => {
+  test('sitesInFile scopes a job’s ceiling to ITSELF — never borrows an earlier job’s', () => {
+    // THE discriminating case, and the one the previous version of this file
+    // could not express. Every real workflow declares a job's ceiling BEFORE
+    // its steps, so a naive backward scan and containment return the SAME
+    // number for all five live sites — reverting the containment fix turned
+    // nothing red. This drives the real function against a shape the corpus
+    // does not contain: a job WITH a ceiling, followed by a job WITHOUT one
+    // that actually holds an apt step. A backward scan reports 120 here.
     const src = [
       'jobs:',
       '  earlier:',
@@ -291,12 +331,60 @@ describe('discovery primitives', () => {
       '      - run: echo hi',
       '  later:',
       '    steps:',
-      '      - run: npx playwright install --with-deps chromium',
+      '      - uses: ./.github/actions/harden-apt',
+      '      - name: Install',
+      '        timeout-minutes: 10',
+      '        run: npx playwright install --with-deps chromium',
     ].join('\n');
-    const j = jobs(src).find((x) => x.id === 'later');
-    const lines = src.split('\n');
-    const found = lines.slice(j.start, j.end).find((l) => JOB_TIMEOUT.test(l));
-    // Borrowing `earlier`'s 120 here is exactly the misattribution being prevented.
-    expect(found).toBeUndefined();
+
+    const found = sitesInFile('synthetic.yml', src);
+    expect(found).toHaveLength(1);
+    expect(found[0].jobId).toBe('later');
+    // null, honestly — NOT `earlier`'s 120.
+    expect(found[0].jobCeiling).toBeNull();
+  });
+
+  test('sitesInFile reads the ceiling of the job that actually contains the step', () => {
+    const src = [
+      'jobs:',
+      '  earlier:',
+      '    timeout-minutes: 120',
+      '    steps:',
+      '      - run: echo hi',
+      '  later:',
+      '    timeout-minutes: 30',
+      '    steps:',
+      '      - uses: ./.github/actions/harden-apt',
+      '      - name: Install',
+      '        timeout-minutes: 10',
+      '        run: npx playwright install --with-deps chromium',
+    ].join('\n');
+    const [site] = sitesInFile('synthetic.yml', src);
+    expect(site.jobCeiling).toBe(30);
+  });
+
+  test('a trailing comment naming harden-apt does NOT satisfy the guard check', () => {
+    // Fail-OPEN if unstripped: the step would look guarded when it is not.
+    const src = [
+      'jobs:',
+      '  j:',
+      '    timeout-minutes: 30',
+      '    steps:',
+      '      - run: echo hi  # see ./.github/actions/harden-apt for why',
+      '      - name: Install',
+      '        timeout-minutes: 10',
+      '        run: npx playwright install --with-deps chromium',
+    ].join('\n');
+    const [site] = sitesInFile('synthetic.yml', src);
+    expect(site.jobPrelude).not.toContain('./.github/actions/harden-apt');
+  });
+
+  test('a trailing comment naming the install command is NOT a site', () => {
+    const body = [
+      '      - name: X',
+      '        run: echo hi  # npx playwright install --with-deps',
+      '',
+    ].join('\n');
+    expect(invokesApt(body)).toBe(false);
   });
 });
