@@ -1,6 +1,6 @@
 ---
 id: SHY-0348
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -289,3 +289,49 @@ sees everything; the API's 403 is never reached.
   scenario-building job rather than a walk. The enforcement half is unit-tested
   and mutation-proven; the rendering is verified only in code and in the 21
   locale files. Not claiming more than that.
+
+- **2026-08-19 05:32 WIB — the message has now been WITNESSED on the real
+  OnePlus**, which the previous entry said honestly had not happened. Build
+  `bafaf1a` of this branch, confirmed by the in-app overlay.
+
+  The route was the one the previous entry predicted would matter: **an existing
+  conversation**, not a list. Signed in as Raul (50000050) with Nora (50000051)
+  having blocked him — the block written as a **number**, the shape that actually
+  occurs — opening the thread and tapping her name in the header lands on
+  `profile/{userId}` and renders:
+
+  > 🚫  **[SEED] Nora (P-09 victim)** · ID: 50000051
+  > **This profile is not available**
+  > You have been blocked by this user
+  > **They need to unblock you before you can view their profile.**
+  > \[ Report User \]
+
+  That is the operator's requirement met literally: prevented, and *told why*,
+  rather than shown an empty or broken profile.
+
+  Checked with eyes, not only assertions: **no profile content leaks** — no bio,
+  no follower or following counts, no gift wall, no rooms. **Report User stays
+  available**, which is right: being blocked must not remove someone's ability to
+  report the person who blocked them.
+
+  One deliberate disclosure, flagged rather than hidden: the display name and
+  uniqueId ARE shown. On this route they are already known — the person just came
+  from a conversation with them — and without a name the message would be about
+  nobody. It is a judgement, not an oversight.
+
+- **2026-08-19 — the fix is tri-platform.** `getProfileForViewing` is
+  implemented on both sides (`UserRepositoryImpl` and `IosUserRepositoryImpl`)
+  and consumed by the shared `ProfileViewModel`, so the enforcement is not
+  Android-only.
+
+- **2026-08-19 — STILL OWED: the iOS device leg, and it is BLOCKED on something
+  bigger than this story.** `iosApp/Configurations/Local.xcconfig` still sets
+  `LOCAL_HOST = localhost`, which on a real iPhone points the phone **at
+  itself** — that is SHY-0275, open as **PR #1696** since 2026-08-17 with
+  `Build & Test` failing.
+
+  The consequence is not local to this story: **while #1696 is unmerged, the iOS
+  half of the LOCAL gauntlet cannot be run for ANY story.** Every iOS local leg
+  either gets skipped or gets faked with a simulator, and the operator has ruled
+  simulators out. That makes #1696 a gating dependency for the whole protocol,
+  not a single ticket, and it deserves priority accordingly.
