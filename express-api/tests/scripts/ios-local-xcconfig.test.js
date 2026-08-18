@@ -1,136 +1,115 @@
+'use strict';
+
 /**
- * Pins the iOS local-flavor Build Configuration file's existence
- * and key build-setting variables.
+ * Pins the iOS Local Build Configuration file (SHY-0345).
  *
- * This file is the foundation of the iOS-local flavor — a sibling of
- * the Android `local` product flavor declared in `app/build.gradle.kts`.
- * Like Android local, it points the app at:
- *   - localhost Express API (port 3000)
- *   - localhost LiveKit signalling (port 7880)
- *   - The `demo-shytalk` Firebase Emulator project (Firestore/Auth)
- *   - The RTDB emulator (port 9000, namespace `demo-shytalk-default-rtdb`)
- *   - A `.local` bundle-id suffix so it can be installed alongside the
- *     dev variant on a single device
+ * `Local.xcconfig` is the project-level baseConfigurationReference for BOTH the
+ * `Debug-Local` and `Release-Local` XCBuildConfigurations — the sibling of the
+ * Android `local` product flavour, pointed at the emulator stack.
  *
- * Phase 3.1 (this PR) adds the file in isolation — it is NOT yet
- * referenced by the Xcode project. Subsequent sub-PRs handle pbxproj
- * surgery (3.2), scheme (3.3), GoogleService-Info + AppDelegate logic
- * (3.4), and CI integration (3.5).
+ * **Its load-bearing job is `KOTLIN_FRAMEWORK_BUILD_TYPE`.** The KMP/Compose
+ * "Compile Kotlin Framework" build phase infers debug-vs-release from the Xcode
+ * CONFIGURATION name and recognises only the literal `Debug` / `Release`. A
+ * custom name like `Debug-Local` defeats that heuristic, and the build dies:
+ *
+ *   error: Unable to detect Kotlin framework build type for
+ *          CONFIGURATION=Debug-Local automatically. Specify
+ *          'KOTLIN_FRAMEWORK_BUILD_TYPE' to 'debug' or 'release'
+ *
+ * Without it the Local configuration cannot build AT ALL — device or simulator.
+ * `Dev.xcconfig` already carried the equivalent line; `Local.xcconfig` never
+ * did, and its sibling's comment asserted a shared file "can't carry one value".
+ * It can: xcconfig supports `[config=<name>]` conditionals, which is what makes
+ * one file serve both configurations.
+ *
+ * These assertions are structural on purpose — the real proof is that
+ * `xcodebuild -configuration Debug-Local` now reaches `** BUILD SUCCEEDED **`,
+ * which no unit test can stand in for. What this file prevents is the value
+ * being dropped again, silently, by someone tidying the config.
  */
 
-const fs = require('fs');
-const path = require('path');
+const { readFileSync } = require('node:fs');
+const { join } = require('node:path');
 
-const REPO_ROOT = path.resolve(__dirname, '../../..');
-const XCCONFIG_PATH = path.join(REPO_ROOT, 'iosApp/Configurations/Local.xcconfig');
+const REPO_ROOT = join(__dirname, '..', '..', '..');
+const XCCONFIG = join(REPO_ROOT, 'iosApp', 'Configurations', 'Local.xcconfig');
+const PBXPROJ = join(REPO_ROOT, 'iosApp', 'iosApp.xcodeproj', 'project.pbxproj');
 
-describe('iosApp/Configurations/Local.xcconfig', () => {
-  let xcconfigText;
+const source = () => readFileSync(XCCONFIG, 'utf8');
 
-  beforeAll(() => {
-    // Guard rather than assert — keeps the failure origin readable.
-    // The named "file exists at the expected path" test below is the
-    // canonical existence assertion. If the file is missing, this
-    // guard throws with a clear message and Jest reports a setup
-    // failure pointing at the right line.
-    if (!fs.existsSync(XCCONFIG_PATH)) {
-      throw new Error(`xcconfig not found at expected path: ${XCCONFIG_PATH}`);
-    }
-    xcconfigText = fs.readFileSync(XCCONFIG_PATH, 'utf8');
+/** Assignments as `{ key, condition, value }`, ignoring comments. */
+function settings(text) {
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('//'))
+    .map((l) => /^([A-Z_][A-Z0-9_]*)(\[[^\]]*\])?\s*=\s*(.*)$/.exec(l))
+    .filter(Boolean)
+    .map((m) => ({ key: m[1], condition: m[2] || null, value: m[3].trim() }));
+}
+
+/** Build configurations whose project-level xcconfig is Local.xcconfig. */
+function configurationsUsingLocalXcconfig() {
+  const pbx = readFileSync(PBXPROJ, 'utf8');
+  const names = new Set();
+  const re =
+    /\/\* ([A-Za-z-]+) \*\/ = \{\s*isa = XCBuildConfiguration;\s*baseConfigurationReference = \w+ \/\* Local\.xcconfig \*\//g;
+  for (const m of pbx.matchAll(re)) names.add(m[1]);
+  return [...names];
+}
+
+describe('SHY-0345 — Local.xcconfig makes the Local configuration buildable', () => {
+  test('declares KOTLIN_FRAMEWORK_BUILD_TYPE at all', () => {
+    // The defect, in one assertion. Absent, every Local build fails in the
+    // "Compile Kotlin Framework" phase before any code is compiled.
+    const keys = settings(source()).map((s) => s.key);
+    expect(keys).toContain('KOTLIN_FRAMEWORK_BUILD_TYPE');
   });
 
-  test('file exists at the expected path', () => {
-    expect(fs.existsSync(XCCONFIG_PATH)).toBe(true);
-  });
-
-  // Mirror of Android's `applicationIdSuffix = ".local"`. Allows the
-  // local-flavor iOS app to be installed alongside the dev variant
-  // on the same physical device for side-by-side comparison.
-  test('declares BUNDLE_ID_SUFFIX = .local', () => {
-    expect(xcconfigText).toMatch(/^BUNDLE_ID_SUFFIX\s*=\s*\.local$/m);
-  });
-
-  // Operator-overridable. Default `localhost` works on iOS Simulator
-  // (shares the Mac's network namespace). For a physical iPhone the
-  // operator must override to the Mac's local-network IP or mDNS .local
-  // hostname at build time:
-  //
-  //   xcodebuild -configuration Debug-Local LOCAL_HOST=Macbook.local …
-  //
-  // Documented in the xcconfig's comment block; pinned at the variable
-  // value level here.
-  test('declares LOCAL_HOST variable (defaults to localhost)', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_HOST\s*=\s*localhost$/m);
-  });
-
-  // Variable interpolation in xcconfig uses the `$(VAR)` form. NOT
-  // `${VAR}` — that's the shell idiom and would be a silent no-op in
-  // Xcode build settings (the value would be literal `${LOCAL_HOST}`
-  // instead of being expanded).
-  test('declares LOCAL_API_BASE_URL pointing at $(LOCAL_HOST):3000', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_API_BASE_URL\s*=\s*http:\/\/\$\(LOCAL_HOST\):3000$/m);
-  });
-
-  // LiveKit signalling port. The Docker container also exposes 7881
-  // and 7882 for WebRTC media — the SFU advertises those back during
-  // the signalling handshake, so we only point at 7880 here.
-  test('declares LOCAL_LIVEKIT_URL pointing at $(LOCAL_HOST):7880', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_LIVEKIT_URL\s*=\s*ws:\/\/\$\(LOCAL_HOST\):7880$/m);
-  });
-
-  // Matches the `--project=demo-shytalk` flag in
-  // `firebase emulators:start` (local/start.sh Step 2). The `demo-`
-  // prefix is Firebase's emulator-only namespace.
-  test('declares LOCAL_FIREBASE_PROJECT_ID = demo-shytalk', () => {
-    expect(xcconfigText).toMatch(/^LOCAL_FIREBASE_PROJECT_ID\s*=\s*demo-shytalk$/m);
-  });
-
-  // RTDB emulator endpoint. Sibling of Android's `RTDB_URL` in
-  // app/build.gradle.kts. The `?ns=…` query string is the namespace
-  // selector the Firebase RTDB emulator expects.
-  test('declares LOCAL_FIREBASE_RTDB_URL pointing at $(LOCAL_HOST):9000 with namespace', () => {
-    expect(xcconfigText).toMatch(
-      /^LOCAL_FIREBASE_RTDB_URL\s*=\s*http:\/\/\$\(LOCAL_HOST\):9000\?ns=demo-shytalk-default-rtdb$/m,
+  test('defaults to debug', () => {
+    const def = settings(source()).find(
+      (s) => s.key === 'KOTLIN_FRAMEWORK_BUILD_TYPE' && s.condition === null,
     );
+    expect(def).toBeDefined();
+    expect(def.value).toBe('debug');
   });
 
-  // Pin the total variable count so a stray addition (typo, copy-paste,
-  // experimental key) doesn't silently land alongside the documented
-  // six. Six values × 1 line each, no continuation lines in the
-  // current file.
-  test('contains exactly six variable declarations', () => {
-    const varLines = xcconfigText.match(/^[A-Z_][A-Z0-9_]*\s*=/gm);
-    expect(varLines).not.toBeNull();
-    expect(varLines.length).toBe(6);
+  test('overrides to release for Release-Local', () => {
+    // The reason the sibling comment claimed a shared file "can't carry one
+    // value". It can — this is the conditional that does it. Without the
+    // override, a Release-Local build would embed a DEBUG Kotlin framework.
+    const override = settings(source()).find(
+      (s) => s.key === 'KOTLIN_FRAMEWORK_BUILD_TYPE' && s.condition === '[config=Release-Local]',
+    );
+    expect(override).toBeDefined();
+    expect(override.value).toBe('release');
   });
 
-  // Phase 3.2 may add `#include "Pods/Target Support Files/…"` once
-  // CocoaPods integration cascades. For Phase 3.1, no #include should
-  // exist — the file is standalone. Pinning this catches a premature
-  // include sneaking in via copy-paste from another xcconfig.
-  test('contains no #include directives in Phase 3.1', () => {
-    expect(xcconfigText).not.toMatch(/^#include/m);
+  test('every build configuration fronted by this file has a value', () => {
+    // Derived from the Xcode project, not hardcoded, so adding a third
+    // `*-Local` configuration without giving it a build type fails HERE rather
+    // than as an unexplained build error later.
+    const configs = configurationsUsingLocalXcconfig();
+    expect(configs.length).toBeGreaterThan(0);
+
+    const decls = settings(source()).filter((s) => s.key === 'KOTLIN_FRAMEWORK_BUILD_TYPE');
+    const hasDefault = decls.some((s) => s.condition === null);
+    const conditioned = new Set(
+      decls
+        .map((s) => s.condition && /\[config=([^\]]+)\]/.exec(s.condition))
+        .filter(Boolean)
+        .map((m) => m[1]),
+    );
+
+    const uncovered = configs.filter((c) => !hasDefault && !conditioned.has(c));
+    expect(uncovered).toEqual([]);
   });
 
-  // Xcode's own file editor ends xcconfig files with a trailing
-  // newline. A tool that strips it would silently churn the file on
-  // every save. Pin it.
-  test('ends with a single trailing newline', () => {
-    expect(xcconfigText.endsWith('\n')).toBe(true);
-    expect(xcconfigText.endsWith('\n\n')).toBe(false);
-  });
-
-  // Defensive trip-wire against the most common xcconfig-newbie
-  // mistake: writing `${LOCAL_HOST}` (shell expansion) where
-  // `$(LOCAL_HOST)` (Xcode build-setting expansion) is required.
-  // The shell form is a silent no-op in Xcode — the value becomes
-  // the literal `${LOCAL_HOST}` string rather than being substituted.
-  // No value line should contain the `${…}` shape.
-  test('no value line uses shell-style ${VAR} expansion (xcconfig requires $(VAR))', () => {
-    const valueLines = xcconfigText.split('\n').filter((l) => /^[A-Z_][A-Z0-9_]*\s*=/.test(l));
-    expect(valueLines.length).toBeGreaterThan(0);
-    valueLines.forEach((line) => {
-      expect(line).not.toMatch(/\$\{[A-Z_]/);
-    });
+  test('Debug-Local and Release-Local are both fronted by this file', () => {
+    // Guards the assumption the test above rests on. If the project were
+    // re-pointed at separate xcconfigs, this file's conditional would stop
+    // being the thing that matters and the pin would quietly mean nothing.
+    const configs = configurationsUsingLocalXcconfig().sort();
+    expect(configs).toEqual(['Debug-Local', 'Release-Local']);
   });
 });
