@@ -1,6 +1,6 @@
 ---
 id: SHY-0347
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-19
 priority: P1
@@ -197,3 +197,21 @@ merge, iOS archive 53 minutes, timed out.
   `seed-personas`) defaults to `true`, so a bare dispatch deploys everything.
   This story makes a bare dispatch change-aware, because that is the form that
   gets used at 2am.
+
+- **2026-08-19 — implemented.** A `detect-deploy-scope` job resolves a baseline
+  (the head SHA of the last SUCCESSFUL deploy-dev run — not `HEAD~1`, because
+  several merges can land between deploys) and classifies the diff through
+  `scripts/deploy-scope.sh`. Each deploy job now requires the operator's input
+  AND a touched area, so an explicit `false` still wins: this narrows, never
+  widens.
+
+- **2026-08-19 — the tests caught a real bug in my own script.** `while read`
+  silently DISCARDS a final line with no trailing newline, so a single-path diff
+  classified as "no input" and fell through to the fail-safe all-true. It looked
+  correct in manual testing because `printf 'x\n'` supplies the newline that
+  `git diff --name-only` does not always end with. Fixed with
+  `|| [ -n "$path" ]`, and the case is now covered.
+
+- **2026-08-19 — mutation-proven.** Reverting `distribute-ios` to `inputs.ios-testers`
+  alone kills `distribute-ios is gated on the detected scope` and nothing else.
+  18 tests; actionlint and shellcheck clean.
