@@ -1,6 +1,6 @@
 ---
 id: SHY-0342
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -208,3 +208,60 @@ runtime surface changes → no device gauntlet for this change itself.
   ([[project-indonesia-relocation-and-age-gating-decision]]). This story's job is
   to say plainly what declaring it honestly does to the rating, in time for the
   operator to weigh it.
+
+- **2026-08-19 — the deliverable exists: `.project/store-readiness/age-rating-answers.md`.**
+  Both questionnaires answered line by line, written to test the operator's 13+
+  target honestly rather than to reach it. Where an answer puts 13+ at risk it
+  says so plainly instead of quietly choosing the convenient option.
+
+  **Verdict: 13+ is achievable, but not automatic.** It rests on two things
+  staying true — no real-money gambling (there is no cash-out: no transfer,
+  withdrawal or payout endpoint exists, checked rather than assumed), and
+  moderation with reporting, blocking and a way to act on reports, which is what
+  keeps a user-generated-content app out of the 17+ bucket. The two answers that
+  actually decide the rating pull in opposite directions, and the sheet says
+  which one is the risk: **simulated gambling**, because of the Lucky Spin.
+
+  Two Play obligations follow that are **not yet met**, and both are compliance
+  gaps rather than rating questions:
+  1. **Odds disclosure for the Lucky Spin** — now filed as SHY-0349.
+  2. The **Data Safety** declaration must be filed alongside the rating.
+
+  Currency terms are used as the operator corrected them: **ShyCoins** are bought
+  with real money and are what you spend to play; **ShyBeans** are what a gift
+  *recipient* receives, redeemable for ShyCoins. The sheet does not say beans buy
+  spins.
+
+- **2026-08-19 — what is left is the operator's, and only the operator's.**
+  Nothing has been submitted, and the sheet is headed as a draft for review. The
+  App Store questionnaire was revised in 2025 with new capability questions and a
+  13+/16+/18+ banding, and I could not open either console to confirm the live
+  wording — so the sheet states that limitation rather than guessing at it. The
+  remaining step is the operator entering the answers in both consoles and
+  reading back the rating each one produces.
+
+  Status moves to `In Review` because the work product is complete and awaiting
+  exactly that review. It does not move to Done until a rating is actually
+  declared.
+
+- **2026-08-19 — self-review of the answer sheet (not an agent review, and
+  labelled as such).** Claims were spot-checked against the tree rather than
+  taken on trust, since the sheet's whole argument rests on them:
+
+  - **"No cash-out exists"** — confirmed. Grepped `express-api/src/routes` for
+    withdraw / payout / cashout / transfer routes: **none**. The economy surface
+    is `daily-reward`, `gacha`, `gift`, `gift-direct`, `gift-batch`,
+    `backpack-send`, `redeem-beans`, `purchase`, `trial-claim`,
+    `trial-activate`, `test-coins`, `balance`. Nothing converts value back to
+    money.
+  - **One wording fix applied.** The sheet said "No transfer, withdrawal or
+    payout endpoint", which reads as contradicting its own gifting rows —
+    `gift-direct`, `gift-batch` and `backpack-send` *are* transfers of in-app
+    value between users. On a document that may inform a store or legal
+    position, that imprecision is worth removing: it now says no endpoint
+    converts in-app value back into money, and states the in-app transfers
+    explicitly, because that is a question the stores actually ask.
+  - `/economy/redeem-beans` and `/economy/purchase` both exist as cited.
+
+
+Reviewed-up-to: fb67857fe25105d438969de90fff264451196441
