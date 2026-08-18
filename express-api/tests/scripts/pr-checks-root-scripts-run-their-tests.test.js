@@ -29,6 +29,46 @@ const path = require('node:path');
 const WORKFLOW = path.resolve(__dirname, '../../../.github/workflows/pr-checks.yml');
 const yaml = fs.readFileSync(WORKFLOW, 'utf8');
 
+/**
+ * The workflow's OWN flag-initialisation line, read from the file rather than
+ * copied into this test.
+ *
+ * It used to be hand-copied, twice, and the two copies had already drifted
+ * apart from each other (`classify`'s was missing `QA_RUNNER_DRIVERS`). Then
+ * SHY-0339 added `BACKEND_TESTS=false` to the real line and both copies went
+ * stale at once: the flag arrived UNSET, `[ "" = "false" ]` was false, and
+ * `WORKFLOW_ONLY` could never be true again. Two tests went red for a change
+ * that was correct.
+ *
+ * A fixture that duplicates a line out of the file under test is a second
+ * source of truth with nothing keeping it honest. Reading the line means
+ * adding a flag can never red these tests again — while a flag MISSING from
+ * the real line still fails, via `every flag the case statement sets is
+ * initialised` below, which is the bug that actually matters.
+ *
+ * @returns {string} e.g. `ANDROID_APP=false IOS_APP=false ... OTHER=false`
+ */
+function flagInitLine() {
+  const line = yaml
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => /^[A-Z][A-Z0-9_]*=false( [A-Z][A-Z0-9_]*=false)+$/.test(l));
+  if (!line) throw new Error('flag initialisation line not found in pr-checks.yml');
+  return line;
+}
+
+/** The flag names that line initialises, in the order it declares them. */
+function flagNames() {
+  return flagInitLine().split(/\s+/).map((pair) => pair.split('=')[0]);
+}
+
+/** Every flag name the `case` statement ASSIGNS, whether or not it is initialised. */
+function flagsAssignedInCaseStatement() {
+  const caseMatch = yaml.match(/case "\$file" in([\s\S]*?)esac/);
+  if (!caseMatch) throw new Error('case statement not found in pr-checks.yml');
+  return [...new Set([...caseMatch[1].matchAll(/([A-Z][A-Z0-9_]*)=true/g)].map((m) => m[1]))];
+}
+
 /** The `case "$file" in … esac` body, run for real against a file list. */
 function classify(files) {
   const caseMatch = yaml.match(/case "\$file" in([\s\S]*?)esac/);
@@ -36,11 +76,11 @@ function classify(files) {
   const list = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
   const script = `
 set -e
-ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false SCRIPTS=false OTHER=false
+${flagInitLine()}
 for file in ${list}; do
   case "$file" in${caseMatch[1]}esac
 done
-for v in ANDROID_APP IOS_APP APP BACKEND WEB INTEGRATION SCRIPTS OTHER; do
+for v in ${flagNames().join(' ')}; do
   eval "echo \\"$v=\\$$v\\""
 done
 `;
@@ -137,7 +177,7 @@ describe('SHY-0284: a root script change is not a workflow-only change', () => {
     const list = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
     const script = `
 set -e
-ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false SCRIPTS=false OTHER=false
+${flagInitLine()}
 WORKFLOW_ONLY=false
 for file in ${list}; do
   case "$file" in${caseMatch[1]}esac
@@ -164,6 +204,26 @@ echo "$WORKFLOW_ONLY"
 
   it('a docs-only change still is', () => {
     expect(workflowOnlyFor(['README.md', '.project/stories/SHY-0001-x.md'])).toBe(true);
+  });
+
+  it('every flag the case statement sets is initialised', () => {
+    // The bug class the hand-copied init line used to hide, now asserted on the
+    // REAL workflow. An uninitialised flag expands empty, so `[ "" = "false" ]`
+    // is false and WORKFLOW_ONLY silently sticks at false forever — every job
+    // gated on it runs on every PR, and nothing says why.
+    const initialised = flagNames();
+    const missing = flagsAssignedInCaseStatement().filter((f) => !initialised.includes(f));
+    expect(missing).toEqual([]);
+  });
+
+  it('the workflow_only condition reads only flags that exist', () => {
+    // The mirror image: a condition naming a flag nothing initialises is the
+    // same empty-string comparison, arrived at from the other direction.
+    const initialised = flagNames();
+    const named = [...new Set(
+      [...workflowOnlyCondition().matchAll(/\$\{?([A-Z][A-Z0-9_]*)\}?/g)].map((m) => m[1]),
+    )].filter((f) => f !== 'WORKFLOW_ONLY');
+    expect(named.filter((f) => !initialised.includes(f))).toEqual([]);
   });
 });
 
