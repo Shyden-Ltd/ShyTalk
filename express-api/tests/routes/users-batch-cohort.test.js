@@ -147,8 +147,31 @@ describe('POST /api/users/batch — the follow-list read', () => {
       expect(u).not.toHaveProperty('email');
       expect(u).not.toHaveProperty('firebaseUid');
       expect(u).not.toHaveProperty('dateOfBirth');
-      expect(u).not.toHaveProperty('cohort');
+      // `cohortOverride` stays stripped — it is a moderator-action side
+      // channel and nothing on the client needs it.
       expect(u).not.toHaveProperty('cohortOverride');
+    }
+  });
+
+  test("cohort IS returned, and always equals the caller's", async () => {
+    // Deliberately NOT stripped here, unlike every other endpoint. The client
+    // keeps a defence-in-depth cohort filter over this list; without the field
+    // every entry reads as the 'minor' default and an adult viewer's list
+    // filters itself to nothing (measured on-device 2026-08-18).
+    //
+    // It discloses nothing, and this assertion is what makes that true: every
+    // user returned is same-cohort as the caller, so the value is a constant
+    // the caller already knows about itself. If that ever stopped holding,
+    // this test fails before the leak ships.
+    const res = await postBatch([
+      String(SAME_COHORT_A),
+      String(SAME_COHORT_B),
+      String(CROSS_COHORT),
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.users.length).toBeGreaterThan(0);
+    for (const u of res.body.users) {
+      expect(u.cohort).toBe('adult');
     }
   });
 

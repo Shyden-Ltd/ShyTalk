@@ -593,7 +593,13 @@ router.get('/users/:uniqueId/stalkers', async (req, res) => {
       user.blockedUserIds = user.blockedUserIds || [];
       user.followingIds = user.followingIds || [];
       user.followerIds = user.followerIds || [];
-      visible.set(String(user.uniqueId ?? userSnap.id), stripSensitiveFields(user));
+      const visitorCohort = effectiveCohort(user);
+      stripSensitiveFields(user);
+      // Same reasoning as POST /users/batch: every visitor returned here is
+      // same-cohort as the owner, so the value discloses nothing, and the
+      // client's defence-in-depth filter needs it to keep the list non-empty.
+      user.cohort = visitorCohort;
+      visible.set(String(user.uniqueId ?? userSnap.id), user);
     }
 
     const stalkers = entries
@@ -676,7 +682,23 @@ router.post('/users/batch', async (req, res) => {
       user.blockedUserIds = user.blockedUserIds || [];
       user.followingIds = user.followingIds || [];
       user.followerIds = user.followerIds || [];
-      users.push(stripSensitiveFields(user));
+      const memberCohort = effectiveCohort(user);
+      stripSensitiveFields(user);
+      // `cohort` is stripped everywhere else, and put BACK here on purpose.
+      //
+      // The client keeps a defence-in-depth cohort filter over these lists
+      // (UK OSA #17 PR 12). Without this field every entry reads as the
+      // 'minor' default and an adult viewer's list filters itself to nothing —
+      // measured on-device 2026-08-18, "Loaded 7 followers, 5 following"
+      // followed by an empty screen.
+      //
+      // It discloses nothing. This endpoint only ever returns users whose
+      // cohort MATCHES the caller's, so the value is a constant the caller
+      // already knows about itself. And if this endpoint ever regressed and
+      // returned a cross-cohort user, the client filter would catch it —
+      // which is the entire point of keeping that filter alive.
+      user.cohort = memberCohort;
+      users.push(user);
     }
 
     res.json({ users });

@@ -179,7 +179,19 @@ describe('GET /api/users/:uniqueId/stalkers', () => {
       expect(u).not.toHaveProperty('fcmTokens');
       expect(u).not.toHaveProperty('email');
       expect(u).not.toHaveProperty('firebaseUid');
-      expect(u).not.toHaveProperty('cohort');
+      expect(u).not.toHaveProperty('cohortOverride');
+    }
+  });
+
+  test("cohort IS returned, and always equals the owner's", async () => {
+    // Same reasoning as POST /users/batch — the client's defence-in-depth
+    // filter needs it, and every visitor returned is same-cohort as the owner,
+    // so the value discloses nothing. This assertion is what keeps that true.
+    const res = await getStalkers(OWNER_ID, owner);
+    expect(res.status).toBe(200);
+    expect(res.body.users.length).toBeGreaterThan(0);
+    for (const u of res.body.users) {
+      expect(u.cohort).toBe('adult');
     }
   });
 
