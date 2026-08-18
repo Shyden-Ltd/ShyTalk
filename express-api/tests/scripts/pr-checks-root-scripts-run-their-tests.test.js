@@ -59,7 +59,9 @@ function flagInitLine() {
 
 /** The flag names that line initialises, in the order it declares them. */
 function flagNames() {
-  return flagInitLine().split(/\s+/).map((pair) => pair.split('=')[0]);
+  return flagInitLine()
+    .split(/\s+/)
+    .map((pair) => pair.split('=')[0]);
 }
 
 /** Every flag name the `case` statement ASSIGNS, whether or not it is initialised. */
@@ -220,9 +222,11 @@ echo "$WORKFLOW_ONLY"
     // The mirror image: a condition naming a flag nothing initialises is the
     // same empty-string comparison, arrived at from the other direction.
     const initialised = flagNames();
-    const named = [...new Set(
-      [...workflowOnlyCondition().matchAll(/\$\{?([A-Z][A-Z0-9_]*)\}?/g)].map((m) => m[1]),
-    )].filter((f) => f !== 'WORKFLOW_ONLY');
+    const named = [
+      ...new Set(
+        [...workflowOnlyCondition().matchAll(/\$\{?([A-Z][A-Z0-9_]*)\}?/g)].map((m) => m[1]),
+      ),
+    ].filter((f) => f !== 'WORKFLOW_ONLY');
     expect(named.filter((f) => !initialised.includes(f))).toEqual([]);
   });
 });
