@@ -1426,5 +1426,35 @@
     "contentId": "I_kwDORJ_E_s8AAAABNMz7wQ",
     "issueNumber": 1789,
     "itemId": "PVTI_lADOEOcG584BZ_lNzg2-AFM"
+  },
+  "SHY-0340": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNONCvA",
+    "issueNumber": 1795,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg2_hyA"
+  },
+  "SHY-0341": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNONFBA",
+    "issueNumber": 1796,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg2_h1M"
+  },
+  "SHY-0342": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNONHHg",
+    "issueNumber": 1797,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg2_h4Q"
+  },
+  "SHY-0343": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNONJTw",
+    "issueNumber": 1798,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg2_h7w"
+  },
+  "SHY-0344": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNONLiQ",
+    "issueNumber": 1799,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg2_h_I"
   }
 }
