@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: []
 mvp: true
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1804
 ---
 
 # SHY-0345: The iOS Local build fails before it compiles a single line
@@ -132,10 +133,20 @@ phase. With the fix it reaches `** BUILD SUCCEEDED **`.
 | the `[config=Release-Local]` override removed | `overrides to release for Release-Local` |
 | the whole setting removed | `declares KOTLIN_FRAMEWORK_BUILD_TYPE at all`, `defaults to debug`, `overrides to release...`, `every build configuration fronted by this file has a value` |
 
-### Classification
+### Classification — CORRECTED
 
-Two xcconfig lines, a comment correction and one new test. No app source, no
-backend, no website → **CI-config-only** for this change itself.
+An earlier version of this story called this **CI-config-only**. **That was
+wrong**, and review caught it. CLAUDE.md's exemption covers
+`.github/workflows/**`, CI-only helper scripts and CI-structure meta-tests, and
+carries an explicit anti-loophole clause: a PR touching `iosApp/**` is NOT
+CI-config-only and runs the FULL protocol. This diff edits
+`iosApp/Configurations/*.xcconfig`. The project's own routing agrees —
+`pr-checks.yml:97` maps `iosApp/*` to `IOS_APP=true; APP=true`.
+
+"It is only a build setting" is exactly the reasoning that clause exists to
+refuse, and it is a bad place to accept it: the entire subject of this change is
+whether the configuration builds, and simulator success does not rule out
+device-only failures in provisioning, entitlements or codesign.
 
 ## Out of Scope
 
@@ -190,3 +201,57 @@ backend, no website → **CI-config-only** for this change itself.
   asserted a shared xcconfig "can't carry one value". That belief is what left
   the Local configuration unbuildable; leaving it in place would invite the same
   conclusion again.
+
+- **2026-08-19 — REAL-DEVICE PROOF (supersedes the simulator run).** The earlier
+  note logged only a simulator build. The operator's rule is real hardware, and
+  they said so directly. Redone on **Sean's iPhone (iPhone Air, iOS 27.0,
+  CoreDevice `74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6`)**:
+
+  ```
+  xcodebuild -configuration Debug-Local -destination "id=74563FF8-…" \
+             LOCAL_HOST=192.168.1.9 -allowProvisioningUpdates build
+  → ** BUILD SUCCEEDED **   (exit 0)
+
+  xcrun devicectl device install app    → installed
+  xcrun devicectl device process launch → "Launched application…"
+  ```
+
+  The app then ran on the phone and was driven through sign-in and navigation
+  with Appium/XCUITest. So this configuration now builds, signs, installs,
+  launches and is drivable on real hardware — the claim this story makes, proven
+  the way the rule requires.
+
+  Carried on a throwaway verification branch alongside SHY-0275's host plumbing,
+  because a physical iPhone cannot reach the local stack without it. The
+  xcconfig change under test is byte-identical to this PR's.
+
+- **2026-08-19 — Android is NOT walked, deliberately, and here is why.** The diff
+  is two lines in an iOS-only xcconfig plus a comment and a test. No Kotlin, no
+  Gradle, no Android source; `Local.xcconfig` is not read by any Android build.
+  There is no Android behaviour this change could alter. Recording the reasoning
+  rather than ticking a box or quietly skipping it — **if the operator wants the
+  Android leg run regardless, say so and it will be.**
+
+- **2026-08-19 — review round 1, findings applied.**
+  - **A test that could never fail.** `every build configuration fronted by this
+    file has a value` filtered on `!hasDefault && !conditioned.has(c)`. Once any
+    bare default exists — the whole point of the fix — `!hasDefault` is false for
+    every element and the result is unconditionally empty. It claimed to stop a
+    future `*-Local` configuration slipping through and stopped nothing.
+    Rewritten to check the value each configuration RESOLVES to against what its
+    name implies, so a `Release-*` silently inheriting `debug` now fails.
+    Mutation-proven: removing the override reddens it.
+  - Added the duplicate-declaration trip-wire and the explicit file-exists check
+    that the sibling `ios-dev-xcconfig.test.js` already had.
+  - Added the missing `pr:` frontmatter field.
+
+- **2026-08-19 — a second, sibling defect fixed here.** `:shared:iosSimulatorArm64Test`
+  never compiled either: two `commonTest` function names contained COMMAS, which
+  Kotlin/Native rejects ("Name contains illegal characters: ,"). So no shared
+  Kotlin test has ever run on an iOS target — only JVM/Android. Renamed both in
+  `UrlEncodingTest.kt`; nothing else in `commonTest` has an illegal name
+  (grepped). Included here rather than filed separately because it is the same
+  problem statement as this story — the iOS build path has never worked — and
+  the fix is two renames.
+
+Reviewed-up-to: 56a0cd64779

@@ -37,7 +37,7 @@ class UrlEncodingTest {
     }
 
     @Test
-    fun `plus is encoded, never left literal`() {
+    fun `plus is encoded and never left literal`() {
         // A literal `+` is decoded as a SPACE by form-urlencoded readers, so
         // leaving it through means a different value arrives than was sent.
         assertEquals("%2B", encodeUrlQueryComponent("+"))
@@ -59,7 +59,7 @@ class UrlEncodingTest {
     }
 
     @Test
-    fun `multi-byte UTF-8 is encoded byte by byte, with upper-case hex`() {
+    fun `multi-byte UTF-8 is encoded byte by byte with upper-case hex`() {
         // `é` is two bytes (C3 A9). Kotlin's Byte is SIGNED, so 0xA9 arrives as
         // -87 — formatting it without masking would emit "%-57".
         assertEquals("%C3%A9", encodeUrlQueryComponent("é"))

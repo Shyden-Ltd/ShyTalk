@@ -28,7 +28,7 @@
  * being dropped again, silently, by someone tidying the config.
  */
 
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
@@ -85,24 +85,57 @@ describe('SHY-0345 — Local.xcconfig makes the Local configuration buildable', 
     expect(override.value).toBe('release');
   });
 
-  test('every build configuration fronted by this file has a value', () => {
-    // Derived from the Xcode project, not hardcoded, so adding a third
-    // `*-Local` configuration without giving it a build type fails HERE rather
-    // than as an unexplained build error later.
+  test('every build configuration fronted by this file resolves to the RIGHT value', () => {
+    // Rewritten after review. The first version asked only whether SOME value
+    // reached each configuration:
+    //
+    //     configs.filter((c) => !hasDefault && !conditioned.has(c))
+    //
+    // Once any bare default exists — which is the whole point of the fix —
+    // `!hasDefault` is false for every element and the filter is
+    // unconditionally empty. The test could never fail, while the story claimed
+    // it stopped "a new *-Local configuration slipping through". It stopped
+    // nothing. A test that cannot go red is worse than no test: it reports
+    // safety that is not there.
+    //
+    // What matters is not that a value arrives but that the CORRECT one does. A
+    // `Release-*` configuration silently inheriting the `debug` default is
+    // exactly the defect this file exists to prevent, and it is the shape a
+    // future `Release-Local-Foo` would take.
     const configs = configurationsUsingLocalXcconfig();
     expect(configs.length).toBeGreaterThan(0);
 
     const decls = settings(source()).filter((s) => s.key === 'KOTLIN_FRAMEWORK_BUILD_TYPE');
-    const hasDefault = decls.some((s) => s.condition === null);
-    const conditioned = new Set(
+    const fallback = decls.find((s) => s.condition === null)?.value;
+    const conditioned = new Map(
       decls
-        .map((s) => s.condition && /\[config=([^\]]+)\]/.exec(s.condition))
-        .filter(Boolean)
-        .map((m) => m[1]),
+        .filter((s) => s.condition)
+        .map((s) => [/\[config=([^\]]+)\]/.exec(s.condition)?.[1], s.value])
+        .filter(([k]) => k),
     );
 
-    const uncovered = configs.filter((c) => !hasDefault && !conditioned.has(c));
-    expect(uncovered).toEqual([]);
+    /** What this configuration actually ends up with. */
+    const resolved = (c) => (conditioned.has(c) ? conditioned.get(c) : fallback);
+    /** What it OUGHT to have, from its own name. */
+    const expected = (c) => (/^Release/.test(c) ? 'release' : 'debug');
+
+    const wrong = configs.filter((c) => resolved(c) !== expected(c));
+    expect(wrong).toEqual([]);
+  });
+
+  test('the pinned key is declared exactly twice — no stray or duplicate copy', () => {
+    // Matches the convention the sibling `ios-dev-xcconfig.test.js` sets for
+    // this file class. A second bare declaration would silently win or lose
+    // depending on order, and neither outcome announces itself.
+    const decls = settings(source()).filter((s) => s.key === 'KOTLIN_FRAMEWORK_BUILD_TYPE');
+    expect(decls).toHaveLength(2);
+    expect(decls.filter((s) => s.condition === null)).toHaveLength(1);
+  });
+
+  test('the xcconfig file exists where the Xcode project expects it', () => {
+    // An explicit check with a readable failure, rather than an ENOENT thrown
+    // from inside four other tests if the file is ever moved.
+    expect(existsSync(XCCONFIG)).toBe(true);
   });
 
   test('Debug-Local and Release-Local are both fronted by this file', () => {
