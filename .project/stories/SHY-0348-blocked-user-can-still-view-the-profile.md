@@ -325,10 +325,20 @@ sees everything; the API's 403 is never reached.
   Android-only.
 
 - **2026-08-19 — STILL OWED: the iOS device leg, and it is BLOCKED on something
-  bigger than this story.** `iosApp/Configurations/Local.xcconfig` still sets
-  `LOCAL_HOST = localhost`, which on a real iPhone points the phone **at
-  itself** — that is SHY-0275, open as **PR #1696** since 2026-08-17 with
-  `Build & Test` failing.
+  bigger than this story.** An iOS build installed on a real iPhone points the
+  phone **at itself** for the local stack — that is SHY-0275, open as **PR #1696**
+  since 2026-08-17 with `Build & Test` failing.
+
+  **Correction to the mechanism, recorded because the wrong version would waste
+  someone's afternoon.** I first wrote that the cause is
+  `LOCAL_HOST = localhost` in `iosApp/Configurations/Local.xcconfig`. It is not.
+  SHY-0275's own analysis shows `LOCAL_HOST` and its siblings are **dead
+  configuration — nothing reads them**; a repo-wide search over
+  `*.swift`/`*.plist`/`*.xcconfig`/`*.pbxproj` finds only their own definitions
+  and comments. The live values are **Swift literals**:
+  `AppEnvironment.swift` (`localApiBaseUrl = "http://localhost:3000"`) and
+  `iOSApp.swift` (`options.databaseURL = "http://localhost:9000?ns=demo-shytalk"`).
+  Editing the xcconfig would change nothing and look like the fix had failed.
 
   The consequence is not local to this story: **while #1696 is unmerged, the iOS
   half of the LOCAL gauntlet cannot be run for ANY story.** Every iOS local leg
