@@ -40,6 +40,9 @@ const { requireSameCohort } = require('../middleware/sameCohort');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
+// SHY-0338 — cap on POST /users/batch. A follow page is 30 ids; 200 leaves
+// generous headroom while keeping the read amplification bounded.
+const MAX_BATCH_USER_IDS = 200;
 const MAX_IDENTIFIERS_PER_PROVIDER = 5;
 
 // UK OSA #17 PR 5 — Discovery + search: shared limits and field hygiene.
@@ -529,6 +532,77 @@ router.get('/users/search', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/users/:uniqueId — Get user profile
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/users/batch — resolve many profiles at once (SHY-0338)
+// ═══════════════════════════════════════════════════════════════════
+//
+// The follow lists used to read their members by querying Firestore straight
+// from the client — `whereIn(FieldPath.documentId(), chunk)` in chunks of 30.
+// `firestore.rules` gates a users read on `cohortMatchesCaller()`, and that
+// refusal is ALL-OR-NOTHING: one member of the chunk failing the gate denies
+// the WHOLE query and the other 29 readable users go with it. Since `cohort`
+// only arrived with UK OSA #17, a single older follower emptied a whole page,
+// and both clients swallowed the PERMISSION_DENIED into an empty list.
+//
+// The Admin SDK is not subject to rules, so the cohort decision moves to where
+// it can be made PER USER: drop the people this viewer may not see, return
+// everyone else. That is the entire difference between a working follow list
+// and a blank one.
+router.post('/users/batch', async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ error: 'ids (array) required' });
+    }
+    // Refuse rather than truncate. A truncated list is a list the caller
+    // believes is complete — the same silent-wrong-answer failure this
+    // endpoint exists to remove.
+    if (ids.length > MAX_BATCH_USER_IDS) {
+      return res.status(400).json({
+        error: `Batch size ${ids.length} exceeds maximum of ${MAX_BATCH_USER_IDS}`,
+      });
+    }
+
+    // Numeric uniqueIds only. A non-numeric id cannot address a user document,
+    // and letting one through would build a doc path out of caller input.
+    const wanted = [...new Set(ids.map(String))].filter((id) => /^[0-9]+$/.test(id));
+    if (wanted.length === 0) return res.json({ users: [] });
+
+    const callerId = String(req.auth.uniqueId);
+    const callerCohort = cohortFromClaim(req);
+
+    const snaps = await db.getAll(...wanted.map((id) => db.doc(`users/${id}`)));
+
+    const users = [];
+    for (const snap of snaps) {
+      // Absent simply means absent: no entry, no error, no existence signal.
+      if (!snap.exists) continue;
+      const user = snap.data();
+      const isSelf = String(user.uniqueId ?? snap.id) === callerId;
+
+      // Cross-cohort members are dropped INDIVIDUALLY. Self always passes —
+      // the caller's own profile is theirs to see, and a claim that has not
+      // finished propagating must not hide them from their own list.
+      if (!isSelf && effectiveCohort(user) !== callerCohort) continue;
+
+      // A user who has blocked the viewer is not shown to them. Mirrors the
+      // 403 on GET /users/:uniqueId, but as a drop: a follow list is a list,
+      // and one blocked member must not fail the other 29.
+      if (!isSelf && viewerIsBlocked(req.auth.uniqueId, user)) continue;
+
+      user.blockedUserIds = user.blockedUserIds || [];
+      user.followingIds = user.followingIds || [];
+      user.followerIds = user.followerIds || [];
+      users.push(stripSensitiveFields(user));
+    }
+
+    res.json({ users });
+  } catch (err) {
+    log.error('users', 'POST /users/batch failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 router.get('/users/:uniqueId', async (req, res) => {
   try {
