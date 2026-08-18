@@ -1003,7 +1003,9 @@ jobs:
       # path; without the cache restore above, a cold install can use
       # the entire 5-min sanity-check budget (incident 2026-05-12, run
       # 25763744882 cancelled after spending all 5 min downloading).
+      - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
+        timeout-minutes: 15
         run: npx playwright install chromium --with-deps
 
       - name: Run sanity checks against Dev
@@ -1065,7 +1067,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ steps.pw.outputs.version }}
 
+      - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
+        timeout-minutes: 15
         run: npx playwright install chromium --with-deps
 
       - name: Verify smoke-test secrets are present
