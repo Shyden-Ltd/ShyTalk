@@ -215,4 +215,23 @@ No app, backend or website runtime surface → **CI-config-only**.
 
   9 → 12 tests.
 
-Reviewed-up-to: 449eb2e2976
+Reviewed-up-to: 2a0a9b82e5e
+
+- **2026-08-18** — Incremental review of everything after the previous marker
+  (three authored commits; the rest were develop merges of already-reviewed
+  work plus board syncs). **No Critical, no Important.** It confirmed the
+  strengthened driver-arm assertion genuinely rejects the regression it names,
+  and that deriving the flag-init line from the workflow does not neuter the
+  original tests — the new guard `every flag the case statement sets is
+  initialised` closes that hole, checked against the live `pr-checks.yml` rather
+  than taken on faith.
+
+- **2026-08-18** — One open question the reviewer could not settle without a
+  shell, now closed: the Prettier commit really is formatting-only. Diffed it
+  with whitespace normalised out; the sole remaining difference is a trailing
+  comma in an array literal (`trailingComma: "all"`), which JavaScript ignores.
+
+- **2026-08-18** — Also fixed here: the chromium Playwright job failed with
+  "Can't find action.yml … .github/actions/harden-apt". The branch was 8 commits
+  behind develop, so the merge ref carried the workflow's reference to
+  SHY-0334's composite action without the action itself. Merged develop in.
