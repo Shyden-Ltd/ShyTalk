@@ -179,3 +179,70 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   "stalkers" (who qualifies, and what the watched user may see about them). The
   AC asserts the list is exactly right, which cannot be tested until the
   definition is written down here.
+
+- **2026-08-18 ~21:1x WIB — ROOT CAUSE, proven against the live rules engine.**
+  The story asked for WHICH failure, per list. The answer is one mechanism for
+  followers and following, and that same mechanism plus two more for stalkers.
+
+  **The lists are refused by `firestore.rules`, and the refusal is swallowed.**
+
+  1. Both platforms read the list members by querying Firestore **directly from
+     the client** — `UserRepositoryImpl.getUsers()` (Android) and
+     `IosUserRepositoryImpl.getUsers()` (iOS) each issue
+     `collection("users").whereIn(FieldPath.documentId(), chunk)` in chunks of 30.
+     That is already a breach of the no-direct-backend rule; here it is also the
+     bug.
+  2. `firestore.rules:66` gates a `users/{uniqueId}` read on
+     `cohortMatchesCaller()`, which compares the caller's token claim against
+     `resource.data.get('cohort', 'minor')`.
+  3. **The refusal is all-or-nothing.** A `documentId() in [...]` query names
+     exact paths, so the engine evaluates the gate per document — an
+     all-same-cohort batch genuinely SUCCEEDS. But if ONE document in the chunk
+     fails, Firestore denies the **entire query**, and the other 29 readable
+     users are lost with it.
+  4. `cohort` arrived with UK OSA #17. Any user document written before it — or
+     by any path that does not stamp it — reads as the `'minor'` default. **One
+     legacy follower empties a whole page of the list for an adult viewer.**
+  5. Both clients catch the exception and return `emptyList()`
+     (`Log.w` / `logW`, nothing else). So the screen shows an empty list with no
+     error, which is exactly "not working at all".
+
+  The profile itself still loads because `getUser()` is a single-document `get()`
+  covered by the own-doc carve-out — which is why the screens open and only the
+  lists are blank.
+
+  **Stalkers has two further, independent faults**, so fixing the above alone
+  would leave it dead:
+
+  - `getStalkers()` runs an ORDERED query over `users/{id}/stalkers`. That one
+    IS the classic "rules are not filters" case — the rule's second clause reads
+    `resource.data`, so the query is refused outright regardless of contents.
+  - A stalker document carries no `cohort` field at all, so
+    `cohortMatchesCaller()` compares an adult caller's `'adult'` claim against
+    the `'minor'` default and **never matches, even on a single-document read**.
+
+- **2026-08-18 — Why it shipped.** Every suite in
+  `express-api/tests/firestore-rules/` tests single-document `get()`/`set()`.
+  **Not one of them issues a query** — grepped for `whereIn`, `documentId` and
+  `orderBy` across the directory, zero hits. The rule was verified for an
+  operation the app never performs, and never for the one it does. There is also
+  no rules suite for `users` at all.
+
+- **2026-08-18 — First theory was WRONG, and the emulator said so.** I expected
+  a blanket "rules are not filters" denial of the batch query. The CONTROL test
+  proves an all-same-cohort batch succeeds. Recorded because the wrong theory
+  leads to the wrong fix: stamping `cohort` everywhere would look like a cure
+  and would still leave every genuinely cross-cohort follower emptying the list.
+
+- **2026-08-18 — Characterisation suite added**,
+  `express-api/tests/firestore-rules/users-follow-lists-rules.test.js`, 8 tests
+  against the live emulator. **These pin the CURRENT, BROKEN behaviour on
+  purpose.** A green run is evidence the lists are still broken in exactly the
+  way described, not that they work. Every `assertFails` in it must be replaced
+  when the fix lands.
+
+- **2026-08-18 — The fix follows the operator's own rule.** These reads belong
+  on the API, where the Admin SDK can apply the cohort filter **per user** —
+  dropping the people a viewer may not see and returning the rest — instead of
+  a client-side query that refuses wholesale. That removes the direct-Firestore
+  breach and the silent `emptyList()` in the same change.
