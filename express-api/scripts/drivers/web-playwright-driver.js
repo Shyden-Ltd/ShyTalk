@@ -25,6 +25,7 @@
  * real implementations one at a time.
  */
 const path = require('path');
+const { makeWebSignIn } = require('./web-sign-in');
 
 let _playwright;
 function loadPlaywright() {
@@ -139,6 +140,7 @@ const WEB_METHOD_NAMES = [
   // on the persona's tab; the matcher's `within 3000ms` polling
   // wraps the list population.
   'webRefreshRoomsList',
+  'webSignIn',
   'takeScreenshot',
   // Append-only — add new method names as new matchers land.
 ];
@@ -209,12 +211,27 @@ async function createWebDriver({
       console.error(
         `[web-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet`,
       );
-      return false;
+      // THROW, do not return false (SHY-0330). Returning false made an
+      // unimplemented method indistinguishable from a working one: 98 step
+      // handlers discarded the verdict and reported PASS, so the whole
+      // missing-driver inventory was invisible in pass/fail terms and a run
+      // could log hundreds of these while "passing". A step that calls a
+      // method nobody has written has not performed the step.
+      const err = new Error(
+        `[web-driver] ${methodName} is NOT IMPLEMENTED — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+      );
+      err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
+      err.method = methodName;
+      throw err;
     };
   }
 
   // ── Real implementations (override stubs above) ─────────────────────
   // Each method docs the matcher signature it satisfies.
+
+  // <Name> on Web signs in with valid credentials — shared across every web
+  // driver; see web-sign-in.js for why it is a factory and not a base class.
+  driver.webSignIn = makeWebSignIn({ pageFor, baseURL, label: 'web-driver' });
 
   // <Name>'s Web UI document direction is "ltr"|"rtl"|"auto"
   // Reads the dir attribute on <html>. Optional 2nd arg is the locale to

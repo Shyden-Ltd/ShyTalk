@@ -35,6 +35,7 @@ jobs:
       integration_changed: ${{ steps.changes.outputs.integration_changed }}
       qa_runner_drivers_changed: ${{ steps.changes.outputs.qa_runner_drivers_changed }}
       scripts_changed: ${{ steps.changes.outputs.scripts_changed }}
+      backend_tests_changed: ${{ steps.changes.outputs.backend_tests_changed }}
       workflow_only: ${{ steps.changes.outputs.workflow_only }}
       skip_android_e2e: ${{ steps.changes.outputs.skip_android_e2e }}
       skip_ios_e2e: ${{ steps.changes.outputs.skip_ios_e2e }}
@@ -59,7 +60,7 @@ jobs:
           # retained for lint/sonarcloud/integration-tests which
           # cover both platforms; only the heavy build/E2E jobs
           # gate on the granular ANDROID_APP / IOS_APP flags.
-          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false SCRIPTS=false OTHER=false
+          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false SCRIPTS=false OTHER=false BACKEND_TESTS=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
@@ -119,7 +120,31 @@ jobs:
               # the heavier test-backend job. BACKEND is set too so the
               # existing backend test suite still runs (regression safety
               # — driver code is a subset of the backend).
-              express-api/scripts/drivers/*|express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
+              # A driver TEST file is a test, not the shared core (SHY-0339).
+              # Matched BEFORE the source arm because shell `case` is
+              # first-match: combined, a test file inherited BACKEND=true and
+              # still forced the full client matrix — contradicting this
+              # story's own principle, on one of the most frequently edited
+              # paths in the repo.
+              express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND_TESTS=true ;;
+              express-api/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
+              # SHY-0339. A file under express-api/tests/** is NOT the shared
+              # core. The SHY-0127 rule below reads BACKEND as "the shared core
+              # changed, retest every client" and forces APP, ANDROID_APP,
+              # IOS_APP, WEB and INTEGRATION on while clearing the E2E skip
+              # markers — so before this arm existed, editing a TEST file ran
+              # five browser suites and the device matrix. Its own rationale is
+              # "a backend regression can break any client"; a test file is
+              # never shipped to a client and cannot cause one.
+              #
+              # Deliberately narrow: ONLY tests/. Everything else under
+              # express-api/ (src, scripts, package.json, jest config) keeps
+              # BACKEND=true and the full forcing, because a dependency or
+              # config change genuinely can reach a client.
+              #
+              # Same reasoning SHY-0284 applied to root scripts/**. Pinned by
+              # express-api/tests/scripts/pr-checks-playwright-scope.test.js.
+              express-api/tests/*) BACKEND_TESTS=true ;;
               express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
               # SHY-0284. Root `scripts/**` are CI/tooling scripts whose ONLY
               # automated coverage lives in express-api/tests/scripts/** (15 of
@@ -152,7 +177,7 @@ jobs:
           # omitting SCRIPTS would have fixed one silent skip (test-backend) by
           # introducing another, since every job gated on workflow_only,
           # sonarcloud among them, would then skip on a scripts-only PR.
-          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$SCRIPTS" = "false" ] && [ "$OTHER" = "false" ]; then
+          if [ "$APP" = "false" ] && [ "$BACKEND" = "false" ] && [ "$WEB" = "false" ] && [ "$INTEGRATION" = "false" ] && [ "$SCRIPTS" = "false" ] && [ "$BACKEND_TESTS" = "false" ] && [ "$OTHER" = "false" ]; then
             WORKFLOW_ONLY=true
           fi
           # Explicit per-platform E2E skip markers in the PR body. Use when the
@@ -183,7 +208,7 @@ jobs:
             APP=true; ANDROID_APP=true; IOS_APP=true; WEB=true; INTEGRATION=true
             SKIP_ANDROID_E2E=false; SKIP_IOS_E2E=false
           fi
-          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION qa_runner_drivers_changed=$QA_RUNNER_DRIVERS scripts_changed=$SCRIPTS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
+          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION qa_runner_drivers_changed=$QA_RUNNER_DRIVERS scripts_changed=$SCRIPTS backend_tests_changed=$BACKEND_TESTS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
           echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION qa_runner_drivers=$QA_RUNNER_DRIVERS scripts=$SCRIPTS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
@@ -409,7 +434,8 @@ jobs:
     if: |
       always() &&
       (needs.detect-changes.outputs.backend_changed == 'true' ||
-       needs.detect-changes.outputs.scripts_changed == 'true') &&
+       needs.detect-changes.outputs.scripts_changed == 'true' ||
+       needs.detect-changes.outputs.backend_tests_changed == 'true') &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped')
     uses: ./.github/workflows/test-backend.yml
     with:
@@ -452,7 +478,28 @@ jobs:
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     uses: ./.github/workflows/playwright-tests.yml
     with:
-      web: 'all'
+      # ONE browser per PR, not five (SHY-0339). The five projects run in
+      # parallel but each pays the WHOLE setup — checkout, JDK/Gradle, node,
+      # npm ci, browser install, apt deps, local services, Firebase emulators,
+      # seeding, Express start. Five times, on every PR that touches web.
+      #
+      # Measured 2026-08-18: recent pr-checks runs took 1/65/147/184/72/8/7/1/
+      # 22/11/44/82 minutes, several cancelled at timeout, four of the last six
+      # running the full matrix.
+      #
+      # This is a DEFERRAL, not a coverage cut: playwright-nightly.yml runs all
+      # five against develop every night, where before this change there was no
+      # scheduled browser run at all. Pinned by
+      # express-api/tests/scripts/pr-checks-playwright-scope.test.js.
+      #
+      # EXCEPT on the develop->main promotion PR, which runs all five. That is
+      # the last gate before production, and it must not depend on whether the
+      # nightly happened to run against this exact commit. Mirrors the
+      # base_ref == 'main' gating android-e2e and ios-e2e already use.
+      #
+      # Before SHY-0339 "the release path runs all five" was true only by
+      # ACCIDENT of every PR defaulting to 'all'. This makes it deliberate.
+      web: ${{ github.base_ref == 'main' && 'all' || 'chromium' }}
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
       report_env: pr

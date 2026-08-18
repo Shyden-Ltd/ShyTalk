@@ -74,3 +74,16 @@
 
 BUNDLE_ID_SUFFIX = .local
 LOCAL_HOST = localhost
+
+// KOTLIN_FRAMEWORK_BUILD_TYPE — see the same note in Dev.xcconfig. The
+// "Compile Kotlin Framework" phase infers debug-vs-release from the Xcode
+// CONFIGURATION name and recognises only the literal `Debug`/`Release`, so
+// `Debug-Local` defeats it: "Unable to detect Kotlin framework build type for
+// CONFIGURATION=Debug-Local". Without this the Local configuration cannot
+// build AT ALL, on device or simulator.
+//
+// This file fronts BOTH Debug-Local and Release-Local, so it carries a default
+// plus a per-configuration override. xcconfig supports `[config=<name>]`
+// conditionals, which is what makes one shared file workable here.
+KOTLIN_FRAMEWORK_BUILD_TYPE = debug
+KOTLIN_FRAMEWORK_BUILD_TYPE[config=Release-Local] = release

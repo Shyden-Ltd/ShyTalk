@@ -135,7 +135,18 @@ async function createIosDriver({ udid: preferred } = {}) {
       console.error(
         `[ios-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet (udid=${udid})`,
       );
-      return false;
+      // THROW, do not return false (SHY-0330). Returning false made an
+      // unimplemented method indistinguishable from a working one: 98 step
+      // handlers discarded the verdict and reported PASS, so the whole
+      // missing-driver inventory was invisible in pass/fail terms and a run
+      // could log hundreds of these while "passing". A step that calls a
+      // method nobody has written has not performed the step.
+      const err = new Error(
+        `[ios-driver] ${methodName} is NOT IMPLEMENTED (udid=${udid}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+      );
+      err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
+      err.method = methodName;
+      throw err;
     };
   }
 
