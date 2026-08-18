@@ -204,3 +204,62 @@ sees everything; the API's 403 is never reached.
   Switching every `getUser` to the API would empty those lists again from a
   fresh cause — exactly the trap SHY-0338 hit. Recorded so it is not rediscovered
   the expensive way.
+
+- **2026-08-19 — the block filter is DEVICE-PROVEN in the lists (SHY-0338's
+  half).** Set Theo to block Alice with a NUMERIC id — the shape
+  `block-check.js:4` documents — then opened Alice's connections on the real
+  OnePlus: **Followers 6 → 5 and Following 5 → 4, with Theo gone from both.**
+  `POST /api/users/batch` drops a member who has blocked the viewer, and it does
+  so per member: the other five survived. So the list half of blocking works on
+  real hardware.
+
+- **2026-08-19 — what that leaves for THIS story.** The profile screen already
+  has a blocked state (`ProfileScreen.kt:491`, driven by
+  `uiState.isBlockedByTarget`), and the view model already computes
+  `blockedByTarget = user.blockedUserIds.contains(currentUid)`
+  (`ProfileViewModel.kt:181`). The UI and the check both exist. What is missing
+  is that the profile DATA still arrives from a direct Firestore read, so:
+  - the server's 403 is never consulted — defence in depth is absent, and a
+    client that ignored the flag would still receive the whole profile;
+  - the message says "blocked", not the operator's requirement — *told they must
+    be unblocked first*.
+
+- **2026-08-19 — a correction worth recording.** I initially reasoned that
+  `blockedUserIds` was always empty on the client because blocks are stored as
+  numbers and `filterIsInstance<String>()` dropped them. Half right: the CLIENT
+  writes blocks as STRINGS (`UserRepositoryImpl.blockUser` →
+  `arrayUnion(blockedUserId)`, a String), so app-created blocks survived the old
+  parser. Only blocks written numerically — by the server or an admin path, which
+  is what `block-check.js` describes — were dropped. SHY-0338's `asIdSet` fix
+  closes that case; it was never the whole story, and saying so avoids
+  overclaiming what that fix repaired.
+
+- **2026-08-19 — implemented (server consultation).** `UserRepository` gains a
+  TYPED result — `ProfileAccess.Visible / BlockedByOwner / NotFound` — because
+  the block case must be told apart from "not found" and from a transport
+  failure, and the only thing that reliably does that is the status code. An
+  error-message match would work until somebody reworded it.
+  `getProfileForViewing` goes through `GET /api/users/:id` on both platforms and
+  maps 403/404; anything else rethrows, so a 500 cannot masquerade as a block.
+  `ProfileViewModel` keeps the document check as the fast path and lets the
+  server's answer win when it says no.
+
+- **2026-08-19 — the failure DIRECTION is asserted, not assumed.** A transport
+  failure is explicitly NOT a block. Telling somebody "you have been blocked"
+  because the network hiccuped is a worse lie than the bug being fixed, so it has
+  its own test.
+
+- **2026-08-19 — Gradle told me it compiled when it had not.** After adding the
+  interface member, all four compile targets reported success; `--rerun-tasks`
+  failed instantly on a fake that no longer implemented the interface. Codified
+  as [[feedback-gradle-up-to-date-hides-a-broken-compile]]. Everything here was
+  re-verified with `--rerun-tasks`.
+
+- **2026-08-19 — 97 tests green, mutation-proven.** Dropping the server answer
+  (`blockedByDoc || blockedByServer` → `blockedByDoc`) kills exactly
+  `the SERVER's block is honoured even when the document does not show it`.
+
+- **2026-08-19 — STILL OWED:** the wording change (the screen says "blocked",
+  the operator asked for *"must be unblocked first"*) and its locale files; the
+  journey scenarios; and the device walk. The enforcement half is done; the
+  telling-the-user half is not.

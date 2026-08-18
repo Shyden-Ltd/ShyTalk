@@ -20,6 +20,35 @@ interface UserRepository {
 
     suspend fun getUser(userId: String): Resource<User>
 
+    /**
+     * Why a viewer may or may not see somebody's profile — SHY-0348.
+     *
+     * Deliberately a TYPE and not a string. The block case has to be told apart
+     * from "not found" and from a network failure, and the only thing that ever
+     * reliably distinguishes them is the server's status code. Matching on an
+     * error message would work until somebody rewords it.
+     */
+    sealed class ProfileAccess {
+        data class Visible(
+            val user: User,
+        ) : ProfileAccess()
+
+        /** The owner has blocked this viewer. They must be unblocked first. */
+        data object BlockedByOwner : ProfileAccess()
+
+        /** No such user, or hidden for a reason the server will not disclose. */
+        data object NotFound : ProfileAccess()
+    }
+
+    /**
+     * Load somebody ELSE's profile, through the API so the block gate applies.
+     *
+     * `getUser` reads Firestore directly, which the rules allow for any
+     * same-cohort user — so a blocked viewer saw everything (SHY-0348). The
+     * server already refuses (`users.js`, 403), it was simply never asked.
+     */
+    suspend fun getProfileForViewing(userId: String): Resource<ProfileAccess>
+
     suspend fun userExists(userId: String): Resource<Boolean>
 
     suspend fun updateDisplayName(

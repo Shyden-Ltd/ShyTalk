@@ -177,8 +177,31 @@ class ProfileViewModel(
                             return@launch
                         }
 
-                        // Fetch viewer's blocked list in parallel with profile load
-                        val blockedByTarget = user.blockedUserIds.contains(currentUid)
+                        // SHY-0348 — ASK THE SERVER, do not only read the document.
+                        //
+                        // `user` above came from a direct Firestore read, which
+                        // the rules allow for any same-cohort user. The API
+                        // refuses a blocked viewer with 403 and always has; it
+                        // was simply never consulted, so a blocked person saw
+                        // the whole profile.
+                        //
+                        // The document check stays as the fast path — it is
+                        // already loaded and usually right. The API answer wins
+                        // when it says no, which is what makes this enforcement
+                        // rather than a client-side courtesy.
+                        val blockedByDoc = user.blockedUserIds.contains(currentUid)
+                        val blockedByServer =
+                            when (val access = userRepository.getProfileForViewing(profileUserId)) {
+                                is Resource.Success ->
+                                    access.data is UserRepository.ProfileAccess.BlockedByOwner
+
+                                // A transport failure is NOT a block. Treating
+                                // it as one would show "you have been blocked"
+                                // every time the network hiccups, which is a
+                                // worse lie than the bug.
+                                else -> false
+                            }
+                        val blockedByTarget = blockedByDoc || blockedByServer
                         val viewerBlockedTarget =
                             coroutineScope {
                                 val blockedDeferred = async { userRepository.getBlockedUserIds(currentUid) }

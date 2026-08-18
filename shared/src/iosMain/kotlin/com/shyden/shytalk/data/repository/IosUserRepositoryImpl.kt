@@ -8,6 +8,7 @@ import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.core.util.recoverListenerErrors
 import com.shyden.shytalk.data.firestore.dataMap
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.DocumentSnapshot
@@ -65,6 +66,28 @@ class IosUserRepositoryImpl(
     }
 
     // ── Read methods ────────────────────────────────────────────────
+
+    // SHY-0348 — see the Android twin. Somebody ELSE's profile goes through the
+    // API so the server's block gate applies; the status code is what tells
+    // "blocked" apart from "gone" and from a transport failure.
+    override suspend fun getProfileForViewing(userId: String): Resource<UserRepository.ProfileAccess> =
+        firebaseCall("Failed to load profile") {
+            try {
+                val json = api.get("/api/users/$userId")
+                UserRepository.ProfileAccess.Visible(
+                    User.fromMap(
+                        jsonToMap(json),
+                        json["uniqueId"]?.jsonPrimitive?.content ?: userId,
+                    ),
+                )
+            } catch (e: ApiException) {
+                when (e.statusCode) {
+                    403 -> UserRepository.ProfileAccess.BlockedByOwner
+                    404 -> UserRepository.ProfileAccess.NotFound
+                    else -> throw e
+                }
+            }
+        }
 
     override suspend fun getUser(userId: String): Resource<User> =
         firebaseCall("Failed to get user") {
