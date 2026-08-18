@@ -3198,7 +3198,7 @@ describe('UI driver — Android element-tag assertion (Then <P>\'s Android UI sh
 describe('UI driver — Android tap on element with tag (When <P> on Android taps "<X>")', () => {
   test('tap on found element calls androidTap with bounds centre', async () => {
     const dump = '<node resource-id="signup_createAccountButton" bounds="[100,200][300,400]" />';
-    const tapSpy = jest.fn(async () => {});
+    const tapSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: { androidUiDump: jest.fn(async () => dump), androidTap: tapSpy },
     });
@@ -3226,7 +3226,7 @@ describe('UI driver — Android tap on element with tag (When <P> on Android tap
   test('fully-qualified resource-id form also resolves', async () => {
     const dump =
       '<node resource-id="com.shyden.shytalk.dev:id/signup_createAccountButton" bounds="[10,20][30,40]" />';
-    const tapSpy = jest.fn(async () => {});
+    const tapSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: { androidUiDump: jest.fn(async () => dump), androidTap: tapSpy },
     });
@@ -3263,8 +3263,8 @@ describe('UI driver — Android tap on element with tag (When <P> on Android tap
 describe('UI driver — Android type text into element (When <P> on Android types "<text>" into "<tag>")', () => {
   test('typing into a found field focuses (taps centre) then dispatches text', async () => {
     const dump = '<node resource-id="signup_emailField" bounds="[200,20][320,80]" />';
-    const tapSpy = jest.fn(async () => {});
-    const typeSpy = jest.fn(async () => {});
+    const tapSpy = jest.fn(async () => true);
+    const typeSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: {
         androidUiDump: jest.fn(async () => dump),
@@ -3323,8 +3323,8 @@ describe('UI driver — Android type text into element (When <P> on Android type
 
   test('quoted text passes through verbatim — special chars preserved (e.g. !@#)', async () => {
     const dump = '<node resource-id="signup_passwordField" bounds="[0,0][100,40]" />';
-    const tapSpy = jest.fn(async () => {});
-    const typeSpy = jest.fn(async () => {});
+    const tapSpy = jest.fn(async () => true);
+    const typeSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: {
         androidUiDump: jest.fn(async () => dump),
@@ -3713,7 +3713,7 @@ describe('UI driver — Android tag-negation (Then <P>\'s Android UI does not sh
 
 describe('UI driver — Android navigation (When <P> on Android opens the "<X>" screen|tab)', () => {
   test('"screen" noun — calls androidOpenScreen with the exact screen name', async () => {
-    const openSpy = jest.fn(async () => {});
+    const openSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenScreen: openSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android opens the "discovery" screen' },
@@ -3724,7 +3724,7 @@ describe('UI driver — Android navigation (When <P> on Android opens the "<X>" 
   });
 
   test('"tab" noun — same matcher works (semantically equivalent navigation target)', async () => {
-    const openSpy = jest.fn(async () => {});
+    const openSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenScreen: openSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Selma on Android opens the "rooms" tab' },
@@ -3735,7 +3735,7 @@ describe('UI driver — Android navigation (When <P> on Android opens the "<X>" 
   });
 
   test('P-NN persona annotation — handled without polluting the screen name', async () => {
-    const openSpy = jest.fn(async () => {});
+    const openSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenScreen: openSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam [P-01] on Android opens the "wallet" screen' },
@@ -3748,7 +3748,7 @@ describe('UI driver — Android navigation (When <P> on Android opens the "<X>" 
   test('multi-word screen names with underscores pass through verbatim', async () => {
     // Important: don't accidentally strip or transform the name — drivers may need
     // exact case/separator for deeplinks (e.g. shytalk://daily_reward).
-    const openSpy = jest.fn(async () => {});
+    const openSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenScreen: openSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android opens the "daily_reward" screen' },
@@ -5128,7 +5128,7 @@ describe('Response status-or-body-signal alternation (Then the response has stat
 
 describe('Android search composite matchers (searches "X" in screen / types "X" into the search field)', () => {
   test('`searches "Marcus" in discovery` — calls androidSearchIn("discovery", "Marcus")', async () => {
-    const searchSpy = jest.fn(async () => {});
+    const searchSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSearchIn: searchSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Vexa on Android searches "Marcus" in discovery' },
@@ -5139,7 +5139,7 @@ describe('Android search composite matchers (searches "X" in screen / types "X" 
   });
 
   test('`types "Alice" into the search field` — calls androidSearchIn(null, "Alice") (null screen = active)', async () => {
-    const searchSpy = jest.fn(async () => {});
+    const searchSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSearchIn: searchSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android types "Alice" into the search field' },
@@ -5150,7 +5150,7 @@ describe('Android search composite matchers (searches "X" in screen / types "X" 
   });
 
   test('search text with special chars passes through verbatim', async () => {
-    const searchSpy = jest.fn(async () => {});
+    const searchSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSearchIn: searchSpy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android types "adult-power" into the search field' },
@@ -5205,9 +5205,9 @@ describe('Android search composite matchers (searches "X" in screen / types "X" 
     // field" form (no quoted Y) is a separate matcher; must not be swallowed
     // by greedy regex on the existing one.
     const dump = '<node resource-id="signup_emailField" bounds="[200,20][320,80]" />';
-    const tapSpy = jest.fn(async () => {});
-    const typeSpy = jest.fn(async () => {});
-    const searchSpy = jest.fn(async () => {});
+    const tapSpy = jest.fn(async () => true);
+    const typeSpy = jest.fn(async () => true);
+    const searchSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: {
         androidUiDump: jest.fn(async () => dump),
@@ -5238,7 +5238,7 @@ describe('Android search composite matchers (searches "X" in screen / types "X" 
 
 describe('Android kill-and-relaunch matcher (When <P> on Android kills and relaunches the app)', () => {
   test('calls androidKillAndRelaunch with the persona name (for driver logging)', async () => {
-    const killSpy = jest.fn(async () => {});
+    const killSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidKillAndRelaunch: killSpy }, target: 'local' });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android kills and relaunches the app' },
@@ -5251,7 +5251,7 @@ describe('Android kill-and-relaunch matcher (When <P> on Android kills and relau
   });
 
   test('P-NN annotation form handled correctly', async () => {
-    const killSpy = jest.fn(async () => {});
+    const killSpy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidKillAndRelaunch: killSpy }, target: 'dev' });
     const r = await executeStep(
       { kind: 'When', text: 'Raul [P-08] on Android kills and relaunches the app' },
@@ -5298,7 +5298,7 @@ describe('Android kill-and-relaunch matcher (When <P> on Android kills and relau
 
 describe('Android auth/token-refresh matchers (force-refresh + performs authenticated call)', () => {
   test('`performs any authenticated API call` — calls androidPerformAuthenticatedCall(persona)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidPerformAuthenticatedCall: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Hayato on Android performs any authenticated API call' },
@@ -5309,7 +5309,7 @@ describe('Android auth/token-refresh matchers (force-refresh + performs authenti
   });
 
   test('`force-refreshes via securetoken endpoint` — calls androidForceRefreshSecureToken(persona)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidForceRefreshSecureToken: spy } });
     const r = await executeStep(
       {
@@ -5323,7 +5323,7 @@ describe('Android auth/token-refresh matchers (force-refresh + performs authenti
   });
 
   test('`force-refreshes the JWT` — calls androidForceRefreshJwt(persona)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidForceRefreshJwt: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Raul on Android force-refreshes the JWT' },
@@ -5334,9 +5334,9 @@ describe('Android auth/token-refresh matchers (force-refresh + performs authenti
   });
 
   test('P-NN annotation form on each variant', async () => {
-    const spy1 = jest.fn(async () => {});
-    const spy2 = jest.fn(async () => {});
-    const spy3 = jest.fn(async () => {});
+    const spy1 = jest.fn(async () => true);
+    const spy2 = jest.fn(async () => true);
+    const spy3 = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: {
         androidPerformAuthenticatedCall: spy1,
@@ -5418,7 +5418,7 @@ describe('Android auth/token-refresh matchers (force-refresh + performs authenti
 
 describe('Android long-press-and-tap composite (When <P> on Android long-presses the message and taps "X")', () => {
   test('Edit menu item — calls androidLongPressMessageAndTap with persona + menu item', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidLongPressMessageAndTap: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android long-presses the message and taps "Edit"' },
@@ -5429,7 +5429,7 @@ describe('Android long-press-and-tap composite (When <P> on Android long-presses
   });
 
   test('Delete menu item — driver receives correct menu label', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidLongPressMessageAndTap: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android long-presses the message and taps "Delete"' },
@@ -5440,7 +5440,7 @@ describe('Android long-press-and-tap composite (When <P> on Android long-presses
   });
 
   test('P-NN annotation form handled', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidLongPressMessageAndTap: spy } });
     const r = await executeStep(
       {
@@ -5489,7 +5489,7 @@ describe('Android long-press-and-tap composite (When <P> on Android long-presses
 
 describe('Android send-message-to-recipient composite (When <P> on Android sends "X" to <Y>)', () => {
   test('simple text message — calls androidSendMessageTo with persona, recipient, content', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSendMessageTo: spy } });
     const r = await executeStep(
       {
@@ -5503,7 +5503,7 @@ describe('Android send-message-to-recipient composite (When <P> on Android sends
   });
 
   test('simple gift identifier — works without cost annotation', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSendMessageTo: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Theo on Android sends "crown" to Selma' },
@@ -5514,7 +5514,7 @@ describe('Android send-message-to-recipient composite (When <P> on Android sends
   });
 
   test('P-NN annotation form handled', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSendMessageTo: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Raul [P-08] on Android sends "msg" to Nora' },
@@ -5541,7 +5541,7 @@ describe('Android send-message-to-recipient composite (When <P> on Android sends
 
 describe("Android tap-user-card composite (When <P> on Android taps <Y>'s user card)", () => {
   test("Alice's user card — calls androidTapUserCard with persona + target name", async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapUserCard: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Adam on Android taps Alice's user card" },
@@ -5552,7 +5552,7 @@ describe("Android tap-user-card composite (When <P> on Android taps <Y>'s user c
   });
 
   test('P-NN annotation form handled on both persona and target side', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapUserCard: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Adam [P-01] on Android taps Marcus's user card" },
@@ -5585,9 +5585,9 @@ describe("Android tap-user-card composite (When <P> on Android taps <Y>'s user c
   test('does not collide with existing `taps "X"` (quoted resource-id) matcher', async () => {
     // Regression guard: `taps Alice's user card` is unquoted; existing
     // pattern requires `taps "..."`. They must route to different handlers.
-    const tapUserCardSpy = jest.fn(async () => {});
+    const tapUserCardSpy = jest.fn(async () => true);
     const dump = '<node resource-id="some_button" bounds="[10,10][50,50]" />';
-    const tapSpy = jest.fn(async () => {});
+    const tapSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: {
         androidTapUserCard: tapUserCardSpy,
@@ -5702,9 +5702,14 @@ describe('iOS Sim tag-assertion matchers (positive + negation, via iosUiDump)', 
 });
 
 describe('iOS Sim tap matcher (When <P> on iOS Sim taps "X")', () => {
-  test('calls iosTap with the identifier', async () => {
-    const spy = jest.fn(async () => {});
-    const ctx = makeCtx({ uiDriver: { iosTap: spy } });
+  test('calls iosTapByTag with the identifier — NOT iosTap (SHY-0330)', async () => {
+    // `iosTap` means different things per driver: ios-simctl takes a string
+    // identifier, ios-appium takes numeric COORDINATES (its string method is
+    // iosTapByTag). This test previously asserted the simctl-only contract, so
+    // it PINNED the bug: under Appium the runner was sending x="<tag>",
+    // y=undefined and the tap silently did nothing.
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosTapByTag: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim taps "signup_createAccountButton"' },
       ctx,
@@ -5731,7 +5736,7 @@ describe('iOS Sim tap matcher (When <P> on iOS Sim taps "X")', () => {
     const spy = jest.fn(async () => {
       throw new Error('simctl: element not found');
     });
-    const ctx = makeCtx({ uiDriver: { iosTap: spy } });
+    const ctx = makeCtx({ uiDriver: { iosTapByTag: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim taps "missing_button"' },
       ctx,
@@ -5743,7 +5748,7 @@ describe('iOS Sim tap matcher (When <P> on iOS Sim taps "X")', () => {
 
 describe('iOS Sim open-screen matcher (When <P> on iOS Sim opens the "X" screen)', () => {
   test('calls iosOpenScreen with the screen name', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosOpenScreen: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim opens the "discovery" screen' },
@@ -5754,7 +5759,7 @@ describe('iOS Sim open-screen matcher (When <P> on iOS Sim opens the "X" screen)
   });
 
   test('"tab" noun accepted', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosOpenScreen: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim opens the "rooms" tab' },
@@ -5844,7 +5849,7 @@ describe('iOS Sim text-content assertion (Then <P>\'s iOS Sim UI shows "X")', ()
 
 describe('iOS Sim type-into-element matcher (When <P> on iOS Sim types "X" into "Y")', () => {
   test('calls iosTypeText with tag + content', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosTypeText: spy } });
     const r = await executeStep(
       {
@@ -5858,7 +5863,7 @@ describe('iOS Sim type-into-element matcher (When <P> on iOS Sim types "X" into 
   });
 
   test('special chars in text passed through verbatim', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosTypeText: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim types "TestPassw0rd!" into "signup_passwordField"' },
@@ -5885,7 +5890,7 @@ describe('iOS Sim type-into-element matcher (When <P> on iOS Sim types "X" into 
 
 describe('iOS Sim type-into-search-field matcher (When <P> on iOS Sim types "X" into the search field)', () => {
   test('calls iosSearchIn(null, text) — active-screen search', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosSearchIn: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim types "minor-power" into the search field' },
@@ -5918,8 +5923,8 @@ describe('iOS Sim type-into-search-field matcher (When <P> on iOS Sim types "X" 
   test('does not collide with iOS Sim type-into-element matcher', async () => {
     // Regression guard: `types "X" into "Y"` and `types "X" into the search field`
     // must route to different driver methods.
-    const typeSpy = jest.fn(async () => {});
-    const searchSpy = jest.fn(async () => {});
+    const typeSpy = jest.fn(async () => true);
+    const searchSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: { iosTypeText: typeSpy, iosSearchIn: searchSpy },
     });
@@ -5938,7 +5943,7 @@ describe('iOS Sim type-into-search-field matcher (When <P> on iOS Sim types "X" 
 
 describe('Web matchers (ctx.webDriver namespace — Playwright MCP scope)', () => {
   test('`on Web taps "X"` — calls webTap(tag)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTap: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web taps "wallet_buyCoinsButton"' },
@@ -5949,7 +5954,7 @@ describe('Web matchers (ctx.webDriver namespace — Playwright MCP scope)', () =
   });
 
   test('`on Web opens the "X" screen` — calls webOpenScreen(name)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenScreen: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Lena on Web opens the "wallet" screen' },
@@ -5961,7 +5966,7 @@ describe('Web matchers (ctx.webDriver namespace — Playwright MCP scope)', () =
 
   test('`on Web opens the "X" tab` — calls webOpenScreen(name) (same driver method as screen)', async () => {
     // The corpus uses "screen" and "tab" interchangeably — same driver call.
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenScreen: spy } });
     const r = await executeStep({ kind: 'When', text: 'Alice on Web opens the "pm" tab' }, ctx);
     expect(r.ok).toBe(true);
@@ -5969,7 +5974,7 @@ describe('Web matchers (ctx.webDriver namespace — Playwright MCP scope)', () =
   });
 
   test('`on Web Admin opens the "X" tab` — calls webAdminOpenTab(name)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenTab: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin opens the "reports" tab' },
@@ -5983,8 +5988,8 @@ describe('Web matchers (ctx.webDriver namespace — Playwright MCP scope)', () =
     // `Alice on Web opens the "pm" tab` → webOpenScreen
     // `Greta on Web Admin opens the "reports" tab` → webAdminOpenTab
     // Different drivers, different handlers. Regression-guarded.
-    const openSpy = jest.fn(async () => {});
-    const adminSpy = jest.fn(async () => {});
+    const openSpy = jest.fn(async () => true);
+    const adminSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       webDriver: { webOpenScreen: openSpy, webAdminOpenTab: adminSpy },
     });
@@ -6130,7 +6135,7 @@ describe('Web document direction assertion (Then <P>\'s Web UI document directio
 
 describe('Web Admin tap-with-reason matcher (When <P> on Web Admin taps "X" with reason "Y")', () => {
   test('calls webAdminTapWithReason(tag, reason)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminTapWithReason: spy } });
     const r = await executeStep(
       {
@@ -6145,7 +6150,7 @@ describe('Web Admin tap-with-reason matcher (When <P> on Web Admin taps "X" with
 
   test('does not collide with plain `Web Admin taps` without reason (different matcher when added later, currently STEP_NOT_IMPLEMENTED)', async () => {
     // The "with reason" form requires the reason suffix; plain `taps "X"` doesn't match.
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminTapWithReason: spy } });
     await executeStep(
       { kind: 'When', text: 'Greta on Web Admin taps "review" on Hayato\'s submission' },
@@ -6172,7 +6177,7 @@ describe('Web Admin tap-with-reason matcher (When <P> on Web Admin taps "X" with
 
 describe('Web Admin confirm-with-reason matcher (When <P> on Web Admin confirms with reason "Y")', () => {
   test('calls webAdminConfirmWithReason(reason)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminConfirmWithReason: spy } });
     const r = await executeStep(
       {
@@ -6266,7 +6271,7 @@ describe('Web sign-in matcher (When <P> on Web signs in with valid credentials)'
 
 describe("Web open-user-profile matcher (When <P> on Web opens <Y>'s profile)", () => {
   test('calls webOpenUserProfile(persona, target)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenUserProfile: spy } });
     const r = await executeStep({ kind: 'When', text: "Layla on Web opens Alice's profile" }, ctx);
     expect(r.ok).toBe(true);
@@ -6274,7 +6279,7 @@ describe("Web open-user-profile matcher (When <P> on Web opens <Y>'s profile)", 
   });
 
   test('different persona target', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenUserProfile: spy } });
     const r = await executeStep({ kind: 'When', text: "Kenji on Web opens Marcus's profile" }, ctx);
     expect(r.ok).toBe(true);
@@ -6291,7 +6296,7 @@ describe("Web open-user-profile matcher (When <P> on Web opens <Y>'s profile)", 
 
 describe('Web Admin opens-report-and-taps composite (When <P> on Web Admin opens the {first|second|new} report and taps "X" [with reason "Y"])', () => {
   test('first report, no reason — calls webAdminOpenReportAndTap(ordinal, menuItem, null)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenReportAndTap: spy } });
     const r = await executeStep(
       {
@@ -6305,7 +6310,7 @@ describe('Web Admin opens-report-and-taps composite (When <P> on Web Admin opens
   });
 
   test('second report with reason — driver receives the reason', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenReportAndTap: spy } });
     const r = await executeStep(
       {
@@ -6319,7 +6324,7 @@ describe('Web Admin opens-report-and-taps composite (When <P> on Web Admin opens
   });
 
   test('new report (non-ordinal keyword) accepted', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenReportAndTap: spy } });
     const r = await executeStep(
       {
@@ -6389,7 +6394,7 @@ describe('Web JS console errors assertion (Then no JavaScript console errors are
 
 describe('Web profile-panel navigation (When <P> on Web opens the "X" panel from his profile)', () => {
   test('calls webOpenProfilePanel(persona, panelName)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenProfilePanel: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Tariq on Web opens the "event-host" panel from his profile' },
@@ -6400,7 +6405,7 @@ describe('Web profile-panel navigation (When <P> on Web opens the "X" panel from
   });
 
   test('different panel name', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenProfilePanel: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Bao on Web opens the "teaching" panel from his profile' },
@@ -6423,7 +6428,7 @@ describe('Web profile-panel navigation (When <P> on Web opens the "X" panel from
 
 describe('Android event-invite tap matcher (When <P> on Android taps "X" on the event invite)', () => {
   test('calls androidTapEventInviteAction(persona, action)', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapEventInviteAction: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Selma on Android taps "Accept" on the event invite' },
@@ -6434,7 +6439,7 @@ describe('Android event-invite tap matcher (When <P> on Android taps "X" on the 
   });
 
   test('Decline action variant', async () => {
-    const spy = jest.fn(async () => {});
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapEventInviteAction: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Selma on Android taps "Decline" on the event invite' },
@@ -6450,8 +6455,8 @@ describe('Android event-invite tap matcher (When <P> on Android taps "X" on the 
     // ctx.uiDriver.androidTapEventInviteAction. Different drivers, different
     // matchers. Regression-guarded.
     const dump = '<node resource-id="main_pmTab" bounds="[10,10][50,50]" />';
-    const inviteSpy = jest.fn(async () => {});
-    const tapSpy = jest.fn(async () => {});
+    const inviteSpy = jest.fn(async () => true);
+    const tapSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       uiDriver: {
         androidUiDump: jest.fn(async () => dump),
@@ -6804,7 +6809,7 @@ describe('UI does not show the message-input field matcher', () => {
 
 describe('Refreshes the rooms list matcher', () => {
   test('Web → webDriver.webRefreshRoomsList', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webRefreshRoomsList: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web refreshes the rooms list' },
@@ -6815,7 +6820,7 @@ describe('Refreshes the rooms list matcher', () => {
   });
 
   test('Android → uiDriver.androidRefreshRoomsList', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidRefreshRoomsList: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Marcus on Android refreshes the rooms list' },
@@ -6838,7 +6843,7 @@ describe('Refreshes the rooms list matcher', () => {
 
 describe("Taps room card / Taps <Owner>'s room matcher", () => {
   test('Web + "taps the room card" → webDriver.webTapRoomCard(undefined)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTapRoomCard: spy } });
     const r = await executeStep({ kind: 'When', text: 'Alice on Web taps the room card' }, ctx);
     expect(r.ok).toBe(true);
@@ -6846,7 +6851,7 @@ describe("Taps room card / Taps <Owner>'s room matcher", () => {
   });
 
   test('Android + "taps Selma\'s room" → uiDriver.androidTapRoomCard("Selma")', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapRoomCard: spy } });
     const r = await executeStep({ kind: 'When', text: "Theo on Android taps Selma's room" }, ctx);
     expect(r.ok).toBe(true);
@@ -6854,7 +6859,7 @@ describe("Taps room card / Taps <Owner>'s room matcher", () => {
   });
 
   test('iOS Sim + "taps Bao\'s room card" → uiDriver.iosTapRoomCard("Bao")', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosTapRoomCard: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Yuki on iOS Sim taps Bao's room card" },
@@ -6865,7 +6870,7 @@ describe("Taps room card / Taps <Owner>'s room matcher", () => {
   });
 
   test('Android + "taps the room card" → androidTapRoomCard(undefined)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapRoomCard: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Marcus on Android taps the room card' },
@@ -6978,7 +6983,7 @@ describe('Gift catalog state-seed matcher', () => {
 
 describe('Web Admin issues a warning matcher', () => {
   test('"Greta on Web Admin issues a warning to Theo" delegates to driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminIssueWarning: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin issues a warning to Theo' },
@@ -7001,7 +7006,7 @@ describe('Web Admin issues a warning matcher', () => {
 
 describe('Confirms action matcher', () => {
   test('"Alice on Web confirms" → webDriver.webConfirm()', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webConfirm: spy } });
     const r = await executeStep({ kind: 'When', text: 'Alice on Web confirms' }, ctx);
     expect(r.ok).toBe(true);
@@ -7009,7 +7014,7 @@ describe('Confirms action matcher', () => {
   });
 
   test('"Selma on Android confirms" → uiDriver.androidConfirm()', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidConfirm: spy } });
     const r = await executeStep({ kind: 'When', text: 'Selma on Android confirms' }, ctx);
     expect(r.ok).toBe(true);
@@ -7017,7 +7022,7 @@ describe('Confirms action matcher', () => {
   });
 
   test('"Nora on iOS Sim confirms" → uiDriver.iosConfirm()', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosConfirm: spy } });
     const r = await executeStep({ kind: 'When', text: 'Nora on iOS Sim confirms' }, ctx);
     expect(r.ok).toBe(true);
@@ -7027,7 +7032,7 @@ describe('Confirms action matcher', () => {
 
 describe('Open <pronoun> <screen> generalization (the | his | her | their)', () => {
   test('"Alice on Web opens her \\"gift_wall\\" screen" matches', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenScreen: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web opens her "gift_wall" screen' },
@@ -7038,7 +7043,7 @@ describe('Open <pronoun> <screen> generalization (the | his | her | their)', () 
   });
 
   test('"Selma on Android opens her \\"gift_wall\\" screen" matches', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenScreen: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Selma on Android opens her "gift_wall" screen' },
@@ -7049,7 +7054,7 @@ describe('Open <pronoun> <screen> generalization (the | his | her | their)', () 
   });
 
   test('existing "the" form still works (regression-guard)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenScreen: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web opens the "wallet" screen' },
@@ -7062,7 +7067,7 @@ describe('Open <pronoun> <screen> generalization (the | his | her | their)', () 
 
 describe('Send gift with coin-cost matcher (j16 economy verification)', () => {
   test('"Alice on Web sends \\"crown\\" (500 coins) to Selma" → webSendGift', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSendGift: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web sends "crown" (500 coins) to Selma' },
@@ -7073,7 +7078,7 @@ describe('Send gift with coin-cost matcher (j16 economy verification)', () => {
   });
 
   test('"Theo on Android sends \\"rose\\" (10 coins) to Selma" → androidSendGift', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSendGift: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Theo on Android sends "rose" (10 coins) to Selma' },
@@ -7084,7 +7089,7 @@ describe('Send gift with coin-cost matcher (j16 economy verification)', () => {
   });
 
   test('iOS Sim variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosSendGift: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim sends "rose" (10 coins) to Selma' },
@@ -7097,7 +7102,7 @@ describe('Send gift with coin-cost matcher (j16 economy verification)', () => {
 
 describe('Picks DOB in picker matcher (j01 Android + j02 iOS Sim)', () => {
   test('Android: "Adam on Android picks DOB \\"2004-01-01\\" in \\"signup_dobPicker\\"" → androidPickDOB', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidPickDOB: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android picks DOB "2004-01-01" in "signup_dobPicker"' },
@@ -7108,7 +7113,7 @@ describe('Picks DOB in picker matcher (j01 Android + j02 iOS Sim)', () => {
   });
 
   test('iOS Sim: "Mia on iOS Sim picks DOB \\"2010-08-20\\" in \\"signup_dobPicker\\"" → iosPickDOB', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosPickDOB: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim picks DOB "2010-08-20" in "signup_dobPicker"' },
@@ -7121,7 +7126,7 @@ describe('Picks DOB in picker matcher (j01 Android + j02 iOS Sim)', () => {
 
 describe('Android age-verification matchers (j01 Adam)', () => {
   test('"picks ID type \\"passport\\"" → androidPickIdType', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidPickIdType: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android picks ID type "passport"' },
@@ -7132,7 +7137,7 @@ describe('Android age-verification matchers (j01 Adam)', () => {
   });
 
   test('"selects test image \\"X.jpg\\" from the gallery" → androidSelectGalleryImage', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSelectGalleryImage: spy } });
     const r = await executeStep(
       {
@@ -7146,7 +7151,7 @@ describe('Android age-verification matchers (j01 Adam)', () => {
   });
 
   test('"signs up with DOB \\"X\\" and accepts legal" → androidSignupWithDOB', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSignupWithDOB: spy } });
     const r = await executeStep(
       {
@@ -7162,7 +7167,7 @@ describe('Android age-verification matchers (j01 Adam)', () => {
 
 describe('Web Admin age-verification matchers (j01 Greta)', () => {
   test('"refreshes the age-verification tab" → webAdminRefreshAgeVerification', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminRefreshAgeVerification: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin refreshes the age-verification tab' },
@@ -7173,7 +7178,7 @@ describe('Web Admin age-verification matchers (j01 Greta)', () => {
   });
 
   test('"taps \\"approve\\" on the submission for \\"{newUniqueId}\\"" → webAdminActOnSubmission', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     const r = await executeStep(
       {
@@ -7187,7 +7192,7 @@ describe('Web Admin age-verification matchers (j01 Greta)', () => {
   });
 
   test('"taps \\"reject\\" on the submission for \\"50000010\\"" — literal uid also accepted', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     const r = await executeStep(
       {
@@ -7213,7 +7218,7 @@ describe('Web Admin age-verification matchers (j01 Greta)', () => {
 
 describe('Scenario-var interpolation (runner-level preprocessing)', () => {
   test('"{varName}" in step text resolves to ctx.scenarioVars value', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     ctx.scenarioVars = new Map([['newUniqueId', '50000010']]);
     const r = await executeStep(
@@ -7228,7 +7233,7 @@ describe('Scenario-var interpolation (runner-level preprocessing)', () => {
   });
 
   test('multiple "{vars}" in the same step are all resolved', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     ctx.scenarioVars = new Map([
       ['actionVar', 'reject'],
@@ -7246,7 +7251,7 @@ describe('Scenario-var interpolation (runner-level preprocessing)', () => {
   });
 
   test('unresolved "{var}" left as literal — no interpolation error', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     ctx.scenarioVars = new Map();
     const r = await executeStep(
@@ -7261,7 +7266,7 @@ describe('Scenario-var interpolation (runner-level preprocessing)', () => {
   });
 
   test('ctx.scenarioVars missing — step matches normally without interpolation', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     // no scenarioVars on ctx at all
     const r = await executeStep(
@@ -7306,7 +7311,7 @@ describe('uniqueId capture matcher (writes to ctx.scenarioVars)', () => {
   });
 
   test('end-to-end: capture then interpolate', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmission: spy } });
     ctx.sessions = new Map([['Adam', { uniqueId: 50000099 }]]);
     // Step 1: capture
@@ -7353,7 +7358,7 @@ describe('Env-var fallback in scenario-var interpolation', () => {
 
   test('"{PERSONAS_PASSWORD}" resolves from process.env when scenarioVars miss', async () => {
     process.env.PERSONAS_PASSWORD = 'real-pw';
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTypeAndSubmit: spy } });
     ctx.scenarioVars = new Map(); // empty — fallback should kick in
     const r = await executeStep(
@@ -7369,7 +7374,7 @@ describe('Env-var fallback in scenario-var interpolation', () => {
 
   test('scenarioVars wins over env when both have the key', async () => {
     process.env.PERSONAS_PASSWORD = 'env-pw';
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTypeAndSubmit: spy } });
     ctx.scenarioVars = new Map([['PERSONAS_PASSWORD', 'scenario-pw']]);
     const r = await executeStep(
@@ -7453,7 +7458,7 @@ describe('Main tabs + PM tab hidden matcher (Android, j01)', () => {
 
 describe('Deep-link navigation matcher (Android + iOS Sim)', () => {
   test('Android: "Adam on Android attempts to navigate to \\"/pm\\" via deep link" → androidOpenDeepLink', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenDeepLink: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android attempts to navigate to "/pm" via deep link' },
@@ -7464,7 +7469,7 @@ describe('Deep-link navigation matcher (Android + iOS Sim)', () => {
   });
 
   test('iOS Sim: "Mia on iOS Sim attempts to navigate to \\"/age-verification\\" via deep link" → iosOpenDeepLink', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosOpenDeepLink: spy } });
     const r = await executeStep(
       {
@@ -7498,7 +7503,7 @@ describe('No <X> screen renders matcher (UI-absence)', () => {
 
 describe('Gift selection (Android)', () => {
   test('"selects gift \\"rose\\" and recipient \\"Alice\\"" → androidSelectGiftRecipient', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSelectGiftRecipient: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android selects gift "rose" and recipient "Alice"' },
@@ -7511,7 +7516,7 @@ describe('Gift selection (Android)', () => {
 
 describe('Sign-in form filler (types email + password and submits)', () => {
   test('Web: "Lena on Web types \\"X\\" + \\"Y\\" and submits" → webTypeAndSubmit', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTypeAndSubmit: spy } });
     const r = await executeStep(
       {
@@ -7525,7 +7530,7 @@ describe('Sign-in form filler (types email + password and submits)', () => {
   });
 
   test('Android: "Marcus on Android types \\"X\\" + \\"Y\\" and submits" → androidTypeAndSubmit', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTypeAndSubmit: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Marcus on Android types "x@y.com" + "secret" and submits' },
@@ -7632,7 +7637,7 @@ describe('Quoted-string UI absence matcher (different from name-absence)', () =>
 
 describe('Bare-name button tap matcher (taps the X button)', () => {
   test('Web: "Lena on Web taps the claim button" → webTapNamedButton', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTapNamedButton: spy } });
     const r = await executeStep({ kind: 'When', text: 'Lena on Web taps the claim button' }, ctx);
     expect(r.ok).toBe(true);
@@ -7640,7 +7645,7 @@ describe('Bare-name button tap matcher (taps the X button)', () => {
   });
 
   test('Web: "Alice on Web taps the send button" → webTapNamedButton', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTapNamedButton: spy } });
     const r = await executeStep({ kind: 'When', text: 'Alice on Web taps the send button' }, ctx);
     expect(r.ok).toBe(true);
@@ -7648,7 +7653,7 @@ describe('Bare-name button tap matcher (taps the X button)', () => {
   });
 
   test('Android variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapNamedButton: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android taps the claim button' },
@@ -7661,7 +7666,7 @@ describe('Bare-name button tap matcher (taps the X button)', () => {
 
 describe('Legal checkboxes + continue composite (signup)', () => {
   test('Web: "Lena on Web checks both legal checkboxes and continues" → webAcceptLegalAndContinue', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAcceptLegalAndContinue: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Lena on Web checks both legal checkboxes and continues' },
@@ -7672,7 +7677,7 @@ describe('Legal checkboxes + continue composite (signup)', () => {
   });
 
   test('iOS Sim: "Mia on iOS Sim accepts both legal checkboxes and continues" → iosAcceptLegalAndContinue', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosAcceptLegalAndContinue: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim accepts both legal checkboxes and continues' },
@@ -7683,7 +7688,7 @@ describe('Legal checkboxes + continue composite (signup)', () => {
   });
 
   test('Android variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidAcceptLegalAndContinue: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Hayato on Android accepts both legal checkboxes and continues' },
@@ -7863,7 +7868,7 @@ describe("List-membership UI assertion (X's UI shows Y in the <list> list)", () 
 
 describe('Browser notification permission grant', () => {
   test('"Lena on Web grants the browser notification permission" → webGrantNotificationPermission', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webGrantNotificationPermission: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Lena on Web grants the browser notification permission' },
@@ -7886,7 +7891,7 @@ describe('Browser notification permission grant', () => {
 
 describe('Web Admin: opens unquoted tab name (slug form)', () => {
   test('"Greta on Web Admin opens the age-verification tab" → webAdminOpenTab', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenTab: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin opens the age-verification tab' },
@@ -7897,7 +7902,7 @@ describe('Web Admin: opens unquoted tab name (slug form)', () => {
   });
 
   test('"opens the suspension-appeals tab" routes the same way', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenTab: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin opens the suspension-appeals tab' },
@@ -7912,7 +7917,7 @@ describe('Web Admin: opens unquoted tab name (slug form)', () => {
     // webAdminOpenTab — they're disjoint by regex shape but converge on
     // the same driver method. Quote inclusion is the corpus author's
     // choice, not a different action.
-    const spyQuoted = jest.fn(async () => undefined);
+    const spyQuoted = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminOpenTab: spyQuoted } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin opens the "/admin#age-verification" tab' },
@@ -7925,7 +7930,7 @@ describe('Web Admin: opens unquoted tab name (slug form)', () => {
 
 describe("Web Admin: taps action on Name's submission (name-anchored)", () => {
   test('"taps \\"review\\" on Hayato\'s submission" → webAdminActOnSubmissionByName', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmissionByName: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin taps "review" on Hayato\'s submission' },
@@ -7936,7 +7941,7 @@ describe("Web Admin: taps action on Name's submission (name-anchored)", () => {
   });
 
   test('"taps \\"approve\\" on Alice\'s submission" routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminActOnSubmissionByName: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin taps "approve" on Alice\'s submission' },
@@ -7996,7 +8001,7 @@ describe('Web Admin: UI shows parsed DOB candidate (quoted text)', () => {
 
 describe('User card tap matcher (iOS Sim + Android + Web)', () => {
   test('iOS Sim: "Mia on iOS Sim taps Marcus\'s user card" → iosTapUserCard', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosTapUserCard: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Mia on iOS Sim taps Marcus's user card" },
@@ -8007,7 +8012,7 @@ describe('User card tap matcher (iOS Sim + Android + Web)', () => {
   });
 
   test('Android: existing matcher (older signature) wins by first-match-wins, passes (tapper, target)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTapUserCard: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Hayato on Android taps Alice's user card" },
@@ -8021,7 +8026,7 @@ describe('User card tap matcher (iOS Sim + Android + Web)', () => {
   });
 
   test('Web variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTapUserCard: spy } });
     const r = await executeStep({ kind: 'When', text: "Alice on Web taps Selma's user card" }, ctx);
     expect(r.ok).toBe(true);
@@ -8073,7 +8078,7 @@ describe('User-doc state-seed with array field (followingIds=[...])', () => {
 
 describe('Web Admin tap-with-reason-and-dobOverride (j04 reject flow)', () => {
   test('"taps \\"reject_and_dob_down\\" with reason \\"X\\" and dobOverride=\\"Y\\"" → driver call', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminTapWithReasonAndOverride: spy } });
     const r = await executeStep(
       {
@@ -8186,7 +8191,7 @@ describe('PM is from <sender> assertion', () => {
 
 describe('Relaunches the app and signs in (composite action)', () => {
   test('Android: "Hayato on Android relaunches the app and signs in" → androidRelaunchAndSignIn', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidRelaunchAndSignIn: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Hayato on Android relaunches the app and signs in' },
@@ -8197,7 +8202,7 @@ describe('Relaunches the app and signs in (composite action)', () => {
   });
 
   test('iOS Sim variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosRelaunchAndSignIn: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim relaunches the app and signs in' },
@@ -8438,7 +8443,7 @@ describe('PM-with-badge UI assertion', () => {
 
 describe('Followers/following list nav matcher', () => {
   test('Android: "Theo on Android opens his followers list" → androidOpenListView("followers")', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenListView: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Theo on Android opens his followers list' },
@@ -8449,7 +8454,7 @@ describe('Followers/following list nav matcher', () => {
   });
 
   test('Web variant + her pronoun', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenListView: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web opens her following list' },
@@ -8524,7 +8529,7 @@ describe('Package state-seed (j05 IAP catalog)', () => {
 
 describe('Package selection (Web)', () => {
   test('"Alice on Web selects package \\"coins-1000\\"" → webSelectPackage', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSelectPackage: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web selects package "coins-1000"' },
@@ -8537,7 +8542,7 @@ describe('Package selection (Web)', () => {
 
 describe('Sandbox receipt submission (Web)', () => {
   test('"Alice on Web submits a sandbox receipt \\"<id>\\"" → webSubmitSandboxReceipt', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSubmitSandboxReceipt: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web submits a sandbox receipt "sandbox-receipt-abc-A"' },
@@ -8548,7 +8553,7 @@ describe('Sandbox receipt submission (Web)', () => {
   });
 
   test('"{ts}" placeholder interpolates from scenarioVars', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSubmitSandboxReceipt: spy } });
     ctx.scenarioVars = new Map([['ts', '1700000000000']]);
     const r = await executeStep(
@@ -8790,7 +8795,7 @@ describe('Highlight-pointing-at-section UI assertion', () => {
 
 describe('Modal close via X button (composite)', () => {
   test('"X on Web closes the modal via the X button without checking boxes" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webCloseModalViaX: spy } });
     const r = await executeStep(
       {
@@ -8865,7 +8870,7 @@ describe('Firestore doc-absence with version constraint', () => {
 
 describe('Picks a NMB test image (Android, size variant)', () => {
   test('"Adam on Android picks a 15MB test image" → driver call with size', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidPickTestImageBySize: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android picks a 15MB test image' },
@@ -8878,7 +8883,7 @@ describe('Picks a NMB test image (Android, size variant)', () => {
 
 describe('Reverse-order gift selection (recipient first, then gift)', () => {
   test('"Alice on Web selects recipient \\"Selma\\" and gift \\"crown\\"" → webSelectRecipientAndGift', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webSelectRecipientAndGift: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web selects recipient "Selma" and gift "crown"' },
@@ -8891,7 +8896,7 @@ describe('Reverse-order gift selection (recipient first, then gift)', () => {
 
 describe('Double-tap with same receipt within Nms (idempotency test)', () => {
   test('"X on Web double-taps \\"tag\\" with the same receipt \\"R\\" within Nms" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webDoubleTapWithSameReceipt: spy } });
     const r = await executeStep(
       {
@@ -8966,7 +8971,7 @@ describe('Sequential request status assertion', () => {
 
 describe('Composite purchase action (sandbox receipt)', () => {
   test('"X on Web purchases \\"Y\\" with sandbox receipt" → driver call', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webPurchaseWithSandboxReceipt: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web purchases "coins-1000" with sandbox receipt' },
@@ -9095,7 +9100,7 @@ describe('Past-tense purchase state-seed (post-Wake-30 strip)', () => {
 
 describe('Network drop simulation', () => {
   test('"X\'s network drops before the 200 OK reaches the client" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { simulateNetworkDropBeforeResponse: spy } });
     const r = await executeStep(
       {
@@ -9154,7 +9159,10 @@ describe('Past-tense purchase matcher generalised (optional "successfully")', ()
 
 describe('Bare API POST matcher (Android)', () => {
   test('"X on Android POSTs /api/X" → androidApiPost(endpoint, "")', async () => {
-    const spy = jest.fn(async () => ({ status: 200 }));
+    // androidApiPost's contract is a BOOLEAN verdict, like every other action
+    // method — the handler never read the response object this mock used to
+    // return, and SHY-0330 makes the verdict the thing that decides the step.
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidApiPost: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Android POSTs /api/economy/purchase' },
@@ -9172,7 +9180,7 @@ describe('Bare API POST matcher (Android)', () => {
 
 describe('Retry-same-purchase composite (Wake 30 strip)', () => {
   test('"X on Android retries the same purchase once network restores" (after parens strip) → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidRetrySamePurchase: spy } });
     const r = await executeStep(
       {
@@ -9251,7 +9259,7 @@ describe('Receipt-mismatch state-seed (j06)', () => {
 
 describe('Web Admin processes refund', () => {
   test('"X on Web Admin processes a refund for receipt \\"Y\\"" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminProcessRefund: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin processes a refund for receipt "receipt-R3"' },
@@ -9470,7 +9478,7 @@ describe('Bare stats UI assertion', () => {
 
 describe('Selects from followed-users picker', () => {
   test('"X on Android selects \\"Y\\" from the followed-users picker" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSelectFromFollowedPicker: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android selects "Alice" from the followed-users picker' },
@@ -9499,7 +9507,7 @@ describe('Navigates to conversation thread screen (composite UI assertion)', () 
 
 describe('Opens conversation with persona (action)', () => {
   test('"X on Web opens the conversation with Y" → webOpenConversation', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webOpenConversation: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web opens the conversation with Adam' },
@@ -9510,7 +9518,7 @@ describe('Opens conversation with persona (action)', () => {
   });
 
   test('Android variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidOpenConversation: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Hayato on Android opens the conversation with Alice' },
@@ -9567,7 +9575,7 @@ describe('FCM push notification assertion (Android device + Web)', () => {
 
 describe('Types into conversation input', () => {
   test('"X on Web types \\"<body>\\" into the conversation input" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTypeIntoConversationInput: spy } });
     const r = await executeStep(
       {
@@ -9581,7 +9589,7 @@ describe('Types into conversation input', () => {
   });
 
   test('Android variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidTypeIntoConversationInput: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android types "hey" into the conversation input' },
@@ -9662,7 +9670,7 @@ describe('Past-tense PM state Given', () => {
 
 describe('Edit-body-and-confirms composite', () => {
   test('"X on Android changes the body to \\"Y\\" and confirms" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidEditBodyAndConfirm: spy } });
     const r = await executeStep(
       {
@@ -9676,7 +9684,7 @@ describe('Edit-body-and-confirms composite', () => {
   });
 
   test('Web variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webEditBodyAndConfirm: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Alice on Web changes the body to "fixed" and confirms' },
@@ -9708,7 +9716,7 @@ describe('Bare persona-exists Given', () => {
 
 describe('Types into search field (platform-dispatch)', () => {
   test('"X on Web types \\"Y\\" into the search field" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webTypeIntoSearch: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Vexa on Web types "Marcus" into the search field' },
@@ -9719,7 +9727,7 @@ describe('Types into search field (platform-dispatch)', () => {
   });
 
   test('Android: pre-existing matcher (line ~2698) wins by first-match-wins, calls androidSearchIn(null, text)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidSearchIn: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android types "Alice" into the search field' },
@@ -9731,7 +9739,7 @@ describe('Types into search field (platform-dispatch)', () => {
   });
 
   test('iOS Sim: pre-existing matcher (line ~2076) wins, calls iosSearchIn(null, text)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosSearchIn: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim types "adult-power" into the search field' },
@@ -9759,7 +9767,7 @@ describe('Voice room state-seed', () => {
 
 describe('FCM dispatcher attempts to send notification (action)', () => {
   test('"FCM dispatcher attempts to send a notification from X to Y" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { simulateFcmDispatcherAttempt: spy } });
     const r = await executeStep(
       {
@@ -9892,7 +9900,7 @@ describe('New follower notification absence (party-implicit)', () => {
 
 describe('Profile deep-link attempt', () => {
   test('"X on Android attempts profile deep-link \\"<url>\\"" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidAttemptProfileDeepLink: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Vexa on Android attempts profile deep-link "/profile/60000010"' },
@@ -9903,7 +9911,7 @@ describe('Profile deep-link attempt', () => {
   });
 
   test('iOS Sim variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosAttemptProfileDeepLink: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim attempts profile deep-link "/profile/50000010"' },
@@ -9916,7 +9924,7 @@ describe('Profile deep-link attempt', () => {
 
 describe('Attempts to follow via profile screen', () => {
   test('"X on Android attempts to follow Y via the profile screen" (after Wake-30 strip)', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidAttemptFollowViaProfile: spy } });
     const r = await executeStep(
       {
@@ -9976,7 +9984,7 @@ describe('Voice room create with joiners composite state-seed', () => {
 
 describe('Network drops for N seconds (platform-dispatch)', () => {
   test('"X\'s Android network drops for N seconds" → driver call', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidNetworkDropFor: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Theo's Android network drops for 30 seconds" },
@@ -9987,7 +9995,7 @@ describe('Network drops for N seconds (platform-dispatch)', () => {
   });
 
   test('iOS Sim variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosNetworkDropFor: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Ines's iOS Sim network drops for 10 seconds" },
@@ -11546,7 +11554,7 @@ describe('Given "no prior segregationEvents exist between <source> and <target>"
 
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidConfirmDialog: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Theo on Android confirms in the dialog' },
@@ -11557,7 +11565,7 @@ describe('Dialog confirm action (platform-dispatch)', () => {
   });
 
   test('iOS Sim variant routes correctly', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosConfirmDialog: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Mia on iOS Sim confirms in the dialog' },
@@ -11570,7 +11578,7 @@ describe('Dialog confirm action (platform-dispatch)', () => {
 
 describe("Long-press on target person's seat", () => {
   test('"X on Android long-presses Y\'s seat" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidLongPressSeat: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Theo on Android long-presses Ines's seat" },
@@ -11583,7 +11591,7 @@ describe("Long-press on target person's seat", () => {
 
 describe('Voice room create composite (j09 host)', () => {
   test('"X on Android types title \\"Y\\" and chooses public visibility" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidCreateRoomComposite: spy } });
     const r = await executeStep(
       {
@@ -11597,7 +11605,7 @@ describe('Voice room create composite (j09 host)', () => {
   });
 
   test('private visibility variant', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidCreateRoomComposite: spy } });
     const r = await executeStep(
       {
@@ -11688,7 +11696,7 @@ describe('Seat grid assertion (N of M seats occupied)', () => {
 
 describe('Taps the same room (relative reference)', () => {
   test('"X on iOS Sim taps the same room" → driver call', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosTapSameRoom: spy } });
     const r = await executeStep({ kind: 'When', text: 'Ines on iOS Sim taps the same room' }, ctx);
     expect(r.ok).toBe(true);
@@ -11696,7 +11704,7 @@ describe('Taps the same room (relative reference)', () => {
   });
 
   test('"taps the same room again" — driver receives isAgain=true', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosTapSameRoom: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Ines on iOS Sim taps the same room again' },
@@ -11709,7 +11717,7 @@ describe('Taps the same room (relative reference)', () => {
 
 describe('Approve seat request composite', () => {
   test('"X on Android taps approve on Y\'s seat request" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidApproveSeatRequest: spy } });
     const r = await executeStep(
       { kind: 'When', text: "Theo on Android taps approve on Ines's seat request" },
@@ -11800,7 +11808,7 @@ describe('Voice room state-seed with mic state (multi-field)', () => {
 
 describe('Web Admin age-down flow composite', () => {
   test('"Greta on Web Admin executes the age-down flow" → driver', async () => {
-    const spy = jest.fn(async () => undefined);
+    const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webAdminExecuteAgeDownFlow: spy } });
     const r = await executeStep(
       { kind: 'When', text: 'Greta on Web Admin executes the age-down flow' },
