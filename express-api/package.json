@@ -56,6 +56,6 @@
     "@tootallnate/once": ">=3.0.1",
     "uuid": ">=14.0.0",
     "protobufjs": "^7.6.3",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.3.1"
   }
 }

@@ -50,6 +50,16 @@ const stripComments = (text) =>
       for (let i = 0; i < line.length; i += 1) {
         const c = line[i];
         if (quote) {
+          // Skip the character after a backslash. Without this, an ODD number
+          // of escaped same-type quotes flips the parity and a genuine `#`
+          // inside the string reads as a comment start — truncating the line
+          // and potentially dropping the very apt command being searched for.
+          // A guard that silently fails to FIND a site is worse than one that
+          // finds a spurious one.
+          if (c === '\\') {
+            i += 1;
+            continue;
+          }
           if (c === quote) quote = null;
         } else if (c === '"' || c === "'") {
           quote = c;
@@ -374,6 +384,64 @@ describe('discovery primitives', () => {
       '      - name: Install',
       '        timeout-minutes: 10',
       '        run: npx playwright install --with-deps chromium',
+    ].join('\n');
+    const [site] = sitesInFile('synthetic.yml', src);
+    expect(site.jobPrelude).not.toContain('./.github/actions/harden-apt');
+  });
+
+  // The quote state machine, in BOTH directions. It shipped in round 3 with no
+  // test at all — deleting it entirely would have turned nothing red, which is
+  // the "coincidence, not a guard" gap this whole file exists to close.
+  test('a # inside a quoted string is NOT a comment', () => {
+    const body = [
+      '      - name: X',
+      '        run: echo "a # b" && npx playwright install-deps',
+    ].join('\n');
+    expect(invokesApt(body)).toBe(true);
+  });
+
+  test('a # after an ESCAPED quote is still inside the string', () => {
+    // Round 4's repro. Without escape handling the `\"` toggles the quote
+    // closed one character early, the real `#` reads as a comment, the line is
+    // truncated there — and the apt command after it vanishes. A guard that
+    // silently fails to FIND a site is worse than one that finds a spurious one.
+    const body = [
+      '      - name: X',
+      '        run: echo "value \\" # literal hash" && npx playwright install-deps',
+    ].join('\n');
+    expect(invokesApt(body)).toBe(true);
+  });
+
+  test('single and double quotes are tracked independently', () => {
+    const body = [
+      '      - name: X',
+      `        run: echo 'a " b # c' && npx playwright install-deps`,
+    ].join('\n');
+    expect(invokesApt(body)).toBe(true);
+  });
+
+  test('an unterminated quote does not swallow the rest of the line’s meaning', () => {
+    // Malformed YAML should not silently un-discover a site.
+    const body = [
+      '      - name: X',
+      '        run: npx playwright install-deps  # trailing "oops',
+    ].join('\n');
+    expect(invokesApt(body)).toBe(true);
+  });
+
+  test('sitesInFile’s jobPrelude stops at the STEP, not at the end of the job', () => {
+    // Guards the sibling of the ceiling bug fixed in round 2: a harden-apt
+    // reference placed AFTER the install step is useless, and must not satisfy
+    // "preceded by harden-apt" for that step.
+    const src = [
+      'jobs:',
+      '  j:',
+      '    timeout-minutes: 30',
+      '    steps:',
+      '      - name: Unguarded install',
+      '        timeout-minutes: 10',
+      '        run: npx playwright install --with-deps chromium',
+      '      - uses: ./.github/actions/harden-apt',
     ].join('\n');
     const [site] = sitesInFile('synthetic.yml', src);
     expect(site.jobPrelude).not.toContain('./.github/actions/harden-apt');
