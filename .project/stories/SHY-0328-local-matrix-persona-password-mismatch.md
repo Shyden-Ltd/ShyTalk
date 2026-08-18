@@ -504,3 +504,18 @@ real-device question by construction. Decisive check: slow the Firebase SDK load
 past ~25s on the real iPhone and confirm no early transport timeout.
 
 Reviewed-up-to: 718d49e91cf
+
+- **2026-08-18** — Merged develop in to pick up the CI fixes that were blocking
+  this PR (SHY-0334's apt hardening and SHY-0329's driver-checks budget). The
+  merge was clean, but the tree then showed 10 failures in `50-matrix.sh`
+  suites — a file this story modifies, so it looked like a real conflict.
+
+  It was not. `50-matrix.sh` resolves the repo BY PATH and refuses anything not
+  at the canonical location, so every test that shells out to it fails inside a
+  git worktree (`FAIL repo not found at .../ShyTalk-shy0328`), whatever the
+  code says. `SHYTALK_REPO` does not override it. The same suite passes 9/9 in
+  the canonical tree.
+
+  Recorded because it is a real limit on reviewing/testing from worktrees, and
+  because the near-miss was expensive: read cold, "10 failures after merging
+  develop" in a file this story touches reads as a merge conflict.
