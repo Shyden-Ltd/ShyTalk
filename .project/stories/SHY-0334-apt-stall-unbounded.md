@@ -137,6 +137,8 @@ site added later fails here rather than hanging on someone's PR.
 | `Acquire::Retries` raised to `50` (bounded wait × unbounded multiplier) | `...not so many times that the wait is unbounded again` |
 | a step's `timeout-minutes` raised above its job ceiling | that site's `has a REACHABLE step timeout` |
 | an apt command added inside a multi-line `run: \|` block in ANY workflow | all per-site assertions for the new site |
+| the escape skip changed from `i += 1` to `i += 2` | `the escape skip consumes EXACTLY the escaped character` |
+| the whole quote machine replaced by `line.split('#')[0]` | 3 quote tests |
 
 ### Real-run proof
 
@@ -229,7 +231,7 @@ under `express-api/tests/scripts/**`. No app, backend or website runtime surface
   block. "Fixing" the parser here would have broken correct code to satisfy a
   wrong expectation.
 
-Reviewed-up-to: 5d065110798
+Reviewed-up-to: d2d7dbd36b8
 
 - **2026-08-18** — Round 5: **merge verdict, zero Critical**. It constructed a
   mutant I had not: changing the escape skip from `i += 1` to `i += 2` survives
