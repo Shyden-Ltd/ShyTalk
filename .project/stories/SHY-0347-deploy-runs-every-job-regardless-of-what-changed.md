@@ -252,3 +252,5 @@ merge, iOS archive 53 minutes, timed out.
 - **2026-08-19 — 22 tests, mutation-proven on both headline fixes.** Removing
   `functions/*` from the web arm kills its named test; swapping `&&` for `||`
   kills the wiring test that previously could not see it.
+
+Reviewed-up-to: 0d41587ad8c
