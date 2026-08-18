@@ -100,12 +100,28 @@ short of leaving the room.
 **RED first, on every framework this touches.** No production change lands
 before a failing test names the defect.
 
-### Kotlin unit — `shared/src/commonTest/.../voice/`
+### Kotlin unit — `app/src/test/.../core/room/ActiveRoomManagerTest.kt`
 
-- `mute publishes nothing — the local audio track is disabled at the source`
-- `unmute republishes`
-- `a failed mute request leaves the UI state UNMUTED and surfaces the error`
-- `mute requested before connect is applied once connected`
+Four of the five originally-named tests exist. The fifth was named at a layer
+that cannot honestly carry it, and saying so is part of the work:
+
+- `toggleSelfMute - toggles mute state for own seat` — mute reaches the mic
+- **`toggleSelfMute - a successful UNMUTE republishes (SHY-0335)`** — added; the
+  unmute direction had four tests and every one was a refusal
+- **`toggleSelfMute - a FAILED UNMUTE leaves the mic CLOSED (SHY-0335)`** — added
+- `toggleSelfMute - a FAILED write must not change the mic (SHY-0335)`
+- `mute requested before connect is applied once connected` — satisfied by the
+  room collector, which sets the mic from `mySeat.isMuted` on every room update
+  and again immediately after `joinRoom` (`ActiveRoomManager.kt:356`, `:362`).
+  Mute-while-disconnected therefore survives to connect by construction.
+
+**`mute publishes nothing — the local audio track is disabled at the source`
+cannot be a unit test here, and pretending otherwise would be the bug wearing a
+test's clothes.** `VoiceService` is the seam; below it is the LiveKit adapter,
+platform code on both sides. A unit test can only assert that
+`setMicrophoneEnabled(false)` was CALLED — which is what the mute tests above
+already do — never that a track stopped publishing. The only honest proof is the
+journey's receiving-side assertion, and that is where it lives.
 
 ### Express/Jest — `express-api/tests/routes/`
 
@@ -216,3 +232,25 @@ before a failing test names the defect.
   meant either an AC that can never be ticked, or a "fix" that widened this
   story into a data-model migration mid-flight. Moved WHOLE to SHY-0340 (P0),
   where it gets its own migration, client surface and safety argument.
+
+- **2026-08-18 20:2x WIB** — Two tests added for the UNMUTE direction, which had
+  none. `toggleSelfMute` carried four manager-level tests and every one was
+  about muting or about being refused, so the honour-the-write change could have
+  broken reopening the mic outright with all 66 still green. Mutation-proven,
+  each killing exactly its own test and nothing else:
+
+  | Mutation | Killed |
+  | --- | --- |
+  | discard the `Resource` again | `a FAILED UNMUTE leaves the mic CLOSED` + `a FAILED write must not change the mic` |
+  | `setMicrophoneEnabled(false)` hardcoded | `a successful UNMUTE republishes` |
+
+  68 tests in the class, 0 failures. Tree verified clean after each revert.
+
+- **2026-08-18** — The fifth named unit test was retired with its reason, not
+  quietly dropped: nothing above the `VoiceService` seam can observe a track
+  ceasing to publish, so a unit test there could only ever restate the call it
+  already asserts. The journey's receiving-side assertion is the real proof.
+
+- **2026-08-18** — STILL OWED, unchanged: the real-device walk on Android and
+  iPhone, local then dev. Devices are unreachable while the operator is away, so
+  this stays out of In Review until that is done.
