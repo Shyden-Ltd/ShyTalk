@@ -24,22 +24,42 @@
  */
 
 const { execFileSync } = require('node:child_process');
-const { readFileSync } = require('node:fs');
+const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 
 const REPO_ROOT = join(__dirname, '..', '..', '..');
 
-/** Every path git currently tracks that mentions node_modules. */
-function trackedNodeModulesPaths() {
-  const out = execFileSync('git', ['-C', REPO_ROOT, 'ls-files'], {
+/**
+ * An ABSOLUTE path to git, never a bare `git`.
+ *
+ * Resolving the binary through `PATH` lets anything earlier on `PATH` answer as
+ * `git` — the shape `sonarjs/no-os-command-from-path` flags, and warnings are
+ * failures here. `/usr/bin/git` is the system binary on macOS and on the
+ * ubuntu-latest runners; Homebrew's is the fallback for a machine without Xcode
+ * command line tools.
+ */
+const GIT = ['/usr/bin/git', '/opt/homebrew/bin/git', '/usr/local/bin/git'].find((p) =>
+  existsSync(p),
+);
+
+/** Run git with fixed argv — no shell, no PATH lookup. */
+function git(args) {
+  if (!GIT) throw new Error('no git binary found at a known absolute path');
+  return execFileSync(GIT, ['-C', REPO_ROOT, ...args], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
   });
-  return out
+}
+
+/** Every path git currently tracks that mentions node_modules. */
+function trackedNodeModulesPaths() {
+  return git(['ls-files'])
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
-    .filter((l) => l === 'node_modules' || l.includes('/node_modules') || l.startsWith('node_modules/'));
+    .filter(
+      (l) => l === 'node_modules' || l.includes('/node_modules') || l.startsWith('node_modules/'),
+    );
 }
 
 describe('SHY-0346 — node_modules is never tracked', () => {
@@ -62,11 +82,7 @@ describe('SHY-0346 — node_modules is never tracked', () => {
     // Asserts the behaviour rather than the text: `check-ignore` answers the
     // real question — would git ignore this path if it appeared? A rule that
     // reads correctly but does not match is the failure mode being guarded.
-    const out = execFileSync(
-      'git',
-      ['-C', REPO_ROOT, 'check-ignore', '-v', 'node_modules', 'express-api/node_modules'],
-      { encoding: 'utf8' },
-    );
+    const out = git(['check-ignore', '-v', 'node_modules', 'express-api/node_modules']);
     expect(out).toMatch(/node_modules/);
     expect(out.split('\n').filter((l) => l.trim()).length).toBe(2);
   });
