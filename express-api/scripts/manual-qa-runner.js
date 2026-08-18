@@ -322,6 +322,48 @@ async function clearCrossCohortFollowsForUserDoc(db, uniqueId, newCohort) {
 //      sign-in matchers — so a future persona rename doesn't require
 //      updating Givens.
 
+/**
+ * Resolve the Identity Toolkit base URL for persona sign-in — and REFUSE to fall
+ * back to production on a local run.
+ *
+ * The four call sites each inlined:
+ *
+ *   ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
+ *     ? emulator : 'https://identitytoolkit.googleapis.com'
+ *
+ * which is `if (check) { right thing } else { wrong thing }` with no complaint —
+ * the silent-fallback shape this project bans. `50-matrix.sh` never set
+ * FIREBASE_AUTH_EMULATOR_HOST (20-reseed.sh:32 DOES, for seeding), so every
+ * local matrix run signed personas in against REAL Google auth using the
+ * `fake-local-key` API key. It failed silently, and the only visible symptom was
+ * `UID: —` in a screenshot watermark and 224 failures per cell — on every
+ * browser, including desktop chromium, which is what made it look like product
+ * debt rather than one missing variable.
+ *
+ * A local run must never reach production auth: it cannot succeed, and it should
+ * not be attempting it. An unset emulator host on a local target is now a loud
+ * error, not a different URL.
+ *
+ * @param {{target: string}} ctx
+ * @returns {{ok: true, base: string} | {ok: false, error: string}}
+ */
+function resolveAuthBase(ctx) {
+  if (ctx.target === 'local') {
+    const host = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    if (!host) {
+      return {
+        ok: false,
+        error:
+          'FIREBASE_AUTH_EMULATOR_HOST is not set on a --target=local run. ' +
+          'Refusing to sign in against production Identity Toolkit. ' +
+          'Set FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 (see 50-matrix.sh local env_prefix).',
+      };
+    }
+    return { ok: true, base: `http://${host}/identitytoolkit.googleapis.com` };
+  }
+  return { ok: true, base: 'https://identitytoolkit.googleapis.com' };
+}
+
 function roomIdFromTitle(title) {
   // Slug: lowercase, replace non-alphanum with `-`, collapse + trim, cap
   // at 64 chars (Firestore doc IDs prefer short stable strings + this
@@ -1079,10 +1121,9 @@ const matchers = [
       // factored because the two share intent but not lifecycle: the
       // catch-all is "permissive consumption", this one is the
       // strict device-driven path.
-      const authBase =
-        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-          : 'https://identitytoolkit.googleapis.com';
+      const authBaseResult = resolveAuthBase(ctx);
+      if (!authBaseResult.ok) return { ok: false, error: authBaseResult.error };
+      const authBase = authBaseResult.base;
       const r = await ctx.fetch(
         `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
         {
@@ -1164,10 +1205,9 @@ const matchers = [
       if (!ctx.personasPassword) {
         return { ok: false, error: 'PERSONAS_PASSWORD env not set' };
       }
-      const authBase =
-        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-          : 'https://identitytoolkit.googleapis.com';
+      const authBaseResult = resolveAuthBase(ctx);
+      if (!authBaseResult.ok) return { ok: false, error: authBaseResult.error };
+      const authBase = authBaseResult.base;
       const r = await ctx.fetch(
         `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
         {
@@ -1242,10 +1282,9 @@ const matchers = [
         // the real Google API. FIREBASE_AUTH_EMULATOR_HOST controls only the
         // firebase-admin SDK, not raw fetch — so the runner must route by
         // ctx.target itself.
-        const authBase =
-          ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-            ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-            : 'https://identitytoolkit.googleapis.com';
+        const authBaseResult = resolveAuthBase(ctx);
+        if (!authBaseResult.ok) return { ok: false, error: authBaseResult.error };
+        const authBase = authBaseResult.base;
         const r = await ctx.fetch(
           `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
           {
@@ -2438,10 +2477,9 @@ const matchers = [
         };
       }
       if (!ctx.personasPassword) return { ok: false, error: 'PERSONAS_PASSWORD env not set' };
-      const authBase2 =
-        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-          : 'https://identitytoolkit.googleapis.com';
+      const authBase2Result = resolveAuthBase(ctx);
+      if (!authBase2Result.ok) return { ok: false, error: authBase2Result.error };
+      const authBase2 = authBase2Result.base;
       const r = await ctx.fetch(
         `${authBase2}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
         {
@@ -3304,13 +3342,19 @@ const matchers = [
       if (!ctx.webDriver.webSignIn) {
         return { ok: false, error: 'ctx.webDriver.webSignIn not configured' };
       }
-      // SHY-0330: a step that the driver could not perform must FAIL.
-      // `!== true` is deliberate — a driver that forgets to return must
-      // read as failure, and an unimplemented method now throws.
-      if ((await ctx.webDriver.webSignIn(name)) !== true) {
+      // SHY-0330 swept all 116 discarded-verdict sites; SHY-0328 had already
+      // fixed this one. Same `!== true` semantics either way — deliberate, so a
+      // driver that forgets to return reads as failure, and an unimplemented
+      // method now throws rather than returning false.
+      //
+      // Keeping SHY-0328's richer message: it names the persona and the value
+      // returned, which is what makes a failed sign-in diagnosable from the run
+      // log rather than just visible.
+      const signedIn = await ctx.webDriver.webSignIn(name);
+      if (signedIn !== true) {
         return {
           ok: false,
-          error: `ctx.webDriver.webSignIn reported failure — the step did not happen`,
+          error: `${name} failed to sign in on Web — webSignIn returned ${JSON.stringify(signedIn)}. See the driver's console output for the reason.`,
         };
       }
       return { ok: true };
@@ -17347,6 +17391,9 @@ async function main() {
 }
 
 module.exports = {
+  // Exported so its REFUSAL is behaviourally testable, not just structurally
+  // asserted against the script text (SHY-0328).
+  resolveAuthBase,
   parseGherkin,
   classifySeverity,
   matchers,

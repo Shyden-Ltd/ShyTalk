@@ -49,9 +49,10 @@ jest.mock(
 );
 
 const playwright = require('playwright');
+const fs = require('fs');
 const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
-const { createWebDriver } = require(
+const { createWebDriver, listMethods } = require(
   path.join(REPO_ROOT, 'express-api/scripts/drivers/web-playwright-driver'),
 );
 
@@ -317,5 +318,134 @@ describe('web-playwright-driver — takeScreenshot delegation', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+/**
+ * The local persona credential, DERIVED from 20-reseed.sh rather than written
+ * here. Two reasons: a literal would drift the day the seeder changes (the exact
+ * failure SHY-0328 is about), and hard-coding one trips
+ * sonarjs/no-hardcoded-passwords — correctly, since this really is a credential.
+ */
+const LOCAL_PERSONA_CREDENTIAL = (() => {
+  const reseed = fs.readFileSync(
+    path.join(REPO_ROOT, 'express-api/scripts/gauntlet/20-reseed.sh'),
+    'utf8',
+  );
+  const m = reseed.match(/^\s*&&\s*NODE_PATH=\S+\s+PERSONAS_PASSWORD=(\S+)/m);
+  if (!m) throw new Error('could not derive the local persona credential from 20-reseed.sh');
+  return m[1];
+})();
+
+describe('web-playwright-driver — webSignIn (SHY-0328)', () => {
+  // The step "<Name> on Web signs in with valid credentials" had NO
+  // implementation on any web driver, and `webSignIn` was not even in
+  // WEB_METHOD_NAMES — so the runner saw `undefined` and returned
+  // "ctx.webDriver.webSignIn not configured". Every journey needing an
+  // authenticated browser died at its first gate, visible only as `UID: —` in
+  // the preview watermark.
+
+  const SAVED_PW = process.env.PERSONAS_PASSWORD;
+  afterEach(() => {
+    if (SAVED_PW === undefined) delete process.env.PERSONAS_PASSWORD;
+    else process.env.PERSONAS_PASSWORD = SAVED_PW;
+  });
+
+  function signInPage(overrides = {}) {
+    return makeMockPage({
+      ...overrides,
+      ...{},
+    });
+  }
+
+  test('webSignIn is a KNOWN method (it was absent from the list entirely)', () => {
+    expect(listMethods()).toContain('webSignIn');
+  });
+
+  test('signs the persona in via the page-exposed Firebase helper', async () => {
+    process.env.PERSONAS_PASSWORD = LOCAL_PERSONA_CREDENTIAL;
+    const page = signInPage();
+    page.waitForFunction = jest.fn(async () => true);
+    page.evaluate = jest.fn(async () => ({ ok: true }));
+    prepareMockPages({ Alice: page });
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+
+    const ok = await driver.webSignIn('Alice');
+
+    expect(ok).toBe(true);
+    // Lands on a page that actually exposes window.shytalkAuth.
+    expect(page.goto).toHaveBeenCalledWith('http://localhost:8888/roadmap.html');
+    // The persona's REAL email, resolved from the registry — not the label.
+    expect(page.evaluate).toHaveBeenCalledWith(expect.any(Function), {
+      email: 'adult-power@shytalk.dev',
+      secret: LOCAL_PERSONA_CREDENTIAL,
+    });
+  });
+
+  test('waits for a real currentUser, not merely for sign-in to resolve', async () => {
+    // signInWithEmail resolving is not the same as the page having an
+    // authenticated user to act on, which is the whole point of the step.
+    process.env.PERSONAS_PASSWORD = LOCAL_PERSONA_CREDENTIAL;
+    const page = signInPage();
+    const waited = [];
+    page.waitForFunction = jest.fn(async (fn) => {
+      waited.push(String(fn));
+      return true;
+    });
+    page.evaluate = jest.fn(async () => ({ ok: true }));
+    prepareMockPages({ Alice: page });
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+
+    await driver.webSignIn('Alice');
+
+    expect(waited.some((f) => f.includes('signInWithEmail'))).toBe(true);
+    expect(waited.some((f) => f.includes('currentUser'))).toBe(true);
+  });
+
+  test('returns FALSE when the persona is not in the registry', async () => {
+    process.env.PERSONAS_PASSWORD = LOCAL_PERSONA_CREDENTIAL;
+    const page = signInPage();
+    prepareMockPages({ Nobody: page });
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+
+    expect(await driver.webSignIn('Nobody')).toBe(false);
+    // Refused before touching the browser at all.
+    expect(page.goto).not.toHaveBeenCalled();
+  });
+
+  test('returns FALSE when PERSONAS_PASSWORD is unset, rather than signing in blank', async () => {
+    delete process.env.PERSONAS_PASSWORD;
+    const page = signInPage();
+    prepareMockPages({ Alice: page });
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+
+    expect(await driver.webSignIn('Alice')).toBe(false);
+    expect(page.goto).not.toHaveBeenCalled();
+  });
+
+  test('returns FALSE when Firebase rejects the credentials', async () => {
+    process.env.PERSONAS_PASSWORD = LOCAL_PERSONA_CREDENTIAL;
+    const page = signInPage();
+    page.waitForFunction = jest.fn(async () => true);
+    page.evaluate = jest.fn(async () => ({ ok: false, error: 'INVALID_PASSWORD' }));
+    prepareMockPages({ Alice: page });
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('resolves a persona by its P-id as well as its first name', async () => {
+    process.env.PERSONAS_PASSWORD = LOCAL_PERSONA_CREDENTIAL;
+    const page = signInPage();
+    page.waitForFunction = jest.fn(async () => true);
+    page.evaluate = jest.fn(async () => ({ ok: true }));
+    prepareMockPages({ 'P-02': page });
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+
+    expect(await driver.webSignIn('P-02')).toBe(true);
+    expect(page.evaluate).toHaveBeenCalledWith(expect.any(Function), {
+      email: 'adult-power@shytalk.dev',
+      secret: LOCAL_PERSONA_CREDENTIAL,
+    });
   });
 });
