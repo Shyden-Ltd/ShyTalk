@@ -85,9 +85,16 @@ describe('per-PR browser scope (SHY-0339)', () => {
     // the full client matrix — contradicting this story's own principle on one
     // of the most frequently edited paths in the repo.
     const src = read('pr-checks.yml');
-    expect(src).toMatch(
-      /express-api\/tests\/scripts\/drivers\/\*\)\s*QA_RUNNER_DRIVERS=true;\s*BACKEND_TESTS=true/,
-    );
+    // END-ANCHORED on the arm's `;;` terminator, and asserting BACKEND=true is
+    // absent from that line. A prefix match would still pass if someone
+    // appended `; BACKEND=true` to the same arm — silently reinstating the
+    // exact full-matrix forcing this story removes.
+    const driverTestArm = src
+      .split('\n')
+      .find((l) => l.includes('express-api/tests/scripts/drivers/*)'));
+    expect(driverTestArm).toBeDefined();
+    expect(driverTestArm).toMatch(/QA_RUNNER_DRIVERS=true;\s*BACKEND_TESTS=true\s*;;/);
+    expect(driverTestArm).not.toMatch(/\bBACKEND=true\b/);
     // First-match: the test arm must precede the SOURCE drivers arm.
     expect(src.indexOf('express-api/tests/scripts/drivers/*)')).toBeLessThan(
       src.indexOf('express-api/scripts/drivers/*)'),

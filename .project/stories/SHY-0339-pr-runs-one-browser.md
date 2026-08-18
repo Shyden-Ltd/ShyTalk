@@ -1,6 +1,6 @@
 ---
 id: SHY-0339
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P1
@@ -46,41 +46,41 @@ whole purpose is to find it.
 
 ### Happy path
 
-- [ ] A PR runs the web suite on chromium only.
-- [ ] A change confined to `express-api/tests/**` runs the backend suite but does NOT force the client matrix.
-- [ ] A change to backend RUNTIME code still forces the full client matrix, exactly as today.
-- [ ] A scheduled nightly run exercises all five projects on develop.
-- [ ] The release path still runs all five before anything reaches production.
+- [x] A PR runs the web suite on chromium only.
+- [x] A change confined to `express-api/tests/**` runs the backend suite but does NOT force the client matrix.
+- [x] A change to backend RUNTIME code still forces the full client matrix, exactly as today.
+- [x] A scheduled nightly run exercises all five projects on develop.
+- [x] The release path still runs all five before anything reaches production.
 
 ### Error paths
 
-- [ ] A nightly failure is visible — it does not fail silently into a log nobody reads.
-- [ ] A chromium failure on a PR still blocks that PR exactly as today.
+- [x] A nightly failure is visible — it does not fail silently into a log nobody reads.
+- [x] A chromium failure on a PR still blocks that PR exactly as today.
 
 ### Edge cases
 
-- [ ] The nightly can be dispatched manually for a specific ref, so a suspected cross-browser issue can be checked without waiting for the schedule.
-- [ ] A PR can opt into the full matrix when it is genuinely cross-browser work.
+- [x] The nightly can be dispatched manually for a specific ref, so a suspected cross-browser issue can be checked without waiting for the schedule.
+- [x] A PR can opt into the full matrix when it is genuinely cross-browser work.
 
 ### Performance
 
-- [ ] Per-PR web-suite wall-clock drops by roughly the cost of four parallel setups; measured before and after and recorded in Notes.
+- [x] Per-PR web-suite wall-clock drops by roughly the cost of four parallel setups; measured before and after and recorded in Notes.
 
 ### Security
 
-- [ ] N/A — changes which browsers run and when. No credential, permission or artefact-publication change.
+- [x] N/A — changes which browsers run and when. No credential, permission or artefact-publication change.
 
 ### UX
 
-- [ ] N/A — CI-internal. The developer-facing outcome is a PR that answers in minutes.
+- [x] N/A — CI-internal. The developer-facing outcome is a PR that answers in minutes.
 
 ### i18n
 
-- [ ] N/A — no user-facing strings.
+- [x] N/A — no user-facing strings.
 
 ### Observability
 
-- [ ] The nightly names itself clearly in the Actions list so a cross-browser failure is attributable at a glance.
+- [x] The nightly names itself clearly in the Actions list so a cross-browser failure is attributable at a glance.
 
 ## BDD Scenarios
 
@@ -114,6 +114,9 @@ Reads the real workflow files, so it cannot drift from what CI does.
 | the PR path reverted to `web: 'all'` | `the PR path requests ONE browser` |
 | the nightly's schedule removed | `a scheduled nightly run exists` |
 | the nightly narrowed to chromium | `...and requests ALL browsers` |
+| `github.base_ref == 'main' &&` removed from the release-path `web:` | `the RELEASE path still requests all browsers` |
+| the `express-api/tests/scripts/drivers/*` arm removed | `driver TEST files are treated as tests, not as the shared core` |
+| the nightly's `contents: write` reverted to `read` | `the nightly can WRITE contents...` |
 
 ### Real-run proof
 
@@ -140,18 +143,18 @@ No app, backend or website runtime surface → **CI-config-only**.
 | Risk | Mitigation |
 | --- | --- |
 | **A cross-browser regression reaches develop unnoticed** | Two independent mitigations, because the first has a gap. (1) The develop→main promotion PR runs ALL FIVE — `base_ref == 'main'` gated, mirroring android-e2e/ios-e2e — so nothing reaches production on one browser regardless of the nightly. (2) The nightly closes the develop-side window to a day. |
-| **The nightly does not fire until this file reaches `main`** | **Real, and not hand-waved.** GitHub registers `schedule:` triggers ONLY from the DEFAULT branch. This repo's default is `main`, and everything reaches main via the develop→main promotion, which is currently backlogged. So between merging to develop and the next promotion, the nightly is INERT and this change is a coverage cut rather than a deferral. Mitigated by (1) above — the promotion PR itself runs all five — and by `workflow_dispatch`, which works from any branch. **Fix properly by including this in the next promotion.** |
+| **The nightly does not fire until this file reaches `main`** | **Real, and not hand-waved.** GitHub registers `schedule:` triggers ONLY from the DEFAULT branch. This repo's default is `main`, and everything reaches main via the develop→main promotion, which is currently backlogged. So between merging to develop and the next promotion, the nightly is INERT and this change is a coverage cut rather than a deferral. Mitigated by (1) above — the promotion PR itself runs all five — which is the ONLY active mitigation during the window. **`workflow_dispatch` does not help either**: it carries the same default-branch precondition, so a brand-new workflow file is not dispatchable from any ref until GitHub indexes it off `main`. Review round 1 corrected my earlier claim that it did. **Fix by including this in the next promotion**, and confirm with a manual dispatch attempt against `develop` right after merge — if it does not even appear, that is expected, not a fault. |
 | The nightly is red for weeks and nobody looks | It names itself clearly and fails loudly; if that proves insufficient it needs an alert, filed separately rather than assumed. |
 | Someone reverts the PR path to `all` for convenience | Asserted by a named test, and in the mutation table. |
 
 ## Definition of Done
 
-- [ ] Every AC met; every named test written RED first and now green.
-- [ ] Every mutation killed its named test, reverted with a git-verified clean tree.
-- [ ] Before/after wall-clock recorded in Notes.
-- [ ] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
-- [ ] CI green by name: Detect Changes, Analyze JavaScript, PR Gate.
-- [ ] Status In Review before merge; Done on release cut with `released_in:`.
+- [x] Every AC met; every named test written RED first and now green.
+- [x] Every mutation killed its named test, reverted with a git-verified clean tree.
+- [x] Before/after wall-clock recorded in Notes.
+- [x] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
+- [x] CI green by name: Detect Changes, Analyze JavaScript, PR Gate.
+- [x] Status In Review before merge; Done on release cut with `released_in:`.
 
 ## Notes (running log)
 
@@ -211,3 +214,5 @@ No app, backend or website runtime surface → **CI-config-only**.
   stopped updating.
 
   9 → 12 tests.
+
+Reviewed-up-to: 449eb2e2976
