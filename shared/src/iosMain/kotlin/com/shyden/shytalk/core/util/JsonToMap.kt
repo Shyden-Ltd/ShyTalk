@@ -23,13 +23,17 @@ import kotlin.math.floor
 internal fun jsonToAny(el: JsonElement): Any? =
     when {
         el is JsonNull -> null
+
         el is JsonPrimitive ->
             when {
                 el.isString -> el.content
                 else -> el.booleanOrNull ?: el.longOrNull ?: el.doubleOrNull?.let(::wholeIfIntegral) ?: el.content
             }
+
         el is JsonArray -> el.map { jsonToAny(it) }
+
         el is JsonObject -> jsonToMap(el)
+
         else -> null
     }
 
