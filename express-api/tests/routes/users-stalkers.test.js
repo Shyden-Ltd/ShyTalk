@@ -41,6 +41,7 @@ const VISITOR_RECENT = 63381003;
 const VISITOR_OLDER = 63381004;
 const VISITOR_CROSS_COHORT = 63381005;
 const VISITOR_DELETED = 63381006;
+const MINOR_OWNER_ID = 63381007;
 
 function createApp() {
   const app = express();
@@ -74,12 +75,14 @@ function seedVisit(ownerId, visitorId, lastVisitedAt) {
 let app;
 let owner;
 let other;
+let minorOwner;
 
 beforeAll(async () => {
   await assertEmulatorReachable();
   app = createApp();
   owner = await mintRealUser({ uniqueId: OWNER_ID, cohort: 'adult' });
   other = await mintRealUser({ uniqueId: OTHER_ID, cohort: 'adult' });
+  minorOwner = await mintRealUser({ uniqueId: MINOR_OWNER_ID, cohort: 'minor' });
 });
 
 afterAll(() => {
@@ -149,12 +152,24 @@ describe('GET /api/users/:uniqueId/stalkers', () => {
   test('a visitor whose account is gone is dropped rather than returned hollow', async () => {
     // A visit record outlives the user document after a deletion sweep. Showing
     // a nameless row would be a worse answer than showing none.
-    await seedVisit(OWNER_ID, VISITOR_DELETED, 1_700_000_960_000);
-    const res = await getStalkers(OWNER_ID, owner);
+    //
+    // The owner here is a MINOR on purpose. A missing document has no `cohort`,
+    // so it resolves to the 'minor' default — which means an ADULT owner drops
+    // it via the COHORT guard and this test would pass with the exists guard
+    // deleted. It did: mutation M7 (`if (!userSnap.exists)` → `if (false)`)
+    // survived against the adult owner. A minor owner makes the default cohort
+    // MATCH, so only the exists guard can drop the row.
+    const stale = await db.collection(`users/${MINOR_OWNER_ID}/stalkers`).get();
+    await Promise.all(stale.docs.map((d) => d.ref.delete()));
+    await seedVisit(MINOR_OWNER_ID, VISITOR_DELETED, 1_700_000_960_000);
+
+    const res = await getStalkers(MINOR_OWNER_ID, minorOwner);
     expect(res.status).toBe(200);
     expect(res.body.stalkers.map((s) => String(s.visitorId))).not.toContain(
       String(VISITOR_DELETED),
     );
+    // And nothing hollow leaked into the profile list either.
+    expect(res.body.users).toEqual([]);
   });
 
   test('sensitive fields are stripped from the visitor profiles', async () => {
