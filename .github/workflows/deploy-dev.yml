@@ -952,10 +952,13 @@ jobs:
     # 112 MB + FFmpeg 2 MB) before the actual tests could even start.
     # Run 25763744882 on 2026-05-12 cancelled with `##[error]The operation
     # was canceled.` literally one second after the chromium download
-    # finished. Bumping to 10 min gives ~5 min headroom for the install,
-    # which is enough even on a slow runner; the actual tests are sub-
-    # 30s. Combined with the browser cache below, warm runs will complete
-    # well under the limit.
+    # finished. 10 min splits as: up to 6 for the browser install (hard-capped
+    # at the step level by SHY-0334, since apt could otherwise wait forever on
+    # a dead mirror), leaving ~4 for checkout + node + npm ci + cache restore
+    # and the sub-30s tests themselves. Warm runs finish far inside this; the
+    # step cap exists to bound the pathological case, not the normal one.
+    # If this ever gets tight, read a real run's per-step timings rather than
+    # re-deriving the arithmetic here.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1041,8 +1044,12 @@ jobs:
     runs-on: ubuntu-latest
     # Same justification as sanity-check: was 8 min, but a cold playwright
     # install can swallow 4-5 min of that on its own. Bumped to 12 min so
-    # the actual smoke tests have headroom. With the browser cache below
-    # warm runs complete much faster.
+    # the actual smoke tests have headroom. 12 min splits as: up to 8 for the
+    # browser install (hard-capped at the step level by SHY-0334), leaving ~4
+    # for setup plus the smoke run itself, which is heavier than sanity's —
+    # real Firebase Auth + Firestore writes + the LiveKit token flow. With the
+    # browser cache below, warm runs complete much faster; the step cap bounds
+    # the pathological case only.
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

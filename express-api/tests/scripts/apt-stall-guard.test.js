@@ -4,22 +4,21 @@
  * apt-stall-guard.test.js — SHY-0334
  *
  * Every workflow step that shells out to apt via Playwright must be preceded by
- * `./.github/actions/harden-apt` and carry a REACHABLE `timeout-minutes`.
+ * `./.github/actions/harden-apt` and carry a REACHABLE `timeout-minutes` — one
+ * that is strictly below its own job's ceiling, since a job-level timeout is a
+ * hard cap across all steps and a larger step value can never fire.
  *
  * WHY. Measured twice on 2026-08-18, identical signature in two different jobs:
  * apt reached `archive.ubuntu.com`, then emitted NOTHING until the job budget
  * expired — 119 minutes on PR #1782's webkit project, 24 on PR #1781's driver
  * checks. apt has no acquire timeout by default, so a dead socket is waited on
- * forever.
- *
- * That is why SHY-0329's `timeout-minutes` 10 -> 25 did not fix it: an unbounded
- * wait consumes whatever budget it is given. The WAIT has to be bounded.
+ * forever. That is why SHY-0329's `timeout-minutes` 10 -> 25 did not fix it: an
+ * unbounded wait consumes whatever budget it is given. The WAIT must be bounded.
  *
  * Sites are DISCOVERED, not listed, so a new one fails here rather than hanging
- * on someone's PR. Discovery scans each STEP'S WHOLE BODY rather than matching
- * `run:` lines — review round 1 showed a line-anchored matcher silently misses
- * both a command inside a multi-line `run: |` block (the dominant style in this
- * repo) and a compact `- run:` step.
+ * on someone's PR. The discovery primitives are unit-tested against synthetic
+ * input at the bottom of this file — a guard whose own parser is only exercised
+ * by today's happy-path files is not a guard, it is a coincidence.
  */
 
 const fs = require('fs');
@@ -29,10 +28,17 @@ const WORKFLOWS_DIR = path.join(__dirname, '../../../.github/workflows');
 const ACTION_PATH = path.join(__dirname, '../../../.github/actions/harden-apt/action.yml');
 const HARDEN_ACTION = './.github/actions/harden-apt';
 
-/** A step header: `- name:` / `- uses:` / a compact `- run:`. */
+/** A step header: `- name:` / `- uses:` / a compact `- run:`, at 6 spaces. */
 const STEP_HEADER = /^ {6}- (name|uses|run):/;
-/** A job-level `timeout-minutes` sits at exactly 4 spaces; a step's is deeper. */
+/** A job key sits at exactly 2 spaces; its properties at 4; step properties deeper. */
+const JOB_HEADER = /^ {2}([\w-]+):\s*$/;
 const JOB_TIMEOUT = /^ {4}timeout-minutes:\s*(\d+)/;
+
+const stripComments = (text) =>
+  text
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('#'))
+    .join('\n');
 
 function workflowFiles() {
   return fs
@@ -41,60 +47,82 @@ function workflowFiles() {
     .map((f) => ({ name: f, src: fs.readFileSync(path.join(WORKFLOWS_DIR, f), 'utf8') }));
 }
 
-/** Split a workflow into steps: {startLine, body, lines}. */
+/** Job ranges, so a step can be attributed to the job that CONTAINS it. */
+function jobs(src) {
+  const lines = src.split('\n');
+  const heads = [];
+  lines.forEach((l, i) => {
+    if (JOB_HEADER.test(l)) heads.push(i);
+  });
+  return heads.map((start, k) => ({
+    id: lines[start].match(JOB_HEADER)[1],
+    start,
+    end: k + 1 < heads.length ? heads[k + 1] : lines.length,
+  }));
+}
+
+/** Step ranges within a file. */
 function steps(src) {
   const lines = src.split('\n');
   const heads = [];
   lines.forEach((l, i) => {
     if (STEP_HEADER.test(l)) heads.push(i);
   });
-  return heads.map((start, k) => ({
-    start,
-    end: k + 1 < heads.length ? heads[k + 1] : lines.length,
-    body: lines.slice(start, k + 1 < heads.length ? heads[k + 1] : lines.length).join('\n'),
-  }));
+  return heads.map((start, k) => {
+    const end = k + 1 < heads.length ? heads[k + 1] : lines.length;
+    return { start, end, body: lines.slice(start, end).join('\n') };
+  });
 }
 
 /**
  * Does this step body invoke apt through Playwright?
  *
- * Comment lines are stripped first: several workflows MENTION the install
- * command in prose explaining why it is there, and prose must never register as
- * a site (nor mask one).
+ * Comments are stripped first: several workflows MENTION the install command in
+ * prose explaining why it is there (a real case lives in manual-qa-matrix.yml),
+ * and prose must neither register as a site nor mask one.
  */
 function invokesApt(body) {
-  const code = body
-    .split('\n')
-    .filter((l) => !l.trim().startsWith('#'))
-    .join('\n');
+  const code = stripComments(body);
   if (code.includes('playwright install-deps')) return true;
   return code.includes('playwright install') && code.includes('--with-deps');
 }
 
-/** Every apt-invoking step across every workflow. */
+/** Every apt-invoking step, attributed to the job that CONTAINS it. */
 function aptSites() {
   const out = [];
   for (const { name, src } of workflowFiles()) {
     const lines = src.split('\n');
+    const jobRanges = jobs(src);
     for (const step of steps(src)) {
       if (!invokesApt(step.body)) continue;
-      // The job ceiling this step actually lives under.
+      const job = jobRanges.find((j) => step.start >= j.start && step.start < j.end);
+      // Search ONLY inside the containing job. A backward walk to the first
+      // matching line would run past a job that declares no ceiling and borrow
+      // the PREVIOUS job's number — silently reporting "reachable" against a
+      // ceiling that does not apply. `deploy-dev.yml`'s `seed-dev-personas`
+      // already has no `timeout-minutes`, so the precondition is real today.
       let jobCeiling = null;
-      for (let i = step.start; i >= 0; i -= 1) {
-        const m = lines[i].match(JOB_TIMEOUT);
-        if (m) {
-          jobCeiling = Number(m[1]);
-          break;
+      if (job) {
+        for (const line of lines.slice(job.start, job.end)) {
+          const m = line.match(JOB_TIMEOUT);
+          if (m) {
+            jobCeiling = Number(m[1]);
+            break;
+          }
         }
       }
-      const stepTimeout = step.body.match(/^\s{8,}timeout-minutes:\s*(\d+)/m);
+      const st = step.body.match(/^\s{8,}timeout-minutes:\s*(\d+)/m);
       out.push({
         file: name,
         line: step.start + 1,
-        body: step.body,
-        preceding: lines.slice(Math.max(0, step.start - 3), step.start).join('\n'),
+        jobId: job ? job.id : null,
+        // harden-apt anywhere EARLIER IN THE SAME JOB, not a 3-line window —
+        // inserting a cache-restore step between the guard and the install is
+        // an established pattern here and must not false-fail. Comments are
+        // stripped so prose naming the path cannot false-PASS either.
+        jobPrelude: job ? stripComments(lines.slice(job.start, step.start).join('\n')) : '',
         jobCeiling,
-        stepTimeout: stepTimeout ? Number(stepTimeout[1]) : null,
+        stepTimeout: st ? Number(st[1]) : null,
       });
     }
   }
@@ -102,36 +130,46 @@ function aptSites() {
 }
 
 const SITES = aptSites();
+const label = (s) => `${s.file}:${s.line}`;
 
 describe('apt stall guard (SHY-0334)', () => {
   test('there IS at least one apt-invoking site — the guard is not vacuous', () => {
-    // Without this, deleting every apt step would make the suite "pass" while
-    // proving nothing. A guard that can never fail is not a guard.
     expect(SITES.length).toBeGreaterThan(0);
   });
 
-  test.each(SITES.map((s) => [`${s.file}:${s.line}`, s]))(
-    'apt site %s is preceded by harden-apt',
-    (_label, site) => {
-      expect(site.preceding).toContain(HARDEN_ACTION);
+  test.each(SITES.map((s) => [label(s), s]))(
+    'apt site %s is preceded by harden-apt in its own job',
+    (_l, site) => {
+      expect(site.jobPrelude).toContain(HARDEN_ACTION);
     },
   );
 
-  test.each(SITES.map((s) => [`${s.file}:${s.line}`, s]))(
+  test.each(SITES.map((s) => [label(s), s]))(
     'apt site %s carries its own timeout-minutes',
-    (_label, site) => {
+    (_l, site) => {
       expect(site.stepTimeout).toEqual(expect.any(Number));
     },
   );
 
-  test.each(SITES.map((s) => [`${s.file}:${s.line}`, s]))(
-    'apt site %s has a REACHABLE step timeout (below its job ceiling)',
-    (_label, site) => {
-      // Job-level timeout-minutes is a hard cap across ALL steps, so a step
-      // ceiling above it can never fire — dead code that misreports the real
-      // bound. I shipped exactly this in deploy-dev.yml (step 15 inside jobs
-      // capped at 10 and 12); actionlint cannot catch it, because it is a
-      // cross-field relationship rather than a syntax rule.
+  test.each(SITES.map((s) => [label(s), s]))(
+    "apt site %s's job declares an explicit timeout-minutes",
+    (_l, site) => {
+      // Relying on GitHub's 360-minute default reopens the very
+      // unbounded-enough-to-hurt problem this story closes: harden-apt bounds
+      // the install CALL, not the job's other steps or its wall-clock.
+      expect(site.jobCeiling).toEqual(expect.any(Number));
+    },
+  );
+
+  test.each(SITES.map((s) => [label(s), s]))(
+    'apt site %s has a REACHABLE step timeout (strictly below its job ceiling)',
+    (_l, site) => {
+      // The `expect.any(Number)` guard is NOT redundant with the sibling test.
+      // `expect(null).toBeLessThan(25)` PASSES, because JS coerces null to 0 —
+      // so without this line a step with NO timeout would satisfy a test named
+      // "REACHABLE", and would only go red because a sibling happened to catch
+      // it. Consolidate or drop that sibling and the regression ships green.
+      expect(site.stepTimeout).toEqual(expect.any(Number));
       expect(site.jobCeiling).toEqual(expect.any(Number));
       expect(site.stepTimeout).toBeLessThan(site.jobCeiling);
     },
@@ -144,23 +182,121 @@ describe('apt stall guard (SHY-0334)', () => {
       return m ? Number(m[1]) : null;
     };
 
-    test('bounds the acquire wait for http AND https', () => {
-      // A bare presence check would accept "99999", which is not a bound.
-      for (const key of ['Acquire::http::Timeout', 'Acquire::https::Timeout']) {
+    test.each(['Acquire::http::Timeout', 'Acquire::https::Timeout', 'Acquire::ftp::Timeout'])(
+      '%s is bounded, not merely present',
+      (key) => {
+        // A presence-only check would accept "99999", which is not a bound.
         const v = valueOf(key);
         expect(v).toEqual(expect.any(Number));
         expect(v).toBeGreaterThan(0);
         expect(v).toBeLessThanOrEqual(120);
-      }
-    });
+      },
+    );
 
-    test('retries at least once, so a transient blip is not a hard failure', () => {
+    test('retries at least once, and not so many times that the wait is unbounded again', () => {
       // A timeout WITHOUT retries turns a blip into a red build; retries
-      // WITHOUT a timeout retry nothing, because the first wait never ends.
-      // `Retries "0"` would satisfy a presence-only assertion.
+      // WITHOUT a timeout retry nothing. And a bounded per-attempt wait times
+      // an unbounded multiplier is unbounded again — 30s x 50 is 25 minutes,
+      // which is the exact failure this story exists to remove.
       const retries = valueOf('Acquire::Retries');
       expect(retries).toEqual(expect.any(Number));
       expect(retries).toBeGreaterThanOrEqual(1);
+      expect(retries).toBeLessThanOrEqual(5);
     });
+  });
+});
+
+// ── The discovery primitives, against synthetic input ─────────────────
+//
+// Exercising these only through today's workflow files proves they work on
+// today's workflow files. These prove the PARSER.
+
+describe('discovery primitives', () => {
+  // The step-splitter is validated against js-yaml — the REAL parser — rather
+  // than against my own belief about YAML. Review round 2 suspected a
+  // column-6 line inside a `run: |` block would be a "decoy" that wrongly
+  // splits a step. It is not a decoy: a block scalar's content must be
+  // indented DEEPER than its key, so a column-6 line genuinely terminates the
+  // block and genuinely starts a new list item. js-yaml confirms it. The
+  // line-scan agrees with YAML; asserting otherwise would have "fixed" correct
+  // code to match a wrong expectation.
+  test('the step splitter agrees with the real YAML parser on a block-scalar edge case', () => {
+    const yaml = require('js-yaml');
+    const src = [
+      'jobs:',
+      '  j:',
+      '    steps:',
+      '      - name: Real step',
+      '        run: |',
+      '          cat > out.yml <<EOF',
+      '      - name: not a real step',
+      '          EOF',
+      '      - name: Next real step',
+      '        run: echo done',
+    ].join('\n');
+    const truth = yaml.load(src).jobs.j.steps.length;
+    expect(steps(src)).toHaveLength(truth);
+  });
+
+  test('header-shaped content INSIDE a block scalar does not split the step', () => {
+    // The case that WOULD be a decoy: properly-indented block content that
+    // happens to look like a step header. STEP_HEADER requires exactly six
+    // spaces, and block content under a step is always deeper, so it cannot
+    // match — proven here rather than assumed.
+    const src = [
+      '      - name: Writes a workflow',
+      '        run: |',
+      '          cat > generated.yml <<EOF',
+      '          - name: embedded thing',
+      '            uses: some/action@v1',
+      '          EOF',
+      '      - name: Second step',
+      '        run: echo done',
+    ].join('\n');
+    expect(steps(src)).toHaveLength(2);
+  });
+
+  test('finds apt inside a multi-line run: | block', () => {
+    const body = [
+      '      - name: X',
+      '        run: |',
+      '          npx playwright install-deps',
+    ].join('\n');
+    expect(invokesApt(body)).toBe(true);
+  });
+
+  test('finds apt in a compact single-line - run: step', () => {
+    expect(invokesApt('      - run: npx playwright install --with-deps chromium')).toBe(true);
+  });
+
+  test('does NOT treat prose mentioning the command as a site', () => {
+    const body = [
+      '      - name: X',
+      '        # npx playwright install --with-deps is slow',
+      '        run: echo hi',
+    ].join('\n');
+    expect(invokesApt(body)).toBe(false);
+  });
+
+  test('playwright install WITHOUT --with-deps never touches apt and is exempt', () => {
+    expect(invokesApt('      - run: npx playwright install')).toBe(false);
+  });
+
+  test('a job with no timeout-minutes yields null, never a neighbour’s ceiling', () => {
+    const src = [
+      'jobs:',
+      '  earlier:',
+      '    timeout-minutes: 120',
+      '    steps:',
+      '      - run: echo hi',
+      '  later:',
+      '    steps:',
+      '      - run: npx playwright install --with-deps chromium',
+    ].join('\n');
+    const j = jobs(src).find((x) => x.id === 'later');
+    const lines = src.split('\n');
+    const found = lines.slice(j.start, j.end).find((l) => JOB_TIMEOUT.test(l));
+    // Borrowing `earlier`'s 120 here is exactly the misattribution being prevented.
+    expect(found).toBeUndefined();
   });
 });

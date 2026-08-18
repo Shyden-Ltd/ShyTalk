@@ -115,9 +115,14 @@ avoidable by caching. (The cache keys are separately broken — see Out of Scope
 ### Node / Jest — `express-api/tests/scripts/apt-stall-guard.test.js`
 
 - `there IS at least one apt-invoking site — the guard is not vacuous`
-- **`apt site <file>:<line> is preceded by harden-apt`** — per discovered site
-- **`apt site <file>:<line> carries its own timeout-minutes`** — per discovered site
-- `the harden-apt action sets a bounded acquire timeout AND retries`
+- **`apt site <file>:<line> is preceded by harden-apt in its own job`** — per site
+- **`apt site <file>:<line> carries its own timeout-minutes`** — per site
+- **`apt site <file>:<line>'s job declares an explicit timeout-minutes`** — per site
+- **`apt site <file>:<line> has a REACHABLE step timeout (strictly below its job ceiling)`** — per site
+- `<Acquire::*::Timeout> is bounded, not merely present` — per directive
+- `retries at least once, and not so many times that the wait is unbounded again`
+- `discovery primitives` — the parser itself, against synthetic input, with
+  `js-yaml` as the oracle for the block-scalar edge case
 
 Sites are DISCOVERED by scanning every workflow, not hardcoded — a sixth apt
 site added later fails here rather than hanging on someone's PR.
@@ -128,7 +133,10 @@ site added later fails here rather than hanging on someone's PR.
 | --- | --- |
 | `harden-apt` removed from one site | that site's `is preceded by harden-apt` |
 | a step's `timeout-minutes` removed | that site's `carries its own timeout-minutes` |
-| the action's `Acquire::Retries` removed | `the harden-apt action sets a bounded acquire timeout AND retries` |
+| the action's `Acquire::Retries` removed or set to `0` | `retries at least once...` |
+| `Acquire::Retries` raised to `50` (bounded wait × unbounded multiplier) | `...not so many times that the wait is unbounded again` |
+| a step's `timeout-minutes` raised above its job ceiling | that site's `has a REACHABLE step timeout` |
+| an apt command added inside a multi-line `run: \|` block in ANY workflow | all per-site assertions for the new site |
 
 ### Real-run proof
 
@@ -188,3 +196,37 @@ under `express-api/tests/scripts/**`. No app, backend or website runtime surface
   about its worst case.
 - **2026-08-18** — Swept all four workflows rather than fixing the one that hurt,
   per the whole-project consistency rule. Five sites, one shared composite action.
+
+- **2026-08-18** — `code-reviewer` round 1: three Importants, all applied. It
+  verified the mechanism I was least sure of by reading `playwright-core`'s own
+  `coreBundle.js` — the apt call is a bare `apt-get install -y
+  --no-install-recommends ...` with no `-o` overrides and no env shadowing, so
+  the `apt.conf.d` fragment genuinely takes effect. It also caught a real bug I
+  introduced: `timeout-minutes: 15` on steps inside jobs capped at 10 and 12,
+  which can never fire. Fixed to 6 and 8, AND the guard now asserts the
+  relationship so the class cannot recur.
+
+- **2026-08-18** — Round 2: one Critical, seven Importants. The Critical was
+  real and subtle — the job-ceiling lookup walked BACKWARD to the first matching
+  line, so a job declaring no `timeout-minutes` would silently borrow the
+  previous job's ceiling. `deploy-dev.yml`'s `seed-dev-personas` already has no
+  ceiling, so the precondition exists today. Now attributed by CONTAINMENT: job
+  ranges are computed, and a miss inside the containing job yields `null`
+  rather than a neighbour's number.
+
+  Also real, and worse: `expect(null).toBeLessThan(25)` **passes**, because JS
+  coerces `null` to `0`. A step with NO timeout therefore satisfied a test named
+  "REACHABLE", going red only because a sibling test happened to catch it. That
+  is a lying green inside the guard written to catch lying greens.
+
+- **2026-08-18** — One round-2 finding was NOT a defect, and the test now proves
+  why. It suspected a column-6 line inside a `run: |` block would wrongly split
+  a step. A block scalar's content must be indented DEEPER than its key, so a
+  column-6 line genuinely terminates the block and genuinely starts a new list
+  item — `js-yaml` confirms 3 steps for that input, exactly as the line-scan
+  reports. Rather than argue, the test now uses `js-yaml` as the ORACLE and
+  asserts agreement with it, plus a separate case for content that IS inside the
+  block. "Fixing" the parser here would have broken correct code to satisfy a
+  wrong expectation.
+
+Reviewed-up-to: b8f1e796498
