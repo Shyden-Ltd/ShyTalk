@@ -213,3 +213,5 @@ runtime surface → **CI-config-only**; no device gauntlet for this change.
   `.gitignore` with the 4-line `express-api/.gitignore`. Caught immediately
   because two tests went red, and restored with `git checkout --`. The tests
   earned their keep on their own author.
+
+Reviewed-up-to: e1f8293b5c7
