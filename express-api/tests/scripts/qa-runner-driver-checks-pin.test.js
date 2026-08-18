@@ -118,10 +118,24 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     expect(reusable).toMatch(/permissions:[\s\S]{0,200}?contents:\s*read/);
   });
 
-  test('has a sensible timeout (≤ 15 minutes)', () => {
-    const m = reusable.match(/timeout-minutes:\s*(\d+)/);
+  test('has a sensible timeout (≤ 30 minutes) — the runaway CEILING', () => {
+    // Raised from 15 to 30 by SHY-0329, on evidence rather than taste.
+    //
+    // 15 was chosen without knowing what a COLD `playwright install
+    // --with-deps chromium firefox webkit` actually costs: ~10 minutes. With
+    // the job budget at 10, every cache MISS cancelled the job, skipped the
+    // contract test and both diagnostics, and failed PR Gate — which treats
+    // `cancelled` exactly like `failure`. Measured on PR #1781 job
+    // 95539346116. It blocked two PRs (#1781, #1673) and would have blocked
+    // every future driver PR on a cold cache.
+    //
+    // This assertion is the CEILING — it still catches a job left to run away.
+    // The FLOOR lives in qa-runner-driver-checks-timeout.test.js, which asserts
+    // the budget exceeds the measured cold install plus the job's own steps.
+    // The two bracket the budget; neither alone is sufficient.
+    const m = reusable.match(/^\s*timeout-minutes:\s*(\d+)\s*$/m);
     expect(m).not.toBeNull();
-    expect(parseInt(m[1], 10)).toBeLessThanOrEqual(15);
+    expect(parseInt(m[1], 10)).toBeLessThanOrEqual(30);
   });
 });
 
