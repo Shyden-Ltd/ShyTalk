@@ -1,6 +1,6 @@
 ---
 id: SHY-0330
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -78,42 +78,42 @@ One method name, two incompatible contracts, chosen by which driver loaded.
 
 ### Happy path
 
-- [ ] A step whose driver method reports failure FAILS, naming the persona, the method and the reason.
-- [ ] A step calling an unimplemented (stub) driver method FAILS rather than passing.
-- [ ] A step whose driver genuinely succeeded still passes.
+- [x] A step whose driver method reports failure FAILS, naming the persona, the method and the reason.
+- [x] A step calling an unimplemented (stub) driver method FAILS rather than passing.
+- [x] A step whose driver genuinely succeeded still passes.
 
 ### Error paths
 
-- [ ] A driver that returns `undefined` (forgot to return) is treated as FAILURE, not success.
-- [ ] The failure message identifies which driver method failed, so the run log points at the gap.
-- [ ] Reverting any single call site to discard its verdict turns exactly one named test RED (mutation-proven).
+- [x] A driver that returns `undefined` (forgot to return) is treated as FAILURE, not success.
+- [x] The failure message identifies which driver method failed, so the run log points at the gap.
+- [x] Reverting any single call site to discard its verdict turns exactly one named test RED (mutation-proven).
 
 ### Edge cases
 
-- [ ] `iosTap` is called with the string-based method that BOTH iOS drivers implement, so the meaning does not change with the transport.
-- [ ] A step calling a method that legitimately returns non-boolean is not broken by the change.
-- [ ] The stub's diagnostic still names the method and the device — it becomes louder, not quieter.
+- [x] `iosTap` is called with the string-based method that BOTH iOS drivers implement, so the meaning does not change with the transport.
+- [x] A step calling a method that legitimately returns non-boolean is not broken by the change.
+- [x] The stub's diagnostic still names the method and the device — it becomes louder, not quieter.
 
 ### Performance
 
-- [ ] N/A — a return-value check. No extra I/O.
+- [x] N/A — a return-value check. No extra I/O.
 
 ### Security
 
-- [ ] N/A — test-harness only; no product surface, no credential handling.
+- [x] N/A — test-harness only; no product surface, no credential handling.
 
 ### UX
 
-- [ ] N/A — developer-facing. **Expect the matrix pass count to DROP sharply when this lands. That is the fix working**, not a regression: those passes were never real.
+- [x] N/A — developer-facing. **Expect the matrix pass count to DROP sharply when this lands. That is the fix working**, not a regression: those passes were never real.
 
 ### i18n
 
-- [ ] N/A — no user-facing strings.
+- [x] N/A — no user-facing strings.
 
 ### Observability
 
-- [ ] An unimplemented method now surfaces as a named step failure instead of a line in a 20k-line log nobody reads.
-- [ ] Per-cell OK counts become meaningful for the first time.
+- [x] An unimplemented method now surfaces as a named step failure instead of a line in a 20k-line log nobody reads.
+- [x] Per-cell OK counts become meaningful for the first time.
 
 ## BDD Scenarios
 
@@ -192,13 +192,13 @@ sites, 98 of them calling stub-only methods.
 
 ## Definition of Done
 
-- [ ] Every AC checkbox above is met.
-- [ ] Every named test exists, was observed RED first, and is now green.
-- [ ] Every mutation killed its named test and was reverted with a git-verified clean tree.
-- [ ] `cd express-api && npm test` passes; `npm run lint` clean at `--max-warnings=0`.
-- [ ] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
-- [ ] CI green by name: **Detect Changes**, **Analyze JavaScript**, **PR Gate**.
-- [ ] Status `In Review` before merge; `Done` on release cut with `released_in:`.
+- [x] Every AC checkbox above is met.
+- [x] Every named test exists, was observed RED first, and is now green.
+- [x] Every mutation killed its named test and was reverted with a git-verified clean tree.
+- [x] `cd express-api && npm test` passes; `npm run lint` clean at `--max-warnings=0`.
+- [x] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
+- [x] CI green by name: **Detect Changes**, **Analyze JavaScript**, **PR Gate**.
+- [x] Status `In Review` before merge; `Done` on release cut with `released_in:`.
 
 ## Notes (running log)
 
@@ -209,3 +209,36 @@ sites, 98 of them calling stub-only methods.
   explains why 256 `not implemented yet` lines in a matrix run did not surface
   as step failures. The missing-driver inventory has been masked by the
   discarded verdicts the whole time.
+
+- **2026-08-18** — Scanning the runner found **116** discarded-verdict sites, not
+  the 7 the SHY-0328 reviewer flagged (it called its sweep "a floor, not a
+  ceiling", correctly). Split: **98 sites / 95 distinct methods are STUB-ONLY** —
+  the step does nothing and reports PASS — and 18 call real implementations
+  where a genuine failure was swallowed.
+
+- **2026-08-18** — The stub connection is the important one. Every driver wires
+  unimplemented methods to a stub that logs and RETURNS FALSE
+  (`android-adb-driver.js:263-270`, same in ios-simctl and web-playwright). The
+  runner discarded that false and returned ok:true, so the **entire 114-method
+  missing-driver inventory was invisible in pass/fail terms**. That is why a
+  matrix run could log 256 "not implemented yet" lines while those steps passed,
+  then die several steps later on state nobody had produced.
+  `web-playwright-driver.js:207` even carried the comment "runner will surface
+  this as a Major finding rather than crashing" — it did not.
+
+- **2026-08-18** — **140 runner tests went red on the fix**, every one a test
+  whose driver spy resolved `undefined` (or nothing) while asserting ok:true.
+  They encoded the defect as expected behaviour — the same shape as the two
+  webSignIn tests in SHY-0328, but 140 of them. Corrected in three measured
+  passes (64 bare spies, then 92 undefined-spies scoped to success-asserting
+  tests ONLY, then 3 individually), never one blanket replace.
+
+- **2026-08-18** — My own test caught a bug I introduced: the stub's thrown
+  message interpolated the method name LITERALLY instead of substituting it — a
+  lost `$` from the script that wrote the code. Every "not implemented" error
+  would have named the method as a literal placeholder, telling you a step
+  failed but not WHICH method is missing, defeating the point of making the gap
+  attributable. Caught only because the test asserts the message CONTAINS the
+  method name; asserting merely "does it throw" would have shipped it.
+
+Reviewed-up-to: 3842023b965
