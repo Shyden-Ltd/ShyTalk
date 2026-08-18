@@ -188,7 +188,9 @@ jobs:
           path: /var/cache/apt/archives
           key: apt-playwright-${{ needs.prepare-playwright.outputs.pw-version }}
 
+      - uses: ./.github/actions/harden-apt
       - name: Install system dependencies
+        timeout-minutes: 15
         run: npx playwright install-deps
 
       - uses: ./.github/actions/start-local-services
