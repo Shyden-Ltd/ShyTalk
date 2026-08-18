@@ -47,7 +47,16 @@ jobs:
   driver-checks:
     name: --check-drivers + contract test (ubuntu)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 25, not 10. A COLD `npx playwright install` of the three engines below
+    # costs ~10 minutes by itself, so a 10-minute budget cancelled this job
+    # deterministically on any cache MISS — skipping the contract test and both
+    # diagnostics it exists to run, and failing PR Gate, which treats
+    # `cancelled` exactly like `failure`. Measured on PR #1781 job 95539346116:
+    # cache step 1s (a miss), browser install 9m53s, cancelled at 10m16s. A
+    # retry could not help either, since cancelling skips the cache-save step.
+    # Costs a warm run nothing — this is a ceiling, not a wait. Pinned by
+    # express-api/tests/scripts/qa-runner-driver-checks-timeout.test.js.
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
