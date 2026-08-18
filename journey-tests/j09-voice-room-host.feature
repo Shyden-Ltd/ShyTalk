@@ -77,6 +77,34 @@ Feature: j09 — Theo hosts a public voice room
     Then within 2000ms Ines's iOS Sim UI shows mic icon as "open"
     Then within 3000ms Theo's Android UI shows Ines's seat with mic-on indicator
 
+  @blocker @android-physical @ios-sim
+  Scenario: Ines mutes herself — the mic actually closes, proven from Theo's device
+    # SHY-0335. The corpus covered UNMUTING but never muting, mirroring the same
+    # gap in the unit tests — so a self-mute that was rejected server-side with
+    # 403 was invisible at every layer. The client only disables the microphone
+    # on a successful write, so that 403 left the mic open while the UI had
+    # asked to be muted.
+    #
+    # The first two assertions are deliberately NOT on Ines's screen. Her own UI
+    # reporting "muted" is precisely the thing that was wrong; server state and
+    # the other participant's view are what make this real.
+    Given Ines is seated and unmuted in Theo's room
+    When Ines on iOS Sim taps "room_micToggleButton"
+    Then within 2000ms the database has document "rooms/{roomId}" with field "seats[1].muted" equal to true
+    Then within 3000ms Theo's Android UI shows Ines's seat with mic-off indicator
+    Then within 2000ms Ines's iOS Sim UI shows mic icon as "muted"
+
+  @blocker @android-physical @ios-sim
+  Scenario: Theo mutes himself in his own room — the owner is not locked open
+    # canForceMute refuses the owner's own seat, since it exists to stop
+    # moderators muting the owner. Before SHY-0335 that also blocked the owner
+    # muting THEMSELVES — the person most likely to be hosting and needing to
+    # cough.
+    Given Ines is seated and unmuted in Theo's room
+    When Theo on Android taps "room_micToggleButton"
+    Then within 2000ms the database has document "rooms/{roomId}" with field "seats[0].muted" equal to true
+    Then within 3000ms Ines's iOS Sim UI shows Theo's seat with mic-off indicator
+
   @manual @android-physical @ios-sim
   Scenario: Audio — Ines's voice is audible on Theo's Android device with a real mic
     Given Ines is seated and unmuted in Theo's room
