@@ -227,9 +227,13 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
       const iosTestsKey = extractCacheKey(iosTestsStep);
       const deployDevKey = extractCacheKey(step);
       expect(deployDevKey).toBe(iosTestsKey);
-      // And both should specifically hash Podfile.lock — the
-      // contract that drives Pods reproducibility.
-      expect(deployDevKey).toContain("hashFiles('iosApp/Podfile.lock')");
+      // Both must hash the Podfile AND the lock (SHY-0305). Keying on the
+      // lock alone meant a Podfile-only change left the key untouched, the
+      // cache hit, and the "Install CocoaPods" step — whose whole job is to
+      // fail loud on a lock mismatch — was SKIPPED by exactly the condition
+      // it exists to catch. SHY-0300 shipped a stale lock that way and every
+      // iOS build failed in the Swift compiler.
+      expect(deployDevKey).toContain("hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock')");
     });
   });
 

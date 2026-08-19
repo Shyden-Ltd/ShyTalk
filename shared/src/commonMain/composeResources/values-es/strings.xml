@@ -944,6 +944,7 @@
     <string name="block_description">No podrán ver tu perfil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Has sido bloqueado por este usuario.</string>
+    <string name="blocked_unblock_required">Tienen que desbloquearte antes de que puedas ver su perfil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Un usuario en esta sala te ha bloqueado. Es posible que tengas una experiencia limitada. ¿Entrar de todos modos?</string>
     <!-- google-translated 2026-05-04 -->
@@ -1501,10 +1502,10 @@
     <string name="security_reset_pin">Restablecer PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifique su identidad para establecer un nuevo PIN</string>
+    <string name="security_set_pin">Establecer PIN</string>
+    <string name="security_set_pin_desc">Proteja la aplicación con un PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Cuentas vinculadas</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Administrar métodos de inicio de sesión</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Iniciar sesión con correo electrónico</string>

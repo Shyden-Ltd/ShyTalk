@@ -7,11 +7,12 @@
  * Android driver backed by `adb` (shell + uiautomator).
  *
  * Exposes the ctx.uiDriver methods that manual-qa-runner.js matchers
- * call for Android scenarios. The current implementation is a SCAFFOLD:
- * every method name from the matcher contract is wired to a stub that
- * returns false + logs a clear "not implemented" message. As scenarios
- * are exercised end-to-end, methods get real implementations one at a
- * time (input tap, uiautomator dump, am start, intent broadcast).
+ * call for Android scenarios. This is a REAL, fully-implemented adb /
+ * UIAutomator driver (~2.5k lines): every method name from the matcher
+ * contract is first registered with a fail-loud fallback (returns false
+ * + logs a clear "not implemented yet" message for any not-yet-mapped
+ * name), then the real implementations below override the mapped names
+ * (input tap, uiautomator dump, am start, intent broadcast).
  *
  * Wiring contract:
  *   - `createAndroidDriver({ serial })` selects which adb device to drive.
@@ -28,9 +29,8 @@
  *   - `adb shell am start -n pkg/.Activity`  — launches activity
  *   - `adb shell am broadcast -a ...`        — broadcasts intent
  *
- * The driver doesn't currently know which Activity each "screen"
- * corresponds to — that mapping needs to come from the app's
- * navigation registry. For now, methods log "not implemented" and the
+ * Where a "screen"→Activity mapping isn't yet wired, that method falls
+ * through to the fail-loud fallback (logs + returns false) and the
  * runner surfaces a finding listing the matcher and the missing call.
  */
 const { execSync } = require('child_process');
@@ -117,8 +117,9 @@ const PACKAGE_BY_TARGET = {
 /**
  * Method-name list the runner expects on ctx.uiDriver for Android
  * scenarios. Extracted by grepping `androidXxx:` patterns in
- * manual-qa-runner.js. Each name maps to a stub returning false +
- * log; real implementations replace stubs incrementally.
+ * manual-qa-runner.js. Each name is registered with the fail-loud
+ * fallback, then overridden below by its real implementation where one
+ * exists.
  */
 const ANDROID_METHOD_NAMES = [
   // Wake 86-106 vocabulary (matcher contract):
@@ -265,7 +266,18 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       console.error(
         `[android-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet (device=${serial})`,
       );
-      return false;
+      // THROW, do not return false (SHY-0330). Returning false made an
+      // unimplemented method indistinguishable from a working one: 98 step
+      // handlers discarded the verdict and reported PASS, so the whole
+      // missing-driver inventory was invisible in pass/fail terms and a run
+      // could log hundreds of these while "passing". A step that calls a
+      // method nobody has written has not performed the step.
+      const err = new Error(
+        `[android-driver] ${methodName} is NOT IMPLEMENTED (device=${serial}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+      );
+      err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
+      err.method = methodName;
+      throw err;
     };
   }
 
@@ -291,6 +303,22 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       console.error(
         `[android-driver] androidUiDump failed after ${result.attempts} attempts: ${result.lastErr}`,
       );
+      // SHY-0236: after the transient-retry budget is spent, a persistent dump
+      // failure is most often a STALE UiAutomation holder — a hung on-device
+      // `uiautomator` process (the EXIT=137 SIGKILL loop) that every retry AND
+      // every app-relaunch leaves stuck, so the caller relaunches the app
+      // forever (the "phone opens/closes the app endlessly" thrash). Kill the
+      // holder so the NEXT dump rebinds a fresh UiAutomation instead of looping.
+      // Fires ONLY on the already-failed path, so the cold-start retry above is
+      // untouched. See the matrix-orphans / hung-uiautomator memory.
+      try {
+        adb(['shell', 'pkill', '-f', 'uiautomator']);
+        console.error(
+          '[android-driver] cleared a possibly-stale uiautomator holder after dump failure — next dump rebinds fresh',
+        );
+      } catch (_e) {
+        /* pkill non-zero = no holder to clear; nothing to do */
+      }
       return '';
     }
     return result.xml;
@@ -2482,7 +2510,17 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // 'unknown'. Bounded loop (`maxIterations`, default 12) so a stuck system
   // dialog can't hang the driver. Shared by androidPersonaSignIn (Step 0b) +
   // androidSignOut.
-  async function advancePastLaunchGates(maxIterations = 12) {
+  /**
+   * @param maxIterations loop budget.
+   * @param clearLegalGate opt-IN. Only androidPersonaSignIn passes true.
+   *   androidSignOut deliberately does NOT: its contract is to fail loudly on a
+   *   fresh-install legal gate rather than tap through one ("sign-out cannot
+   *   clear a fresh-install gate"), and a test pins that. Sign-IN has the
+   *   opposite need — a freshly installed local build opens ON the gate, so
+   *   without clearing it every androidPersonaSignIn failed with
+   *   'could not tap "persona_picker_open"'.
+   */
+  async function advancePastLaunchGates(maxIterations = 12, clearLegalGate = false) {
     for (let i = 0; i < maxIterations; i++) {
       let dump;
       try {
@@ -2493,6 +2531,44 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       const state = classifyAndroidAuthState(dump);
       if (state === 'splash') {
         await driver.androidTapByTag('splash_continueButton');
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      // Fresh-install legal gate. A newly-installed local build opens HERE, not
+      // on the persona picker, so every androidPersonaSignIn failed with
+      // 'could not tap "persona_picker_open"' — 109 of 221 findings in one
+      // corpus run. classifyAndroidAuthState already recognised the state
+      // (:92); nothing cleared it, and androidSignOut explicitly cannot
+      // ("sign-out cannot clear a fresh-install gate").
+      //
+      // Each checkbox is ticked ONLY if the dump says checked="false". Tapping
+      // one that is already ticked would UNtick it, and the loop would then
+      // oscillate until maxIterations without ever reaching Continue. This also
+      // honours the never-tap-a-label-speculatively rule: read the dump, tap
+      // only what is actually there and actually needs it, then re-read.
+      if (state === 'legal_gate' && clearLegalGate) {
+        const LEGAL_CHECKBOXES = [
+          'legal_acceptPrivacyCheckbox',
+          'legal_acceptTermsCheckbox',
+          'legal_acceptCommunityCheckbox',
+          'legal_acceptCyberBullyingCheckbox',
+        ];
+        let tapped = false;
+        for (const tag of LEGAL_CHECKBOXES) {
+          const node = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id/)?${tag}"[^>]*>`).exec(dump);
+          if (!node) continue; // not on this build's gate — skip, do not guess
+          if (/checked="true"/.test(node[0])) continue; // already accepted
+          await driver.androidTapByTag(tag);
+          tapped = true;
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        if (tapped) {
+          // Re-read before Continue: the button enables off the checkbox state,
+          // and tapping it while still disabled looks identical to a failure.
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        await driver.androidTapByTag('legal_continueButton');
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
@@ -2660,7 +2736,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // the Firebase session, so the app may relaunch signed-in (or on a
     // moderation warning gate) instead of the picker; if so, perform a real
     // in-app sign-out so the picker becomes reachable.
-    const launchState = await advancePastLaunchGates();
+    const launchState = await advancePastLaunchGates(12, true);
     if (launchState === 'signed_in' || launchState === 'warning') {
       await driver.androidSignOut();
     }

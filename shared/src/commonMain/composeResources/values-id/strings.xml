@@ -944,6 +944,7 @@
     <string name="block_description">Mereka tidak akan dapat melihat profil Anda.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Anda telah diblokir oleh pengguna ini</string>
+    <string name="blocked_unblock_required">Mereka harus membuka blokir Anda sebelum Anda dapat melihat profilnya.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Seorang pengguna di ruangan ini telah memblokir Anda. Anda mungkin memiliki pengalaman terbatas. Tetap masuk?</string>
     <!-- google-translated 2026-05-04 -->
@@ -1501,10 +1502,10 @@
     <string name="security_reset_pin">Setel ulang PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifikasi identitas Anda untuk menetapkan PIN baru</string>
+    <string name="security_set_pin">Tetapkan PIN</string>
+    <string name="security_set_pin_desc">Lindungi aplikasi dengan PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Akun Tertaut</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Kelola metode masuk</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Masuk dengan email</string>

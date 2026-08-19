@@ -1092,6 +1092,15 @@ test.describe("Integration — cohort gates: null-cohort doc edge cases", () => 
 // means the JWT (server-signed via custom claim mint, PR 2) is the
 // only source of truth. Without immutability on update, even a
 // correctly-stamped create can be undone by a flip-update later.
+//
+// SHY-0198 repair: every client-side create below now carries
+// `ownerFirebaseUid` bound to its auth context's uid — SHY-0029
+// (#1541) made the field strictly mandatory on create ("absent →
+// deny" per the rule), which post-dates these specs. The allow-side
+// tests need it to pass at all; the deny-side tests need it so each
+// keeps failing for exactly its NAMED cause (cohort forgery, missing
+// cohort, invalid value, proxy ownerId) rather than the incidental
+// missing-field denial.
 
 import { updateDoc } from "firebase/firestore";
 
@@ -1105,6 +1114,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertSucceeds(
       setDoc(doc(db, "rooms", "room-create-1"), {
         ownerId: "200000200",
+        ownerFirebaseUid: "uid-adult-create",
         cohort: "adult",
         participantIds: ["200000200"],
         state: "ACTIVE",
@@ -1121,6 +1131,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertSucceeds(
       setDoc(doc(db, "rooms", "room-create-2"), {
         ownerId: "200000201",
+        ownerFirebaseUid: "uid-minor-create",
         cohort: "minor",
         participantIds: ["200000201"],
         state: "ACTIVE",
@@ -1137,6 +1148,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-3"), {
         ownerId: "200000202",
+        ownerFirebaseUid: "uid-adult-create-2",
         cohort: "minor", // claim says adult — mismatch must reject
         participantIds: ["200000202"],
         state: "ACTIVE",
@@ -1153,6 +1165,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-4"), {
         ownerId: "200000203",
+        ownerFirebaseUid: "uid-minor-create-2",
         cohort: "adult", // claim says minor — mismatch must reject
         participantIds: ["200000203"],
         state: "ACTIVE",
@@ -1169,6 +1182,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-5"), {
         ownerId: "200000204",
+        ownerFirebaseUid: "uid-adult-create-3",
         // no cohort
         participantIds: ["200000204"],
         state: "ACTIVE",
@@ -1185,6 +1199,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-6"), {
         ownerId: "200000205",
+        ownerFirebaseUid: "uid-adult-create-4",
         cohort: "super-adult", // not 'adult' or 'minor'
         participantIds: ["200000205"],
         state: "ACTIVE",
@@ -1201,6 +1216,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-7"), {
         ownerId: "999999999", // someone else
+        ownerFirebaseUid: "uid-adult-create-5", // correct — ownerId is the sole defect
         cohort: "adult",
         participantIds: ["200000206"],
         state: "ACTIVE",
@@ -1217,6 +1233,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertSucceeds(
       setDoc(doc(db, "rooms", "room-create-8"), {
         ownerId: "200000207",
+        ownerFirebaseUid: "uid-no-cohort-claim",
         cohort: "minor",
         participantIds: ["200000207"],
         state: "ACTIVE",
@@ -1232,6 +1249,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-9"), {
         ownerId: "200000208",
+        ownerFirebaseUid: "uid-no-cohort-claim-2",
         cohort: "adult",
         participantIds: ["200000208"],
         state: "ACTIVE",

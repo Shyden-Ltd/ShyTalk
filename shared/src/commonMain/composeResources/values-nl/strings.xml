@@ -944,6 +944,7 @@
     <string name="block_description">Ze kunnen uw profiel niet bekijken.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Je bent geblokkeerd door deze gebruiker</string>
+    <string name="blocked_unblock_required">Zij moeten je deblokkeren voordat je hun profiel kunt bekijken.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Een gebruiker in deze kamer heeft je geblokkeerd. Het kan zijn dat u een beperkte ervaring heeft. Toch binnenkomen?</string>
     <!-- google-translated 2026-05-04 -->
@@ -1501,10 +1502,10 @@
     <string name="security_reset_pin">Pincode opnieuw instellen</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifieer uw identiteit om een ​​nieuwe pincode in te stellen</string>
+    <string name="security_set_pin">Pincode instellen</string>
+    <string name="security_set_pin_desc">Bescherm de app met een pincode</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Gekoppelde accounts</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Beheer aanmeldingsmethoden</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Meld u aan met e-mail</string>

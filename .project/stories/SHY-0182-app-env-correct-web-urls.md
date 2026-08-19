@@ -1,6 +1,6 @@
 ---
 id: SHY-0182
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-13
 priority: P1
@@ -113,3 +113,5 @@ Touches `shared/**` (+ platform host bridging) → **full protocol**: all app fr
 ## Notes
 
 - 2026-07-13 — Filed under EPIC-0007 as the APP half of the web-surface-correctness theme; the WEB `?lang=` resolver is [[SHY-0181]]. Hard rule + CI + contamination-tests per [[feedback-web-urls-env-derived-never-cross]] (operator 2026-07-13: "do not cross-over between environments ever" + "tests must confirm no cross-environment contaminations"). `type: bug` because the hardcoded prod URL is a live cross-env defect. `mvp: true` (compliance-adjacent + a real leak).
+
+- 2026-08-06 — **CANCELLED, superseded by EPIC-0010.** The operator replaced every language mechanism with the shyden.co.uk model (real per-locale URLs on the web; device-locale in the app) and narrowed the set to five MVP languages. See EPIC-0010's Notes for the per-ticket disposition table. Specifically: the app no longer has a language of its own to open web pages in; locale-aware URLs are SHY-0285/0286. The environment half stays with EPIC-0007.

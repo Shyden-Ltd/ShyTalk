@@ -30,6 +30,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { readGitIdentity, buildMetaTags, injectMetas } = require("./build-meta");
 
 function parseArgs(argv) {
   const opts = { port: 8888, root: "public", quiet: false };
@@ -72,9 +73,36 @@ function contentType(filePath) {
 }
 
 /**
+ * True when `candidate` — an already-resolved absolute path — names something
+ * strictly inside `absRoot`.
+ *
+ * The `+ path.sep` is the whole point: a bare `startsWith(absRoot)` would treat
+ * the SIBLING directory `<root>-evil` as inside the root, because it shares the
+ * root's string prefix. Requiring the separator means only true descendants
+ * pass. `absRoot` itself fails, which is correct — the root is a directory, so
+ * it is never a servable file.
+ *
+ * Candidates are always products of `path.resolve`/`path.join`, so they arrive
+ * normalized; this predicate does not have to reason about `..` segments.
+ */
+function isInsideRoot(absRoot, candidate) {
+  return candidate.startsWith(absRoot + path.sep);
+}
+
+/**
  * Resolves a request URL path to an absolute file inside `root`, applying
  * serve's clean-URL + directory-index rules. Returns null if nothing resolves
  * OR if the path would escape the web root (defense against `..` traversal).
+ *
+ * CONTAINMENT IS CHECKED ON THE FINAL CANDIDATE, never earlier (SHY-0293).
+ * The original guard tested the pre-candidate path, and the candidates are
+ * DERIVED from it: a URL resolving to the root itself (`/.`, `/foo/..`, `/%2e`,
+ * `//.`) passed the guard legitimately — the root is inside the root — and then
+ * produced the clean-URL candidate `<root>.html`, a sibling of the web root and
+ * outside it. CodeQL flagged all three fs sinks for exactly this
+ * (js/path-injection ×3 high, PR #1652); it was right, and four URL forms
+ * reproduced it. Every path that reaches `fs` now passes this one check, so a
+ * new candidate shape cannot quietly skip it.
  */
 function resolveFile(root, urlPath) {
   const absRoot = path.resolve(root);
@@ -86,10 +114,7 @@ function resolveFile(root, urlPath) {
     // Treat as unresolvable rather than let the throw crash the request handler.
     return null;
   }
-  // Normalize + confine to the root: a resolved path outside absRoot is rejected.
   const requested = path.resolve(absRoot, `.${decoded}`);
-  if (requested !== absRoot && !requested.startsWith(absRoot + path.sep))
-    return null;
 
   const candidates = [];
   const endsWithSlash = decoded.endsWith("/");
@@ -101,6 +126,7 @@ function resolveFile(root, urlPath) {
     candidates.push(path.join(requested, "index.html")); // extensionless dir
   }
   for (const c of candidates) {
+    if (!isInsideRoot(absRoot, c)) continue;
     try {
       if (fs.statSync(c).isFile()) return c;
     } catch {
@@ -110,12 +136,66 @@ function resolveFile(root, urlPath) {
   return null;
 }
 
+// SHY-0205 — the local writer half of the build-meta contract (the deploy
+// writer is scripts/stamp-build-meta.mjs; both share local/build-meta.js).
+// Locally there is no build step, so "build-time git injection" means
+// serve-time: html responses get the LIVE working tree's branch/sha/dirty
+// stamped in, and the preview watermark names the exact code being served.
+// TTL-cached so the Playwright load (hundreds of requests/min) costs one
+// git subprocess per window, not per request; failures cache as null and
+// pages serve unmodified — a missing watermark line never breaks serving.
+const GIT_META_TTL_MS = 5000;
+let gitMetaCache = { at: 0, meta: null };
+function cachedGitMeta() {
+  if (Date.now() - gitMetaCache.at > GIT_META_TTL_MS) {
+    gitMetaCache = { at: Date.now(), meta: readGitIdentity(process.cwd()) };
+  }
+  return gitMetaCache.meta;
+}
+
+/** Serves an html file buffered, with the git metas injected when known. */
+function serveHtml(res, file) {
+  fs.readFile(file, "utf8", (err, html) => {
+    if (err) {
+      // Mirror the streaming path's error semantics: log always, end THIS
+      // request with a 500, never take the process down.
+      process.stderr.write(`[serve-web] read error ${file}: ${err.code}\n`);
+      if (!res.headersSent) res.writeHead(500);
+      res.end();
+      return;
+    }
+    const meta = cachedGitMeta();
+    let body = html;
+    if (meta) {
+      const injected = injectMetas(
+        html,
+        buildMetaTags({
+          branch: meta.branch,
+          sha: meta.sha,
+          dirty: meta.dirty,
+        }),
+      );
+      // null = no </head> (fragment) — serve unmodified rather than corrupt.
+      if (injected !== null) body = injected;
+    }
+    res.writeHead(200, {
+      "Content-Type": contentType(file),
+      "Content-Length": Buffer.byteLength(body),
+    });
+    res.end(body);
+  });
+}
+
 function createServer({ root }) {
   return http.createServer((req, res) => {
     const file = resolveFile(root, req.url || "/");
     if (!file) {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("404 Not Found");
+      return;
+    }
+    if (contentType(file).startsWith("text/html")) {
+      serveHtml(res, file);
       return;
     }
     const stream = fs.createReadStream(file);
@@ -147,10 +227,13 @@ function main() {
   server.listen(opts.port, () => {
     // One-line startup banner. --quiet/--no-clipboard are accepted for CLI
     // parity with `serve` but no longer gate anything (read errors always
-    // log; this banner is a single harmless line).
+    // log; this banner is a single harmless line). The port comes from the
+    // BOUND address, not the requested option — `--port 0` (ephemeral,
+    // used by the meta-injection tests) would otherwise print a lie.
+    const boundPort = server.address().port;
     if (!opts.quiet)
       process.stdout.write(
-        `[serve-web] serving ${path.resolve(opts.root)} on http://localhost:${opts.port} (pid ${process.pid})\n`,
+        `[serve-web] serving ${path.resolve(opts.root)} on http://localhost:${boundPort} (pid ${process.pid})\n`,
       );
   });
   // Clean shutdown — no half-torn-down fd race, exit 0.

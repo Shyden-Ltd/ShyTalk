@@ -1278,6 +1278,7 @@
     <string name="profile_not_available">កម្រងព័ត៌មាននេះមិនមានទេ។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">អ្នកត្រូវបានរារាំងដោយអ្នកប្រើប្រាស់នេះ។</string>
+    <string name="blocked_unblock_required">ពួកគេត្រូវដោះការទប់ស្កាត់អ្នកជាមុនសិន មុននឹងអ្នកអាចមើលប្រវត្តិរូបរបស់ពួកគេបាន។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="account_suspended_label">គណនីត្រូវបានផ្អាក</string>
     <!-- google-translated 2026-05-04 -->
@@ -1591,10 +1592,10 @@
     <string name="security_reset_pin">កំណត់កូដ PIN ឡើងវិញ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">ផ្ទៀងផ្ទាត់អត្តសញ្ញាណរបស់អ្នកដើម្បីកំណត់កូដ PIN ថ្មី។</string>
+    <string name="security_set_pin">កំណត់កូដ PIN</string>
+    <string name="security_set_pin_desc">ការពារកម្មវិធីដោយកូដ PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">គណនីដែលបានភ្ជាប់</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">គ្រប់គ្រងវិធីសាស្រ្តចូល</string>
 
     <!-- Email OTP Screen -->
     <!-- google-translated 2026-05-04 -->

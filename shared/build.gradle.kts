@@ -110,6 +110,11 @@ kotlin {
             // (matching the app module's pinned versions).
             implementation(project.dependencies.platform(libs.firebase.bom))
             implementation(libs.firebase.auth)
+            // SHY-0300: the App Check API + the Play Integrity provider. The
+            // actual lives in androidMain because the Firebase Android SDK has
+            // no KMP binding; iOS reaches the same API through a Swift bridge.
+            implementation(libs.firebase.appcheck)
+            implementation(libs.firebase.appcheck.playintegrity)
             implementation(libs.kotlinx.coroutines.play.services)
         }
 
@@ -132,20 +137,72 @@ compose.resources {
     generateResClass = always
 }
 
-// SHY-0151: IosBypassDeviceChecksWiringPinTest reads two source files at
-// runtime (the iosMain DI module + the Swift boot file) to guard the
-// device-check-bypass wiring against a hardcoded-`true` regression. Those
-// files are NOT inputs to the jvmTest compilation, so without declaring
-// them here Gradle would treat jvmTest as up-to-date when only they change
-// and skip the pin — leaving the regression unguarded. Declaring them as
-// task inputs forces a re-run whenever either file changes.
+// SHY-0187: AppLockWiringPinTest (jvmTest) reads these navigation sources
+// directly off disk. The app-module + iosMain files are NOT inputs to the
+// jvmTest compilation, so without declaring them here Gradle would treat
+// jvmTest as up-to-date when only they change and skip the pin — leaving the
+// "built but never wired" regression unguarded.
+//
+// SHY-0143 added the two Koin modules: the DI pin asserts SessionCache is
+// registered on BOTH platforms, and a registration deleted from either one is
+// precisely the change that would otherwise leave jvmTest up-to-date. This
+// list has to grow whenever a pin learns to read a new file — a pin reading an
+// undeclared file is a pin that does not run.
 tasks.named("jvmTest") {
     inputs
         .files(
-            layout.projectDirectory.file(
-                "src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt",
-            ),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/MainActivity.kt"),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/navigation/NavGraph.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/MainViewController.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/navigation/IosPlatformScreens.kt"),
+            rootProject.layout.projectDirectory.file("iosApp/iosApp/AppDelegate.swift"),
+            // SHY-0151: IosBypassDeviceChecksWiringPinTest also reads the Swift
+            // boot file, to guard the device-check-bypass wiring against a
+            // hardcoded-`true` regression. develop's list did not carry it.
             rootProject.layout.projectDirectory.file("iosApp/iosApp/iOSApp.swift"),
-        ).withPropertyName("iosBypassDeviceChecksPinnedSources")
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt"),
+            rootProject.layout.projectDirectory.file(
+                "app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosAuthRepositoryImpl.kt",
+            ),
+            // SHY-0300: AppCheckWiringPinTest reads both platforms' public-GET
+            // paths, both actuals, the Android installer, the app-start order,
+            // the gradle variant scoping, and the SERVER's header constant —
+            // the last of which is not a Kotlin source at all, and is exactly
+            // the file whose drift the pin exists to catch.
+            rootProject.layout.projectDirectory.file(
+                "app/src/main/java/com/shyden/shytalk/data/remote/WorkerApiClient.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/data/remote/IosApiClient.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/commonMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/androidMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.android.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckTokenProvider.ios.kt",
+            ),
+            // SHY-0306: AppCheckWiringPinTest reads this too, so it MUST be
+            // declared. Proven, not assumed: with it missing, touching only
+            // AppCheckBridge.kt left `:shared:jvmTest UP-TO-DATE` — the pin
+            // that exists to stop the bridge moving back into a *.ios.kt file
+            // would silently not run on the very commit that moved it.
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/core/security/AppCheckBridge.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/androidMain/kotlin/com/shyden/shytalk/core/security/AppCheckInstaller.kt",
+            ),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/ShyTalkApp.kt"),
+            rootProject.layout.projectDirectory.file("app/build.gradle.kts"),
+            rootProject.layout.projectDirectory.file("express-api/src/middleware/app-check.js"),
+        ).withPropertyName("appLockWiringPinnedSources")
         .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 }

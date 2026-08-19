@@ -944,6 +944,7 @@
     <string name="block_description">वे आपकी प्रोफ़ाइल नहीं देख पाएंगे.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">आपको इस उपयोगकर्ता द्वारा ब्लॉक कर दिया गया है</string>
+    <string name="blocked_unblock_required">आपको उनका प्रोफ़ाइल देखने के लिए पहले उन्हें आपको अनब्लॉक करना होगा।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">इस कमरे में एक उपयोगकर्ता ने आपको ब्लॉक कर दिया है. आपके पास सीमित अनुभव हो सकता है. फिर भी दर्ज करें?</string>
     <!-- google-translated 2026-05-04 -->
@@ -1501,10 +1502,10 @@
     <string name="security_reset_pin">पिन रीसेट करें</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">नया पिन सेट करने के लिए अपनी पहचान सत्यापित करें</string>
+    <string name="security_set_pin">पिन सेट करें</string>
+    <string name="security_set_pin_desc">ऐप को पिन से सुरक्षित करें</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">लिंक किए गए खाते</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">साइन-इन विधियाँ प्रबंधित करें</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">ईमेल से साइन इन करें</string>
