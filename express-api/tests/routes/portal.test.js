@@ -838,3 +838,201 @@ describe('POST /api/portal/revoke-all-sessions', () => {
     expect(auth.revokeRefreshTokens).not.toHaveBeenCalled();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// SHY-0147 — "remember this browser" MFA window
+//
+// Reuses this file's existing harness on purpose: `tests/routes/` is not a
+// unit-test location, so a NEW file with its own `jest.mock` calls would add
+// to the no-new-stubs debt (EPIC-0003). The mocks here are already baselined.
+// ═══════════════════════════════════════════════════════════════════
+describe('SHY-0147 — MFA-remember (per-browser)', () => {
+  const { MFA_REMEMBER_COOKIE, issueMfaRememberToken } = require('../../src/utils/mfa-remember');
+
+  const UNIQUE_ID = 12345;
+
+  /** The two doc reads GET /portal/me makes, in order: user, then totp. */
+  function primeMe({ totpEnrolled = true, epoch = 0, user = {} } = {}) {
+    mockDocGet.mockReset();
+    mockDocGet.mockImplementation((path) => {
+      if (path === `users/${UNIQUE_ID}/private/totp`) {
+        return Promise.resolve(
+          totpEnrolled
+            ? {
+                exists: true,
+                data: () => ({ encryptedSecret: 'encrypted:S', mfaRememberEpoch: epoch }),
+              }
+            : { exists: false },
+        );
+      }
+      return Promise.resolve(makeUserDoc(user));
+    });
+  }
+
+  const cookieFor = (over = {}) =>
+    `${MFA_REMEMBER_COOKIE}=${issueMfaRememberToken({
+      uniqueId: UNIQUE_ID,
+      browserId: 'b-test',
+      epoch: 0,
+      ...over,
+    })}`;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDocSet.mockResolvedValue();
+    auth.getUser.mockResolvedValue({ customClaims: {} });
+  });
+
+  // ── the window is honoured ────────────────────────────────────────────
+  it('honours a valid remembered browser even with no totpVerified claim', async () => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe();
+    const res = await request(buildApp()).get('/api/portal/me').set('Cookie', cookieFor());
+    expect(res.status).toBe(200);
+  });
+
+  it('still prompts when there is no cookie at all', async () => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe();
+    const res = await request(buildApp()).get('/api/portal/me');
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('MFA required');
+  });
+
+  // ── fail-closed ───────────────────────────────────────────────────────
+  it.each([
+    ['a forged signature', `${MFA_REMEMBER_COOKIE}=12345.b-x.0.99999999999999.${'f'.repeat(64)}`],
+    ['garbage', `${MFA_REMEMBER_COOKIE}=not-a-token`],
+    ['an empty value', `${MFA_REMEMBER_COOKIE}=`],
+  ])('re-prompts on %s rather than erroring', async (_label, cookie) => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe();
+    const res = await request(buildApp()).get('/api/portal/me').set('Cookie', cookie);
+    expect(res.status).toBe(403);
+  });
+
+  it('re-prompts once the window has expired', async () => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe();
+    const expired = cookieFor({ now: Date.now() - 31 * 24 * 60 * 60 * 1000 });
+    const res = await request(buildApp()).get('/api/portal/me').set('Cookie', expired);
+    expect(res.status).toBe(403);
+  });
+
+  it('re-prompts after the epoch is bumped — one number revokes every browser', async () => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe({ epoch: 5 }); // server has moved on; the cookie was signed at 0
+    const res = await request(buildApp()).get('/api/portal/me').set('Cookie', cookieFor());
+    expect(res.status).toBe(403);
+  });
+
+  it('a token minted for ANOTHER user does not work here', async () => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe();
+    const other = cookieFor({ uniqueId: 99999 });
+    const res = await request(buildApp()).get('/api/portal/me').set('Cookie', other);
+    expect(res.status).toBe(403);
+  });
+
+  // ── it is NOT an access grant ─────────────────────────────────────────
+  it('a suspended account is still blocked while its browser is remembered', async () => {
+    setMockAuth(); // defaults: password provider, totpVerified false
+    primeMe({ user: { isSuspended: true, suspensionReason: 'Terms violation' } });
+    const res = await request(buildApp()).get('/api/portal/me').set('Cookie', cookieFor());
+    // Suspension is evaluated BEFORE the MFA gate and must win.
+    expect(res.status).toBe(200);
+    expect(res.body.isSuspended).toBe(true);
+    expect(res.body.totpEnrolled).toBe(false); // status withheld for suspended users
+  });
+
+  // ── issuance ──────────────────────────────────────────────────────────
+  it('issues an httpOnly cookie only when the browser is to be remembered', async () => {
+    setMockAuth();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ encryptedSecret: 'encrypted:S', mfaRememberEpoch: 0 }),
+    });
+    mockVerifySync.mockReturnValue({ valid: true });
+
+    const res = await request(buildApp())
+      .post('/api/portal/totp/verify')
+      .send({ code: '123456', rememberBrowser: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body.rememberedBrowser).toBe(true);
+    const setCookie = String(res.headers['set-cookie'] || '');
+    expect(setCookie).toContain(MFA_REMEMBER_COOKIE);
+    expect(setCookie).toMatch(/HttpOnly/i);
+    expect(setCookie).toMatch(/SameSite=Strict/i);
+  });
+
+  it('issues NOTHING when the user did not ask to be remembered', async () => {
+    setMockAuth();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ encryptedSecret: 'encrypted:S' }),
+    });
+    mockVerifySync.mockReturnValue({ valid: true });
+
+    const res = await request(buildApp()).post('/api/portal/totp/verify').send({ code: '123456' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.rememberedBrowser).toBe(false);
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('issues NOTHING on a wrong code, even when asked to remember', async () => {
+    setMockAuth();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ encryptedSecret: 'encrypted:S' }),
+    });
+    mockVerifySync.mockReturnValue({ valid: false });
+
+    const res = await request(buildApp())
+      .post('/api/portal/totp/verify')
+      .send({ code: '000000', rememberBrowser: true });
+
+    expect(res.status).toBe(401);
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  // ── revocation on sign-out ────────────────────────────────────────────
+  it('sign-out clears the cookie AND bumps the epoch server-side', async () => {
+    setMockAuth();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ encryptedSecret: 'encrypted:S', mfaRememberEpoch: 3 }),
+    });
+
+    const res = await request(buildApp()).post('/api/portal/sign-out').send({});
+
+    expect(res.status).toBe(200);
+    // Client side: the cookie is expired away.
+    expect(String(res.headers['set-cookie'] || '')).toContain(MFA_REMEMBER_COOKIE);
+    // Server side: the epoch moved, so a surviving cookie is dead anyway.
+    expect(mockDocSet).toHaveBeenCalledWith(
+      `users/${UNIQUE_ID}/private/totp`,
+      expect.objectContaining({ mfaRememberEpoch: 4 }),
+    );
+  });
+
+  it('sign-out still succeeds if the epoch bump fails, and says so loudly', async () => {
+    setMockAuth();
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ mfaRememberEpoch: 1 }),
+    });
+    mockDocSet.mockRejectedValueOnce(new Error('firestore down'));
+
+    const res = await request(buildApp()).post('/api/portal/sign-out').send({});
+
+    // Refresh tokens are already revoked; failing the sign-out would be worse.
+    expect(res.status).toBe(200);
+    expect(log.error).toHaveBeenCalledWith(
+      'portal',
+      expect.stringContaining('epoch bump FAILED'),
+      expect.objectContaining({ uniqueId: UNIQUE_ID }),
+    );
+  });
+});

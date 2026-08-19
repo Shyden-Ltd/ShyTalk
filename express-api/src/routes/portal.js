@@ -6,6 +6,14 @@ const log = require('../utils/log');
 const { sendEmail } = require('../utils/email');
 const { buildOtpEmail } = require('../utils/email-templates');
 const { encryptSecret, decryptSecret } = require('../utils/totp-crypto');
+const {
+  MFA_REMEMBER_COOKIE,
+  MFA_TRUST_WINDOW_MS,
+  readCookie,
+  issueMfaRememberToken,
+  verifyMfaRememberToken,
+  newBrowserId,
+} = require('../utils/mfa-remember');
 const { generateSecret, generateURI, verifySync } = require('otplib/functional');
 const { NobleCryptoPlugin } = require('@otplib/plugin-crypto-noble');
 const { ScureBase32Plugin } = require('@otplib/plugin-base32-scure');
@@ -101,6 +109,85 @@ async function setTotpVerifiedClaim(uid) {
 }
 
 /**
+ * The user's MFA-remember epoch — the single number that revokes every
+ * remembered browser at once.
+ *
+ * Kept on the existing TOTP doc rather than a new collection: it is MFA state,
+ * it is read on the same path that already reads that doc, and it costs no
+ * extra document read. Absent means 0, so a user who has never signed out
+ * behaves exactly as before.
+ */
+async function readMfaRememberEpoch(uniqueId) {
+  const snap = await db.doc(`users/${uniqueId}/private/totp`).get();
+  return snap.exists ? Number(snap.data().mfaRememberEpoch || 0) : 0;
+}
+
+/**
+ * Bumps the epoch, invalidating every outstanding remembered browser.
+ *
+ * Never takes sign-out down with it. A failure here is logged at ERROR — it is
+ * not swallowed — but it must not turn a successful sign-out into a 500: the
+ * user has already had their refresh tokens revoked and must re-enter their
+ * password, and this token governs only the authenticator RE-PROMPT, never
+ * access. Returns whether the bump actually happened so callers can assert it.
+ */
+async function bumpMfaRememberEpoch(uniqueId) {
+  try {
+    const ref = db.doc(`users/${uniqueId}/private/totp`);
+    const snap = await ref.get();
+    // No TOTP doc means nothing was ever remembered — a real state, not an error.
+    if (!snap || !snap.exists) return false;
+    const data = snap.data() || {};
+    const next = Number(data.mfaRememberEpoch || 0) + 1;
+    await ref.set({ ...data, mfaRememberEpoch: next });
+    log.info('portal', 'MFA-remember revoked for all browsers', { uniqueId, epoch: next });
+    return true;
+  } catch (err) {
+    log.error('portal', 'MFA-remember epoch bump FAILED — remembered browsers may persist', {
+      uniqueId,
+      error: err.message,
+    });
+    return false;
+  }
+}
+
+/** Cookies are Secure everywhere except plain-http local development. */
+function cookieIsSecure(req) {
+  return req.secure || req.get('x-forwarded-proto') === 'https';
+}
+
+function clearMfaRememberCookie(req, res) {
+  // Attributes must MATCH the ones the cookie was set with, or the browser
+  // treats it as a different cookie and the clear silently does nothing.
+  // Spelled out for the same reason as the set path above.
+  res.clearCookie(MFA_REMEMBER_COOKIE, {
+    httpOnly: true,
+    secure: cookieIsSecure(req),
+    sameSite: 'strict',
+    path: '/',
+  });
+}
+
+/**
+ * Does this request carry a still-valid remembered-browser token?
+ *
+ * Never throws: any doubt returns false and the caller re-prompts for MFA.
+ * The reason is logged (never the token itself) so the lifecycle is auditable.
+ */
+async function hasValidMfaRemember(req, uniqueId) {
+  const raw = readCookie(req, MFA_REMEMBER_COOKIE);
+  if (!raw) return false;
+  const epoch = await readMfaRememberEpoch(uniqueId);
+  const result = verifyMfaRememberToken(raw, { uniqueId, epoch });
+  if (!result.valid) {
+    log.info('portal', 'MFA-remember rejected', { uniqueId, reason: result.reason });
+    return false;
+  }
+  log.info('portal', 'MFA-remember honoured', { uniqueId, browserId: result.browserId });
+  return true;
+}
+
+/**
  * GET /portal/me — Returns the authenticated user's portal-relevant data.
  *
  * This is the main portal entry point. Every portal page load calls this
@@ -169,14 +256,20 @@ router.get('/portal/me', authMiddlewareStrict, async (req, res) => {
     // 8. TOTP enforcement for password users
     const signInProvider = token.firebase?.sign_in_provider;
     if (signInProvider === 'password' && totpEnrolled) {
-      if (!token.totpVerified) {
+      // SHY-0147 — a browser the user chose to remember skips the CODE PROMPT
+      // only. Everything above this point still ran: suspension is checked
+      // first (step 6) and returns before we get here, and the token itself is
+      // re-validated on every call. This is not an access grant.
+      const remembered = await hasValidMfaRemember(req, uniqueId);
+
+      if (!remembered && !token.totpVerified) {
         // Not verified at all
         return res.status(403).json({ error: 'MFA required' });
       }
 
       // Check if totpVerifiedAt is missing or expired (> 24h)
       const totpVerifiedAt = token.totpVerifiedAt;
-      if (!totpVerifiedAt || Date.now() - totpVerifiedAt > TOTP_MAX_AGE_MS) {
+      if (!remembered && (!totpVerifiedAt || Date.now() - totpVerifiedAt > TOTP_MAX_AGE_MS)) {
         // Clear the expired claim
         try {
           const userRecord = await auth.getUser(req.auth.uid);
@@ -345,7 +438,7 @@ router.post('/portal/totp/confirm-setup', authMiddlewareStrict, async (req, res)
 router.post('/portal/totp/verify', authMiddlewareStrict, async (req, res) => {
   try {
     const { uniqueId, uid, token } = req.auth;
-    const { code } = req.body || {};
+    const { code, rememberBrowser } = req.body || {};
 
     // 1. Validate code format
     const formatErr = validateCodeFormat(code);
@@ -381,7 +474,37 @@ router.post('/portal/totp/verify', authMiddlewareStrict, async (req, res) => {
     // 7. Set totpVerified claim
     await setTotpVerifiedClaim(uid);
 
-    return res.status(200).json({ success: true });
+    // 8. SHY-0147 — remember THIS browser, only on a genuinely correct code.
+    // Everything above already rejected a bad or replayed code, so reaching
+    // here is the only way a token can be issued.
+    let remembered = false;
+    if (rememberBrowser === true) {
+      const epoch = await readMfaRememberEpoch(uniqueId);
+      const value = issueMfaRememberToken({
+        uniqueId,
+        browserId: newBrowserId(),
+        epoch,
+      });
+      // Flags spelled out at the call site ON PURPOSE. Passing an options
+      // object built by a helper hides httpOnly/secure from a reader AND from
+      // static analysis — CodeQL cannot see through the indirection and
+      // reported this cookie as missing both. The helper still exists and is
+      // unit-tested; this call states the security-relevant attributes plainly.
+      res.cookie(MFA_REMEMBER_COOKIE, value, {
+        httpOnly: true,
+        secure: cookieIsSecure(req),
+        sameSite: 'strict',
+        path: '/',
+        maxAge: MFA_TRUST_WINDOW_MS,
+      });
+      remembered = true;
+      log.info('portal', 'MFA-remember issued', {
+        uniqueId,
+        expiresInMs: MFA_TRUST_WINDOW_MS,
+      });
+    }
+
+    return res.status(200).json({ success: true, rememberedBrowser: remembered });
   } catch (err) {
     log.error('portal', 'POST /portal/totp/verify failed', { error: err.message });
     return res.status(503).json({ error: 'Internal server error' });
@@ -443,6 +566,11 @@ router.delete('/portal/totp', authMiddlewareStrict, async (req, res) => {
 router.post('/portal/sign-out', authMiddlewareStrict, async (req, res) => {
   try {
     await clearTotpSessionAndRevoke(req.auth.uid);
+    // SHY-0147 — sign-out must un-remember this browser on BOTH sides: the
+    // cookie goes, and the server-side epoch bump invalidates it (and every
+    // other remembered browser) even if the cookie survives on the client.
+    await bumpMfaRememberEpoch(req.auth.uniqueId);
+    clearMfaRememberCookie(req, res);
     return res.status(200).json({ success: true });
   } catch (err) {
     log.error('portal', 'POST /portal/sign-out failed', { error: err.message });
