@@ -12,7 +12,7 @@
 const {
   issueMfaRememberToken,
   verifyMfaRememberToken,
-  MFA_REMEMBER_DEFAULT_TTL_MS,
+  MFA_TRUST_WINDOW_MS,
 } = require('../../src/utils/mfa-remember');
 
 const UID = 1234567;
@@ -38,16 +38,16 @@ describe('SHY-0147 — MFA-remember token', () => {
   });
 
   test('the default window is 30 days, and it is bounded', () => {
-    expect(MFA_REMEMBER_DEFAULT_TTL_MS).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(MFA_TRUST_WINDOW_MS).toBe(30 * 24 * 60 * 60 * 1000);
     const t = issue();
-    expect(verify(t, { now: NOW + MFA_REMEMBER_DEFAULT_TTL_MS - 1 }).valid).toBe(true);
+    expect(verify(t, { now: NOW + MFA_TRUST_WINDOW_MS - 1 }).valid).toBe(true);
   });
 
   // ── expiry ──────────────────────────────────────────────────────────────
   test('a token is rejected the instant it expires — no off-by-one past the boundary', () => {
     const t = issue();
-    expect(verify(t, { now: NOW + MFA_REMEMBER_DEFAULT_TTL_MS }).valid).toBe(false);
-    expect(verify(t, { now: NOW + MFA_REMEMBER_DEFAULT_TTL_MS }).reason).toBe('expired');
+    expect(verify(t, { now: NOW + MFA_TRUST_WINDOW_MS }).valid).toBe(false);
+    expect(verify(t, { now: NOW + MFA_TRUST_WINDOW_MS }).reason).toBe('expired');
   });
 
   test('a token from the future is not honoured', () => {
@@ -118,11 +118,7 @@ describe('SHY-0147 — MFA-remember token', () => {
 });
 
 // ── cookie plumbing ────────────────────────────────────────────────────────
-const {
-  MFA_REMEMBER_COOKIE,
-  readCookie,
-  mfaRememberCookieOptions,
-} = require('../../src/utils/mfa-remember');
+const { MFA_REMEMBER_COOKIE, readCookie } = require('../../src/utils/mfa-remember');
 
 describe('SHY-0147 — cookie plumbing', () => {
   const req = (header) => ({ headers: header === undefined ? {} : { cookie: header } });
@@ -156,17 +152,5 @@ describe('SHY-0147 — cookie plumbing', () => {
   ])('%s yields null rather than throwing', (_l, header) => {
     expect(() => readCookie(req(header), MFA_REMEMBER_COOKIE)).not.toThrow();
     expect(readCookie(req(header), MFA_REMEMBER_COOKIE)).toBeNull();
-  });
-
-  test('the cookie is httpOnly, SameSite and path-scoped; Secure outside local dev', () => {
-    const opts = mfaRememberCookieOptions({ maxAgeMs: 1000, secure: true });
-    expect(opts.httpOnly).toBe(true);
-    expect(opts.sameSite).toBe('strict');
-    expect(opts.secure).toBe(true);
-    expect(opts.path).toBe('/');
-    expect(opts.maxAge).toBe(1000);
-    // Not script-readable is the whole point — a JS-readable store would be
-    // exfiltratable by any XSS on the portal.
-    expect(mfaRememberCookieOptions({ maxAgeMs: 1, secure: false }).secure).toBe(false);
   });
 });

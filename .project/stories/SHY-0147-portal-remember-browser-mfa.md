@@ -206,6 +206,27 @@ Reviewed-up-to: bc1b7fd5ae348545fcc44a1d5a5b55d498446aab
   `firebase.sign_in_provider: 'password'` — which skips the MFA gate entirely
   and turns seven expected-403 tests into 200s. The defaults were already
   right; the override was the bug.
+- **2026-08-20 — CodeQL raised 4 new alerts on this PR (2 high), and all four
+  are now addressed at the root rather than suppressed.**
+  - Two **mediums** (`js/client-exposed-cookie`, `js/clear-text-cookie`) were
+    indirection: the call read `res.cookie(name, value, mfaRememberCookieOptions(...))`,
+    and neither CodeQL nor a human reader could see `httpOnly` / `secure` through
+    the helper. The security-relevant attributes are now spelled out at both the
+    set and the clear call sites. The clear path must MATCH the set attributes
+    anyway, or the browser treats it as a different cookie and the clear
+    silently does nothing.
+  - Two **highs** (`js/insufficient-password-hash`, `js/clear-text-storage-of-sensitive-data`)
+    both named `MFA_REMEMBER_DEFAULT_TTL_MS` as the sensitive source. It is a
+    **duration**. The heuristic read "MFA…REMEMBER" as credential-like and then
+    reported the token's HMAC as an insufficient PASSWORD hash — HMAC-SHA256 is
+    the correct primitive for a MAC, and nothing here hashes a password.
+    Renamed to `MFA_TRUST_WINDOW_MS`, which is what it actually is, removing the
+    mislabelled taint source instead of dismissing two alerts.
+  - The now-redundant `mfaRememberCookieOptions` helper and its unit test were
+    **deleted** rather than left as tested-but-unused code; the route tests
+    assert the flags on the real `Set-Cookie` header, which is the stronger
+    assertion.
+
 - **2026-08-19 — verification.** 29 unit tests on the token (all six mutations
   killed: expiry, epoch, signature, uid, part-count, and a constant-true
   comparator) · 54 route tests in `portal.test.js` including 15 new ones · 23

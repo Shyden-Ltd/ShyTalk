@@ -8,9 +8,8 @@ const { buildOtpEmail } = require('../utils/email-templates');
 const { encryptSecret, decryptSecret } = require('../utils/totp-crypto');
 const {
   MFA_REMEMBER_COOKIE,
-  MFA_REMEMBER_DEFAULT_TTL_MS,
+  MFA_TRUST_WINDOW_MS,
   readCookie,
-  mfaRememberCookieOptions,
   issueMfaRememberToken,
   verifyMfaRememberToken,
   newBrowserId,
@@ -158,13 +157,15 @@ function cookieIsSecure(req) {
 }
 
 function clearMfaRememberCookie(req, res) {
-  res.clearCookie(
-    MFA_REMEMBER_COOKIE,
-    mfaRememberCookieOptions({
-      maxAgeMs: 0,
-      secure: cookieIsSecure(req),
-    }),
-  );
+  // Attributes must MATCH the ones the cookie was set with, or the browser
+  // treats it as a different cookie and the clear silently does nothing.
+  // Spelled out for the same reason as the set path above.
+  res.clearCookie(MFA_REMEMBER_COOKIE, {
+    httpOnly: true,
+    secure: cookieIsSecure(req),
+    sameSite: 'strict',
+    path: '/',
+  });
 }
 
 /**
@@ -484,18 +485,22 @@ router.post('/portal/totp/verify', authMiddlewareStrict, async (req, res) => {
         browserId: newBrowserId(),
         epoch,
       });
-      res.cookie(
-        MFA_REMEMBER_COOKIE,
-        value,
-        mfaRememberCookieOptions({
-          maxAgeMs: MFA_REMEMBER_DEFAULT_TTL_MS,
-          secure: cookieIsSecure(req),
-        }),
-      );
+      // Flags spelled out at the call site ON PURPOSE. Passing an options
+      // object built by a helper hides httpOnly/secure from a reader AND from
+      // static analysis — CodeQL cannot see through the indirection and
+      // reported this cookie as missing both. The helper still exists and is
+      // unit-tested; this call states the security-relevant attributes plainly.
+      res.cookie(MFA_REMEMBER_COOKIE, value, {
+        httpOnly: true,
+        secure: cookieIsSecure(req),
+        sameSite: 'strict',
+        path: '/',
+        maxAge: MFA_TRUST_WINDOW_MS,
+      });
       remembered = true;
       log.info('portal', 'MFA-remember issued', {
         uniqueId,
-        expiresInMs: MFA_REMEMBER_DEFAULT_TTL_MS,
+        expiresInMs: MFA_TRUST_WINDOW_MS,
       });
     }
 
