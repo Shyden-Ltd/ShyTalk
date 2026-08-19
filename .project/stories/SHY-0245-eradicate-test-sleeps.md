@@ -201,12 +201,18 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
   four helper modules the restored specs no longer import are deleted rather
   than left orphaned.
 
+  One spec the branch ADDED, `suggestions-submit-tags.spec.ts`, is not carried
+  over. It never existed on develop, so nothing is lost relative to develop —
+  and it was among the 8 files failing in CI. It stays on the original branch
+  and belongs to [SHY-0357] with the rest. Confirmed mechanically: this PR's
+  diff against develop deletes **no** file that develop has.
+
   **What this PR is worth, stated plainly:** the ratchet. New sleeps fail
   immediately, and the 312 that exist can only shrink. The conversions
   themselves are better done file-by-file against current develop, which is
   [SHY-0357].
 
-Reviewed-up-to: eb5e0aa1297b66d21d32bd7a890c84fa5dae80d8
+Reviewed-up-to: dcce0471a71e2fd4fafe1007b05bf9af53568a94
 
 
 - **2026-08-19 — the AC was written before the shape of the debt was known, and
