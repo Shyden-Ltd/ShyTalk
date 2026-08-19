@@ -246,10 +246,7 @@ class AuthViewModelIdentityTest {
 
         override suspend fun getBlockedUserIds(userId: String) = Resource.Success(emptySet<String>())
 
-        override suspend fun checkBlockedBy(
-            userIds: List<String>,
-            targetUserId: String,
-        ) = Resource.Success(emptySet<String>())
+        override suspend fun checkBlockedBy(userIds: List<String>) = Resource.Success(emptySet<String>())
 
         override suspend fun followUser(
             currentUserId: String,

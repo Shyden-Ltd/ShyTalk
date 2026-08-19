@@ -547,6 +547,76 @@ router.get('/users/search', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// POST /api/users/blocked-by — which of these people have blocked ME?
+// ═══════════════════════════════════════════════════════════════════
+//
+// Answers the room-join question "has anyone already in this room blocked me?"
+// (SHY-0351). The subject is ALWAYS the authenticated caller — it is never read
+// from the body — so this cannot be used to ask about anybody else.
+//
+// Why it is a server endpoint at all: the client used to ask Firestore directly
+// with `whereIn(documentId(), chunk)` on `users`, and could never get a truthful
+// answer. `/users/{uniqueId}` is cohort-gated, and a filtered query against a
+// content-gated rule is refused ALL-OR-NOTHING — so one member of the room in
+// the other cohort denied the whole chunk. Here the Admin SDK reads each
+// document directly, so a member the caller could not have queried is still
+// answered for.
+//
+// The comparison goes through `viewerIsBlocked`, which coerces BOTH sides with
+// String(). That matters: `blockedUserIds` genuinely holds two shapes — the app
+// writes strings via arrayUnion, while `PATCH /admin/users/:uniqueId` validates
+// only Array.isArray and writes numeric ids straight through. The client's old
+// `filterIsInstance<String>()` silently dropped the numeric ones.
+//
+// The response is a bare id list. It deliberately carries nothing else about the
+// members queried — not their block lists, not any other field.
+
+const BLOCKED_BY_MAX_IDS = 1000;
+
+router.post('/users/blocked-by', async (req, res) => {
+  try {
+    const callerUniqueId = req.auth?.uniqueId;
+    if (!callerUniqueId) {
+      return res.status(403).json({ error: 'No profile for this account' });
+    }
+
+    const { userIds } = req.body || {};
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ error: 'userIds must be an array' });
+    }
+    if (userIds.length > BLOCKED_BY_MAX_IDS) {
+      return res
+        .status(400)
+        .json({ error: `userIds must contain at most ${BLOCKED_BY_MAX_IDS} ids` });
+    }
+    if (userIds.length === 0) {
+      return res.json({ blockedBy: [] });
+    }
+
+    // Ids become document paths, so anything that is not a plain positive
+    // integer is refused outright rather than normalised into one.
+    const ids = userIds.map((id) => String(id));
+    if (!ids.every((id) => /^[1-9][0-9]*$/.test(id))) {
+      return res.status(400).json({ error: 'userIds must all be numeric user ids' });
+    }
+
+    // De-duplicate: a repeated id would otherwise cost an extra read and could
+    // appear twice in the result.
+    const uniqueIds = [...new Set(ids)];
+    const snapshots = await db.getAll(...uniqueIds.map((id) => db.doc(`users/${id}`)));
+
+    const blockedBy = snapshots
+      .filter((snap) => snap.exists && viewerIsBlocked(callerUniqueId, snap.data()))
+      .map((snap) => snap.id);
+
+    return res.json({ blockedBy });
+  } catch (err) {
+    log.error('users', 'POST /users/blocked-by failed', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // GET /api/users/:uniqueId — Get user profile
 // ═══════════════════════════════════════════════════════════════════
 

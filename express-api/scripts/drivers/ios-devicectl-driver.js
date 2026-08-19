@@ -4,17 +4,17 @@
 /**
  * iOS driver backed by `xcrun devicectl` — physical iPhone target.
  *
- * Replaces `ios-simctl-driver.js` (simulator-only) per the policy
- * shift: journey tests run on a real device over wireless, not on a
- * simulator (see feedback-ios-also-journey-tested.md). The simctl
- * driver is preserved in-tree for reference but the runner now
- * imports from this file.
+ * NON-CANONICAL ALTERNATIVE (EPIC-0003, 2026-06-13): the canonical
+ * real-iPhone native path is `ios-appium-driver.js` (Appium + WebDriver-
+ * Agent). This devicectl driver is kept in-tree as a non-canonical
+ * alternative; its UI inspection is INTENTIONALLY left unbuilt and it is
+ * NOT on the Pre-Merge gauntlet path — so it is not a No-Stubs violation
+ * to "complete". Do not build it out; use the Appium driver instead.
  *
- * SCAFFOLD STATE: this is the Phase 5 root PR. The factory + method
- * name registry + stub methods are in place; real UI inspection
- * (devicectl + WDA / XCTest harness) lands in subsequent PRs that
- * convert each stub into a foundation presence-check method, mirror-
- * ing the Android cluster's pattern.
+ * State: the factory + method-name registry + device selection are real;
+ * UI inspection (`iosUiDump()` returns '' → every `iosShows*` returns
+ * false) is the part deliberately not implemented here. `ios-simctl-
+ * driver.js` is the simulator-only sibling (also non-canonical).
  *
  * Wiring contract:
  *   - `createIosDriver({ udid })` picks the first connected physical
@@ -31,9 +31,9 @@
  *   - `device process launch <bundleId>`— launch app
  *   - `device info details`             — device metadata
  *   - For UI inspection on physical devices, devicectl alone is
- *     insufficient; this scaffold uses WebDriverAgent / XCTest as a
- *     future integration. Until that lands, `iosUiDump()` returns ''
- *     and every presence-check method returns false in real journeys.
+ *     insufficient; the canonical path (ios-appium-driver.js) uses
+ *     WebDriverAgent for this. Here, `iosUiDump()` returns '' and every
+ *     presence-check returns false — intentionally unbuilt (see above).
  *
  * Foundation parity with android-adb-driver.js:
  *   - `iosUiDump()` is the rough equivalent of `androidUiDump()` —
