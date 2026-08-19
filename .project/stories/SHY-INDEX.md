@@ -173,6 +173,9 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0328](SHY-0328-local-matrix-persona-password-mismatch.md) | P0 | S | bug | The local journey matrix cannot pass on any branch, because it seeds with one password and signs in with another | 🔍 In Review | — | — |
 | [SHY-0360](SHY-0360-board-roadmap-two-way-sync.md) | P1 | L | infra | A change on the project board never reaches the roadmap pages | 📝 Draft | — | — |
 | [SHY-0361](SHY-0361-tester-build-notes-name-the-ticket.md) | P2 | S | infra | Tester build notes do not say what changed | 📝 Draft | — | — |
+| [SHY-0362](SHY-0362-develop-carries-two-ktlint-errors.md) | P0 | XS | bug | develop carries two ktlint errors, so every app-touching PR fails lint | 🔍 In Review | — | [#1860](https://github.com/Shyden-Ltd/ShyTalk/pull/1860) |
+| [SHY-0363](SHY-0363-gradle10-deprecated-kotlin-dsl.md) | P2 | XS | chore | Every Gradle build warns that the project is incompatible with Gradle 10 | 🔍 In Review | — | [#1861](https://github.com/Shyden-Ltd/ShyTalk/pull/1861) |
+| [SHY-0364](SHY-0364-replace-the-slogan-with-mission-copy.md) | P1 | S | chore | The first thing a new user reads is "Voice chat rooms, reimagined." | 📝 Draft | — | — |
 
 ## Done
 
