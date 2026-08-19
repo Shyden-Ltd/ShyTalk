@@ -127,7 +127,7 @@ is no runtime surface to walk. Verification is:
 
 ## Notes (running log)
 
-Reviewed-up-to: fa66dee4a6f68607d255b622a512857665f2a8d6
+Reviewed-up-to: b13a5c5a11986723091699614c213b49eae1ed47
 
 - **2026-08-20** — Raised the trade-off with the operator before acting (delete
   / trim / leave), noting the file is the source of the Pre-Merge Protocol and
