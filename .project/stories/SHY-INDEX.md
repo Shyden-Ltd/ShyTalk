@@ -152,6 +152,24 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0176](SHY-0176-playwright-webkit-full-suite-instability.md)                | P2  | S      | infra    | Playwright WebKit engine crashes abort full-suite serial runs on macOS                                                                                                                                                                            | 📝 Draft       | —                | —                                                        |
 | [SHY-0241](SHY-0241-harden-cross-platform-realtime-journeys.md)                 | P1  | M      | infra    | Harden cross-platform real-time journey coverage (live admin/web → Android/iPhone propagation)                                                                                                                                                    | 📝 Draft       | —                | —                                                        |
 | [SHY-0283](SHY-0283-audit-log-load-more-repeats-page-one.md)                    | P2  | S      | bug      | "Load More" on the audit log shows the same entries again instead of the next ones                                                                                                                                                                | 📝 Draft       | —                | —                                                        |
+| [SHY-0310](SHY-0310-manifest-schema-and-parser.md) | P1 | M | feature | The UI manifest — schema, shared model, and a parser that cannot blank the screen (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0311](SHY-0311-sealed-screen-registry.md) | P1 | S | feature | Five screens the server can never touch, held by a test rather than by good intentions (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0312](SHY-0312-ui-manifest-endpoint.md) | P1 | M | feature | Serve the manifest — cohort-resolved, cheap to poll, attested before sign-in (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0313](SHY-0313-client-three-tier-resolution.md) | P1 | L | feature | The app works having never reached the server, and improves when it does (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0314](SHY-0314-manifest-driven-navigation-and-menus.md) | P1 | L | feature | Menus and navigation the server decides (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0315](SHY-0315-feature-flags-with-server-refusal.md) | P1 | M | feature | A kill-switch that actually kills — client hides the entrance, the API closes the door (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0316](SHY-0316-server-served-copy-all-locales.md) | P1 | M | feature | Fix any wording in the app from the server, in all 20 languages (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0317](SHY-0317-staged-rollout-and-rollback.md) | P1 | M | feature | Reach 5% before you reach everyone, and prove you can get back (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0318](SHY-0318-manifest-publishing-pipeline.md) | P1 | M | infra | Manifests live in git, so every change has a diff, an author, and an undo (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0319](SHY-0319-manifest-admin-ui.md) | P1 | L | feature | Edit the app's appearance from the admin panel, and still get a commit (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0320](SHY-0320-theming-debt-spike.md) | P1 | S | spike | How much of the app can server-driven theming actually reach? (EPIC-0011) | 📝 Draft | — | — |
+| [SHY-0321](SHY-0321-app-check-on-authenticated-routes.md) | P1 | M | bug | A modified build of the app is indistinguishable from the real one on every authenticated route | 📝 Draft | — | — |
+| [SHY-0322](SHY-0322-remove-gacha-age-verification-gate.md) | P1 | M | refactor | Remove the gacha age-verification gate, and keep cohort segregation exactly as it is | 📝 Draft | — | — |
+| [SHY-0323](SHY-0323-manifest-awareness-in-future-stories.md) | P1 | S | chore | Every future story has to say whether its UI is server-driven or native | 📝 Draft | — | — |
+| [SHY-0324](SHY-0324-fcm-registration-to-fid-migration.md) | P1 | L | refactor | Firebase deprecated the FCM token API we target push with, and the build already refuses to compile without it | 📝 Draft | — | blocks #1519 |
+| [SHY-0325](SHY-0325-github-diffs-run-their-guards-vs-workflow-only.md) | P2 | S | infra | A workflow-only change can either skip CI or run its guards, and right now it silently does the first | 📝 Draft | — | — |
+| [SHY-0326](SHY-0326-matrix-tests-fail-in-a-linked-worktree.md) | P2 | S | bug | Six gauntlet tests pass in one checkout and fail in another, on byte-identical files | 📝 Draft | — | — |
+| [SHY-0327](SHY-0327-triage-dependabot-alerts-against-what-ships.md) | P1 | S | chore | The "2 critical, 12 high" security banner is mostly the un-promoted main, and the fix is the promotion | 📝 Draft | — | — |
 | [SHY-0328](SHY-0328-local-matrix-persona-password-mismatch.md) | P0 | S | bug | The local journey matrix cannot pass on any branch, because it seeds with one password and signs in with another | 🔍 In Review | — | — |
 
 ## Done
@@ -292,6 +310,7 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | EPIC-0004 | Persistent session & instant, secure cold-start across all surfaces — retire the FunFact splash           | In Progress | SHY-0143..0148, 0187, 0189, 0192 (9 SHYs)                                                  |
 | EPIC-0005 | Ban enforcement & anti-abuse hardening — make bans actually unbypassable (server + rules + web)           | In Progress | SHY-0149, SHY-0150, SHY-0151 (3 SHYs)                                                      |
 | EPIC-0006 | API-only backend access — no direct client→Firestore/RTDB/Storage                                         | In Progress | SHY-0168, SHY-0169 (+ as filed)                                                            |
+| EPIC-0011 | Server-driven UI — change look, menus, options and copy without a store release | Draft | SHY-0310..0320 (11 SHYs); gated behind EPIC-0004 |
 | EPIC-0007 | Correct web surface — every owned web page in the right language AND environment                          | In Progress | SHY-0181, SHY-0182, SHY-0184 (3 SHYs)                                                      |
 | EPIC-0008 | Comprehensive, self-serve, publicly-visible testing — every kind of test, one command, public health page | Draft       | SHY-0212..0225 (14 SHYs) — MVP hard-blocker                                                |
 
