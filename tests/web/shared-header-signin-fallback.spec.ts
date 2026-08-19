@@ -55,8 +55,14 @@ test.describe('Shared header Sign In — modal hook + portal fallback', () => {
       const btn = document.querySelector('[data-testid="header-signin-btn"]') as HTMLElement | null;
       if (!btn) return { invoked: false, calledWith };
       btn.click();
-      // Brief settle so any deferred navigation / state change runs
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      // Poll for the deferred handler rather than guessing at 250ms. This
+      // exits the instant it fires (so the fast path costs ~0), and it still
+      // FAILS -- returning invoked:false -- if it never fires, which a fixed
+      // settle could not distinguish from "not long enough" (SHY-0245).
+      const deadline = Date.now() + 5000;
+      while (calledWith === null && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 25)); // sleep-ok: poll interval, exits the instant the handler fires
+      }
       return { invoked: !!calledWith, calledWith };
     });
 
