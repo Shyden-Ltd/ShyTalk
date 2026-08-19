@@ -172,6 +172,8 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0327](SHY-0327-triage-dependabot-alerts-against-what-ships.md) | P1 | S | chore | The "2 critical, 12 high" security banner is mostly the un-promoted main, and the fix is the promotion | 📝 Draft | — | — |
 | [SHY-0328](SHY-0328-local-matrix-persona-password-mismatch.md) | P0 | S | bug | The local journey matrix cannot pass on any branch, because it seeds with one password and signs in with another | 🔍 In Review | — | — |
 | [SHY-0359](SHY-0359-remove-relationships-feature.md) | P1 | S | chore | The roadmap advertises paid relationship tiers, which reads as dating on a language-learning platform | 🔍 In Review | — | [#1858](https://github.com/Shyden-Ltd/ShyTalk/pull/1858) |
+| [SHY-0360](SHY-0360-board-roadmap-two-way-sync.md) | P1 | L | infra | A change on the project board never reaches the roadmap pages | 📝 Draft | — | — |
+| [SHY-0361](SHY-0361-tester-build-notes-name-the-ticket.md) | P2 | S | infra | Tester build notes do not say what changed | 📝 Draft | — | — |
 
 ## Done
 
@@ -328,4 +330,4 @@ EPICs are validated by `scripts/check-epic-frontmatter.sh` (separate from the SH
 - **Tooling:** `scripts/check-story-frontmatter.sh` validates every `SHY-[0-9][0-9][0-9][0-9]-*.md` in CI. This `SHY-INDEX.md` file is human-maintained — the 4-digit ID glob excludes it from validation.
 - **No skeletons:** every new SHY is born fully refined ([[feedback-no-skeleton-stories-fully-refined]]); `N/A — TBD refinement on pickup` is forbidden.
 
-See `CLAUDE.md` § "Agile Way of Working" for the full spec (frontmatter, body sections, AC depth, BDD format, lifecycle, naming convention, Done bar per `type`).
+The full spec (frontmatter, body sections, AC depth, BDD format, lifecycle, naming convention, Done bar per `type`) was documented in `CLAUDE.md`, which SHY-0358 deleted. It is now enforced by `scripts/check-story-frontmatter.sh` and the CI story gates — read the validator, which is the authority in any case.
