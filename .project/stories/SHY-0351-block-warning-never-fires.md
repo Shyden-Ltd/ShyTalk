@@ -1,6 +1,6 @@
 ---
 id: SHY-0351
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-19
 priority: P1
@@ -435,3 +435,41 @@ Against the **real** local emulator stack, per the real-only rule.
   **succeeds**. Dev personas are now freshly seeded as a result, which is what
   made the dev proof above possible. No new work is needed — develop is already
   correct and rides to main on the next promotion.
+
+- **2026-08-19 07:2x WIB — iOS DEVICE-PROVEN on Sean's real iPhone** (iPhone Air,
+  iOS 27.0), build `3a86387` of this branch, Debug-Dev variant installed over USB
+  and running against the **dev** backend — the deployed endpoint, not a local one.
+  Confirmed by the in-app overlay: `dev · 0.97.15 (2269) · api ead8a5d ·
+  fix/SHY-0351…never-fires`.
+
+  Fixture: a same-cohort user (Marcus, P-04) blocked the signed-in account with
+  the id stored as a **number**, and sat in a room the account then opened. On
+  tapping the room:
+
+  > **Notice** — "A user in this room has blocked you. You may have a limited
+  > experience. Enter anyway?" · *Choose Another Room* / *Enter*
+
+  So the warning now fires on **both** platforms, and on iOS it is the deployed
+  dev endpoint answering. Dev fixtures were restored afterwards — the blocker's
+  list emptied and the fixture rooms deleted.
+
+- **2026-08-19 — three iOS-automation traps worth keeping, none of them product
+  defects.** All three cost real time and would cost it again:
+
+  1. **The soft keyboard overlays `profileSetup_continueButton`.** `inputView`
+     sits at y=592 and the button at y=600, so every "tap Continue" landed on a
+     key instead. It reported success and the screen simply did not move —
+     which is exactly why the rule is *a tap that reports success is not
+     evidence; only a changed screen is*. Dismiss the keyboard first.
+  2. **Setting a Compose text field via WDA's `value` endpoint is cosmetic.**
+     The field displayed the text and the counter read `20/20`, but Compose's
+     state never updated, so validation kept failing. Typing on the on-screen
+     keyboard moved the counter `0/20 → 9/20` and worked. Same cause as the
+     date field refusing `15/06/1995`.
+  3. **Date-picker cells scroll horizontally, so most are off-screen** at
+     negative or far-right x. A naive "first element whose name matches" tapped
+     x=-846 and x=1170 and silently dismissed the picker. Filter candidates to
+     the visible viewport before tapping.
+
+  Also: the on-screen error `You must be at least 16 years old` is a *product*
+  rule doing its job — a 2010-12 date is rejected, 2010-06 accepted.
