@@ -1,6 +1,6 @@
 ---
 id: SHY-0365
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P1
@@ -150,6 +150,8 @@ a defect in its own right and should not wait on a 7-week-old PR being revalidat
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: 95f1166e647f89785babb1d51a13f8f30ff3a607
 
 - **2026-08-20** — Found while triaging the stale #1527. A line-based grep found
   only this one instance; the guard, which walks back from the matcher to the
