@@ -128,6 +128,51 @@ Touches `express-api/**` (DeviceCheck bit + Play Integrity verdict verification,
 
 ## Notes (running log)
 
+- **2026-08-20 — INCREMENT 1 DEVICE-PROVEN ON A REAL iPHONE.** The deferred
+  device-E2E named below is now done, on Sean's iPhone Air (iOS 27.0) against
+  **dev**, with a `Debug-Dev` build of this branch (develop merged in).
+
+  **The build really was the enforcing variant**, verified before the walk rather
+  than assumed: `project.pbxproj` sets
+  `SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG … DEV_BACKEND"` for Debug-Dev →
+  `iOSApp.swift:23` branches on `#if DEV_BACKEND` first → `variant = .dev` →
+  `AppEnvironment.resolve` returns `bypassDeviceChecks: false`. The app's own
+  debug overlay confirmed it at runtime: `dev · 1.0 (1) · api 717ee08 ●`.
+
+  **Leg 1 — device-lock blocks a second persona.** With the device bound to
+  UID `10000013`, signing in as **P-02 (`50000010`)** was refused with
+  *"Account Restricted — This device is already linked to another account. Only
+  one account is allowed per device."* The dismiss control is tagged
+  `signIn_deviceLockedOk`, so this is the device-locked path, not a generic error.
+  The overlay still read `UID: —` — no session was established.
+
+  **The controlled comparison that makes it a proof, not a coincidence:** after
+  `POST /api/cleanup/all-device-bindings` (7 deleted), the **same** persona P-02
+  signed in cleanly (`UID: 50000010 · adult`). The only thing that changed was
+  the binding, so the block was the device-lock and not a bad credential.
+
+  **Leg 2 — a banned persona sees the ban screen.** Suspending P-02
+  (`POST /api/user/50000010/suspend`) **auto-cascaded into a device ban**, and on
+  relaunch iOS showed the `ban_device` screen: *"Device Banned … Reason:
+  Auto-applied: user suspended … This ban is permanent."* Tags present:
+  `ban_title`, `ban_reason`, `ban_permanent`, `ban_signOutButton`. That exercises
+  the SHY-0149 ban-application path on iOS, which is the other half of what this
+  increment claims.
+
+  **Everything was reversed.** Unsuspended; `unban-all` reported `removed: 0`
+  because the unsuspend cascade had already lifted the device ban; the app was
+  relaunched and reached `sign_in` (not the ban screen); device bindings cleared
+  again (1 deleted); `GET /api/ban-status/50000010` returns "Not found".
+
+- **2026-08-20 — a trap worth recording for the next walk.** The persona picker
+  renders but does **nothing** when `DEV_QA_PERSONAS_PASSWORD` is not passed to
+  the build. `Dev.xcconfig:51` leaves it deliberately empty (it is a secret), it
+  flows to `Info.plist` → `iOSApp.swift:33`, and the picker fails **closed** with
+  no feedback at all. Correct security behaviour, invisible failure mode. Pass
+  `DEV_QA_PERSONAS_PASSWORD="$PERSONAS_PASSWORD"` on the `xcodebuild` line and
+  verify with
+  `plutil -extract DevQaPersonasPassword raw <app>/Info.plist` before walking.
+
 - **2026-08-19 — marker bumped past the develop merge.** The 135 commits the
   gate flagged are develop's own history, pulled in by the merge that resolved
   this branch's four collisions; each was reviewed on its own pull request
