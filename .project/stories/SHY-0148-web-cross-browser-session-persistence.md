@@ -128,7 +128,7 @@ Touches the public web JS (`public/js/**`, `public/portal`/`admin` where the fla
 
 ## Notes
 
-Reviewed-up-to: 875479f1e122a33f063f75be79520e9e24ca8126
+Reviewed-up-to: da0ae8ec639f1b101c796b77b9cc61d187504b48
 
 - **2026-08-19 — the flash had a known cause and an unused fix already in the
   tree.** SHY-0279 added `window.shytalkAuth.authStateKnown` precisely so a
