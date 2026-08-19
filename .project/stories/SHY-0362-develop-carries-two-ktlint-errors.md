@@ -1,6 +1,6 @@
 ---
 id: SHY-0362
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P0
@@ -131,6 +131,8 @@ above. That is the failing state, reproduced from CI job `96173798745` on #1853.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: c1ada9cb530634f97ddee17c244cd9d90f3917ee
 
 - **2026-08-20** — Found while triaging #1853's red lint gate. The failure was
   reported against a portal/Express PR that touches no Kotlin, which is what made
