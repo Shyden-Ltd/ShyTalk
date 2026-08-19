@@ -1,6 +1,6 @@
 ---
 id: SHY-0145
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -127,6 +127,8 @@ Touches `express-api/**` (routes) + `firestore.rules` + `public/admin/**` → **
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: 932964373b7360f1f75fa57076b952508d742be5
 
 - **2026-08-20 — implemented. The AC named 5 surfaces; the sweep found 16.**
   The story listed the Express route, the admin tab, the firestore rule and the
