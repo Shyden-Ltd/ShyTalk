@@ -294,7 +294,7 @@ _(superseded — see the current marker at the end of this log.)_
   board-sync commits — each reviewed on its own pull request. They arrived here
   through a merge of develop; no new work on this branch is unreviewed.
 
-Reviewed-up-to: 228070243dc5bd8de4c55541b3aa673138821115
+Reviewed-up-to: 6608c7b46a19c1c0a877af5c210037f1bc3b5957
 
 - **2026-08-19 — CORRECTION to my earlier claim that this PR blocks EVERY iOS
   leg.** It does not. It blocks the iOS **local** leg. A real-iPhone leg against
