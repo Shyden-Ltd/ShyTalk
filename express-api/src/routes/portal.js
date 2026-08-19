@@ -8,7 +8,7 @@ const { buildOtpEmail } = require('../utils/email-templates');
 const { encryptSecret, decryptSecret } = require('../utils/totp-crypto');
 const {
   MFA_REMEMBER_COOKIE,
-  MFA_REVERIFY_AFTER_MS,
+  MFA_TRUST_WINDOW_MS,
   readCookie,
   issueMfaRememberToken,
   verifyMfaRememberToken,
@@ -495,12 +495,12 @@ router.post('/portal/totp/verify', authMiddlewareStrict, async (req, res) => {
         secure: cookieIsSecure(req),
         sameSite: 'strict',
         path: '/',
-        maxAge: MFA_REVERIFY_AFTER_MS,
+        maxAge: MFA_TRUST_WINDOW_MS,
       });
       remembered = true;
       log.info('portal', 'MFA-remember issued', {
         uniqueId,
-        expiresInMs: MFA_REVERIFY_AFTER_MS,
+        expiresInMs: MFA_TRUST_WINDOW_MS,
       });
     }
 

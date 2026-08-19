@@ -222,25 +222,37 @@ Reviewed-up-to: 890f463d48316fe547e36e4a9efefa0d2bd97881
     the correct primitive for a MAC, and nothing here hashes a password.
     Renamed to `MFA_TRUST_WINDOW_MS`, which is what it actually is, removing the
     mislabelled taint source instead of dismissing two alerts.
-- **2026-08-20 — that rename was half a fix.** `js/clear-text-storage-of-sensitive-data`
-  survived as **alert 55**, now naming `MFA_TRUST_WINDOW_MS` itself as the source
-  at the `res.cookie()` call: *"This stores sensitive data returned by an access
-  to MFA_TRUST_WINDOW_MS as clear text."* **`TRUST` is in the same heuristic's
-  word list** — one trigger word was swapped for another. The claim is that a
-  cookie's `maxAge` is sensitive data stored in clear text; `maxAge` is not part
-  of the cookie **value** at all, so the finding is wrong on its face.
-  Renamed again to `MFA_REVERIFY_AFTER_MS`, which says what happens at the
-  boundary and avoids remember / trust / token / secret / key / credential /
-  password / cert. The declaration now carries the full trail so the next reader
-  does not "helpfully" rename it back into an alert.
-  **This removes the operator dependency**: the previous session recorded alert
-  55 as a hard blocker needing an operator-run `gh api ... -f state=dismissed`,
-  because the agent (correctly) could not widen its own permissions. Fixing the
-  taint source needs no permission at all.
-  - The now-redundant `mfaRememberCookieOptions` helper and its unit test were
-    **deleted** rather than left as tested-but-unused code; the route tests
-    assert the flags on the real `Set-Cookie` header, which is the stronger
-    assertion.
+- **2026-08-20 — renaming does NOT clear this alert. Proven, not argued.**
+  `js/clear-text-storage-of-sensitive-data` survived the first rename as **alert
+  55**, naming `MFA_TRUST_WINDOW_MS` itself at the `res.cookie()` call. The
+  obvious reading was that `TRUST` had simply replaced `REMEMBER` in the same
+  heuristic word list, so the constant was renamed a second time to
+  `MFA_REVERIFY_AFTER_MS` and pushed. **CodeQL flagged it again — same rule,
+  same line, same message, with the new name substituted in.** Three names have
+  now been through CodeQL:
+
+  | Name | Result |
+  | --- | --- |
+  | `MFA_REMEMBER_DEFAULT_TTL_MS` | flagged |
+  | `MFA_TRUST_WINDOW_MS` | flagged (alert 55) |
+  | `MFA_REVERIFY_AFTER_MS` | flagged, identically |
+
+  So the trigger is not a single dodgeable word, and the second rename was
+  **reverted** — churn in a security PR for no benefit is worse than the name it
+  replaced. What is kept is the knowledge: the declaration now carries a
+  `DO NOT RENAME THIS TO CHASE THE CODEQL ALERT` block listing all three
+  attempts, so the next reader does not spend the same two rounds.
+
+  The finding is wrong on two counts: the flagged value is a 30-day **duration**,
+  not a credential; and it is used as a cookie `maxAge`, which is not part of the
+  cookie **value** at all, so nothing about it is "stored in clear text". The
+  cookie it guards is a signed bearer token — httpOnly + Secure +
+  SameSite=strict + HMAC-SHA256 + bounded expiry + server-side epoch revocation
+  — which is the standard shape for "remember this browser".
+
+  **Remedy: an operator-run dismissal**, as originally recorded. It needs
+  `security_events: write`, and an agent must not widen its own permissions to
+  dismiss its own security findings.
 
 - **2026-08-19 — verification.** 29 unit tests on the token (all six mutations
   killed: expiry, epoch, signature, uid, part-count, and a constant-true

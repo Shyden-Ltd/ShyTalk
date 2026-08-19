@@ -12,7 +12,7 @@
 const {
   issueMfaRememberToken,
   verifyMfaRememberToken,
-  MFA_REVERIFY_AFTER_MS,
+  MFA_TRUST_WINDOW_MS,
 } = require('../../src/utils/mfa-remember');
 
 const UID = 1234567;
@@ -38,16 +38,16 @@ describe('SHY-0147 — MFA-remember token', () => {
   });
 
   test('the default window is 30 days, and it is bounded', () => {
-    expect(MFA_REVERIFY_AFTER_MS).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(MFA_TRUST_WINDOW_MS).toBe(30 * 24 * 60 * 60 * 1000);
     const t = issue();
-    expect(verify(t, { now: NOW + MFA_REVERIFY_AFTER_MS - 1 }).valid).toBe(true);
+    expect(verify(t, { now: NOW + MFA_TRUST_WINDOW_MS - 1 }).valid).toBe(true);
   });
 
   // ── expiry ──────────────────────────────────────────────────────────────
   test('a token is rejected the instant it expires — no off-by-one past the boundary', () => {
     const t = issue();
-    expect(verify(t, { now: NOW + MFA_REVERIFY_AFTER_MS }).valid).toBe(false);
-    expect(verify(t, { now: NOW + MFA_REVERIFY_AFTER_MS }).reason).toBe('expired');
+    expect(verify(t, { now: NOW + MFA_TRUST_WINDOW_MS }).valid).toBe(false);
+    expect(verify(t, { now: NOW + MFA_TRUST_WINDOW_MS }).reason).toBe('expired');
   });
 
   test('a token from the future is not honoured', () => {

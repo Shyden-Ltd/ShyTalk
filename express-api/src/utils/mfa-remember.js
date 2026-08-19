@@ -32,24 +32,33 @@ const crypto = require('node:crypto');
 
 // How long a remembered browser may skip the code prompt. This is a DURATION,
 // not a credential — it was previously named `MFA_REMEMBER_DEFAULT_TTL_MS`, and
-// NAME THIS CAREFULLY. It is a duration, but CodeQL's sensitive-data heuristic
-// classifies by identifier name, so a credential-ish word here makes every
-// downstream write look like clear-text storage of a secret.
+// DO NOT RENAME THIS TO CHASE THE CODEQL ALERT. It has been tried, twice, and
+// it does not work.
 //
-//   MFA_REMEMBER_DEFAULT_TTL_MS -> "MFA...REMEMBER" read as credential-like:
-//     js/insufficient-password-hash (the token's HMAC reported as a PASSWORD
-//     hash — HMAC-SHA256 is the correct primitive for a MAC, and nothing here
-//     hashes a password) + js/clear-text-storage-of-sensitive-data.
-//   MFA_TRUST_WINDOW_MS -> "TRUST" is in the same heuristic's word list, so
-//     js/clear-text-storage-of-sensitive-data persisted, now naming this
-//     constant as the source at the res.cookie() call in routes/portal.js.
-//     The claim is that a cookie's maxAge is sensitive data stored in clear
-//     text; maxAge is not part of the cookie VALUE at all, so it is wrong.
+// `js/clear-text-storage-of-sensitive-data` (high) fires at the res.cookie()
+// call in routes/portal.js and names THIS constant as the sensitive source.
+// Three names have been through CodeQL and all three were flagged identically:
 //
-// The current name avoids remember / trust / token / secret / key / credential
-// / password / cert. Renaming it back to any of those re-opens the alerts, and
-// the remedy is a better name, not a suppression or a dismissal.
-const MFA_REVERIFY_AFTER_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+//   MFA_REMEMBER_DEFAULT_TTL_MS  -> flagged
+//   MFA_TRUST_WINDOW_MS          -> flagged (alert 55)
+//   MFA_REVERIFY_AFTER_MS        -> flagged, same message, same line
+//
+// So the trigger is not "remember", not "trust", and not any single word that a
+// better name can dodge. The finding is simply WRONG, on two counts:
+//   1. The flagged value is a 30-day DURATION, not a credential.
+//   2. It is used as a cookie `maxAge`, which is not part of the cookie VALUE
+//      at all — nothing about it is "stored in clear text".
+//
+// The cookie this guards is a signed bearer token: httpOnly + Secure +
+// SameSite=strict + HMAC-SHA256 signature + bounded expiry + server-side epoch
+// revocation. That is the standard shape for "remember this browser", and the
+// protection is the signature and the flags, not encryption at rest.
+//
+// The correct remedy is a documented dismissal of the alert as a false
+// positive, which needs `security_events: write` and is therefore an operator
+// action. An agent must not widen its own permissions to dismiss its own
+// security findings.
+const MFA_TRUST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 if (!process.env.MFA_REMEMBER_SECRET && process.env.NODE_ENV === 'production') {
   throw new Error('MFA_REMEMBER_SECRET is required in production');
@@ -89,7 +98,7 @@ function newBrowserId() {
  */
 function issueMfaRememberToken({ uniqueId, browserId, epoch, now, ttlMs }) {
   const issuedAt = typeof now === 'number' ? now : Date.now();
-  const lifetime = typeof ttlMs === 'number' ? ttlMs : MFA_REVERIFY_AFTER_MS;
+  const lifetime = typeof ttlMs === 'number' ? ttlMs : MFA_TRUST_WINDOW_MS;
   const expiresAt = issuedAt + lifetime;
   const payload = [uniqueId, browserId, epoch, expiresAt].join(SEP);
   return payload + SEP + sign(payload);
@@ -162,7 +171,7 @@ function readCookie(req, name) {
 module.exports = {
   MFA_REMEMBER_COOKIE,
   readCookie,
-  MFA_REVERIFY_AFTER_MS,
+  MFA_TRUST_WINDOW_MS,
   issueMfaRememberToken,
   verifyMfaRememberToken,
   newBrowserId,
