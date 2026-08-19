@@ -12,7 +12,6 @@ import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.DocumentSnapshot
-import dev.gitlive.firebase.firestore.FieldPath
 import dev.gitlive.firebase.firestore.FieldValue
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
