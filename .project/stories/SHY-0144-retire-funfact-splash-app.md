@@ -1,6 +1,6 @@
 ---
 id: SHY-0144
-status: Draft
+status: In Review
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -123,5 +123,51 @@ Kotlin app/shared change (no `express-api/**`) → **NOT `*.md`-only → runs th
 - [ ] **Pre-Merge Testing Protocol satisfied:** host-unit RED→GREEN (nav-decision + ScreenTest) + Android instrumented (post-auth lands on room list; banner regression) + iOS verification → LOCAL gauntlet green on real Android + real iPhone (no splash anywhere; banners intact) → `code-reviewer` 100% clean → In Review + `Reviewed-up-to:` → push → CI green by name → DEV gauntlet green → **judgment-merge** (NO auto-merge; notify operator).
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
-## Notes (running log)
+## Notes
+
+Reviewed-up-to: __SHA__
+
+- **2026-08-19 — re-validated the spec before touching anything, and it was
+  materially incomplete.** The AC named 8 files; the tree carried **19**
+  splash/fun-fact artefacts. The extras were an Android Gherkin
+  `splash.feature`, four Kotlin test files, `FakeFunFactRepository`, both
+  Android preloader impls, `IosFunFactRepositoryImpl`, and a driver fixture.
+  Deleting only the listed 8 would have left a non-compiling tree. Recording
+  this because the spec was written 2026-07-01 and the code moved under it.
+- **2026-08-19 — `splash_tagline` turned out to be a DUPLICATE.** The sign-in
+  screen renders the same copy ("Voice chat rooms, reimagined.") from its own
+  key, `voice_chat_reimagined`. Removing `splash_tagline` from all 21 locale
+  files therefore changed nothing a user sees on sign-in — confirmed on device,
+  the tagline is still there. Worth knowing before anyone "restores" it.
+- **2026-08-19 — the QA harness KEEPS its splash tolerance, deliberately.**
+  `splash_continueButton` handling stays in `android-adb-driver.js` and
+  `device-journey-runner.js` because the runner also drives builds that predate
+  this change (an APK already installed, TestFlight, dev before redeploy).
+  Removing it would fail the journey matrix against every one of them. Both
+  sites now carry the reason and the condition for later removal.
+- **2026-08-19 — DEVICE-PROVEN on a real OnePlus CPH2653 (Android 16), USB adb,
+  against the local stack.** Clean install, walked end to end:
+
+  | step | route watermark | `splash_continueButton` |
+  | --- | --- | --- |
+  | cold start | legal acceptance gate | 0 |
+  | accept all | `en · sign_in` | 0 |
+  | sign in as persona | `en · required_dob` | 0 |
+  | complete DOB | **`en · main`** | 0 |
+
+  Final screen: Rooms / Messages / Profile with "No active rooms — Tap + to
+  create one". That walk exercises the `RequiredDOB -> Main` rewiring (which
+  previously went to Splash), and the splash never appeared at any step.
+- **2026-08-19 — a local-stack defect surfaced and was fixed en route**, not
+  caused by this story: every **POST** to local Express returned 500 while GETs
+  worked. Root cause was an EMPTY `express-api/node_modules` in the main clone —
+  PR #1800's merge deleted a `node_modules` **symlink** (`delete mode 120000`),
+  so a module required lazily inside POST middleware threw at request time.
+  `npm ci` restored it; `/api/users/sign-in` went from 500 to a correct 401.
+- **2026-08-19 — verification**: `:shared:compileKotlinIosArm64` exit 0 ·
+  `:shared:jvmTest` + `testDevDebugUnitTest` BUILD SUCCESSFUL under
+  `--rerun-tasks` (a cached green would have been stale, commonMain interfaces
+  were removed) · ktlint exit 0 · detekt exit 0 · the new guard 6/6 (RED 5/6
+  before the work).
+ (running log)
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0004-persistent-session-instant-coldstart]]. Scope from the splash blast-radius Explore pass: only fun-facts are splash-exclusive; banners are independent (home screen) and explicitly kept + regression-guarded; the 5 other preloads are redundant. Operator-approved full splash deletion (2026-07-01). Lands after SHY-0143, before SHY-0145.
