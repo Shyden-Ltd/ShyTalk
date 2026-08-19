@@ -138,3 +138,28 @@ pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
     - `develop-ci-gate.test.js` only understood `directory:` (singular), so the plural `directories:` form read as `?`. Fixed here because this branch introduces the plural form.
     - The SHY-0304 `50-matrix.sh` suites **fail in a linked git worktree and pass in the primary one**, on byte-identical files (`git diff origin/develop...HEAD` is empty for them). 6 failed / 9 passed in `ShyTalk-cifix`; 0 failed / 15 passed in the main tree. A worktree-portability defect in the tests, not a develop regression. **Filed as SHY-0326.**
 
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** Read the
+  production diff:
+
+  - **`firebase-tools` is now pinned to 15.15.0**, and the version is folded into
+    the emulator cache key (`firebase-emulators-${{ runner.os }}-ft15.15.0`).
+    Both halves matter: an unpinned `npm install -g firebase-tools` drifts
+    silently, and without the version in the key a cache from the old version
+    would be restored over the new one — the pin would look applied and not be.
+  - **dependabot moves from `directory: "/"` to a `directories:` list** naming
+    every composite action, which is what makes the exhaustiveness test above
+    enforceable rather than aspirational.
+  - **462 lines of new tests** back both: the composite-action coverage matrix
+    and a pin test for the emulator action.
+
+  One thing this branch caught on merging develop, which is the invariant doing
+  its job: develop had added `.github/actions/harden-apt` (SHY-0334) **without**
+  listing it, and the coverage test failed. Added in alphabetical position —
+  without it, an action bump would move the workflow pins but not that
+  directory, recreating the SHY-0162 two-SHA drift that once blocked the whole
+  Dependabot queue.
+
+  Verified on the merged tree: backend suite green apart from the two known
+  worktree-only gauntlet tests.
+
+Reviewed-up-to: 5c3fcb13bd254d86d94a81a91d7d570598ef53bb
