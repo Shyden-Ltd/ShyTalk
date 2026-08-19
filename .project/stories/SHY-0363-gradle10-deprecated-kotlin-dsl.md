@@ -137,8 +137,12 @@ deprecation and the Gradle 10 banner. That is the failing state.
 
 ## Notes (running log)
 
-Reviewed-up-to: 9536d5a1cb371215f2428d4e7474655949d8e124
+Reviewed-up-to: fbd6c4195521c8f79df0c9e693349ceab57f77bb
 
+- **2026-08-20** — Merged `develop` in to pick up SHY-0362's ktlint fix (#1860),
+  which was the only reason this branch's lint gate was red. Clean merge, no
+  conflicts. Re-verified after the merge: ktlint clean, and `--warning-mode all`
+  still reports zero deprecations.
 - **2026-08-20** — Raised with the operator while fixing SHY-0362, who asked for
   it to be investigated and fixed if small. `--warning-mode all` showed a single
   deprecation at a single call site, so it is small.
