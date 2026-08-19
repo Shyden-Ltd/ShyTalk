@@ -42,17 +42,24 @@ Six 1-SHY-1-PR vertical slices, grouped by surface + review boundary so each PR 
 
 ## Child SHYs
 
+> **Child statuses below are maintained by hand and had drifted.** Corrected
+> 2026-08-20 (SHY-0366): every child read "Status: Draft" while SHY-0143 and
+> SHY-0148 were already merged and 0144/0147 had open PRs — so the epic implied
+> nothing had started. Verified against the story files on `develop` and the
+> open PR list, not from memory. `status:` in each story's frontmatter is the
+> authority; these lines are a convenience summary.
+
 **App track (Android + iOS):**
-- **SHY-0143** (P1, XL, feature) — Persist session → optimistic, cohort-safe, ban-gated cold-start to the room list. **The headline + security keystone.** Status: Draft.
-- **SHY-0144** (P1, M, refactor) — Retire the FunFact splash + app-side fun-fact code. Status: Draft.
-- **SHY-0145** (P1, M, chore) — Decommission the fun-facts pipeline (admin + backend + data). Status: Draft.
+- **SHY-0143** (P1, XL, feature) — Persist session → optimistic, cohort-safe, ban-gated cold-start to the room list. **The headline + security keystone.** Status: **In Review — MERGED** (#1752, 2026-08-16); awaiting a release cut.
+- **SHY-0144** (P1, M, refactor) — Retire the FunFact splash + app-side fun-fact code. Status: **In Review — PR #1846 open**, device-proven on a real OnePlus.
+- **SHY-0145** (P1, M, chore) — Decommission the fun-facts pipeline (admin + backend + data). Status: **Draft — NOT started.** Gated on #1846 merging, which removes the consumer. Fun-facts export-then-delete is operator-authorised.
 
 **Device-integrity parity:**
-- **SHY-0146** (P1, L, feature) — iOS in-app jailbreak/simulator/integrity detection (Android parity). Status: Draft.
+- **SHY-0146** (P1, L, feature) — iOS in-app jailbreak/simulator/integrity detection (Android parity). Status: **Draft — NOT started.** No longer blocked: the iOS 27.0 simulator runtime **is** installed (7.8 GB, Ready) and only simulator *devices* are missing — `xcrun simctl create` makes one in seconds. Earlier notes claiming a multi-GB download is required are stale. The simulator IS the condition under test here, per the operator's standing carve-out.
 
 **Web track (all supported browsers):**
-- **SHY-0147** (P1, L, feature) — Portal "remember this browser" bounded MFA window. Status: Draft.
-- **SHY-0148** (P1, M, chore) — Cross-browser "stay signed in" proof + hardening for the public pages. Status: Draft.
+- **SHY-0147** (P1, L, feature) — Portal "remember this browser" bounded MFA window. Status: **In Review — PR #1853 open**, everything green except CodeQL alert 55, which needs an operator-run dismissal (renaming the constant does NOT clear it — three names were flagged identically).
+- **SHY-0148** (P1, M, chore) — Cross-browser "stay signed in" proof + hardening for the public pages. Status: **In Review — MERGED** (#1847); awaiting a release cut.
 
 > The cohort-safety gate + the hoisted ban gate in SHY-0143 are the security keystones; SHY-0144 cannot regress banners (a separate, surviving feature); SHY-0145 carries the only irreversible step (the collection delete) and is therefore its own small, auditable PR (lands after SHY-0144 removes the consumer). SHY-0146 gives iOS device-integrity parity. SHY-0147's MFA-remember is fail-closed + bounded + revocable. SHY-0148 is mostly cross-browser proof + a flash fix (the web already persists login).
 
