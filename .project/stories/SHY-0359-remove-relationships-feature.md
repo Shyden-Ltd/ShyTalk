@@ -187,8 +187,12 @@ one back.
 
 ## Notes (running log)
 
-Reviewed-up-to: b2e5016cb9d1f4c54a611102994d89aeea344612
+Reviewed-up-to: 1b99bf3da16c8012a5899f91fb4b7771bbc5ed50
 
+- **2026-08-20** — Merged `develop` in (brings #1859's two filed stories and
+  #1860's ktlint fix). The only conflict was `SHY-INDEX.md`, where both sides
+  appended rows; resolved by keeping all three in priority order. Verified after
+  the merge that `phases[2].features` is still `[Decorations, Nobility system]`.
 - **2026-08-20** — Operator chose "just delete it, no automation", plus a standing
   rule in the project `CLAUDE.md` to stay alert to dating drift on every surface.
   That rule is written and includes the reasoning and this story as precedent.
