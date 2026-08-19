@@ -311,6 +311,11 @@ class AuthViewModelIdentityTest {
 
         override suspend fun cancelAccountDeletion(userId: String) = Resource.Success(Unit)
 
+        override suspend fun getProfileForViewing(userId: String) =
+            Resource.Success<UserRepository.ProfileAccess>(
+                UserRepository.ProfileAccess.Visible(User()),
+            )
+
         override suspend fun getAccountDeletionStatus(userId: String) = Resource.Success(UserRepository.DeletionStatus())
 
         override suspend fun requestDataExport(userId: String) = Resource.Success(0L)

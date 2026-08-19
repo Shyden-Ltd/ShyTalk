@@ -944,6 +944,7 @@
     <string name="block_description">彼らはあなたのプロフィールを見ることができなくなります。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">あなたはこのユーザーによってブロックされています</string>
+    <string name="blocked_unblock_required">プロフィールを見るには、相手にブロックを解除してもらう必要があります。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">このルームのユーザーがあなたをブロックしました。限られた経験しかないかもしれません。とにかく入力しますか？</string>
     <!-- google-translated 2026-05-04 -->

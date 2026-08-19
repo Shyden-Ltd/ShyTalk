@@ -944,6 +944,7 @@
     <string name="block_description">他们将无法查看您的个人资料。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">您已被该用户屏蔽</string>
+    <string name="blocked_unblock_required">对方需要先解除对你的屏蔽，你才能查看其个人资料。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">该房间中的一个用户已阻止您。您的经验可能有限。还是要输入吗？</string>
     <!-- google-translated 2026-05-04 -->

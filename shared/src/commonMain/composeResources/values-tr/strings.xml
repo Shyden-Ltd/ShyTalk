@@ -944,6 +944,7 @@
     <string name="block_description">Profilinizi görüntüleyemeyecekler.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Bu kullanıcı tarafından engellendiniz</string>
+    <string name="blocked_unblock_required">Profilini görebilmen için önce engeli kaldırması gerekiyor.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Bu odadaki bir kullanıcı sizi engelledi. Sınırlı bir deneyiminiz olabilir. Yine de girilsin mi?</string>
     <!-- google-translated 2026-05-04 -->
