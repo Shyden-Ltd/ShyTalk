@@ -180,7 +180,7 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
 
 ## Notes (running log)
 
-Reviewed-up-to: 716670b3156d77e2b92b833cd83be9db78da6506
+Reviewed-up-to: eb5e0aa1297b66d21d32bd7a890c84fa5dae80d8
 
 
 - **2026-08-19 — the AC was written before the shape of the debt was known, and
