@@ -675,10 +675,10 @@ async function signOutFlow(device) {
 function initDb(target) {
   if (target !== 'local') return null;
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
-  if (!admin.apps.length) {
+  if (!require('firebase-admin/app').getApps().length) {
     admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-shytalk' });
   }
-  return admin.firestore();
+  return require('firebase-admin/firestore').getFirestore();
 }
 
 async function dbGet(db, docPath) {

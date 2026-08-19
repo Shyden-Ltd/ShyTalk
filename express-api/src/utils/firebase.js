@@ -7,6 +7,14 @@
  */
 
 const admin = require('firebase-admin');
+// firebase-admin 14 REMOVED the `admin.apps` array (deprecated in 13). `getApps()`
+// from the modular entry point is its replacement; reading `admin.apps.length`
+// now throws "Cannot read properties of undefined" before a single test runs.
+const { getApps } = require('firebase-admin/app');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
+const { getDatabase } = require('firebase-admin/database');
+const { getMessaging } = require('firebase-admin/messaging');
 
 const serviceAccountPath =
   process.env.FIREBASE_SERVICE_ACCOUNT_PATH || process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -39,7 +47,7 @@ const LOCAL_PROJECT_ID =
     ? `demo-shytalk-${process.env.FIRESTORE_TEST_NAMESPACE}`
     : 'demo-shytalk';
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   if (process.env.NODE_ENV === 'local') {
     // Emulators need a databaseURL for RTDB even though traffic goes to emulator
     admin.initializeApp({
@@ -67,10 +75,11 @@ if (!admin.apps.length) {
   }
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
-const rtdb = admin.database();
-const messaging = admin.messaging();
-const { FieldValue } = admin.firestore;
+const db = getFirestore();
+const auth = getAuth();
+const rtdb = getDatabase();
+const messaging = getMessaging();
+// FieldValue now comes from the modular entry point above — firebase-admin 14
+// removed the `admin.firestore` namespace it used to hang off.
 
 module.exports = { admin, db, auth, rtdb, messaging, FieldValue, configureLocalEmulators };

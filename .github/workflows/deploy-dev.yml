@@ -58,9 +58,105 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # ═══════════════════════════════════════════════════════════════════
+  # Which areas does this change actually touch? (SHY-0347)
+  # ═══════════════════════════════════════════════════════════════════
+  #
+  # Every input below defaults to `true`, so a bare `gh workflow run
+  # deploy-dev.yml` used to deploy EVERYTHING regardless of the diff. A merge
+  # of five markdown files (#1794) therefore spent 53 minutes in the iOS
+  # archive and timed out.
+  #
+  # This job answers "what changed" once; each deploy job then runs only if the
+  # operator asked for it AND the change set touches it. An explicit
+  # `inputs.<area>=false` still wins — this narrows, never widens.
+  #
+  # FAIL-SAFE: if the baseline cannot be resolved, `deploy-scope.sh` reports
+  # every area true. A deploy that runs needlessly costs runner minutes; one
+  # skipped when it was needed ships nothing and nobody notices.
+  detect-deploy-scope:
+    name: Detect Deploy Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.scope.outputs.backend }}
+      web: ${{ steps.scope.outputs.web }}
+      android: ${{ steps.scope.outputs.android }}
+      ios: ${{ steps.scope.outputs.ios }}
+      baseline: ${{ steps.scope.outputs.baseline }}
+      reason: ${{ steps.scope.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Resolve baseline and classify the change set
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # NOTE: deliberately NOT `set -e`. Three uncertainty cases are handled
+          # explicitly below, but an UNANTICIPATED failure here would abort the
+          # job — and every deploy job reads these outputs, so an empty output
+          # means `'' == 'true'` is false and EVERY DEPLOY SILENTLY SKIPS. That
+          # is the exact direction this story exists to prevent, so the step
+          # traps instead and emits the all-true fallback.
+          set -uo pipefail
+          emit_failsafe() {
+            {
+              echo "backend=true"; echo "web=true"; echo "android=true"; echo "ios=true"
+              echo "reason=detection-failed-failing-safe"
+              echo "baseline=unresolved"
+            } >> "$GITHUB_OUTPUT"
+            echo "::warning::deploy-scope detection failed; deploying everything (fail-safe)"
+            exit 0
+          }
+          trap 'emit_failsafe' ERR
+          # Baseline = the head SHA of the last SUCCESSFUL run of THIS workflow.
+          # Not `HEAD~1`: several merges can land between deploys, and comparing
+          # against the previous commit would miss everything in between.
+          # `// empty` matters: on an empty array `.[0].headSha` is jq's null,
+          # and `gh --jq` prints the literal four-character string "null".
+          # Without it BASE becomes "null" and only the cat-file guard below
+          # rescues it — by accident. The same file already uses this idiom in
+          # the cached-APK step.
+          BASE="$(gh run list --workflow deploy-dev.yml --status success \
+                    --limit 1 --json headSha --jq '.[0].headSha // empty' 2>/dev/null || true)"
+          if [ -n "$BASE" ] && ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+            echo "baseline $BASE is not in this checkout — treating as unresolvable"
+            BASE=""
+          fi
+          echo "baseline=${BASE:-unresolved}" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$BASE" ]; then
+            # No baseline: hand the classifier nothing, which it reads as
+            # "could not work out what changed" and fails safe to all-true.
+            printf '' | bash scripts/deploy-scope.sh >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only "$BASE" HEAD | bash scripts/deploy-scope.sh >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarise
+        run: |
+          {
+            echo "### Deploy scope"
+            echo ""
+            echo "baseline: \`${{ steps.scope.outputs.baseline }}\` (${{ steps.scope.outputs.reason }})"
+            echo ""
+            echo "| area | requested | changed | will deploy |"
+            echo "| --- | --- | --- | --- |"
+            echo "| backend | ${{ inputs.backend }} | ${{ steps.scope.outputs.backend }} | ${{ inputs.backend && steps.scope.outputs.backend == 'true' }} |"
+            echo "| web | ${{ inputs.web }} | ${{ steps.scope.outputs.web }} | ${{ inputs.web && steps.scope.outputs.web == 'true' }} |"
+            echo "| android | ${{ inputs.android-testers }} | ${{ steps.scope.outputs.android }} | ${{ inputs.android-testers && steps.scope.outputs.android == 'true' }} |"
+            echo "| ios | ${{ inputs.ios-testers }} | ${{ steps.scope.outputs.ios }} | ${{ inputs.ios-testers && steps.scope.outputs.ios == 'true' }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   deploy-backend-dev:
     name: Deploy Backend to Dev
-    if: inputs.backend
+    needs: detect-deploy-scope
+    # SHY-0347 — the operator asked for it AND the diff touches it.
+    if: inputs.backend && needs.detect-deploy-scope.outputs.backend == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -187,6 +283,51 @@ jobs:
     uses: ./.github/workflows/seed-dev-personas.yml
     secrets: inherit
 
+  # SHY-0269 — the seed outcome must be readable WITHOUT expanding a job.
+  # Five of the last eight dev deploys ran with a failing seed job and one
+  # ran with a SKIPPED one while the run reported green; in every case the
+  # only trace was a check-run annotation. This job always() runs and puts
+  # the verdict at the top of the run page, naming the consequence (stale
+  # personas) rather than just a status word.
+  seed-personas-report:
+    name: Seed Personas Report
+    needs: seed-dev-personas
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Summarise seed outcome
+        env:
+          SEED_RESULT: ${{ needs.seed-dev-personas.result }}
+          SEED_REQUESTED: ${{ inputs.seed-personas }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Dev test personas (P-02..P-19)"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "$SEED_RESULT" in
+            success)
+              echo "✅ Re-seeded — persona state on dev is fresh for this build." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            skipped)
+              echo "⏭️ **Skipped** — personas were NOT refreshed, so dev still holds whatever state the last run left behind. Requested via input: \`$SEED_REQUESTED\`; the job also skips when the backend deploy did not succeed." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            failure | cancelled)
+              {
+                echo "❌ **Seeding $SEED_RESULT — personas on dev are STALE.**"
+                echo ""
+                echo "Journey tests and manual QA that rely on P-02..P-19 may fail for reasons that have nothing to do with the build under test."
+                echo ""
+                echo "Open the \`Seed Dev Personas\` job. If it has no steps at all, the failure happened during secrets evaluation — check the secret names against \`.github/known-secrets.yml\`."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "::error title=Dev personas are stale::Seed job result: $SEED_RESULT. See the run summary."
+              ;;
+            *)
+              echo "❔ Unrecognised seed result: \`$SEED_RESULT\`" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+          esac
+
   deploy-web-dev:
     name: Deploy Web to Dev
     # Web depends on the dev API to function (firebase-config, /api/health,
@@ -196,7 +337,7 @@ jobs:
     # 25276782190): web deployed with the new auth lockdown but
     # backend deploy failed in the same run, so dev was simultaneously
     # locked down AND functionally broken. Gating prevents that drift.
-    needs: deploy-backend-dev
+    needs: [deploy-backend-dev, detect-deploy-scope]
     # Allow `success` OR `skipped` — `skipped` covers the legitimate
     # `inputs.backend=false` case where the operator deliberately runs
     # web-only / mobile-only. Block only on `failure` / `cancelled` so
@@ -215,7 +356,7 @@ jobs:
     # of running with no gate. Defence in depth on top of `always()`.
     if: |
       always() &&
-      inputs.web &&
+      inputs.web && needs.detect-deploy-scope.outputs.web == 'true' &&
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -274,13 +415,13 @@ jobs:
     # talk to dev-api and break if the backend deploy didn't succeed.
     # Pushing a build to internal testers that's guaranteed to error
     # on the first sign-in attempt wastes their day.
-    needs: deploy-backend-dev
+    needs: [deploy-backend-dev, detect-deploy-scope]
     # See deploy-web-dev for `success || skipped` rationale (preserves
     # `inputs.backend=false` Android-only hotfix path).
     # See deploy-web-dev `always()` + allowlist rationale (run 25280868804).
     if: |
       always() &&
-      inputs.android-testers &&
+      inputs.android-testers && needs.detect-deploy-scope.outputs.android == 'true' &&
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -416,13 +557,13 @@ jobs:
     # deploy didn't succeed. TestFlight build numbers are also a finite
     # resource (Apple-rate-limited per session); skipping a doomed
     # build saves a slot and keeps testers on the last known-good IPA.
-    needs: deploy-backend-dev
+    needs: [deploy-backend-dev, detect-deploy-scope]
     # See deploy-web-dev for `success || skipped` rationale (preserves
     # `inputs.backend=false` iOS-only hotfix path).
     # See deploy-web-dev `always()` + allowlist rationale (run 25280868804).
     if: |
       always() &&
-      inputs.ios-testers &&
+      inputs.ios-testers && needs.detect-deploy-scope.outputs.ios == 'true' &&
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
     # Migrated 2026-05-20 from self-hosted Mac (shytalk-mac) to GitHub-hosted
     # macos-latest per the no-self-hosted-runners policy. The self-hosted Mac
@@ -439,7 +580,12 @@ jobs:
     # site), the outer job envelope can stay tight at 100 min. Normal
     # case is ~60-80 min on cold-cache macos-latest. 100 is the safety
     # net for anything unexpected before the step timeouts fire.
-    timeout-minutes: 100
+    # 2026-07-16 (SHY-0195): 100 -> 120 — the platform-runtime install
+    # step adds a 20-min cap on top of the archive step's 50-min cap;
+    # stacked worst-case legit-slow steps + ~35-55 min of other overhead
+    # could exceed 100 and fire this OPAQUE job timeout before the
+    # step-level fuses. 120 keeps the step caps as the first fuse.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -573,7 +719,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cocoapods/repos
-          key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock') }}
           restore-keys: |
             cocoapods-repos-${{ runner.os }}-
 
@@ -582,7 +728,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: iosApp/Pods
-          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock') }}
           restore-keys: |
             pods-${{ runner.os }}-
 
@@ -618,6 +764,76 @@ jobs:
       # fresh and avoid the collision.
       - name: Stop gradle daemon before xcodebuild
         run: ./gradlew --stop
+
+      # Runner image 20260630.0213.1 ships the default Xcode WITHOUT the iOS
+      # platform runtime (Apple split platform runtimes out of the Xcode
+      # bundle) — the archive then fails with "iOS 26.0 is not installed"
+      # (exit 70; SHY-0195 run 29478170583), and before the explicit
+      # -destination the same gap surfaced as the EMPTY "Found no
+      # destinations" list. Assert our own dependency instead of trusting
+      # image contents. Idempotency VERIFIED empirically (2026-07-16, Xcode
+      # 27.0 host with the platform already installed): exit 0 in <1s — NOT
+      # the Metal-Toolchain -importComponent exit-70 "already installed"
+      # failure mode. Step-capped per this file's hang-detector philosophy
+      # (normal case: seconds when present, ~3-10 min to fetch).
+      - name: Ensure iOS platform runtime is installed
+        # QUERY BEFORE DOWNLOADING. The unconditional `sudo xcodebuild
+        # -downloadPlatform iOS` this replaced has now failed in BOTH
+        # directions, from one cause: it never asked what was present.
+        #
+        #  - Wrong by PASSING: an iOS platform was installed but not the
+        #    required version, so the command exited 0 as a no-op and every
+        #    archive died ~20 minutes later with "iOS 26.0 is not installed".
+        #  - Wrong by FAILING: 2026-08-16, runs 31955605141 and 31958212267 on
+        #    the same develop tip, `Finding content... / Unable to connect to
+        #    simulator. / exit 70` — before any build ran. Two runs of the same
+        #    workflow had succeeded ~3 hours earlier, so the runner image or
+        #    the Apple-side service changed state, not the code.
+        #
+        # A DEVICE archive needs the iphoneos SDK. The simulator runtime that
+        # `-downloadPlatform` also fetches is not required for it, which is why
+        # the download can be unreachable while the archive would have been
+        # fine — so an outage must not fail the deploy when the SDK is present.
+        #
+        # Executed by express-api/tests/scripts/ios-runtime-ensure.test.js
+        # against canned tools; a regex over this YAML could not tell a correct
+        # version check from one that matches any runtime, which IS the defect.
+        run: |
+          set -euo pipefail
+          # Minimum the archive can target — IPHONEOS_DEPLOYMENT_TARGET in
+          # iosApp.xcodeproj. Pinned in ios-deployment-target-18.test.js.
+          REQUIRED_MAJOR=18
+
+          # `-showsdks` lists what is actually installed. `|| true` because a
+          # non-zero here must fall through to the download attempt rather than
+          # abort under `set -e` — an unreadable list is not evidence of a
+          # missing SDK.
+          SDKS=$(xcodebuild -showsdks 2>/dev/null || true)
+          # Field 2 of the "iOS <version>" lines. `sort -V | tail -1` picks the
+          # NEWEST by version order; a plain sort calls 26.9 newer than 26.10.
+          FOUND=$(printf '%s\n' "$SDKS" | sed -n 's/^[[:space:]]*iOS \([0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)
+          FOUND_MAJOR="${FOUND%%.*}"
+
+          if [ -n "$FOUND" ] && [ "${FOUND_MAJOR:-0}" -ge "$REQUIRED_MAJOR" ]; then
+            echo "iOS SDK ${FOUND} present (need >= ${REQUIRED_MAJOR}) — skipping the platform download"
+            exit 0
+          fi
+
+          echo "iOS SDK >= ${REQUIRED_MAJOR} not found (found: '${FOUND:-none}') — installing"
+          if ! sudo xcodebuild -downloadPlatform iOS; then
+            echo "::error::iOS platform download failed and no SDK >= ${REQUIRED_MAJOR} is installed (found: '${FOUND:-none}'). The archive cannot succeed without it."
+            exit 1
+          fi
+
+          # Exit 0 is NOT evidence the SDK arrived — that is exactly how the
+          # no-op regression shipped. Re-read and assert.
+          AFTER=$(xcodebuild -showsdks 2>/dev/null | sed -n 's/^[[:space:]]*iOS \([0-9][0-9.]*\).*/\1/p' | sort -V | tail -1)
+          if [ -z "$AFTER" ] || [ "${AFTER%%.*}" -lt "$REQUIRED_MAJOR" ]; then
+            echo "::error::the platform download reported success but no SDK >= ${REQUIRED_MAJOR} is installed (found: '${AFTER:-none}')."
+            exit 1
+          fi
+          echo "iOS SDK ${AFTER} installed"
+        timeout-minutes: 20
 
       # Step-level hang detector: the xcodebuild archive (which transitively
       # runs gradle for K/Native compile + framework embed/sign + IPA export
@@ -697,6 +913,7 @@ jobs:
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -showBuildTimingSummary \
             -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
@@ -831,10 +1048,13 @@ jobs:
     # 112 MB + FFmpeg 2 MB) before the actual tests could even start.
     # Run 25763744882 on 2026-05-12 cancelled with `##[error]The operation
     # was canceled.` literally one second after the chromium download
-    # finished. Bumping to 10 min gives ~5 min headroom for the install,
-    # which is enough even on a slow runner; the actual tests are sub-
-    # 30s. Combined with the browser cache below, warm runs will complete
-    # well under the limit.
+    # finished. 10 min splits as: up to 6 for the browser install (hard-capped
+    # at the step level by SHY-0334, since apt could otherwise wait forever on
+    # a dead mirror), leaving ~4 for checkout + node + npm ci + cache restore
+    # and the sub-30s tests themselves. Warm runs finish far inside this; the
+    # step cap exists to bound the pathological case, not the normal one.
+    # If this ever gets tight, read a real run's per-step timings rather than
+    # re-deriving the arithmetic here.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -882,7 +1102,9 @@ jobs:
       # path; without the cache restore above, a cold install can use
       # the entire 5-min sanity-check budget (incident 2026-05-12, run
       # 25763744882 cancelled after spending all 5 min downloading).
+      - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
+        timeout-minutes: 6
         run: npx playwright install chromium --with-deps
 
       - name: Run sanity checks against Dev
@@ -918,8 +1140,12 @@ jobs:
     runs-on: ubuntu-latest
     # Same justification as sanity-check: was 8 min, but a cold playwright
     # install can swallow 4-5 min of that on its own. Bumped to 12 min so
-    # the actual smoke tests have headroom. With the browser cache below
-    # warm runs complete much faster.
+    # the actual smoke tests have headroom. 12 min splits as: up to 8 for the
+    # browser install (hard-capped at the step level by SHY-0334), leaving ~4
+    # for setup plus the smoke run itself, which is heavier than sanity's —
+    # real Firebase Auth + Firestore writes + the LiveKit token flow. With the
+    # browser cache below, warm runs complete much faster; the step cap bounds
+    # the pathological case only.
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -944,7 +1170,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ steps.pw.outputs.version }}
 
+      - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
+        timeout-minutes: 8
         run: npx playwright install chromium --with-deps
 
       - name: Verify smoke-test secrets are present

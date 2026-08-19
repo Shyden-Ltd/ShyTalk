@@ -37,7 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -61,6 +63,7 @@ import com.shyden.shytalk.data.remote.VoiceService
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.NotificationRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitScreen
 import com.shyden.shytalk.feature.auth.EmailOtpScreen
 import com.shyden.shytalk.feature.auth.PinSetupScreen
 import com.shyden.shytalk.feature.auth.SignInScreen
@@ -97,9 +100,11 @@ import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
 import com.shyden.shytalk.feature.splash.FunFactSplashScreen
 import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
+import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.warning.WarningScreen
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.jetbrains.compose.resources.stringResource
@@ -120,15 +125,24 @@ fun NavGraph(
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
     onSignOut: () -> Unit,
+    /**
+     * SHY-0143. Android normally renders `BanScreen` ABOVE this NavHost, so
+     * these routes are belt-and-braces — but `initialRoute` can legitimately
+     * hold `ban_device`/`ban_network`, and a NavHost whose start destination
+     * is not registered throws `IllegalArgumentException` at launch. The
+     * routes existed only in `SharedNavGraph`, so the two graphs disagreed
+     * about which destinations exist while both were fed the same resolver.
+     */
+    coldStartBan: BanState = BanState(),
 ) {
     val activeRoomManager: RoomLifecycleManager = koinInject()
     val authRepository: AuthRepository = koinInject()
-    var currentUserId by remember { mutableStateOf(authRepository.currentUserId) }
+    var currentUserId by remember { mutableStateOf(authRepository.resolvedUniqueId) }
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
         navController.currentBackStackEntryFlow.collect { entry ->
-            currentUserId = authRepository.currentUserId
+            currentUserId = authRepository.resolvedUniqueId
             if (BuildVariant.isPreviewBuild) {
                 // Feed the preview watermark's route line (SHY-0205) —
                 // mirrors SharedNavGraph's publisher (Android runs THIS
@@ -144,6 +158,20 @@ fun NavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
+    // SHY-0143 — `currentUserId` above is now `resolvedUniqueId`, NOT the
+    // `resolvedUniqueId ?: firebaseUid` fallback. That fallback is the whole
+    // hazard: on a cache miss it made this subscribe to `users/<firebaseUid>`,
+    // a document that does not exist (SHY-0139).
+    //
+    // An earlier attempt gated on a `cohortVerified` flag from the cold-start
+    // sequencer. That was the wrong property AND a one-shot snapshot: the
+    // sequencer runs once per process and returns early for Lock and Sign-In,
+    // so after a PIN unlock or a normal sign-in the flag stayed false and this
+    // listener — the ONLY real-time suspension and warning listener in the app
+    // — never subscribed at all. SHY-0024's AC pins that it must.
+    //
+    // Reading one's OWN user document is not a cross-cohort read, so the
+    // cohort claim was never what gated it. Knowing the correct key is.
     if (uid != null) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
@@ -189,10 +217,68 @@ fun NavGraph(
     AppLockResumeGate(navController)
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // SHY-0143 — hoisted above the NavHost because the builder lambda is
+        // not a @Composable context. Owned here rather than taken from
+        // `onSignOut`: a device or network ban follows the hardware or the IP,
+        // not the account, so signing out must clear the session and leave the
+        // user exactly where they are. iOS proved a caller-supplied lambda
+        // cannot be trusted with that — it passed one that navigated away.
+        // SHY-0143 — the ban screens' sign-out is owned by the graph rather
+        // than taken from `onSignOut`: a device or network ban follows the
+        // hardware or the IP, not the account, so signing out must clear the
+        // session and leave the user exactly where they are. iOS proved a
+        // caller-supplied lambda cannot be trusted with that — it passed one
+        // that navigated away.
+        //
+        // It does NOT clear the API token cache here. R3 moved that invariant
+        // into `AuthRepository.signOut()` itself, because copying it per call
+        // site had already reached 2 of 4 sites on Android and 0 of 3 on iOS.
+        val signOutAndStay: () -> Unit =
+            remember(authRepository) {
+                {
+                    // Process-scoped, like MainActivity's own sign-out: the
+                    // composition scope dies with the Activity, which signing
+                    // out can itself cause.
+                    ProcessLifecycleOwner.get().lifecycleScope.launch {
+                        try {
+                            authRepository.signOut()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.e("NavGraph", "ban-screen sign-out failed", e)
+                        }
+                    }
+                }
+            }
+
         NavHost(
             navController = navController,
             startDestination = startDestination,
         ) {
+            // SHY-0143 — see `coldStartBan`. The sign-out handler is owned
+            // HERE rather than taken from `onSignOut`: a device or network ban
+            // follows the hardware or the IP, not the account, so signing out
+            // must clear the session and leave the user exactly where they
+            // are. iOS proved a caller-supplied lambda cannot be trusted with
+            // that — it passed one that navigated to Sign-In.
+            composable(Screen.BanDevice.route) {
+                BanScreen(
+                    banType = "device",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = signOutAndStay,
+                )
+            }
+
+            composable(Screen.BanNetwork.route) {
+                BanScreen(
+                    banType = "network",
+                    reason = coldStartBan.reason,
+                    expiresAt = coldStartBan.expiresAt,
+                    onSignOut = signOutAndStay,
+                )
+            }
+
             composable(Screen.Lock.route) {
                 com.shyden.shytalk.feature.auth.LockScreen(
                     onUnlocked = {
@@ -280,6 +366,16 @@ fun NavGraph(
                             popUpTo(Screen.RequiredDOB.route) { inclusive = true }
                         }
                     },
+                )
+            }
+
+            // Age-verification submit flow. Reached from the 18+
+            // AgeRestrictionDialog's "Verify now" CTA on every gated surface
+            // (Gacha, DM, in-room PM sheet) and from the profile entry point.
+            // The screen owns its own back/done navigation via onClose.
+            composable(Screen.AgeVerificationSubmit.route) {
+                AgeVerificationSubmitScreen(
+                    onClose = { navController.safePopBackStack() },
                 )
             }
 
@@ -598,6 +694,9 @@ fun NavGraph(
                         )
                     },
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
+                    onNavigateToAgeVerification = {
+                        navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoom?.name,
                     viewModel = chatViewModel,
@@ -817,6 +916,9 @@ fun NavGraph(
                         )
                     },
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
+                    onNavigateToAgeVerification = {
+                        navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
                     activeRoomId = groupActiveRoomId,
                     activeRoomName = groupActiveRoom?.name,
                     viewModel = groupChatViewModel,

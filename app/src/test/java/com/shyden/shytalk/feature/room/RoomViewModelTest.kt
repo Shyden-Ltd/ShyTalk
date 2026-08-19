@@ -5167,7 +5167,7 @@ class RoomViewModelTest {
                     TestData.createTestUser(uid = ownerId, displayName = "Owner"),
                 )
             // Mock checkBlockedBy to return no conflicts so joinRoom() is called
-            coEvery { userRepository.checkBlockedBy(any(), any()) } returns Resource.Success(emptySet<String>())
+            coEvery { userRepository.checkBlockedBy(any()) } returns Resource.Success(emptySet<String>())
             roomFlow.value = room
             advanceUntilIdle()
 
@@ -5192,7 +5192,7 @@ class RoomViewModelTest {
                 Resource.Success(
                     TestData.createTestUser(uid = ownerId, displayName = "Owner"),
                 )
-            coEvery { userRepository.checkBlockedBy(any(), any()) } returns Resource.Success(emptySet<String>())
+            coEvery { userRepository.checkBlockedBy(any()) } returns Resource.Success(emptySet<String>())
             roomFlow.value = room
             advanceUntilIdle()
 

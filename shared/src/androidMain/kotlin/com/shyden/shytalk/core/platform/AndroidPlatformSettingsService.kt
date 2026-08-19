@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.logE
 import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
@@ -43,7 +44,7 @@ class AndroidPlatformSettingsService(
     override fun openPlayStore(packageId: String): Boolean {
         val context = ctx ?: return false
         val market =
-            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageId"))
+            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${encodeUrlQueryComponent(packageId)}"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         return runCatching { context.startActivity(market) }
             .recoverCatching {
@@ -51,7 +52,7 @@ class AndroidPlatformSettingsService(
                 val web =
                     Intent(
                         Intent.ACTION_VIEW,
-                        Uri.parse("https://play.google.com/store/apps/details?id=$packageId"),
+                        Uri.parse("https://play.google.com/store/apps/details?id=${encodeUrlQueryComponent(packageId)}"),
                     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(web)
             }.isSuccess

@@ -1,6 +1,6 @@
 ---
 id: SHY-0178
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-11
 priority: P0
@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: []
 pr:
+released_in: v0.98.0
 ---
 
 # SHY-0178: Dev smoke fails room creation — payload predates the tightened rooms-create rule

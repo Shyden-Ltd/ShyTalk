@@ -15,17 +15,32 @@ const mockFieldValue = { increment: jest.fn(), serverTimestamp: jest.fn() };
 const mockCert = jest.fn().mockReturnValue('mock-credential');
 const mockInitializeApp = jest.fn();
 
+// firebase-admin 14 removed the namespaced surface this used to mock:
+// `admin.apps`, `admin.firestore()`, `admin.auth()`, `admin.database()`,
+// `admin.messaging()` and `admin.firestore.FieldValue` are all gone. The
+// module under test now reads them from the modular entry points, so the
+// mocks follow it there — mocking the shape the SDK no longer has would
+// have passed while production threw.
 function setupFirebaseAdminMock(appsLength = 0) {
   jest.doMock('firebase-admin', () => ({
-    apps: { length: appsLength },
     credential: { cert: mockCert },
     initializeApp: mockInitializeApp,
-    firestore: Object.assign(jest.fn().mockReturnValue(mockFirestore), {
-      FieldValue: mockFieldValue,
-    }),
-    auth: jest.fn().mockReturnValue(mockAuth),
-    database: jest.fn().mockReturnValue(mockDatabase),
-    messaging: jest.fn().mockReturnValue(mockMessaging),
+  }));
+  jest.doMock('firebase-admin/app', () => ({
+    getApps: jest.fn().mockReturnValue(new Array(appsLength).fill({})),
+  }));
+  jest.doMock('firebase-admin/firestore', () => ({
+    getFirestore: jest.fn().mockReturnValue(mockFirestore),
+    FieldValue: mockFieldValue,
+  }));
+  jest.doMock('firebase-admin/auth', () => ({
+    getAuth: jest.fn().mockReturnValue(mockAuth),
+  }));
+  jest.doMock('firebase-admin/database', () => ({
+    getDatabase: jest.fn().mockReturnValue(mockDatabase),
+  }));
+  jest.doMock('firebase-admin/messaging', () => ({
+    getMessaging: jest.fn().mockReturnValue(mockMessaging),
   }));
 }
 

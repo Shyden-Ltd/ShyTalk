@@ -152,7 +152,7 @@ function parseGherkin(text) {
     }
 
     // Linear regex (no nested quantifiers, single .+ on bounded line).
-    const stepMatch = /^(Given|When|Then|And|But)\s+(.+)$/.exec(line); // eslint-disable-line sonarjs/slow-regex
+    const stepMatch = /^(Given|When|Then|And|But)\s+(.+)$/.exec(line);
     if (stepMatch) {
       const step = { kind: stepMatch[1], text: stepMatch[2].trim() };
       if (current === 'background') background.steps.push(step);
@@ -257,7 +257,7 @@ async function clearCrossCohortFollowsForUserDoc(db, uniqueId, newCohort) {
   // any app init. Importing through src/utils/firebase would trigger
   // the prod-init code path under jest (NODE_ENV !== 'local'), which
   // exits the test process with a "FIREBASE_DATABASE_URL required" error.
-  const { FieldValue } = require('firebase-admin').firestore;
+  const { FieldValue } = require('firebase-admin/firestore');
   const userRef = db.doc(`users/${uniqueId}`);
   const userSnap = await userRef.get();
   if (!userSnap.exists) return 0;
@@ -321,6 +321,48 @@ async function clearCrossCohortFollowsForUserDoc(db, uniqueId, newCohort) {
 //   4. Use the persona registry's uniqueId — same indirection as the
 //      sign-in matchers — so a future persona rename doesn't require
 //      updating Givens.
+
+/**
+ * Resolve the Identity Toolkit base URL for persona sign-in — and REFUSE to fall
+ * back to production on a local run.
+ *
+ * The four call sites each inlined:
+ *
+ *   ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
+ *     ? emulator : 'https://identitytoolkit.googleapis.com'
+ *
+ * which is `if (check) { right thing } else { wrong thing }` with no complaint —
+ * the silent-fallback shape this project bans. `50-matrix.sh` never set
+ * FIREBASE_AUTH_EMULATOR_HOST (20-reseed.sh:32 DOES, for seeding), so every
+ * local matrix run signed personas in against REAL Google auth using the
+ * `fake-local-key` API key. It failed silently, and the only visible symptom was
+ * `UID: —` in a screenshot watermark and 224 failures per cell — on every
+ * browser, including desktop chromium, which is what made it look like product
+ * debt rather than one missing variable.
+ *
+ * A local run must never reach production auth: it cannot succeed, and it should
+ * not be attempting it. An unset emulator host on a local target is now a loud
+ * error, not a different URL.
+ *
+ * @param {{target: string}} ctx
+ * @returns {{ok: true, base: string} | {ok: false, error: string}}
+ */
+function resolveAuthBase(ctx) {
+  if (ctx.target === 'local') {
+    const host = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    if (!host) {
+      return {
+        ok: false,
+        error:
+          'FIREBASE_AUTH_EMULATOR_HOST is not set on a --target=local run. ' +
+          'Refusing to sign in against production Identity Toolkit. ' +
+          'Set FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 (see 50-matrix.sh local env_prefix).',
+      };
+    }
+    return { ok: true, base: `http://${host}/identitytoolkit.googleapis.com` };
+  }
+  return { ok: true, base: 'https://identitytoolkit.googleapis.com' };
+}
 
 function roomIdFromTitle(title) {
   // Slug: lowercase, replace non-alphanum with `-`, collapse + trim, cap
@@ -1079,10 +1121,9 @@ const matchers = [
       // factored because the two share intent but not lifecycle: the
       // catch-all is "permissive consumption", this one is the
       // strict device-driven path.
-      const authBase =
-        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-          : 'https://identitytoolkit.googleapis.com';
+      const authBaseResult = resolveAuthBase(ctx);
+      if (!authBaseResult.ok) return { ok: false, error: authBaseResult.error };
+      const authBase = authBaseResult.base;
       const r = await ctx.fetch(
         `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
         {
@@ -1122,7 +1163,15 @@ const matchers = [
       try {
         // Pass ctx.target as the 3rd arg so the driver picks the right
         // applicationIdSuffix (local → .local, dev → .dev, prod → bare).
-        await ctx.uiDriver.androidPersonaSignIn(personaId, tab, ctx.target);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidPersonaSignIn(personaId, tab, ctx.target)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidPersonaSignIn reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e.message };
@@ -1156,10 +1205,9 @@ const matchers = [
       if (!ctx.personasPassword) {
         return { ok: false, error: 'PERSONAS_PASSWORD env not set' };
       }
-      const authBase =
-        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-          : 'https://identitytoolkit.googleapis.com';
+      const authBaseResult = resolveAuthBase(ctx);
+      if (!authBaseResult.ok) return { ok: false, error: authBaseResult.error };
+      const authBase = authBaseResult.base;
       const r = await ctx.fetch(
         `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
         {
@@ -1204,10 +1252,10 @@ const matchers = [
     // The `[^()]+?` class excludes `(`/`)` so it cannot overlap with the
     // surrounding paren groups, making backtracking linear in input length.
     // Inputs are author-controlled Gherkin step text, not user input.
-    /* eslint-disable sonarjs/slow-regex */
+
     pattern:
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+AND\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+with\s+([^()]+?))?(?:\s+\([^)]*\))?(?:\s+\(no admin claim\))?(?:\s+at\s+the\s+"[^"]+"\s+(?:screen|tab))?$/,
-    /* eslint-enable sonarjs/slow-regex */
+
     async handler(m, ctx) {
       const name = m[1];
       const withClause = m[3];
@@ -1234,10 +1282,9 @@ const matchers = [
         // the real Google API. FIREBASE_AUTH_EMULATOR_HOST controls only the
         // firebase-admin SDK, not raw fetch — so the runner must route by
         // ctx.target itself.
-        const authBase =
-          ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-            ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-            : 'https://identitytoolkit.googleapis.com';
+        const authBaseResult = resolveAuthBase(ctx);
+        if (!authBaseResult.ok) return { ok: false, error: authBaseResult.error };
+        const authBase = authBaseResult.base;
         const r = await ctx.fetch(
           `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
           {
@@ -1352,7 +1399,6 @@ const matchers = [
     // complex bodies into a step var if needed. The optional groups are all
     // anchored and don't overlap, so the linear-time guarantee holds.
     pattern:
-      // eslint-disable-next-line sonarjs/slow-regex
       /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]*)?\s+sends?\s+(GET|POST|PATCH|PUT|DELETE)\s+(\S+)(?:\s+with\s+body\s+(\{[^}]*\}|\[[^\]]*\]))?(?:\s+with\s+(?:her|his|their)\s+ID token)?\.?$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -1419,9 +1465,7 @@ const matchers = [
   // All four matchers populate `ctx.lastResponse.path` so the new
   // path-tagged response assertions (below) can verify the chain.
   {
-    pattern:
-      // eslint-disable-next-line sonarjs/slow-regex
-      /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
+    pattern: /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
     async handler(m, ctx) {
       const name = m[1];
       const apiPath = m[2];
@@ -1460,7 +1504,7 @@ const matchers = [
   {
     pattern:
       // Alt word order: `POST <path> with <kv-list-or-any-payload-or-body> as <Persona>(?: on <Platform>)?`
-      // eslint-disable-next-line sonarjs/slow-regex
+
       /^POST\s+(\S+)\s+with\s+(any payload|body\s+(\{[^}]*\}|\[[^\]]*\])|.+?)\s+as\s+([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\.?$/,
     async handler(m, ctx) {
       const apiPath = m[1];
@@ -2433,10 +2477,9 @@ const matchers = [
         };
       }
       if (!ctx.personasPassword) return { ok: false, error: 'PERSONAS_PASSWORD env not set' };
-      const authBase2 =
-        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
-          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
-          : 'https://identitytoolkit.googleapis.com';
+      const authBase2Result = resolveAuthBase(ctx);
+      if (!authBase2Result.ok) return { ok: false, error: authBase2Result.error };
+      const authBase2 = authBase2Result.base;
       const r = await ctx.fetch(
         `${authBase2}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
         {
@@ -2570,7 +2613,7 @@ const matchers = [
     // shape j03/j05/j06 use for known-state setup.
     // `.+$` is greedy and anchored to end-of-string. No nested quantifiers,
     // no character-class overlap with surrounding patterns — match is linear.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+(exists|has user doc) with\s+(.+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
@@ -2819,7 +2862,15 @@ const matchers = [
       const y2 = parseInt(match[4] || match[8], 10);
       const cx = Math.floor((x1 + x2) / 2);
       const cy = Math.floor((y1 + y2) / 2);
-      await ctx.uiDriver.androidTap(cx, cy);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidTap(cx, cy)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidTap reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -2872,8 +2923,24 @@ const matchers = [
       const y2 = parseInt(match[4] || match[8], 10);
       const cx = Math.floor((x1 + x2) / 2);
       const cy = Math.floor((y1 + y2) / 2);
-      await ctx.uiDriver.androidTap(cx, cy);
-      await ctx.uiDriver.androidTypeText(text);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidTap(cx, cy)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidTap reported failure — the step did not happen`,
+        };
+      }
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidTypeText(text)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidTypeText reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -2892,7 +2959,7 @@ const matchers = [
     // the optional trailing `(?:\s+.+)?$` is anchored to end-of-string with no
     // nested quantifiers. Input is author-controlled (feature files), not
     // untrusted user data. Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Android UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -2939,13 +3006,21 @@ const matchers = [
           error: 'ctx.uiDriver.androidOpenScreen not configured',
         };
       }
-      await ctx.uiDriver.androidOpenScreen(screenName);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidOpenScreen(screenName)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidOpenScreen reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
   {
     // iOS Sim tap. Unlike the Android tap (which parses adb XML bounds in
-    // the matcher), the iOS variant delegates to `iosTap(identifier)` — the
+    // the matcher), the iOS variant delegates to `iosTapByTag(identifier)` — the
     // driver owns coordinate lookup from the accessibility dump. Less
     // parsing logic in the matcher = more flexibility for the driver to
     // adapt to xcrun simctl's evolving output format.
@@ -2955,10 +3030,18 @@ const matchers = [
       if (!ctx.uiDriver) {
         return { ok: false, error: `UI step requires ctx.uiDriver (iOS tap, tag=${tag})` };
       }
-      if (!ctx.uiDriver.iosTap) {
-        return { ok: false, error: 'ctx.uiDriver.iosTap not configured' };
+      if (!ctx.uiDriver.iosTapByTag) {
+        return { ok: false, error: 'ctx.uiDriver.iosTapByTag not configured' };
       }
-      await ctx.uiDriver.iosTap(tag);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.iosTapByTag(tag)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.iosTap reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -2979,7 +3062,15 @@ const matchers = [
       if (!ctx.uiDriver.iosOpenScreen) {
         return { ok: false, error: 'ctx.uiDriver.iosOpenScreen not configured' };
       }
-      await ctx.uiDriver.iosOpenScreen(screenName);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.iosOpenScreen(screenName)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.iosOpenScreen reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -2995,7 +3086,7 @@ const matchers = [
     //
     // Trailing descriptive text accepted (e.g. ` toast`, ` banner`) and
     // ignored — matches the corpus phrasings without forcing rewrites.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s iOS Sim UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -3031,7 +3122,15 @@ const matchers = [
       if (!ctx.uiDriver.iosTypeText) {
         return { ok: false, error: 'ctx.uiDriver.iosTypeText not configured' };
       }
-      await ctx.uiDriver.iosTypeText(tag, text);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.iosTypeText(tag, text)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.iosTypeText reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3048,7 +3147,15 @@ const matchers = [
       if (!ctx.uiDriver.iosSearchIn) {
         return { ok: false, error: 'ctx.uiDriver.iosSearchIn not configured' };
       }
-      await ctx.uiDriver.iosSearchIn(null, text);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.iosSearchIn(null, text)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.iosSearchIn reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3076,7 +3183,15 @@ const matchers = [
       if (!ctx.webDriver.webAdminOpenTab) {
         return { ok: false, error: 'ctx.webDriver.webAdminOpenTab not configured' };
       }
-      await ctx.webDriver.webAdminOpenTab(tabName);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminOpenTab(tabName)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminOpenTab reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3090,7 +3205,15 @@ const matchers = [
       if (!ctx.webDriver.webTap) {
         return { ok: false, error: 'ctx.webDriver.webTap not configured' };
       }
-      await ctx.webDriver.webTap(tag);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webTap(tag)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webTap reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3108,7 +3231,15 @@ const matchers = [
       if (!ctx.webDriver.webOpenScreen) {
         return { ok: false, error: 'ctx.webDriver.webOpenScreen not configured' };
       }
-      await ctx.webDriver.webOpenScreen(name);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webOpenScreen(name)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webOpenScreen reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3127,7 +3258,15 @@ const matchers = [
       if (!ctx.webDriver.webAdminTapWithReason) {
         return { ok: false, error: 'ctx.webDriver.webAdminTapWithReason not configured' };
       }
-      await ctx.webDriver.webAdminTapWithReason(tag, reason);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminTapWithReason(tag, reason)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminTapWithReason reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3143,7 +3282,15 @@ const matchers = [
       if (!ctx.webDriver.webAdminConfirmWithReason) {
         return { ok: false, error: 'ctx.webDriver.webAdminConfirmWithReason not configured' };
       }
-      await ctx.webDriver.webAdminConfirmWithReason(reason);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminConfirmWithReason(reason)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminConfirmWithReason reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3171,7 +3318,15 @@ const matchers = [
           error: 'ctx.webDriver.webAdminOpenReportAndTap not configured',
         };
       }
-      await ctx.webDriver.webAdminOpenReportAndTap(ordinal, menuItem, reason);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminOpenReportAndTap(ordinal, menuItem, reason)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminOpenReportAndTap reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3187,7 +3342,21 @@ const matchers = [
       if (!ctx.webDriver.webSignIn) {
         return { ok: false, error: 'ctx.webDriver.webSignIn not configured' };
       }
-      await ctx.webDriver.webSignIn(name);
+      // SHY-0330 swept all 116 discarded-verdict sites; SHY-0328 had already
+      // fixed this one. Same `!== true` semantics either way — deliberate, so a
+      // driver that forgets to return reads as failure, and an unimplemented
+      // method now throws rather than returning false.
+      //
+      // Keeping SHY-0328's richer message: it names the persona and the value
+      // returned, which is what makes a failed sign-in diagnosable from the run
+      // log rather than just visible.
+      const signedIn = await ctx.webDriver.webSignIn(name);
+      if (signedIn !== true) {
+        return {
+          ok: false,
+          error: `${name} failed to sign in on Web — webSignIn returned ${JSON.stringify(signedIn)}. See the driver's console output for the reason.`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3207,7 +3376,15 @@ const matchers = [
       if (!ctx.webDriver.webOpenUserProfile) {
         return { ok: false, error: 'ctx.webDriver.webOpenUserProfile not configured' };
       }
-      await ctx.webDriver.webOpenUserProfile(name, target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webOpenUserProfile(name, target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webOpenUserProfile reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3229,7 +3406,15 @@ const matchers = [
       if (!ctx.webDriver.webOpenProfilePanel) {
         return { ok: false, error: 'ctx.webDriver.webOpenProfilePanel not configured' };
       }
-      await ctx.webDriver.webOpenProfilePanel(name, panel);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webOpenProfilePanel(name, panel)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webOpenProfilePanel reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3278,7 +3463,15 @@ const matchers = [
           error: 'ctx.uiDriver.androidTapEventInviteAction not configured',
         };
       }
-      await ctx.uiDriver.androidTapEventInviteAction(name, action);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidTapEventInviteAction(name, action)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidTapEventInviteAction reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3551,21 +3744,45 @@ const matchers = [
         }
         // Pass persona name — web driver maintains per-persona Page state
         // (pageFor cache), so the refresh needs to target the right tab.
-        await ctx.webDriver.webRefreshRoomsList(name);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webRefreshRoomsList(name)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webRefreshRoomsList reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidRefreshRoomsList) {
           return { ok: false, error: 'ctx.uiDriver.androidRefreshRoomsList not configured' };
         }
-        await ctx.uiDriver.androidRefreshRoomsList();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidRefreshRoomsList()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidRefreshRoomsList reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosRefreshRoomsList) {
           return { ok: false, error: 'ctx.uiDriver.iosRefreshRoomsList not configured' };
         }
-        await ctx.uiDriver.iosRefreshRoomsList();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosRefreshRoomsList()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosRefreshRoomsList reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for refresh-rooms step` };
@@ -3584,21 +3801,45 @@ const matchers = [
         if (!ctx.webDriver?.webTapRoomCard) {
           return { ok: false, error: 'ctx.webDriver.webTapRoomCard not configured' };
         }
-        await ctx.webDriver.webTapRoomCard(owner);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTapRoomCard(owner)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTapRoomCard reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTapRoomCard) {
           return { ok: false, error: 'ctx.uiDriver.androidTapRoomCard not configured' };
         }
-        await ctx.uiDriver.androidTapRoomCard(owner);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTapRoomCard(owner)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTapRoomCard reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTapRoomCard) {
           return { ok: false, error: 'ctx.uiDriver.iosTapRoomCard not configured' };
         }
-        await ctx.uiDriver.iosTapRoomCard(owner);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTapRoomCard(owner)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTapRoomCard reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for tap-room step` };
@@ -3610,7 +3851,7 @@ const matchers = [
     // text-only view of the page. Trailing descriptive context (e.g.
     // ` toast`, ` indicator on her reply`) accepted and ignored, mirroring
     // Wake-19 Android pattern.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?'s Web UI shows "([^"]+)"(?:\s+.+)?$/,
     async handler(m, ctx) {
       const expected = m[3];
@@ -3683,7 +3924,15 @@ const matchers = [
       if (!ctx.uiDriver.androidSearchIn) {
         return { ok: false, error: 'ctx.uiDriver.androidSearchIn not configured' };
       }
-      await ctx.uiDriver.androidSearchIn(screen, text);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSearchIn(screen, text)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSearchIn reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3699,7 +3948,15 @@ const matchers = [
         return { ok: false, error: 'ctx.uiDriver.androidSearchIn not configured' };
       }
       // null screen = "active screen" — driver decides which search field.
-      await ctx.uiDriver.androidSearchIn(null, text);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSearchIn(null, text)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSearchIn reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3724,7 +3981,15 @@ const matchers = [
       if (!ctx.uiDriver.androidKillAndRelaunch) {
         return { ok: false, error: 'ctx.uiDriver.androidKillAndRelaunch not configured' };
       }
-      await ctx.uiDriver.androidKillAndRelaunch(name, ctx.target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidKillAndRelaunch(name, ctx.target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidKillAndRelaunch reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3744,7 +4009,15 @@ const matchers = [
       if (!ctx.uiDriver.androidPerformAuthenticatedCall) {
         return { ok: false, error: 'ctx.uiDriver.androidPerformAuthenticatedCall not configured' };
       }
-      await ctx.uiDriver.androidPerformAuthenticatedCall(name);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidPerformAuthenticatedCall(name)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidPerformAuthenticatedCall reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3769,7 +4042,15 @@ const matchers = [
           error: 'ctx.uiDriver.androidForceRefreshSecureToken not configured',
         };
       }
-      await ctx.uiDriver.androidForceRefreshSecureToken(name);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidForceRefreshSecureToken(name)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidForceRefreshSecureToken reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3788,7 +4069,15 @@ const matchers = [
       if (!ctx.uiDriver.androidForceRefreshJwt) {
         return { ok: false, error: 'ctx.uiDriver.androidForceRefreshJwt not configured' };
       }
-      await ctx.uiDriver.androidForceRefreshJwt(name);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidForceRefreshJwt(name)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidForceRefreshJwt reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3818,7 +4107,15 @@ const matchers = [
           error: 'ctx.uiDriver.androidLongPressMessageAndTap not configured',
         };
       }
-      await ctx.uiDriver.androidLongPressMessageAndTap(name, menuItem);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidLongPressMessageAndTap(name, menuItem)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidLongPressMessageAndTap reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3846,7 +4143,15 @@ const matchers = [
       if (!ctx.uiDriver.androidSendMessageTo) {
         return { ok: false, error: 'ctx.uiDriver.androidSendMessageTo not configured' };
       }
-      await ctx.uiDriver.androidSendMessageTo(name, recipient, content);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSendMessageTo(name, recipient, content)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSendMessageTo reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3870,7 +4175,15 @@ const matchers = [
       if (!ctx.uiDriver.androidTapUserCard) {
         return { ok: false, error: 'ctx.uiDriver.androidTapUserCard not configured' };
       }
-      await ctx.uiDriver.androidTapUserCard(name, target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidTapUserCard(name, target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidTapUserCard reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -3913,7 +4226,7 @@ const matchers = [
     // cohort-rooms scenario shape. Filter is in-memory.
     // `.+$` is greedy + anchored — no overlap with the surrounding pattern
     // pieces, so backtracking is linear.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^a query is run for "([^"]+)\/\*" docs with\s+(.+)$/,
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
@@ -4069,7 +4382,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminIssueWarning) {
         return { ok: false, error: 'ctx.webDriver.webAdminIssueWarning not configured' };
       }
-      await ctx.webDriver.webAdminIssueWarning(target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminIssueWarning(target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminIssueWarning reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4085,21 +4406,45 @@ const matchers = [
         if (!ctx.webDriver?.webConfirm) {
           return { ok: false, error: 'ctx.webDriver.webConfirm not configured' };
         }
-        await ctx.webDriver.webConfirm();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webConfirm()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webConfirm reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidConfirm) {
           return { ok: false, error: 'ctx.uiDriver.androidConfirm not configured' };
         }
-        await ctx.uiDriver.androidConfirm();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidConfirm()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidConfirm reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosConfirm) {
           return { ok: false, error: 'ctx.uiDriver.iosConfirm not configured' };
         }
-        await ctx.uiDriver.iosConfirm();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosConfirm()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosConfirm reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for confirm step` };
@@ -4123,21 +4468,45 @@ const matchers = [
         if (!ctx.webDriver?.webSendGift) {
           return { ok: false, error: 'ctx.webDriver.webSendGift not configured' };
         }
-        await ctx.webDriver.webSendGift(giftName, cost, recipient);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webSendGift(giftName, cost, recipient)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webSendGift reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidSendGift) {
           return { ok: false, error: 'ctx.uiDriver.androidSendGift not configured' };
         }
-        await ctx.uiDriver.androidSendGift(giftName, cost, recipient);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidSendGift(giftName, cost, recipient)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidSendGift reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosSendGift) {
           return { ok: false, error: 'ctx.uiDriver.iosSendGift not configured' };
         }
-        await ctx.uiDriver.iosSendGift(giftName, cost, recipient);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosSendGift(giftName, cost, recipient)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosSendGift reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for send-gift step` };
@@ -4157,14 +4526,30 @@ const matchers = [
         if (!ctx.uiDriver?.androidPickDOB) {
           return { ok: false, error: 'ctx.uiDriver.androidPickDOB not configured' };
         }
-        await ctx.uiDriver.androidPickDOB(dob, pickerTag);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidPickDOB(dob, pickerTag)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidPickDOB reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosPickDOB) {
           return { ok: false, error: 'ctx.uiDriver.iosPickDOB not configured' };
         }
-        await ctx.uiDriver.iosPickDOB(dob, pickerTag);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosPickDOB(dob, pickerTag)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosPickDOB reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for pick-DOB step` };
@@ -4181,7 +4566,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidPickIdType) {
         return { ok: false, error: 'ctx.uiDriver.androidPickIdType not configured' };
       }
-      await ctx.uiDriver.androidPickIdType(idType);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidPickIdType(idType)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidPickIdType reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4195,7 +4588,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidSelectGalleryImage) {
         return { ok: false, error: 'ctx.uiDriver.androidSelectGalleryImage not configured' };
       }
-      await ctx.uiDriver.androidSelectGalleryImage(filename);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSelectGalleryImage(filename)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSelectGalleryImage reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4211,7 +4612,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidSignupWithDOB) {
         return { ok: false, error: 'ctx.uiDriver.androidSignupWithDOB not configured' };
       }
-      await ctx.uiDriver.androidSignupWithDOB(dob);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSignupWithDOB(dob)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSignupWithDOB reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4223,7 +4632,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminRefreshAgeVerification) {
         return { ok: false, error: 'ctx.webDriver.webAdminRefreshAgeVerification not configured' };
       }
-      await ctx.webDriver.webAdminRefreshAgeVerification();
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminRefreshAgeVerification()) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminRefreshAgeVerification reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4240,7 +4657,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminActOnSubmission) {
         return { ok: false, error: 'ctx.webDriver.webAdminActOnSubmission not configured' };
       }
-      await ctx.webDriver.webAdminActOnSubmission(action, uid);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminActOnSubmission(action, uid)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminActOnSubmission reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4336,14 +4761,30 @@ const matchers = [
         if (!ctx.uiDriver?.androidOpenDeepLink) {
           return { ok: false, error: 'ctx.uiDriver.androidOpenDeepLink not configured' };
         }
-        await ctx.uiDriver.androidOpenDeepLink(url);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidOpenDeepLink(url)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidOpenDeepLink reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosOpenDeepLink) {
           return { ok: false, error: 'ctx.uiDriver.iosOpenDeepLink not configured' };
         }
-        await ctx.uiDriver.iosOpenDeepLink(url);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosOpenDeepLink(url)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosOpenDeepLink reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for deep-link step` };
@@ -4384,7 +4825,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidSelectGiftRecipient) {
         return { ok: false, error: 'ctx.uiDriver.androidSelectGiftRecipient not configured' };
       }
-      await ctx.uiDriver.androidSelectGiftRecipient(giftName, recipient);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSelectGiftRecipient(giftName, recipient)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSelectGiftRecipient reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4404,21 +4853,45 @@ const matchers = [
         if (!ctx.webDriver?.webTypeAndSubmit) {
           return { ok: false, error: 'ctx.webDriver.webTypeAndSubmit not configured' };
         }
-        await ctx.webDriver.webTypeAndSubmit(email, password);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTypeAndSubmit(email, password)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTypeAndSubmit reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTypeAndSubmit) {
           return { ok: false, error: 'ctx.uiDriver.androidTypeAndSubmit not configured' };
         }
-        await ctx.uiDriver.androidTypeAndSubmit(email, password);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTypeAndSubmit(email, password)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTypeAndSubmit reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTypeAndSubmit) {
           return { ok: false, error: 'ctx.uiDriver.iosTypeAndSubmit not configured' };
         }
-        await ctx.uiDriver.iosTypeAndSubmit(email, password);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTypeAndSubmit(email, password)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTypeAndSubmit reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for type-and-submit step` };
@@ -4552,21 +5025,45 @@ const matchers = [
         if (!ctx.webDriver?.webTapNamedButton) {
           return { ok: false, error: 'ctx.webDriver.webTapNamedButton not configured' };
         }
-        await ctx.webDriver.webTapNamedButton(buttonName);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTapNamedButton(buttonName)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTapNamedButton reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTapNamedButton) {
           return { ok: false, error: 'ctx.uiDriver.androidTapNamedButton not configured' };
         }
-        await ctx.uiDriver.androidTapNamedButton(buttonName);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTapNamedButton(buttonName)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTapNamedButton reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTapNamedButton) {
           return { ok: false, error: 'ctx.uiDriver.iosTapNamedButton not configured' };
         }
-        await ctx.uiDriver.iosTapNamedButton(buttonName);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTapNamedButton(buttonName)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTapNamedButton reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for button-tap step` };
@@ -4586,21 +5083,45 @@ const matchers = [
         if (!ctx.webDriver?.webAcceptLegalAndContinue) {
           return { ok: false, error: 'ctx.webDriver.webAcceptLegalAndContinue not configured' };
         }
-        await ctx.webDriver.webAcceptLegalAndContinue();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webAcceptLegalAndContinue()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webAcceptLegalAndContinue reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidAcceptLegalAndContinue) {
           return { ok: false, error: 'ctx.uiDriver.androidAcceptLegalAndContinue not configured' };
         }
-        await ctx.uiDriver.androidAcceptLegalAndContinue();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidAcceptLegalAndContinue()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidAcceptLegalAndContinue reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosAcceptLegalAndContinue) {
           return { ok: false, error: 'ctx.uiDriver.iosAcceptLegalAndContinue not configured' };
         }
-        await ctx.uiDriver.iosAcceptLegalAndContinue();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosAcceptLegalAndContinue()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosAcceptLegalAndContinue reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for legal-checkbox step` };
@@ -4772,7 +5293,15 @@ const matchers = [
       if (!ctx.webDriver?.webGrantNotificationPermission) {
         return { ok: false, error: 'ctx.webDriver.webGrantNotificationPermission not configured' };
       }
-      await ctx.webDriver.webGrantNotificationPermission();
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webGrantNotificationPermission()) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webGrantNotificationPermission reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4787,7 +5316,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminOpenTab) {
         return { ok: false, error: 'ctx.webDriver.webAdminOpenTab not configured' };
       }
-      await ctx.webDriver.webAdminOpenTab(tabName);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminOpenTab(tabName)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminOpenTab reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4802,7 +5339,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminActOnSubmissionByName) {
         return { ok: false, error: 'ctx.webDriver.webAdminActOnSubmissionByName not configured' };
       }
-      await ctx.webDriver.webAdminActOnSubmissionByName(action, submitter);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminActOnSubmissionByName(action, submitter)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminActOnSubmissionByName reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -4859,21 +5404,45 @@ const matchers = [
         if (!ctx.webDriver?.webTapUserCard) {
           return { ok: false, error: 'ctx.webDriver.webTapUserCard not configured' };
         }
-        await ctx.webDriver.webTapUserCard(owner);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTapUserCard(owner)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTapUserCard reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTapUserCard) {
           return { ok: false, error: 'ctx.uiDriver.androidTapUserCard not configured' };
         }
-        await ctx.uiDriver.androidTapUserCard(owner);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTapUserCard(owner)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTapUserCard reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTapUserCard) {
           return { ok: false, error: 'ctx.uiDriver.iosTapUserCard not configured' };
         }
-        await ctx.uiDriver.iosTapUserCard(owner);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTapUserCard(owner)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTapUserCard reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for user-card tap step` };
@@ -4922,7 +5491,17 @@ const matchers = [
           error: 'ctx.webDriver.webAdminTapWithReasonAndOverride not configured',
         };
       }
-      await ctx.webDriver.webAdminTapWithReasonAndOverride(action, reason, dobOverride);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if (
+        (await ctx.webDriver.webAdminTapWithReasonAndOverride(action, reason, dobOverride)) !== true
+      ) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminTapWithReasonAndOverride reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5031,14 +5610,30 @@ const matchers = [
         if (!ctx.uiDriver?.androidRelaunchAndSignIn) {
           return { ok: false, error: 'ctx.uiDriver.androidRelaunchAndSignIn not configured' };
         }
-        await ctx.uiDriver.androidRelaunchAndSignIn(name);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidRelaunchAndSignIn(name)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidRelaunchAndSignIn reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosRelaunchAndSignIn) {
           return { ok: false, error: 'ctx.uiDriver.iosRelaunchAndSignIn not configured' };
         }
-        await ctx.uiDriver.iosRelaunchAndSignIn(name);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosRelaunchAndSignIn(name)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosRelaunchAndSignIn reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for relaunch step` };
@@ -5121,7 +5716,7 @@ const matchers = [
     // Regex is linear: `.+$` is greedy + anchored to end-of-string, no
     // overlap with preceding tokens. Input is author-controlled (feature
     // files), not untrusted user data. Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)\s+has\s+(\w+)\s+(>=|<=|==|>|<)\s+(\d+)(?:\s+.+)?$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -5321,21 +5916,45 @@ const matchers = [
         if (!ctx.webDriver?.webOpenListView) {
           return { ok: false, error: 'ctx.webDriver.webOpenListView not configured' };
         }
-        await ctx.webDriver.webOpenListView(listName);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webOpenListView(listName)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webOpenListView reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidOpenListView) {
           return { ok: false, error: 'ctx.uiDriver.androidOpenListView not configured' };
         }
-        await ctx.uiDriver.androidOpenListView(listName);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidOpenListView(listName)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidOpenListView reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosOpenListView) {
           return { ok: false, error: 'ctx.uiDriver.iosOpenListView not configured' };
         }
-        await ctx.uiDriver.iosOpenListView(listName);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosOpenListView(listName)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosOpenListView reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for list-nav step` };
@@ -5387,7 +6006,15 @@ const matchers = [
       if (!ctx.webDriver?.webSelectPackage) {
         return { ok: false, error: 'ctx.webDriver.webSelectPackage not configured' };
       }
-      await ctx.webDriver.webSelectPackage(packageId);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webSelectPackage(packageId)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webSelectPackage reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5402,7 +6029,15 @@ const matchers = [
       if (!ctx.webDriver?.webSubmitSandboxReceipt) {
         return { ok: false, error: 'ctx.webDriver.webSubmitSandboxReceipt not configured' };
       }
-      await ctx.webDriver.webSubmitSandboxReceipt(receiptId);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webSubmitSandboxReceipt(receiptId)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webSubmitSandboxReceipt reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5581,7 +6216,15 @@ const matchers = [
       if (!ctx.webDriver?.webCloseModalViaX) {
         return { ok: false, error: 'ctx.webDriver.webCloseModalViaX not configured' };
       }
-      await ctx.webDriver.webCloseModalViaX();
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webCloseModalViaX()) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webCloseModalViaX reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5627,7 +6270,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidPickTestImageBySize) {
         return { ok: false, error: 'ctx.uiDriver.androidPickTestImageBySize not configured' };
       }
-      await ctx.uiDriver.androidPickTestImageBySize(sizeMB);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidPickTestImageBySize(sizeMB)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidPickTestImageBySize reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5642,7 +6293,15 @@ const matchers = [
       if (!ctx.webDriver?.webSelectRecipientAndGift) {
         return { ok: false, error: 'ctx.webDriver.webSelectRecipientAndGift not configured' };
       }
-      await ctx.webDriver.webSelectRecipientAndGift(recipient, giftName);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webSelectRecipientAndGift(recipient, giftName)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webSelectRecipientAndGift reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5660,7 +6319,15 @@ const matchers = [
       if (!ctx.webDriver?.webDoubleTapWithSameReceipt) {
         return { ok: false, error: 'ctx.webDriver.webDoubleTapWithSameReceipt not configured' };
       }
-      await ctx.webDriver.webDoubleTapWithSameReceipt(tag, receipt, withinMs);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webDoubleTapWithSameReceipt(tag, receipt, withinMs)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webDoubleTapWithSameReceipt reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5736,7 +6403,15 @@ const matchers = [
       if (!ctx.webDriver?.webPurchaseWithSandboxReceipt) {
         return { ok: false, error: 'ctx.webDriver.webPurchaseWithSandboxReceipt not configured' };
       }
-      await ctx.webDriver.webPurchaseWithSandboxReceipt(packageId);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webPurchaseWithSandboxReceipt(packageId)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webPurchaseWithSandboxReceipt reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5782,7 +6457,7 @@ const matchers = [
       const coinsGranted = coinsMatch ? parseInt(coinsMatch[1], 10) : 0;
       const crypto = require('node:crypto');
       const receiptId = crypto.createHash('sha256').update(String(receipt)).digest('hex');
-      const { FieldValue } = require('firebase-admin').firestore;
+      const { FieldValue } = require('firebase-admin/firestore');
       await ctx.db.doc(`purchaseReceipts/${receiptId}`).set({
         userId: p.uniqueId,
         productId,
@@ -5817,7 +6492,15 @@ const matchers = [
           error: 'ctx.webDriver.simulateNetworkDropBeforeResponse not configured',
         };
       }
-      await ctx.webDriver.simulateNetworkDropBeforeResponse(name);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.simulateNetworkDropBeforeResponse(name)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.simulateNetworkDropBeforeResponse reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5830,7 +6513,7 @@ const matchers = [
     //
     // Regex linear: `.+$` greedy + anchored to end-of-string. Input
     // is author-controlled (feature files). Safe.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     pattern: /^([A-Z][a-z]+)\s+on Android POSTs (\/api\/[\w/-]+)(?:\s+(.+))?$/,
     async handler(m, ctx) {
       const endpoint = m[2];
@@ -5838,7 +6521,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidApiPost) {
         return { ok: false, error: 'ctx.uiDriver.androidApiPost not configured' };
       }
-      await ctx.uiDriver.androidApiPost(endpoint, rest);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidApiPost(endpoint, rest)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidApiPost reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5855,7 +6546,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidRetrySamePurchase) {
         return { ok: false, error: 'ctx.uiDriver.androidRetrySamePurchase not configured' };
       }
-      await ctx.uiDriver.androidRetrySamePurchase(name);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidRetrySamePurchase(name)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidRetrySamePurchase reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -5913,7 +6612,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminProcessRefund) {
         return { ok: false, error: 'ctx.webDriver.webAdminProcessRefund not configured' };
       }
-      await ctx.webDriver.webAdminProcessRefund(receipt);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminProcessRefund(receipt)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminProcessRefund reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -6129,7 +6836,15 @@ const matchers = [
           error: 'ctx.uiDriver.androidSelectFromFollowedPicker not configured',
         };
       }
-      await ctx.uiDriver.androidSelectFromFollowedPicker(target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidSelectFromFollowedPicker(target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidSelectFromFollowedPicker reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -6182,21 +6897,45 @@ const matchers = [
         if (!ctx.webDriver?.webOpenConversation) {
           return { ok: false, error: 'ctx.webDriver.webOpenConversation not configured' };
         }
-        await ctx.webDriver.webOpenConversation(target);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webOpenConversation(target)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webOpenConversation reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidOpenConversation) {
           return { ok: false, error: 'ctx.uiDriver.androidOpenConversation not configured' };
         }
-        await ctx.uiDriver.androidOpenConversation(target);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidOpenConversation(target)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidOpenConversation reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosOpenConversation) {
           return { ok: false, error: 'ctx.uiDriver.iosOpenConversation not configured' };
         }
-        await ctx.uiDriver.iosOpenConversation(target);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosOpenConversation(target)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosOpenConversation reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for open-conversation step` };
@@ -6246,7 +6985,15 @@ const matchers = [
             error: 'ctx.webDriver.webTypeIntoConversationInput not configured',
           };
         }
-        await ctx.webDriver.webTypeIntoConversationInput(body);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTypeIntoConversationInput(body)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTypeIntoConversationInput reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
@@ -6256,7 +7003,15 @@ const matchers = [
             error: 'ctx.uiDriver.androidTypeIntoConversationInput not configured',
           };
         }
-        await ctx.uiDriver.androidTypeIntoConversationInput(body);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTypeIntoConversationInput(body)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTypeIntoConversationInput reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -6266,7 +7021,15 @@ const matchers = [
             error: 'ctx.uiDriver.iosTypeIntoConversationInput not configured',
           };
         }
-        await ctx.uiDriver.iosTypeIntoConversationInput(body);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTypeIntoConversationInput(body)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTypeIntoConversationInput reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return {
@@ -6349,7 +7112,15 @@ const matchers = [
         if (!ctx.webDriver?.webEditBodyAndConfirm) {
           return { ok: false, error: 'ctx.webDriver.webEditBodyAndConfirm not configured' };
         }
-        await ctx.webDriver.webEditBodyAndConfirm(newBody);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webEditBodyAndConfirm(newBody)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webEditBodyAndConfirm reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
@@ -6359,14 +7130,30 @@ const matchers = [
             error: 'ctx.uiDriver.androidEditBodyAndConfirm not configured',
           };
         }
-        await ctx.uiDriver.androidEditBodyAndConfirm(newBody);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidEditBodyAndConfirm(newBody)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidEditBodyAndConfirm reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosEditBodyAndConfirm) {
           return { ok: false, error: 'ctx.uiDriver.iosEditBodyAndConfirm not configured' };
         }
-        await ctx.uiDriver.iosEditBodyAndConfirm(newBody);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosEditBodyAndConfirm(newBody)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosEditBodyAndConfirm reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for edit-body step` };
@@ -6456,7 +7243,15 @@ const matchers = [
           error: 'ctx.webDriver.simulateFcmDispatcherAttempt not configured',
         };
       }
-      await ctx.webDriver.simulateFcmDispatcherAttempt(sender, recipient);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.simulateFcmDispatcherAttempt(sender, recipient)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.simulateFcmDispatcherAttempt reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -6638,7 +7433,15 @@ const matchers = [
             error: 'ctx.uiDriver.androidAttemptProfileDeepLink not configured',
           };
         }
-        await ctx.uiDriver.androidAttemptProfileDeepLink(url);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidAttemptProfileDeepLink(url)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidAttemptProfileDeepLink reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
@@ -6648,7 +7451,15 @@ const matchers = [
             error: 'ctx.uiDriver.iosAttemptProfileDeepLink not configured',
           };
         }
-        await ctx.uiDriver.iosAttemptProfileDeepLink(url);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosAttemptProfileDeepLink(url)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosAttemptProfileDeepLink reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for profile-deep-link step` };
@@ -6669,7 +7480,15 @@ const matchers = [
           error: 'ctx.uiDriver.androidAttemptFollowViaProfile not configured',
         };
       }
-      await ctx.uiDriver.androidAttemptFollowViaProfile(target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidAttemptFollowViaProfile(target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidAttemptFollowViaProfile reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -6813,7 +7632,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminExecuteAgeDownFlow) {
         return { ok: false, error: 'ctx.webDriver.webAdminExecuteAgeDownFlow not configured' };
       }
-      await ctx.webDriver.webAdminExecuteAgeDownFlow();
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminExecuteAgeDownFlow()) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminExecuteAgeDownFlow reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -6927,7 +7754,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidCreateRoomComposite) {
         return { ok: false, error: 'ctx.uiDriver.androidCreateRoomComposite not configured' };
       }
-      await ctx.uiDriver.androidCreateRoomComposite(title, visibility);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidCreateRoomComposite(title, visibility)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidCreateRoomComposite reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -7019,21 +7854,45 @@ const matchers = [
         if (!ctx.webDriver?.webTapSameRoom) {
           return { ok: false, error: 'ctx.webDriver.webTapSameRoom not configured' };
         }
-        await ctx.webDriver.webTapSameRoom(isAgain);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTapSameRoom(isAgain)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTapSameRoom reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTapSameRoom) {
           return { ok: false, error: 'ctx.uiDriver.androidTapSameRoom not configured' };
         }
-        await ctx.uiDriver.androidTapSameRoom(isAgain);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTapSameRoom(isAgain)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTapSameRoom reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTapSameRoom) {
           return { ok: false, error: 'ctx.uiDriver.iosTapSameRoom not configured' };
         }
-        await ctx.uiDriver.iosTapSameRoom(isAgain);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTapSameRoom(isAgain)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTapSameRoom reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for tap-same-room step` };
@@ -7052,7 +7911,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidApproveSeatRequest) {
         return { ok: false, error: 'ctx.uiDriver.androidApproveSeatRequest not configured' };
       }
-      await ctx.uiDriver.androidApproveSeatRequest(host, requester);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidApproveSeatRequest(host, requester)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidApproveSeatRequest reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -7196,21 +8063,45 @@ const matchers = [
         if (!ctx.webDriver?.webConfirmDialog) {
           return { ok: false, error: 'ctx.webDriver.webConfirmDialog not configured' };
         }
-        await ctx.webDriver.webConfirmDialog();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webConfirmDialog()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webConfirmDialog reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidConfirmDialog) {
           return { ok: false, error: 'ctx.uiDriver.androidConfirmDialog not configured' };
         }
-        await ctx.uiDriver.androidConfirmDialog();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidConfirmDialog()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidConfirmDialog reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosConfirmDialog) {
           return { ok: false, error: 'ctx.uiDriver.iosConfirmDialog not configured' };
         }
-        await ctx.uiDriver.iosConfirmDialog();
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosConfirmDialog()) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosConfirmDialog reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for dialog-confirm step` };
@@ -7226,7 +8117,15 @@ const matchers = [
       if (!ctx.uiDriver?.androidLongPressSeat) {
         return { ok: false, error: 'ctx.uiDriver.androidLongPressSeat not configured' };
       }
-      await ctx.uiDriver.androidLongPressSeat(target);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.uiDriver.androidLongPressSeat(target)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.uiDriver.androidLongPressSeat reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -7270,14 +8169,30 @@ const matchers = [
         if (!ctx.uiDriver?.androidNetworkDropFor) {
           return { ok: false, error: 'ctx.uiDriver.androidNetworkDropFor not configured' };
         }
-        await ctx.uiDriver.androidNetworkDropFor(name, seconds);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidNetworkDropFor(name, seconds)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidNetworkDropFor reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosNetworkDropFor) {
           return { ok: false, error: 'ctx.uiDriver.iosNetworkDropFor not configured' };
         }
-        await ctx.uiDriver.iosNetworkDropFor(name, seconds);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosNetworkDropFor(name, seconds)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosNetworkDropFor reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for network-drop step` };
@@ -7818,21 +8733,45 @@ const matchers = [
         if (!ctx.webDriver?.webTapBareVerb) {
           return { ok: false, error: 'ctx.webDriver.webTapBareVerb not configured' };
         }
-        await ctx.webDriver.webTapBareVerb(name, verb);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTapBareVerb(name, verb)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTapBareVerb reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTapBareVerb) {
           return { ok: false, error: 'ctx.uiDriver.androidTapBareVerb not configured' };
         }
-        await ctx.uiDriver.androidTapBareVerb(name, verb);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTapBareVerb(name, verb)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTapBareVerb reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTapBareVerb) {
           return { ok: false, error: 'ctx.uiDriver.iosTapBareVerb not configured' };
         }
-        await ctx.uiDriver.iosTapBareVerb(name, verb);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTapBareVerb(name, verb)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTapBareVerb reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for bare-verb tap` };
@@ -7857,21 +8796,45 @@ const matchers = [
         if (!ctx.webDriver?.webTapQuotedTarget) {
           return { ok: false, error: 'ctx.webDriver.webTapQuotedTarget not configured' };
         }
-        await ctx.webDriver.webTapQuotedTarget(name, targetId, isRoomCard);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.webDriver.webTapQuotedTarget(name, targetId, isRoomCard)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.webDriver.webTapQuotedTarget reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'Android') {
         if (!ctx.uiDriver?.androidTapQuotedTarget) {
           return { ok: false, error: 'ctx.uiDriver.androidTapQuotedTarget not configured' };
         }
-        await ctx.uiDriver.androidTapQuotedTarget(name, targetId, isRoomCard);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.androidTapQuotedTarget(name, targetId, isRoomCard)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.androidTapQuotedTarget reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       if (platform === 'iOS Sim') {
         if (!ctx.uiDriver?.iosTapQuotedTarget) {
           return { ok: false, error: 'ctx.uiDriver.iosTapQuotedTarget not configured' };
         }
-        await ctx.uiDriver.iosTapQuotedTarget(name, targetId, isRoomCard);
+        // SHY-0330: a step that the driver could not perform must FAIL.
+        // `!== true` is deliberate — a driver that forgets to return must
+        // read as failure, and an unimplemented method now throws.
+        if ((await ctx.uiDriver.iosTapQuotedTarget(name, targetId, isRoomCard)) !== true) {
+          return {
+            ok: false,
+            error: `ctx.uiDriver.iosTapQuotedTarget reported failure — the step did not happen`,
+          };
+        }
         return { ok: true };
       }
       return { ok: false, error: `unknown platform "${platform}" for quoted-target tap` };
@@ -8587,7 +9550,15 @@ const matchers = [
       if (!ctx.webDriver?.webAdminOpenReportAndTap) {
         return { ok: false, error: 'ctx.webDriver.webAdminOpenReportAndTap not configured' };
       }
-      await ctx.webDriver.webAdminOpenReportAndTap(ordinal, menuItem, reason);
+      // SHY-0330: a step that the driver could not perform must FAIL.
+      // `!== true` is deliberate — a driver that forgets to return must
+      // read as failure, and an unimplemented method now throws.
+      if ((await ctx.webDriver.webAdminOpenReportAndTap(ordinal, menuItem, reason)) !== true) {
+        return {
+          ok: false,
+          error: `ctx.webDriver.webAdminOpenReportAndTap reported failure — the step did not happen`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -10278,7 +11249,7 @@ const matchers = [
       // captures). The `\w+` key class is non-overlapping with the space
       // that follows. Linear time despite the alternation-free capture.
       const fields = {};
-      // eslint-disable-next-line sonarjs/slow-regex
+
       for (const match of kvText.matchAll(/(\w+)\s+"([^"]*)"/g)) {
         fields[match[1]] = match[2];
       }
@@ -14747,7 +15718,6 @@ const matchers = [
 // — so backtracking can't recurse). Author-controlled input (Gherkin
 // step text), not untrusted user data. Safe.
 function stripStepAnnotation(text) {
-  // eslint-disable-next-line sonarjs/slow-regex
   return text.replace(/\s+\([^()]*\)$/, '');
 }
 
@@ -15300,7 +16270,7 @@ function parseUserDocFields(text) {
 function parseSignInWithClause(text) {
   // `[^)]*` excludes `)` so it cannot overlap with the literal `\)` that
   // follows; anchored to end-of-string. Linear match.
-  // eslint-disable-next-line sonarjs/slow-regex
+
   const stripped = text.replace(/\s*\([^)]*\)\s*$/, '').trim();
   const pairs = [];
   let buf = '';
@@ -16383,7 +17353,7 @@ async function main() {
     ? [path.join(opts.planDir, opts.journey)]
     : fs
         .readdirSync(opts.planDir)
-        // eslint-disable-next-line sonarjs/slow-regex
+
         .filter((f) => /^j\d+[^.]*\.feature$/.test(f))
         .map((f) => path.join(opts.planDir, f));
 
@@ -16421,6 +17391,9 @@ async function main() {
 }
 
 module.exports = {
+  // Exported so its REFUSAL is behaviourally testable, not just structurally
+  // asserted against the script text (SHY-0328).
+  resolveAuthBase,
   parseGherkin,
   classifySeverity,
   matchers,

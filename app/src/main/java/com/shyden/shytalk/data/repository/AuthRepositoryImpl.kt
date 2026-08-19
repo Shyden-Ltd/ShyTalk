@@ -6,17 +6,53 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logE
+import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.feature.auth.AppleSignInCancelledException
 import kotlinx.coroutines.tasks.await
 
 class AuthRepositoryImpl(
     private val auth: FirebaseAuth,
+    private val sessionCache: SessionCache,
+    private val workerApiClient: WorkerApiClient,
     private val applicationId: String = "com.shyden.shytalk",
     private val emailLinkDomain: String = "shytalk.shyden.co.uk",
 ) : AuthRepository {
+    // SHY-0143 — the two identity slots write through to encrypted storage so a
+    // cold start can key its reads on the real uniqueId. Custom setters rather
+    // than explicit calls at each assignment site: there are four across the
+    // codebase today, and a fifth added later would silently skip the cache.
     override var resolvedUniqueId: String? = null
+        set(value) {
+            field = value
+            syncSessionCache()
+        }
+
     override var resolvedDisplayName: String? = null
+
     override var resolvedCohort: String? = null
+        set(value) {
+            field = value
+            syncSessionCache()
+        }
+
+    /**
+     * Mirrors the resolved identity onto disk.
+     *
+     * Identity arrives in stages — the uniqueId when the backend resolves it,
+     * the cohort only once the User doc loads — so this runs while the record
+     * is still incomplete. [SessionCache.write] erases rather than half-writes
+     * in that case, which is correct: at that instant there genuinely is no
+     * complete identity to cache. The window closes microseconds later, and if
+     * the process dies inside it the next launch simply takes the
+     * resolve-then-route fallback.
+     */
+    private fun syncSessionCache() {
+        sessionCache.write(
+            firebaseUid = auth.currentUser?.uid,
+            uniqueId = resolvedUniqueId,
+            cohort = resolvedCohort,
+        )
+    }
 
     override val currentUserId: String?
         get() = resolvedUniqueId ?: auth.currentUser?.uid
@@ -156,11 +192,40 @@ class AuthRepositoryImpl(
         resolvedUniqueId = null
         resolvedDisplayName = null
         resolvedCohort = null
+        // SHY-0143 R3 — the API token cache is cleared HERE, not at each call
+        // site. `WorkerApiClient` caches the bearer token for 50 minutes, and
+        // signing out did not touch it, so a signed-out (or banned) process
+        // kept a working token in memory. The invariant was being copied per
+        // call site and had reached 2 of 4 on Android and 0 of 3 on iOS —
+        // including the ban screen Android actually renders. Owning it here
+        // makes every present and future sign-out correct by default.
+        workerApiClient.clearTokenCache()
+        // SHY-0143 — deliberately redundant, and mutation testing says so:
+        // deleting this line leaves the suite green, because nulling the two
+        // slots above already drove `SessionCache.write` into its erase branch.
+        // It stays because the story's requirement is "sign-out leaves nothing
+        // on disk", and a requirement stated at the site that owns it survives
+        // a later refactor of the setters. Costs one no-op storage remove.
+        sessionCache.clear()
         auth.signOut()
     }
 
     override suspend fun refreshIdToken(): Resource<Unit> =
         firebaseCall("Failed to refresh ID token") {
+            // SHY-0143 — invalidate the API client's cached bearer token FIRST.
+            //
+            // `WorkerApiClient` caches the ID token for 50 minutes. Rotating
+            // Firebase's token without clearing that cache means every Express
+            // call for the next ~50 minutes still carries the PRE-flip cohort
+            // claim — which is the SHY-0132/0137 window this story exists to
+            // close, reopened by the refresh meant to close it. The
+            // cohort-flip path is the one that makes it reachable: the
+            // pm-lock-check request itself repopulates the cache with the old
+            // token moments before the server mints the new claim.
+            //
+            // `IdentityRepositoryImpl.forceRefreshToken()` already does this;
+            // this method did not, and both are called for the same purpose.
+            workerApiClient.clearTokenCache()
             // UK OSA #17 PR 2: force-refresh after a server-side
             // cohort flip so the rules-layer JWT picks up the new
             // claim immediately rather than waiting for the ~1h

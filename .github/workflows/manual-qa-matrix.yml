@@ -97,10 +97,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
 
+      - uses: ./.github/actions/harden-apt
       - name: Install Playwright browsers
         # `--with-deps` pulls apt packages on Ubuntu so headless WebKit
         # actually launches. Mobile browsers are device-emulated via the
         # base playwright BrowserType, no separate binary needed.
+        timeout-minutes: 20
         run: npx playwright install --with-deps chromium firefox webkit
         working-directory: express-api
 

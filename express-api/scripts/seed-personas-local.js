@@ -40,7 +40,7 @@ const pw = process.env.PERSONAS_PASSWORD || 'localdev123';
   assertSafeProject(
     admin.app().options.projectId || process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID,
   );
-  const ctx = { auth: admin.auth(), db, pw, FieldValue };
+  const ctx = { auth: require('firebase-admin/auth').getAuth(), db, pw, FieldValue };
   for (const p of personas) {
     const r = await upsertPersona(p, ctx);
     console.log(`OK ${p.id} ${p.email} uniqueId=${r.uniqueId}`);

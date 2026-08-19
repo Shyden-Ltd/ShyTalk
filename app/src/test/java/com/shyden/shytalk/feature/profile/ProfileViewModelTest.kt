@@ -229,6 +229,65 @@ class ProfileViewModelTest {
         }
 
     @Test
+    fun `loadProfile - the SERVER's block is honoured even when the document does not show it (SHY-0348)`() =
+        runTest {
+            // The defect, in one assertion. The profile document arrives from a
+            // direct Firestore read that the rules allow for any same-cohort
+            // user, so a blocked viewer saw everything. The API has always
+            // refused with 403 — it was never asked.
+            //
+            // Here the document says nothing (empty blockedUserIds) and only the
+            // server knows. Before this change the profile rendered normally.
+            val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = emptySet())
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.getProfileForViewing(otherUserId) } returns
+                Resource.Success(UserRepository.ProfileAccess.BlockedByOwner)
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.isBlockedByTarget)
+        }
+
+    @Test
+    fun `loadProfile - a transport failure is NOT reported as a block (SHY-0348)`() =
+        runTest {
+            // The failure direction that matters. Treating an unreachable server
+            // as "you have been blocked" tells the user something false about
+            // another person — a worse outcome than the bug being fixed.
+            val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = emptySet())
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.getProfileForViewing(otherUserId) } returns
+                Resource.Error("network unreachable")
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isBlockedByTarget)
+        }
+
+    @Test
+    fun `loadProfile - a visible profile from the server stays visible (SHY-0348)`() =
+        runTest {
+            val user = TestData.createTestUser(uid = otherUserId, blockedUserIds = emptySet())
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(user)
+            coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
+            coEvery { userRepository.getProfileForViewing(otherUserId) } returns
+                Resource.Success(UserRepository.ProfileAccess.Visible(user))
+
+            val vm = createViewModel()
+            vm.loadProfile(otherUserId)
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isBlockedByTarget)
+            assertEquals(user, vm.uiState.value.user)
+        }
+
+    @Test
     fun `loadProfile - detects viewer blocked target`() =
         runTest {
             val user = TestData.createTestUser(uid = otherUserId)

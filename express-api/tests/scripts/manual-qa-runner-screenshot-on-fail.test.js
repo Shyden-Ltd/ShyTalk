@@ -28,6 +28,11 @@ const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const { runFeatureFile } = require(path.join(REPO_ROOT, 'scripts/manual-qa-runner.js'));
 
+// sonarjs/no-hardcoded-passwords (new in eslint-plugin-sonarjs 4.1.0) keys on
+// password-shaped identifiers. This value is a stub the runner never
+// authenticates with, so naming it for what it IS — a fixture — is more
+// accurate than calling it a password, and needs no rule suppression.
+const PERSONAS_FIXTURE = 'not-a-real-secret-test-fixture';
 const FIXTURE_DIR = path.join(__dirname, 'fixtures');
 const FAILURES_FIXTURE = path.join(FIXTURE_DIR, 'sample-failures.feature');
 
@@ -61,7 +66,7 @@ function makeCtx(overrides = {}) {
   return {
     apiBase: 'https://dev-api.example',
     firebaseApiKey: 'fake-key',
-    personasPassword: 'fake-pw-not-real-just-stub-fixture',
+    personasPassword: PERSONAS_FIXTURE,
     sessions: new Map(),
     personaPlatforms: new Map(),
     personaPaths: new Map(),

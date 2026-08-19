@@ -1,12 +1,13 @@
 ---
 id: SHY-0279
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-05
 priority: P0
 effort: S
 type: bug
 roadmap_ids: []
+released_in: v0.98.0
 ---
 
 # SHY-0279: Seven web checks are decided by a timing race, so WebKit blocks every PR into develop
