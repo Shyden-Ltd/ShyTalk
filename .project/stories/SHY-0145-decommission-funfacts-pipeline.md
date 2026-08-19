@@ -128,7 +128,7 @@ Touches `express-api/**` (routes) + `firestore.rules` + `public/admin/**` → **
 
 ## Notes (running log)
 
-Reviewed-up-to: 4e9b1261fa1616ad928448887fb33adb5deca101
+Reviewed-up-to: 048506297dd30af59dfa6d7592ad3c3e0b7a6f45
 
 - **2026-08-20 — implemented. The AC named 5 surfaces; the sweep found 16.**
   The story listed the Express route, the admin tab, the firestore rule and the
