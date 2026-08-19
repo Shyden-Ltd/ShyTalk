@@ -441,4 +441,9 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   because a handoff file has no story of its own and a story-less chore PR is
   refused by design, and this was the PR furthest from merging at the time.
 
-Reviewed-up-to: 98de3e9e519b29ca0a243d31510e0750f164210a
+- **2026-08-19 — marker bumped past the two handoff commits.** Both add files
+  under `.project/handoff/` — session-state documents carrying no code and no
+  story change. They landed on this branch because a handoff file has no story
+  of its own and a story-less chore PR is refused by design.
+
+Reviewed-up-to: 89537b60f419de86ec5ccc815475b9f2d7a7066c
