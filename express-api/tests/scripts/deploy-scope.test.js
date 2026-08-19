@@ -51,7 +51,7 @@ describe('SHY-0347 — deploy scope from a change set', () => {
       '.project/stories/SHY-0340-moderator-mute-does-not-stick.md',
       '.project/stories/SHY-INDEX.md',
       'README.md',
-      'CLAUDE.md',
+      'CONTRIBUTING.md',
     ]);
     expect(s).toMatchObject({ backend: false, web: false, android: false, ios: false });
   });

@@ -316,6 +316,10 @@ Bans (ratchet, may only shrink) — OUTSIDE unit-test locations only:
   · mockResolvedValue/etc · Kotlin mockk/Mockito · iOS Mock/Fake/Stub/Spy type
 Unit-test locations are EXEMPT (policy: doubles allowed only in unit tests):
   tests/unit/** · *.unit.test.{js,ts} · non-instrumented Kotlin src/*Test sets
+Every OTHER layer is real-only — integration, journey-runner, e2e, device.
+Instrumented Kotlin (src/androidTest · androidInstrumentedTest · androidUiTest)
+needs a real device, so it is real-only and counted. A file is classified by
+what it exercises, not by what it is named.
 Exit: 0 clean | 1 ratchet violated | 2 usage / bad baseline`;
 
 function main(argv) {
