@@ -53,15 +53,25 @@ if [ "$DO_RESET" = "1" ]; then
 fi
 
 # --- reverse tunnels --------------------------------------------------------
-# 3000 Express · 7880 LiveKit · 8080 Firestore · 9000 RTDB · 9002 MinIO
-# · 9099 Auth · 8888 web. The local app hits the emulators directly, so all
-# must be tunnelled (else "Technical Difficulties" in-app).
+# 3000 Express · 7880 LiveKit signalling · 7881 LiveKit TCP media
+# · 8080 Firestore · 8888 web · 9000 RTDB · 9002 MinIO · 9099 Auth. The local
+# app hits the emulators directly, so all must be tunnelled (else "Technical
+# Difficulties" in-app).
+#
+# 7881 is the ONLY media transport a reverse tunnel can carry — `adb reverse`
+# forwards TCP and never UDP (SHY-0273). Unused while the phone shares this
+# machine's Wi-Fi (media then flows direct to the advertised LAN candidate),
+# and the only route to audio when it does not. Kept identical to start.sh's
+# and the journey runner's lists; pinned equal by livekit-local-node-ip.test.js.
 log "reverse-tunnelling stack ports into ${SERIAL}…"
-for p in 3000 7880 8080 9000 9002 9099 8888; do
+for p in 3000 7880 7881 8080 8888 9000 9002 9099; do
   adb -s "$SERIAL" reverse "tcp:$p" "tcp:$p" >/dev/null 2>&1 \
     || warn "adb reverse tcp:$p failed"
 done
-ok "tunnels: $(adb -s "$SERIAL" reverse --list 2>/dev/null | wc -l | tr -d ' ') active"
+# `grep -c .`, NOT `wc -l`: `adb reverse --list` emits a trailing blank line, so
+# `wc -l` reports one MORE tunnel than exist — an overstated count reads as
+# confirmation that a missing tunnel is present.
+ok "tunnels: $(adb -s "$SERIAL" reverse --list 2>/dev/null | grep -c . | tr -d ' ') active"
 
 # --- wake + keep awake ------------------------------------------------------
 adb -s "$SERIAL" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true

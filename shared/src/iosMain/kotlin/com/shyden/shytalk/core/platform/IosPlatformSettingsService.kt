@@ -86,9 +86,21 @@ class IosPlatformSettingsService : PlatformSettingsService {
 
     override fun canDrawOverlays(): Boolean = false // No equivalent on iOS
 
-    override fun hasPermission(permission: String): Boolean {
-        // iOS permissions are checked through specific framework APIs,
-        // not generic string-based like Android
-        return true
-    }
+    override fun hasPermission(permission: AppPermission): Boolean =
+        when (permission) {
+            // iOS has no generic permission query — each capability is checked
+            // through its own framework API (AVAudioSession for the mic,
+            // CBManager for Bluetooth). Neither is wired up yet, so this
+            // reports granted rather than blocking the user out of a control
+            // they can actually use: iOS prompts at the point of use, and the
+            // system refuses the capability itself if the user declined.
+            //
+            // Reporting `false` here would disable the room's mic toggle on
+            // iOS entirely — the exact failure SHY-0272 fixes on Android — so
+            // this stays permissive until the real checks land. Tracked in the
+            // story's Out of Scope.
+            AppPermission.MICROPHONE -> true
+
+            AppPermission.BLUETOOTH -> true
+        }
 }

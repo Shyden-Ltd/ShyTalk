@@ -85,6 +85,51 @@ echo "  All required ports are free."
 # Step 1: Docker Compose up (LiveKit + MinIO + Mailpit)
 # =============================================================================
 echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, Mailpit)..."
+
+# LiveKit advertises NODE_IP to clients as its ICE candidate address
+# (SHY-0273). Without it, it advertises the Docker bridge address
+# (172.18.0.2) — unreachable from a phone, so voice signalling connects but
+# media never does. Detect the host's LAN address and hand it over.
+#
+# `route get` picks the interface that actually carries traffic, which is
+# correct when Wi-Fi and Ethernet are both up; en0/en1 guesswork is not.
+detect_lan_ip() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    local iface
+    iface=$(route -n get default 2>/dev/null | awk '/interface: /{print $2; exit}')
+    [ -n "$iface" ] && ipconfig getifaddr "$iface" 2>/dev/null && return 0
+    for i in en0 en1; do ipconfig getifaddr "$i" 2>/dev/null && return 0; done
+  else
+    hostname -I 2>/dev/null | awk '{print $1}'
+  fi
+}
+
+# Two working modes for a REAL device:
+#
+#   Wi-Fi (default) — phone and this machine on the same network. LiveKit
+#     advertises the LAN IP; UDP media flows directly. Nothing else to do.
+#
+#   USB-only        — phone has no route to this machine's LAN. Run with
+#     `LIVEKIT_NODE_IP=127.0.0.1 bash local/start.sh` and add
+#     `adb reverse tcp:7881 tcp:7881` (alongside 3000/7880). ICE then falls
+#     back to the TCP candidate, which the reverse tunnel can carry — `adb
+#     reverse` forwards TCP ONLY, which is why the UDP range alone never
+#     worked over USB.
+LIVEKIT_NODE_IP="${LIVEKIT_NODE_IP:-$(detect_lan_ip)}"
+if [ -n "$LIVEKIT_NODE_IP" ]; then
+  export LIVEKIT_NODE_IP
+  echo "  LiveKit will advertise $LIVEKIT_NODE_IP to clients (real devices need this)."
+  if [ "$LIVEKIT_NODE_IP" = "127.0.0.1" ]; then
+    echo "  USB-only mode: also run 'adb reverse tcp:7881 tcp:7881' for TCP media."
+  fi
+else
+  # Loud, not fatal: emulator/simulator and web-on-localhost still work, but a
+  # real device will fail ICE. Silence here is how this cost an evening.
+  echo "  WARNING: could not detect a LAN IP — LiveKit will advertise its Docker" >&2
+  echo "           address and voice will NOT connect from a real device." >&2
+  echo "           Set LIVEKIT_NODE_IP=<this machine's LAN IP> and re-run." >&2
+fi
+
 docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
 
 # =============================================================================
@@ -297,7 +342,14 @@ echo "  Web serve ready."
 # =============================================================================
 APK_PATH="app/build/outputs/apk/local/debug/app-local-debug.apk"
 echo "==> Step 7/8: Building Android APK..."
-cd "$PROJECT_ROOT" && ./gradlew assembleLocalDebug
+# `-PlocalHost` is NOT optional here. Its default is 10.0.2.2 — the Android
+# EMULATOR's alias for the host loopback. Emulators were retired 2026-07-15
+# (AVD + emulator package deleted), so the default bakes an address that
+# resolves nowhere on the only device type left, and Step 8 then installs
+# that APK on the attached phone. `localhost` + the reverse tunnels below is
+# the canonical physical-device recipe (CLAUDE.md, app/build.gradle.kts, and
+# what the gauntlet + journey runner already use).
+cd "$PROJECT_ROOT" && ./gradlew assembleLocalDebug -PlocalHost=localhost
 
 # =============================================================================
 # Step 8: Install on device if connected
@@ -308,6 +360,21 @@ if adb devices 2>/dev/null | grep -q "device$"; then
   DEVICE_NAME=$(adb devices -l 2>/dev/null | grep "device " | head -1 | sed 's/.*model:\([^ ]*\).*/\1/' || echo "connected device")
   echo "  Installing on $DEVICE_NAME..."
   adb install -r "$PROJECT_ROOT/$APK_PATH" 2>/dev/null && echo "  Installed." || echo "  Install failed -- APK path shown below."
+  # An APK built for `localhost` reaches nothing until localhost IS this
+  # machine. Kept identical to the gauntlet's and the journey runner's lists
+  # (pinned equal by livekit-local-node-ip.test.js) — a device that reaches
+  # the stack under one harness and not another is the drift this prevents.
+  # 3000 Express · 7880 LiveKit signalling · 7881 LiveKit TCP media
+  # · 8080 Firestore · 8888 web serve · 9000 RTDB · 9002 MinIO · 9099 Auth
+  echo "  Tunnelling stack ports into $DEVICE_NAME..."
+  for p in 3000 7880 7881 8080 8888 9000 9002 9099; do
+    adb reverse "tcp:$p" "tcp:$p" >/dev/null 2>&1 \
+      || echo "  WARNING: adb reverse tcp:$p failed -- the app may not reach the stack." >&2
+  done
+  # `grep -c .`, NOT `wc -l`: `adb reverse --list` emits a trailing blank line,
+  # so `wc -l` reports one MORE tunnel than exist. A status line that overstates
+  # what is actually there is worse than none — it reads as confirmation.
+  echo "  Tunnels: $(adb reverse --list 2>/dev/null | grep -c . | tr -d ' ') active."
 else
   echo "  No device connected -- skipping install."
 fi

@@ -75,6 +75,7 @@ import com.shyden.shytalk.core.model.LinkedProvider
 import com.shyden.shytalk.core.model.PmPrivacy
 import com.shyden.shytalk.core.model.ProviderType
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.platform.AppPermission
 import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.platform.SettingsType
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
@@ -1556,8 +1557,8 @@ private fun PermissionsPage(
 ) {
     val notificationsEnabled = remember { platformSettings.areNotificationsEnabled() }
     val overlayEnabled = remember { platformSettings.canDrawOverlays() }
-    val microphoneEnabled = remember { platformSettings.hasPermission("microphone") }
-    val bluetoothEnabled = remember { platformSettings.hasPermission("bluetooth") }
+    val microphoneEnabled = remember { platformSettings.hasPermission(AppPermission.MICROPHONE) }
+    val bluetoothEnabled = remember { platformSettings.hasPermission(AppPermission.BLUETOOTH) }
 
     SettingsSubPage(
         title = stringResource(Res.string.permissions),
