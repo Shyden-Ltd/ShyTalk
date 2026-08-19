@@ -202,7 +202,7 @@ if [ "$large" -gt 0 ]; then
   echo "" >&2
   echo "Remediation options:" >&2
   echo "  1. Move the asset to a CDN and load at runtime." >&2
-  echo "  2. Use Git LFS (operator authorisation required — see CLAUDE.md)." >&2
+  echo "  2. Use Git LFS (operator authorisation required)." >&2
   echo "  3. Add this exact line to the PR description (escape hatch):" >&2
   echo "       [allow-large-file: <path> reason: <one-line reason>]" >&2
   echo "     where <path> EXACTLY matches the offending file path above." >&2
