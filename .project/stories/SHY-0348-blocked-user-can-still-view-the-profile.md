@@ -407,3 +407,25 @@ sees everything; the API's 403 is never reached.
   (there is a `pm-lock-check` endpoint) rather than a bug, but it was **not**
   established either way and is not claimed as a finding — recorded so the next
   person starts from the observation rather than rediscovering it.
+
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** Read the
+  production diff. Three things checked:
+
+  - **Status mapping** — `getProfileForViewing` maps `403 → BlockedByOwner`,
+    `404 → NotFound`, and **rethrows** anything else rather than folding unknown
+    failures into "blocked". Correct: a 500 must not render as an accusation.
+  - **Locale coverage** — `blocked_unblock_required` is present in **21 of 21**
+    locale files, none missing. Checked by enumerating the directories rather
+    than trusting the diff to have covered them.
+  - **The fallback, and an interaction worth naming.** On a transport failure
+    `blockedByServer` is `false`, so the decision falls back to
+    `blockedByDoc` — and `blockedByDoc` is exactly the check that
+    `filterIsInstance<String>()` broke for numerically-stored ids until
+    SHY-0338's `asIdSet` landed. So the server path is not belt-and-braces here;
+    **it is the load-bearing one**, and the document path is a fast path that was
+    itself unreliable. The chosen degradation is still right — treating a network
+    hiccup as a block would be a worse lie than the bug — but it is worth being
+    clear that "fail open on transport error" means falling back to a check whose
+    reliability arrives with SHY-0338.
+
+Reviewed-up-to: 7d83b84050da5ca50c8bb9399b0ba65f61e31f84
