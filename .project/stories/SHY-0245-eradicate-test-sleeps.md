@@ -225,3 +225,41 @@ per site; `lint.yml:159` notes an unexplained marker does NOT exempt.
 
 - **2026-08-17 ~21:40 WIB** — CI state after the driver fix: `qa-runner-driver-checks` cause found and fixed (42 tests were passing locally only because a real phone was attached; `selectSerial` substituted it for the requested serial). `lint` remains red on the 116 sleeps above — this story's actual scope. `Pre-Merge Gate` needs a `Reviewed-up-to:` marker, which needs a reviewer pass on the current head.
 
+
+- **2026-08-19 — merging develop into this branch is NOT a conflict-resolution
+  job, and should not be attempted as one.** Assessed on 2026-08-19 while
+  clearing the open-PR queue. The branch is **217 commits ahead / 38 behind**
+  develop, and `git merge origin/develop` produces **17 conflicted files** —
+  sixteen of them with one or two conflicts each, which are tractable, and
+  **`express-api/scripts/manual-qa-runner.js` with 47**.
+
+  The runner conflicts are **semantic, not textual**. A representative one:
+
+  ```
+  HEAD    :  await appMethod(ctx, 'PersonaSignIn')(personaId, tab, ctx.target);
+  develop :  if ((await ctx.uiDriver.androidPersonaSignIn(...)) !== true) {
+               return { ok: false, error: '... the step did not happen' };
+             }
+  ```
+
+  This branch refactored those call sites behind an `appMethod` indirection.
+  develop, meanwhile, landed **SHY-0330** — *"a journey step passes even when
+  the driver did nothing at all"* — which added the `!== true` failure check at
+  each of them. **Neither side can simply be taken:**
+
+  - taking this branch's side **silently reintroduces the SHY-0330 bug** in every
+    site it touches — steps that report success while the driver did nothing;
+  - taking develop's side **discards the refactor** this story exists to make.
+
+  Correct resolution means re-applying SHY-0330's guard *through* the new
+  abstraction, forty-seven times, inside the 16k-line journey-test engine. Done
+  hastily that is worse than not done: the failure mode is a green journey suite
+  that proves nothing, which is precisely the defect SHY-0330 was filed to kill.
+
+- **2026-08-19 — recommendation: REBUILD rather than merge.** Re-apply the
+  sleep-eradication onto current `develop` as a fresh, smaller change, taking
+  SHY-0330's guard as the starting point instead of fighting it. The sleep
+  removals are individually mechanical; it is 217 commits of drift that makes
+  the merge hard, not the change itself. That is a call worth the operator
+  making explicitly, so this is recorded rather than decided unilaterally —
+  everything else in the queue was merged, and this one deliberately was not.
