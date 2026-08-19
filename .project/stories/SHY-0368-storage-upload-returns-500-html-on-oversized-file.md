@@ -1,6 +1,6 @@
 ---
 id: SHY-0368
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P1
@@ -146,6 +146,8 @@ real multer and real supertest — no mock decides the outcome.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: acadcecf8f7bea3daea78d633323ef75b75fe761
 
 - **2026-08-20** — Found while triaging the stale #1527 overnight. The sweep
   found exactly two multer mounts in the codebase; `banners.js` was already
