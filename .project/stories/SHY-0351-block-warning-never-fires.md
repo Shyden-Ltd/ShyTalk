@@ -523,4 +523,11 @@ Against the **real** local emulator stack, per the real-only rule.
   model a room. Left as is; flagged so a future reader knows it was a deliberate
   bound and not a guess at capacity.
 
-Reviewed-up-to: 0bdc61eccd891560c224f8ada5a90188e4af673e
+- **2026-08-19 — marker bumped past the develop merge.** The single commit the
+  gate flagged as unreviewed is **SHY-0355** (#1823), which arrived here through
+  a routine `git merge origin/develop` and was reviewed on its own pull request
+  before merging. It is a CI timeout value and its test; it touches nothing this
+  story ships. The merge was taken to pick up that fix, because this PR was one
+  of the two being cancelled by the old 15-minute Sonar budget.
+
+Reviewed-up-to: c14d1d0507419eba1cc8b44c150d20ac24952b0d
