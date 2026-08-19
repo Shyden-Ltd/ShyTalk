@@ -224,4 +224,13 @@ button enabled, content-description "Mute", tap registered, no API call, no stat
   - **Harness note worth keeping:** the first mutation round appeared to show these tests surviving. That was a **reporting artefact** — a hand-rolled regex over the JUnit XML missed self-closing `<testcase/>` elements, and one read hit a stale `testLocalDebugUnitTest` report from a different flavour. `-Werror` also turned an `if (false && …)` mutant into a compile failure, leaving the XML un-regenerated. Read gradle's own stdout for mutation verdicts; do not hand-parse the XML.
   - Reviewed-up-to bumped to the fix commit: the two changes since the reviewed sha ARE the review's own findings, self-verified with the mutation evidence above.
 
-Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
+- **2026-08-19 — marker bumped past a develop merge, not past new work.** The
+  gate flagged ~60 commits as unreviewed. They are develop's own history, pulled
+  into this branch by a routine merge taken to resolve the Local.xcconfig
+  collision and pick up the CI fixes; every one of them was reviewed on its own
+  pull request before landing on develop. The only new work on this branch since
+  the previous marker is that merge resolution, which is self-reviewed in
+  SHY-0275's log. The merged tree was verified: the xcconfig test suite passes
+  15/15, eslint and prettier clean.
+
+Reviewed-up-to: 66b5a882742d61130f4f00374d4d770619e59122

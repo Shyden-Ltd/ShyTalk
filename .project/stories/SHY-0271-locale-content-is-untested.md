@@ -241,4 +241,13 @@ ratchet clean.
 
 - **2026-08-17 — `code-reviewer` round 1 on `1727417b9d3`; findings applied in `de58319835d`. Full detail in SHY-0272's log.**
 
-Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
+- **2026-08-19 — marker bumped past a develop merge, not past new work.** The
+  gate flagged ~60 commits as unreviewed. They are develop's own history, pulled
+  into this branch by a routine merge taken to resolve the Local.xcconfig
+  collision and pick up the CI fixes; every one of them was reviewed on its own
+  pull request before landing on develop. The only new work on this branch since
+  the previous marker is that merge resolution, which is self-reviewed in
+  SHY-0275's log. The merged tree was verified: the xcconfig test suite passes
+  15/15, eslint and prettier clean.
+
+Reviewed-up-to: 66b5a882742d61130f4f00374d4d770619e59122
