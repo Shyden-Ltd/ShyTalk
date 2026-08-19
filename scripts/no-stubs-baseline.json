@@ -187,7 +187,6 @@
     "app/src/androidTest/java/com/shyden/shytalk/fake/FakeBannerRepository.kt",
     "app/src/androidTest/java/com/shyden/shytalk/fake/FakeDeviceRepository.kt",
     "app/src/androidTest/java/com/shyden/shytalk/fake/FakeEconomyRepository.kt",
-    "app/src/androidTest/java/com/shyden/shytalk/fake/FakeFunFactRepository.kt",
     "app/src/androidTest/java/com/shyden/shytalk/fake/FakeGiftRepository.kt",
     "app/src/androidTest/java/com/shyden/shytalk/fake/FakeIdentityRepository.kt",
     "app/src/androidTest/java/com/shyden/shytalk/fake/FakeMessageRepository.kt",

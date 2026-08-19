@@ -835,7 +835,6 @@
     <string name="time_unit_millisecond">MS</string>
 
     <!-- Run 5 strings -->
-    <string name="splash_tagline">Voice chat rooms, reimagined.</string>
     <string name="quantity_all">ALL (%1$d)</string>
     <string name="english_language">English</string>
     <string name="google_sign_in_failed">Google sign-in failed</string>

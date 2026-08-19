@@ -14,7 +14,6 @@ import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
-import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.MessageRepository
@@ -34,7 +33,6 @@ import com.shyden.shytalk.fake.FakeAuthRepository
 import com.shyden.shytalk.fake.FakeBannerRepository
 import com.shyden.shytalk.fake.FakeDeviceRepository
 import com.shyden.shytalk.fake.FakeEconomyRepository
-import com.shyden.shytalk.fake.FakeFunFactRepository
 import com.shyden.shytalk.fake.FakeGiftRepository
 import com.shyden.shytalk.fake.FakeIdentityRepository
 import com.shyden.shytalk.fake.FakeMessageRepository
@@ -70,7 +68,6 @@ import com.shyden.shytalk.feature.settings.AppSettingsViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
-import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -120,7 +117,6 @@ val testModule =
         single { FakeEconomyRepository() } bind EconomyRepository::class
         single { FakeTranslationRepository() } bind TranslationRepository::class
         single { FakeBannerRepository() } bind BannerRepository::class
-        single { FakeFunFactRepository() } bind FunFactRepository::class
 
         // Fake managers
         single { FakeActiveRoomManager() } bind RoomLifecycleManager::class
@@ -200,5 +196,4 @@ val testModule =
         viewModel { GiftingViewModel(get(), get(), get()) }
         viewModel { params -> GiftWallViewModel(params[0], get()) }
         viewModel { DailyRewardViewModel(get(), get()) }
-        viewModel { FunFactSplashViewModel(get(), get(), null, null, get(), get(), get(), get()) }
     }

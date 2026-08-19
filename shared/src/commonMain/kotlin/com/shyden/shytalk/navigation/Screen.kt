@@ -54,8 +54,6 @@ sealed class Screen(
         fun createRoute(selectedIds: String) = "group_setup/$selectedIds"
     }
 
-    data object Splash : Screen("splash")
-
     data object Warning : Screen("warning")
 
     data object Wallet : Screen("wallet")

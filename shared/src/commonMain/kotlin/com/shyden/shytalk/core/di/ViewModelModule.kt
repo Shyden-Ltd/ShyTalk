@@ -24,7 +24,6 @@ import com.shyden.shytalk.feature.settings.AppSettingsViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
-import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -83,5 +82,4 @@ val viewModelModule =
         viewModel { GiftingViewModel(get(), get(), get()) }
         viewModel { params -> GiftWallViewModel(params[0], get()) }
         viewModel { DailyRewardViewModel(get(), get()) }
-        viewModel { FunFactSplashViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     }

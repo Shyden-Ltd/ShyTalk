@@ -42,8 +42,6 @@ import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.DeviceRepositoryImpl
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.EconomyRepositoryImpl
-import com.shyden.shytalk.data.repository.FunFactRepository
-import com.shyden.shytalk.data.repository.FunFactRepositoryImpl
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.GiftRepositoryImpl
 import com.shyden.shytalk.data.repository.IdentityRepository
@@ -73,10 +71,6 @@ import com.shyden.shytalk.data.repository.TranslationRepositoryImpl
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.data.repository.UserRepositoryImpl
-import com.shyden.shytalk.feature.splash.BannerImagePreloader
-import com.shyden.shytalk.feature.splash.CoilBannerImagePreloader
-import com.shyden.shytalk.feature.splash.OkHttpWebContentPreloader
-import com.shyden.shytalk.feature.splash.WebContentPreloader
 import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.singleOf
@@ -154,7 +148,6 @@ val appModule =
         singleOf(::GiftRepositoryImpl) bind GiftRepository::class
         singleOf(::EconomyRepositoryImpl) bind EconomyRepository::class
         singleOf(::BannerRepositoryImpl) bind BannerRepository::class
-        single<FunFactRepository> { FunFactRepositoryImpl(get(), androidContext()) }
         singleOf(::TranslationRepositoryImpl) bind TranslationRepository::class
         single { StickerStorage(androidContext()) }
         singleOf(::OtpRepositoryImpl) bind OtpRepository::class
@@ -173,6 +166,4 @@ val appModule =
         single<RoomLifecycleManager> { get<ActiveRoomManager>() }
 
         // Preloaders (Android-specific implementations)
-        single<BannerImagePreloader> { CoilBannerImagePreloader(androidContext()) }
-        single<WebContentPreloader> { OkHttpWebContentPreloader(get()) }
     }

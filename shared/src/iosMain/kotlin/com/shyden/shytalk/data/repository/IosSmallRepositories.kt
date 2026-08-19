@@ -1,7 +1,6 @@
 package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.Banner
-import com.shyden.shytalk.core.model.FunFact
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.encodeUrlQueryComponent
@@ -422,32 +421,6 @@ class IosBannerRepositoryImpl(
                 }
             }.sortedBy { it.sortOrder }
     }
-}
-
-// ── FunFactRepository ───────────────────────────────────────────
-
-class IosFunFactRepositoryImpl(
-    private val firestore: FirebaseFirestore,
-) : FunFactRepository {
-    @kotlin.concurrent.Volatile
-    private var memoryCache: List<FunFact>? = null
-
-    override suspend fun syncFacts(): List<FunFact> {
-        val snapshot = firestore.collection("funFacts").get()
-        val facts =
-            snapshot.documents.mapNotNull { doc ->
-                try {
-                    val data = doc.dataMap()
-                    FunFact.fromMap(data, doc.id)
-                } catch (e: Exception) {
-                    null
-                }
-            }
-        memoryCache = facts
-        return facts
-    }
-
-    override fun getCachedFacts(): List<FunFact> = memoryCache ?: emptyList()
 }
 
 // ── StorageRepository ───────────────────────────────────────────

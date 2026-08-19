@@ -71,8 +71,6 @@ import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
-import com.shyden.shytalk.feature.splash.FunFactSplashScreen
-import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.back
@@ -309,14 +307,14 @@ fun SharedNavGraph(
                                     }
 
                                 needsLegalAcceptance -> {
-                                    navController.navigate(Screen.Splash.route) {
+                                    navController.navigate(Screen.Main.route) {
                                         popUpTo(Screen.SignIn.route) { inclusive = true }
                                     }
                                     navController.navigate(Screen.LegalAcceptance.route)
                                 }
 
                                 else ->
-                                    navController.navigate(Screen.Splash.route) {
+                                    navController.navigate(Screen.Main.route) {
                                         popUpTo(Screen.SignIn.route) { inclusive = true }
                                     }
                             }
@@ -340,7 +338,7 @@ fun SharedNavGraph(
             composable(Screen.ProfileSetup.route) {
                 ProfileSetupScreen(
                     onProfileComplete = {
-                        navController.navigate(Screen.Splash.route) {
+                        navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.ProfileSetup.route) { inclusive = true }
                         }
                     },
@@ -350,7 +348,7 @@ fun SharedNavGraph(
             composable(Screen.RequiredDOB.route) {
                 RequiredDOBScreen(
                     onComplete = {
-                        navController.navigate(Screen.Splash.route) {
+                        navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.RequiredDOB.route) { inclusive = true }
                         }
                     },
@@ -364,25 +362,6 @@ fun SharedNavGraph(
             composable(Screen.AgeVerificationSubmit.route) {
                 AgeVerificationSubmitScreen(
                     onClose = { navController.popBackStack() },
-                )
-            }
-
-            // ── Splash ──
-
-            composable(Screen.Splash.route) {
-                val splashViewModel: FunFactSplashViewModel =
-                    org.koin.compose.viewmodel
-                        .koinViewModel()
-                val warmUpComplete by splashViewModel.warmUpComplete.collectAsState()
-                val funFacts by splashViewModel.funFacts.collectAsState()
-                FunFactSplashScreen(
-                    warmUpComplete = warmUpComplete,
-                    funFacts = funFacts,
-                    onContinue = {
-                        navController.navigate(Screen.Main.route) {
-                            popUpTo(Screen.Splash.route) { inclusive = true }
-                        }
-                    },
                 )
             }
 

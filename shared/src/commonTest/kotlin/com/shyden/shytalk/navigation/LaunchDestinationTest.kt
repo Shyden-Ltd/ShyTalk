@@ -186,7 +186,7 @@ class LaunchDestinationTest {
 
     @Test
     fun `relock on resume fires on post-auth content when the lock is due`() {
-        for (route in listOf(Screen.Main.route, Screen.Splash.route, Screen.Warning.route, "room/123")) {
+        for (route in listOf(Screen.Main.route, Screen.Warning.route, "room/123")) {
             assertEquals(
                 true,
                 shouldRelockOnResume(
@@ -273,7 +273,7 @@ class LaunchDestinationTest {
 
     @Test
     fun `deep-link navigation is gated when a lock is due even before Lock renders`() {
-        for (route in listOf(Screen.Main.route, Screen.Splash.route, null)) {
+        for (route in listOf(Screen.Main.route, null)) {
             assertEquals(
                 true,
                 isNavigationLockGated(

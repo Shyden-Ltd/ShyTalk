@@ -31,7 +31,6 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
-import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.IosAgeVerificationRepositoryImpl
@@ -40,7 +39,6 @@ import com.shyden.shytalk.data.repository.IosBannerRepositoryImpl
 import com.shyden.shytalk.data.repository.IosBiometricRepositoryImpl
 import com.shyden.shytalk.data.repository.IosDeviceRepositoryImpl
 import com.shyden.shytalk.data.repository.IosEconomyRepositoryImpl
-import com.shyden.shytalk.data.repository.IosFunFactRepositoryImpl
 import com.shyden.shytalk.data.repository.IosGiftRepositoryImpl
 import com.shyden.shytalk.data.repository.IosIdentityRepositoryImpl
 import com.shyden.shytalk.data.repository.IosMessageRepositoryImpl
@@ -67,8 +65,6 @@ import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
-import com.shyden.shytalk.feature.splash.BannerImagePreloader
-import com.shyden.shytalk.feature.splash.WebContentPreloader
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.auth
@@ -153,7 +149,6 @@ val iosPlatformModule =
         single<GiftRepository> { IosGiftRepositoryImpl(get()) }
         single<EconomyRepository> { IosEconomyRepositoryImpl(get(), get(), get()) }
         single<BannerRepository> { IosBannerRepositoryImpl(get()) }
-        single<FunFactRepository> { IosFunFactRepositoryImpl(get()) }
         single<TranslationRepository> { IosTranslationRepositoryImpl(get()) }
         single<OtpRepository> { IosOtpRepositoryImpl(get()) }
         single<PinRepository> { IosPinRepositoryImpl(get()) }
@@ -197,6 +192,4 @@ val iosPlatformModule =
         single { PushTokenManager(bridgeProvider = ::getPushBridge, notificationRepo = get()) }
 
         // Preloaders
-        single<BannerImagePreloader> { BannerImagePreloader { } }
-        single<WebContentPreloader> { WebContentPreloader { } }
     }
