@@ -410,4 +410,29 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   actual fix for the all-or-nothing refusal, and `asIdSet` carries a type-drift
   logger so the next silent coercion is not silent.
 
-Reviewed-up-to: 7f703921e431aa66afa2325d4cab0f799318fea7
+- **2026-08-19 — a claim of mine, corrected by checking.** When weighing the
+  backend⇒full-gauntlet rule I said the website does not consume the endpoints
+  this story adds. **That was too broad.** `public/admin/js/tabs/users.js:1806`
+  does call a stalkers endpoint:
+
+  ```js
+  const data = await apiCall("GET", "/api/user/" + uid + "/stalkers");
+  ```
+
+  It resolves in this change's favour, but only once checked: that is
+  `/api/**user**/` — **singular** — which is `admin-users.js:384`, the separate
+  ADMIN endpoint. This story added `/api/**users**/:uniqueId/stalkers` —
+  **plural** — at `users.js:572`. Two distinct routes on two distinct surfaces,
+  so the admin page is untouched by this change. The narrow, checked claim is
+  the one worth recording; the blanket one happened to be right for the wrong
+  reason.
+
+- **2026-08-19 — marker bumped past the develop merge.** The 22 commits the gate
+  flagged are `develop`'s own history, pulled in by a routine
+  `git merge origin/develop` taken to pick up SHY-0355's Sonar timeout fix (this
+  PR was one of the two being cancelled at fifteen minutes). Each of those
+  commits was reviewed on its own pull request before landing on develop. The
+  merged tree was verified here: `:shared:compileKotlinIosArm64`, `ktlintCheck`
+  and `detekt` all exit 0.
+
+Reviewed-up-to: d8da6f2f6bbdda5b0c3e19841452860a6b71ce87
