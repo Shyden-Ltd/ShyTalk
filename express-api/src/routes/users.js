@@ -40,6 +40,11 @@ const { requireSameCohort } = require('../middleware/sameCohort');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
+// SHY-0338 — cap on POST /users/batch. A follow page is 30 ids; 200 leaves
+// generous headroom while keeping the read amplification bounded.
+const MAX_BATCH_USER_IDS = 200;
+// SHY-0338 — stalker page size. Mirrors the limit the client already used.
+const MAX_STALKERS = 50;
 const MAX_IDENTIFIERS_PER_PROVIDER = 5;
 
 // UK OSA #17 PR 5 — Discovery + search: shared limits and field hygiene.
@@ -619,6 +624,179 @@ router.post('/users/blocked-by', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // GET /api/users/:uniqueId — Get user profile
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/users/:uniqueId/stalkers — who has been viewing you (SHY-0338)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Stalkers could not be rescued by fixing the batch read, because it fails for
+// two further reasons of its own. `getStalkers()` ran an ORDERED query over
+// `users/{id}/stalkers`, and that rule's second clause reads `resource.data` —
+// the genuine "rules are not filters" case, refused whatever it contains. And a
+// stalker document carries no `cohort` field at all, so `cohortMatchesCaller()`
+// compared an adult caller's claim against the 'minor' default and never
+// matched, killing even a single-document read.
+//
+// Returns the visit records AND the visitor profiles in ONE response. The
+// client previously made two calls, and the second was the one that failed.
+router.get('/users/:uniqueId/stalkers', async (req, res) => {
+  try {
+    const target = String(req.params.uniqueId);
+    // Who is watching you is yours alone — no cohort gate, no existence-hiding
+    // 404 dance: either it is your list or you may not have it.
+    if (String(req.auth.uniqueId) !== target) {
+      return res.status(403).json({ error: 'Only the owner can view their stalkers' });
+    }
+
+    const snap = await db
+      .collection(`users/${target}/stalkers`)
+      .orderBy('lastVisitedAt', 'desc')
+      .limit(MAX_STALKERS)
+      .get();
+    if (snap.empty) return res.json({ stalkers: [], users: [] });
+
+    const entries = snap.docs.map((d) => ({
+      ...d.data(),
+      visitorId: String(d.data().visitorId ?? d.id),
+    }));
+    const visitorIds = [...new Set(entries.map((e) => e.visitorId))].filter((id) =>
+      /^[0-9]+$/.test(id),
+    );
+
+    const callerCohort = cohortFromClaim(req);
+    const userSnaps = visitorIds.length
+      ? await db.getAll(...visitorIds.map((id) => db.doc(`users/${id}`)))
+      : [];
+
+    const visible = new Map();
+    for (const userSnap of userSnaps) {
+      // A visit record outlives its user document after a deletion sweep.
+      // A nameless row is a worse answer than no row.
+      if (!userSnap.exists) continue;
+      const user = userSnap.data();
+      if (effectiveCohort(user) !== callerCohort) continue;
+
+      // DELIBERATELY NOT block-filtered, unlike /users/batch. If somebody has
+      // blocked you and is still opening your profile, that is precisely the
+      // fact this screen exists to tell you. Hiding them would turn a safety
+      // surface into a blind spot.
+      user.blockedUserIds = user.blockedUserIds || [];
+      user.followingIds = user.followingIds || [];
+      user.followerIds = user.followerIds || [];
+      const visitorCohort = effectiveCohort(user);
+      stripSensitiveFields(user);
+      // Same reasoning as POST /users/batch: every visitor returned here is
+      // same-cohort as the owner, so the value discloses nothing, and the
+      // client's defence-in-depth filter needs it to keep the list non-empty.
+      user.cohort = visitorCohort;
+      visible.set(String(user.uniqueId ?? userSnap.id), user);
+    }
+
+    const stalkers = entries
+      .filter((e) => visible.has(e.visitorId))
+      .map((e) => ({
+        visitorId: e.visitorId,
+        visitCount: e.visitCount ?? 0,
+        firstVisitedAt: e.firstVisitedAt ?? 0,
+        lastVisitedAt: e.lastVisitedAt ?? 0,
+      }));
+
+    res.json({ stalkers, users: [...visible.values()] });
+  } catch (err) {
+    log.error('users', 'GET /users/:uniqueId/stalkers failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/users/batch — resolve many profiles at once (SHY-0338)
+// ═══════════════════════════════════════════════════════════════════
+//
+// The follow lists used to read their members by querying Firestore straight
+// from the client — `whereIn(FieldPath.documentId(), chunk)` in chunks of 30.
+// `firestore.rules` gates a users read on `cohortMatchesCaller()`, and that
+// refusal is ALL-OR-NOTHING: one member of the chunk failing the gate denies
+// the WHOLE query and the other 29 readable users go with it. Since `cohort`
+// only arrived with UK OSA #17, a single older follower emptied a whole page,
+// and both clients swallowed the PERMISSION_DENIED into an empty list.
+//
+// The Admin SDK is not subject to rules, so the cohort decision moves to where
+// it can be made PER USER: drop the people this viewer may not see, return
+// everyone else. That is the entire difference between a working follow list
+// and a blank one.
+router.post('/users/batch', async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ error: 'ids (array) required' });
+    }
+    // Refuse rather than truncate. A truncated list is a list the caller
+    // believes is complete — the same silent-wrong-answer failure this
+    // endpoint exists to remove.
+    if (ids.length > MAX_BATCH_USER_IDS) {
+      return res.status(400).json({
+        error: `Batch size ${ids.length} exceeds maximum of ${MAX_BATCH_USER_IDS}`,
+      });
+    }
+
+    // Numeric uniqueIds only. A non-numeric id cannot address a user document,
+    // and letting one through would build a doc path out of caller input.
+    const wanted = [...new Set(ids.map(String))].filter((id) => /^[0-9]+$/.test(id));
+    if (wanted.length === 0) return res.json({ users: [] });
+
+    const callerId = String(req.auth.uniqueId);
+    const callerCohort = cohortFromClaim(req);
+
+    const snaps = await db.getAll(...wanted.map((id) => db.doc(`users/${id}`)));
+
+    const users = [];
+    for (const snap of snaps) {
+      // Absent simply means absent: no entry, no error, no existence signal.
+      if (!snap.exists) continue;
+      const user = snap.data();
+      const isSelf = String(user.uniqueId ?? snap.id) === callerId;
+
+      // Cross-cohort members are dropped INDIVIDUALLY. Self always passes —
+      // the caller's own profile is theirs to see, and a claim that has not
+      // finished propagating must not hide them from their own list.
+      if (!isSelf && effectiveCohort(user) !== callerCohort) continue;
+
+      // A user who has blocked the viewer is not shown to them. Mirrors the
+      // 403 on GET /users/:uniqueId, but as a drop: a follow list is a list,
+      // and one blocked member must not fail the other 29.
+      if (!isSelf && viewerIsBlocked(req.auth.uniqueId, user)) continue;
+
+      user.blockedUserIds = user.blockedUserIds || [];
+      user.followingIds = user.followingIds || [];
+      user.followerIds = user.followerIds || [];
+      const memberCohort = effectiveCohort(user);
+      stripSensitiveFields(user);
+      // `cohort` is stripped everywhere else, and put BACK here on purpose.
+      //
+      // The client keeps a defence-in-depth cohort filter over these lists
+      // (UK OSA #17 PR 12). Without this field every entry reads as the
+      // 'minor' default and an adult viewer's list filters itself to nothing —
+      // measured on-device 2026-08-18, "Loaded 7 followers, 5 following"
+      // followed by an empty screen.
+      //
+      // It discloses nothing. This endpoint only ever returns users whose
+      // cohort MATCHES the caller's, so the value is a constant the caller
+      // already knows about itself. And if this endpoint ever regressed and
+      // returned a cross-cohort user, the client filter would catch it —
+      // which is the entire point of keeping that filter alive.
+      user.cohort = memberCohort;
+      users.push(user);
+    }
+
+    res.json({ users });
+  } catch (err) {
+    log.error('users', 'POST /users/batch failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 router.get('/users/:uniqueId', async (req, res) => {
   try {

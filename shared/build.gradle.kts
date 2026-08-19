@@ -66,7 +66,10 @@ kotlin {
             implementation(libs.koin.test)
         }
 
-        val androidHostTest by getting {
+        // `by getting` is deprecated and removed in Gradle 10 (SHY-0363). The
+        // binding was never referenced, so this configures the source set
+        // directly, as Gradle's own deprecation message prescribes.
+        getByName("androidHostTest") {
             dependencies {
                 implementation(libs.mockk)
             }

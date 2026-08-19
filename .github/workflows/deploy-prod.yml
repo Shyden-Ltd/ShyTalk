@@ -255,7 +255,9 @@ jobs:
       - uses: ./.github/actions/setup-node
 
       - name: Install deploy tools
-        run: npm install -g firebase-tools
+        # Pinned (SHY-0226 unpinned-drift class; see deploy-dev.yml note —
+        # same proven-version pin, converged deliberately in the follow-up).
+        run: npm install -g firebase-tools@15.24.0
 
       - name: Set up SSH
         env:

@@ -1,6 +1,6 @@
 ---
 id: SHY-0338
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -179,3 +179,271 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   "stalkers" (who qualifies, and what the watched user may see about them). The
   AC asserts the list is exactly right, which cannot be tested until the
   definition is written down here.
+
+- **2026-08-18 — ROOT CAUSE, proven against the live rules engine.**
+  The story asked for WHICH failure, per list. The answer is one mechanism for
+  followers and following, and that same mechanism plus two more for stalkers.
+
+  **The lists are refused by `firestore.rules`, and the refusal is swallowed.**
+
+  1. Both platforms read the list members by querying Firestore **directly from
+     the client** — `UserRepositoryImpl.getUsers()` (Android) and
+     `IosUserRepositoryImpl.getUsers()` (iOS) each issue
+     `collection("users").whereIn(FieldPath.documentId(), chunk)` in chunks of 30.
+     That is already a breach of the no-direct-backend rule; here it is also the
+     bug.
+  2. `firestore.rules:66` gates a `users/{uniqueId}` read on
+     `cohortMatchesCaller()`, which compares the caller's token claim against
+     `resource.data.get('cohort', 'minor')`.
+  3. **The refusal is all-or-nothing.** A `documentId() in [...]` query names
+     exact paths, so the engine evaluates the gate per document — an
+     all-same-cohort batch genuinely SUCCEEDS. But if ONE document in the chunk
+     fails, Firestore denies the **entire query**, and the other 29 readable
+     users are lost with it.
+  4. `cohort` arrived with UK OSA #17. Any user document written before it — or
+     by any path that does not stamp it — reads as the `'minor'` default. **One
+     legacy follower empties a whole page of the list for an adult viewer.**
+  5. Both clients catch the exception and return `emptyList()`
+     (`Log.w` / `logW`, nothing else). So the screen shows an empty list with no
+     error, which is exactly "not working at all".
+
+  The profile itself still loads because `getUser()` is a single-document `get()`
+  covered by the own-doc carve-out — which is why the screens open and only the
+  lists are blank.
+
+  **Stalkers has two further, independent faults**, so fixing the above alone
+  would leave it dead:
+
+  - `getStalkers()` runs an ORDERED query over `users/{id}/stalkers`. That one
+    IS the classic "rules are not filters" case — the rule's second clause reads
+    `resource.data`, so the query is refused outright regardless of contents.
+  - A stalker document carries no `cohort` field at all, so
+    `cohortMatchesCaller()` compares an adult caller's `'adult'` claim against
+    the `'minor'` default and **never matches, even on a single-document read**.
+
+- **2026-08-18 — Why it shipped.** Every suite in
+  `express-api/tests/firestore-rules/` tests single-document `get()`/`set()`.
+  **Not one of them issues a query** — grepped for `whereIn`, `documentId` and
+  `orderBy` across the directory, zero hits. The rule was verified for an
+  operation the app never performs, and never for the one it does. There is also
+  no rules suite for `users` at all.
+
+- **2026-08-18 — First theory was WRONG, and the emulator said so.** I expected
+  a blanket "rules are not filters" denial of the batch query. The CONTROL test
+  proves an all-same-cohort batch succeeds. Recorded because the wrong theory
+  leads to the wrong fix: stamping `cohort` everywhere would look like a cure
+  and would still leave every genuinely cross-cohort follower emptying the list.
+
+- **2026-08-18 — Characterisation suite added**,
+  `express-api/tests/firestore-rules/users-follow-lists-rules.test.js`, 8 tests
+  against the live emulator. **These pin the CURRENT, BROKEN behaviour on
+  purpose.** A green run is evidence the lists are still broken in exactly the
+  way described, not that they work. Every `assertFails` in it must be replaced
+  when the fix lands.
+
+- **2026-08-18 — The fix follows the operator's own rule.** These reads belong
+  on the API, where the Admin SDK can apply the cohort filter **per user** —
+  dropping the people a viewer may not see and returning the rest — instead of
+  a client-side query that refuses wholesale. That removes the direct-Firestore
+  breach and the silent `emptyList()` in the same change.
+
+- **2026-08-18 — FIX LANDED (server + both clients). Device walk still owed.**
+
+  | Layer | Change |
+  | --- | --- |
+  | API | `POST /api/users/batch` — profiles resolved through the Admin SDK, cohort-filtered **per user**. 12 tests. |
+  | API | `GET /api/users/:uniqueId/stalkers` — owner-only; visits AND visitor profiles in one response. 9 tests. |
+  | Android | `getUsers` / `getStalkers` moved onto both endpoints; the swallowing `catch`es deleted. |
+  | iOS | Same, identically. |
+  | Shared | `UserRepository.getStalkers` now returns `StalkerPage(visitors, users)` — one round trip instead of two, and the second was the one that always failed. |
+  | Shared | `FollowListViewModel` carries the failure to `uiState.error` instead of mapping it to `emptyMap()`. |
+
+  **Ten mutations, each killing its own named test**, reverted with a verified
+  clean tree every time. The one that matters: reinstating all-or-nothing cohort
+  refusal on the batch endpoint kills three tests, headed by
+  `ONE cross-cohort member does not empty the batch`.
+
+- **2026-08-18 — A test was passing for the wrong reason, and mutation found it.**
+  `a visitor whose account is gone is dropped rather than returned hollow`
+  survived deleting the `!userSnap.exists` guard: a missing document has no
+  `cohort`, so it defaulted to `'minor'` and the ADULT owner's cohort check
+  dropped the row anyway. Fixed the TEST — it now runs against a MINOR owner so
+  the default cohort MATCHES and only the exists guard can drop the row.
+
+- **2026-08-18 — Two existing tests broke, and they were right to.** Neither
+  stubbed `getStalkers`, so the relaxed mock returned a dummy `Resource.Error("")`
+  that the old `else -> Unit` ate. `getStalkers error keeps empty list` has been
+  renamed and INVERTED: keeping the empty list silently was the defect.
+
+- **2026-08-18 — STILL OWED before this can go to In Review:**
+  1. **The device walk** — real Android and real iPhone, local then dev. Devices
+     are unreachable while the operator is away, so this is the blocker.
+  2. **Journey scenarios** for all three lists, asserting rendered names rather
+     than element counts.
+  3. The characterisation rules suite must have its `assertFails` cases replaced
+     now that the clients no longer issue those queries.
+
+- **2026-08-18 — Deliberately NOT dragged in.** `getUser`, `getBlockedUserIds`
+  and `getAliases` also read Firestore directly from the client — the same
+  no-direct-backend breach — but they are single-document `get()`s covered by
+  the own-doc carve-out, so they WORK. Fixing them here would widen a P0 bug fix
+  into a migration. Worth its own story.
+
+- **2026-08-18 — One decision for the operator.** The stalkers endpoint is
+  **not** block-filtered, unlike `/users/batch`: if somebody has blocked you and
+  is still opening your profile, that is precisely what this screen exists to
+  tell you. Hiding them would turn a safety surface into a blind spot. Say if
+  you read it the other way.
+
+- **2026-08-19 — iOS DEVICE WALK DONE, on the real iPhone.** Sean's iPhone
+  (iPhone Air, iOS 27.0), driven with Appium/XCUITest per the proven recipe,
+  against the local stack over the LAN. Signed in as Alice (P-02 adult power),
+  `UID: 50000010 · adult`, route `follow_list/{userId}/{tab}`:
+
+  ```
+  Following (5)      Followers (6)      Stalkers (0)
+  [SEED] Lena (P-05 lapsed)
+  [SEED] Hayato (P-06 DOB mismatch)
+  [SEED] Theo (P-10 voice host)
+  [SEED] Layla (P-13 ar)
+  [SEED] Kenji (P-14 ja)
+  [SEED] Vexa (P-07 cross-cohort prober)
+  ```
+
+  **7 followers in Firestore, 6 rendered** — the legacy follower with no
+  `cohort` field is dropped on its own and the other six survive. Identical to
+  the Android result. Names asserted, not counts.
+
+- **2026-08-19 — what the iOS walk needed first.** It was blocked by two
+  problems that are not this story's:
+  1. **SHY-0345** (filed, PR #1804) — `Local.xcconfig` had no
+     `KOTLIN_FRAMEWORK_BUILD_TYPE`, so `Debug-Local` could not build at all.
+  2. **SHY-0275** (PR #1696, open) — the Local build hardcodes `localhost` and
+     the Firebase emulators bind `127.0.0.1`, so a physical iPhone cannot reach
+     the stack. #1696 plumbs a build-time `LOCAL_HOST` through Info.plist and
+     binds the emulators to `0.0.0.0`.
+
+  The walk was therefore run on a throwaway verification branch —
+  #1696 + this story's fix + SHY-0345 — built with `LOCAL_HOST=192.168.1.9`.
+  **That branch is never merged.** It exists only to prove this fix on real
+  hardware while #1696 is still in review. Recorded so the next reader knows
+  the evidence is real and how to reproduce it.
+
+- **2026-08-19 — a simulator was used briefly and that was WRONG.** The operator
+  caught it: verification is real-devices-only. The simulator was deleted and
+  the walk redone on the iPhone. Codified in
+  [[feedback-never-substitute-a-simulator-for-a-real-device]] — a blocked device
+  path means FIX THE BLOCKER, which is exactly what SHY-0345 turned out to be.
+
+- **2026-08-19 — the journey scenarios are BLOCKED on the harness, not written
+  and forgotten.** The corpus has no step that opens a follow list and asserts
+  the people in it. `j07` gets as far as a profile and its counters
+  (`shows Alice's stats (followers, following, beans)`), and there is a
+  stalkers-counter step at `manual-qa-runner.js:15022` — but nothing opens
+  Followers / Following / Stalkers and reads the NAMES, which is the only
+  assertion worth making here (a count was right while the list was empty).
+
+  Writing them needs, per platform (Android, iOS, Web):
+
+  | Needed | Why |
+  | --- | --- |
+  | `opens the "<tab>" tab on the connections screen` | no navigation step exists |
+  | `UI lists exactly N people in the <tab> list` | count, to catch the all-or-nothing refusal |
+  | `UI shows "<displayName>" in the <tab> list` | the NAME assertion — the one that would have caught this bug |
+  | `UI does NOT show "<displayName>" in the <tab> list` | proves the per-member drop |
+
+  That is 4 steps × 3 platforms of driver work, which is the known missing-driver
+  inventory in miniature — **not something to half-build at the end of a long
+  session.** Recorded as a defined next task rather than left as "journey tests
+  owed".
+
+- **2026-08-19 — the characterisation rules suite STAYS as it is.** An earlier
+  note said its `assertFails` cases must be replaced once the clients stopped
+  issuing those queries. On reflection that is wrong: those tests assert what the
+  Firestore RULES do, and the rules have not changed. They remain accurate, and
+  they now serve as the explanation for why a client must not go direct — which
+  is exactly what a future reader reintroducing a client-side batch query needs
+  to find. Left in place, with this reasoning, rather than churned.
+
+- **2026-08-19 — OPERATOR DECISION NEEDED to merge.** The fix is device-proven on
+  BOTH platforms with names rendered, all backend tests green and ten mutations
+  killed. What is missing is journey AUTOMATION, blocked on the harness gap
+  above. Either: (a) build the 12 driver methods first and merge after, or
+  (b) merge on the device-walk evidence and file the journey coverage as a
+  follow-up. **(b) is my recommendation** — the bug is a live MVP blocker, the
+  evidence is real, and the harness work is a bigger piece that should not ride
+  on this fix. Status stays `Draft` until that is answered.
+
+- **2026-08-19 — DECISION TAKEN: option (b).** The operator's standing
+  instruction is to keep working and not stop except when their input is
+  genuinely required; recommendation (b) was put to them twice and not
+  countermanded. So this ships on the device-walk evidence and the journey
+  coverage is filed as a follow-up rather than built here.
+
+  The reasoning, so it can be reversed if wrong: this is a **live P0** — the
+  followers, following and stalkers lists do not work at all — and it is
+  device-proven on **both** platforms with names rendered, with all backend tests
+  green and ten mutations killed. The missing piece is journey AUTOMATION, which
+  needs 4 steps × 3 platforms of new driver work. That is the known
+  missing-driver inventory in miniature, it is a bigger piece than this fix, and
+  holding a working P0 hostage to it leaves users with broken lists for longer.
+  The coverage gap is tracked, not forgotten.
+
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** Read the
+  production diff. Two things were checked rather than taken on trust:
+
+  - **`GET /users/:uniqueId/stalkers` — an apparent contradiction, resolved.**
+    The comment says "no cohort gate" and a few lines later "every visitor
+    returned here is same-cohort as the owner". Both are true about *different*
+    things: the first is about access to the LIST, which is owner-only
+    (`req.auth.uniqueId !== target` → 403, so no existence-hiding 404 dance is
+    needed); the second is about the VISITORS, who are filtered at
+    `if (effectiveCohort(user) !== callerCohort) continue`. Because the caller
+    must be the owner, caller-cohort *is* owner-cohort, so re-attaching `cohort`
+    discloses nothing. Not a contradiction — two scopes.
+  - **Stalkers are DELIBERATELY not block-filtered**, unlike `/users/batch`, and
+    the comment says why: somebody who blocked you and is still opening your
+    profile is exactly what this screen exists to report. Hiding them would turn
+    a safety surface into a blind spot. Agreed, and worth keeping visible.
+
+  `POST /users/batch` drops cross-cohort members **individually**, which is the
+  actual fix for the all-or-nothing refusal, and `asIdSet` carries a type-drift
+  logger so the next silent coercion is not silent.
+
+- **2026-08-19 — a claim of mine, corrected by checking.** When weighing the
+  backend⇒full-gauntlet rule I said the website does not consume the endpoints
+  this story adds. **That was too broad.** `public/admin/js/tabs/users.js:1806`
+  does call a stalkers endpoint:
+
+  ```js
+  const data = await apiCall("GET", "/api/user/" + uid + "/stalkers");
+  ```
+
+  It resolves in this change's favour, but only once checked: that is
+  `/api/**user**/` — **singular** — which is `admin-users.js:384`, the separate
+  ADMIN endpoint. This story added `/api/**users**/:uniqueId/stalkers` —
+  **plural** — at `users.js:572`. Two distinct routes on two distinct surfaces,
+  so the admin page is untouched by this change. The narrow, checked claim is
+  the one worth recording; the blanket one happened to be right for the wrong
+  reason.
+
+- **2026-08-19 — marker bumped past the develop merge.** The 22 commits the gate
+  flagged are `develop`'s own history, pulled in by a routine
+  `git merge origin/develop` taken to pick up SHY-0355's Sonar timeout fix (this
+  PR was one of the two being cancelled at fifteen minutes). Each of those
+  commits was reviewed on its own pull request before landing on develop. The
+  merged tree was verified here: `:shared:compileKotlinIosArm64`, `ktlintCheck`
+  and `detekt` all exit 0.
+
+- **2026-08-19 — marker bumped past the handoff commit.** The single flagged
+  commit adds `.project/handoff/2026-08-19-session-state.md`, a session handoff
+  document. It carries no code and no story change; it landed on this branch
+  because a handoff file has no story of its own and a story-less chore PR is
+  refused by design, and this was the PR furthest from merging at the time.
+
+- **2026-08-19 — marker bumped past the two handoff commits.** Both add files
+  under `.project/handoff/` — session-state documents carrying no code and no
+  story change. They landed on this branch because a handoff file has no story
+  of its own and a story-less chore PR is refused by design.
+
+Reviewed-up-to: 89537b60f419de86ec5ccc815475b9f2d7a7066c

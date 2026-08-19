@@ -41,8 +41,26 @@ interface PlatformSettingsService {
     /** Check if overlay (draw-over-other-apps) permission is granted. Always false on iOS. */
     fun canDrawOverlays(): Boolean
 
-    /** Check if a specific permission is granted (e.g. microphone, bluetooth). */
-    fun hasPermission(permission: String): Boolean
+    /** Check if a specific runtime permission is granted. */
+    fun hasPermission(permission: AppPermission): Boolean
+}
+
+/**
+ * A runtime permission, named in platform-neutral terms (SHY-0272).
+ *
+ * This used to be a plain `String`, and the room's mic toggle passed
+ * `"microphone"` while the Android implementation fed the argument straight to
+ * `ContextCompat.checkSelfPermission`, which only understands
+ * `android.permission.*` constants. The check therefore returned DENIED
+ * forever and the toggle silently did nothing on every Android device.
+ *
+ * An enum makes that class of mistake unrepresentable: a call site cannot
+ * invent a name, and each platform's `when` is exhaustive, so a new permission
+ * cannot be added without every platform being made to handle it.
+ */
+enum class AppPermission {
+    MICROPHONE,
+    BLUETOOTH,
 }
 
 enum class SettingsType {

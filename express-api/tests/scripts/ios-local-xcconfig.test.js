@@ -66,6 +66,59 @@ describe('SHY-0345 — Local.xcconfig makes the Local configuration buildable', 
     expect(keys).toContain('KOTLIN_FRAMEWORK_BUILD_TYPE');
   });
 
+  test('file exists at the expected path', () => {
+    expect(existsSync(XCCONFIG)).toBe(true);
+  });
+
+  // Mirror of Android's `applicationIdSuffix = ".local"`. Allows the
+  // local-flavor iOS app to be installed alongside the dev variant
+  // on the same physical device for side-by-side comparison.
+  test('declares BUNDLE_ID_SUFFIX = .local', () => {
+    expect(source()).toMatch(/^BUNDLE_ID_SUFFIX\s*=\s*\.local$/m);
+  });
+
+  // Operator-overridable. Default `localhost` works on iOS Simulator
+  // (shares the Mac's network namespace). For a physical iPhone the
+  // operator must override to the Mac's local-network IP or mDNS .local
+  // hostname at build time:
+  //
+  //   xcodebuild -configuration Debug-Local LOCAL_HOST=Macbook.local …
+  //
+  // Documented in the xcconfig's comment block; pinned at the variable
+  // value level here.
+  test('declares LOCAL_HOST variable (defaults to localhost)', () => {
+    expect(source()).toMatch(/^LOCAL_HOST\s*=\s*localhost$/m);
+  });
+
+  // Pin the total variable count so a stray addition (typo, copy-paste,
+  // experimental key) doesn't silently land alongside the documented
+  // BUNDLE_ID_SUFFIX + LOCAL_HOST + KOTLIN_FRAMEWORK_BUILD_TYPE, one line
+  // each. The `KOTLIN_FRAMEWORK_BUILD_TYPE[config=Release-Local]` override is
+  // deliberately NOT counted here: this regex requires `=` straight after the
+  // key, so a `[config=…]` conditional does not match it. The by-name absence
+  // guard below is what stops a dead knob creeping back, in either form.
+  test('contains exactly three unconditional variable declarations', () => {
+    const varLines = source().match(/^[A-Z_][A-Z0-9_]*\s*=/gm);
+    expect(varLines).not.toBeNull();
+    expect(varLines.length).toBe(3);
+  });
+
+  // Regression guard for the defect that removed them. These four keys
+  // existed for months, were documented as live operator knobs, and were
+  // read by nothing — every URL is computed in AppEnvironment.swift from
+  // LOCAL_HOST alone. LOCAL_FIREBASE_RTDB_URL was actively misleading: it
+  // documented `?ns=demo-shytalk-default-rtdb` while the app ships
+  // `?ns=demo-shytalk`. Re-adding any of them re-creates a knob that
+  // looks followed and does nothing, so fail loudly instead.
+  test.each([
+    'LOCAL_API_BASE_URL',
+    'LOCAL_LIVEKIT_URL',
+    'LOCAL_FIREBASE_PROJECT_ID',
+    'LOCAL_FIREBASE_RTDB_URL',
+  ])('does NOT declare the dead knob %s', (key) => {
+    expect(source()).not.toMatch(new RegExp(`^${key}\\s*=`, 'm'));
+  });
+
   test('defaults to debug', () => {
     const def = settings(source()).find(
       (s) => s.key === 'KOTLIN_FRAMEWORK_BUILD_TYPE' && s.condition === null,
