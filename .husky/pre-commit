@@ -9,6 +9,7 @@
 # App-signed commits gated by ruleset 12613584 bypass_actors. Operator-
 # authorised in SHY-0066 AskUserQuestion at 2026-06-09 ~11:30 BST (same
 # scope as the pre-push fix — same deprecated script, sibling hook).
+# (SHY-0359 later deleted that script outright — the path above is historical).
 
 # Secret scanning — block commits containing API keys, tokens, or credentials
 # Only scan ADDED lines (starting with +) to avoid false positives on removals

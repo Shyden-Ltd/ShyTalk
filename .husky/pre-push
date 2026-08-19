@@ -35,6 +35,7 @@ done
 # diffs. Removed cleanly; the workflow handles regen server-side under
 # App-signed commits (ruleset 12613584 bypass_actors). Operator-authorised
 # in SHY-0066 AskUserQuestion at 2026-06-09 ~11:30 BST.
+# (SHY-0359 later deleted that script outright — the path above is historical).
 
 # Load .env if SONAR_TOKEN not already set
 if [ -z "$SONAR_TOKEN" ] && [ -f ".env" ]; then

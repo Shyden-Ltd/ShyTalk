@@ -165,8 +165,7 @@ Monetisation features that fund everything else.
 | #  | Feature                                                                                                   | Effort | Status |
 |----|-----------------------------------------------------------------------------------------------------------|--------|--------|
 | 7  | **Decorations** — profile decorations, avatar borders, speech bubbles, entrance effects, room backgrounds | Large  | Broadest revenue footprint — small purchases, high frequency |
-| 1  | **Relationships** — paid tiers (friend→partner→family), perks, seat connections                           | Large  |        |
-| 13 | **Nobility system** — ranks from gift value sent, perks per rank                                          | Large  | Layered on top of decorations + relationships — sequence after both |
+| 13 | **Nobility system** — ranks from gift value sent, perks per rank                                          | Large  | Layered on top of decorations — sequence after it |
 
 ---
 
