@@ -180,6 +180,8 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
 
 ## Notes (running log)
 
+Reviewed-up-to: 716670b3156d77e2b92b833cd83be9db78da6506
+
 
 - **2026-08-19 — the AC was written before the shape of the debt was known, and
   is amended here rather than quietly missed.** "Zero sleeps" assumed the
