@@ -289,7 +289,12 @@ _(superseded — see the current marker at the end of this log.)_
     off-by-one that would otherwise puzzle the next reader. 15 tests pass;
     eslint `--max-warnings=0` and prettier both clean.
 
-Reviewed-up-to: 3efedf035b61a1ddcaac8861295db39e389cfe39
+- **2026-08-19 — marker re-bumped after a second develop merge.** The nine
+  commits the gate flagged are develop's own history — SHY-0348, SHY-0350 and
+  board-sync commits — each reviewed on its own pull request. They arrived here
+  through a merge of develop; no new work on this branch is unreviewed.
+
+Reviewed-up-to: 228070243dc5bd8de4c55541b3aa673138821115
 
 - **2026-08-19 — CORRECTION to my earlier claim that this PR blocks EVERY iOS
   leg.** It does not. It blocks the iOS **local** leg. A real-iPhone leg against
