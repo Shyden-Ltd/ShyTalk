@@ -30,8 +30,25 @@ const ALLOWED_UPLOAD_PATHS = [
   'starting-screens',
 ];
 
+// Multer must never be mounted as BARE middleware here. Mounted bare, a
+// LIMIT_FILE_SIZE (or any other multer error) propagates to Express's default
+// error handler, which answers 500 with an HTML body — so an API client asking
+// for JSON gets an HTML 500 for the entirely expected "your file is too big".
+// `banners.js` already wrapped multer this way; storage.js did not (SHY-0368).
+const handleUpload = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'File too large (max 10 MB)' });
+      }
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+};
+
 // POST /api/storage/upload
-router.post('/storage/upload', upload.single('file'), async (req, res) => {
+router.post('/storage/upload', handleUpload, async (req, res) => {
   try {
     const file = req.file;
     const path = req.body.path;
