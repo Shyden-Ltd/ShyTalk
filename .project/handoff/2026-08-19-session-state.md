@@ -71,3 +71,32 @@ naive name match taps off-screen coordinates.
    questionnaires is theirs. Verdict: 13+ achievable but not automatic.
 3. **develop→main promotion is still owed** — and would fix the seed-workflow
    break above.
+
+---
+
+## Open-PR queue as at 15:14 WIB (operator asked for ALL of these merged to develop)
+
+**Merged today (10):** #1803, #1810, #1809, #1815, #1816, #1819, #1808, #1807, #1823, #1416
+
+| PR | State | What is needed |
+| --- | --- | --- |
+| #1812 SHY-0351 | one check from green | block-warning fix. Reviewed, both devices proven. Just needs Playwright/CI to land, then gate + merge. |
+| #1800 SHY-0338 | Playwright apt failure | follow lists. Reviewed, both devices proven. `Install system dependencies` keeps failing on the package mirror — re-run it. |
+| #1780 | **DRAFT**, conflicts | SDUI design + EPIC-0011 + 18 stories. Needs `gh pr ready` and a develop merge. |
+| #1696 SHY-0275 | conflicts resolved, CI restarted | iOS-local. Four-story bundle; relaxes the LiveKit cleartext allow-list for private-LAN in DEBUG only. |
+| #1673 SHY-0245 | conflicts + several red checks | test sleeps. The most work of the queue. |
+| #1651 SHY-0226 | Build & Test red | setup-java pin drift. |
+| #1582 SHY-0151 | conflicts, no checks | iOS auth-stage device checks. |
+| #1527 SHY-0152/0142 | conflicts, checks green | SonarCloud gate + CI pin-tests. |
+| #1520 / #1519 | conflicts + red | Dependabot: firebase-admin, firebase-bom. |
+
+### Two things that will recur while clearing this queue
+
+1. **`Reviewed-up-to` markers go stale the moment you merge develop into a
+   branch**, and the gate reads the **FIRST** marker in a story, so a story with
+   two markers is measured against the older one. Several of these PRs bundle
+   multiple stories, each with its own marker — bump them all.
+2. **`Install system dependencies` fails on the package mirror** roughly every
+   other Playwright run. SHY-0334 made it fail fast rather than hang, which is
+   correct, but the failure itself still needs a manual re-run. Do not add an
+   auto-retry — that is a standing prohibition.
