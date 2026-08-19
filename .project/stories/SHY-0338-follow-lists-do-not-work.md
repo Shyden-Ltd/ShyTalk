@@ -435,4 +435,10 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   merged tree was verified here: `:shared:compileKotlinIosArm64`, `ktlintCheck`
   and `detekt` all exit 0.
 
-Reviewed-up-to: d8da6f2f6bbdda5b0c3e19841452860a6b71ce87
+- **2026-08-19 — marker bumped past the handoff commit.** The single flagged
+  commit adds `.project/handoff/2026-08-19-session-state.md`, a session handoff
+  document. It carries no code and no story change; it landed on this branch
+  because a handoff file has no story of its own and a story-less chore PR is
+  refused by design, and this was the PR furthest from merging at the time.
+
+Reviewed-up-to: 98de3e9e519b29ca0a243d31510e0750f164210a
