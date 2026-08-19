@@ -28,7 +28,6 @@ class ScreenTest {
                 Screen.LegalAcceptance,
                 Screen.ReportReview,
                 Screen.Warning,
-                Screen.Splash,
                 Screen.Wallet,
                 Screen.Transactions,
                 Screen.GiftWall,
@@ -162,11 +161,6 @@ class ScreenTest {
     @Test
     fun `Warning has correct route`() {
         assertEquals("warning", Screen.Warning.route)
-    }
-
-    @Test
-    fun `Splash has correct route`() {
-        assertEquals("splash", Screen.Splash.route)
     }
 
     @Test

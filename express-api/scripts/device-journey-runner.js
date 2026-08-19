@@ -610,6 +610,8 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
     if (byId(nodes, 'requiredDob_continueButton'))
       throw new Error('stuck on RequiredDOB — persona has no date of birth (seed incomplete?)');
     if (await handleLegalGate(device, nodes)) continue;
+    // `splash_continueButton` is retained for builds predating SHY-0144's
+    // splash retirement (see android-adb-driver.js for the full reasoning).
     for (const cont of ['splash_continueButton', 'startingScreen_dismissButton']) {
       const n = byId(nodes, cont);
       if (n && n.enabled) {

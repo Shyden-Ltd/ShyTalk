@@ -38,7 +38,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
 import androidx.navigation.NavHostController
@@ -98,8 +97,6 @@ import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
-import com.shyden.shytalk.feature.splash.FunFactSplashScreen
-import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.warning.WarningScreen
 import com.shyden.shytalk.resources.*
@@ -322,14 +319,14 @@ fun NavGraph(
                                 }
 
                             needsLegalAcceptance -> {
-                                navController.navigate(Screen.Splash.route) {
+                                navController.navigate(Screen.Main.route) {
                                     popUpTo(Screen.SignIn.route) { inclusive = true }
                                 }
                                 navController.navigate(Screen.LegalAcceptance.route)
                             }
 
                             else ->
-                                navController.navigate(Screen.Splash.route) {
+                                navController.navigate(Screen.Main.route) {
                                     popUpTo(Screen.SignIn.route) { inclusive = true }
                                 }
                         }
@@ -352,7 +349,7 @@ fun NavGraph(
             composable(Screen.ProfileSetup.route) {
                 ProfileSetupScreen(
                     onProfileComplete = {
-                        navController.navigate(Screen.Splash.route) {
+                        navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.ProfileSetup.route) { inclusive = true }
                         }
                     },
@@ -362,7 +359,7 @@ fun NavGraph(
             composable(Screen.RequiredDOB.route) {
                 RequiredDOBScreen(
                     onComplete = {
-                        navController.navigate(Screen.Splash.route) {
+                        navController.navigate(Screen.Main.route) {
                             popUpTo(Screen.RequiredDOB.route) { inclusive = true }
                         }
                     },
@@ -376,23 +373,6 @@ fun NavGraph(
             composable(Screen.AgeVerificationSubmit.route) {
                 AgeVerificationSubmitScreen(
                     onClose = { navController.safePopBackStack() },
-                )
-            }
-
-            composable(Screen.Splash.route) {
-                val splashViewModel: FunFactSplashViewModel =
-                    org.koin.compose.viewmodel
-                        .koinViewModel()
-                val warmUpComplete by splashViewModel.warmUpComplete.collectAsStateWithLifecycle()
-                val funFacts by splashViewModel.funFacts.collectAsStateWithLifecycle()
-                FunFactSplashScreen(
-                    warmUpComplete = warmUpComplete,
-                    funFacts = funFacts,
-                    onContinue = {
-                        navController.navigate(Screen.Main.route) {
-                            popUpTo(Screen.Splash.route) { inclusive = true }
-                        }
-                    },
                 )
             }
 

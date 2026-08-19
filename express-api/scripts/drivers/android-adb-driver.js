@@ -2530,6 +2530,14 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       const state = classifyAndroidAuthState(dump);
       if (state === 'splash') {
+        // SHY-0144 RETIRED the FunFact splash, so a current build never
+        // reaches here. This branch is kept DELIBERATELY, not by oversight:
+        // the runner also drives builds that predate the removal — an APK
+        // already on a phone, a TestFlight build, dev before its next deploy —
+        // and dropping it would fail the journey matrix against every one of
+        // them. It costs one comparison per launch-gate poll when no splash
+        // exists. Remove once a release containing SHY-0144 has shipped to
+        // every surface the matrix targets.
         await driver.androidTapByTag('splash_continueButton');
         await new Promise((r) => setTimeout(r, 1500));
         continue;
