@@ -682,6 +682,7 @@
     <string name="voice_chat_reimagined">Voice chat rooms, reimagined.</string>
     <string name="profile_not_available">This profile is not available</string>
     <string name="blocked_by_user">You have been blocked by this user</string>
+    <string name="blocked_unblock_required">They need to unblock you before you can view their profile.</string>
     <string name="account_suspended_label">Account Suspended</string>
     <string name="account_suspended_description">This user\'s account has been suspended.</string>
     <string name="closing">Closing...</string>
