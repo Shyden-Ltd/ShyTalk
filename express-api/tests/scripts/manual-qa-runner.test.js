@@ -14,6 +14,27 @@
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * A `--target=local` run ALWAYS has FIREBASE_AUTH_EMULATOR_HOST set — 50-matrix.sh
+ * pins it, and manual-qa-runner's resolveAuthBase now REFUSES to fall back to
+ * production Identity Toolkit without it (SHY-0328). Tests that construct a ctx
+ * with `target: 'local'` are simulating that run, so they must simulate its
+ * environment too; otherwise they exercise the refusal branch instead of the
+ * sign-in branch they are actually about.
+ *
+ * Their stubbed fetch matches on `url.includes('signInWithPassword')`, so the
+ * host itself is immaterial to them — only its presence is.
+ */
+const SAVED_AUTH_EMULATOR_HOST = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+beforeAll(() => {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST =
+    process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+});
+afterAll(() => {
+  if (SAVED_AUTH_EMULATOR_HOST === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  else process.env.FIREBASE_AUTH_EMULATOR_HOST = SAVED_AUTH_EMULATOR_HOST;
+});
+
 // sonarjs/no-hardcoded-passwords (new in eslint-plugin-sonarjs 4.1.0) keys on
 // password-shaped identifiers. This value is a stub the runner never
 // authenticates with, so naming it for what it IS — a fixture — is more
@@ -6200,6 +6221,67 @@ describe('Web sign-in matcher (When <P> on Web signs in with valid credentials)'
       ctx,
     );
     expect(spy).toHaveBeenCalledWith('Ines');
+  });
+
+  test('a FAILED sign-in fails the step — it must not report ok (SHY-0328 R4)', async () => {
+    // This handler used to `await webSignIn(name)` and then `return {ok:true}`
+    // unconditionally. Every refusal the drivers implement — persona not in the
+    // registry, PERSONAS_PASSWORD unset, the transport throwing, Firebase
+    // rejecting the credentials — resolves FALSE, and the step reported PASS.
+    //
+    // The journey then continued unauthenticated and died several steps later
+    // on something unrelated. That is the undiagnosable-failure shape that made
+    // this bug take three weeks to find, reproduced on the one step this story
+    // exists to make work.
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webSignIn: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Lena/);
+    expect(r.error).toMatch(/sign in/i);
+    // The DIAGNOSTIC content, not just the fact of failure. This merge
+    // deliberately kept SHY-0328's richer message over SHY-0330's plainer one
+    // because it names the value the driver returned — and until now nothing
+    // asserted that, so the returned value and the pointer to the driver's
+    // output could both have been deleted with every test still green.
+    expect(r.error).toMatch(/webSignIn returned false/);
+    expect(r.error).toMatch(/driver's console output/);
+  });
+
+  test('a driver returning undefined is a FAILURE, not a pass', async () => {
+    // webSignIn's contract is to return a boolean. A driver that forgets to
+    // return must not be read as success — that is how the original defect
+    // stayed invisible, since the old test's spy resolved undefined and the
+    // assertion still expected ok:true.
+    const spy = jest.fn(async () => undefined);
+    const ctx = makeCtx({ webDriver: { webSignIn: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    // This is the R4 regression pin, so it has to say WHAT it saw. `undefined`
+    // is the value that used to read as success; the message must distinguish
+    // "the driver forgot to return" from "the driver said no".
+    expect(r.error).toMatch(/webSignIn returned undefined/);
+  });
+
+  test('a non-boolean return is reported verbatim, not coerced', async () => {
+    // The only case that exercises JSON.stringify's real serialisation rather
+    // than trivial template coercion of true/undefined. A driver returning a
+    // response object instead of a boolean is a plausible mistake, and the
+    // message has to be readable when it happens.
+    const spy = jest.fn(async () => ({ status: 500, body: 'nope' }));
+    const ctx = makeCtx({ webDriver: { webSignIn: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Lena on Web signs in with valid credentials' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webSignIn returned \{"status":500,"body":"nope"\}/);
   });
 
   test('missing webSignIn driver method — specific error', async () => {
@@ -26592,5 +26674,98 @@ describe('Wake 106 — `<Name>\'s <Plat> Admin UI shows the "<X>" stat`', () => 
     );
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/iosAdminShowsStat/);
+  });
+});
+
+// ── resolveAuthBase refusal, THROUGH the real matchers (SHY-0328 R1) ──
+
+describe('resolveAuthBase refusal reaches every sign-in matcher', () => {
+  // The isolated function is pinned in matrix-local-persona-password.test.js.
+  // That does NOT prove the four CALL SITES honour it: dropping the
+  // `if (!authBaseResult.ok) return ...` guard at any one of them would leave
+  // `authBase === undefined` and silently build
+  // "undefined/v1/accounts:signInWithPassword?key=...", which every existing
+  // test would still pass. These drive each matcher for real and assert the
+  // step refuses AND that no network call was attempted.
+
+  // Captured in a beforeAll, NOT in the describe body. A describe callback runs
+  // during Jest's COLLECTION phase — before this file's root beforeAll (:29)
+  // sets FIREBASE_AUTH_EMULATOR_HOST — so a bare `const SAVED = process.env...`
+  // here captures the pristine pre-file value (undefined) rather than the
+  // 'localhost:9099' every other test in this file runs against. afterEach
+  // would then DELETE the variable instead of restoring it, and the next
+  // `target: 'local'` test appended after this block would silently get the
+  // refusal error for a reason unrelated to whatever it was testing.
+  // Proven, not theorised: a probe test placed after this block read `undefined`.
+  let saved;
+  beforeAll(() => {
+    saved = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  });
+  beforeEach(() => {
+    delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    else process.env.FIREBASE_AUTH_EMULATOR_HOST = saved;
+  });
+
+  // One step text per resolveAuthBase call site in manual-qa-runner.js.
+  const CALL_SITES = [
+    [
+      'Android physical at a named tab',
+      'Alice [P-02] is signed in on Android physical at the "rooms" tab',
+    ],
+    ['signed in with a device locale', 'Alice is signed in on Android with device locale en'],
+    ['the general signed-in Given', 'Alice is signed in'],
+    // Alice's REAL uniqueId — this matcher validates it against the registry
+    // BEFORE it resolves the auth base, so a placeholder never reaches the
+    // branch under test.
+    [
+      'browser locale + signed in as N',
+      'Alice is on Web with browser locale en, signed in as 50000010',
+    ],
+  ];
+
+  test.each(CALL_SITES)('refuses on a local target — %s', async (_label, text) => {
+    const ctx = makeCtx({ target: 'local' });
+
+    const r = await executeStep({ kind: 'Given', text }, ctx);
+
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/FIREBASE_AUTH_EMULATOR_HOST/);
+    // The whole point: it must not reach production Identity Toolkit.
+    expect(ctx.fetch).not.toHaveBeenCalled();
+  });
+
+  test('a dev target is unaffected — it has no emulator host by design', async () => {
+    // Guards against someone "fixing" the refusal by applying it everywhere,
+    // which would break every dev run exactly as uniformly.
+    const ctx = makeCtx({ target: 'dev' });
+    const r = await executeStep({ kind: 'Given', text: 'Alice is signed in' }, ctx);
+    expect(r.error || '').not.toMatch(/FIREBASE_AUTH_EMULATOR_HOST/);
+  });
+});
+
+// ── Env-isolation guard — keep this LAST (SHY-0328 R2) ───────────────
+
+describe('the refusal block leaves the emulator host intact for later tests', () => {
+  // This exists because it CAUGHT a real leak. The refusal block above deletes
+  // FIREBASE_AUTH_EMULATOR_HOST per test and restores it afterwards; an earlier
+  // draft captured the "saved" value in the describe BODY, which Jest evaluates
+  // during collection — before this file's root beforeAll sets the variable. So
+  // it restored `undefined`, i.e. deleted it, for every test that followed.
+  //
+  // Blast radius was zero at the time only because nothing came after it. That
+  // is not a safety property, it is a coincidence of ordering — and this file
+  // has grown by appending for months. This guard turns the coincidence into
+  // an assertion. Keep it last; if you append a new describe below, move it.
+  test('FIREBASE_AUTH_EMULATOR_HOST is still set after the refusal tests ran', () => {
+    // Mirrors the root beforeAll's own expression (`process.env.X || 'localhost:9099'`)
+    // rather than hardcoding the fallback. A developer who already exports a
+    // different emulator host keeps it, and this guard must assert the value
+    // that is actually meant to survive — not fail them for a non-regression.
+    expect(process.env.FIREBASE_AUTH_EMULATOR_HOST).toBe(
+      SAVED_AUTH_EMULATOR_HOST || 'localhost:9099',
+    );
   });
 });

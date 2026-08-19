@@ -528,6 +528,17 @@ private fun ProfileContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                // SHY-0348 — the operator's requirement is not just to stop the
+                // view but to say what would change it. "You have been blocked"
+                // alone leaves the reader with nothing to do.
+                Text(
+                    text = stringResource(Res.string.blocked_unblock_required),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("profile_blockedUnblockRequired"),
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedButton(
                     onClick = onReportUser,

@@ -83,3 +83,16 @@ LOCAL_API_BASE_URL = http://$(LOCAL_HOST):3000
 LOCAL_LIVEKIT_URL = ws://$(LOCAL_HOST):7880
 LOCAL_FIREBASE_PROJECT_ID = demo-shytalk
 LOCAL_FIREBASE_RTDB_URL = http://$(LOCAL_HOST):9000?ns=demo-shytalk-default-rtdb
+
+// KOTLIN_FRAMEWORK_BUILD_TYPE — see the same note in Dev.xcconfig. The
+// "Compile Kotlin Framework" phase infers debug-vs-release from the Xcode
+// CONFIGURATION name and recognises only the literal `Debug`/`Release`, so
+// `Debug-Local` defeats it: "Unable to detect Kotlin framework build type for
+// CONFIGURATION=Debug-Local". Without this the Local configuration cannot
+// build AT ALL, on device or simulator.
+//
+// This file fronts BOTH Debug-Local and Release-Local, so it carries a default
+// plus a per-configuration override. xcconfig supports `[config=<name>]`
+// conditionals, which is what makes one shared file workable here.
+KOTLIN_FRAMEWORK_BUILD_TYPE = debug
+KOTLIN_FRAMEWORK_BUILD_TYPE[config=Release-Local] = release

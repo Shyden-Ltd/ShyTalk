@@ -38,8 +38,11 @@
 //     A custom name like `Debug-Dev` defeats that heuristic ("Unable to detect
 //     Kotlin framework build type"), so the type MUST be stated explicitly.
 //     Debug-Dev is a debug build → `debug`. (Single-config xcconfig, so this is
-//     unambiguous here — unlike the shared Local.xcconfig, which fronts both
-//     Debug-Local and Release-Local and therefore can't carry one value.)
+//     unambiguous here. Local.xcconfig fronts both Debug-Local and
+//     Release-Local; it carries a default plus a `[config=Release-Local]`
+//     conditional — SHY-0345. An earlier version of this note said a shared
+//     file "can't carry one value", which was wrong and left the Local
+//     configuration unbuildable.)
 //
 // xcconfig syntax: expansion is `$(VAR)` — NOT shell `${VAR}`; `//` comments.
 //

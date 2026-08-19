@@ -2509,7 +2509,17 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // 'unknown'. Bounded loop (`maxIterations`, default 12) so a stuck system
   // dialog can't hang the driver. Shared by androidPersonaSignIn (Step 0b) +
   // androidSignOut.
-  async function advancePastLaunchGates(maxIterations = 12) {
+  /**
+   * @param maxIterations loop budget.
+   * @param clearLegalGate opt-IN. Only androidPersonaSignIn passes true.
+   *   androidSignOut deliberately does NOT: its contract is to fail loudly on a
+   *   fresh-install legal gate rather than tap through one ("sign-out cannot
+   *   clear a fresh-install gate"), and a test pins that. Sign-IN has the
+   *   opposite need — a freshly installed local build opens ON the gate, so
+   *   without clearing it every androidPersonaSignIn failed with
+   *   'could not tap "persona_picker_open"'.
+   */
+  async function advancePastLaunchGates(maxIterations = 12, clearLegalGate = false) {
     for (let i = 0; i < maxIterations; i++) {
       let dump;
       try {
@@ -2520,6 +2530,44 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       const state = classifyAndroidAuthState(dump);
       if (state === 'splash') {
         await driver.androidTapByTag('splash_continueButton');
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      // Fresh-install legal gate. A newly-installed local build opens HERE, not
+      // on the persona picker, so every androidPersonaSignIn failed with
+      // 'could not tap "persona_picker_open"' — 109 of 221 findings in one
+      // corpus run. classifyAndroidAuthState already recognised the state
+      // (:92); nothing cleared it, and androidSignOut explicitly cannot
+      // ("sign-out cannot clear a fresh-install gate").
+      //
+      // Each checkbox is ticked ONLY if the dump says checked="false". Tapping
+      // one that is already ticked would UNtick it, and the loop would then
+      // oscillate until maxIterations without ever reaching Continue. This also
+      // honours the never-tap-a-label-speculatively rule: read the dump, tap
+      // only what is actually there and actually needs it, then re-read.
+      if (state === 'legal_gate' && clearLegalGate) {
+        const LEGAL_CHECKBOXES = [
+          'legal_acceptPrivacyCheckbox',
+          'legal_acceptTermsCheckbox',
+          'legal_acceptCommunityCheckbox',
+          'legal_acceptCyberBullyingCheckbox',
+        ];
+        let tapped = false;
+        for (const tag of LEGAL_CHECKBOXES) {
+          const node = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id/)?${tag}"[^>]*>`).exec(dump);
+          if (!node) continue; // not on this build's gate — skip, do not guess
+          if (/checked="true"/.test(node[0])) continue; // already accepted
+          await driver.androidTapByTag(tag);
+          tapped = true;
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        if (tapped) {
+          // Re-read before Continue: the button enables off the checkbox state,
+          // and tapping it while still disabled looks identical to a failure.
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        await driver.androidTapByTag('legal_continueButton');
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
@@ -2687,7 +2735,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // the Firebase session, so the app may relaunch signed-in (or on a
     // moderation warning gate) instead of the picker; if so, perform a real
     // in-app sign-out so the picker becomes reachable.
-    const launchState = await advancePastLaunchGates();
+    const launchState = await advancePastLaunchGates(12, true);
     if (launchState === 'signed_in' || launchState === 'warning') {
       await driver.androidSignOut();
     }

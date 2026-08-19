@@ -9,6 +9,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.toMap
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -114,6 +115,34 @@ class UserRepositoryImpl(
     // ---- Read methods (unchanged — all use Firestore SDK) ----
 
     // Read from Firestore (offline cache replaces in-memory LRU cache)
+    // SHY-0348 — somebody ELSE's profile, through the API so the block gate
+    // applies. `getUser` below reads Firestore directly, which the rules allow
+    // for any same-cohort user, so a blocked viewer saw everything. The server
+    // already refuses with 403; nobody asked it.
+    //
+    // The status code is what distinguishes "blocked" from "gone" from "the
+    // network failed". Matching on an error message would hold only until
+    // somebody rewords it.
+    override suspend fun getProfileForViewing(userId: String): Resource<UserRepository.ProfileAccess> =
+        firebaseCall("Failed to load profile") {
+            try {
+                val json = api.get("/api/users/$userId")
+                UserRepository.ProfileAccess.Visible(
+                    User.fromMap(json.toMap(), json.optString("uniqueId", userId)),
+                )
+            } catch (e: ApiException) {
+                when (e.statusCode) {
+                    403 -> UserRepository.ProfileAccess.BlockedByOwner
+
+                    404 -> UserRepository.ProfileAccess.NotFound
+
+                    // Anything else is a real failure and must surface as one —
+                    // swallowing it here would show "blocked" for a 500.
+                    else -> throw e
+                }
+            }
+        }
+
     override suspend fun getUser(userId: String): Resource<User> =
         firebaseCall("Failed to get user") {
             val doc = firestore.document("users/$userId").get().await()
