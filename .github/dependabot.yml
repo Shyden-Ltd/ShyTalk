@@ -94,6 +94,7 @@ updates:
       - "/.github/actions/decode-google-services"
       - "/.github/actions/decode-keystore"
       - "/.github/actions/deploy-firebase-rules"
+      - "/.github/actions/harden-apt"
       - "/.github/actions/publish-gh-pages"
       - "/.github/actions/seed-test-personas"
       - "/.github/actions/setup-ios-signing"
