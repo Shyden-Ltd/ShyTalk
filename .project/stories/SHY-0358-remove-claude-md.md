@@ -127,12 +127,38 @@ is no runtime surface to walk. Verification is:
 
 ## Notes (running log)
 
-Reviewed-up-to: b13a5c5a11986723091699614c213b49eae1ed47
+Reviewed-up-to: 93e93ba9024efcd9f18ba492205fc176448d26da
 
 - **2026-08-20** — Raised the trade-off with the operator before acting (delete
   / trim / leave), noting the file is the source of the Pre-Merge Protocol and
   the no-stubs rule. They reaffirmed deletion, so it is deleted in full.
 - **2026-08-20** — Confirmed no global `CLAUDE.md` exists at `~/CLAUDE.md` or
   `~/.claude/CLAUDE.md`; the repo file was the only one.
-- **2026-08-20** — Confirmed nothing reads the file programmatically, so no CI
-  job depends on it.
+- **2026-08-20** — ~~Confirmed nothing reads the file programmatically, so no CI
+  job depends on it.~~ **WRONG — corrected below.** The audit searched CI
+  workflows and `scripts/`, and every hit there was a comment. It did not
+  search the test trees.
+- **2026-08-20** — CI disproved that claim. `test-backend`, `SonarCloud` and
+  `PR Gate` all went red on ONE root cause:
+  `express-api/tests/scripts/check-no-new-stubs.test.js:783` called
+  `fs.readFileSync(REPO_ROOT/CLAUDE.md)` at describe-collection time, so the
+  suite failed to run (ENOENT) — 448 of 449 suites and 14,299 tests passed
+  around it. SonarCloud runs the same Jest suite for coverage and PR Gate is a
+  pure aggregate, so one `readFileSync` presented as three separate failures.
+- **2026-08-20** — SHY-0112 used that read to assert the No-Stubs policy was
+  *documented*. Rather than drop the contract, it re-anchors to the guard's own
+  `--help` banner. The banner did not state the instrumented-vs-host boundary
+  or the real-only rule, so two of the four re-pointed assertions were RED
+  before `scripts/check-no-new-stubs.js` was extended to document both. With
+  `CLAUDE.md` gone, `--help` is now the only discoverable statement of this
+  policy. Behavioural coverage was never at risk — `isUnitTestLocation` has a
+  22-case table test and the CLI has its own exit-code contract.
+- **2026-08-20** — Second dangling reference:
+  `express-api/tests/scripts/deploy-scope.test.js:54` passed `'CLAUDE.md'` as a
+  docs-only fixture path. It still passed (the script classifies a path string,
+  it never stats the file) but named a file that no longer exists. Repointed to
+  `CONTRIBUTING.md`.
+- **2026-08-20** — Lesson for the next removal: an exhaustiveness claim about a
+  file must search **every** tree, tests included, not just the CI configs and
+  `scripts/`. A test that reads a doc and asserts on its prose makes that doc a
+  build input, and grep over `.github/` will never reveal it.
