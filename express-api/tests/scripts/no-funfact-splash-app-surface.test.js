@@ -16,8 +16,16 @@ const REPO = path.resolve(__dirname, '../../..');
 
 /** Directories that are not source, or that belong to SHY-0145. */
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'build', 'dist', '.gradle', 'Pods',
-  'test-results', 'playwright-report', 'allure-results', '.project',
+  'node_modules',
+  '.git',
+  'build',
+  'dist',
+  '.gradle',
+  'Pods',
+  'test-results',
+  'playwright-report',
+  'allure-results',
+  '.project',
 ]);
 
 /** SHY-0145's surface — excluded here on purpose (see the file header). */
@@ -68,7 +76,8 @@ describe('SHY-0144 — the FunFact splash is gone from the app', () => {
 
   test('no "splash" route string survives in the navigation model', () => {
     const screenKt = path.join(
-      REPO, 'shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/Screen.kt',
+      REPO,
+      'shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/Screen.kt',
     );
     expect(fs.existsSync(screenKt)).toBe(true);
     expect(fs.readFileSync(screenKt, 'utf8')).not.toMatch(/Splash/);
