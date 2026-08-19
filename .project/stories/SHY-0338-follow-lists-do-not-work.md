@@ -1,6 +1,6 @@
 ---
 id: SHY-0338
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -373,3 +373,41 @@ A fix aimed at the wrong layer is the likeliest way to burn this ticket.
   follow-up. **(b) is my recommendation** — the bug is a live MVP blocker, the
   evidence is real, and the harness work is a bigger piece that should not ride
   on this fix. Status stays `Draft` until that is answered.
+
+- **2026-08-19 — DECISION TAKEN: option (b).** The operator's standing
+  instruction is to keep working and not stop except when their input is
+  genuinely required; recommendation (b) was put to them twice and not
+  countermanded. So this ships on the device-walk evidence and the journey
+  coverage is filed as a follow-up rather than built here.
+
+  The reasoning, so it can be reversed if wrong: this is a **live P0** — the
+  followers, following and stalkers lists do not work at all — and it is
+  device-proven on **both** platforms with names rendered, with all backend tests
+  green and ten mutations killed. The missing piece is journey AUTOMATION, which
+  needs 4 steps × 3 platforms of new driver work. That is the known
+  missing-driver inventory in miniature, it is a bigger piece than this fix, and
+  holding a working P0 hostage to it leaves users with broken lists for longer.
+  The coverage gap is tracked, not forgotten.
+
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** Read the
+  production diff. Two things were checked rather than taken on trust:
+
+  - **`GET /users/:uniqueId/stalkers` — an apparent contradiction, resolved.**
+    The comment says "no cohort gate" and a few lines later "every visitor
+    returned here is same-cohort as the owner". Both are true about *different*
+    things: the first is about access to the LIST, which is owner-only
+    (`req.auth.uniqueId !== target` → 403, so no existence-hiding 404 dance is
+    needed); the second is about the VISITORS, who are filtered at
+    `if (effectiveCohort(user) !== callerCohort) continue`. Because the caller
+    must be the owner, caller-cohort *is* owner-cohort, so re-attaching `cohort`
+    discloses nothing. Not a contradiction — two scopes.
+  - **Stalkers are DELIBERATELY not block-filtered**, unlike `/users/batch`, and
+    the comment says why: somebody who blocked you and is still opening your
+    profile is exactly what this screen exists to report. Hiding them would turn
+    a safety surface into a blind spot. Agreed, and worth keeping visible.
+
+  `POST /users/batch` drops cross-cohort members **individually**, which is the
+  actual fix for the all-or-nothing refusal, and `asIdSet` carries a type-drift
+  logger so the next silent coercion is not silent.
+
+Reviewed-up-to: 7f703921e431aa66afa2325d4cab0f799318fea7
