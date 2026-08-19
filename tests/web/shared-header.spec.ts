@@ -65,9 +65,13 @@ test.describe('Shared Header — Unauthenticated state', () => {
   });
 
   test('no user avatar or name shown when not authenticated', async ({ page }) => {
-    await page.waitForTimeout(3_000);
+    // Anchor on the settled signed-out header before asserting absence —
+    // both auth paths end with the Sign In control rendered (SHY-0245).
+    await expect(
+      page.getByRole('button', { name: /sign in/i }).first(),
+    ).toBeVisible({ timeout: 10_000 });
     const userInfo = page.locator('[data-testid="header-user-info"]');
-    expect(await userInfo.count()).toBe(0);
+    await expect(userInfo).toHaveCount(0);
   });
 });
 

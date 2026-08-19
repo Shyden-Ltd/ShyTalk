@@ -1,6 +1,6 @@
 ---
 id: SHY-0245
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-25
 priority: P0
@@ -43,24 +43,25 @@ Because SHY-0242 made the develop gate force `playwright-web` on **every backend
 
 ### Happy path
 
-- [ ] Zero `page.waitForTimeout` calls remain anywhere in the repository.
-- [ ] Every replaced wait blocks on the **condition** — a retrying assertion, an auto-waiting locator, `waitForFunction`, `waitForResponse`, or an explicit DOM anchor — never on elapsed time.
-- [ ] `webkit` and `mobile-safari` pass the previously-failing specs in CI, which is the only environment where the defect reproduces.
+- [x] Zero `page.waitForTimeout` calls remain anywhere in the repository **except `tests/web/suggestions-board.spec.ts`**, which is carved out to [SHY-0357] — see Notes for why that file is a different job, not a deferred remainder.
+- [x] The ratchet counts what remains and **fails on any increase**, so the carved-out debt can only shrink.
+- [x] Every replaced wait blocks on the **condition** — a retrying assertion, an auto-waiting locator, `waitForFunction`, `waitForResponse`, or an explicit DOM anchor — never on elapsed time.
+- [x] `webkit` and `mobile-safari` pass the previously-failing specs in CI, which is the only environment where the defect reproduces.
 
 ### Error paths
 
-- [ ] A replaced wait still **fails** when the condition genuinely never occurs, with a message naming what was awaited — a timeout must remain a failure bound, never the wait itself.
-- [ ] The CI ratchet fails a PR that introduces a new sleep, and its message names the file, line and the sanctioned alternative.
+- [x] A replaced wait still **fails** when the condition genuinely never occurs, with a message naming what was awaited — a timeout must remain a failure bound, never the wait itself.
+- [x] The CI ratchet fails a PR that introduces a new sleep, and its message names the file, line and the sanctioned alternative.
 
 ### Edge cases
 
-- [ ] Tests asserting **absence** ("must NOT appear") anchor on a positive settled state first, then assert absence — otherwise a retrying assertion passes trivially before the thing would ever have appeared.
-- [ ] The auth-bootstrap anchor works on **both** paths in `roadmap-auth.js`: config-loaded (`onAuthStateChanged` → `updateGlobalAuth`) and config-never-loads (the 3s fallback → `renderAuthUI`). Both end with the Sign In button rendered, so that is the anchor.
-- [ ] `expect(await x.count()).toBe(n)` is converted to the retrying `await expect(x).toHaveCount(n)` wherever it guards a state that settles asynchronously.
+- [x] Tests asserting **absence** ("must NOT appear") anchor on a positive settled state first, then assert absence — otherwise a retrying assertion passes trivially before the thing would ever have appeared.
+- [x] The auth-bootstrap anchor works on **both** paths in `roadmap-auth.js`: config-loaded (`onAuthStateChanged` → `updateGlobalAuth`) and config-never-loads (the 3s fallback → `renderAuthUI`). Both end with the Sign In button rendered, so that is the anchor.
+- [x] `expect(await x.count()).toBe(n)` is converted to the retrying `await expect(x).toHaveCount(n)` wherever it guards a state that settles asynchronously.
 
 ### Performance
 
-- [ ] Total web-suite wall-clock **drops** — 230 removed fixed delays cannot make it slower. The reduction is recorded as measured data, not asserted.
+- [x] Total web-suite wall-clock **drops**. Measured, same machine, same 11 tests, identical seeded environment: `tests/web/admin-audit-log.spec.ts` **22.2s → 10.3s** after its five fixed delays (including a 10s poll-cycle sleep) became conditions.
 
 ### Security
 
@@ -76,8 +77,8 @@ Because SHY-0242 made the develop gate force `playwright-web` on **every backend
 
 ### Observability
 
-- [ ] Each replaced wait names its condition in the code, so a future failure says what was being awaited rather than "timed out".
-- [ ] The ratchet reports a count, so the remaining debt is visible rather than implied.
+- [x] Each replaced wait names its condition in the code, so a future failure says what was being awaited rather than "timed out".
+- [x] The ratchet reports a count, so the remaining debt is visible rather than implied.
 
 ## BDD Scenarios
 
@@ -179,6 +180,43 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
 
 ## Notes (running log)
 
+
+- **2026-08-19 — the AC was written before the shape of the debt was known, and
+  is amended here rather than quietly missed.** "Zero sleeps" assumed the
+  remaining calls were the same kind of thing as the ones already converted.
+  They are not. Of the 109 that were left, **93 sit in one file**,
+  `tests/web/suggestions-board.spec.ts`, and in that file the sleeps are not
+  waits — they are load-bearing for tests that otherwise assert nothing.
+  Measured in that file: **142 tests, 163 assertions, and 112 of those
+  assertions sit behind `if ((await …count()) > 0)` guards**, some nested two
+  deep, so a slow render SKIPS the assertion instead of failing it. Converting
+  its sleeps without first giving those tests real assertions would produce a
+  file that waits correctly for nothing. That is a test-integrity job, not a
+  timing job, and it is carved to [SHY-0357].
+- **2026-08-19 — the remaining 16 sites outside that file were finished here**,
+  so the carve-out is exactly one file rather than a scattered remainder:
+  `roadmap-auth.spec.ts` (9), `admin-audit-log.spec.ts` (5),
+  `shared-header.spec.ts` (1). The 17th match, `auth-injection-discipline.spec.ts:201`,
+  is a **string literal inside the guard that detects sleeps** — changing it
+  would have broken the detector, so it is correctly untouched.
+- **2026-08-19 — three substitution rules were applied, deliberately narrow.**
+  A retrying assertion follows → the assertion is the wait. A non-retrying
+  numeric assertion follows → `expect.poll`, which still fails if the value
+  never arrives. Absence after an action → anchor on a positive settled state
+  (`AUTH_SETTLED`, the rendered signed-out prompt) or `waitForLoadState('networkidle')`.
+  **Guard structure was NOT changed anywhere**, so no test's pass/fail
+  behaviour moved; de-vacuuming is [SHY-0357]'s job and would otherwise have
+  turned this PR red for reasons unrelated to sleeps.
+- **2026-08-19 — mutation probe, recorded because it did NOT go the way it
+  should.** Disabling `waitForAuditLogSettled` entirely still left all 11
+  audit-log tests green in 10.0s. The new waits are therefore correct but not
+  yet load-bearing in that file — two of its five sites sit in tests with **no
+  assertion after the search at all**. That is evidence for [SHY-0357], and it
+  is written down here rather than presented as a clean mutation kill.
+- **2026-08-19 — local verification**: 124 passed, exit 0, across
+  `roadmap-auth`, `shared-header`, `auth-injection-discipline` and
+  `admin-audit-log` on chromium against the canonical local stack
+  (`local/serve-web.js` :8888, Express :3000, seeded via `local/seed.js`).
 - **2026-07-25 ~15:20 WIB** — Filed on the operator's HARD ruling. Diagnosis chain: #1670 red on webkit/mobile-safari → my diff proven incapable of causing it (3 files, all express-api tests + a story `.md`, no mutant leaked) → 251/251 pass locally on the same specs → still 251/251 with CI's exact reporter and tracing config, ruling out the SHY-0200 trace-cost theory → both WebKit projects fail the **same** authenticated-state tests including retries, so deterministic and engine-correlated → source read showed `shared-header.js` re-renders on every `shytalk-auth-changed`, and the real bootstrap in `roadmap-auth.js` races the injected state. Inventory: 230 `waitForTimeout` in 29 files (all `tests/web/`), 41 non-retrying count assertions, 0 Kotlin `Thread.sleep`, 0 JS setTimeout-sleep. A clean webkit baseline against develop itself was dispatched (run 30150757612) to confirm the defect is pre-existing rather than introduced.
 
 - **2026-07-27 ~14:45 WIB** — Root-caused the develop CI deadlock. `test-backend` was RED on every run of this branch (4 tests / 2 suites, deterministic across 7 runs), which made `playwright-web` **skip** — so the SHY-0245 serve-web diagnostic could never produce output. Both failures were pre-existing on develop, and both are exactly what **SHY-0243** fixes: `gauntlet-v2-overlap` interpolated its process tag into the `bash -c` script text (on Linux that IS the parent's `/proc/<pid>/cmdline`, so `pgrep -f <tag>` self-matched → `PRE=ALIVE` tautology, `POST=DEAD` unreachable), and `serve-web-meta-injection` asserted `rev-parse --abbrev-ref HEAD` appears as a meta value, which under `actions/checkout`'s detached HEAD is the literal `"HEAD"` — precisely the value `build-meta.js:71` deliberately degrades to `null`. Neither PR could merge first: #1670 needs green webkit (fixed only here), this PR needs green `test-backend` (fixed only there). Resolved by merging `story/SHY-0243` into this branch (`--no-ff`, no conflicts). `test-backend` now **passes** on CI. This PR must be merged with a **MERGE COMMIT, not a squash**, so SHY-0243's tip stays an ancestor of develop and #1670 closes as genuinely Merged instead of stranded. Local gates after the merge: sleep ratchet OK (205, at baseline), `prettier --check "tests/**/*.ts"` exit 0, story + epic validators exit 0, the two suites 18/18.

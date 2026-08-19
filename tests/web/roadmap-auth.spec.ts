@@ -2,6 +2,17 @@ import { test, expect } from '@playwright/test';
 import { injectAuthState } from './helpers/roadmap-auth';
 
 /**
+ * The roadmap page's settled SIGNED-OUT state.
+ *
+ * SHY-0245 — absence assertions ("no login buttons", "no user info") must
+ * anchor on a positive settled state first, or they pass trivially before the
+ * thing could ever have appeared. Both auth paths end here: config-loaded
+ * (onAuthStateChanged -> updateGlobalAuth) and config-never-loads (the 3s
+ * fallback -> renderAuthUI).
+ */
+const AUTH_SETTLED = '[data-testid="auth-login-prompt"], .auth-login-prompt';
+
+/**
  * Roadmap page authentication flow tests.
  *
  * Tests the login UI on the suggestions section:
@@ -57,11 +68,11 @@ test.describe('Roadmap Auth — Login Prompt', () => {
 
   test('no Google/Apple login buttons shown on initial page load', async ({ page }) => {
     // Login buttons should only appear in modal when user tries an auth action
-    await page.waitForTimeout(5_000);
+    await expect(page.locator(AUTH_SETTLED)).toBeVisible({ timeout: 10_000 });
     const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
     const appleBtn = page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn');
-    expect(await googleBtn.count()).toBe(0);
-    expect(await appleBtn.count()).toBe(0);
+    await expect(googleBtn).toHaveCount(0);
+    await expect(appleBtn).toHaveCount(0);
   });
 
   // ── Login modal: appears when user tries an auth-gated action ──
@@ -714,9 +725,11 @@ test.describe('Roadmap Auth — Logged In State', () => {
       });
     });
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Suggestions endpoint should have been called at least once after auth resolves
-    expect(suggestionsCallCount).toBeGreaterThanOrEqual(1);
+    // Poll the counter instead of sleeping past it: this still FAILS if the
+    // endpoint is never called, and returns as soon as it is.
+    await expect
+      .poll(() => suggestionsCallCount, { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(1);
   });
 
   test('after login, bell icons become clickable (not showing login toast)', async ({ page }) => {
@@ -752,9 +765,11 @@ test.describe('Roadmap Auth — Logged In State', () => {
     const bellIcon = page.locator('.bell-icon, [data-testid="subscribe-btn"]').first();
     if ((await bellIcon.count()) > 0) {
       await bellIcon.click();
-      // Should not show a "please log in" toast
+      // Should not show a "please log in" toast. Wait for the click's own
+      // network work to finish rather than a fixed delay, so the absence is
+      // asserted against a settled page.
+      await page.waitForLoadState('networkidle');
       const loginToast = page.locator('text=log in, text=sign in');
-      await page.waitForTimeout(1000);
       await expect(loginToast).toHaveCount(0);
     }
   });
@@ -923,8 +938,9 @@ test.describe('Roadmap Auth — Logged In State', () => {
         navigationOccurred = true;
       });
       await signOutBtn.click();
-      await page.waitForTimeout(2000);
-      // Page should not have fully reloaded — SPA behavior
+      // Sign-out is complete when the signed-out prompt is back; a full page
+      // load would have fired the 'load' handler by then.
+      await expect(page.locator(AUTH_SETTLED)).toBeVisible({ timeout: 10_000 });
       expect(navigationOccurred).toBe(false);
     }
   });
@@ -941,7 +957,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
     if ((await signOutBtn.count()) > 0) {
       await signOutBtn.click();
-      await page.waitForTimeout(1000);
+      await expect(page.locator(AUTH_SETTLED)).toBeVisible({ timeout: 10_000 });
       // User name should no longer be visible after sign out
       const userName = page.locator('text=CachedUser');
       await expect(userName).toHaveCount(0);
@@ -965,8 +981,9 @@ test.describe('Roadmap Auth — Logged In State', () => {
         await dialog.accept();
       });
       await signOutBtn.click();
-      await page.waitForTimeout(1000);
-      // Sign out should be instant — no confirmation dialog
+      // Sign out should be instant — no confirmation dialog. Anchor on the
+      // completed sign-out, so a dialog would have had to appear by now.
+      await expect(page.locator(AUTH_SETTLED)).toBeVisible({ timeout: 10_000 });
       expect(dialogAppeared).toBe(false);
     }
   });
@@ -1063,7 +1080,10 @@ test.describe('Roadmap Auth — Session Persistence', () => {
   test('login spinner/loading state shown during auth check', async ({ page }) => {
     // Delay the /roadmap/me response to observe loading state
     await page.route('**/api/roadmap/me', async (route) => {
-      await new Promise((r) => setTimeout(r, 2000));
+      // The delay IS the stimulus here: this route mock deliberately makes
+      // /roadmap/me slow so the loading state has a window to be observed in.
+      // It is not a guess about machine speed (SHY-0245).
+      await new Promise((r) => setTimeout(r, 2000)); // sleep-ok: injected latency under test
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -1106,8 +1126,10 @@ test.describe('Roadmap Auth — Error Handling', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Auth-related errors should not appear in console
+    // Let the auth flow reach its settled state — that is when any auth error
+    // would already have been emitted.
+    await expect(page.locator(AUTH_SETTLED)).toBeVisible({ timeout: 10_000 });
+    await page.waitForLoadState('networkidle');
     const authErrors = errors.filter((e) => /auth|firebase|token/i.test(e));
     expect(authErrors).toHaveLength(0);
   });
@@ -1121,7 +1143,8 @@ test.describe('Roadmap Auth — Error Handling', () => {
       return route.continue();
     });
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
+    // With the SDK blocked the page must still reach its rendered fallback.
+    await page.waitForLoadState('networkidle');
     // Page should not crash — should show a fallback or degrade gracefully
     await expect(page.locator('body')).toBeVisible();
     // Should not show raw JS errors to the user
@@ -1138,8 +1161,8 @@ test.describe('Roadmap Auth — Error Handling', () => {
     const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
     if ((await googleBtn.count()) > 0) {
       await googleBtn.click();
-      await page.waitForTimeout(2000);
       // Should show a message about popup being blocked, or at least not crash
+      await page.waitForLoadState('networkidle');
       await expect(page.locator('body')).toBeVisible();
     }
   });
