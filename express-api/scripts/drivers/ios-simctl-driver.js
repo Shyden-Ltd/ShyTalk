@@ -4,13 +4,19 @@
    Xcode command-line dispatcher; resolving via PATH is the standard
    macOS pattern. Operator-installed; not user input. */
 /**
- * iOS driver backed by `xcrun simctl`.
+ * iOS driver backed by `xcrun simctl` (simulator).
  *
- * Exposes the ctx.uiDriver methods that manual-qa-runner.js matchers
- * call for iOS scenarios. Real implementations of UI taps + reads
- * require an instrumentation framework (XCUITest, Appium, or
- * idb-companion); the scaffold here provides `openurl`, `launch`,
- * `screenshot`, `status_bar` and stubs for the rest.
+ * NON-CANONICAL ALTERNATIVE (EPIC-0003, 2026-06-13): the canonical
+ * real-iPhone native path is `ios-appium-driver.js` (Appium + WebDriver-
+ * Agent on a REAL device). This simctl driver targets the simulator and
+ * is kept as a non-canonical alternative; the No-Stubs / Pre-Merge
+ * gauntlet requires a real device, so simctl is NOT on the gauntlet path
+ * and its unimplemented methods are not a violation to "complete".
+ *
+ * Exposes the ctx.uiDriver methods the runner's matchers call. It
+ * provides real `openurl`, `launch`, `screenshot`, `status_bar`; UI tap/
+ * read methods need an instrumentation framework (XCUITest/Appium/idb-
+ * companion) and fall through to the fail-loud fallback here.
  *
  * Wiring contract:
  *   - `createIosDriver({ udid })` picks a booted simulator; defaults
