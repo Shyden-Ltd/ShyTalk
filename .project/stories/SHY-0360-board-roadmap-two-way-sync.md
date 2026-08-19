@@ -63,6 +63,8 @@ The operator explicitly chose the **full two-way** scope over the smaller
       into its story file, and from there reaches the roadmap pages.
 - [ ] The **live** roadmap page updates on the release path, unchanged in
       timing from today unless the operator asks otherwise.
+- [ ] `SHY-INDEX.md` is **generated** from the story files, not hand-maintained,
+      so its rows cannot drift from the stories they describe.
 
 ### Error paths
 
@@ -79,6 +81,12 @@ The operator explicitly chose the **full two-way** scope over the smaller
 - [ ] The write-back cannot re-trigger the forward sync into a loop. Both
       existing syncs already guard on `github.actor`; the new arm needs the same.
 - [ ] A board item with no matching `SHY-NNNN` story is reported, not invented.
+- [ ] Index generation preserves the hand-written prose around the tables (the
+      header, status legend, sort-order note and footer) and regenerates only the
+      rows — those paragraphs are curated, not derived.
+- [ ] The generated index sorts by the documented rule (priority, then created),
+      and the Active/Done split follows `status`, so a story moving to Done moves
+      section without anyone touching the file.
 - [ ] Deleting a card on the board does **not** delete a story file.
 - [ ] Two edits in quick succession do not race; the sync serialises.
 
@@ -137,6 +145,9 @@ The operator explicitly chose the **full two-way** scope over the smaller
 
 ## Out of Scope
 
+- Backfilling `SHY-INDEX.md` by hand. The operator chose generation over a manual
+  catch-up precisely so it cannot drift again — the first generated run IS the
+  backfill.
 - Redesigning the roadmap page itself.
 - Changing **when** the public page publishes (operator kept release-gated).
 - Migrating `features[]` → `items[]`. The legacy hand-curated array stays.
@@ -165,6 +176,13 @@ The operator explicitly chose the **full two-way** scope over the smaller
 
 ## Notes (running log)
 
+- **2026-08-20** — Scope extended by operator decision: `SHY-INDEX.md` is **31
+  stories behind** (newest row SHY-0328; the corpus is at SHY-0362). It is
+  hand-maintained and feeds no automation — `sync-stories-to-issues.yml` reads the
+  story files directly — so nothing is broken by the drift, but it is no longer a
+  truthful catalogue. The operator chose to **generate** it here rather than
+  backfill it by hand, on the reasoning that a third hand-kept copy is what
+  drifted in the first place.
 - **2026-08-20** — Filed after the operator noticed the roadmap was not tracking
   ticket changes. Diagnosis above is from reading the two workflows' triggers,
   not from inference. Operator chose full two-way sync over the smaller
