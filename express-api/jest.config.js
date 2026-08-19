@@ -27,9 +27,10 @@ module.exports = {
   clearMocks: true,
   resetMocks: false,
   testMatch: ['**/src/__tests__/**/*.test.js', '**/tests/**/*.test.js'],
-  // Exclude tests that require modules outside the express-api project root
-  // (cross-project mocking doesn't work reliably with Jest)
-  testPathIgnorePatterns: ['/node_modules/', 'tests/scripts/generate-roadmap-json.test.js'],
+  // Only node_modules is excluded. The former cross-project exclusion covered
+  // generate-roadmap-json.test.js, which never ran here; SHY-0359 deleted that
+  // suite along with the dead script it tested.
+  testPathIgnorePatterns: ['/node_modules/'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov'],
   collectCoverageFrom: ['src/**/*.js', '!src/__tests__/**'],

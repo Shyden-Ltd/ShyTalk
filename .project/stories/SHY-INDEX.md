@@ -171,6 +171,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0326](SHY-0326-matrix-tests-fail-in-a-linked-worktree.md) | P2 | S | bug | Six gauntlet tests pass in one checkout and fail in another, on byte-identical files | 📝 Draft | — | — |
 | [SHY-0327](SHY-0327-triage-dependabot-alerts-against-what-ships.md) | P1 | S | chore | The "2 critical, 12 high" security banner is mostly the un-promoted main, and the fix is the promotion | 📝 Draft | — | — |
 | [SHY-0328](SHY-0328-local-matrix-persona-password-mismatch.md) | P0 | S | bug | The local journey matrix cannot pass on any branch, because it seeds with one password and signs in with another | 🔍 In Review | — | — |
+| [SHY-0359](SHY-0359-remove-relationships-feature.md) | P1 | S | chore | The roadmap advertises paid relationship tiers, which reads as dating on a language-learning platform | 🔍 In Review | — | [#1858](https://github.com/Shyden-Ltd/ShyTalk/pull/1858) |
 | [SHY-0360](SHY-0360-board-roadmap-two-way-sync.md) | P1 | L | infra | A change on the project board never reaches the roadmap pages | 📝 Draft | — | — |
 | [SHY-0361](SHY-0361-tester-build-notes-name-the-ticket.md) | P2 | S | infra | Tester build notes do not say what changed | 📝 Draft | — | — |
 | [SHY-0362](SHY-0362-develop-carries-two-ktlint-errors.md) | P0 | XS | bug | develop carries two ktlint errors, so every app-touching PR fails lint | 🔍 In Review | — | [#1860](https://github.com/Shyden-Ltd/ShyTalk/pull/1860) |
