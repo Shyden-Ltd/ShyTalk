@@ -73,7 +73,11 @@ describe('locale strings render as written', () => {
     // every locale ("They need to unblock you before you can view their
     // profile."). The count is pinned precisely so an addition has to be
     // acknowledged here rather than sliding in unnoticed.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([839]);
+    // 839 -> 838 on 2026-08-20: SHY-0144 retired the FunFact splash, which took
+    // `splash_tagline` ("Voice chat rooms, reimagined.") out of all 21 locales
+    // along with the screen that rendered it. A REMOVAL has to be acknowledged
+    // here for the same reason an addition does.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([838]);
   });
 
   test('no string carries an Android-style escape sequence', () => {
