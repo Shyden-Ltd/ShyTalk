@@ -5,6 +5,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.core.util.recoverListenerErrors
 import com.shyden.shytalk.data.firestore.dataMap

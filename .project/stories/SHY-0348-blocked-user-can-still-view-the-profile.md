@@ -345,3 +345,36 @@ sees everything; the API's 403 is never reached.
   either gets skipped or gets faked with a simulator, and the operator has ruled
   simulators out. That makes #1696 a gating dependency for the whole protocol,
   not a single ticket, and it deserves priority accordingly.
+
+- **2026-08-19 — this branch did not COMPILE for iOS, and CI was green.** Found
+  while building the Debug-Dev variant for the iOS device leg:
+
+  ```
+  IosUserRepositoryImpl.kt:79:25: Unresolved reference 'jsonToMap'.
+  ```
+
+  `:shared:compileKotlinIosArm64` failed outright. The iOS implementation of
+  `getProfileForViewing` was written against a `jsonToMap` helper that lives on
+  the **SHY-0350 branch** (`core/util/JsonToMap.kt`) and is not on this one — a
+  cross-branch dependency picked up while working several branches at once.
+
+  Fixed by making this branch self-contained: the helper is copied in
+  **byte-identically** to 0350's copy (verified with `diff -q`), so whichever
+  branch merges second gets a trivial identical-content conflict rather than a
+  behavioural one. The obvious cheap alternative — the private `jsonToMap` in
+  `IosEconomyGiftRepositories.kt` — was rejected on inspection: it flattens
+  nested values with `v.toString()`, which would turn `blockedUserIds` and
+  `followingIds` into the string `["1","2"]` and break `User.fromMap`. The 0350
+  helper handles arrays, matches `JsonNull` before `JsonPrimitive`, and avoids
+  the `50000010.0.toString() == "5.000001E7"` trap.
+
+  `:shared:compileKotlinIosArm64` now exits 0; ktlint and detekt clean.
+
+- **2026-08-19 — the reason it got this far is a CI GAP, and it is not specific
+  to this story.** `grep -rl compileKotlinIosArm64 .github/workflows/` returns
+  **nothing**. No PR check compiles the iOS target, so any change under
+  `shared/src/{commonMain,iosMain}` can break the iOS build and still show every
+  check green — which is exactly what #1808 showed while the branch could not
+  build. CLAUDE.md's tri-platform policy says to verify with
+  `./gradlew :shared:compileKotlinIosArm64` after any shared change; nothing
+  enforces it. Filed separately as its own story.
