@@ -779,26 +779,43 @@ describe('SHY-0112 policy-aware ratchet — boundary honoured end-to-end (real C
   });
 });
 
-describe('SHY-0112 CLAUDE.md §No-Stubs encodes the unit-only policy + boundary convention', () => {
-  const claudeMd = fs.readFileSync(path.join(REPO_ROOT, 'CLAUDE.md'), 'utf8');
+describe('SHY-0112 the unit-only policy + boundary convention is DOCUMENTED (re-anchored by SHY-0358)', () => {
+  // SHY-0112 asserted this policy against CLAUDE.md's prose. That file was
+  // deleted (SHY-0358), so the contract re-anchors to the guard's OWN --help
+  // banner: the surface a human actually hits when the ratchet rejects their
+  // file, and one that cannot be deleted without touching the script.
+  const r = spawnSync('node', [SCRIPT_ABS, '--help'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  });
+  const help = r.stdout;
+
+  // Asserted FIRST so a CLI that failed to run reports THAT, rather than four
+  // downstream "received value must be a string" errors on a null stdout.
+  test('the banner is actually produced (exit 0, non-empty)', () => {
+    expect(r.error).toBeUndefined();
+    expect(r.status).toBe(0);
+    expect(help).toEqual(expect.any(String));
+    expect(help.length).toBeGreaterThan(0);
+  });
 
   test('states test doubles are permitted ONLY in unit tests', () => {
-    expect(claudeMd).toMatch(/only in unit tests/i);
+    expect(help).toMatch(/only in unit tests/i);
   });
 
   test('documents the greppable JS unit-test-location convention', () => {
-    expect(claudeMd).toContain('tests/unit/');
-    expect(claudeMd).toMatch(/\.unit\.test\./);
+    expect(help).toContain('tests/unit/');
+    expect(help).toMatch(/\.unit\.test\./);
   });
 
   test('documents the Kotlin instrumented-vs-host boundary', () => {
-    expect(claudeMd).toMatch(/androidTest/);
-    expect(claudeMd).toMatch(/non-instrumented|host/i);
+    expect(help).toMatch(/androidTest/);
+    expect(help).toMatch(/non-instrumented|host/i);
   });
 
   test('states every other layer is real-only / classified by what the test exercises', () => {
-    expect(claudeMd).toMatch(/real-only/i);
-    expect(claudeMd).toMatch(/exercises/i);
+    expect(help).toMatch(/real-only/i);
+    expect(help).toMatch(/exercises/i);
   });
 });
 
