@@ -195,7 +195,7 @@ No app, backend or website runtime surface → **CI-config-only**.
 
 ## Notes (running log)
 
-Reviewed-up-to: dd0ee1156ff58fe2ff9fee9a85bb4046d185857b
+Reviewed-up-to: abb50f5c3a699f150b47b506621e0f3431a93f69
 
 - **2026-08-19 — filed after the SAME failure blocked four separate CI runs in
   one evening** (#1696 twice, #1826, and the `qa-runner-driver-checks` job on
