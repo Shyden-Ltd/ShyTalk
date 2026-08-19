@@ -66,3 +66,19 @@ Continues `2026-08-19-session-state.md`. Durable state; do not rely on scrollbac
 - **The gauntlet cannot run from a worktree** (`lib.sh` tests `-d "$REPO/.git"`,
   which is a FILE in a worktree). Ten `50-matrix` tests fail from any worktree
   and pass from the main clone — they are not real failures.
+
+## Nothing is stranded on this machine
+
+Checked every worktree for unpushed commits and uncommitted changes:
+
+- **Preserved:** `story/SHY-0227-heal-stale-rules-contract-specs` held **one
+  unpushed commit dated 2026-07-21** — a month old and existing nowhere but this
+  laptop (Firestore-rules contract specs + a tautological-assertion removal, 250
+  lines). **Pushed to origin** so it survives. It has no open PR; it is a
+  candidate for the queue once the current one clears.
+- **Superseded, left alone:** `tmp/verify-0348-0350` carries 7 unpushed commits
+  that are SHY-0350's work, now merged properly via #1807. `tmp/walk-0338…` has
+  one dirty `users.js` that *reverses* SHY-0338 while adding SHY-0350 — a stale
+  cross-branch experiment, both halves since merged correctly. Neither was
+  discarded; both are simply not needed.
+- Every branch carrying today's work is pushed and clean.
