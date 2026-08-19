@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">详细信息：%1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">消息：\“%1$s\”</string>
+    <string name="report_message_prefix">消息：“%1$s”</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">记者：%1$s |报告：%2$s</string>
 
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">输入您的 PIN 码以继续</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">正在验证\u2026</string>
+    <string name="pin_verifying">正在验证…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN 码错误。还剩 %1$d 次尝试。</string>
     <!-- google-translated 2026-05-04 -->

@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">警告イラスト</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">読み込み中\u2026</string>
+    <string name="starting_screen_loading">読み込み中…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">安全</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">続行するにはPINを入力してください</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">確認中\u2026</string>
+    <string name="pin_verifying">確認中…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN が間違っています。残りの試行回数は %1$d です。</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">生体認証を開始できませんでした</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">サインイン\u2026</string>
+    <string name="signing_in_loading">サインイン…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">ちょうど今</string>

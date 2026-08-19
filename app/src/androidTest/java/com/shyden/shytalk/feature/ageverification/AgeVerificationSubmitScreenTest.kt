@@ -1,19 +1,26 @@
 package com.shyden.shytalk.feature.ageverification
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.AnnotatedString
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AgeVerificationRepository
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.ContentType
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.IdMethod
 import com.shyden.shytalk.data.repository.AgeVerificationRepository.UploadHandle
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -186,4 +193,143 @@ class AgeVerificationSubmitScreenTest {
             .onNodeWithTag(TAG_AGE_VERIF_TEST_ENV_WARNING)
             .assertIsDisplayed()
     }
+
+    // ─── Rendered CONTENT of the method buttons (SHY-0271) ─────────────
+
+    /** Set by [showPickMethodStep] so a test can drive the flow past PickImage. */
+    private lateinit var pickMethodVm: AgeVerificationSubmitViewModel
+
+    /** Renders the screen on its FIRST step (Explanation). */
+    private fun renderScreen() {
+        pickMethodVm = AgeVerificationSubmitViewModel(fakeRepo, isPreviewBuild = true)
+        composeTestRule.setContent {
+            MaterialTheme {
+                AgeVerificationSubmitScreen(onClose = {}, viewModel = pickMethodVm)
+            }
+        }
+    }
+
+    /** Advances to the PickMethod step, where the three ID buttons live. */
+    private fun showPickMethodStep() {
+        renderScreen()
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_CONTINUE).performClick()
+    }
+
+    /**
+     * Walks the flow and collects every user-readable string at each step.
+     *
+     * Deliberately shared by the sweep AND its guard (SHY-0271). An earlier
+     * version had the guard perform its own private walk, which meant deleting
+     * the sweep's steps left the guard green — a guard that does not guard the
+     * thing it is named after.
+     *
+     * Returns the strings seen and how many steps were actually visited.
+     */
+    private fun sweepEveryStep(): Pair<List<String>, Int> {
+        val seen = mutableListOf<String>()
+        var steps = 0
+
+        renderScreen() // Explanation — previously skipped entirely
+        seen += visibleStrings()
+        steps++
+
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_CONTINUE).performClick()
+        composeTestRule.waitForIdle()
+        seen += visibleStrings() // PickMethod
+        steps++
+
+        composeTestRule.onNodeWithTag(TAG_AGE_VERIF_METHOD_PASSPORT).performClick()
+        composeTestRule.waitForIdle()
+        seen += visibleStrings() // PickImage
+        steps++
+
+        pickMethodVm.setImage(byteArrayOf(0x01), ContentType.Jpeg)
+        composeTestRule.waitForIdle()
+        seen += visibleStrings() // Confirm
+        steps++
+
+        return seen.distinct() to steps
+    }
+
+    @Test
+    fun methodButtonsRenderTheirLabels_notJustTheirTags() {
+        // The operator read `Driver\'s license` — backslash and all — off this
+        // screen, and it had shipped. Every test above CLICKS these buttons by
+        // tag and none reads them, so a corrupt label passed the whole suite.
+        //
+        // `\'` is ANDROID XML escaping; Compose Multiplatform's
+        // `composeResources` does not unescape it, so it reaches the screen
+        // verbatim. Asserting the tag proves a button exists; only asserting
+        // the TEXT proves it says the right thing.
+        showPickMethodStep()
+        mapOf(
+            TAG_AGE_VERIF_METHOD_PASSPORT to "Passport",
+            TAG_AGE_VERIF_METHOD_DRIVERS to "Driver's license",
+            TAG_AGE_VERIF_METHOD_NATIONAL to "National ID card",
+        ).forEach { (tag, label) ->
+            // Compose merges a clickable's descendants, so the Button's node
+            // carries its child Text — the same node the click tests use.
+            composeTestRule.onNodeWithTag(tag).assertTextEquals(label)
+        }
+    }
+
+    /**
+     * Every user-readable string currently composed, from all three semantics
+     * properties a user can perceive.
+     *
+     * `ContentDescription` matters as much as `Text` here: the back control at
+     * `AgeVerificationSubmitScreen` carries its label only as a description, so
+     * a sweep over `Text` alone would let a corrupt string reach every TalkBack
+     * user unchallenged. `EditableText` is what a field's own contents live in.
+     */
+    private fun visibleStrings(): List<String> =
+        listOf(
+            SemanticsProperties.Text,
+            SemanticsProperties.EditableText,
+            SemanticsProperties.ContentDescription,
+        ).flatMap { key ->
+            composeTestRule
+                .onAllNodes(SemanticsMatcher.keyIsDefined(key), useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .flatMap { node ->
+                    when (val v = node.config.getOrNull(key)) {
+                        is AnnotatedString -> listOf(v.text)
+                        is List<*> -> v.map { it.toString() }
+                        null -> emptyList()
+                        else -> listOf(v.toString())
+                    }
+                }
+        }
+
+    @Test
+    fun noRenderedTextOnAnyStepCarriesAnEscapeSequence() {
+        // The general form of the defect, across the whole flow rather than
+        // one screen of it.
+        val (seen, _) = sweepEveryStep()
+        assertEquals(emptyList<String>(), seen.filter(::carriesEscape).sorted())
+    }
+
+    @Test
+    fun theSweepReallyVisitsEveryStepItClaims() {
+        // Guards the SWEEP, by calling the same walk it calls. If a future edit
+        // collapses the walk to one step, the copy it stops covering would
+        // vanish silently and the sweep would still pass — on less.
+        val (seen, steps) = sweepEveryStep()
+        assertEquals("the walk did not visit every step", 4, steps)
+        assertTrue("no strings were read at all", seen.size > 5)
+    }
+
+    @Test
+    fun theEscapeSweepCanActuallyFail() {
+        // Mutation guard on the SHARED predicate used by the sweep above — not
+        // an inline copy of it. A guard with its own private copy stays green
+        // while the real rule is weakened, which proves only that Kotlin's
+        // `String.contains` works.
+        assertTrue(carriesEscape("Driver\\'s license"))
+        assertTrue(carriesEscape("an escaped \\\" quote"))
+        assertEquals(false, carriesEscape("Driver's license"))
+    }
 }
+
+/** No user-facing copy in this app legitimately contains a backslash. */
+internal fun carriesEscape(s: String): Boolean = s.contains('\\')

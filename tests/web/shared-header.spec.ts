@@ -65,9 +65,13 @@ test.describe('Shared Header — Unauthenticated state', () => {
   });
 
   test('no user avatar or name shown when not authenticated', async ({ page }) => {
-    await page.waitForTimeout(3_000);
+    // Anchor on the settled signed-out header before asserting absence —
+    // both auth paths end with the Sign In control rendered (SHY-0245).
+    await expect(
+      page.getByRole('button', { name: /sign in/i }).first(),
+    ).toBeVisible({ timeout: 10_000 });
     const userInfo = page.locator('[data-testid="header-user-info"]');
-    expect(await userInfo.count()).toBe(0);
+    await expect(userInfo).toHaveCount(0);
   });
 });
 
@@ -80,7 +84,8 @@ test.describe('Shared Header — Sign In fallback on pages without login modal',
   test('Sign In on /community-guidelines.html redirects to /portal/', async ({ page }) => {
     await page.goto('/community-guidelines.html');
     const hasModalHook = await page.evaluate(
-      () => typeof (window as { shytalkShowLoginModal?: unknown }).shytalkShowLoginModal === 'function',
+      () =>
+        typeof (window as { shytalkShowLoginModal?: unknown }).shytalkShowLoginModal === 'function',
     );
     expect(hasModalHook).toBe(false);
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
@@ -204,7 +209,9 @@ test.describe('Shared Header — Responsive', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto('/roadmap.html');
     await expect(page.locator('[data-testid="header-logo"]')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
 
