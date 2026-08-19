@@ -22,10 +22,54 @@ class BuildVariantTest {
             builtAt = "?",
         )
         BuildVariant.initApiBaseUrl(null)
+        BuildVariant.initBypassDeviceChecks(false)
         // SHY-0275: without this, the FIRST test that sets a liveKitUrl leaks it
         // into every test that runs after it in this class — the slot is a
         // process-wide singleton, so the leak is silent and order-dependent.
         BuildVariant.initLiveKitUrl(null)
+    }
+
+    @Test
+    fun `BuildVariantConfig bypassDeviceChecks defaults to false so an absent initialiser enforces`() {
+        // Fail-closed pin asserted on a FRESH constructor instance — NOT
+        // the shared object getter, which @AfterTest's
+        // initBypassDeviceChecks(false) would force false regardless of
+        // the constructor default (that made the getter-only version a
+        // tautology: a mutation flipping the default to `true` survived).
+        // Testing the data-class default directly is what actually catches
+        // the fail-closed regression: the exact bug this slot replaces was
+        // iOS DI hardcoding `true` for every build (IosPlatformModule
+        // pre-SHY-0170-fix).
+        assertFalse(BuildVariantConfig().bypassDeviceChecks)
+    }
+
+    @Test
+    fun `bypassDeviceChecks getter reflects an explicit false init`() {
+        BuildVariant.initBypassDeviceChecks(false)
+        assertFalse(BuildVariant.bypassDeviceChecks)
+    }
+
+    @Test
+    fun `initBypassDeviceChecks captures true for local builds`() {
+        BuildVariant.initBypassDeviceChecks(true)
+        assertTrue(BuildVariant.bypassDeviceChecks)
+    }
+
+    @Test
+    fun `initBypassDeviceChecks toggles back to false`() {
+        BuildVariant.initBypassDeviceChecks(true)
+        BuildVariant.initBypassDeviceChecks(false)
+        assertFalse(BuildVariant.bypassDeviceChecks)
+    }
+
+    @Test
+    fun `bypassDeviceChecks persists independently of initLocalEmulator state`() {
+        BuildVariant.initBypassDeviceChecks(true)
+        BuildVariant.initLocalEmulator(false)
+        assertTrue(
+            BuildVariant.bypassDeviceChecks,
+            "initLocalEmulator's holder copy must not clobber the bypass slot",
+        )
     }
 
     @Test

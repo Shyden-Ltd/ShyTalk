@@ -121,6 +121,7 @@ struct iOSApp: App {
             deviceInfo: deviceInfo,
             apiBaseUrl: env.apiBaseUrl,
             googleWebClientId: env.googleWebClientId,
+            bypassDeviceChecks: env.bypassDeviceChecks,
             gitBranch: gitBranch,
             gitSha: gitSha,
             gitDirty: gitDirty,

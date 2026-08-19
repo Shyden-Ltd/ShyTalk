@@ -160,6 +160,10 @@ tasks.named("jvmTest") {
             layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt"),
             layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/navigation/IosPlatformScreens.kt"),
             rootProject.layout.projectDirectory.file("iosApp/iosApp/AppDelegate.swift"),
+            // SHY-0151: IosBypassDeviceChecksWiringPinTest also reads the Swift
+            // boot file, to guard the device-check-bypass wiring against a
+            // hardcoded-`true` regression. develop's list did not carry it.
+            rootProject.layout.projectDirectory.file("iosApp/iosApp/iOSApp.swift"),
             rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt"),
             layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt"),
             rootProject.layout.projectDirectory.file(
