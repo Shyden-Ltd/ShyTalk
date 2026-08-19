@@ -113,7 +113,22 @@ function shapeForViewer(callerUniqueId, callerCohort, data) {
   if (data.uniqueId === callerUniqueId) return null;
   if (effectiveCohort(data) !== callerCohort) return null;
   if (viewerIsBlocked(callerUniqueId, data)) return null;
-  return stripSensitiveFields(data);
+  const memberCohort = effectiveCohort(data);
+  stripSensitiveFields(data);
+  // SHY-0350 — `cohort` is stripped everywhere else and put BACK here.
+  //
+  // The clients keep a defence-in-depth cohort filter over these lists
+  // (`NewMessageViewModel` runs `filterSameCohortAs` on search results).
+  // Without the field every result reads as the 'minor' default and an adult's
+  // search filters itself to nothing — measured on-device 2026-08-19: the API
+  // returned a match, the screen said "No users found".
+  //
+  // It discloses nothing. The line three above this one guarantees every user
+  // returned is same-cohort as the caller, so the value is a constant they
+  // already know about themselves — and if that ever stopped holding, the
+  // client filter is what would catch it.
+  data.cohort = memberCohort;
+  return data;
 }
 
 /**
@@ -509,7 +524,12 @@ router.get('/users/search', async (req, res) => {
       if (!isSelf && viewerIsBlocked(req.auth.uniqueId, target)) {
         return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
       }
+      const targetCohort = effectiveCohort(target);
       stripSensitiveFields(target);
+      // Same reasoning as shapeForViewer: the exact-ID branch has already
+      // enforced same-cohort above, so returning `cohort` discloses nothing and
+      // the client's own filter needs it.
+      target.cohort = targetCohort;
       return res.json({ users: [target] });
     }
 

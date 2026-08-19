@@ -944,6 +944,7 @@
     <string name="block_description">De kommer inte att kunna se din profil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Du har blivit blockerad av den här användaren</string>
+    <string name="blocked_unblock_required">De måste häva blockeringen innan du kan se deras profil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">En användare i det här rummet har blockerat dig. Du kan ha en begränsad erfarenhet. Gå in ändå?</string>
     <!-- google-translated 2026-05-04 -->

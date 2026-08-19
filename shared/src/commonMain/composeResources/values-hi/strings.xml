@@ -944,6 +944,7 @@
     <string name="block_description">वे आपकी प्रोफ़ाइल नहीं देख पाएंगे.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">आपको इस उपयोगकर्ता द्वारा ब्लॉक कर दिया गया है</string>
+    <string name="blocked_unblock_required">आपको उनका प्रोफ़ाइल देखने के लिए पहले उन्हें आपको अनब्लॉक करना होगा।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">इस कमरे में एक उपयोगकर्ता ने आपको ब्लॉक कर दिया है. आपके पास सीमित अनुभव हो सकता है. फिर भी दर्ज करें?</string>
     <!-- google-translated 2026-05-04 -->

@@ -944,6 +944,7 @@
     <string name="block_description">Они не смогут просмотреть ваш профиль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Вы были заблокированы этим пользователем</string>
+    <string name="blocked_unblock_required">Пользователь должен снять блокировку, прежде чем вы сможете открыть его профиль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Пользователь в этой комнате заблокировал вас. Возможно, у вас ограниченный опыт. Все равно войти?</string>
     <!-- google-translated 2026-05-04 -->

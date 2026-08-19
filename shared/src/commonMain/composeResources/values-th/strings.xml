@@ -942,6 +942,7 @@
     <string name="block_description">พวกเขาจะไม่สามารถดูโปรไฟล์ของคุณได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">คุณถูกบล็อกโดยผู้ใช้รายนี้</string>
+    <string name="blocked_unblock_required">พวกเขาต้องเลิกบล็อกคุณก่อน คุณจึงจะดูโปรไฟล์ได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">ผู้ใช้ในห้องนี้บล็อกคุณ คุณอาจมีประสบการณ์ที่จำกัด เข้ารึยัง?</string>
     <!-- google-translated 2026-05-04 -->

@@ -944,6 +944,7 @@
     <string name="block_description">Mereka tidak akan dapat melihat profil Anda.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Anda telah diblokir oleh pengguna ini</string>
+    <string name="blocked_unblock_required">Mereka harus membuka blokir Anda sebelum Anda dapat melihat profilnya.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Seorang pengguna di ruangan ini telah memblokir Anda. Anda mungkin memiliki pengalaman terbatas. Tetap masuk?</string>
     <!-- google-translated 2026-05-04 -->

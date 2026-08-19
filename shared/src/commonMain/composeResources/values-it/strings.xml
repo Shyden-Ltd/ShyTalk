@@ -944,6 +944,7 @@
     <string name="block_description">Non saranno in grado di visualizzare il tuo profilo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Sei stato bloccato da questo utente</string>
+    <string name="blocked_unblock_required">Devono sbloccarti prima che tu possa vedere il suo profilo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Un utente in questa stanza ti ha bloccato. Potresti avere un'esperienza limitata. Entra comunque?</string>
     <!-- google-translated 2026-05-04 -->

@@ -1278,6 +1278,7 @@
     <string name="profile_not_available">កម្រងព័ត៌មាននេះមិនមានទេ។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">អ្នកត្រូវបានរារាំងដោយអ្នកប្រើប្រាស់នេះ។</string>
+    <string name="blocked_unblock_required">ពួកគេត្រូវដោះការទប់ស្កាត់អ្នកជាមុនសិន មុននឹងអ្នកអាចមើលប្រវត្តិរូបរបស់ពួកគេបាន។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="account_suspended_label">គណនីត្រូវបានផ្អាក</string>
     <!-- google-translated 2026-05-04 -->

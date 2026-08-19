@@ -944,6 +944,7 @@
     <string name="block_description">Họ sẽ không thể xem hồ sơ của bạn.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Bạn đã bị chặn bởi người dùng này</string>
+    <string name="blocked_unblock_required">Họ cần bỏ chặn bạn trước khi bạn có thể xem hồ sơ của họ.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Một người dùng trong phòng này đã chặn bạn. Bạn có thể có một kinh nghiệm hạn chế. Vẫn nhập?</string>
     <!-- google-translated 2026-05-04 -->
