@@ -54,8 +54,8 @@ test.describe('Portal — Dashboard Section Content', () => {
 
   test('all card icons are aria-hidden', async ({ page }) => {
     const icons = page.locator('.dashboard-card-icon');
-    await expect.poll(async () => await icons.count()).toBeGreaterThan(0);
     const count = await icons.count();
+    expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       await expect(icons.nth(i)).toHaveAttribute('aria-hidden', 'true');
     }
@@ -129,9 +129,7 @@ test.describe('Portal — Security Section Content', () => {
   });
 
   test('has TOTP management card', async ({ page }) => {
-    const totpTitle = page.locator(
-      '#security-section .security-card-title[data-i18n="security_totp"]',
-    );
+    const totpTitle = page.locator('#security-section .security-card-title[data-i18n="security_totp"]');
     await expect(totpTitle).toHaveCount(1);
     await expect(totpTitle).toContainText('Two-Factor');
   });
@@ -146,9 +144,7 @@ test.describe('Portal — Security Section Content', () => {
   });
 
   test('has sessions card with revoke button', async ({ page }) => {
-    const sessionsTitle = page.locator(
-      '#security-section .security-card-title[data-i18n="security_sessions"]',
-    );
+    const sessionsTitle = page.locator('#security-section .security-card-title[data-i18n="security_sessions"]');
     await expect(sessionsTitle).toHaveCount(1);
     await expect(sessionsTitle).toContainText('Sessions');
     await expect(page.locator('#security-revoke-btn')).toHaveCount(1);
@@ -156,13 +152,12 @@ test.describe('Portal — Security Section Content', () => {
 
   test('revoke button has danger styling', async ({ page }) => {
     const revokeBtn = page.locator('#security-revoke-btn');
-    await expect.poll(async () => await revokeBtn.getAttribute('class')).toContain('btn--danger');
+    const classes = await revokeBtn.getAttribute('class');
+    expect(classes).toContain('btn--danger');
   });
 
   test('has linked providers card', async ({ page }) => {
-    const providersTitle = page.locator(
-      '#security-section .security-card-title[data-i18n="security_providers"]',
-    );
+    const providersTitle = page.locator('#security-section .security-card-title[data-i18n="security_providers"]');
     await expect(providersTitle).toHaveCount(1);
     await expect(providersTitle).toContainText('Sign-In');
   });
@@ -193,36 +188,29 @@ test.describe('Portal — Data & Privacy Section Content', () => {
   });
 
   test('has export data card with button', async ({ page }) => {
-    const exportTitle = page.locator(
-      '#data-privacy-section .security-card-title[data-i18n="data_export"]',
-    );
+    const exportTitle = page.locator('#data-privacy-section .security-card-title[data-i18n="data_export"]');
     await expect(exportTitle).toHaveCount(1);
     await expect(exportTitle).toContainText('Export');
     await expect(page.locator('#data-export-btn')).toHaveCount(1);
   });
 
   test('has delete account card with danger button', async ({ page }) => {
-    const deleteTitle = page.locator(
-      '#data-privacy-section .security-card-title[data-i18n="data_delete"]',
-    );
+    const deleteTitle = page.locator('#data-privacy-section .security-card-title[data-i18n="data_delete"]');
     await expect(deleteTitle).toHaveCount(1);
     await expect(deleteTitle).toContainText('Delete');
     const deleteBtn = page.locator('#data-delete-btn');
-    await expect.poll(async () => await deleteBtn.getAttribute('class')).toContain('btn--danger');
+    const classes = await deleteBtn.getAttribute('class');
+    expect(classes).toContain('btn--danger');
   });
 
   test('has legal section with all three links', async ({ page }) => {
-    const legalTitle = page.locator(
-      '#data-privacy-section .security-card-title[data-i18n="data_legal"]',
-    );
+    const legalTitle = page.locator('#data-privacy-section .security-card-title[data-i18n="data_legal"]');
     await expect(legalTitle).toHaveCount(1);
     await expect(legalTitle).toContainText('Legal');
 
     await expect(page.locator('#data-privacy-section a[href="/privacy.html"]')).toHaveCount(1);
     await expect(page.locator('#data-privacy-section a[href="/terms.html"]')).toHaveCount(1);
-    await expect(
-      page.locator('#data-privacy-section a[href="/community-guidelines.html"]'),
-    ).toHaveCount(1);
+    await expect(page.locator('#data-privacy-section a[href="/community-guidelines.html"]')).toHaveCount(1);
   });
 
   test('privacy policy link text', async ({ page }) => {

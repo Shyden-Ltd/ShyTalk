@@ -14,26 +14,8 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const SUPPORTED_LANGS = [
-  'en',
-  'de',
-  'es',
-  'fr',
-  'hi',
-  'id',
-  'it',
-  'km',
-  'ja',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
-  'th',
-  'tr',
-  'uk',
-  'vi',
-  'zh',
+  'en', 'de', 'es', 'fr', 'hi', 'id', 'it', 'km', 'ja', 'ko',
+  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
 ];
 
 test.describe('Language selector — RTL direction (regression)', () => {

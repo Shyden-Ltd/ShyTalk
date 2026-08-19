@@ -50,35 +50,33 @@ test.describe('Admin Spin Monitor', () => {
 
     // Status should not be visible (no user monitored)
     // The monitor-status div has display:none by default
-    const statusDisplay = await page
-      .locator('#monitor-status')
-      .evaluate((el: HTMLElement) => window.getComputedStyle(el).display);
+    const statusDisplay = await page.locator('#monitor-status').evaluate(
+      (el: HTMLElement) => window.getComputedStyle(el).display,
+    );
     expect(statusDisplay).toBe('none');
 
     // Stats should not be visible
-    const statsDisplay = await page
-      .locator('#monitor-stats')
-      .evaluate((el: HTMLElement) => window.getComputedStyle(el).display);
+    const statsDisplay = await page.locator('#monitor-stats').evaluate(
+      (el: HTMLElement) => window.getComputedStyle(el).display,
+    );
     expect(statsDisplay).toBe('none');
   });
 
   // ── Test 2: Start monitoring ──
-  test('start monitoring — enter uniqueId, click Start, verify status and name', async ({
-    page,
-    testData,
-  }) => {
+  test('start monitoring — enter uniqueId, click Start, verify status and name', async ({ page, testData }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // Verify status dot is live (green)
     await expect(page.locator('#monitor-dot')).toHaveClass(/live/);
 
     // Verify user name displays
-    await expect
-      .poll(async () => await page.locator('#monitor-user-name').textContent())
-      .toBeTruthy();
-    await expect
-      .poll(async () => await page.locator('#monitor-user-name').textContent())
-      .not.toBe('\u2014'); // not the dash placeholder  // Verify status text contains the user info await expect(page.locator('#monitor-status-text')).toContainText('Live');
+    const userName = await page.locator('#monitor-user-name').textContent();
+    expect(userName).toBeTruthy();
+    expect(userName).not.toBe('\u2014'); // not the dash placeholder
+
+    // Verify status text contains the user info
+    const statusText = await page.locator('#monitor-status-text').textContent();
+    expect(statusText).toContain('Live');
 
     // Stop button should be visible, start hidden
     await expect(page.locator('#monitor-stop-btn')).toBeVisible();
@@ -89,10 +87,7 @@ test.describe('Admin Spin Monitor', () => {
   });
 
   // ── Test 3: Start via Enter key ──
-  test('start via Enter key — type uniqueId, press Enter, verify starts', async ({
-    page,
-    testData,
-  }) => {
+  test('start via Enter key — type uniqueId, press Enter, verify starts', async ({ page, testData }) => {
     const input = page.locator('#monitor-uid-input');
     await input.fill(String(testData.user.uniqueId));
     // Use page.keyboard.press — WebKit does not reliably fire keydown
@@ -104,7 +99,8 @@ test.describe('Admin Spin Monitor', () => {
     await expect(page.locator('#monitor-dot')).toHaveClass(/live/);
 
     // Verify it started correctly
-    await expect(page.locator('#monitor-status-text')).toContainText('Live');
+    const statusText = await page.locator('#monitor-status-text').textContent();
+    expect(statusText).toContain('Live');
 
     // Clean up
     await stopMonitoring(page);
@@ -131,18 +127,13 @@ test.describe('Admin Spin Monitor', () => {
   });
 
   // ── Test 5: Live coin display ──
-  test('live coin display — verify #monitor-coins shows current coins', async ({
-    page,
-    testData,
-  }) => {
+  test('live coin display — verify #monitor-coins shows current coins', async ({ page, testData }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // #monitor-coins should show a numeric value (not the placeholder dash)
-    await expect.poll(async () => await page.locator('#monitor-coins').textContent()).toBeTruthy();
-    await expect
-      .poll(async () => await page.locator('#monitor-coins').textContent())
-      .not.toBe('\u2014');
     const coinsText = await page.locator('#monitor-coins').textContent();
+    expect(coinsText).toBeTruthy();
+    expect(coinsText).not.toBe('\u2014');
 
     // The displayed value should be a formatted number (may have commas)
     const coinsNum = Number(coinsText!.replace(/,/g, ''));
@@ -157,31 +148,23 @@ test.describe('Admin Spin Monitor', () => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // #monitor-pity should show a pity value like "0 / 120"
-    await expect.poll(async () => await page.locator('#monitor-pity').textContent()).toBeTruthy();
-    await expect
-      .poll(async () => await page.locator('#monitor-pity').textContent())
-      .not.toBe('\u2014');
-    // Format is "X / Y".
-    await expect.poll(async () => await page.locator('#monitor-pity').textContent()).toContain('/');
+    const pityText = await page.locator('#monitor-pity').textContent();
+    expect(pityText).toBeTruthy();
+    expect(pityText).not.toBe('\u2014');
+    expect(pityText).toContain('/'); // format is "X / Y"
 
-    // The pity BAR must also be sized — a number with no bar behind it tells
-    // the admin nothing at a glance. (This declaration had been swallowed into
-    // a trailing comment by an earlier rewrite, leaving `barWidth` undefined.)
-    await expect
-      .poll(async () =>
-        page.locator('#monitor-pity-bar').evaluate((el: HTMLElement) => el.style.width),
-      )
-      .toBeTruthy();
+    // Pity bar should have a width style set
+    const barWidth = await page.locator('#monitor-pity-bar').evaluate(
+      (el: HTMLElement) => el.style.width,
+    );
+    expect(barWidth).toBeTruthy();
 
     // Clean up
     await stopMonitoring(page);
   });
 
   // ── Test 7: Guarantee set ──
-  test('guarantee set — select gift, click Set, verify status and API', async ({
-    page,
-    testData,
-  }) => {
+  test('guarantee set — select gift, click Set, verify status and API', async ({ page, testData }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // Wait for guarantee gift dropdown to be populated
@@ -190,9 +173,10 @@ test.describe('Admin Spin Monitor', () => {
 
     // Select the first non-placeholder gift option
     const options = giftSelect.locator('option');
-    await expect.poll(async () => await options.count()).toBeGreaterThan(1);
-    await expect.poll(async () => await options.nth(1).getAttribute('value')).toBeTruthy();
+    const optCount = await options.count();
+    expect(optCount).toBeGreaterThan(1);
     const firstGiftValue = await options.nth(1).getAttribute('value');
+    expect(firstGiftValue).toBeTruthy();
     await giftSelect.selectOption(firstGiftValue!);
 
     // Accept all confirm dialogs (set + revoke both trigger confirm())
@@ -269,36 +253,34 @@ test.describe('Admin Spin Monitor', () => {
     // the element has a non-null, non-empty textContent (WebKit can return
     // null for text inside recently-shown containers)
     await expect(page.locator('#session-spins')).toHaveText(/\d+/);
-    await expect.poll(async () => await page.locator('#session-spins').textContent()).toBeTruthy();
     const sessionSpins = await page.locator('#session-spins').textContent();
+    expect(sessionSpins).toBeTruthy();
     const sessionSpinsNum = Number(sessionSpins!.replace(/,/g, ''));
     expect(sessionSpinsNum).toBeGreaterThanOrEqual(0);
 
-    await expect.poll(async () => await page.locator('#session-spent').textContent()).toBeTruthy();
     const sessionSpent = await page.locator('#session-spent').textContent();
+    expect(sessionSpent).toBeTruthy();
     const sessionSpentNum = Number(sessionSpent!.replace(/,/g, ''));
     expect(sessionSpentNum).toBeGreaterThanOrEqual(0);
 
     // All-time stats should show numeric values (or "?" if load failed)
-    await expect.poll(async () => await page.locator('#alltime-spins').textContent()).toBeTruthy();
     const alltimeSpins = await page.locator('#alltime-spins').textContent();
+    expect(alltimeSpins).toBeTruthy();
     // Could be a number or "?" — both are valid displays
     if (alltimeSpins !== '?') {
       const alltimeSpinsNum = Number(alltimeSpins!.replace(/,/g, ''));
       expect(alltimeSpinsNum).toBeGreaterThanOrEqual(0);
     }
 
-    await expect(page.locator('#alltime-spent')).not.toBeEmpty();
+    const alltimeSpent = await page.locator('#alltime-spent').textContent();
+    expect(alltimeSpent).toBeTruthy();
 
     // Clean up
     await stopMonitoring(page);
   });
 
   // ── Test 10: Spin history collapsible ──
-  test('spin history collapsible — click toggle, verify expands/collapses', async ({
-    page,
-    testData,
-  }) => {
+  test('spin history collapsible — click toggle, verify expands/collapses', async ({ page, testData }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     const toggle = page.locator('#spin-history-toggle');

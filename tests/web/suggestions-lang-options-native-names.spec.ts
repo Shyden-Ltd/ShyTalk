@@ -51,18 +51,12 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const src = await res.text();
 
     // Extract just the LANG_OPTIONS array literal.
-    // The option lists became FUNCTIONS under SHY-0252 — as module-level
-    // `var`s they froze the locale active at script load, so a language
-    // switch could never change them. The anchor moved with them; the
-    // claim (labels are sgT()-driven) is unchanged.
-    const langBlock = src.match(/function langOptions\(\) \{\s*return \[([\s\S]*?)\];/);
+    const langBlock = src.match(/var LANG_OPTIONS = \[([\s\S]*?)\];/);
     expect(langBlock, 'LANG_OPTIONS array not found').not.toBeNull();
     const arrSrc = langBlock![1];
 
     for (const [code, native] of Object.entries(NATIVE_NAMES)) {
-      const re = new RegExp(
-        `value:\\s*"${code}",\\s*label:\\s*"${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}"`,
-      );
+      const re = new RegExp(`value:\\s*"${code}",\\s*label:\\s*"${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}"`);
       expect(arrSrc, `${code} label should be native "${native}"`).toMatch(re);
     }
   });
@@ -70,34 +64,14 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
   test('LANG_OPTIONS no longer hardcodes English language names', async ({ request }) => {
     const res = await request.get(`${BASE}/js/suggestions-board.js`);
     const src = await res.text();
-    // The option lists became FUNCTIONS under SHY-0252 — as module-level
-    // `var`s they froze the locale active at script load, so a language
-    // switch could never change them. The anchor moved with them; the
-    // claim (labels are sgT()-driven) is unchanged.
-    const langBlock = src.match(/function langOptions\(\) \{\s*return \[([\s\S]*?)\];/);
+    const langBlock = src.match(/var LANG_OPTIONS = \[([\s\S]*?)\];/);
     const arrSrc = langBlock![1];
     // English language NAMES that should NOT appear (en is intentional).
     const englishNames = [
-      'Arabic',
-      'German',
-      'Spanish',
-      'French',
-      'Hindi',
-      'Indonesian',
-      'Italian',
-      'Japanese',
-      'Khmer',
-      'Korean',
-      'Dutch',
-      'Polish',
-      'Portuguese',
-      'Russian',
-      'Swedish',
-      'Thai',
-      'Turkish',
-      'Ukrainian',
-      'Vietnamese',
-      'Chinese',
+      'Arabic', 'German', 'Spanish', 'French', 'Hindi', 'Indonesian',
+      'Italian', 'Japanese', 'Khmer', 'Korean', 'Dutch', 'Polish',
+      'Portuguese', 'Russian', 'Swedish', 'Thai', 'Turkish', 'Ukrainian',
+      'Vietnamese', 'Chinese',
     ];
     for (const name of englishNames) {
       expect(arrSrc, `English name "${name}" should not be in LANG_OPTIONS`).not.toMatch(

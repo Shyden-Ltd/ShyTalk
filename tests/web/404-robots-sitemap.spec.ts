@@ -30,21 +30,17 @@ test.describe('Static SEO + 404 surfaces', () => {
     const homeLink = page.locator('[data-testid="404-home-link"]');
     await expect(homeLink).toHaveAttribute('href', '/');
     // robots noindex header so search engines don't index the 404 itself
-    await expect
-      .poll(async () => await page.locator('meta[name="robots"]').getAttribute('content'))
-      .toBe('noindex');
+    const robots = await page.locator('meta[name="robots"]').getAttribute('content');
+    expect(robots).toBe('noindex');
     // theme-color set so Safari + Chrome status bar matches the dark UI
-    await expect
-      .poll(async () => await page.locator('meta[name="theme-color"]').getAttribute('content'))
-      .toBe('#0f0d15');
+    const theme = await page.locator('meta[name="theme-color"]').getAttribute('content');
+    expect(theme).toBe('#0f0d15');
   });
 
   test('404.html link returns user to homepage on click', async ({ page }) => {
     await page.goto(`${BASE}/404.html`);
     await Promise.all([
-      page.waitForURL((url) => url.pathname === '/' || url.pathname === '/index.html', {
-        timeout: 5_000,
-      }),
+      page.waitForURL((url) => url.pathname === '/' || url.pathname === '/index.html', { timeout: 5_000 }),
       page.locator('[data-testid="404-home-link"]').click(),
     ]);
     expect(page.url().replace(/\/index\.html$/, '/')).toBe(`${BASE}/`);

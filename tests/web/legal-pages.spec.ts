@@ -10,9 +10,8 @@ test.describe('Privacy Policy', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    await expect
-      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
-      .toContain('width=device-width');
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).toContain('width=device-width');
   });
 
   test('contains key privacy sections', async ({ page }) => {
@@ -21,7 +20,9 @@ test.describe('Privacy Policy', () => {
     await expect(body).toContainText('Data Storage');
   });
 
-  test('age verification section is present and explains ID-image lifetime', async ({ page }) => {
+  test('age verification section is present and explains ID-image lifetime', async ({
+    page,
+  }) => {
     // PR 12 (age-verification feature) added a dedicated section
     // documenting DOB collection, ID image collection + retention
     // (deleted on decision), legal basis, and the under-18 path.
@@ -36,6 +37,7 @@ test.describe('Privacy Policy', () => {
     // Non-prod warning so dev testers know not to upload real IDs.
     await expect(body).toContainText('do NOT');
   });
+
 });
 
 test.describe('Terms of Service', () => {
@@ -48,9 +50,8 @@ test.describe('Terms of Service', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    await expect
-      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
-      .toContain('width=device-width');
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).toContain('width=device-width');
   });
 
   test('contains key terms sections', async ({ page }) => {
@@ -58,6 +59,7 @@ test.describe('Terms of Service', () => {
     await expect(body).toContainText('Terms of Service');
     await expect(body).toContainText('Acceptable Use');
   });
+
 });
 
 test.describe('Community Guidelines', () => {
@@ -70,9 +72,8 @@ test.describe('Community Guidelines', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    await expect
-      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
-      .toContain('width=device-width');
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).toContain('width=device-width');
   });
 
   test('contains community-related content', async ({ page }) => {
@@ -80,6 +81,7 @@ test.describe('Community Guidelines', () => {
     await expect(body).toContainText('Community Guidelines');
     await expect(body).toContainText('Be Respectful');
   });
+
 });
 
 test.describe('Cyber Bullying Policy', () => {
@@ -92,24 +94,19 @@ test.describe('Cyber Bullying Policy', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    await expect
-      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
-      .toContain('width=device-width');
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).toContain('width=device-width');
   });
 
   test('contains anti-bullying content', async ({ page }) => {
     const body = page.locator('body');
     await expect(body).toContainText('bullying');
   });
+
 });
 
 test.describe('Shyden Ltd branding across legal pages', () => {
-  const pages = [
-    '/privacy.html',
-    '/terms.html',
-    '/community-guidelines.html',
-    '/cyber-bullying.html',
-  ];
+  const pages = ['/privacy.html', '/terms.html', '/community-guidelines.html', '/cyber-bullying.html'];
 
   for (const pagePath of pages) {
     test(`${pagePath} footer shows Shyden Ltd copyright`, async ({ page }) => {
@@ -160,12 +157,7 @@ test.describe('Terms of Service — Shyden Ltd service provider', () => {
 });
 
 test.describe('Consistent styling across pages', () => {
-  const pages = [
-    '/privacy.html',
-    '/terms.html',
-    '/community-guidelines.html',
-    '/cyber-bullying.html',
-  ];
+  const pages = ['/privacy.html', '/terms.html', '/community-guidelines.html', '/cyber-bullying.html'];
 
   for (const pagePath of pages) {
     test(`${pagePath} uses dark theme`, async ({ page }) => {

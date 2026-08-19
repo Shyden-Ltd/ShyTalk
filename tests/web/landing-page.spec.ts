@@ -76,16 +76,13 @@ test.describe('Landing Page', () => {
   });
 
   test('loads logger script', async ({ page }) => {
-    const loggerLoaded = await page.evaluate(
-      () => typeof (window as any).ShyTalkLogger !== 'undefined',
-    );
+    const loggerLoaded = await page.evaluate(() => typeof (window as any).ShyTalkLogger !== 'undefined');
     expect(loggerLoaded).toBe(true);
   });
 
   test('has correct viewport meta tag', async ({ page }) => {
-    await expect
-      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
-      .toContain('width=device-width');
+    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+    expect(viewport).toContain('width=device-width');
   });
 
   test('has Shyden Ltd copyright footer', async ({ page }) => {

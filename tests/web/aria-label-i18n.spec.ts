@@ -52,11 +52,8 @@ test.describe('Roadmap aria-label i18n', () => {
 
     for (const [key, expected] of cases) {
       const sel = `[data-i18n-aria-label="${key}"]`;
-      await expect
-        .poll(async () => await page.locator(sel).getAttribute('aria-label'), {
-          message: `${key} aria-label`,
-        })
-        .toBe(expected);
+      const aria = await page.locator(sel).getAttribute('aria-label');
+      expect(aria, `${key} aria-label`).toBe(expected);
     }
   });
 
@@ -71,11 +68,10 @@ test.describe('Roadmap aria-label i18n', () => {
     await page.goto(`${BASE}/roadmap.html`);
 
     const sel = '[data-i18n-aria-label="aria_progress_overview"]';
-    await expect
-      .poll(async () => await page.locator(sel).getAttribute('aria-label'))
-      .toBe('Progress overview');
+    const aria = await page.locator(sel).getAttribute('aria-label');
     // No translation pass for `en` runs (LEGAL_T.footer.en is undefined),
     // so the inline `aria-label="Progress overview"` from the HTML stays.
+    expect(aria).toBe('Progress overview');
   });
 
   test('LEGAL_T.footer defines all 5 aria_* keys for all 20 locales', async ({ request }) => {
@@ -84,26 +80,8 @@ test.describe('Roadmap aria-label i18n', () => {
     const src = await res.text();
 
     const SUPPORTED = [
-      'es',
-      'fr',
-      'de',
-      'pt',
-      'it',
-      'ja',
-      'ko',
-      'zh',
-      'ar',
-      'hi',
-      'tr',
-      'ru',
-      'uk',
-      'th',
-      'vi',
-      'id',
-      'pl',
-      'nl',
-      'sv',
-      'km',
+      'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
+      'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
     ];
     const KEYS = [
       'aria_progress_overview',

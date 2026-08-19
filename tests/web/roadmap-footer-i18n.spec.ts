@@ -21,9 +21,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 test.describe('Roadmap footer i18n', () => {
-  test('copyright element is populated via t() — not left as raw HTML default', async ({
-    page,
-  }) => {
+  test('copyright element is populated via t() — not left as raw HTML default', async ({ page }) => {
     await page.goto(`${BASE}/roadmap.html`);
 
     // Wait for roadmap-app.js to finish rendering (footer disclaimer
@@ -63,11 +61,8 @@ test.describe('Roadmap footer i18n', () => {
       { timeout: 10_000 },
     );
 
-    await expect
-      .poll(async () => await page.locator('[data-i18n="copyright"]').textContent(), {
-        message: 'copyright must contain Shyden Ltd brand even in Arabic locale',
-      })
-      .toContain('Shyden Ltd');
+    const copyright = await page.locator('[data-i18n="copyright"]').textContent();
+    expect(copyright, 'copyright must contain Shyden Ltd brand even in Arabic locale').toContain('Shyden Ltd');
   });
 
   test('roadmap-app.js defines copyright key (orphan-checker contract)', async ({ request }) => {

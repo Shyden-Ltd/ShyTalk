@@ -23,26 +23,8 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const KNY_NON_EN_LOCALES = [
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'hi',
-  'id',
-  'it',
-  'ja',
-  'km',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
-  'th',
-  'tr',
-  'uk',
-  'vi',
-  'zh',
+  'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
+  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
 ];
 
 test.describe('KNY scroll-to-top aria-label i18n', () => {
@@ -59,42 +41,23 @@ test.describe('KNY scroll-to-top aria-label i18n', () => {
       const rowMatch = src.match(rowRe);
       expect(rowMatch, `${lang} KNY row not found`).not.toBeNull();
       const row = rowMatch![0];
-      expect(row, `${lang} missing aria_scroll_to_top`).toMatch(
-        /aria_scroll_to_top:\s*['"][^'"]+['"]/,
-      );
+      expect(row, `${lang} missing aria_scroll_to_top`).toMatch(/aria_scroll_to_top:\s*['"][^'"]+['"]/);
     }
   });
 
-  test('Khmer locale: scroll-top button aria-label translates to Khmer script', async ({
-    page,
-  }) => {
+  test('Khmer locale: scroll-top button aria-label translates to Khmer script', async ({ page }) => {
     await page.addInitScript(() => {
-      try {
-        localStorage.setItem('shytalk_language', 'km');
-      } catch {
-        /* ignore */
-      }
+      try { localStorage.setItem('shytalk_language', 'km'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/events/khmer-new-year.html`);
-    await page.waitForFunction(
-      () => {
-        const el = document.querySelector('#scroll-top[aria-label]');
-        return !!(el && el.getAttribute('aria-label') !== 'Scroll to top');
-      },
-      undefined,
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(() => {
+      const el = document.querySelector('#scroll-top[aria-label]');
+      return !!(el && el.getAttribute('aria-label') !== 'Scroll to top');
+    }, undefined, { timeout: 10_000 });
 
-    await expect
-      .poll(async () => await page.locator('#scroll-top').getAttribute('aria-label'), {
-        message: 'scroll-top aria-label should not be English',
-      })
-      .not.toBe('Scroll to top');
-    await expect
-      .poll(async () => await page.locator('#scroll-top').getAttribute('aria-label'), {
-        message: 'scroll-top aria-label should contain Khmer script',
-      })
-      .toMatch(/[ក-៿]/);
+    const aria = await page.locator('#scroll-top').getAttribute('aria-label');
+    expect(aria, 'scroll-top aria-label should not be English').not.toBe('Scroll to top');
+    expect(aria, 'scroll-top aria-label should contain Khmer script').toMatch(/[ក-៿]/);
   });
 
   test('English locale: scroll-top button keeps the HTML default (skip path)', async ({ page }) => {
@@ -104,25 +67,16 @@ test.describe('KNY scroll-to-top aria-label i18n', () => {
     // longer skip English, they'll see English aria_scroll_to_top
     // need to be added.
     await page.addInitScript(() => {
-      try {
-        localStorage.setItem('shytalk_language', 'en');
-      } catch {
-        /* ignore */
-      }
+      try { localStorage.setItem('shytalk_language', 'en'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/events/khmer-new-year.html`);
     // Give the deferred scripts a moment to register their applyLanguage chain.
     await page.waitForFunction(
-      () =>
-        typeof (window as Window & { applyLanguage?: (l: string) => void }).applyLanguage ===
-        'function',
+      () => typeof (window as Window & { applyLanguage?: (l: string) => void }).applyLanguage === 'function',
       undefined,
       { timeout: 5_000 },
     );
-    await expect
-      .poll(async () => await page.locator('#scroll-top').getAttribute('aria-label'), {
-        message: 'scroll-top aria-label should be the English HTML default',
-      })
-      .toBe('Scroll to top');
+    const aria = await page.locator('#scroll-top').getAttribute('aria-label');
+    expect(aria, 'scroll-top aria-label should be the English HTML default').toBe('Scroll to top');
   });
 });

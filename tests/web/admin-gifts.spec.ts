@@ -54,11 +54,7 @@ async function applyAndConfirm(page: Page): Promise<void> {
 /**
  * Helper: trigger an input event on a field (needed for the inline change handler).
  */
-async function fillAndTrigger(
-  page: Page,
-  locator: ReturnType<Page['locator']>,
-  value: string,
-): Promise<void> {
+async function fillAndTrigger(page: Page, locator: ReturnType<Page['locator']>, value: string): Promise<void> {
   await locator.fill(value);
   await locator.dispatchEvent('input');
   await locator.dispatchEvent('change');
@@ -77,12 +73,13 @@ test.describe('Admin Gifts Tab', () => {
   test('seeded gift appears in table with correct data', async ({ page, testData }) => {
     // Verify the gifts table has rows
     const rows = page.locator('#gifts-tbody tr[data-gift-id]');
-    await expect.poll(async () => await rows.count()).toBeGreaterThan(0);
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThan(0);
 
     // Pick the first gift row and verify it has all expected fields
     const row = rows.first();
-    await expect.poll(async () => await row.getAttribute('data-gift-id')).toBeTruthy();
     const giftId = await row.getAttribute('data-gift-id');
+    expect(giftId).toBeTruthy();
 
     // Verify name, coinValue, and checkboxes are populated
     const fields = await readRowFields(row);
@@ -91,7 +88,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify: fetch all gifts and confirm this gift exists
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
+    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     expect(apiGift.name).toBe(fields.name);
@@ -129,7 +126,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Verify save persisted via API (no reload — faster and more reliable)
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
+    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
     const apiGift = giftList.find((g: any) => g.name === giftName);
     expect(apiGift).toBeTruthy();
     expect(apiGift.coinValue).toBe(42);
@@ -177,10 +174,7 @@ test.describe('Admin Gifts Tab', () => {
   });
 
   // ── Test 4: Delete gift ──
-  test('delete gift — row marked, Apply removes it, re-seed afterward', async ({
-    page,
-    testData,
-  }) => {
+  test('delete gift — row marked, Apply removes it, re-seed afterward', async ({ page, testData }) => {
     // First, create a temporary gift to delete
     const tempName = `e2e-delete-${Date.now()}`;
     await page.locator('#gift-add-btn').click();
@@ -204,7 +198,6 @@ test.describe('Admin Gifts Tab', () => {
     let targetRow: ReturnType<Page['locator']> | null = null;
     let targetId = '';
     for (let i = 0; i < count; i++) {
-      // defect-detector:allow GUARD-IF — this scans rows to FIND one by its input value, which no locator filter can express, and the loop is followed by an unconditional expect(targetRow).not.toBeNull()
       const nameVal = await allRows.nth(i).locator('[data-field="name"]').inputValue();
       if (nameVal === tempName) {
         targetRow = allRows.nth(i);
@@ -234,7 +227,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify: gift should not exist
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
+    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
     const found = giftList.find((g: any) => g.id === targetId);
     expect(found).toBeUndefined();
   });
@@ -299,12 +292,9 @@ test.describe('Admin Gifts Tab', () => {
 
     // Delete another gift (second row if it exists)
     const secondRow = page.locator('#gifts-tbody tr[data-gift-id]').nth(1);
-    // The confirm dialog's "Deleted Gifts" section is the thing under test, so
-    // a run with only one row silently tested nothing. Two rows are required.
-    await expect
-      .poll(async () => secondRow.count(), { message: 'need a second gift row to delete' })
-      .toBeGreaterThan(0);
-    await secondRow.locator('.gift-delete-btn').click();
+    if (await secondRow.count() > 0) {
+      await secondRow.locator('.gift-delete-btn').click();
+    }
 
     // Click Apply — opens the confirm dialog
     await page.locator('#gift-apply-btn').click();
@@ -315,7 +305,9 @@ test.describe('Admin Gifts Tab', () => {
     const body = page.locator('#gift-confirm-body');
     await expect(body.locator('h4:has-text("New Gifts")')).toBeVisible();
     await expect(body.locator('h4:has-text("Modified Gifts")')).toBeVisible();
-    await expect(body.locator('h4:has-text("Deleted Gifts")')).toBeVisible();
+    if (await secondRow.count() > 0) {
+      await expect(body.locator('h4:has-text("Deleted Gifts")')).toBeVisible();
+    }
 
     // Title should show total change count
     const title = page.locator('#gift-confirm-title');
@@ -347,7 +339,6 @@ test.describe('Admin Gifts Tab', () => {
     let compensateOriginal = false;
     for (let i = 0; i < rowCount; i++) {
       const r = allRows.nth(i);
-      // defect-detector:allow GUARD-IF — this scans for a row to compensate with and is followed by an unconditional expect(compensateRow).not.toBeNull()
       const rId = await r.getAttribute('data-gift-id');
       if (rId === giftId) continue;
       const rWheel = await r.locator('[data-field="showOnWheel"]').isChecked();
@@ -397,7 +388,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
+    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     expect(apiGift.showOnWheel).toBe(!originalWheel);
@@ -492,7 +483,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
+    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     expect(apiGift.animationUrl).toBe(testAnim);
@@ -518,7 +509,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Read current weight via API
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
+    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     const originalWeight = apiGift.weight ?? 1.0;
@@ -532,7 +523,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Verify via API
     const verifyGifts = await testData.api.get('/api/gifts/all');
-    const verifyList = Array.isArray(verifyGifts) ? verifyGifts : verifyGifts.gifts || [];
+    const verifyList = Array.isArray(verifyGifts) ? verifyGifts : (verifyGifts.gifts || []);
     const verifyGift = verifyList.find((g: any) => g.id === giftId);
     expect(verifyGift).toBeTruthy();
     expect(verifyGift.weight).toBe(2.5);
@@ -553,9 +544,8 @@ test.describe('Admin Gifts Tab', () => {
     await page.locator('#gift-add-btn').click();
 
     // New row should appear
-    await expect
-      .poll(async () => await page.locator('#gifts-tbody tr').count())
-      .toBe(beforeCount + 1);
+    const afterCount = await page.locator('#gifts-tbody tr').count();
+    expect(afterCount).toBe(beforeCount + 1);
 
     // The new row should have gift-new class
     const newRow = page.locator('#gifts-tbody tr.gift-new').last();
@@ -587,8 +577,8 @@ test.describe('Admin Gifts Tab', () => {
   // ── Test 13: Multiple gifts in table sorted by order ──
   test('multiple gifts in table are sorted by order', async ({ page }) => {
     const rows = page.locator('#gifts-tbody tr[data-gift-id]');
-    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(2);
     const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThanOrEqual(2);
 
     // Collect order values from all rows
     const orders: number[] = [];

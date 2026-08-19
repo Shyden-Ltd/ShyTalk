@@ -48,11 +48,7 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    // The option lists became FUNCTIONS under SHY-0252 — as module-level
-    // `var`s they froze the locale active at script load, so a language
-    // switch could never change them. The anchor moved with them; the
-    // claim (labels are sgT()-driven) is unchanged.
-    const phaseBlock = src.match(/function phaseOptions\(\) \{\s*return \[([\s\S]*?)\];/);
+    const phaseBlock = src.match(/var PHASE_OPTIONS = \[([\s\S]*?)\];/);
     expect(phaseBlock, 'PHASE_OPTIONS array not found').not.toBeNull();
     const arrSrc = phaseBlock![1];
 
@@ -77,26 +73,8 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
 
     const locales = [
       'en',
-      'ar',
-      'de',
-      'es',
-      'fr',
-      'hi',
-      'id',
-      'it',
-      'ja',
-      'km',
-      'ko',
-      'nl',
-      'pl',
-      'pt',
-      'ru',
-      'sv',
-      'th',
-      'tr',
-      'uk',
-      'vi',
-      'zh',
+      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
+      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
     ];
 
     for (const locale of locales) {
@@ -108,18 +86,16 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
+        expect(block, `${locale} should define ${key}`).toMatch(
+          new RegExp(`${key}\\s*:`),
+        );
       }
     }
   });
 
   test('Korean locale: sgT() returns Hangul for all 7 phase keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try {
-        localStorage.setItem('shytalk_language', 'ko');
-      } catch {
-        /* ignore */
-      }
+      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -138,9 +114,7 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
     for (const key of PHASE_KEYS) {
       const value = t[key];
       expect(value, `sgT(${key}) should not be null`).not.toBeNull();
-      expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(
-        false,
-      );
+      expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(false);
       expect(value, `sgT(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
     }
   });
