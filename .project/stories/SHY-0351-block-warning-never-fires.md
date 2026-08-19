@@ -473,3 +473,27 @@ Against the **real** local emulator stack, per the real-only rule.
 
   Also: the on-screen error `You must be at least 16 years old` is a *product*
   rule doing its job — a 2010-12 date is rejected, 2010-06 accepted.
+
+- **2026-08-19 — a CI observation, recorded because it cost several cycles here.**
+  This PR reported `PR Gate: fail` three times while **every individual check
+  passed**, including SonarCloud's own external analysis
+  (`SonarCloud Code Analysis … pass`). The run's overall conclusion was
+  `cancelled`, and the only non-success job was
+  `sonarcloud / SonarCloud Analysis: CANCELLED`. PR Gate then failed in 2 s
+  reading that cancelled dependency.
+
+  The likely mechanism, stated as an observation rather than a proven diagnosis:
+  `sonarcloud.yml`'s concurrency group is `sonarcloud-${{ inputs.ref || github.ref }}`
+  with `cancel-in-progress: true`, and `pr-checks.yml` passes
+  `ref: github.event.pull_request.head.sha`. So **`gh run rerun --failed`
+  re-enters the SAME group for the SAME head SHA**, and one attempt cancels the
+  other. Re-running is therefore self-defeating for this job; pushing a new
+  commit (a new SHA, hence a new group) is what actually produces a clean run.
+
+  This is the same *class* of failure `playwright-tests.yml` documents in its own
+  concurrency comment — *"surfacing as … CANCELLED → PR Gate: FAILURE on PRs that
+  did nothing wrong"* — which was fixed there by per-ref scoping. Sonar's scoping
+  is already per-SHA, so the rerun path is the remaining hole rather than the
+  group key. Not filed as a story from a single PR's evidence; recorded here so
+  the next person who sees a green board with a red gate does not re-run three
+  times before questioning it.
