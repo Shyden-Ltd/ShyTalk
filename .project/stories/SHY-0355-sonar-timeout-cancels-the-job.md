@@ -1,6 +1,6 @@
 ---
 id: SHY-0355
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-19
 priority: P1
@@ -175,3 +175,26 @@ reading the **real** workflow file so it cannot drift from what CI runs.
   same pull request whose `sonarcloud / SonarCloud Analysis` **job** is
   cancelled. Analysis completing while its wrapper is killed is the signature of
   a budget, not of a finding.
+
+- **2026-08-19 — the fix proved itself on its own pull request.** #1823's own
+  `sonarcloud / SonarCloud Analysis` job ran under the new 30-minute budget and
+  **passed**, on the same infrastructure and at the same time of day that was
+  cancelling #1800 and #1812 at fifteen minutes. That is the cleanest available
+  evidence short of replaying the old value.
+
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** The change
+  is one value plus a comment plus a test. Checked:
+  - The budget is **finite** — raised, not removed — so a genuinely hung job
+    still terminates. Only a job that was about to succeed stops being killed.
+  - A real Sonar **quality-gate failure is a job FAILURE, not a timeout**, so it
+    is unaffected by this value. The change cannot turn a red analysis green.
+  - The meta-test anchors on the `sonarcloud:` job before reading
+    `timeout-minutes`, so a timeout declared elsewhere in the file cannot
+    satisfy it, and it reads the real workflow rather than a copy.
+
+  **Not merged on the filing exemption.** This story is newly-added and Draft, so
+  `pre-merge-check.sh` would have waved it through — the exact hole SHY-0353
+  records. It ships a workflow change and a test, so it is moved to
+  `In Review` and reviewed like any other implementation.
+
+Reviewed-up-to: 29aa634b85b42ba31ad70c31488fdedacdbe8ccb
