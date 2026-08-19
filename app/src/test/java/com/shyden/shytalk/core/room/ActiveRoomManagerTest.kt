@@ -1007,11 +1007,26 @@ class ActiveRoomManagerTest {
     @Test
     fun `ensureSingleRoom - closes owned rooms`() =
         runTest {
-            coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns "old-room"
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "old-room"
 
             manager.ensureSingleRoom()
 
             coVerify { roomRepository.closeRoom("old-room") }
+        }
+
+    @Test
+    fun `ensureSingleRoom - pins the caller's resolved cohort on the owner-dedup query`() =
+        runTest {
+            // SHY-0102 — findActiveRoomByOwner is a rooms `list`, so it must
+            // carry the caller's cohort or the firestore.rules read gate denies
+            // it (the owner could never close their own stale room).
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns null
+
+            manager.ensureSingleRoom()
+
+            coVerify { roomRepository.findActiveRoomByOwner(currentUserId, "adult") }
         }
 
     // --- clearError ---

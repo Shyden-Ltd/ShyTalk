@@ -1,6 +1,6 @@
 ---
 id: SHY-0045
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P1
@@ -9,6 +9,7 @@ type: infra
 roadmap_ids: [G011]
 pr:
 mvp: true
+released_in: v0.97.15
 ---
 
 # SHY-0045: SHA-pin floating Action tags in manual-qa-matrix.yml + qa-runner-driver-checks.yml
@@ -159,3 +160,4 @@ Supply-chain hardening (see [[feedback-update-sweep-comprehensive]]): every `use
 
 - 2026-06-08 ~13:05 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 79 (G011). Reserved ID SHY-0045.
 - 2026-06-13 ~00:05 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): CI/workflow change (SHA-pin + Jest pin-test) → NOT `*.md`-only → full protocol applies; headline frameworks = Express Jest pin-test + eslint + actionlint + `check-action-shas.sh`, with the apps/all-browser journeys as the regression net (the SHA-pinned `manual-qa-matrix.yml` is itself the matrix orchestrator, so the dev matrix run doubles as proof the pin didn't break CI). DoD gains the protocol-satisfied + judgment-merge bullets. Pickup-fitness: AC already current (G011 supply-chain policy + `#1016` live); no stale cross-refs found.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Done. manual-qa-matrix.yml third-party actions SHA-pinned (0 floating @vN outside comments); present at v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

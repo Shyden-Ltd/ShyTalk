@@ -31,7 +31,7 @@ class FirebaseCallTest {
         }
 
     @Test
-    fun `success path works for Unit returns (fire-and-forget repository methods)`() =
+    fun `success path works for Unit returns fire-and-forget repository methods`() =
         runTest {
             // Every mutation method in IosRoomRepositoryImpl + RoomRepositoryImpl
             // returns Resource<Unit>; the wrapper must hand back Resource.Success(Unit).
@@ -43,7 +43,7 @@ class FirebaseCallTest {
         }
 
     @Test
-    fun `success path works for String returns (e g  ID-returning create methods)`() =
+    fun `success path works for String returns such as ID-returning create methods`() =
         runTest {
             val result = firebaseCall { "room-abc-123" }
             assertTrue(result is Resource.Success, "expected Success, got $result")
@@ -134,7 +134,7 @@ class FirebaseCallTest {
     // ── Structured concurrency: CancellationException rethrows ─────────
 
     @Test
-    fun `CancellationException is rethrown as the exact same instance (structured concurrency)`() =
+    fun `CancellationException is rethrown as the exact same instance structured concurrency`() =
         runTest {
             // Swallowing CancellationException breaks coroutine cancellation
             // propagation — a scope canceller would never get its cancel signal.
@@ -152,7 +152,7 @@ class FirebaseCallTest {
     // ── Generic exception types ────────────────────────────────────────
 
     @Test
-    fun `non-Exception Error subtypes (OutOfMemoryError, etc) propagate uncaught — not converted to Resource Error`() =
+    fun `non-Exception Error subtypes OutOfMemoryError etc propagate uncaught — not converted to Resource Error`() =
         runTest {
             // The catch on `Exception` is deliberately narrower than `Throwable`:
             // fatal JVM errors (OOM, stack overflow, etc.) should crash the
@@ -168,7 +168,7 @@ class FirebaseCallTest {
         }
 
     @Test
-    fun `wrapper handles arbitrary Exception subtypes (IllegalStateException, IllegalArgumentException, etc)`() =
+    fun `wrapper handles arbitrary Exception subtypes like IllegalStateException and IllegalArgumentException`() =
         runTest {
             // Mirrors the wide range of exception types Firebase / ApiException
             // can throw in production — the catch must be on Exception broadly,

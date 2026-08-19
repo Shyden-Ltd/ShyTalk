@@ -31,7 +31,10 @@ const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const IOS_TESTS_YML = path.join(REPO_ROOT, '.github/workflows/ios-tests.yml');
-const UPLOAD_ARTIFACT_SHA = 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a';
+// SHY-0162: match the SHA-PINNED form (version-agnostic), not a frozen literal —
+// a frozen SHA reds the suite on any Dependabot upload-artifact bump. Repo-wide
+// SHA-pinning + single-SHA consistency is enforced by ci-action-pin-consistency.test.js.
+const UPLOAD_ARTIFACT_PINNED = /actions\/upload-artifact@[0-9a-f]{40}\b/;
 
 /**
  * Extract a workflow step's full YAML block by its `- name:` header.
@@ -138,7 +141,7 @@ describe('ios-tests.yml — xcodebuild log capture + artifact upload', () => {
 
     test('Upload step uses pinned actions/upload-artifact SHA', () => {
       const body = extractStep(yamlText, 'Upload xcodebuild logs');
-      expect(body).toContain(UPLOAD_ARTIFACT_SHA);
+      expect(body).toMatch(UPLOAD_ARTIFACT_PINNED);
     });
 
     test('Upload step has if: always() so it runs ON FAILURE (the critical case)', () => {

@@ -58,6 +58,7 @@ class IosAppConfigServiceImpl(
                     status = json["status"]?.jsonPrimitive?.contentOrNull ?: "ok",
                     firestoreAvailable = json["firestoreAvailable"]?.jsonPrimitive?.boolean ?: true,
                     timestamp = json["timestamp"]?.jsonPrimitive?.long ?: currentTimeMillis(),
+                    sha = json["sha"]?.jsonPrimitive?.contentOrNull,
                 ),
             )
         } catch (e: Exception) {

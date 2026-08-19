@@ -1148,6 +1148,7 @@ const J07 = {
     await reporter.step(device, 'Setup: create the Alice↔Lena conversation doc', async () => {
       await ctx.db.doc(`conversations/${convId}`).set({
         participantIds: [alice, lena],
+        crossCohortAtMigration: false,
         isGroup: false,
         createdAt: Date.now(),
       });

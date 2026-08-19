@@ -185,14 +185,14 @@ describe('createMobileWebkitIosDriver — input validation', () => {
   });
 
   test('throws when no iPhone is connected', async () => {
-    await expect(
-      createMobileWebkitIosDriver({
-        browser: 'chrome',
-        wdaTeamId: 'TEAM',
-        selectUdidImpl: () => null,
-        fetchImpl: makeFetchMock([]),
-      }),
-    ).rejects.toThrow(/no connected iPhone found/);
+    const err = await createMobileWebkitIosDriver({
+      browser: 'chrome',
+      wdaTeamId: 'TEAM',
+      selectUdidImpl: () => null,
+      fetchImpl: makeFetchMock([]),
+    }).catch((e) => e);
+    expect(err.message).toMatch(/no physical iPhone found via `xcrun xctrace list devices`/);
+    expect(err.code).toBe('DRIVER_INIT_FAILED'); // → matrix-dispatch skips, not fails
   });
 
   test('throws when WDA_TEAM_ID is missing', async () => {
@@ -698,5 +698,211 @@ describe('createMobileWebkitIosDriver — takeScreenshot delegation', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+// R4 parity — WDA signing caps + env-check ordering (SHY-0095) ────────
+
+describe('R4 — WDA signing parity with ios-appium-driver', () => {
+  test('session caps use the modern "Apple Development" signing id', async () => {
+    // 'Apple Developer' matches NO certificate (live-proven 2026-07-12:
+    // xcodebuild code 65 on the first fresh WDA build).
+    const fetchImpl = makeFetchMock(defaultHandlers());
+    const driver = await createMobileWebkitIosDriver({
+      browser: 'chrome',
+      wdaTeamId: 'TEAM123',
+      selectUdidImpl: () => 'UDID-A',
+      fetchImpl,
+    });
+    await driver.webRefreshRoomsList('Alice');
+    const sessionCall = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+    const caps = JSON.parse(sessionCall.opts.body).capabilities.alwaysMatch;
+    expect(caps['appium:xcodeSigningId']).toBe('Apple Development');
+  });
+
+  test('useNewWDA defaults false and flips true under IOS_FORCE_NEW_WDA=true', async () => {
+    async function capsWithEnv(value) {
+      if (value === undefined) delete process.env.IOS_FORCE_NEW_WDA;
+      else process.env.IOS_FORCE_NEW_WDA = value;
+      try {
+        const fetchImpl = makeFetchMock(defaultHandlers());
+        const driver = await createMobileWebkitIosDriver({
+          browser: 'edge',
+          wdaTeamId: 'TEAM123',
+          selectUdidImpl: () => 'UDID-A',
+          fetchImpl,
+        });
+        await driver.webRefreshRoomsList('Alice');
+        const sessionCall = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+        return JSON.parse(sessionCall.opts.body).capabilities.alwaysMatch;
+      } finally {
+        delete process.env.IOS_FORCE_NEW_WDA;
+      }
+    }
+    expect((await capsWithEnv(undefined))['appium:useNewWDA']).toBe(false);
+    expect((await capsWithEnv('true'))['appium:useNewWDA']).toBe(true);
+    expect((await capsWithEnv('1'))['appium:useNewWDA']).toBe(false);
+  });
+
+  test('WDA_TEAM_ID is validated BEFORE the device probe runs', async () => {
+    await expect(
+      createMobileWebkitIosDriver({
+        browser: 'firefox',
+        wdaTeamId: undefined,
+        selectUdidImpl: () => {
+          throw new Error('device probe ran before env validation');
+        },
+        fetchImpl: makeFetchMock([]),
+      }),
+    ).rejects.toThrow(/WDA_TEAM_ID env var is required/);
+  });
+
+  test('browser-slug validation still precedes everything (unknown slug wins over missing WDA)', async () => {
+    await expect(
+      createMobileWebkitIosDriver({
+        browser: 'opera',
+        wdaTeamId: undefined,
+        selectUdidImpl: () => {
+          throw new Error('device probe ran before validation');
+        },
+        fetchImpl: makeFetchMock([]),
+      }),
+    ).rejects.toThrow(/not supported/);
+  });
+});
+
+// webSignIn (SHY-0328) ───────────────────────────────────────────────
+
+describe('createMobileWebkitIosDriver — webSignIn (SHY-0328)', () => {
+  // Wiring coverage: driver-contract.test.js compares the method-name
+  // constant to itself, so nothing here was ever asserted behaviourally.
+
+  const SESSION = 'sess-iosbrowser';
+  const SAVED_PW = process.env.PERSONAS_PASSWORD;
+  const SECRET = 'webkit-driver-credential';
+
+  beforeEach(() => {
+    process.env.PERSONAS_PASSWORD = SECRET;
+  });
+  afterEach(() => {
+    if (SAVED_PW === undefined) delete process.env.PERSONAS_PASSWORD;
+    else process.env.PERSONAS_PASSWORD = SAVED_PW;
+  });
+
+  /** /execute/async responder FIRST — this fetch mock is first-match-wins. */
+  function handlersWithAsync(asyncResponse) {
+    return [
+      {
+        match: (url, opts) =>
+          url.endsWith(`/session/${SESSION}/execute/async`) && opts.method === 'POST',
+        respond: () => asyncResponse,
+      },
+      ...defaultHandlers({ sessionId: SESSION }),
+    ];
+  }
+
+  async function driverWith(fetchImpl) {
+    return createMobileWebkitIosDriver({
+      browser: 'chrome',
+      wdaTeamId: 'TEAM',
+      selectUdidImpl: () => 'UDID',
+      fetchImpl,
+    });
+  }
+
+  test('signs in over /execute/ASYNC — never /execute/sync', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    expect(await driver.webSignIn('Alice')).toBe(true);
+
+    const scriptCalls = fetchImpl.calls.filter((c) => c.url.includes('/execute/'));
+    expect(scriptCalls.some((c) => c.url.endsWith('/execute/async'))).toBe(true);
+    expect(scriptCalls.some((c) => c.url.endsWith('/execute/sync'))).toBe(false);
+  });
+
+  test('navigates to /roadmap.html on the driver’s own baseURL', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    await driver.webSignIn('Alice');
+
+    const nav = fetchImpl.calls.find((c) => c.url.endsWith(`/session/${SESSION}/url`));
+    expect(JSON.parse(nav.opts.body).url).toBe('http://localhost:8888/roadmap.html');
+  });
+
+  test('the credential is sent as an ARG and never inside the script source', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    await driver.webSignIn('Alice');
+
+    const body = JSON.parse(
+      fetchImpl.calls.find((c) => c.url.endsWith('/execute/async')).opts.body,
+    );
+    expect(body.script).not.toContain(SECRET);
+    expect(body.script).not.toContain('adult-power@shytalk.dev');
+    expect(body.args).toEqual(['adult-power@shytalk.dev', SECRET]);
+  });
+
+  test('returns FALSE when the page reports the sign-in failed', async () => {
+    const fetchImpl = makeFetchMock(
+      handlersWithAsync(makeJsonResponse({ value: { ok: false, error: 'INVALID_PASSWORD' } })),
+    );
+    const driver = await driverWith(fetchImpl);
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('returns FALSE when Appium rejects /execute/async, rather than throwing', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeTextResponse('script timeout', 500)));
+    const driver = await driverWith(fetchImpl);
+    expect(await driver.webSignIn('Alice')).toBe(false);
+  });
+
+  test('returns FALSE for an unknown persona without running any script', async () => {
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    expect(await driver.webSignIn('Nobody')).toBe(false);
+    expect(fetchImpl.calls.some((c) => c.url.endsWith('/execute/async'))).toBe(false);
+  });
+
+  test('returns FALSE when PERSONAS_PASSWORD is unset rather than signing in blank', async () => {
+    delete process.env.PERSONAS_PASSWORD;
+    const fetchImpl = makeFetchMock(handlersWithAsync(makeJsonResponse({ value: { ok: true } })));
+    const driver = await driverWith(fetchImpl);
+
+    expect(await driver.webSignIn('Alice')).toBe(false);
+    expect(fetchImpl.calls.some((c) => c.url.endsWith('/execute/async'))).toBe(false);
+  });
+});
+
+// Script timeout (SHY-0328 R4) ───────────────────────────────────────
+
+describe('createMobileWebkitIosDriver — W3C script timeout is pinned explicitly', () => {
+  // WEBDRIVER_SIGN_IN_SCRIPT's worst case is ~40s: two 20s phases, each with
+  // its OWN budget so a slow SDK load cannot starve the currentUser wait. The
+  // W3C default script timeout is 30000ms, so without an explicit capability
+  // the remote would kill a legitimately-slow-but-succeeding sign-in and
+  // surface it as a transport error instead of success or a diagnostic.
+  //
+  // Asserted against the script's own worst case rather than a bare literal,
+  // so lengthening a phase without raising this ceiling fails HERE.
+  const SCRIPT_WORST_CASE_MS = 20000 * 2;
+
+  test('the session is created with a script timeout above the script’s worst case', async () => {
+    const fetchImpl = makeFetchMock(defaultHandlers({ sessionId: 'sess-iosbrowser' }));
+    const driver = await createMobileWebkitIosDriver({
+      browser: 'chrome',
+      wdaTeamId: 'TEAM',
+      selectUdidImpl: () => 'UDID',
+      fetchImpl,
+    });
+    await driver.webUiDump('Alice').catch(() => {});
+
+    const create = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+    const caps = JSON.parse(create.opts.body).capabilities.alwaysMatch;
+    expect(caps.timeouts).toBeDefined();
+    expect(caps.timeouts.script).toBeGreaterThan(SCRIPT_WORST_CASE_MS);
   });
 });

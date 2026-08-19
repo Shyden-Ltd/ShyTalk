@@ -289,18 +289,18 @@ Use `--fail-fast` to abort on first **fail** (skips still continue).
 
 ## Troubleshooting
 
-| symptom                                               | likely cause                                             | fix                                                               |
-| ----------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------- |
-| `MISSING_ENV: PERSONAS_PASSWORD`                      | env var unset                                            | `source ~/.shytalk/dev-personas.env`                              |
-| `--browser X not allowed for --target local`          | typo in browser slug                                     | check the matrix table above                                      |
-| `no Android device attached`                          | USB cable unplugged or USB debugging not authorised      | `adb devices` to verify; replug if needed                         |
-| `Android device is unauthorised`                      | RSA prompt not accepted on device                        | unlock device, replug, tap **Allow**                              |
-| `no connected iPhone found via xcrun devicectl`       | iPhone not paired with Xcode                             | Xcode → Devices and Simulators → re-pair                          |
-| `WDA_TEAM_ID env var is required`                     | iOS-related env var unset                                | `export WDA_TEAM_ID=<team-id>`                                    |
-| `Appium /session failed (500)` with WDA install error | dev cert not trusted on iPhone                           | Settings → General → VPN & Device Management → trust              |
-| `geckodriver did not become ready`                    | geckodriver not on PATH or Firefox not installed         | `brew install geckodriver`, install Firefox from Play Store       |
-| `connectOverCDP failed` on Mobile Chrome              | Chrome not open on device, or USB Web debugging disabled | open Chrome, enable chrome://flags toggle                         |
-| One cell perpetually skips                            | device disconnected mid-run                              | replug + re-run that cell with `--browser <slug>` (no `--matrix`) |
+| symptom                                                   | likely cause                                                                                     | fix                                                                                                             |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `MISSING_ENV: PERSONAS_PASSWORD`                          | env var unset                                                                                    | `source ~/.shytalk/dev-personas.env`                                                                            |
+| `--browser X not allowed for --target local`              | typo in browser slug                                                                             | check the matrix table above                                                                                    |
+| `no Android device attached`                              | USB cable unplugged or USB debugging not authorised                                              | `adb devices` to verify; replug if needed                                                                       |
+| `Android device is unauthorised`                          | RSA prompt not accepted on device                                                                | unlock device, replug, tap **Allow**                                                                            |
+| `no physical iPhone found via xcrun xctrace list devices` | iPhone not connected/trusted, or listed under "Devices Offline" (iOS 26/27 — often still usable) | `idevice_id -l` + `xcrun devicectl list devices`; if reachable it is drivable despite xctrace showing "Offline" |
+| `WDA_TEAM_ID env var is required`                         | iOS-related env var unset                                                                        | `export WDA_TEAM_ID=<team-id>`                                                                                  |
+| `Appium /session failed (500)` with WDA install error     | dev cert not trusted on iPhone                                                                   | Settings → General → VPN & Device Management → trust                                                            |
+| `geckodriver did not become ready`                        | geckodriver not on PATH or Firefox not installed                                                 | `brew install geckodriver`, install Firefox from Play Store                                                     |
+| `connectOverCDP failed` on Mobile Chrome                  | Chrome not open on device, or USB Web debugging disabled                                         | open Chrome, enable chrome://flags toggle                                                                       |
+| One cell perpetually skips                                | device disconnected mid-run                                                                      | replug + re-run that cell with `--browser <slug>` (no `--matrix`)                                               |
 
 ---
 

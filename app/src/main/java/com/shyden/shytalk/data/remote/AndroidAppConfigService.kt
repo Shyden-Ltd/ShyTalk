@@ -32,6 +32,7 @@ class AndroidAppConfigService(
                     status = data["status"] as? String ?: "ok",
                     firestoreAvailable = data["firestoreAvailable"] as? Boolean ?: true,
                     timestamp = (data["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                    sha = data["sha"] as? String,
                 ),
             )
         } catch (e: Exception) {

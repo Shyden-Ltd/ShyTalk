@@ -153,4 +153,3 @@ This story's deliverable IS the single Gherkin scenario below, appended to the e
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 31 (G006). Reserved ID SHY-0043. Originally scoped at 4 scenarios.
 - 2026-06-12 ~23:30 BST — **Rescoped to the single missing scenario** (operator dedup decision, [[SHY-0091]] pass). Pickup-fitness against the live `push_permission.feature` (verified by `grep`, not assumed): PR #1015 + #1024 already shipped 12 scenarios covering 3 of the original 4 (denied→banner, tap→settings, granted→hidden) plus non-dismissible + pre/post-Tiramisu gating. ONLY **cold-start persistence** (force-stop + relaunch, no flicker) is genuinely absent — no scenario, no step defs. Effort S→XS. The original's `@flaky-emulator` mitigation is now MOOT (real-device-only policy). Embedded the full Pre-Merge Testing Protocol (cold-start = inherently real-device Android). DoD → **judgment-merge**.
-</content>

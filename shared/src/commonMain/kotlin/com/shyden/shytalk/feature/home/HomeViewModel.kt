@@ -8,10 +8,8 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.push.PushPermissionState
 import com.shyden.shytalk.core.push.PushPermissionStore
-import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
-import com.shyden.shytalk.core.util.effectiveCohort
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
@@ -19,6 +17,7 @@ import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.data.repository.resolveEffectiveCohort
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -151,8 +150,12 @@ class HomeViewModel(
 
     private fun observeRooms() {
         viewModelScope.launch {
+            // SHY-0102 — pin the caller's cohort so the rooms `list` query
+            // satisfies the firestore.rules read gate (an unconstrained list
+            // is denied → empty Rooms screen). Fails closed to "minor".
+            val cohort = userRepository.resolveEffectiveCohort(currentUserId)
             roomRepository
-                .getActiveRooms()
+                .getActiveRooms(cohort)
                 .catch { e ->
                     logE(TAG, "Room observation failed: ${e.message}")
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -366,8 +369,11 @@ class HomeViewModel(
         val userId = authRepository.currentUserId ?: return
         logI(TAG, "Creating room: name=$name")
         viewModelScope.launch {
-            // Check if user already has an active room — ask before replacing
-            val existingRoomId = roomRepository.findActiveRoomByOwner(userId)
+            // Check if user already has an active room — ask before replacing.
+            // SHY-0102 — owner-dedup is a rooms `list`, so it carries the same
+            // cohort pin as the rooms list (fails closed to "minor").
+            val cohort = userRepository.resolveEffectiveCohort(userId)
+            val existingRoomId = roomRepository.findActiveRoomByOwner(userId, cohort)
             if (existingRoomId != null) {
                 logI(TAG, "User has existing room $existingRoomId — showing confirmation")
                 _uiState.update {
@@ -375,7 +381,7 @@ class HomeViewModel(
                 }
                 return@launch
             }
-            doCreateRoom(name, userId)
+            doCreateRoom(name, userId, cohort)
         }
     }
 
@@ -384,8 +390,11 @@ class HomeViewModel(
         val name = _uiState.value.pendingRoomName ?: return
         _uiState.update { it.copy(showReplaceRoomConfirmation = false, pendingRoomName = null) }
         viewModelScope.launch {
-            roomRepository.closeAllRoomsByOwner(userId)
-            doCreateRoom(name, userId)
+            // SHY-0102 — closeAllRoomsByOwner lists the owner's rooms (a `list`),
+            // so it pins the caller's cohort like the other rooms queries.
+            val cohort = userRepository.resolveEffectiveCohort(userId)
+            roomRepository.closeAllRoomsByOwner(userId, cohort)
+            doCreateRoom(name, userId, cohort)
         }
     }
 
@@ -396,32 +405,17 @@ class HomeViewModel(
     private suspend fun doCreateRoom(
         name: String,
         userId: String,
+        cohort: String,
     ) {
         _uiState.update { it.copy(isLoading = true, error = null, lastRoomName = name) }
         viewModelScope.launch { userRepository.updateProfile(userId, mapOf("lastRoomName" to name)) }
 
-        // UK OSA #17 PR 7 — fetch the caller's cohort to stamp on the
-        // new room. The firestore.rules layer binds this value to the
-        // server-signed JWT claim, so a client cannot create a room
-        // tagged with the wrong cohort. We fall back to "minor" if the
-        // user lookup fails: most-restrictive default per the OSA
-        // "fail closed when ambiguous" rule.
-        //
-        // `cohortOverride` (admin-set) takes precedence over `cohort`
-        // — the JWT claim is server-minted from `effectiveCohort`
-        // which honours the override, so the stamped value MUST match
-        // or the firestore.rules create-bind rejects.
-        // UK OSA #17 PR 12 — route through the central
-        // `User.effectiveCohort` extension so an invalid `cohort` field
-        // also fails closed to "minor" (the prior inline check honoured
-        // override but accepted any `cohort` string, even a corrupted
-        // Firestore value, which would be rejected by the rules-layer
-        // create-bind and surface as a confusing error to the user).
-        val cohort =
-            when (val userResult = userRepository.getUser(userId)) {
-                is Resource.Success -> userResult.data.effectiveCohort
-                else -> COHORT_MINOR
-            }
+        // UK OSA #17 PR 7 — stamp the caller's cohort on the new room. The
+        // firestore.rules create-bind requires `request.resource.data.cohort ==
+        // request.auth.token.cohort`, so the stamped value MUST equal the
+        // server-minted JWT claim (which honours an admin `cohortOverride`).
+        // [cohort] is resolved once per create action by the caller via the
+        // shared fail-closed-to-"minor" [resolveEffectiveCohort] (SHY-0102).
 
         // Cron-elim PR A0 — pass the Firebase Auth uid alongside the
         // Firestore uniqueId. firestore.rules binds `ownerFirebaseUid` to

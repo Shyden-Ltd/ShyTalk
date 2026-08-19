@@ -1520,3 +1520,32 @@ describe('buildDataExport', () => {
     });
   });
 });
+
+// SHY-0132 — OSA §17: migrated cross-cohort threads must NOT appear in the GDPR
+// export (the Admin SDK bypasses Firestore rules). Plain doc fixtures — no mocks —
+// so this pins the predicate the export uses for BOTH metadata and the message loop.
+describe('_isExportableConversation (SHY-0132 cross-cohort export segregation)', () => {
+  const { _isExportableConversation } = require('../../src/utils/data-export-builder');
+  const doc = (id, fields) => ({ id, data: () => fields });
+
+  test('EXCLUDES a migrated cross-cohort thread (crossCohortAtMigration: true)', () => {
+    expect(_isExportableConversation(doc('m', { crossCohortAtMigration: true }))).toBe(false);
+  });
+
+  test('INCLUDES a non-migrated thread (crossCohortAtMigration: false)', () => {
+    expect(_isExportableConversation(doc('n', { crossCohortAtMigration: false }))).toBe(true);
+  });
+
+  test('INCLUDES a legacy thread with the field ABSENT (matches in-app visibility)', () => {
+    expect(_isExportableConversation(doc('legacy', { participantIds: [1, 2] }))).toBe(true);
+  });
+
+  test('a mixed set keeps only the non-migrated threads', () => {
+    const docs = [
+      doc('normal', { crossCohortAtMigration: false }),
+      doc('migrated', { crossCohortAtMigration: true }),
+      doc('legacy', {}),
+    ];
+    expect(docs.filter(_isExportableConversation).map((d) => d.id)).toEqual(['normal', 'legacy']);
+  });
+});

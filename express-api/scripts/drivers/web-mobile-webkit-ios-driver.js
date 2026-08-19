@@ -39,6 +39,7 @@ const path = require('path');
 // the other iOS drivers (Safari + native app).
 const REPO_ROOT_DRIVERS = path.resolve(__dirname);
 const { selectUdid } = require(path.join(REPO_ROOT_DRIVERS, 'ios-appium-driver'));
+const { makeWebSignInViaWebDriver } = require('./web-sign-in');
 
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
@@ -102,15 +103,23 @@ async function createMobileWebkitIosDriver({
   }
   const { bundleId, appName } = WEBKIT_BROWSERS[browser];
 
-  const udid = selectUdidImpl(preferredUdid);
-  if (!udid) {
-    throw new Error(
-      `createMobileWebkitIosDriver(${browser}): no connected iPhone found via \`xcrun devicectl list devices\`. Pair the device with Xcode + ensure it shows "available" or "connected".`,
-    );
-  }
+  // Cheap env validation FIRST, device probe second: a no-device
+  // environment (CI, phone unplugged) must surface the missing env var,
+  // not a misleading "no physical iPhone" for what is a config gap —
+  // and the probe shells out to xcrun, so failing early is also faster.
   if (!wdaTeamId) {
     throw new Error(
       `createMobileWebkitIosDriver(${browser}): WDA_TEAM_ID env var is required. This is the operator's Apple Developer team ID — Appium uses it to sign WebDriverAgent + the WebKit Remote Inspector bridge.`,
+    );
+  }
+  const udid = selectUdidImpl(preferredUdid);
+  if (!udid) {
+    // Stable `code` → matrix-dispatch isInitError skips (not fails) on no-device.
+    throw Object.assign(
+      new Error(
+        `createMobileWebkitIosDriver(${browser}): no physical iPhone found via \`xcrun xctrace list devices\`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable).`,
+      ),
+      { code: 'DRIVER_INIT_FAILED' },
     );
   }
 
@@ -122,15 +131,31 @@ async function createMobileWebkitIosDriver({
       capabilities: {
         alwaysMatch: {
           platformName: 'iOS',
+          // W3C script timeout. The default is 30000ms, and
+          // WEBDRIVER_SIGN_IN_SCRIPT's worst case is ~40s — two 20s phases,
+          // each with its own budget so a slow SDK load cannot starve the
+          // currentUser wait (SHY-0328 R4). Without this the remote would kill
+          // a legitimately-slow-but-succeeding sign-in and surface it as a
+          // transport error rather than success or a graceful diagnostic.
+          // Set EXPLICITLY rather than relying on any implementation's default.
+          timeouts: { script: 45000 },
           'appium:automationName': 'XCUITest',
           'appium:udid': udid,
           // Launch the specific browser app via bundleId — distinct
           // from Safari's `browserName: 'safari'` capability. Once the
           // app is up we switch to its webview context.
           'appium:bundleId': bundleId,
-          'appium:xcodeSigningId': 'Apple Developer',
+          // "Apple Development" is the modern signing-cert name; "Apple
+          // Developer" matches no certificate and fails the WDA rebuild
+          // with xcodebuild code 65 (live-proven 2026-07-12; parity with
+          // ios-appium-driver's identical fix).
+          'appium:xcodeSigningId': 'Apple Development',
           'appium:xcodeOrgId': wdaTeamId,
-          'appium:useNewWDA': false,
+          // Reuse the installed WDA by default; IOS_FORCE_NEW_WDA=true
+          // forces a fresh build+install after a signing/config change
+          // (else Appium launches the stale WDA → "connection refused
+          // to port 8100"). Same contract as ios-appium-driver.
+          'appium:useNewWDA': process.env.IOS_FORCE_NEW_WDA === 'true',
           'appium:noReset': true,
           // Auto-launch the app (default true, explicit for clarity).
           'appium:autoLaunch': true,
@@ -232,6 +257,27 @@ async function createMobileWebkitIosDriver({
     return body.value || '';
   }
 
+  /**
+   * W3C /execute/async — the callback form. Needed by webSignIn because
+   * signInWithEmail returns a Promise, and /execute/sync would return before it
+   * settles and report a false success (SHY-0328).
+   */
+  async function executeAsync(script, args = []) {
+    const sid = await ensureSession();
+    const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/execute/async`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ script, args }),
+    });
+    if (!r.ok) {
+      throw new Error(
+        `Appium /execute/async failed (${r.status}): ${(await r.text()).slice(0, 300)}`,
+      );
+    }
+    const body = await r.json();
+    return body.value;
+  }
+
   const driver = {
     _browser: browser,
     _bundleId: bundleId,
@@ -240,6 +286,15 @@ async function createMobileWebkitIosDriver({
     _appiumBaseUrl: appiumBaseUrl,
     _baseURL: baseURL,
   };
+
+  // webSignIn — real Firebase auth over WebDriver REST; shared sequence with
+  // every other web driver, different transport.
+  driver.webSignIn = makeWebSignInViaWebDriver({
+    navigateTo,
+    executeAsync,
+    baseURL,
+    label: 'mobile-webkit-ios-driver',
+  });
 
   driver.webRefreshRoomsList = async (_name) => {
     try {
@@ -289,7 +344,13 @@ async function createMobileWebkitIosDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
+const WEB_MOBILE_METHOD_NAMES = [
+  'webRefreshRoomsList',
+  'webUiDump',
+  'takeScreenshot',
+  // SHY-0328 — the step existed with no method behind it on any web driver.
+  'webSignIn',
+];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

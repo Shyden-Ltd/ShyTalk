@@ -44,7 +44,7 @@ jobs:
     # added below for EPIC-0003 Phase 3 (real-firebase Jest tests).
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
 
@@ -56,7 +56,7 @@ jobs:
       # present before they start. Reuses the repo-wide SHA pin for
       # actions/setup-java (see .github/actions/setup-jdk-gradle) to
       # satisfy the SHA-pin supply-chain guard.
-      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -116,34 +116,86 @@ jobs:
           mkdir -p express-api/coverage
           echo "{\"passed\":${PASSED},\"failed\":${FAILED},\"total\":${TOTAL},\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"express\",\"env\":\"${REPORT_ENV}\"}" > express-api/coverage/metadata.json
 
-      - name: Deploy Express report to GitHub Pages
-        # Skip for PR runs (the default 'pr' report_env) and for
-        # dependabot PRs. Three layers of motivation:
-        #   1) Read-only GITHUB_TOKEN: on dependabot-authored runs
-        #      GitHub enforces a read-only token (2021 supply-chain
-        #      tightening), so peaceiris/actions-gh-pages can't push.
-        #   2) gh-pages race condition: when N PRs run CI in the same
-        #      minute (e.g. matrix-completeness batch + dependabot bumps),
-        #      each peaceiris invocation does `git clone gh-pages
-        #      --depth=1`, commits its report, then `git push` — and
-        #      N-1 of those pushes are rejected as non-fast-forward
-        #      because the first push got there first. peaceiris
-        #      doesn't retry. Verified with PR #901's two consecutive
-        #      failures despite the test step itself passing.
-        #   3) PR-branch reports are nice-to-have, not canonical —
-        #      only the dev/prod main-branch reports are linked from
-        #      docs and consumed downstream. Skipping the racey pr
-        #      deploy preserves the deploys that matter.
-        # The condition skips when the resolved report_env is 'pr'
-        # (i.e. neither dev nor prod was supplied), preserving the
-        # main-branch deploy path. We guard on `github.head_ref` (PR's
-        # source branch) instead of `github.actor` so the dependabot
-        # skip applies even when the run is triggered by a non-dependabot
-        # user adding a merge commit to the PR.
-        if: always() && (inputs.report_env == 'dev' || inputs.report_env == 'prod') && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+      # SHY-0298: handed to a separate publish job rather than pushed from here,
+      # so a slow or retrying publish cannot hold the backend suite open. An
+      # artifact is the hand-off.
+      - name: Upload Express report for publishing
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: express-api/coverage
-          destination_dir: express/${{ inputs.report_env || 'pr' }}/latest
-          keep_files: true
+          name: express-report-pages-${{ inputs.report_env || 'pr' }}
+          retention-days: 1
+          path: express-api/coverage
+          if-no-files-found: error
+
+  # SHY-0298 — PR branches get their report back.
+  #
+  # The old step skipped publishing unless report_env was dev or prod. That was
+  # AVOIDANCE, not a fix: the race (peaceiris clones --depth=1, commits, pushes,
+  # never retries; N-1 concurrent pushes rejected non-fast-forward — verified on
+  # PR #901) was dodged by switching the PR-branch report OFF, on the grounds
+  # that it was "nice-to-have". The publish action now RETRIES against the
+  # moving tip, so a lost race costs a second attempt rather than a report, and
+  # the report comes back — which is also the only externally observable proof
+  # that the retry works.
+  #
+  # NO concurrency group, deliberately. The first version of this story used
+  # one, and that was wrong: a group holds exactly ONE pending entry, so a
+  # third contender cancels the pending second (incidents #568/#570), and a
+  # cancelled publish here propagates into PR Gate, a REQUIRED check — the lock
+  # would have red-gated innocent PRs.
+  publish-express-report:
+    name: Publish Express Report
+    needs: test-backend
+    # NOT `always()` — see pr-checks.yml's publish job for the full reasoning.
+    # `always()` also fires when the run is CANCELLED, and this workflow sits
+    # under `cancel-in-progress: true`; the producer's own `if: always()` upload
+    # step still runs during cancellation, so the artifact can hold a
+    # HALF-FINISHED coverage report, which keep_files:false would publish over
+    # the good one. The `skipped` guard is defensive here (this job's producer
+    # is the workflow's own main job) but keeps the two publishers identical.
+    #
+    # A FAILED suite still publishes: that is the case a report matters most.
+    if: ${{ !cancelled() && needs.test-backend.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # A publish failure must NOT red-gate the PR (SHY-0298 Error-paths AC:
+    # "a publishing failure must not be reported as a test failure").
+    #
+    # This job lives inside a REUSABLE workflow, and a reusable workflow's
+    # conclusion is the aggregate of its jobs — so without this, a green
+    # backend suite whose report failed to publish made the caller's
+    # `test-backend` job `failure`, and `test-backend` is in PR Gate's `needs`.
+    # A missing coverage HTML would have blocked a merge with no test failure
+    # behind it.
+    #
+    # `continue-on-error` and NOT a moved job: `test-backend.yml` is also
+    # `workflow_dispatch`-able for dev/prod report runs, and moving the publish
+    # into pr-checks.yml (where the Kotlin one lives, naturally outside the
+    # gate) would silently stop those from publishing.
+    #
+    # Visibility is unaffected — the job still reports as failed, with the
+    # publish action's own `::error` annotation. It just stops being a gate.
+    continue-on-error: true
+    # NO concurrency group — see pr-checks.yml's publish job. A cancelled job
+    # here would be worse than there: this workflow is in PR Gate's `needs`, so
+    # a cancelled publish would otherwise fail a REQUIRED check on an innocent
+    # PR.
+    permissions:
+      contents: write
+    steps:
+      # Same ref as this workflow's own main job, so the publish uses the
+      # composite action from the commit under test, not whatever the merge
+      # ref resolves to.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: express-report-pages-${{ inputs.report_env || 'pr' }}
+          path: express-api/coverage
+      - uses: ./.github/actions/publish-gh-pages
+        with:
+          publish-dir: express-api/coverage
+          destination-dir: express/${{ inputs.report_env || 'pr' }}/latest
+          github-token: ${{ secrets.GITHUB_TOKEN }}

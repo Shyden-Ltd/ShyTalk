@@ -33,6 +33,12 @@
  */
 const PRIOR_NODE_ENV = process.env.NODE_ENV;
 process.env.NODE_ENV = 'local';
+// This suite WIPES the shared `users` collection, so it runs against its own
+// emulator project — otherwise it deletes documents another parallel Jest
+// worker just seeded (SHY-0171). Safe here: no Auth tokens are minted.
+// Jest gives every test FILE its own cloned `process.env` (jest-environment-node
+// builds a fresh `process` per environment), so this cannot reach another file.
+process.env.FIRESTORE_TEST_NAMESPACE = 'storage';
 
 const { CreateBucketCommand } = require('@aws-sdk/client-s3');
 const { db } = require('../../src/utils/firebase');

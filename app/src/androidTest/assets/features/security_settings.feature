@@ -12,7 +12,6 @@ Feature: Security Settings
     Then I should see the element with tag "appLockToggle"
     And I should see the element with tag "biometricToggle"
     And I should see the element with tag "resetPinSetting"
-    And I should see the element with tag "linkedAccountsSetting"
 
   Scenario: App lock enabled by default with timeout visible
     Then I should see the text "App Lock"
@@ -23,7 +22,12 @@ Feature: Security Settings
     And I wait 500 milliseconds
     Then I should not see the element with tag "lockTimeoutSetting"
 
-  Scenario: Linked accounts navigates correctly
-    When I tap the element with tag "linkedAccountsSetting"
-    And I wait 1000 milliseconds
-    Then I should see the text "Linked Accounts"
+# NOTE (SHY-0187): the reset-PIN flow is covered elsewhere, not here, because it
+# needs the real PIN backend (PinRepository -> API -> Firebase) which the fake
+# Compose harness does not provide:
+#   - the identity-gate wiring (reset re-verifies when a credential exists) is
+#     pinned at the host level in AppLockWiringPinTest;
+#   - the Settings -> Security click-through is a runnable journey test
+#     (SettingsNavigationTest.securityRow_navigatesToSecurityScreen);
+#   - the live verify-dialog + first-set behaviours are proven on the real
+#     device against the local stack in the batched device gauntlet.

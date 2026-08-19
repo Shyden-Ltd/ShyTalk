@@ -1,6 +1,6 @@
 ---
 id: SHY-0052
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-08
 priority: P2
@@ -141,3 +141,4 @@ Roadmap row (line 95, 2026-06-05): `G035 | 🟡 Polish | Mobile FF/WebKit isMobi
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 95 (G035). Reserved ID SHY-0052.
 - 2026-06-13 ~01:16 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): responsive-web admin un-skip → Playwright headline on the real admin UI across Mac desktop browsers. No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]) **honest-layering note:** viewport-sizing tests REAL responsive layout on real desktop engines (the fix), but is NOT real-mobile — the true mobile assurance is the real Android-Chrome + iOS-Safari device-browser cells (EPIC-0003); the two are complementary. **🚩** if `isMobile` drives behaviour beyond layout (touch/viewport-meta), use a real touch context or a follow-up SHY — never fake mobile-only behaviour via a desktop viewport. DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the 4 line numbers (`:1349,1402,1414,1426`) to re-confirm at pickup.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → In Review. admin-suggestions.spec.ts isMobile-context skips rewritten as viewport sizing (G035); the 9 remaining skips are unrelated data-availability/platform guards; develop, post-v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

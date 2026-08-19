@@ -21,6 +21,7 @@ class FakeAuthRepository : AuthRepository {
 
     override var resolvedUniqueId: String? = null
     override var resolvedDisplayName: String? = null
+    override var resolvedCohort: String? = null
     override val currentUserId: String? get() = resolvedUniqueId ?: fakeUserId
     override val currentFirebaseUid: String? get() = fakeUserId
     override val isAuthenticated: Boolean get() = fakeAuthenticated

@@ -1,0 +1,11 @@
+// Doubles firebase with `jest.doMock` (scoped, paired with resetModules) and
+// never with the hoisted `jest.mock`. It reaches no emulator.
+const logger = require('../../src/utils/loggerInstance');
+
+test('production logger writes through a doubled db', () => {
+  jest.resetModules();
+  jest.doMock('../../src/utils/firebase', () => ({ db: { doc: () => ({ set: () => {} }) } }));
+  const prod = require('../../src/utils/loggerInstance');
+  expect(prod).toBeDefined();
+  expect(logger).toBeDefined();
+});

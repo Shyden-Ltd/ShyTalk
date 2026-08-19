@@ -83,10 +83,14 @@ function startCronJobs() {
   // POSTs to /api/system/sweep-account-deletions; the underlying
   // function lives in src/cron/accountDeletion.js.
   //
-  // expireBans ELIMINATED — ban expiry is enforced at query time in
-  // routes/device-info.js via a Firestore Filter.or() that returns
-  // only currently-active bans (expiresAt == null OR > now). No sweep,
-  // no GH Actions workflow, no system endpoint needed.
+  // expireBans ELIMINATED — ban expiry is decided at read time by
+  // `isBanActive` in utils/bans.js, and lapsed network bans are lazily
+  // reaped on the way through `getActiveNetworkBans`. No sweep, no GH
+  // Actions workflow, no system endpoint needed.
+  //
+  // NOT a Firestore range filter: `where('expiresAt','>',nowIso)` compares
+  // ISO strings by codepoint, so a corrupt expiry silently retires the ban
+  // (SHY-0149). The predicate fails closed instead.
 
   // Expire data exports — daily 04:00 UTC
   cron.schedule('0 4 * * *', () => {

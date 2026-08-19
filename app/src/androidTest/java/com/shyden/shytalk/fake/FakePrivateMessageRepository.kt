@@ -34,7 +34,9 @@ class FakePrivateMessageRepository : PrivateMessageRepository {
         val newConv =
             Conversation(
                 conversationId = "conv-new",
-                participantIds = listOf(uid1, uid2),
+                // SHY-0130 — match the real impl's canonical sorted-string invariant
+                // so instrumented tests exercise the same participantIds shape.
+                participantIds = listOf(uid1, uid2).sorted(),
             )
         conversations.value = conversations.value + newConv
         return Resource.Success(newConv)

@@ -40,6 +40,10 @@ const HELPER_FILES = new Set([
   'android-cdp-helpers.js',
   'ios-driver-loader.js',
   'driver-screenshot-helper.js',
+  'ui-dump-retry.js', // SHY-0154: pure retry helper for androidUiDump — not a driver
+  // SHY-0328: shared webSignIn sequence, wired into all 7 web drivers. It owns
+  // the auth steps, never page acquisition, so it is a helper and not a driver.
+  'web-sign-in.js',
 ]);
 
 function discoverDrivers() {

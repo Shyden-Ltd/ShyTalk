@@ -31,10 +31,22 @@ runs:
         # Try the versioned path first, fall back to the unversioned one if its
         # CFBundleShortVersionString matches the requested major version.
         # `|| true` is required because GitHub's `shell: bash` runs with
-        # `-eo pipefail`, and an empty glob makes the `ls | head` pipeline
+        # `-eo pipefail`, and an empty glob makes the `ls | sort` pipeline
         # exit non-zero on self-hosted runners that don't have the versioned
         # Xcode path. Suppressing keeps execution flowing into the fallback.
-        XCODE=$(ls -d /Applications/Xcode_${{ inputs.xcode-version }}*.app 2>/dev/null | head -1 || true)
+        #
+        # `sort -V | tail -1` — NEWEST matching Xcode, not the lexicographically
+        # first (SHY-0195 root cause #3). `ls` sorts as TEXT, so a bare
+        # `head -1` over the seven Xcode 26.x builds on macos-26-arm64 picked
+        # `Xcode_26.0.1.app` ('0' < '5' at the third component) — the OLDEST on
+        # the box. The image pre-installs the iOS device platform only for its
+        # DEFAULT Xcode (26.6, iphoneos26.5), so every archive died with
+        # "iOS 26.0 is not installed" (exit 70) after a ~20-minute build, and
+        # `xcodebuild -downloadPlatform iOS` could not save it: an iOS platform
+        # WAS present, just not 26.0, so it exited 0 as a no-op. Selecting the
+        # newest tracks whatever the image ships as default. Comparing versions
+        # as strings is the whole bug; `sort -V` compares them as versions.
+        XCODE=$(ls -d /Applications/Xcode_${{ inputs.xcode-version }}*.app 2>/dev/null | sort -V | tail -1 || true)
         if [ -z "$XCODE" ] && [ -d /Applications/Xcode.app ]; then
           ACTUAL=$(defaults read /Applications/Xcode.app/Contents/Info CFBundleShortVersionString 2>/dev/null || echo "")
           if [[ "$ACTUAL" == "${{ inputs.xcode-version }}" || "$ACTUAL" == "${{ inputs.xcode-version }}".* ]]; then

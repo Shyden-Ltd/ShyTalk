@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.AuthRepository
+import com.shyden.shytalk.data.repository.DeviceLockStatus
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.SignInResult
@@ -130,7 +131,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -152,7 +153,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -174,7 +175,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success("other-user")
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.LOCKED)
 
             val vm = createViewModel()
             advanceUntilIdle()
@@ -200,11 +201,11 @@ class AuthViewModelTest {
         }
 
     @Test
-    fun `signInWithGoogle - no device binding binds new device`() =
+    fun `signInWithGoogle - unbound device delegates the lock-check (and bind) to the API`() =
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(null)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -216,7 +217,9 @@ class AuthViewModelTest {
             vm.signInWithGoogle("token")
             advanceUntilIdle()
 
-            coVerify { deviceRepository.bindDevice(deviceId, uniqueIdStr) }
+            // Binding an unbound device now happens server-side inside lock-check;
+            // the client only asks the API for the decision (SHY-0170).
+            coVerify { deviceRepository.resolveDeviceLock(deviceId) }
         }
 
     @Test
@@ -224,7 +227,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Error("network")
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Error("network")
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -264,7 +267,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns Resource.Error("fetch failed")
 
@@ -325,7 +328,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Error("Firestore down")
 
             val vm = createViewModel()
@@ -385,7 +388,7 @@ class AuthViewModelTest {
             coEvery { identityRepository.resolveIdentity("apple", "001234.abcdef") } returns
                 Resource.Success(SignInResult.Found(uniqueId))
             coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success("other-user")
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.LOCKED)
 
             val vm = createViewModel()
             advanceUntilIdle()
@@ -406,7 +409,7 @@ class AuthViewModelTest {
             coEvery { identityRepository.resolveIdentity("apple", "001234.abcdef") } returns
                 Resource.Success(SignInResult.Found(uniqueId))
             coEvery { identityRepository.forceRefreshToken() } returns Resource.Success(Unit)
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -430,7 +433,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -460,7 +463,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -500,7 +503,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -544,7 +547,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success("other-user")
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.LOCKED)
 
             val vm = createViewModel()
             advanceUntilIdle()
@@ -563,7 +566,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -593,7 +596,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -619,7 +622,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -649,7 +652,7 @@ class AuthViewModelTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
             every { authRepository.currentUserId } returns "firebase-uid"
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -681,7 +684,7 @@ class AuthViewModelTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
             every { authRepository.currentUserId } returns "firebase-uid"
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(
@@ -734,7 +737,7 @@ class AuthViewModelTest {
         runTest {
             setupSignInIdentity()
             coEvery { authRepository.signInWithGoogleIdToken("token") } returns Resource.Success("firebase-uid")
-            coEvery { deviceRepository.getDeviceBinding(deviceId) } returns Resource.Success(uniqueIdStr)
+            coEvery { deviceRepository.resolveDeviceLock(deviceId) } returns Resource.Success(DeviceLockStatus.ALLOWED)
             coEvery { userRepository.userExists(uniqueIdStr) } returns Resource.Success(true)
             coEvery { userRepository.getUser(uniqueIdStr) } returns
                 Resource.Success(

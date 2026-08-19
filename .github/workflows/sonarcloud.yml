@@ -42,9 +42,24 @@ jobs:
   sonarcloud:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # SHY-0355 — 15 was not enough and cancelled the job mid-analysis.
+    #
+    # `PR Gate` treats a `cancelled` dependency as a failure, so the pull
+    # request showed every check passing — including SonarCloud's OWN external
+    # `SonarCloud Code Analysis` result — while the gate was red. That reads as
+    # "Sonar found something", so the natural response was to re-run, which cost
+    # another fifteen minutes and failed the same way.
+    #
+    # Measured on PR #1812: two runs cancelled at 15m18s and 15m03s against the
+    # 15m budget, while a SUCCESSFUL run of the same job took 9m37s. So the old
+    # budget left about five minutes of headroom and any queueing or cache miss
+    # spent it. Same shape as SHY-0329 on the driver-checks job.
+    #
+    # Pinned by express-api/tests/scripts/sonarcloud-timeout.test.js, which
+    # reads THIS file so the value cannot drift from what CI runs.
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
@@ -60,7 +75,7 @@ jobs:
       # restore-keys restores the newest entry. Do NOT set SONAR_USER_HOME
       # — CI and local pre-push scans must share this default path.
       - name: Cache SonarCloud scanner engine
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar-${{ github.run_id }}

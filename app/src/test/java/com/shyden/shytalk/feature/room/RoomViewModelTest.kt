@@ -1635,6 +1635,35 @@ class RoomViewModelTest {
         }
 
     @Test
+    fun `joinRoom leaves other rooms pinned to the resolved cohort`() =
+        roomTest {
+            // SHY-0102 — leaveAllRooms in the join flow is a rooms `list`, so it
+            // pins the caller's cohort. Value-pin the threaded cohort.
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            viewModel = createViewModel()
+            emitRoomAsOwner(
+                TestData.createTestRoom(ownerId = currentUserId, seats = TestData.createDefaultSeats()),
+            )
+            advanceUntilIdle()
+
+            coVerify { roomRepository.leaveAllRooms(currentUserId, "adult", exceptRoomId = any()) }
+        }
+
+    @Test
+    fun `joinRoom leaveAllRooms fails closed to minor when the user is unresolved`() =
+        roomTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("no user")
+            viewModel = createViewModel()
+            emitRoomAsOwner(
+                TestData.createTestRoom(ownerId = currentUserId, seats = TestData.createDefaultSeats()),
+            )
+            advanceUntilIdle()
+
+            coVerify { roomRepository.leaveAllRooms(currentUserId, "minor", exceptRoomId = any()) }
+        }
+
+    @Test
     fun `attendee joining room also joins voice as audience`() =
         roomTest {
             viewModel = createViewModel()
@@ -5138,7 +5167,7 @@ class RoomViewModelTest {
                     TestData.createTestUser(uid = ownerId, displayName = "Owner"),
                 )
             // Mock checkBlockedBy to return no conflicts so joinRoom() is called
-            coEvery { userRepository.checkBlockedBy(any(), any()) } returns Resource.Success(emptySet<String>())
+            coEvery { userRepository.checkBlockedBy(any()) } returns Resource.Success(emptySet<String>())
             roomFlow.value = room
             advanceUntilIdle()
 
@@ -5163,7 +5192,7 @@ class RoomViewModelTest {
                 Resource.Success(
                     TestData.createTestUser(uid = ownerId, displayName = "Owner"),
                 )
-            coEvery { userRepository.checkBlockedBy(any(), any()) } returns Resource.Success(emptySet<String>())
+            coEvery { userRepository.checkBlockedBy(any()) } returns Resource.Success(emptySet<String>())
             roomFlow.value = room
             advanceUntilIdle()
 

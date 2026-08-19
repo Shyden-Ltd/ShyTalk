@@ -1,11 +1,9 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 private fun JSONObject.optStringOrNull(key: String): String? {
@@ -14,35 +12,44 @@ private fun JSONObject.optStringOrNull(key: String): String? {
 }
 
 class DeviceRepositoryImpl(
-    private val firestore: FirebaseFirestore,
     private val workerApiClient: WorkerApiClient,
 ) : DeviceRepository {
-    override suspend fun getDeviceBinding(deviceId: String): Resource<String?> =
-        firebaseCall("Failed to check device binding") {
-            val doc = firestore.document("deviceBindings/$deviceId").get().await()
-            val data = doc.data ?: return@firebaseCall null
-            (data["uniqueId"] ?: data["userId"])?.toString()
-        }
-
-    override suspend fun bindDevice(
-        deviceId: String,
-        userId: String,
-    ): Resource<Unit> =
-        firebaseCall("Failed to bind device") {
-            firestore
-                .document("deviceBindings/$deviceId")
-                .set(
-                    mapOf(
-                        "userId" to userId,
-                        "boundAt" to System.currentTimeMillis(),
-                    ),
-                ).await()
-        }
-
-    override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
+    override suspend fun resolveDeviceLock(deviceId: String): Resource<DeviceLockStatus> =
         try {
             val body = JSONObject().apply { put("deviceId", deviceId) }
-            val response = workerApiClient.post("/api/device-info", body)
+            val response = workerApiClient.post("/api/devices/lock-check", body)
+            val status =
+                if (response.optString("status") == "locked") {
+                    DeviceLockStatus.LOCKED
+                } else {
+                    DeviceLockStatus.ALLOWED
+                }
+            Resource.Success(status)
+        } catch (e: Exception) {
+            // Lenient: a lock-check outage must not lock out real users (logged for debugging).
+            logW("DeviceRepository", "Device lock-check failed, allowing through: ${e.message}")
+            Resource.Error(e.message ?: "Device lock-check failed")
+        }
+
+    /**
+     * SHY-0143 — reads the UNAUTHENTICATED `/api/ban-status`, not
+     * `/api/device-info`.
+     *
+     * `/api/device-info` sits behind `authMiddleware`, so with no Firebase
+     * session `getIdToken()` threw `IllegalStateException("Not signed in")`
+     * before the request was built, and the catch below turned that into
+     * "not banned" — a banned user who was signed out reached the sign-in
+     * screen, which the story's AC names as the thing that must never happen.
+     * `/api/ban-status` answers the same question with no token, and writes
+     * nothing (device-info upserts a binding and runs a cap transaction,
+     * which has no business running on every cold start and every rotation).
+     */
+    override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
+        try {
+            val response =
+                workerApiClient.getPublic(
+                    "/api/ban-status?deviceId=" + encodeUrlQueryComponent(deviceId),
+                )
             val banObj = response.optJSONObject("banStatus")
             if (banObj != null && banObj.optBoolean("isBanned", false)) {
                 Resource.Success(

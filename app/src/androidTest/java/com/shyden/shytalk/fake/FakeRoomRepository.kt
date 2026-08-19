@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.map
 class FakeRoomRepository : RoomRepository {
     val rooms = MutableStateFlow(TestData.sampleRooms)
 
-    override fun getActiveRooms(): Flow<List<ChatRoom>> = rooms
+    override fun getActiveRooms(cohort: String): Flow<List<ChatRoom>> = rooms
 
     override fun getRoomFlow(roomId: String): Flow<ChatRoom?> = rooms.map { list -> list.find { it.roomId == roomId } }
 
@@ -131,7 +131,10 @@ class FakeRoomRepository : RoomRepository {
 
     override suspend fun closeRoom(roomId: String): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun findActiveRoomByOwner(ownerId: String): String? = null
+    override suspend fun findActiveRoomByOwner(
+        ownerId: String,
+        cohort: String,
+    ): String? = null
 
     override suspend fun recordFirstJoinTimestamp(
         roomId: String,
@@ -140,10 +143,14 @@ class FakeRoomRepository : RoomRepository {
 
     override suspend fun leaveAllRooms(
         userId: String,
+        cohort: String,
         exceptRoomId: String?,
     ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit> = Resource.Success(Unit)
+    override suspend fun closeAllRoomsByOwner(
+        ownerId: String,
+        cohort: String,
+    ): Resource<Unit> = Resource.Success(Unit)
 
     override suspend fun removeDisconnectedUser(
         roomId: String,

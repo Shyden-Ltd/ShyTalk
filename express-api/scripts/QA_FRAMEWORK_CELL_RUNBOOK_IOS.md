@@ -65,13 +65,13 @@ node express-api/scripts/manual-qa-runner.js \
 
 ### Common failures
 
-| Symptom                                    | Root cause                         | Fix                                                                     |
-| ------------------------------------------ | ---------------------------------- | ----------------------------------------------------------------------- |
-| `no connected iPhone found`                | USB disconnected OR untrusted      | Re-plug + trust dialog; `idevice_id -l`                                 |
-| `WDA_TEAM_ID env var is required`          | Real device requires Xcode signing | `export WDA_TEAM_ID=$(...)`; or use Simulator                           |
-| `Appium /session failed (500): xcodebuild` | XCUITest harness build failed      | `xcodebuild clean -workspace iosApp/iosApp.xcworkspace`; re-pair device |
-| `no WEBVIEW_ context`                      | Safari Web Inspector OFF           | Enable: Settings → Safari → Advanced → Web Inspector                    |
-| Slow first-launch (>60s)                   | WDA app build cold                 | Acceptable on first run; subsequent runs cache the WDA app              |
+| Symptom                                    | Root cause                                                                    | Fix                                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `no physical iPhone found`                 | disconnected/untrusted, or under "Devices Offline" (iOS 26/27 — often usable) | `idevice_id -l` + `xcrun devicectl list devices`; drivable despite xctrace "Offline" |
+| `WDA_TEAM_ID env var is required`          | Real device requires Xcode signing                                            | `export WDA_TEAM_ID=$(...)`; or use Simulator                                        |
+| `Appium /session failed (500): xcodebuild` | XCUITest harness build failed                                                 | `xcodebuild clean -workspace iosApp/iosApp.xcworkspace`; re-pair device              |
+| `no WEBVIEW_ context`                      | Safari Web Inspector OFF                                                      | Enable: Settings → Safari → Advanced → Web Inspector                                 |
+| Slow first-launch (>60s)                   | WDA app build cold                                                            | Acceptable on first run; subsequent runs cache the WDA app                           |
 
 ---
 

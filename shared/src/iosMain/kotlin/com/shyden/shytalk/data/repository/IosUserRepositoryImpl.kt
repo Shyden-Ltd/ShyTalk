@@ -5,8 +5,11 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.core.util.recoverListenerErrors
 import com.shyden.shytalk.data.firestore.dataMap
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.DocumentSnapshot
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -63,6 +67,28 @@ class IosUserRepositoryImpl(
     }
 
     // ── Read methods ────────────────────────────────────────────────
+
+    // SHY-0348 — see the Android twin. Somebody ELSE's profile goes through the
+    // API so the server's block gate applies; the status code is what tells
+    // "blocked" apart from "gone" and from a transport failure.
+    override suspend fun getProfileForViewing(userId: String): Resource<UserRepository.ProfileAccess> =
+        firebaseCall("Failed to load profile") {
+            try {
+                val json = api.get("/api/users/$userId")
+                UserRepository.ProfileAccess.Visible(
+                    User.fromMap(
+                        jsonToMap(json),
+                        json["uniqueId"]?.jsonPrimitive?.content ?: userId,
+                    ),
+                )
+            } catch (e: ApiException) {
+                when (e.statusCode) {
+                    403 -> UserRepository.ProfileAccess.BlockedByOwner
+                    404 -> UserRepository.ProfileAccess.NotFound
+                    else -> throw e
+                }
+            }
+        }
 
     override suspend fun getUser(userId: String): Resource<User> =
         firebaseCall("Failed to get user") {
@@ -141,33 +167,15 @@ class IosUserRepositoryImpl(
             data["warningReason"] as? String
         }
 
-    override suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>> {
+    override suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>> {
         if (userIds.isEmpty()) return Resource.Success(emptySet())
         return firebaseCall("Failed to check blocks") {
-            userIds
-                .chunked(30)
-                .flatMap { chunk ->
-                    try {
-                        val snapshot =
-                            firestore
-                                .collection("users")
-                                .where { FieldPath.documentId inArray chunk }
-                                .get()
-                        snapshot.documents.mapNotNull { doc ->
-                            val data = doc.dataMap()
-                            val blockedIds =
-                                (data["blockedUserIds"] as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList()
-                            if (targetUserId in blockedIds) doc.id else null
-                        }
-                    } catch (e: Exception) {
-                        logW(TAG, "Failed to batch-check blocks for ${chunk.size} users")
-                        emptyList()
-                    }
-                }.toSet()
+            val body = JsonObject(mapOf("userIds" to JsonArray(userIds.map { JsonPrimitive(it) })))
+            val response = api.post("/api/users/blocked-by", body)
+            (response["blockedBy"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.content }
+                ?.toSet()
+                ?: emptySet()
         }
     }
 
@@ -188,6 +196,17 @@ class IosUserRepositoryImpl(
                     warningReason = data["warningReason"] as? String,
                 )
             }
+            // SHY-0185: a `.snapshots` listener error (rules denial / network
+            // drop) surfaces as a FirebaseFirestoreException emitted into the
+            // Flow; uncaught on iOS it SIGABRTs the app right after sign-in.
+            // Log it (default debug-logging rule; parity with this file's other
+            // swallow sites) then recover to a safe default. The logging `catch`
+            // rethrows so the terminal recovery still fires; `kotlinx` catch
+            // never invokes either lambda for CancellationException.
+            .catch { e ->
+                logW(TAG, "observeUserFlags listener error for $userId — falling back to safe defaults", e)
+                throw e
+            }.recoverListenerErrors(UserFlags())
 
     override fun observeUsers(userIds: Set<String>): Flow<User> {
         if (userIds.isEmpty()) return emptyFlow()

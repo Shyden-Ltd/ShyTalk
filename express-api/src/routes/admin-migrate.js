@@ -10,6 +10,7 @@
 const router = require('express').Router();
 const admin = require('firebase-admin');
 const { db } = require('../utils/firebase');
+const { clearBanCache } = require('../utils/bans');
 const { requireAdmin } = require('../middleware/auth');
 const log = require('../utils/log');
 
@@ -206,6 +207,11 @@ router.post('/admin/migrate-prod-data', async (req, res) => {
         copySubcollection(srcDb, db, parent, sub),
       );
     }
+
+    // The migration wholesale replaces deviceBans/networkBans. Without this,
+    // a ban just copied in would not bite for up to the cache TTL, and a ban
+    // just deleted would keep blocking (SHY-0149).
+    clearBanCache();
 
     const totalDeleted = Object.values(results.deleted).reduce((a, b) => a + b, 0);
     const totalCopied = Object.values(results.copied).reduce((a, b) => a + b, 0);

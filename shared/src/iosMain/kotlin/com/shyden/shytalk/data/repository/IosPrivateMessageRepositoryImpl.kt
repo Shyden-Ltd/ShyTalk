@@ -10,7 +10,9 @@ import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 private const val TAG = "PMRepository"
 
@@ -44,8 +47,14 @@ class IosPrivateMessageRepositoryImpl(
             val snapshot =
                 firestore
                     .collection("conversations")
-                    .where { "participantIds" contains uid }
-                    .orderBy("lastMessageAt", Direction.DESCENDING)
+                    .where {
+                        all(
+                            "participantIds" contains uid,
+                            // SHY-0132 — exclude migrated cross-cohort threads (OSA §17);
+                            // the `list` rule doesn't enforce this, so the query must.
+                            "crossCohortAtMigration" equalTo false,
+                        )
+                    }.orderBy("lastMessageAt", Direction.DESCENDING)
                     .get()
             prefetchedConversations =
                 snapshot.documents.mapNotNull { doc ->
@@ -67,8 +76,13 @@ class IosPrivateMessageRepositoryImpl(
         // See prefetchConversations: participantIds is stored as strings.
         return firestore
             .collection("conversations")
-            .where { "participantIds" contains userId }
-            .orderBy("lastMessageAt", Direction.DESCENDING)
+            .where {
+                all(
+                    "participantIds" contains userId,
+                    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17); see prefetch.
+                    "crossCohortAtMigration" equalTo false,
+                )
+            }.orderBy("lastMessageAt", Direction.DESCENDING)
             .snapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
@@ -100,6 +114,9 @@ class IosPrivateMessageRepositoryImpl(
                         // Strings (matches Express API + Firestore rules format)
                         "participantIds" to listOf(uid1, uid2).sorted(),
                         "isGroup" to false,
+                        // SHY-0132 — stamp false so the thread matches the segregation
+                        // filter `where('crossCohortAtMigration','==', false)`.
+                        "crossCohortAtMigration" to false,
                         "createdAt" to now,
                         "lastMessageAt" to now,
                         "isClosed" to false,
@@ -480,6 +497,9 @@ class IosPrivateMessageRepositoryImpl(
                     "isGroup" to true,
                     "groupName" to groupName,
                     "createdBy" to creatorId,
+                    // SHY-0132 — stamp false so the group matches the segregation filter
+                    // (cross-cohort growth is rejected per-add).
+                    "crossCohortAtMigration" to false,
                     "createdAt" to now,
                     "lastMessageAt" to now,
                     "isClosed" to false,
@@ -726,27 +746,25 @@ class IosPrivateMessageRepositoryImpl(
 
     // ── Search ──────────────────────────────────────────────────
 
+    // SHY-0350 — see the Android twin. A FILTERED Firestore query from the
+    // client is refused outright by `firestore.rules:74`, and the user saw the
+    // refusal verbatim in the search box. `GET /api/users/search` already did
+    // this properly and was never called.
     override suspend fun searchUsers(
         query: String,
         currentUserId: String,
     ): Resource<List<User>> =
         firebaseCall("Failed to search users") {
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .where {
-                        all(
-                            "displayName" greaterThanOrEqualTo query,
-                            "displayName" lessThan query + "\uf8ff",
-                        )
-                    }.get()
-            snapshot.documents.mapNotNull { doc ->
-                if (doc.id == currentUserId) return@mapNotNull null
-                try {
-                    val data = doc.dataMap()
-                    User.fromMap(data, doc.id)
-                } catch (e: Exception) {
-                    null
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) {
+                emptyList()
+            } else {
+                val json = api.get("/api/users/search?q=" + encodeUrlQueryComponent(trimmed))
+                (json["users"] as? JsonArray).orEmpty().mapNotNull { entry ->
+                    (entry as? JsonObject)?.let { obj ->
+                        val uid = obj["uniqueId"]?.jsonPrimitive?.content ?: ""
+                        if (uid == currentUserId) null else User.fromMap(jsonToMap(obj), uid)
+                    }
                 }
             }
         }

@@ -32,6 +32,14 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
+// This suite tests the AUTH flow; the per-request ban gate (SHY-0149) is a
+// separate collaborator with its own suites (auth-ban-gate*.test.js). Stub
+// it benign — plain functions, immune to clearAllMocks/mockReset sweeps.
+jest.mock('../../src/utils/bans', () => ({
+  checkUserBans: async () => ({ isBanned: false, banType: null, reason: null, expiresAt: null }),
+  clearBanCache: () => {},
+}));
+
 const {
   authMiddlewareStrict,
   clearSuspensionCache,

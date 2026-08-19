@@ -174,6 +174,9 @@ describe('sendSystemPm()', () => {
       },
       lastMessageAt: MOCK_NOW,
       createdAt: MOCK_NOW, // Only set when conversation is new
+      // SHY-0132 — stamped false on create so the system-PM thread matches the
+      // conversations segregation filter `where('crossCohortAtMigration','==', false)`.
+      crossCohortAtMigration: false,
     });
     // Should be called with merge: true
     expect(convSetCall[1]).toEqual({ merge: true });
@@ -196,6 +199,9 @@ describe('sendSystemPm()', () => {
     expect(convSetCall).toBeDefined();
     // Should NOT have createdAt because the conversation already exists
     expect(convSetCall[0].createdAt).toBeUndefined();
+    // SHY-0132 — likewise not re-stamped on the existing-doc path (only on create),
+    // so an existing crossCohortAtMigration value is never overwritten via merge.
+    expect(convSetCall[0].crossCohortAtMigration).toBeUndefined();
     expect(convSetCall[0].participantIds).toEqual(['recipient1', SYSTEM_UID]);
   });
 

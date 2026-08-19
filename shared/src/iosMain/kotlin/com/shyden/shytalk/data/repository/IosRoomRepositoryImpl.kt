@@ -23,13 +23,17 @@ class IosRoomRepositoryImpl(
     @kotlin.concurrent.Volatile
     private var prefetchedRooms: List<ChatRoom>? = null
 
-    override suspend fun prefetchActiveRooms() {
+    override suspend fun prefetchActiveRooms(cohort: String) {
         try {
             val snapshot =
                 firestore
                     .collection("rooms")
-                    .where { "state" inArray listOf("ACTIVE", "OWNER_AWAY") }
-                    .get()
+                    .where {
+                        all(
+                            "cohort" equalTo cohort,
+                            "state" inArray listOf("ACTIVE", "OWNER_AWAY"),
+                        )
+                    }.get()
             prefetchedRooms =
                 snapshot.documents.map { doc ->
                     val data = doc.dataMap()
@@ -42,11 +46,15 @@ class IosRoomRepositoryImpl(
         }
     }
 
-    override fun getActiveRooms(): Flow<List<ChatRoom>> =
+    override fun getActiveRooms(cohort: String): Flow<List<ChatRoom>> =
         firestore
             .collection("rooms")
-            .where { "state" inArray listOf("ACTIVE", "OWNER_AWAY") }
-            .snapshots
+            .where {
+                all(
+                    "cohort" equalTo cohort,
+                    "state" inArray listOf("ACTIVE", "OWNER_AWAY"),
+                )
+            }.snapshots
             .map { snapshot ->
                 snapshot.documents.map { doc ->
                     val data = doc.dataMap()
@@ -305,13 +313,17 @@ class IosRoomRepositoryImpl(
             api.post("/api/rooms/$roomId/close")
         }
 
-    override suspend fun findActiveRoomByOwner(ownerId: String): String? =
+    override suspend fun findActiveRoomByOwner(
+        ownerId: String,
+        cohort: String,
+    ): String? =
         try {
             val snapshot =
                 firestore
                     .collection("rooms")
                     .where {
                         all(
+                            "cohort" equalTo cohort,
                             "ownerId" equalTo ownerId,
                             "state" inArray listOf("ACTIVE", "OWNER_AWAY"),
                         )
@@ -334,6 +346,7 @@ class IosRoomRepositoryImpl(
 
     override suspend fun leaveAllRooms(
         userId: String,
+        cohort: String,
         exceptRoomId: String?,
     ): Resource<Unit> =
         firebaseCall("Failed to leave all rooms") {
@@ -342,6 +355,7 @@ class IosRoomRepositoryImpl(
                     .collection("rooms")
                     .where {
                         all(
+                            "cohort" equalTo cohort,
                             "participantIds" contains userId,
                             "state" inArray listOf("ACTIVE", "OWNER_AWAY"),
                         )
@@ -359,15 +373,20 @@ class IosRoomRepositoryImpl(
             firestore.collection("users").document(userId).updateFields { "currentRoomId" to null }
         }
 
-    override suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit> =
+    override suspend fun closeAllRoomsByOwner(
+        ownerId: String,
+        cohort: String,
+    ): Resource<Unit> =
         firebaseCall("Failed to close rooms") {
             // Query stays client-side; each close routes through /close (which
-            // also clears participants' currentRoomId server-side).
+            // also clears participants' currentRoomId server-side). SHY-0102 —
+            // the client query pins cohort to satisfy the rooms `list` rule.
             val snapshot =
                 firestore
                     .collection("rooms")
                     .where {
                         all(
+                            "cohort" equalTo cohort,
                             "ownerId" equalTo ownerId,
                             "state" inArray listOf("ACTIVE", "OWNER_AWAY"),
                         )

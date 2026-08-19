@@ -13,9 +13,13 @@ import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Transaction
 import com.google.firebase.firestore.WriteBatch
+import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.WorkerApiClient
+import io.mockk.CapturingSlot
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -24,8 +28,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -118,7 +124,7 @@ class PrivateMessageRepositoryImplTest {
         }
 
     @Test
-    fun `getOrCreateConversation stores participantIds as Long values`() =
+    fun `getOrCreateConversation stores participantIds as String values`() =
         runTest {
             val dataSlot = slot<Map<String, Any>>()
             every { mockDocRef.set(capture(dataSlot)) } returns Tasks.forResult(null)
@@ -127,10 +133,17 @@ class PrivateMessageRepositoryImplTest {
             assertTrue(result is Resource.Success)
 
             val participantIds = dataSlot.captured["participantIds"] as List<*>
-            // Both values must be Long, not String
-            assertTrue("participantIds[0] should be Long", participantIds[0] is Long)
-            assertTrue("participantIds[1] should be Long", participantIds[1] is Long)
-            assertEquals(listOf(10000001L, 10000002L), participantIds)
+            // SHY-0130 — participantIds MUST be Strings: the canonical type the
+            // rule (`string(callerUniqueId()) in resource.data.participantIds`),
+            // the model (`List<String>`), iOS, and Express (`.map(String)`) all
+            // use. This test previously asserted Longs — it ENCODED the bug that
+            // made Android-created threads unreadable by the string gate.
+            assertTrue("participantIds[0] should be String", participantIds[0] is String)
+            assertTrue("participantIds[1] should be String", participantIds[1] is String)
+            assertEquals(listOf("10000001", "10000002"), participantIds)
+            // SHY-0132 — new DM threads are stamped crossCohortAtMigration:false so they
+            // match the segregation filter `where('crossCohortAtMigration','==', false)`.
+            assertEquals(false, dataSlot.captured["crossCohortAtMigration"])
         }
 
     @Test
@@ -140,6 +153,272 @@ class PrivateMessageRepositoryImplTest {
 
             val result = repo.getOrCreateConversation("uid1", "uid2")
             assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `getOrCreateConversation stores participantIds sorted regardless of argument order`() =
+        runTest {
+            // SHY-0130 — the stored `participantIds` must be the canonical SORTED
+            // string list so all three platforms agree on the shape; passing the
+            // ids in reverse must still produce ["10000001", "10000002"]. Guards a
+            // regression that drops `.sorted()` (which the existing test, using
+            // already-ordered args, would not catch). Identity is keyed off
+            // Conversation.generateId, so order never affects dedup — this pins the
+            // stored-array invariant only.
+            val dataSlot = slot<Map<String, Any>>()
+            every { mockDocRef.set(capture(dataSlot)) } returns Tasks.forResult(null)
+
+            val result = repo.getOrCreateConversation("10000002", "10000001")
+            assertTrue(result is Resource.Success)
+
+            assertEquals(listOf("10000001", "10000002"), dataSlot.captured["participantIds"])
+        }
+
+    // endregion
+
+    // region getConversations / prefetchConversations — SHY-0130 id-type + I3 observability
+
+    /**
+     * Wires `collection("conversations").whereArrayContains("participantIds", <captured>)
+     * .whereEqualTo("crossCohortAtMigration", false).orderBy(...)` to a fresh relaxed
+     * Query, capturing the array-contains value into [uidSlot] so a test can assert it is
+     * a STRING (SHY-0130: never a Long). The chained `whereEqualTo` is the SHY-0132
+     * cross-cohort segregation filter — stubbed to return the same query so the chain
+     * continues, and asserted via `io.mockk.verify` in the filter tests.
+     */
+    private fun wireConversationsQuery(uidSlot: CapturingSlot<Any>): Query {
+        val mockQuery = mockk<Query>(relaxed = true)
+        every { mockCollRef.whereArrayContains(any<String>(), capture(uidSlot)) } returns mockQuery
+        every { mockQuery.whereEqualTo("crossCohortAtMigration", false) } returns mockQuery
+        every { mockQuery.orderBy(any<String>(), any<Query.Direction>()) } returns mockQuery
+        return mockQuery
+    }
+
+    /** A QuerySnapshot whose single document maps to a Conversation with [id]. */
+    private fun singleConversationSnapshot(id: String): QuerySnapshot {
+        val doc = mockk<DocumentSnapshot>(relaxed = true)
+        every { doc.id } returns id
+        every { doc.data } returns
+            mapOf(
+                "participantIds" to listOf("10000001", "10000002"),
+                "isGroup" to false,
+                "createdAt" to 1_000L,
+                "lastMessageAt" to 2_000L,
+                "isClosed" to false,
+            )
+        val snap = mockk<QuerySnapshot>(relaxed = true)
+        every { snap.documents } returns listOf(doc)
+        return snap
+    }
+
+    @Test
+    fun `prefetchConversations does not query Firestore when currentUserId is null`() =
+        runTest {
+            val nullAuth = mockk<AuthRepository> { every { currentUserId } returns null }
+            val repoNoUser = PrivateMessageRepositoryImpl(api, firestore, nullAuth)
+
+            repoNoUser.prefetchConversations()
+
+            io.mockk.verify(exactly = 0) { firestore.collection("conversations") }
+        }
+
+    @Test
+    fun `prefetchConversations queries participantIds with a String uid`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            val emptySnap = mockk<QuerySnapshot>(relaxed = true)
+            every { emptySnap.documents } returns emptyList()
+            every { mockQuery.get() } returns Tasks.forResult(emptySnap)
+
+            repo.prefetchConversations()
+
+            // SHY-0130 — the bug coerced this to a Long via toLongOrNull().
+            assertTrue("array-contains value must be a String", uidSlot.captured is String)
+            assertEquals("10000001", uidSlot.captured)
+            // SHY-0132 — the cross-cohort segregation filter is applied (OSA §17).
+            io.mockk.verify { mockQuery.whereEqualTo("crossCohortAtMigration", false) }
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `prefetchConversations populates the cache which getConversations replays first`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            every { mockQuery.get() } returns Tasks.forResult(singleConversationSnapshot("conv-pref"))
+            // getConversations registers a listener we never fire — the replayed
+            // prefetch is the first (and only) emission collected.
+            every { mockQuery.addSnapshotListener(any<EventListener<QuerySnapshot>>()) } returns
+                mockk<ListenerRegistration>(relaxed = true)
+
+            repo.prefetchConversations()
+
+            var emitted: List<*>? = null
+            val job =
+                launch {
+                    repo.getConversations("10000001").first {
+                        emitted = it
+                        true
+                    }
+                }
+            advanceUntilIdle()
+
+            assertEquals(1, emitted?.size)
+            assertEquals("conv-pref", (emitted?.get(0) as Conversation).conversationId)
+            job.cancel()
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `prefetchConversations swallows a Firestore exception and leaves the cache null`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            every { mockQuery.get() } returns Tasks.forException(RuntimeException("denied"))
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns
+                mockk<ListenerRegistration>(relaxed = true)
+
+            // Must not throw — the catch logs and leaves the cache null.
+            repo.prefetchConversations()
+
+            var emitted: List<*>? = null
+            val job =
+                launch {
+                    repo.getConversations("10000001").first {
+                        emitted = it
+                        true
+                    }
+                }
+            advanceUntilIdle()
+            // No stale replay: the first emission is the LIVE listener's, proving the
+            // failed prefetch left prefetchedConversations null.
+            listenerSlot.captured.onEvent(singleConversationSnapshot("live-1"), null)
+            advanceUntilIdle()
+            assertEquals("live-1", (emitted?.get(0) as Conversation).conversationId)
+            job.cancel()
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `getConversations propagates a listener error via close`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns
+                mockk<ListenerRegistration>(relaxed = true)
+
+            var caught: Throwable? = null
+            val job =
+                launch {
+                    try {
+                        repo.getConversations("10000001").first { false }
+                    } catch (e: Throwable) {
+                        caught = e
+                    }
+                }
+            advanceUntilIdle()
+
+            val error = mockk<FirebaseFirestoreException>(relaxed = true)
+            every { error.message } returns "PERMISSION_DENIED"
+            listenerSlot.captured.onEvent(null, error)
+            advanceUntilIdle()
+
+            // SHY-0130 I3 — a denied listen surfaces to the collector (was silently
+            // swallowed as empty), and the String uid reached the query.
+            assertTrue("error should propagate to the collector", caught is FirebaseFirestoreException)
+            assertTrue("array-contains value must be a String", uidSlot.captured is String)
+            job.cancel()
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `getConversations removes the listener after an error close`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val registration = mockk<ListenerRegistration>(relaxed = true)
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns registration
+
+            val job =
+                launch {
+                    try {
+                        repo.getConversations("10000001").first { false }
+                    } catch (_: Throwable) {
+                    }
+                }
+            advanceUntilIdle()
+            listenerSlot.captured.onEvent(null, mockk<FirebaseFirestoreException>(relaxed = true))
+            advanceUntilIdle()
+
+            // awaitClose cleanup still runs when the flow is closed via close(error).
+            io.mockk.verify { registration.remove() }
+            job.cancel()
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `getConversations ignores a null snapshot and keeps listening`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns
+                mockk<ListenerRegistration>(relaxed = true)
+
+            var emitted: List<*>? = null
+            val job =
+                launch {
+                    repo.getConversations("10000001").first {
+                        emitted = it
+                        true
+                    }
+                }
+            advanceUntilIdle()
+
+            // A null snapshot with no error must NOT emit and must NOT crash; the flow
+            // keeps listening and the next real snapshot is the first emission.
+            listenerSlot.captured.onEvent(null, null)
+            advanceUntilIdle()
+            assertEquals("null snapshot must not emit", null, emitted)
+
+            listenerSlot.captured.onEvent(singleConversationSnapshot("after-null"), null)
+            advanceUntilIdle()
+            assertEquals("after-null", (emitted?.get(0) as Conversation).conversationId)
+            job.cancel()
+        }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun `getConversations queries participantIds with a String uid and maps documents`() =
+        runTest {
+            val uidSlot = slot<Any>()
+            val mockQuery = wireConversationsQuery(uidSlot)
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns
+                mockk<ListenerRegistration>(relaxed = true)
+
+            var emitted: List<*>? = null
+            val job =
+                launch {
+                    repo.getConversations("10000001").first {
+                        emitted = it
+                        true
+                    }
+                }
+            advanceUntilIdle()
+            listenerSlot.captured.onEvent(singleConversationSnapshot("conv-live"), null)
+            advanceUntilIdle()
+
+            assertTrue("array-contains value must be a String", uidSlot.captured is String)
+            assertEquals(1, emitted?.size)
+            assertEquals("conv-live", (emitted?.get(0) as Conversation).conversationId)
+            // SHY-0132 — the cross-cohort segregation filter is applied (OSA §17).
+            io.mockk.verify { mockQuery.whereEqualTo("crossCohortAtMigration", false) }
+            job.cancel()
         }
 
     // endregion
@@ -435,6 +714,9 @@ class PrivateMessageRepositoryImplTest {
                 )
             assertTrue(result is Resource.Success)
             assertEquals("minor", capturedData.captured["cohort"])
+            // SHY-0132 — a new group is stamped crossCohortAtMigration:false so it matches
+            // the segregation filter (cross-cohort growth is rejected per-add).
+            assertEquals(false, capturedData.captured["crossCohortAtMigration"])
         }
 
     @Test
@@ -598,6 +880,105 @@ class PrivateMessageRepositoryImplTest {
         runTest {
             val result = repo.transferOwnership("conv-1", "new-owner")
             assertTrue(result is Resource.Success)
+        }
+
+    // endregion
+
+    // region searchUsers (SHY-0350)
+
+    // The defect: search queried Firestore directly. `/users` is cohort-gated,
+    // and a filtered query against a content-gated rule is refused outright, so
+    // the screen said "No users found" for a user who plainly exists. These
+    // pin that the search now goes through the API instead.
+
+    @Test
+    fun `searchUsers goes through the API, not Firestore`() =
+        runTest {
+            val path = slot<String>()
+            coEvery { api.get(capture(path)) } returns
+                JSONObject().put("users", JSONArray())
+
+            repo.searchUsers("ines", "50000010")
+
+            assertTrue(
+                "expected the search endpoint, got ${'$'}{path.captured}",
+                path.captured.startsWith("/api/users/search?q="),
+            )
+        }
+
+    @Test
+    fun `searchUsers url-encodes the query rather than pasting it in raw`() =
+        runTest {
+            val path = slot<String>()
+            coEvery { api.get(capture(path)) } returns
+                JSONObject().put("users", JSONArray())
+
+            repo.searchUsers("a b&c", "50000010")
+
+            assertFalse("raw space leaked into the URL", path.captured.contains("a b"))
+            assertFalse("raw ampersand leaked into the URL", path.captured.contains("b&c"))
+        }
+
+    @Test
+    fun `searchUsers returns the users the API reports`() =
+        runTest {
+            val users =
+                JSONArray().put(
+                    // uniqueId as a NUMBER — that is what Firestore stores and
+                    // what the API serialises. A string here would be a fixture
+                    // that cannot occur, and would pass while production broke.
+                    JSONObject().put("uniqueId", 50000020L).put("displayName", "Ines"),
+                )
+            coEvery { api.get(any()) } returns JSONObject().put("users", users)
+
+            val result = repo.searchUsers("ines", "50000010")
+
+            assertTrue(result is Resource.Success)
+            val list = (result as Resource.Success).data
+            assertEquals(1, list.size)
+            assertEquals(50000020L, list[0].uniqueId)
+        }
+
+    @Test
+    fun `searchUsers excludes the caller from the results`() =
+        runTest {
+            // The server already excludes the caller; this is the belt-and-braces
+            // half, because a self-row in a "who do you want to message" picker
+            // is a confusing thing to render.
+            val users =
+                JSONArray()
+                    .put(JSONObject().put("uniqueId", 50000010L).put("displayName", "Me"))
+                    .put(JSONObject().put("uniqueId", 50000020L).put("displayName", "Ines"))
+            coEvery { api.get(any()) } returns JSONObject().put("users", users)
+
+            val result = repo.searchUsers("i", "50000010")
+
+            val list = (result as Resource.Success).data
+            assertEquals(1, list.size)
+            assertEquals(50000020L, list[0].uniqueId)
+        }
+
+    @Test
+    fun `searchUsers returns empty for a blank query without calling the API`() =
+        runTest {
+            val result = repo.searchUsers("   ", "50000010")
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+            coVerify(exactly = 0) { api.get(any()) }
+        }
+
+    @Test
+    fun `searchUsers surfaces a failure as an error, not an empty list`() =
+        runTest {
+            // An empty list means "nobody matched". An error means "we could not
+            // look". Collapsing the second into the first is what made the
+            // original defect invisible on screen.
+            coEvery { api.get(any()) } throws ApiException(403, "Missing or insufficient permissions")
+
+            val result = repo.searchUsers("ines", "50000010")
+
+            assertTrue("expected Resource.Error, got ${'$'}result", result is Resource.Error)
         }
 
     // endregion

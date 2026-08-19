@@ -74,6 +74,44 @@ beforeEach(() => {
 // ─── Tests ───────────────────────────────────────────────────────
 
 describe('GET /api/admin/bans', () => {
+  // Round-9 IMP-2 regression pin. The admin console and the request-time gate
+  // must agree on what "active" means. This route used to inline
+  // `new Date(x).getTime() > now`, which is `NaN > now === false` for a corrupt
+  // expiry — the console would show the ban as gone while the gate still
+  // enforced it. `isBanActive` is now the single arbiter and fails CLOSED.
+  test.each([
+    ['an empty string', ''],
+    ['a low-sorting impossible date', '1999-13-45'],
+    ['non-date garbage', 'garbage'],
+  ])(
+    'a ban whose expiry is unparseable (%s) is still listed as ACTIVE',
+    async (_label, expiresAt) => {
+      // db.collection() is a single shared mock, so this one doc lands in both
+      // the deviceBans and the networkBans snapshot.
+      mockCollectionGet.mockResolvedValue({
+        docs: [{ id: 'corrupt1', data: () => ({ deviceId: 'corrupt1', reason: 'r', expiresAt }) }],
+      });
+
+      const res = await request(createApp()).get('/api/admin/bans').expect(200);
+
+      expect(res.body.deviceBans).toHaveLength(1);
+      expect(res.body.deviceBans[0].id).toBe('corrupt1');
+      expect(res.body.networkBans).toHaveLength(1);
+      expect(res.body.networkBans[0].id).toBe('corrupt1');
+    },
+  );
+
+  test('a permanent ban (no expiresAt) is listed as ACTIVE', async () => {
+    mockCollectionGet.mockResolvedValue({
+      docs: [{ id: 'perma1', data: () => ({ deviceId: 'perma1', reason: 'perm' }) }],
+    });
+
+    const res = await request(createApp()).get('/api/admin/bans').expect(200);
+
+    expect(res.body.deviceBans).toHaveLength(1);
+    expect(res.body.networkBans).toHaveLength(1);
+  });
+
   test('lists all active bans (200)', async () => {
     const futureExpiry = new Date(Date.now() + 86400000).toISOString();
 

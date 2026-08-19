@@ -1,0 +1,7 @@
+// This file only TALKS about process.env.FIRESTORE_TEST_NAMESPACE; it never
+// assigns it, so it has not claimed a project.
+const note = 'set FIRESTORE_TEST_NAMESPACE to claim a project';
+
+test('mentions are not assignments', () => {
+  expect(note).toContain('FIRESTORE_TEST_NAMESPACE');
+});

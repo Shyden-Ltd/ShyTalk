@@ -32,6 +32,7 @@ import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.data.repository.resolveEffectiveCohort
 import com.shyden.shytalk.feature.report.UserReportOutcome
 import com.shyden.shytalk.feature.report.submitUserReport
 import kotlinx.coroutines.CancellationException
@@ -759,10 +760,22 @@ class RoomViewModel(
             // Check if any other participant (non-owner) has blocked me — single batch call
             val otherParticipantIds = room.participantIds.filter { it != userId && it != room.ownerId }
             if (otherParticipantIds.isNotEmpty()) {
-                val result = userRepository.checkBlockedBy(otherParticipantIds, userId)
-                if (result is Resource.Success && result.data.isNotEmpty()) {
-                    _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByUserInRoom) }
-                    return@launch
+                // An ERROR here means "we could not find out", which is not the
+                // same as "nobody has blocked you" — so it is handled separately
+                // rather than folded into the success branch. Joining proceeds,
+                // as it always has, but the distinction is now visible instead of
+                // being manufactured by a swallowed exception (SHY-0351).
+                when (val result = userRepository.checkBlockedBy(otherParticipantIds)) {
+                    is Resource.Success ->
+                        if (result.data.isNotEmpty()) {
+                            _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByUserInRoom) }
+                            return@launch
+                        }
+
+                    is Resource.Error ->
+                        logW(TAG, "Block-check failed before joining room; proceeding unwarned")
+
+                    Resource.Loading -> Unit
                 }
             }
 
@@ -926,7 +939,10 @@ class RoomViewModel(
             // security rules before they can write to firstJoinTimestamps.
             launch {
                 try {
-                    roomRepository.leaveAllRooms(userId, exceptRoomId = roomId)
+                    // SHY-0102 — leaveAllRooms lists the user's participated rooms
+                    // (a `list`), so it pins the caller's cohort.
+                    val cohort = userRepository.resolveEffectiveCohort(userId)
+                    roomRepository.leaveAllRooms(userId, cohort, exceptRoomId = roomId)
                     roomRepository.joinRoom(roomId, userId)
                     roomRepository.recordFirstJoinTimestamp(roomId, userId)
                 } catch (e: CancellationException) {

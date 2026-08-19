@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.FunFact
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logW
@@ -27,31 +28,39 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class IosDeviceRepositoryImpl(
     private val api: IosApiClient,
-    private val firestore: FirebaseFirestore,
 ) : DeviceRepository {
-    override suspend fun getDeviceBinding(deviceId: String): Resource<String?> =
-        firebaseCall("Failed to check device binding") {
-            val doc = firestore.collection("deviceBindings").document(deviceId).get()
-            if (!doc.exists) return@firebaseCall null
-            val data = doc.dataMap()
-            (data["uniqueId"] ?: data["userId"])?.toString()
-        }
-
-    override suspend fun bindDevice(
-        deviceId: String,
-        userId: String,
-    ): Resource<Unit> =
-        firebaseCall("Failed to bind device") {
-            firestore
-                .collection("deviceBindings")
-                .document(deviceId)
-                .set(mapOf("userId" to userId, "boundAt" to currentTimeMillis()))
-        }
-
-    override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
+    override suspend fun resolveDeviceLock(deviceId: String): Resource<DeviceLockStatus> =
         try {
             val body = JsonObject(mapOf("deviceId" to JsonPrimitive(deviceId)))
-            val response = api.post("/api/device-info", body)
+            val response = api.post("/api/devices/lock-check", body)
+            val status =
+                if (response["status"]?.jsonPrimitive?.contentOrNull == "locked") {
+                    DeviceLockStatus.LOCKED
+                } else {
+                    DeviceLockStatus.ALLOWED
+                }
+            Resource.Success(status)
+        } catch (e: Exception) {
+            // Lenient: a lock-check outage must not lock out real users (logged).
+            logW("DeviceRepository", "Device lock-check failed, allowing through: ${e.message}")
+            Resource.Error("Device lock-check failed: ${e.message}")
+        }
+
+    /**
+     * SHY-0143 — reads the UNAUTHENTICATED `/api/ban-status`, not
+     * `/api/device-info`.
+     *
+     * `/api/device-info` sits behind `authMiddleware`, so with no Firebase
+     * session `getIdToken()` threw before the request was built and the catch
+     * below reported "not banned" — a banned user who was signed out reached
+     * the sign-in screen, which the story's AC names as the thing that must
+     * never happen. `/api/ban-status` answers the same question with no token,
+     * and writes nothing (device-info upserts a binding and runs a cap
+     * transaction, which has no business running on every cold start).
+     */
+    override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =
+        try {
+            val response = api.getPublic("/api/ban-status?deviceId=${encodeUrlQueryComponent(deviceId)}")
             val banObj = response["banStatus"]
             if (banObj != null) {
                 val ban = (banObj as? kotlinx.serialization.json.JsonObject) ?: JsonObject(emptyMap())
@@ -327,12 +336,6 @@ class IosPinRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
-
-    override suspend fun resetPin(newPin: String): Result<Unit> =
-        runCatching {
-            @Suppress("UNUSED_VARIABLE")
-            val ignored = api.post("/api/auth/pin/reset", JsonObject(mapOf("pin" to JsonPrimitive(newPin))))
-        }
 }
 
 // ── BiometricRepository ─────────────────────────────────────────
@@ -358,7 +361,12 @@ class IosBiometricRepositoryImpl(
         deviceId: String,
     ): Result<String> =
         runCatching {
-            val response = api.getPublic("/api/auth/biometric/challenge?uniqueId=$uniqueId&deviceId=$deviceId")
+            val response =
+                api.getPublic(
+                    "/api/auth/biometric/challenge" +
+                        "?uniqueId=${encodeUrlQueryComponent(uniqueId)}" +
+                        "&deviceId=${encodeUrlQueryComponent(deviceId)}",
+                )
             response["challenge"]!!.jsonPrimitive.content
         }
 
@@ -480,7 +488,7 @@ class IosStorageRepositoryImpl(
     override suspend fun deleteImageByUrl(url: String) {
         try {
             val key = url.removePrefix("https://images.shytalk.shyden.co.uk/")
-            api.delete("/api/storage/delete?key=$key")
+            api.delete("/api/storage/delete?key=${encodeUrlQueryComponent(key)}")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

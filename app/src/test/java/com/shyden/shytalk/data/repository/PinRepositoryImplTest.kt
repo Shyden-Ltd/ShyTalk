@@ -284,50 +284,8 @@ class PinRepositoryImplTest {
             assertEquals("Network timeout", result.exceptionOrNull()?.message)
         }
 
-    // ===== resetPin =====
-
-    @Test
-    fun `resetPin returns success`() =
-        runTest {
-            coEvery { apiClient.post("/api/auth/pin/reset", any()) } returns JSONObject()
-
-            val result = repo.resetPin("654321")
-
-            assertTrue(result.isSuccess)
-        }
-
-    @Test
-    fun `resetPin sends correct endpoint and payload`() =
-        runTest {
-            val bodySlot = slot<JSONObject>()
-            coEvery { apiClient.post("/api/auth/pin/reset", capture(bodySlot)) } returns JSONObject()
-
-            repo.resetPin("654321")
-
-            coVerify { apiClient.post("/api/auth/pin/reset", any()) }
-            assertEquals("654321", bodySlot.captured.getString("pin"))
-        }
-
-    @Test
-    fun `resetPin returns failure on network error`() =
-        runTest {
-            coEvery { apiClient.post("/api/auth/pin/reset", any()) } throws RuntimeException("Connection refused")
-
-            val result = repo.resetPin("654321")
-
-            assertTrue(result.isFailure)
-            assertEquals("Connection refused", result.exceptionOrNull()?.message)
-        }
-
-    @Test
-    fun `resetPin returns failure on API error`() =
-        runTest {
-            coEvery { apiClient.post("/api/auth/pin/reset", any()) } throws ApiException(403, "Forbidden")
-
-            val result = repo.resetPin("654321")
-
-            assertTrue(result.isFailure)
-            assertTrue(result.exceptionOrNull() is ApiException)
-            assertEquals(403, (result.exceptionOrNull() as ApiException).statusCode)
-        }
+    // resetPin() was removed in SHY-0192: /api/auth/pin/reset duplicated
+    // /pin/setup's write without returning pinHash (which enrolment requires),
+    // so any caller would have re-created the broken-enrolment bug. Resets go
+    // through setupPin (create-or-replace; server clears lockout state).
 }

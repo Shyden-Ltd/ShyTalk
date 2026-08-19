@@ -23,6 +23,7 @@ const bcrypt = require('bcrypt');
 const { db, auth, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { getDoc } = require('../utils/firestore-helpers');
+const { nextUniqueIdFrom } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
 const { clearSuspensionCache, updateUniqueIdCache } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
@@ -112,7 +113,22 @@ function shapeForViewer(callerUniqueId, callerCohort, data) {
   if (data.uniqueId === callerUniqueId) return null;
   if (effectiveCohort(data) !== callerCohort) return null;
   if (viewerIsBlocked(callerUniqueId, data)) return null;
-  return stripSensitiveFields(data);
+  const memberCohort = effectiveCohort(data);
+  stripSensitiveFields(data);
+  // SHY-0350 — `cohort` is stripped everywhere else and put BACK here.
+  //
+  // The clients keep a defence-in-depth cohort filter over these lists
+  // (`NewMessageViewModel` runs `filterSameCohortAs` on search results).
+  // Without the field every result reads as the 'minor' default and an adult's
+  // search filters itself to nothing — measured on-device 2026-08-19: the API
+  // returned a match, the screen said "No users found".
+  //
+  // It discloses nothing. The line three above this one guarantees every user
+  // returned is same-cohort as the caller, so the value is a constant they
+  // already know about themselves — and if that ever stopped holding, the
+  // client filter is what would catch it.
+  data.cohort = memberCohort;
+  return data;
 }
 
 /**
@@ -275,10 +291,15 @@ router.post('/users', async (req, res) => {
         }
       }
 
-      // Atomic counter increment
-      let current = counterSnap.exists ? counterSnap.data().value || 0 : 0;
-      if (current < MIN_UNIQUE_ID) current = MIN_UNIQUE_ID - 1;
-      const next = current + 1;
+      // Atomic counter increment. counters/uniqueId is shared with the
+      // test-helpers allocator and has been observed string-typed — a string
+      // >= MIN_UNIQUE_ID passed the old `<` floor un-reassigned and `+ 1`
+      // CONCATENATED, minting a real account at users/"100000421".
+      // nextUniqueIdFrom is type-immune; the floor keeps ids >= MIN_UNIQUE_ID.
+      const next = nextUniqueIdFrom(counterSnap.exists ? counterSnap.data().value : undefined, {
+        base: MIN_UNIQUE_ID - 1,
+        floor: MIN_UNIQUE_ID - 1,
+      });
 
       const timestamp = now();
 
@@ -503,7 +524,12 @@ router.get('/users/search', async (req, res) => {
       if (!isSelf && viewerIsBlocked(req.auth.uniqueId, target)) {
         return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
       }
+      const targetCohort = effectiveCohort(target);
       stripSensitiveFields(target);
+      // Same reasoning as shapeForViewer: the exact-ID branch has already
+      // enforced same-cohort above, so returning `cohort` discloses nothing and
+      // the client's own filter needs it.
+      target.cohort = targetCohort;
       return res.json({ users: [target] });
     }
 
@@ -517,6 +543,76 @@ router.get('/users/search', async (req, res) => {
   } catch (err) {
     log.error('users', 'GET /users/search failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/users/blocked-by — which of these people have blocked ME?
+// ═══════════════════════════════════════════════════════════════════
+//
+// Answers the room-join question "has anyone already in this room blocked me?"
+// (SHY-0351). The subject is ALWAYS the authenticated caller — it is never read
+// from the body — so this cannot be used to ask about anybody else.
+//
+// Why it is a server endpoint at all: the client used to ask Firestore directly
+// with `whereIn(documentId(), chunk)` on `users`, and could never get a truthful
+// answer. `/users/{uniqueId}` is cohort-gated, and a filtered query against a
+// content-gated rule is refused ALL-OR-NOTHING — so one member of the room in
+// the other cohort denied the whole chunk. Here the Admin SDK reads each
+// document directly, so a member the caller could not have queried is still
+// answered for.
+//
+// The comparison goes through `viewerIsBlocked`, which coerces BOTH sides with
+// String(). That matters: `blockedUserIds` genuinely holds two shapes — the app
+// writes strings via arrayUnion, while `PATCH /admin/users/:uniqueId` validates
+// only Array.isArray and writes numeric ids straight through. The client's old
+// `filterIsInstance<String>()` silently dropped the numeric ones.
+//
+// The response is a bare id list. It deliberately carries nothing else about the
+// members queried — not their block lists, not any other field.
+
+const BLOCKED_BY_MAX_IDS = 1000;
+
+router.post('/users/blocked-by', async (req, res) => {
+  try {
+    const callerUniqueId = req.auth?.uniqueId;
+    if (!callerUniqueId) {
+      return res.status(403).json({ error: 'No profile for this account' });
+    }
+
+    const { userIds } = req.body || {};
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ error: 'userIds must be an array' });
+    }
+    if (userIds.length > BLOCKED_BY_MAX_IDS) {
+      return res
+        .status(400)
+        .json({ error: `userIds must contain at most ${BLOCKED_BY_MAX_IDS} ids` });
+    }
+    if (userIds.length === 0) {
+      return res.json({ blockedBy: [] });
+    }
+
+    // Ids become document paths, so anything that is not a plain positive
+    // integer is refused outright rather than normalised into one.
+    const ids = userIds.map((id) => String(id));
+    if (!ids.every((id) => /^[1-9][0-9]*$/.test(id))) {
+      return res.status(400).json({ error: 'userIds must all be numeric user ids' });
+    }
+
+    // De-duplicate: a repeated id would otherwise cost an extra read and could
+    // appear twice in the result.
+    const uniqueIds = [...new Set(ids)];
+    const snapshots = await db.getAll(...uniqueIds.map((id) => db.doc(`users/${id}`)));
+
+    const blockedBy = snapshots
+      .filter((snap) => snap.exists && viewerIsBlocked(callerUniqueId, snap.data()))
+      .map((snap) => snap.id);
+
+    return res.json({ blockedBy });
+  } catch (err) {
+    log.error('users', 'POST /users/blocked-by failed', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

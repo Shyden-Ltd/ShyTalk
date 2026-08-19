@@ -130,14 +130,65 @@ describe('qa-cleanup-orphans.sh — safety invariants', () => {
     expect(src).toMatch(/find\s+\/tmp\s+[^\n]{0,200}-mmin\s+\+60/);
   });
 
-  test('excludes own PID from manual-qa-runner orphan kill', () => {
-    // Without this guard, the script could match itself via pgrep
-    // ancestry and try to kill its own PID (it wouldn't, because
-    // qa-cleanup-orphans doesn't have "manual-qa-runner" in args —
-    // but the guard documents intent + protects against future
-    // refactors that rename the script).
-    expect(src).toMatch(/\bSELF_PID\b/);
-    expect(src).toMatch(/grep -v "\^\$SELF_PID\$"/);
+  test('selects orphan runners by identity, never by a bare name match', () => {
+    // SHY-0304 replaced `pgrep -f "manual-qa-runner"` + a `$$`-only exclusion.
+    // That predicate matched any process whose command line merely NAMED the
+    // runner — Jest running its test files, the npm wrapper, the invoking
+    // shell — and `clean` is the DEFAULT mode, so each match was a real kill
+    // (50 innocent processes in one measured sweep). The old exclusion could
+    // not help: it covered `$$` alone, while the hazard is the ANCESTRY, and
+    // BSD pgrep hides ancestors for free so the guard was a no-op on macOS and
+    // absent on Linux.
+    //
+    // Structural pins are weak on their own — this one only checks the bare
+    // name match is gone and the shared helper is in use. The behaviour is
+    // covered for real, against real processes, in
+    // `runner-process-identity.test.js`.
+    // Asserted over CODE lines only. The first draft of this pin failed
+    // against its own comment, which quotes the very call it forbids — the
+    // repeat of a trap already recorded in `.claude_learnings.md` ("a
+    // source-reading pin must read CODE, not text").
+    const code = src
+      .split('\n')
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n');
+
+    expect(code).toMatch(/source\s+"\$HERE\/lib\/runner-pids\.sh"/);
+    expect(code).toMatch(/RUNNER_PIDS=\$\(runner_pids\)/);
+    expect(code).not.toMatch(/pgrep\s+-f\s+"?manual-qa-runner/);
+  });
+
+  test('clean mode kills exactly the set it reported — it computes nothing of its own', () => {
+    // Review finding. Every executing test of this script runs `--dry-run`,
+    // so the KILLING branch — the highest-consequence path in SHY-0304, the
+    // one that selected 50 innocent processes — is never executed against a
+    // real target anywhere in the suite.
+    //
+    // It is deliberately NOT executed here either, and that is a considered
+    // choice rather than an omission: this script is machine-wide BY DESIGN,
+    // Jest runs ~150 suites in parallel workers, and five sibling suites spawn
+    // real `manual-qa-runner.js` processes. A clean-mode run inside the suite
+    // would kill THEIR runners — which is precisely the cross-suite
+    // interference this story exists to remove. Buying coverage by
+    // reintroducing the defect is a bad trade.
+    //
+    // What IS enforceable statically is the property that makes dry-run a
+    // faithful preview: the clean branch must kill the SAME variable the
+    // report printed, never re-derive its own set. That is the regression the
+    // reviewer named — a future machine-wide fallback added to the kill branch
+    // alone, invisible to every --dry-run assertion.
+    const code = src
+      .split('\n')
+      .filter((l) => !/^\s*#/.test(l))
+      .join('\n');
+
+    const section = code.slice(code.indexOf('RUNNER_PIDS='), code.indexOf('Playwright temp dirs'));
+    expect(section).toMatch(/RUNNER_PIDS=\$\(runner_pids\)/);
+    expect(section).toMatch(/say "\s*found runner PIDs: \$RUNNER_PIDS"/);
+    expect(section).toMatch(/echo "\$RUNNER_PIDS" \| xargs -r kill/);
+    // exactly one assignment: the kill branch cannot be fed a different set
+    expect(section.match(/RUNNER_PIDS=/g)).toHaveLength(1);
+    expect(section).not.toMatch(/pgrep/);
   });
 
   test('uses SIGTERM first, SIGKILL only as fallback (graceful shutdown)', () => {

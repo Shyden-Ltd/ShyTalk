@@ -4,7 +4,9 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Transaction
@@ -15,12 +17,18 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RoomRepositoryImplTest {
     private lateinit var api: WorkerApiClient
     private lateinit var firestore: FirebaseFirestore
@@ -438,15 +446,40 @@ class RoomRepositoryImplTest {
     @Test
     fun `leaveAllRooms returns Success`() =
         runTest {
-            val result = repo.leaveAllRooms("user-1")
+            val result = repo.leaveAllRooms("user-1", "adult")
             assertTrue(result is Resource.Success)
         }
 
     @Test
     fun `leaveAllRooms with exceptRoomId returns Success`() =
         runTest {
-            val result = repo.leaveAllRooms("user-1", "room-keep")
+            val result = repo.leaveAllRooms("user-1", "adult", "room-keep")
             assertTrue(result is Resource.Success)
+        }
+
+    @Test
+    fun `leaveAllRooms pins the caller cohort on the query`() =
+        runTest {
+            // SHY-0102 — leaveAllRooms is a rooms `list`, denied without cohort.
+            val cohortValue = slot<Any>()
+            every { mockCollRef.whereEqualTo("cohort", capture(cohortValue)) } returns mockQuery
+
+            repo.leaveAllRooms("user-1", "minor")
+
+            assertTrue(
+                "leaveAllRooms must constrain the rooms list by cohort",
+                cohortValue.isCaptured,
+            )
+            assertEquals("minor", cohortValue.captured)
+        }
+
+    @Test
+    fun `leaveAllRooms returns Error on exception`() =
+        runTest {
+            every { mockQuery.get() } returns Tasks.forException(RuntimeException("Firestore fail"))
+
+            val result = repo.leaveAllRooms("user-1", "adult")
+            assertTrue(result is Resource.Error)
         }
 
     // endregion
@@ -456,7 +489,7 @@ class RoomRepositoryImplTest {
     @Test
     fun `closeAllRoomsByOwner returns Success`() =
         runTest {
-            val result = repo.closeAllRoomsByOwner("owner-1")
+            val result = repo.closeAllRoomsByOwner("owner-1", "adult")
             assertTrue(result is Resource.Success)
         }
 
@@ -465,8 +498,24 @@ class RoomRepositoryImplTest {
         runTest {
             every { mockQuery.get() } returns Tasks.forException(RuntimeException("Fail"))
 
-            val result = repo.closeAllRoomsByOwner("owner-1")
+            val result = repo.closeAllRoomsByOwner("owner-1", "adult")
             assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `closeAllRoomsByOwner pins the caller cohort on the query`() =
+        runTest {
+            // SHY-0102 — closeAllRoomsByOwner is a rooms `list`, denied without cohort.
+            val cohortValue = slot<Any>()
+            every { mockCollRef.whereEqualTo("cohort", capture(cohortValue)) } returns mockQuery
+
+            repo.closeAllRoomsByOwner("owner-1", "adult")
+
+            assertTrue(
+                "closeAllRoomsByOwner must constrain the rooms list by cohort",
+                cohortValue.isCaptured,
+            )
+            assertEquals("adult", cohortValue.captured)
         }
 
     // endregion
@@ -480,7 +529,7 @@ class RoomRepositoryImplTest {
             every { mockDoc.id } returns "active-room-id"
             every { mockQuerySnapshot.documents } returns listOf(mockDoc)
 
-            val result = repo.findActiveRoomByOwner("owner-1")
+            val result = repo.findActiveRoomByOwner("owner-1", "adult")
             assertTrue(result == "active-room-id")
         }
 
@@ -489,7 +538,7 @@ class RoomRepositoryImplTest {
         runTest {
             every { mockQuerySnapshot.documents } returns emptyList()
 
-            val result = repo.findActiveRoomByOwner("owner-1")
+            val result = repo.findActiveRoomByOwner("owner-1", "adult")
             assertTrue(result == null)
         }
 
@@ -498,8 +547,130 @@ class RoomRepositoryImplTest {
         runTest {
             every { mockQuery.get() } returns Tasks.forException(RuntimeException("Network error"))
 
-            val result = repo.findActiveRoomByOwner("owner-1")
+            val result = repo.findActiveRoomByOwner("owner-1", "adult")
             assertTrue(result == null)
+        }
+
+    // endregion
+
+    // region SHY-0102 — rooms `list` queries pin the caller's cohort
+    //
+    // The rooms read rule (firestore.rules L192) gates a `list` on
+    // `resource.data.cohort == request.auth.token.cohort`. A `list` is denied
+    // unless the query itself constrains `cohort`, so every rooms-collection
+    // query the client issues MUST add `whereEqualTo("cohort", <caller cohort>)`
+    // — proven against the real rules engine in room-rules.test.js (SHY-0129).
+    // These tests CAPTURE the actual value the impl pins (not merely "was
+    // called"): without the constraint the slot is never filled and the test
+    // fails. The cohort filter is issued FIRST (on the collection ref) so it is
+    // captured on `mockCollRef`.
+
+    @Test
+    fun `getActiveRooms pins the caller cohort on the query`() =
+        runTest {
+            val cohortValue = slot<Any>()
+            every { mockCollRef.whereEqualTo("cohort", capture(cohortValue)) } returns mockQuery
+
+            val job = launch { repo.getActiveRooms("adult").collect { } }
+            runCurrent()
+
+            assertTrue(
+                "getActiveRooms must constrain the rooms list by cohort or the rule denies it",
+                cohortValue.isCaptured,
+            )
+            assertEquals("adult", cohortValue.captured)
+            job.cancel()
+        }
+
+    @Test
+    fun `getActiveRooms pins a minor cohort verbatim`() =
+        runTest {
+            val cohortValue = slot<Any>()
+            every { mockCollRef.whereEqualTo("cohort", capture(cohortValue)) } returns mockQuery
+
+            val job = launch { repo.getActiveRooms("minor").collect { } }
+            runCurrent()
+
+            assertEquals("minor", cohortValue.captured)
+            job.cancel()
+        }
+
+    @Test
+    fun `getActiveRooms still constrains state to ACTIVE and OWNER_AWAY`() =
+        runTest {
+            val stateValues = slot<List<Any>>()
+            every { mockQuery.whereIn("state", capture(stateValues)) } returns mockQuery
+
+            val job = launch { repo.getActiveRooms("adult").collect { } }
+            runCurrent()
+
+            assertEquals(listOf("ACTIVE", "OWNER_AWAY"), stateValues.captured)
+            job.cancel()
+        }
+
+    @Test
+    fun `getActiveRooms surfaces a Firestore listener error to the flow`() =
+        runTest {
+            // SHY-0102 Observability — a denied/failed rooms listen must reach the
+            // flow's catch (so observeRooms logs it), not be silently swallowed.
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+            val errors = mutableListOf<Throwable>()
+
+            val job = launch { repo.getActiveRooms("adult").catch { errors.add(it) }.collect { } }
+            runCurrent()
+            listenerSlot.captured.onEvent(
+                null,
+                FirebaseFirestoreException("denied", FirebaseFirestoreException.Code.PERMISSION_DENIED),
+            )
+            runCurrent()
+
+            assertTrue(
+                "a listener error must surface to the flow, not be swallowed",
+                errors.isNotEmpty(),
+            )
+            job.cancel()
+        }
+
+    @Test
+    fun `prefetchActiveRooms pins the caller cohort on the query`() =
+        runTest {
+            val cohortValue = slot<Any>()
+            every { mockCollRef.whereEqualTo("cohort", capture(cohortValue)) } returns mockQuery
+
+            repo.prefetchActiveRooms("minor")
+
+            assertTrue(
+                "prefetchActiveRooms must constrain the rooms list by cohort",
+                cohortValue.isCaptured,
+            )
+            assertEquals("minor", cohortValue.captured)
+        }
+
+    @Test
+    fun `findActiveRoomByOwner pins the caller cohort on the query`() =
+        runTest {
+            val cohortValue = slot<Any>()
+            every { mockCollRef.whereEqualTo("cohort", capture(cohortValue)) } returns mockQuery
+
+            repo.findActiveRoomByOwner("owner-1", "adult")
+
+            assertTrue(
+                "findActiveRoomByOwner must constrain the rooms list by cohort",
+                cohortValue.isCaptured,
+            )
+            assertEquals("adult", cohortValue.captured)
+        }
+
+    @Test
+    fun `findActiveRoomByOwner still constrains ownerId`() =
+        runTest {
+            val ownerValue = slot<Any>()
+            every { mockQuery.whereEqualTo("ownerId", capture(ownerValue)) } returns mockQuery
+
+            repo.findActiveRoomByOwner("owner-42", "adult")
+
+            assertEquals("owner-42", ownerValue.captured)
         }
 
     // endregion

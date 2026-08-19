@@ -31,6 +31,19 @@ jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: (...args) => mockDoc(...args),
     collection: (...args) => mockCollection(...args),
+    // The binding write is transactional (SHY-0149 R4-I2). The fake buffers
+    // writes and commits them after the callback, exactly as Firestore does,
+    // so a rejecting `mockSet` still fails the transaction and existing
+    // assertions keep reading `mockSet`'s payload.
+    runTransaction: async (fn) => {
+      const writes = [];
+      const result = await fn({
+        get: () => mockDocGet(),
+        set: (_ref, data, opts) => writes.push([data, opts]),
+      });
+      for (const [data, opts] of writes) await mockSet(data, opts);
+      return result;
+    },
   },
 }));
 
@@ -47,6 +60,18 @@ jest.mock('../../src/utils/log', () => ({
 
 jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
+}));
+
+// The admin binding routes now enforce the per-account device cap and clear
+// the ban gate's cache (SHY-0149). Both behaviours are proven against the
+// REAL emulator in tests/routes/devices-lock-check.test.js and
+// tests/middleware/auth-ban-gate.test.js; here they are stubbed benign so
+// this suite keeps testing the admin route's own branches.
+jest.mock('../../src/utils/bans', () => ({
+  countBoundDevices: async () => 0,
+  rollbackBindingIfOverCap: async () => false,
+  clearBanCache: () => {},
+  MAX_BOUND_DEVICES: 20,
 }));
 
 // ─── App setup ───────────────────────────────────────────────────
@@ -497,11 +522,14 @@ describe('POST /api/admin/devices — all branches', () => {
     expect(res.body.lastIp).toBe('1.2.3.4');
     expect(res.body.isp).toBe('BT');
     expect(mockDoc).toHaveBeenCalledWith('deviceBindings/dev-new');
+    // merge:true — a real binding carries ~20 telemetry fields written by
+    // /api/device-info; a full replace would silently wipe them (R4-I3).
     expect(mockSet).toHaveBeenCalledWith(
       expect.objectContaining({
         deviceId: 'dev-new',
         uniqueId: 10000001,
       }),
+      { merge: true },
     );
   });
 
@@ -536,6 +564,71 @@ describe('POST /api/admin/devices — all branches', () => {
       .expect(400);
 
     expect(res.body.error).toBe('deviceId and uniqueId are required');
+  });
+
+  test.each([
+    ['null', null],
+    ['false', false],
+    ['empty string', ''],
+    ['whitespace-only string', '   '],
+    ['array', []],
+    ['negative', -1],
+    ['negative string', '-1'],
+    ['fractional', 1.5],
+    ['exponent string', '1e3'],
+    ['Infinity string', 'Infinity'],
+    ['NaN string', 'NaN'],
+    ['Infinity', Infinity],
+    ['NaN', NaN],
+    ['true', true],
+    ['plain object', {}],
+    ['oversized numeral string', '99999999999999999999'],
+    ['oversized number', 1e20],
+    ['above MAX_SAFE_INTEGER', Number.MAX_SAFE_INTEGER + 2],
+  ])('rejects uniqueId: %s — a uniqueId is a non-negative integer', async (_label, value) => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: 'dev-coerce', uniqueId: value })
+      .expect(400);
+    expect(res.body.error).toContain('required');
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  test('rejects uniqueId: null (would silently become account 0)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: 'dev-null', uniqueId: null })
+      .expect(400);
+    expect(res.body.error).toContain('required');
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  test('accepts a numeric STRING uniqueId (support tooling and test fixtures post strings)', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: 'dev-strid', uniqueId: '10000042' })
+      .expect(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ uniqueId: 10000042 }), {
+      merge: true,
+    });
+  });
+
+  test.each([
+    ['string zero', '0', 0],
+    ['leading zeros', '007', 7],
+    ['MAX_SAFE_INTEGER', Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+  ])('accepts uniqueId: %s', async (_label, input, stored) => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: `dev-ok-${String(input)}`, uniqueId: input })
+      .expect(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ uniqueId: stored }), {
+      merge: true,
+    });
   });
 
   test('allows uniqueId of 0 (falsy but not undefined)', async () => {

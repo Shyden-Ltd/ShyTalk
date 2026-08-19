@@ -13,6 +13,7 @@ import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.data.repository.resolveEffectiveCohort
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -99,9 +100,15 @@ class FunFactSplashViewModel(
                     launch {
                         val userId = authRepository.currentUserId ?: return@launch
                         listOf(
-                            launch { userRepository.getUser(userId) },
                             launch { userRepository.getBlockedUserIds(userId) },
-                            launch { roomRepository.prefetchActiveRooms() },
+                            // SHY-0102 — the rooms prefetch is a `list` and must
+                            // pin the caller's cohort or be denied. Resolving the
+                            // cohort fetches the user doc (warming the same cache
+                            // the standalone getUser warm-up used to populate).
+                            launch {
+                                val cohort = userRepository.resolveEffectiveCohort(userId)
+                                roomRepository.prefetchActiveRooms(cohort)
+                            },
                             launch { pmRepository.prefetchConversations() },
                         ).joinAll()
                     },

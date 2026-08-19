@@ -65,6 +65,7 @@ import com.shyden.shytalk.data.repository.RoomRepositoryImpl
 import com.shyden.shytalk.data.repository.RtdbTypingRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepositoryImpl
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.StorageRepositoryImpl
 import com.shyden.shytalk.data.repository.TranslationRepository
@@ -137,7 +138,7 @@ val appModule =
         single { BillingService(androidContext()) }
 
         // Repositories
-        single<AuthRepository> { AuthRepositoryImpl(get(), BuildConfig.APPLICATION_ID, BuildConfig.EMAIL_LINK_DOMAIN) }
+        single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), BuildConfig.APPLICATION_ID, BuildConfig.EMAIL_LINK_DOMAIN) }
         singleOf(::UserRepositoryImpl) bind UserRepository::class
         singleOf(::RoomRepositoryImpl) bind RoomRepository::class
         singleOf(::MessageRepositoryImpl) bind MessageRepository::class
@@ -161,6 +162,8 @@ val appModule =
         singleOf(::BiometricRepositoryImpl) bind BiometricRepository::class
         single { SecureStorage(androidContext()) }
         single<AppLockRepository> { AppLockRepositoryImpl(get()) }
+        // SHY-0143 — shares the App-Lock's encrypted storage, under its own keys.
+        single { SessionCache(get()) }
         single { BiometricAuth(androidContext()) }
         single { CryptoKeyPair() }
 

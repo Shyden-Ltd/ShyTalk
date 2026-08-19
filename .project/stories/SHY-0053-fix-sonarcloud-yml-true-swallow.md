@@ -1,6 +1,6 @@
 ---
 id: SHY-0053
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P2
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: [G036]
 pr:
 mvp: true
+released_in: v0.97.15
 ---
 
 # SHY-0053: Remove `|| true` from sonarcloud.yml coverage step (was silently swallowing Jest failures)
@@ -142,3 +143,4 @@ Roadmap row (line 84, 2026-06-05): `G036 | 🟡 Polish | CI — || true swallows
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 84 (G036). Reserved ID SHY-0053.
 - 2026-06-13 ~01:18 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): this ticket IS the No-Stubs/warnings-are-failures principle in CI form (`|| true` = green-without-real). Proof framework = actionlint + the real Jest coverage run + **verified-by-running** the loud-failure path via a REAL induced Jest failure on a scratch run ([[feedback-workflow-verify-by-running]]), not YAML-only assertion; any surfaced pre-existing failure fixed in-PR ([[feedback-fix-pre-existing-and-new-same]]); the WARN fallback still emits a visible `::warning::` (never a silent swallow). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the `:63` line number + whether multiple `|| true` exist in the file to re-confirm at pickup.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Done. sonarcloud.yml Jest coverage step no longer carries || true (its cited G036 target); present at v0.97.15. NB a residual gradle/Kotlin-coverage `|| true` at :150 is a DIFFERENT step → separate follow-up finding. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

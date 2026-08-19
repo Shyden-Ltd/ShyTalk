@@ -12,6 +12,8 @@ const router = require('express').Router();
 const { db, auth } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const { getFcmCaptures, clearFcmCaptures } = require('../utils/fcm');
+const { clearBanCache } = require('../utils/bans');
+const { nextUniqueIdFrom, restoreUniqueIdCounter } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -58,12 +60,15 @@ router.post('/test/setup', async (req, res) => {
       userIndex++;
       const uid = `${testRunId}_user_${generateId()}`;
 
-      // Allocate real uniqueId via atomic counter transaction
+      // Allocate real uniqueId via atomic counter transaction. The counter
+      // has been observed string-typed (then `+ 1` CONCATENATES: "33331" + 1
+      // === "333311" — every user carries a string uniqueId the number-typed
+      // admin search can never match); nextUniqueIdFrom is type-immune.
       const counterRef = db.doc('counters/uniqueId');
       const uniqueId = await db.runTransaction(async (t) => {
         const counterDoc = await t.get(counterRef);
-        const current = counterDoc.exists ? counterDoc.data().value : 100000000;
-        const next = current + 1;
+        const raw = counterDoc.exists ? counterDoc.data().value : undefined;
+        const next = nextUniqueIdFrom(raw, { base: 100000000 });
         t.set(counterRef, { value: next }, { merge: true });
         return next;
       });
@@ -203,6 +208,11 @@ router.post('/test/setup', async (req, res) => {
       const convData = {
         id: convId,
         participantIds,
+        // SHY-0132 — stamp false (the default) so the seeded thread matches the
+        // mobile clients' `crossCohortAtMigration == false` segregation filter; a
+        // segregation test can override with `crossCohortAtMigration: true` to seed
+        // a hidden migrated thread.
+        crossCohortAtMigration: convSpec.crossCohortAtMigration ?? false,
         createdAt: now,
         _testRun: testRunId,
       };
@@ -427,6 +437,12 @@ router.post('/test/write/:collection', async (req, res) => {
       // [[feedback-test-isolation-no-leaks]]: never leak state between
       // tests). admin-maintenance.spec.ts:58 was the first caller.
       'deviceBindings',
+      // SHY-0149: the web anti-abuse specs must seed a REAL ban and prove
+      // the server-side gate refuses a banned user — a route-mocked ban
+      // would prove nothing (§ No Stubs). Teardown sweeps both by
+      // linkedUniqueId (see deleteTestData).
+      'deviceBans',
+      'networkBans',
     ];
     if (!ALLOWED_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });
@@ -444,6 +460,18 @@ router.post('/test/write/:collection', async (req, res) => {
       writeData._testRun = data._testRun;
     }
     await db.doc(`${collection}/${docId}`).set(writeData, { merge: true });
+
+    // A ban — or a binding, which decides WHICH hardware bans reach an
+    // account — seeded directly into Firestore bypasses the routes that
+    // normally invalidate the gate's caches. Clear them here so the very next
+    // request sees the seeded state (SHY-0149).
+    if (
+      collection === 'deviceBans' ||
+      collection === 'networkBans' ||
+      collection === 'deviceBindings'
+    ) {
+      clearBanCache();
+    }
 
     res.json({ success: true, id: docId });
   } catch (err) {
@@ -685,6 +713,8 @@ async function deleteTestData(testRunId) {
       }
     }
   }
+  // Deleted bans must stop gating the NEXT test scenario immediately.
+  clearBanCache();
 
   // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations, etc.)
   // Note: system PMs created by admin actions won't have _testRun set — accepted trade-off
@@ -749,12 +779,12 @@ async function deleteTestData(testRunId) {
     // Best-effort cleanup — config deletion failure is non-critical
   }
 
-  // 6. Restore uniqueId counter to the highest remaining real user (best-effort)
+  // 6. Restore uniqueId counter after deleting test users (best-effort).
+  // Type-immune + raise-only — see utils/unique-id-counter.js for the
+  // string-poisoning root cause and the concurrent-allocation race guard.
   if (userUniqueIds.length > 0) {
     try {
-      const maxSnap = await db.collection('users').orderBy('uniqueId', 'desc').limit(1).get();
-      const maxId = maxSnap.empty ? 100000000 : maxSnap.docs[0].data().uniqueId;
-      await db.doc('counters/uniqueId').set({ value: maxId }, { merge: true });
+      await restoreUniqueIdCounter(db);
     } catch {
       // Best-effort — counter restoration failure does not block test cleanup
     }

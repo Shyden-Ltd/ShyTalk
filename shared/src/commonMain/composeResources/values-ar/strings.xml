@@ -944,6 +944,7 @@
     <string name="block_description">لن يتمكنوا من عرض ملفك الشخصي.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">لقد تم حظرك من قبل هذا المستخدم</string>
+    <string name="blocked_unblock_required">يجب أن يلغوا حظرك أولاً حتى تتمكن من عرض ملفهم الشخصي.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">لقد قام أحد المستخدمين في هذه الغرفة بحظرك. قد تكون لديك خبرة محدودة. أدخل على أي حال؟</string>
     <!-- google-translated 2026-05-04 -->
@@ -1501,10 +1502,10 @@
     <string name="security_reset_pin">إعادة تعيين رقم التعريف الشخصي</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">قم بتأكيد هويتك لتعيين رقم PIN جديد</string>
+    <string name="security_set_pin">تعيين رقم التعريف الشخصي</string>
+    <string name="security_set_pin_desc">احمِ التطبيق برقم PIN</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">حسابات متصلة</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">إدارة طرق تسجيل الدخول</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">قم بتسجيل الدخول باستخدام البريد الإلكتروني</string>

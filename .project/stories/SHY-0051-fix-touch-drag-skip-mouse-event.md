@@ -1,6 +1,6 @@
 ---
 id: SHY-0051
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-08
 priority: P2
@@ -142,3 +142,4 @@ Permanent browser skips reduce coverage silently. Real desktop browsers DO suppo
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 94 (G034). Reserved ID SHY-0051.
 - 2026-06-13 ~01:13 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): desktop-web coverage fix → Playwright drag headline on the real suggestions-board (real dev API/local stack) across Mac chromium/firefox/webkit/edge; mobile browsers N/A (separate touch SHY). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): already real-backend; **🚩 flagged** that the Risk's `.fixme` fallback is a skip-by-another-name → if the component only handles `touchstart`, block on a component-update SHY, never ship `.fixme` ([[feedback-think-like-qa-real-fixes]]). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:` populated. Pickup-fitness: AC current; the `:1252` line number to re-confirm at pickup (spec may have drifted).
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → In Review. suggestions-board.spec.ts touch skip converted to a real mouse-drag assertion (Closes G034); 0 skips remain; develop, post-v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

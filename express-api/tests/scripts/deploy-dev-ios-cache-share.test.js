@@ -131,6 +131,22 @@ function extractStep(yamlText, stepName) {
   return lines.slice(startIdx, endIdx).join('\n');
 }
 
+/**
+ * Extract the `actions/cache*@<sha>` ref (action name + 40-hex pin) from a
+ * cache step block. Version-agnostic (SHY-0162): returns whatever SHA is
+ * pinned, so the shared-cache assertions compare deploy-dev vs ios-tests
+ * rather than freezing a literal SHA — a frozen literal is what left this
+ * suite red after Dependabot bumped actions/cache 5.0.5 → 6.1.0. Pinned-ness
+ * (40-hex, never a tag) is guarded by the regex + scripts/check-action-shas.sh.
+ */
+function extractCacheRef(stepBlock) {
+  const m = stepBlock.match(/uses:\s*(actions\/cache(?:\/restore|\/save)?@[a-f0-9]{40})\b/);
+  if (!m) {
+    throw new Error('No SHA-pinned actions/cache* `uses:` found in step block:\n' + stepBlock);
+  }
+  return m[1];
+}
+
 describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
   let deployDevYaml;
   let iosTestsYaml;
@@ -146,8 +162,15 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
       step = extractStep(deployDevYaml, 'Cache CocoaPods spec repos (~/.cocoapods/repos)');
     });
 
-    test('exists in deploy-dev with same SHA as ios-tests', () => {
-      expect(step).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
+    test('uses the same cache action + SHA as ios-tests (shared restore contract)', () => {
+      // Version-agnostic: assert the two workflows pin the SAME cache ref, not
+      // a frozen SHA. Survives Dependabot bumps; still proves the sharing.
+      const iosTestsStep = extractStep(
+        iosTestsYaml,
+        'Cache CocoaPods spec repos (~/.cocoapods/repos)',
+      );
+      expect(extractCacheRef(step)).toBe(extractCacheRef(iosTestsStep));
+      expect(extractCacheRef(step)).toMatch(/@[a-f0-9]{40}$/);
     });
 
     test('targets ~/.cocoapods/repos', () => {
@@ -181,8 +204,10 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
       step = extractStep(deployDevYaml, 'Cache iosApp/Pods');
     });
 
-    test('exists with same SHA as ios-tests', () => {
-      expect(step).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
+    test('uses the same cache action + SHA as ios-tests', () => {
+      const iosTestsStep = extractStep(iosTestsYaml, 'Cache iosApp/Pods');
+      expect(extractCacheRef(step)).toBe(extractCacheRef(iosTestsStep));
+      expect(extractCacheRef(step)).toMatch(/@[a-f0-9]{40}$/);
     });
 
     test('has `id: pods-cache` (required for Install CocoaPods skip-on-hit)', () => {
@@ -202,9 +227,13 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
       const iosTestsKey = extractCacheKey(iosTestsStep);
       const deployDevKey = extractCacheKey(step);
       expect(deployDevKey).toBe(iosTestsKey);
-      // And both should specifically hash Podfile.lock — the
-      // contract that drives Pods reproducibility.
-      expect(deployDevKey).toContain("hashFiles('iosApp/Podfile.lock')");
+      // Both must hash the Podfile AND the lock (SHY-0305). Keying on the
+      // lock alone meant a Podfile-only change left the key untouched, the
+      // cache hit, and the "Install CocoaPods" step — whose whole job is to
+      // fail loud on a lock mismatch — was SKIPPED by exactly the condition
+      // it exists to catch. SHY-0300 shipped a stale lock that way and every
+      // iOS build failed in the Swift compiler.
+      expect(deployDevKey).toContain("hashFiles('iosApp/Podfile', 'iosApp/Podfile.lock')");
     });
   });
 
@@ -214,8 +243,13 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
       step = extractStep(deployDevYaml, 'Cache SwiftPM packages (build/ios-spm-packages)');
     });
 
-    test('exists with same SHA', () => {
-      expect(step).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
+    test('uses the same cache action + SHA as ios-tests', () => {
+      const iosTestsStep = extractStep(
+        iosTestsYaml,
+        'Cache SwiftPM packages (build/ios-spm-packages)',
+      );
+      expect(extractCacheRef(step)).toBe(extractCacheRef(iosTestsStep));
+      expect(extractCacheRef(step)).toMatch(/@[a-f0-9]{40}$/);
     });
 
     test('targets build/ios-spm-packages (matches xcodebuild -clonedSourcePackagesDirPath)', () => {

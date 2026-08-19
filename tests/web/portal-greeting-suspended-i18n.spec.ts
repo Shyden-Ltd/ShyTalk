@@ -1,4 +1,10 @@
 import { test, expect } from '@playwright/test';
+import {
+  PORTAL_LOCALES,
+  fetchPortalTranslations,
+  localeBlock,
+  valueOf,
+} from './helpers/portal-translations';
 
 const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 
@@ -35,26 +41,20 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * portal-translations.js since the dashboard's first revision.)
  */
 
-const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
-
 const NEW_KEYS = ['suspended_reason_label', 'default_user_name'];
 
 test.describe('Portal greeting + suspension i18n', () => {
   test('PORTAL_T defines suspended_reason_label + default_user_name × 21 locales', async ({ request }) => {
-    const res = await request.get(`${BASE}/portal/portal-translations.js`);
-    expect(res.ok()).toBe(true);
-    const src = await res.text();
+    // Parser shared with portal-ban-i18n.spec.ts: two independent copies could
+    // drift, so one could silently stop matching after a reformat (R18-I2).
+    const src = await fetchPortalTranslations(request, BASE);
 
     for (const lang of PORTAL_LOCALES) {
-      const blockRe = new RegExp(`  ${lang}:\\s*\\{[\\s\\S]*?\\n  \\},`);
-      const blockMatch = src.match(blockRe);
-      expect(blockMatch, `${lang} block not found`).not.toBeNull();
-      const block = blockMatch![0];
+      const block = localeBlock(src, lang);
       for (const key of NEW_KEYS) {
-        expect(block, `${lang} missing ${key}`).toMatch(new RegExp(`\\b${key}:\\s*['"][^'"]+['"]`));
+        const value = valueOf(block, key);
+        expect(value, `${lang} missing ${key}`).not.toBeNull();
+        expect(value!.trim(), `${lang}'s ${key} is empty`).not.toBe('');
       }
     }
   });
