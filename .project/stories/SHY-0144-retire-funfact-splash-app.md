@@ -125,7 +125,7 @@ Kotlin app/shared change (no `express-api/**`) → **NOT `*.md`-only → runs th
 
 ## Notes
 
-Reviewed-up-to: 2b3929767df6394ed63fe394658a421d83867d12
+Reviewed-up-to: d2ab66d499ef8c3d8f48c1ae38b8de29cac81dc0
 
 - **2026-08-19 — re-validated the spec before touching anything, and it was
   materially incomplete.** The AC named 8 files; the tree carried **19**
