@@ -1,6 +1,6 @@
 ---
 id: SHY-0348
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -378,3 +378,32 @@ sees everything; the API's 403 is never reached.
   build. CLAUDE.md's tri-platform policy says to verify with
   `./gradlew :shared:compileKotlinIosArm64` after any shared change; nothing
   enforces it. Filed separately as its own story.
+
+- **2026-08-19 07:4x WIB — iOS DEVICE-PROVEN on Sean's real iPhone** (iPhone Air,
+  iOS 27.0), build `2ba282a` of this branch, Debug-Dev over USB against the
+  **dev** backend. The blocker (Marcus, P-04) blocked the signed-in account with
+  the id stored as a **number**. Opening his card from a room seat and tapping
+  *View Profile* lands on `profile/{userId}` and renders:
+
+  > **This profile is not available**
+  > You have been blocked by this user
+  > **They need to unblock you before you can view their profile.**
+  > \[ Report User \]
+
+  The **rendered sentence** was asserted, not just the `profile_blockedUnblockRequired`
+  tag — a tag proves the component mounted, not that it says anything.
+
+  Both platforms are now proven: Android via an existing conversation, iOS via a
+  room seat. Two different non-list routes, which is the point — those are
+  exactly the paths the fix exists to cover.
+
+- **2026-08-19 — route note, and an open question that is NOT this story's.** The
+  iOS leg went via a room seat because the conversation route could not be
+  reached: a seeded 1:1 conversation satisfying the client's own query
+  (`participantIds contains me`, `crossCohortAtMigration == false`,
+  ordered by `lastMessageAt`) did **not** appear in the iOS conversation list for
+  a **minor** account, on two launches. The same fixture shape worked on Android
+  for an adult account. That smells like a minors' private-messaging restriction
+  (there is a `pm-lock-check` endpoint) rather than a bug, but it was **not**
+  established either way and is not claimed as a finding — recorded so the next
+  person starts from the observation rather than rediscovering it.
