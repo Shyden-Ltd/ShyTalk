@@ -898,3 +898,30 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── SHY-0147: "remember this browser" opt-in ───────────────────
+   Sits between the code field and the Verify button. Deliberately
+   understated — it is an opt-in convenience, not a call to action,
+   and it must never read as something the user has to do. */
+.portal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 16px;
+  font-size: 0.875rem;
+  color: var(--text-muted, var(--text));
+  cursor: pointer;
+  /* Long translations of this label must wrap rather than overflow the card. */
+  text-align: start;
+  line-height: 1.4;
+}
+
+.portal-checkbox input[type='checkbox'] {
+  /* A real checkbox, not a styled div — keyboard and screen-reader
+     behaviour come free and cannot regress. */
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}

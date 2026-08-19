@@ -230,3 +230,46 @@ describe('CORS localhost in local mode', () => {
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// SHY-0147 — credentialed CORS for the portal's httpOnly MFA cookie
+// ═══════════════════════════════════════════════════════════════════
+describe('SHY-0147 — credentials are allowed WITHOUT widening the allowlist', () => {
+  const ALLOWED = 'https://shytalk.shyden.co.uk';
+
+  it('an allowed origin is told credentials may be sent', async () => {
+    const app = createApp(ALLOWED);
+    const res = await request(app).get('/test').set('Origin', ALLOWED).expect(200);
+
+    // Without this the browser DISCARDS the Set-Cookie on a cross-origin
+    // response and the MFA-remember feature silently does nothing.
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+    expect(res.headers['access-control-allow-origin']).toBe(ALLOWED);
+  });
+
+  it('never answers with a wildcard origin', async () => {
+    // `*` and credentials are mutually exclusive in the CORS spec; a wildcard
+    // here would make every credentialed request fail in the browser, and
+    // would mean the allowlist had stopped being applied.
+    const app = createApp(ALLOWED);
+    const res = await request(app).get('/test').set('Origin', ALLOWED).expect(200);
+    expect(res.headers['access-control-allow-origin']).not.toBe('*');
+  });
+
+  it('enabling credentials does NOT let a disallowed origin through', async () => {
+    // The regression that would matter: credentials must not become a bypass.
+    const app = createApp(ALLOWED);
+    const res = await request(app).get('/test').set('Origin', 'https://evil-site.com').expect(500);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+
+  it('a preflight from an allowed origin also advertises credentials', async () => {
+    const app = createApp(ALLOWED);
+    const res = await request(app)
+      .options('/test')
+      .set('Origin', ALLOWED)
+      .set('Access-Control-Request-Method', 'POST');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+});

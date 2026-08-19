@@ -566,7 +566,7 @@ if (require.main === module) {
     process.exit(2);
   }
 
-  const ctx = { auth: admin.auth(), db, pw, FieldValue };
+  const ctx = { auth: require('firebase-admin/auth').getAuth(), db, pw, FieldValue };
 
   (async () => {
     console.log('PROVISIONING ' + personas.length + ' personas against project ' + projectId);

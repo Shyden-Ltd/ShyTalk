@@ -7,6 +7,15 @@
  */
 
 const admin = require("firebase-admin");
+// firebase-admin 14 REMOVED the whole namespaced surface: `admin.apps`,
+// `admin.firestore()`, `admin.auth()`, `admin.database()` and
+// `admin.messaging()` are all `undefined` on 14.2.0 — only
+// `admin.initializeApp` survives. The modular entry points are the
+// replacements. Reading `admin.apps.length` threw "Cannot read properties
+// of undefined" before this script could seed anything.
+const { getApps } = require("firebase-admin/app");
+const { getFirestore } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
 const {
   S3Client,
   CreateBucketCommand,
@@ -21,12 +30,12 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST =
 process.env.FIREBASE_DATABASE_EMULATOR_HOST =
   process.env.FIREBASE_DATABASE_EMULATOR_HOST || "localhost:9000";
 
-if (!admin.apps.length) {
+if (!getApps().length) {
   admin.initializeApp({ projectId: "demo-shytalk" });
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
+const db = getFirestore();
+const auth = getAuth();
 
 async function seedIfMissing(path, data) {
   const doc = await db.doc(path).get();

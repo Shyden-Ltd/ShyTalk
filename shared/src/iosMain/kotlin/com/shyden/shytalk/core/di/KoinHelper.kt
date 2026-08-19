@@ -41,6 +41,7 @@ fun doInitKoin(
     deviceInfo: String = "?",
     apiBaseUrl: String? = null,
     googleWebClientId: String? = null,
+    bypassDeviceChecks: Boolean = false,
     gitBranch: String = "",
     gitSha: String = "",
     gitDirty: Boolean = false,
@@ -90,6 +91,12 @@ fun doInitKoin(
     // localhost:3000 from real iPhones and locked the user on "Unable to
     // connect".
     BuildVariant.initApiBaseUrl(apiBaseUrl)
+    // Auth-stage device checks (device-lock + ban application). Default
+    // false = enforce; Swift passes true ONLY for the `.local` variant
+    // (AppEnvironment.resolve), mirroring Android's per-flavor
+    // BuildConfig.BYPASS_DEVICE_CHECKS. Fixes the SHY-0170 iOS gap where
+    // IosPlatformModule hardcoded the bypass to true for EVERY build.
+    BuildVariant.initBypassDeviceChecks(bypassDeviceChecks)
     // SHY-0275 — same fail-closed shape as apiBaseUrl. Express omits `url` from
     // the token response on local by design, so without this the iOS voice
     // service fell through to "" and refused its own connection before any

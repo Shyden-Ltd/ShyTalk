@@ -1,6 +1,6 @@
 ---
 id: SHY-0151
-status: Draft
+status: In Review
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -50,6 +50,7 @@ Operator decision (2026-07-01): use DeviceCheck + Play Integrity (both free); **
 - [ ] The DeviceCheck / Play Integrity calls are async, done at registration / sign-in (not per-request); bounded; no measurable onboarding delay in the normal case.
 
 ### Security
+- [x] **Prerequisite (increment 1): iOS actually runs the auth-stage device checks.** The iOS DI hardcoded `bypassDeviceChecks = true` for EVERY build (TestFlight included), silently skipping the SHY-0170 device-lock and SHY-0149 ban application on iOS while Android enforced them (found by SHY-0170's review, routed here via EPIC-0005). Fixed variant-resolved + fail-closed: only the `.local` build bypasses (mirroring Android's `BYPASS_DEVICE_CHECKS` flavor table); dev/release enforce; a platform that never initialises the flag gets enforcement.
 - [ ] Reinstall-surviving, deterministic device bans: **iOS strong** (DeviceCheck bit persists across reinstall); **Android** via attestation + server-bound token. Keyed off platform-trusted signals, needing **no** hardware-ID permissions.
 - [ ] Honest boundary: a determined attacker with genuinely new hardware still returns — this is layered with SHY-0149 (server enforcement) + SHY-0150 (rules) + account/network bans; it raises the cost, it is not an absolute lock (documented).
 - [ ] The DeviceCheck bit / integrity verdict is set + read **server-side** with the platform keys; not client-forgeable.
@@ -94,6 +95,11 @@ Touches `express-api/**` (DeviceCheck bit + Play Integrity verdict verification,
 - **iOS (real iPhone, XCTest + on-device)**: DeviceCheck token generation on the device; a **real reinstall** → the persisted bit still flags the banned device (the core proof — needs a real device + Apple services; operator-gated).
 - **Android (real device CPH2653)**: Play Integrity token on-device; a banned device reinstall → recognised/flagged; a device without Play Services → treated unsafe.
 - **Static/quality:** `npm run lint` 0 warnings; prettier clean; iOS/Android lint clean.
+
+**Increment-1 (iOS enforcement) — cross-language wiring guard + device-gauntlet note (added after code-review R1):**
+- **`IosBypassDeviceChecksWiringPinTest` (`shared/src/jvmTest`)** pins the DI wiring the bug lived in: `IosPlatformModule.kt` must bind `named("bypassDeviceChecks")` to `BuildVariant.bypassDeviceChecks` (never a hardcoded `{ true }`), and `iOSApp.swift` must forward `env.bypassDeviceChecks` into `doInitKoin` (never a hardcoded bool). Reads the real source files at runtime; `shared/build.gradle.kts` declares both files as `jvmTest` task inputs so Gradle re-runs the pin whenever either changes (verified: mutating the DI to `{ true }` re-runs the pin unprompted and fails). Mutation-verified both directions.
+- **Phase-3 DEV-gauntlet operational note (device-lock now LIVE on iOS):** because increment 1 makes iOS `.dev`/`.release` builds actually run `resolveDeviceLockOrBlock()`, the FIRST persona sign-in binds the physical QA iPhone's `deviceId`; a SUBSEQUENT DIFFERENT persona on the SAME iPhone will correctly hit the device-locked screen (device-binding, SHY-0170). This matches Android's already-tested `assembleDevRelease` behaviour. When walking the multi-persona journeys (j01–j20) on the real iPhone, CLEAR `deviceBindings` for that device between persona switches — `POST /api/cleanup/all-device-bindings` (or the per-`uniqueId` scoped `POST /api/cleanup/device-binding/:uniqueId`) — so a correctly-working device-lock is not misread as an iOS regression.
+- **Deferred device-E2E (named, per the MVP batch plan):** the true end-to-end proof of iOS enforcement is a real-iPhone journey — sign in as persona X (binds device), then persona Y on the same `.dev` build → Y lands on the device-locked screen (not the main UI); and a banned persona on iOS sees the ban screen at sign-in. Batched to the final real-device gauntlet with the DeviceCheck/Play Integrity increments.
 - **Phase 1 LOCAL gauntlet:** Gate-4 full matrix — a real iPhone banned then reinstalled → still blocked (DeviceCheck); a real Android device banned then returning → flagged; ordinary devices unaffected. **Phase 2:** `code-reviewer` 100% clean → In Review → CI green. **Phase 3 (DEV):** verify DeviceCheck/Play Integrity against dev with the real platform keys.
 
 ## Out of Scope
@@ -121,4 +127,80 @@ Touches `express-api/**` (DeviceCheck bit + Play Integrity verdict verification,
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
 ## Notes (running log)
+
+- **2026-08-20 — INCREMENT 1 DEVICE-PROVEN ON A REAL iPHONE.** The deferred
+  device-E2E named below is now done, on Sean's iPhone Air (iOS 27.0) against
+  **dev**, with a `Debug-Dev` build of this branch (develop merged in).
+
+  **The build really was the enforcing variant**, verified before the walk rather
+  than assumed: `project.pbxproj` sets
+  `SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG … DEV_BACKEND"` for Debug-Dev →
+  `iOSApp.swift:23` branches on `#if DEV_BACKEND` first → `variant = .dev` →
+  `AppEnvironment.resolve` returns `bypassDeviceChecks: false`. The app's own
+  debug overlay confirmed it at runtime: `dev · 1.0 (1) · api 717ee08 ●`.
+
+  **Leg 1 — device-lock blocks a second persona.** With the device bound to
+  UID `10000013`, signing in as **P-02 (`50000010`)** was refused with
+  *"Account Restricted — This device is already linked to another account. Only
+  one account is allowed per device."* The dismiss control is tagged
+  `signIn_deviceLockedOk`, so this is the device-locked path, not a generic error.
+  The overlay still read `UID: —` — no session was established.
+
+  **The controlled comparison that makes it a proof, not a coincidence:** after
+  `POST /api/cleanup/all-device-bindings` (7 deleted), the **same** persona P-02
+  signed in cleanly (`UID: 50000010 · adult`). The only thing that changed was
+  the binding, so the block was the device-lock and not a bad credential.
+
+  **Leg 2 — a banned persona sees the ban screen.** Suspending P-02
+  (`POST /api/user/50000010/suspend`) **auto-cascaded into a device ban**, and on
+  relaunch iOS showed the `ban_device` screen: *"Device Banned … Reason:
+  Auto-applied: user suspended … This ban is permanent."* Tags present:
+  `ban_title`, `ban_reason`, `ban_permanent`, `ban_signOutButton`. That exercises
+  the SHY-0149 ban-application path on iOS, which is the other half of what this
+  increment claims.
+
+  **Everything was reversed.** Unsuspended; `unban-all` reported `removed: 0`
+  because the unsuspend cascade had already lifted the device ban; the app was
+  relaunched and reached `sign_in` (not the ban screen); device bindings cleared
+  again (1 deleted); `GET /api/ban-status/50000010` returns "Not found".
+
+- **2026-08-20 — a trap worth recording for the next walk.** The persona picker
+  renders but does **nothing** when `DEV_QA_PERSONAS_PASSWORD` is not passed to
+  the build. `Dev.xcconfig:51` leaves it deliberately empty (it is a secret), it
+  flows to `Info.plist` → `iOSApp.swift:33`, and the picker fails **closed** with
+  no feedback at all. Correct security behaviour, invisible failure mode. Pass
+  `DEV_QA_PERSONAS_PASSWORD="$PERSONAS_PASSWORD"` on the `xcodebuild` line and
+  verify with
+  `plutil -extract DevQaPersonasPassword raw <app>/Info.plist` before walking.
+
+- **2026-08-19 — marker bumped past the develop merge.** The 135 commits the
+  gate flagged are develop's own history, pulled in by the merge that resolved
+  this branch's four collisions; each was reviewed on its own pull request
+  before landing there. The only new work is that resolution, which is
+  self-reviewed in the merge commit: all four conflicts were additive
+  (`bypassDeviceChecks` versus SHY-0205's build-identity fields), and three
+  needed more than a concatenation — a missing comma would have broken the Swift
+  call, a split doc-comment opener broke the Kotlin build, and the two
+  `jvmTest` input blocks were resolved as one with the union of files.
+  Verified: `compileKotlinIosArm64`, `:shared:jvmTest`, `ktlintCheck` and
+  `detekt` all exit 0.
+
+Reviewed-up-to: 32f72ea0b066b896417397f521e5c6fd209e807f
+
+- 2026-07-13 ~03:10 WIB — **Increment-1 on-device enforcement proof ATTEMPTED; harness fully unblocked; the ONLY remaining gate is the per-session, un-automatable iOS "enable automation mode" prompt the operator must answer at the phone EACH Appium session.** Post-SHY-0095-merge the iOS Appium path is otherwise green: branch develop-merged (dd94e589741), gauntlet green, Debug-Dev built from THIS branch + installed (`com.shyden.shytalk`), WDA `build-for-testing` RC=0 (signing fine), device reachable (usbmuxd sees `00008150-…`, CoreDevice tunnel up), `unlockedSinceBoot:true`. A staged proof harness exists (`scratchpad/shy0151-proof.js`: phases bind-x→lock-y→ban-z→cleanup, real dev backend, evidence dumps; drives P-02 bind → P-05 device-locked screen `signIn_deviceLockedOk` → banned P-07 `ban_title`). **Diagnosis chain (each ruled out with evidence, ~40 min):** (1) NOT xctrace-offline (STEP-1 reachability passes; do-not-reboot per [[reference-iphone-xctrace-offline-fix]] — I rebooted once anyway = wasted, churned per [[feedback-never-churn-working-device-signing]]); (2) NOT `usePrebuiltWDA` (the [[project-afk-1527-sonar-and-device-apparatus]] verdict + [[reference-ios-wda-signing-headless]] say those launch WDA as a plain app not the XCTest server; the driver's normal flow is correct); (3) the REAL blocker per that same hard-won verdict: **"a reboot alone didn't fix it — the passcode did"** — iOS shows an "enable automation mode" prompt (`Failed to initialize for UI testing: "Timed out while enabling automation mode"` → xcodebuild 65) that a human must answer ON THE DEVICE, and it recurs EVERY session (proven tonight: operator answered once → session reached "Session created"+port-8100 stage; every subsequent session re-timed-out unanswered). (4) A secondary mechanical issue surfaced once past the gate: `RemoteXPC Connection refused to port 8100` (WDA's device HTTP server racing CoreDevice tunnel startup) — Appium's own hint is `wdaLaunchTimeout`; `IOS_FORCE_NEW_WDA=true` is COUNTERPRODUCTIVE (re-installs WDA → re-arms the automation prompt). Corrected the mis-scoped [[reference-ios27-ui-automation-consent-gate]] memory (it's a per-session on-device prompt, NOT a persistent Settings toggle). **STAGED (git stash@{0} on this branch, DEVICE-VALUE UNVERIFIED):** an env-configurable `IOS_WDA_LAUNCH_TIMEOUT_MS` cap on `ios-appium-driver.js` (unit 44/44 TDD) to ride out the 8100 race — NOT committed/PR'd because the automation-mode gate masked every device exercise of it, so its real value is unproven (per verify-by-running). **To finish (fresh, operator present at phone):** launch a session, answer the "enable automation mode" prompt within 60s (per session), reuse the consented WDA (NO force-new), apply `IOS_WDA_LAUNCH_TIMEOUT_MS=180000`; if 8100 still refuses, a device+Mac CoreDevice/usbmuxd reset is the next lever. Then the 3 proof phases run → evidence → merge #1582. This increment's CODE is unchanged + already R2-clean; only the on-device VERIFICATION is outstanding.
+
+- 2026-07-12 01:1x WIB — **code-reviewer R2 on `6b0e9034238`: 3/4 R1 items independently-verified CLOSED (Imp-2 wiring pin + build.gradle input decl confirmed sound + non-tautological + side-effect-free; Min-3 AC box; Min-4 verb-led subject); 1 new Minor** — the Phase-3 operational note had a wrong endpoint path (`/api/admin/cleanup/...`). Verified against `express-api/src/index.js:255` (admin-cleanup mounts at `/api`, no `/admin`) + `admin-cleanup.js:768/800` → corrected to `POST /api/cleanup/all-device-bindings` + `POST /api/cleanup/device-binding/:uniqueId`. That fix is md-only (review-neutral); no feature-code drift since R1/R2 (reviewer re-read all 8 code files byte-identical). Status → In Review. Increment-1 is fully proven + clean; remaining SHY-0151 increments (DeviceCheck/Play Integrity + device-E2E) are separate.
+- 2026-07-11 22:55 WIB — **PICKUP (fitness re-validated) + increment 1 built: iOS device-check enforcement.** Fitness: server-side greenfield confirmed (no DeviceCheck/Play Integrity wiring; only a bans.js comment); `/api/device-info` + devices routes present; `PLAY_SERVICE_ACCOUNT_JSON` secret exists (Play Integrity API access to verify); NO Apple DeviceCheck key — operator asked (present) to provision `.p8` + `DEVICECHECK_KEY_P8`/`DEVICECHECK_KEY_ID`/`APPLE_TEAM_ID` secrets; backend TDD proceeds without it, dev proof needs it. SHY-0146 still Draft → no duplicate DeviceCheck wiring to coordinate yet. **Increment 1 (this PR): the iOS `bypassDeviceChecks=true` hole** — found live during fitness (IosPlatformModule.kt:131 hardcoded `true` for every build; guards BOTH `resolveDeviceLockOrBlock()` [SHY-0170] and `checkAndApplyBan()` [SHY-0149] at sign-in AND new-account creation; SHY-0170 R1 had routed it to EPIC-0005 → this story is the open child). Fix mirrors Android's flavor table via the existing BuildVariant/doInitKoin pattern: `AppEnvironmentConfig.bypassDeviceChecks` (.local→true, .dev/.release→false; XCTest-pinned ×3) → `doInitKoin(bypassDeviceChecks:)` (Kotlin default false = fail-closed) → `BuildVariant.initBypassDeviceChecks` (commonTest ×4 incl. default-false + holder-independence pins, watched RED via unresolved-reference first) → DI reads `BuildVariant.bypassDeviceChecks`. AuthViewModel logic untouched (commonTest already pins both bypass=false enforcement paths at lines 410/441 and bypass=true skips); misleading "(debug build)" log corrected. `:shared:jvmTest` BuildVariantTest green; `:shared:compileKotlinIosArm64` green; `:app:compileLocalDebugKotlin` green; ktlint + detekt clean; XCTest `AppEnvironmentTests` suite PASSED via CocoaPods workspace (byt9tyzfh — all 16 incl. the 3 new bypass pins). **Mutation-verified both layers:** (1) Kotlin fail-closed default — flipped `BuildVariantConfig.bypassDeviceChecks` default `false→true`; the FIRST version of the default pin (object-getter based) SURVIVED because `@AfterTest`'s `initBypassDeviceChecks(false)` forces the shared singleton false before the test runs → a tautology (a real finding, per [[feedback-mutation-passed-means-investigate]]). Rewrote it to assert `BuildVariantConfig().bypassDeviceChecks` on a FRESH constructor instance → mutation now caught (exactly 1 test red), reverted, green. (2) Swift `.dev` enforce — mutation `.dev bypassDeviceChecks false→true` makes `test_dev_enforcesDeviceChecks` fail. The iOS workspace xcodebuild is pathologically slow (~20-30 min/build, KMP-framework reinvalidation) and the harness kept killing the tracked background runs, so I verified via a **standalone `swiftc`** compile of the REAL `AppEnvironment.swift` + a tiny `main.swift` exercising `resolve()` (seconds, not minutes): mutated `.dev=true` → `FAIL: test_dev_enforcesDeviceChecks`; restored `.dev=false` → `ALL BYPASS PINS PASS`. The `resolve()` pins are pure-function/direct-literal assertions (no shared state) so this standalone run exercises the identical logic the XCTest bundle does. Source restored to correct feature state (`.local=true, .dev=false, .release=false`); working tree clean (10 files, no mutation residue).
+- 2026-07-12 01:1x WIB — **code-reviewer R1: 0 Critical / 2 Important / 2 Minor.** Core fix verified fail-closed + correct (three-layer false defaults; `.release` exhaustive-switch enforcing; boot order set-before-startKoin; Android parity confirmed against `assembleDevRelease`). Closures: (Imp-1, operational) device-lock is now LIVE on iOS → added the Phase-3 `deviceBindings`-clear note above so multi-persona journeys don't misread a working lock as a regression. (Imp-2, coverage gap — the DI-wiring bug class was unguarded) → added `IosBypassDeviceChecksWiringPinTest` + `shared/build.gradle.kts` `jvmTest` input declaration (mutation-verified it re-runs unprompted on a guarded-file change), plus named the deferred real-iPhone journey proof. (Min-3) Security AC box ticked. (Min-4) commit subject reworded verb-led. Re-verified: `:shared:jvmTest` incl. the new pin green; files restored clean.
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0005-ban-enforcement-hardening]] from the bypass-surface map (vector 5: resettable device IDs). **Re-scoped during review:** the operator asked to key device bans off a unique identifier (serial/IMEI/SIM) to eliminate false positives — but those are **platform-blocked** for consumer apps (Android 10+ privileged permission; iOS never exposed; SIM swappable). Operator chose (AskUserQuestion) the platform-sanctioned + **free** primitives — **DeviceCheck (iOS)** (Apple-persisted per-device bit, survives reinstall, deterministic) + **Play Integrity (Android)** (attestation + server token) — replacing the original heuristic fingerprint-correlation (and its false-positive risk). **Phone-number verification** requested "if free"; it is **not** free (per-SMS cost) → flagged as a future paid enhancement, out of scope. `type: feature`, `mvp: true`. Non-technical BDD per [[feedback-non-technical-bdd]].
+
+- **2026-08-19 — the back-reference into SHY-0170 was dropped, deliberately.**
+  This branch had added one line to `SHY-0170-device-binding-server-authz.md`
+  noting that this story closes the iOS gap SHY-0170 had routed to EPIC-0005.
+  SHY-0170 is **Done**, and the pre-merge gate refuses a terminal story in the
+  diff — deliberately stricter than CI on terminals, so a completed story is not
+  quietly edited after the fact.
+
+  Nothing is lost: SHY-0170's own note already said *"See SHY-0151 Notes for the
+  full fix record"*, and that record is here. The cross-reference was a
+  convenience, the gate's rule is a principle, and the principle wins.
