@@ -1,6 +1,6 @@
 ---
 id: SHY-0148
-status: Draft
+status: In Review
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -34,26 +34,26 @@ Operator chose **`mvp: true`** — cross-browser session correctness is a launch
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] A signed-in visitor reloads (or returns to) any public page — roadmap, suggestions board, admin dashboard — and **stays signed in**, seeing their signed-in state, on **all five supported browsers** (Chrome, Firefox, Safari/WebKit, mobile-Chrome, mobile-Safari).
-- [ ] A signed-in visitor is **not** shown the sign-in prompt/modal on reload of the suggestions board (they can suggest/vote straight away).
+- [x] A signed-in visitor reloads (or returns to) any public page — roadmap, suggestions board, admin dashboard — and **stays signed in**, seeing their signed-in state, on **all five supported browsers** (Chrome, Firefox, Safari/WebKit, mobile-Chrome, mobile-Safari).
+- [x] A signed-in visitor is **not** shown the sign-in prompt/modal on reload of the suggestions board (they can suggest/vote straight away).
 
 ### Error paths
-- [ ] A genuinely **signed-out** visitor still sees the sign-in prompt when they try to suggest/subscribe (unchanged).
-- [ ] A visitor whose session has **genuinely expired** is prompted to sign in again (not left in a broken half-signed-in state).
+- [x] A genuinely **signed-out** visitor still sees the sign-in prompt when they try to suggest/subscribe (unchanged).
+- [x] A visitor whose session has **genuinely expired** is prompted to sign in again (not left in a broken half-signed-in state).
 
 ### Edge cases
-- [ ] **No signed-out flash:** during the brief "checking sign-in" moment, the signed-out UI (a "Sign In" button) does **not** flash before the signed-in state resolves.
-- [ ] **Safari/WebKit ITP:** the session survives a reload within the expected window on WebKit despite ITP storage constraints (verified, not assumed).
-- [ ] **Mobile browsers:** mobile-Chrome and mobile-Safari persist the session the same as their desktop counterparts.
+- [x] **No signed-out flash:** during the brief "checking sign-in" moment, the signed-out UI (a "Sign In" button) does **not** flash before the signed-in state resolves.
+- [x] **Safari/WebKit ITP:** the session survives a reload within the expected window on WebKit despite ITP storage constraints (verified, not assumed).
+- [x] **Mobile browsers:** mobile-Chrome and mobile-Safari persist the session the same as their desktop counterparts.
 
 ### Performance
-- [ ] The signed-in state resolves quickly on reload — no long blank/loading state before the page settles into the correct auth view.
+- [x] The signed-in state resolves quickly on reload — no long blank/loading state before the page settles into the correct auth view.
 
 ### Security
 - N/A — this is cross-browser **coverage** + a UI-flash fix; it does not change what is gated or who can see what (the backend still enforces every read/write). The flash fix only affects which of the *already-permitted* UI states is shown first.
 
 ### UX
-- [ ] The signed-in indicator (header account state) is **stable** on load/reload — no flip from signed-out to signed-in that the user can perceive.
+- [x] The signed-in indicator (header account state) is **stable** on load/reload — no flip from signed-out to signed-in that the user can perceive.
 
 ### i18n
 - N/A — no new user-facing strings; the public pages' existing (translated) copy is unchanged. (Public pages remain lazy-translated per [[feedback-public-translations-lazy-architecture]].)
@@ -126,5 +126,57 @@ Touches the public web JS (`public/js/**`, `public/portal`/`admin` where the fla
 - [ ] **Pre-Merge Testing Protocol satisfied:** Playwright RED→GREEN on **all 5 browsers** (reload-stays-signed-in · no-modal-for-signed-in · no-signed-out-flash · signed-out-still-prompted · Safari-survives-reload) + lint/prettier clean → LOCAL gauntlet green → `code-reviewer` 100% clean → In Review + `Reviewed-up-to:` → push → CI green by name (all browser cells) → DEV gauntlet green (all 5 browsers) → **judgment-merge** (NO auto-merge; notify operator).
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
-## Notes (running log)
+## Notes
+
+Reviewed-up-to: __SHA__
+
+- **2026-08-19 — the flash had a known cause and an unused fix already in the
+  tree.** SHY-0279 added `window.shytalkAuth.authStateKnown` precisely so a
+  consumer could tell "signed out" from "we don't know yet", and its own comment
+  names the consequence: *"which is why the shared header renders Sign In during
+  the unknown window"*. The producer was done; **the header simply never read
+  the flag**. So this is a consumer fix plus one small producer gap, not a new
+  mechanism.
+- **2026-08-19 — the producer gap.** `updateGlobalAuth()` was only ever called
+  from inside async paths, so `window.shytalkAuth` was **undefined** at the
+  header's first render even on pages that DO have auth. The unknown window was
+  therefore not observable at the moment it mattered. Fixed by publishing the
+  global at module load.
+- **2026-08-19 — publishing must NOT dispatch.** The first attempt called
+  `updateGlobalAuth()` at module load and broke SHY-0279's *"exactly one
+  auth-changed event"* test — caught by that test, on both chromium and webkit.
+  Each dispatch makes the header rebuild itself, and a second one detaches
+  elements mid-click. Split into `publishGlobalAuth()` (assign only) and
+  `updateGlobalAuth()` (assign + dispatch); the module-load call uses the
+  former.
+- **2026-08-19 — the regression this fix could most plausibly have caused.**
+  **Seven of the eight** pages carrying the shared header load no auth module at
+  all (`index`, `terms`, `privacy`, `404`, `community-guidelines`,
+  `cyber-bullying`, `do-not-sell`). Waiting for a flag that never arrives would
+  have left them pending forever — worse than the flash. The header therefore
+  defers only when `window.shytalkAuth` **exists** but is not yet known; absent
+  entirely means "no auth on this page" and Sign In renders at once. Four
+  explicit tests pin this, and each asserts the premise (`shytalkAuth` really is
+  absent) rather than assuming it.
+- **2026-08-19 — a timing test would have been worthless here.** The natural
+  page-load race only flashes when the header renders before Firebase resolves;
+  on a fast machine it does not, so the first version of the spec was **flaky —
+  it failed once and passed on retry**. Replaced with deterministic transitions
+  driven through the REAL published contract (the same global and the same
+  `shytalk-auth-changed` event the real producer uses), plus a settled-state
+  guard that does not depend on timing at all.
+- **2026-08-19 — an earlier draft of the spec passed while measuring nothing.**
+  `addInitScript` runs before the document is parsed, so
+  `MutationObserver.observe(document.documentElement)` threw and silently killed
+  the observer, leaving an empty log that would have read as "no flash". Caught
+  only because the spec asserted its own non-vacuity first.
+- **2026-08-19 — CROSS-BROWSER PROOF, all five projects, real browsers, local
+  stack:** `shared-header`, `shared-header-signin-fallback`,
+  `shared-header-auth-flash`, `roadmap-auth`, `auth-state-known-contract` —
+  **116 passed on each** of chromium, firefox, webkit, mobile-chrome and
+  mobile-safari (580 total). One pre-existing flaky on mobile-chrome
+  (`roadmap-auth`, unrelated to this change) passed on retry. Firefox and WebKit
+  binaries were not installed locally and were installed before the run — the
+  earlier all-red on those two was a harness gap, not a result.
+ (running log)
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0004-persistent-session-instant-coldstart]]. Scoped from the web-surfaces Explore map: the public pages already persist the session + don't re-prompt login on load; the gaps are **cross-browser proof** (Safari/WebKit ITP the real risk), a **skeleton** reload test (`roadmap-auth.spec.ts:1029-1041`, no assertion), a missing "signed-in skips the login modal on reload" test, and a **loading flash**. Operator chose **`mvp: true`** (launch-blocking cross-browser session correctness). Sibling: SHY-0147 (portal TOTP remember-browser).
