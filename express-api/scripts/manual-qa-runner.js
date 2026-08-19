@@ -257,7 +257,7 @@ async function clearCrossCohortFollowsForUserDoc(db, uniqueId, newCohort) {
   // any app init. Importing through src/utils/firebase would trigger
   // the prod-init code path under jest (NODE_ENV !== 'local'), which
   // exits the test process with a "FIREBASE_DATABASE_URL required" error.
-  const { FieldValue } = require('firebase-admin').firestore;
+  const { FieldValue } = require('firebase-admin/firestore');
   const userRef = db.doc(`users/${uniqueId}`);
   const userSnap = await userRef.get();
   if (!userSnap.exists) return 0;
@@ -6457,7 +6457,7 @@ const matchers = [
       const coinsGranted = coinsMatch ? parseInt(coinsMatch[1], 10) : 0;
       const crypto = require('node:crypto');
       const receiptId = crypto.createHash('sha256').update(String(receipt)).digest('hex');
-      const { FieldValue } = require('firebase-admin').firestore;
+      const { FieldValue } = require('firebase-admin/firestore');
       await ctx.db.doc(`purchaseReceipts/${receiptId}`).set({
         userId: p.uniqueId,
         productId,
