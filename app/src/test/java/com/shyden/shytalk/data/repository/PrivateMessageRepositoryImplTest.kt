@@ -15,9 +15,11 @@ import com.google.firebase.firestore.Transaction
 import com.google.firebase.firestore.WriteBatch
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.CapturingSlot
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -26,8 +28,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -876,6 +880,105 @@ class PrivateMessageRepositoryImplTest {
         runTest {
             val result = repo.transferOwnership("conv-1", "new-owner")
             assertTrue(result is Resource.Success)
+        }
+
+    // endregion
+
+    // region searchUsers (SHY-0350)
+
+    // The defect: search queried Firestore directly. `/users` is cohort-gated,
+    // and a filtered query against a content-gated rule is refused outright, so
+    // the screen said "No users found" for a user who plainly exists. These
+    // pin that the search now goes through the API instead.
+
+    @Test
+    fun `searchUsers goes through the API, not Firestore`() =
+        runTest {
+            val path = slot<String>()
+            coEvery { api.get(capture(path)) } returns
+                JSONObject().put("users", JSONArray())
+
+            repo.searchUsers("ines", "50000010")
+
+            assertTrue(
+                "expected the search endpoint, got ${'$'}{path.captured}",
+                path.captured.startsWith("/api/users/search?q="),
+            )
+        }
+
+    @Test
+    fun `searchUsers url-encodes the query rather than pasting it in raw`() =
+        runTest {
+            val path = slot<String>()
+            coEvery { api.get(capture(path)) } returns
+                JSONObject().put("users", JSONArray())
+
+            repo.searchUsers("a b&c", "50000010")
+
+            assertFalse("raw space leaked into the URL", path.captured.contains("a b"))
+            assertFalse("raw ampersand leaked into the URL", path.captured.contains("b&c"))
+        }
+
+    @Test
+    fun `searchUsers returns the users the API reports`() =
+        runTest {
+            val users =
+                JSONArray().put(
+                    // uniqueId as a NUMBER — that is what Firestore stores and
+                    // what the API serialises. A string here would be a fixture
+                    // that cannot occur, and would pass while production broke.
+                    JSONObject().put("uniqueId", 50000020L).put("displayName", "Ines"),
+                )
+            coEvery { api.get(any()) } returns JSONObject().put("users", users)
+
+            val result = repo.searchUsers("ines", "50000010")
+
+            assertTrue(result is Resource.Success)
+            val list = (result as Resource.Success).data
+            assertEquals(1, list.size)
+            assertEquals(50000020L, list[0].uniqueId)
+        }
+
+    @Test
+    fun `searchUsers excludes the caller from the results`() =
+        runTest {
+            // The server already excludes the caller; this is the belt-and-braces
+            // half, because a self-row in a "who do you want to message" picker
+            // is a confusing thing to render.
+            val users =
+                JSONArray()
+                    .put(JSONObject().put("uniqueId", 50000010L).put("displayName", "Me"))
+                    .put(JSONObject().put("uniqueId", 50000020L).put("displayName", "Ines"))
+            coEvery { api.get(any()) } returns JSONObject().put("users", users)
+
+            val result = repo.searchUsers("i", "50000010")
+
+            val list = (result as Resource.Success).data
+            assertEquals(1, list.size)
+            assertEquals(50000020L, list[0].uniqueId)
+        }
+
+    @Test
+    fun `searchUsers returns empty for a blank query without calling the API`() =
+        runTest {
+            val result = repo.searchUsers("   ", "50000010")
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+            coVerify(exactly = 0) { api.get(any()) }
+        }
+
+    @Test
+    fun `searchUsers surfaces a failure as an error, not an empty list`() =
+        runTest {
+            // An empty list means "nobody matched". An error means "we could not
+            // look". Collapsing the second into the first is what made the
+            // original defect invisible on screen.
+            coEvery { api.get(any()) } throws ApiException(403, "Missing or insufficient permissions")
+
+            val result = repo.searchUsers("ines", "50000010")
+
+            assertTrue("expected Resource.Error, got ${'$'}result", result is Resource.Error)
         }
 
     // endregion

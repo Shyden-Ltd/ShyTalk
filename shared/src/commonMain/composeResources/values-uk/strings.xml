@@ -943,6 +943,7 @@
     <string name="block_description">Вони не зможуть переглядати ваш профіль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Ви були заблоковані цим користувачем</string>
+    <string name="blocked_unblock_required">Користувач має розблокувати вас, перш ніж ви зможете переглянути його профіль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Користувач у цій кімнаті заблокував вас. Ви можете мати обмежений досвід. Все одно ввійти?</string>
     <!-- google-translated 2026-05-04 -->

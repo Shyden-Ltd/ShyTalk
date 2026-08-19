@@ -760,10 +760,22 @@ class RoomViewModel(
             // Check if any other participant (non-owner) has blocked me — single batch call
             val otherParticipantIds = room.participantIds.filter { it != userId && it != room.ownerId }
             if (otherParticipantIds.isNotEmpty()) {
-                val result = userRepository.checkBlockedBy(otherParticipantIds, userId)
-                if (result is Resource.Success && result.data.isNotEmpty()) {
-                    _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByUserInRoom) }
-                    return@launch
+                // An ERROR here means "we could not find out", which is not the
+                // same as "nobody has blocked you" — so it is handled separately
+                // rather than folded into the success branch. Joining proceeds,
+                // as it always has, but the distinction is now visible instead of
+                // being manufactured by a swallowed exception (SHY-0351).
+                when (val result = userRepository.checkBlockedBy(otherParticipantIds)) {
+                    is Resource.Success ->
+                        if (result.data.isNotEmpty()) {
+                            _uiState.update { it.copy(blockWarning = BlockWarning.BlockedByUserInRoom) }
+                            return@launch
+                        }
+
+                    is Resource.Error ->
+                        logW(TAG, "Block-check failed before joining room; proceeding unwarned")
+
+                    Resource.Loading -> Unit
                 }
             }
 

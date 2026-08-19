@@ -944,6 +944,7 @@
     <string name="block_description">Eles não poderão ver seu perfil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Você foi bloqueado por este usuário</string>
+    <string name="blocked_unblock_required">Precisam de desbloqueá-lo antes de poder ver o perfil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Um usuário nesta sala bloqueou você. Você pode ter uma experiência limitada. Entrar mesmo assim?</string>
     <!-- google-translated 2026-05-04 -->
