@@ -1,6 +1,6 @@
 ---
 id: SHY-0350
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -266,3 +266,49 @@ new-message search and read `PERMISSION_DENIED … for 'list' @ L74` on screen.
   Deliberately NOT fixed in this PR — it is a different function on a different
   concern, and this branch is already a search fix. Flagged here with the exact
   sites so it is a filing decision rather than a rediscovery.
+
+- **2026-08-19 — the owed Kotlin tests are in: 6 tests, 3 mutations, 3 kills.**
+  They pin that search goes through the API (endpoint called, query url-encoded,
+  results returned, caller excluded, blank query short-circuits without a call)
+  and that a failure surfaces as `Resource.Error` rather than an empty list —
+  that last one is the one that matters, because "nobody matched" and "we could
+  not look" rendered identically on screen and that is what made the original
+  defect invisible.
+
+  | Mutation | Killed |
+  | --- | --- |
+  | swallow the failure into an empty list | `surfaces a failure as an error, not an empty list` |
+  | stop url-encoding the query | `url-encodes the query rather than pasting it in raw` |
+  | stop excluding the caller | `excludes the caller from the results` |
+
+- **2026-08-19 — two fixtures were wrong, and chasing it was worthwhile.** They
+  put `uniqueId` as a **String**, which cannot occur: Firestore stores it as a
+  number, the API serialises it as one, and `User.fromMap` does
+  `(map["uniqueId"] as? Number)?.toLong() ?: 0L`. The tests failed with
+  `expected 50000020 but was 0`, which is exactly what a real defect would look
+  like — so it was checked against production rather than assumed to be a test
+  bug. Production is fine: `JsonExt.convertValue` preserves numbers
+  (`Int -> Long`, everything else passthrough). The fixture was wrong, not the
+  code — but a String fixture would have gone green while asserting nothing real.
+
+- **2026-08-19 — a HOLE IN THE PRE-MERGE GATE, found on this PR and not specific
+  to it.** `scripts/pre-merge-check.sh` printed:
+
+  ```
+  filing exemption: SHY-0350-....md newly-added Draft (SHY-0131 parity)
+  PRE-MERGE-CHECK: OK
+  ```
+
+  and would have let this merge. But this PR is **not** a filing — it ships
+  `express-api/src/routes/users.js`, both platform repositories, a new
+  `JsonToMap.kt` and two test files. The exemption exists so a newly-*filed*
+  Draft story (a document) is not blocked by its own "must be In Review" rule;
+  it keys on *story is newly-added and Draft* and never asks whether the PR also
+  contains **non-story files**. So any implementation PR whose story happens to
+  be new and still Draft is waved through the status gate entirely.
+
+  That is the gate saying OK to something the protocol would refuse, which is
+  worth more attention than this one story. Not fixed here — it is
+  `scripts/pre-merge-check.sh`'s own concern and deserves its own change with its
+  own test. Recorded, and the story is being moved to `In Review` properly rather
+  than merged on the exemption.
