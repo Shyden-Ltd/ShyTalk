@@ -268,6 +268,45 @@ describe('POST /api/storage/upload', () => {
     expect(r2.putObject).not.toHaveBeenCalled();
   });
 
+  test('a file over the 10 MB multer limit returns 413 JSON — not a 500 HTML page', async () => {
+    // SHY-0368. multer was wired as BARE middleware here, so LIMIT_FILE_SIZE
+    // propagated to Express's default error handler: a 500 with an HTML body.
+    // banners.js already wrapped multer and mapped this to 413; storage.js did
+    // not. Real multer, real supertest — no mock decides this.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.alloc(11 * 1024 * 1024, 0x61), {
+        filename: 'too-big.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(413);
+    // The body must be JSON an API client can read, not an HTML error page.
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.body.error).toMatch(/too large/i);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
+  test('a multer error that is NOT a size limit returns 400 JSON, not 500', async () => {
+    // The other half of the same wiring: any upload error must be answered by
+    // the route, never fall through to Express's default handler. Sending the
+    // file under an unexpected field name trips LIMIT_UNEXPECTED_FILE.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('wrongFieldName', Buffer.from('small'), {
+        filename: 'x.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
   test('policy violation (SVG) returns 400 — does NOT silently store original', async () => {
     // MIME-type allowlist already rejects SVG before compressImage is called,
     // but verify the layered defence: even if a future change loosens the
