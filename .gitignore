@@ -16,9 +16,7 @@ shytalk-dev-firebase-adminsdk*.json
 
 # Firebase config (contains API keys — injected from secrets in CI)
 **/google-services.json
-worker/node_modules/
 worker/.wrangler/
-worker-api/node_modules/
 worker-api/.wrangler/
 .env
 
@@ -35,7 +33,17 @@ public/admin/config.dev.js
 public/portal/config.js
 public/js/roadmap-config.js
 .scannerwork/
-/node_modules/
+# node_modules — the trailing slash matches a DIRECTORY only, so a SYMLINK
+# named node_modules slipped past it and was committed onto develop
+# (SHY-0346). The slash-less form matches a file, a symlink or a directory,
+# at any depth, which is what a worktree setup that symlinks node_modules
+# needs. It also SUBSUMES the dir-only forms that used to sit here
+# (`node_modules/`, `worker/node_modules/`, `worker-api/node_modules/`), which
+# were removed: three redundant rules are an ordering trap — move this line
+# above them and the dir-only one becomes last-matching again, silently
+# reopening the bug, with nothing to catch it.
+# Pinned by express-api/tests/scripts/no-tracked-node-modules.test.js
+node_modules
 e2e_results/
 test_output.txt
 nul

@@ -1,0 +1,431 @@
+---
+id: SHY-0348
+status: In Review
+owner: claude
+created: 2026-08-19
+priority: P0
+effort: M
+type: bug
+roadmap_ids: []
+mvp: true
+---
+
+# SHY-0348: Blocking someone does not stop them looking at your profile
+
+## User Story
+
+As **someone who has blocked another user**, I want them to be unable to open my
+profile at all, so that blocking actually removes me from their reach instead of
+only hiding them from mine.
+
+## Why
+
+**P0 on a minors-facing product. Blocking is the control a user reaches for when
+someone is making them uncomfortable, and it does not do what they believe it
+does.**
+
+The server already gets this right. `GET /api/users/:uniqueId` refuses a blocked
+viewer:
+
+```js
+if (!isSelf && viewerIsBlocked(req.auth.uniqueId, user)) {
+  return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
+}
+```
+
+`POST /users/:uniqueId/record-visit` carries the same gate, so a blocked viewer
+should not even tick the profile-visit counter.
+
+**The app never asks.** `ProfileViewModel` loads a profile through
+`userRepository.getUser(profileUserId)`, and that reads **Firestore directly**
+from the client — a single-document `get()` that the security rules allow for
+any same-cohort user. The API's refusal is never consulted, so the block is
+invisible to the one code path that matters.
+
+So today: A blocks B; B opens A's profile and sees everything. The server would
+have said no. Nobody asked it.
+
+**This is the same class of defect as SHY-0338** — the client reading Firestore
+directly instead of going through the API, and the operator's standing rule
+against direct backend access existing precisely to prevent it. There the
+consequence was empty lists; here it is a safety control that silently does
+nothing.
+
+**Operator decision, 2026-08-19:** a blocked person attempting to view the
+blocker's profile must be **prevented and told they must be unblocked first**.
+That also settles an open question on SHY-0338 — if a blocked user can never
+reach the profile, they can never generate a visit, so the stalker list needs no
+block filtering.
+
+## Acceptance Criteria
+
+### Happy path
+
+- [ ] A blocked person opening the blocker's profile is stopped, and told they need to be unblocked first.
+- [ ] Everyone else sees the profile exactly as before.
+- [ ] Blocking takes effect immediately — an already-open profile does not keep working.
+
+### Error paths
+
+- [ ] If the check cannot be completed, the profile is NOT shown — the failure direction is refusal.
+- [ ] The refusal is a clear message, not a blank screen or a generic error.
+
+### Edge cases
+
+- [ ] Unblocking restores access.
+- [ ] A user always sees their own profile, whoever has blocked them.
+- [ ] Reaching the profile by a different route — search, a room, a message thread, a deep link — is refused the same way.
+- [ ] A blocked viewer does not tick the profile-visit counter, so they cannot appear in the blocker's stalker list.
+
+### Performance
+
+- [ ] Opening a profile costs no extra round trip for the ordinary, unblocked case.
+
+### Security
+
+- [ ] Enforcement is server-side. A modified client cannot read the profile it was refused.
+- [ ] The refusal does not reveal anything about the blocker beyond the fact of the block.
+
+### UX
+
+- [ ] The message says what happened and what would change it, in plain words.
+- [ ] Verified with eyes on real devices, both platforms.
+
+### i18n
+
+- [ ] The message ships in every launch locale, asserted on rendered text.
+
+### Observability
+
+- [ ] A refused profile view is distinguishable in logs from a network failure.
+
+## BDD Scenarios
+
+**Scenario: A blocked person cannot open the profile**
+
+- **Given** someone who has been blocked
+- **When** they try to open the profile of the person who blocked them
+- **Then** they are stopped and told they need to be unblocked first
+
+**Scenario: Unblocking gives access back**
+
+- **Given** a person who was blocked and has since been unblocked
+- **When** they open that profile
+- **Then** it opens normally
+
+**Scenario: A blocked person leaves no trace**
+
+- **Given** someone who has been blocked
+- **When** they try to open the blocker's profile
+- **Then** they do not appear in that person's list of profile visitors
+
+## Test Plan
+
+**RED first.** Today a blocked viewer loads the profile through Firestore and
+sees everything; the API's 403 is never reached.
+
+### Express / Jest — `express-api/tests/routes/users-blocked-profile-view.test.js`
+
+- `a blocked viewer is refused the profile` — pins the server contract that already exists
+- `an unblocked viewer is served the profile`
+- `the owner always sees their own profile`
+- `a blocked viewer does not record a profile visit`
+
+### Kotlin unit — `shared/src/commonTest/.../profile/`
+
+- `a refused profile shows the unblock message, not an empty profile` — **the defect, in one assertion**
+- `a transport failure is distinguishable from a refusal`
+- `an unblocked profile loads unchanged`
+
+### Journey tests — real devices
+
+- `journey-tests/`: two personas, A blocks B, B opens A's profile from search AND from a room; both refused with the message. A unblocks; B opens it successfully.
+- Walked on real Android (USB adb) AND real iPhone (USB devicectl), local then dev.
+
+### Mutation proof
+
+| Mutation | Must kill |
+| --- | --- |
+| the profile view reverted to the direct Firestore read | `a refused profile shows the unblock message...` + the journey |
+| the server's `viewerIsBlocked` gate removed | `a blocked viewer is refused the profile` |
+| the refusal rendered as an empty profile | `a refused profile shows the unblock message...` |
+
+## Out of Scope
+
+- Routing EVERY `getUser` call through the API. **There is a trap here worth
+  naming:** the API strips `cohort` before responding, and the follow lists rely
+  on the viewer's own cohort for their defence-in-depth filter (SHY-0338). A
+  blanket switch would empty those lists again from a new cause. This story
+  changes the profile-view path only.
+- Changing what blocking does elsewhere — messages, rooms, gifts.
+- The wider direct-Firestore debt.
+
+## Dependencies
+
+- **SHY-0338** — shares the "client reads Firestore directly" root cause and the
+  `cohort`-stripping hazard above. Land 0338 first so the interaction is settled.
+
+## Risks & Mitigations
+
+| Risk | Mitigation |
+| ---- | ---- |
+| Routing the profile through the API breaks the follow lists again | Explicitly out of scope to change `getUser` wholesale; the cohort hazard is named here so the next person does not walk into it. |
+| A network failure looks like a block | Asserted separately, and in the mutation table. |
+| The block is enforced only in the UI | Server-side gate already exists and is pinned by its own test. |
+
+## Definition of Done
+
+- [ ] Every AC checkbox above is met.
+- [ ] Every named test exists, was observed RED first, and is now green.
+- [ ] Every mutation killed its named test and was reverted with a git-verified clean tree.
+- [ ] Journey scenarios walked on real Android AND real iPhone, local then dev.
+- [ ] Screenshots of the refusal on both platforms, in at least two locales.
+- [ ] `cd express-api && npm test` passes; `npm run lint` clean at `--max-warnings=0`.
+- [ ] `code-reviewer` 100% clean; `Reviewed-up-to: <sha>` in Notes.
+- [ ] CI green by name: **Detect Changes**, **Analyze JavaScript**, **PR Gate**.
+- [ ] Status `In Review` before merge; `Done` on release cut with `released_in:`.
+
+## Notes (running log)
+
+- **2026-08-19** — Filed at operator instruction: *"if a person is blocked and
+  they attempt to view that person's profile, we must prevent and inform the
+  user they must be unblocked first. this avoids the need for this filtering."*
+  The last clause settles SHY-0338's open question: with the profile
+  unreachable, a blocked user can never generate a visit, so the stalker list
+  needs no block filter.
+
+- **2026-08-19** — Verified before writing: the SERVER already refuses
+  (`users.js:729`), and `record-visit` carries the same gate. The gap is
+  entirely client-side — `ProfileViewModel` calls `userRepository.getUser`,
+  which reads Firestore directly and never consults the API.
+
+- **2026-08-19** — The hazard that shapes the scope: the API strips `cohort`,
+  and the follow lists need the viewer's cohort for their client-side filter.
+  Switching every `getUser` to the API would empty those lists again from a
+  fresh cause — exactly the trap SHY-0338 hit. Recorded so it is not rediscovered
+  the expensive way.
+
+- **2026-08-19 — the block filter is DEVICE-PROVEN in the lists (SHY-0338's
+  half).** Set Theo to block Alice with a NUMERIC id — the shape
+  `block-check.js:4` documents — then opened Alice's connections on the real
+  OnePlus: **Followers 6 → 5 and Following 5 → 4, with Theo gone from both.**
+  `POST /api/users/batch` drops a member who has blocked the viewer, and it does
+  so per member: the other five survived. So the list half of blocking works on
+  real hardware.
+
+- **2026-08-19 — what that leaves for THIS story.** The profile screen already
+  has a blocked state (`ProfileScreen.kt:491`, driven by
+  `uiState.isBlockedByTarget`), and the view model already computes
+  `blockedByTarget = user.blockedUserIds.contains(currentUid)`
+  (`ProfileViewModel.kt:181`). The UI and the check both exist. What is missing
+  is that the profile DATA still arrives from a direct Firestore read, so:
+  - the server's 403 is never consulted — defence in depth is absent, and a
+    client that ignored the flag would still receive the whole profile;
+  - the message says "blocked", not the operator's requirement — *told they must
+    be unblocked first*.
+
+- **2026-08-19 — a correction worth recording.** I initially reasoned that
+  `blockedUserIds` was always empty on the client because blocks are stored as
+  numbers and `filterIsInstance<String>()` dropped them. Half right: the CLIENT
+  writes blocks as STRINGS (`UserRepositoryImpl.blockUser` →
+  `arrayUnion(blockedUserId)`, a String), so app-created blocks survived the old
+  parser. Only blocks written numerically — by the server or an admin path, which
+  is what `block-check.js` describes — were dropped. SHY-0338's `asIdSet` fix
+  closes that case; it was never the whole story, and saying so avoids
+  overclaiming what that fix repaired.
+
+- **2026-08-19 — implemented (server consultation).** `UserRepository` gains a
+  TYPED result — `ProfileAccess.Visible / BlockedByOwner / NotFound` — because
+  the block case must be told apart from "not found" and from a transport
+  failure, and the only thing that reliably does that is the status code. An
+  error-message match would work until somebody reworded it.
+  `getProfileForViewing` goes through `GET /api/users/:id` on both platforms and
+  maps 403/404; anything else rethrows, so a 500 cannot masquerade as a block.
+  `ProfileViewModel` keeps the document check as the fast path and lets the
+  server's answer win when it says no.
+
+- **2026-08-19 — the failure DIRECTION is asserted, not assumed.** A transport
+  failure is explicitly NOT a block. Telling somebody "you have been blocked"
+  because the network hiccuped is a worse lie than the bug being fixed, so it has
+  its own test.
+
+- **2026-08-19 — Gradle told me it compiled when it had not.** After adding the
+  interface member, all four compile targets reported success; `--rerun-tasks`
+  failed instantly on a fake that no longer implemented the interface. Codified
+  as [[feedback-gradle-up-to-date-hides-a-broken-compile]]. Everything here was
+  re-verified with `--rerun-tasks`.
+
+- **2026-08-19 — 97 tests green, mutation-proven.** Dropping the server answer
+  (`blockedByDoc || blockedByServer` → `blockedByDoc`) kills exactly
+  `the SERVER's block is honoured even when the document does not show it`.
+
+- **2026-08-19 — STILL OWED:** the wording change (the screen says "blocked",
+  the operator asked for *"must be unblocked first"*) and its locale files; the
+  journey scenarios; and the device walk. The enforcement half is done; the
+  telling-the-user half is not.
+
+- **2026-08-19 — device finding: the block bites EARLIER than this story assumed.**
+  With Theo blocking Alice, on the real OnePlus Alice cannot reach Theo at all:
+  - he is absent from her Followers and Following (the `/users/batch` block
+    filter, SHY-0338),
+  - and he is absent from **search** — `shapeForViewer` drops anyone who has
+    blocked the searcher, so `GET /users/search` never returns him.
+
+  So through the ordinary UI a blocked person cannot navigate to the blocker's
+  profile in the first place. **That is stronger than showing a message**, and it
+  is worth stating plainly rather than leaving the story implying the message is
+  the primary control.
+
+- **2026-08-19 — what the message is actually for, then.** It covers the routes
+  that do NOT go through a list or a search: an existing conversation thread, a
+  seat in a room, a deep link, a stale back-stack entry. Those are exactly the
+  cases where the profile screen opens directly, and where the server's 403 —
+  now consulted — is the only thing standing between a blocked person and the
+  profile.
+
+- **2026-08-19 — STILL OWED, stated honestly.** The message itself has NOT been
+  witnessed rendering on a device. Reaching it needs one of those non-list
+  routes set up (a pre-existing conversation is the easiest), which is a
+  scenario-building job rather than a walk. The enforcement half is unit-tested
+  and mutation-proven; the rendering is verified only in code and in the 21
+  locale files. Not claiming more than that.
+
+- **2026-08-19 05:32 WIB — the message has now been WITNESSED on the real
+  OnePlus**, which the previous entry said honestly had not happened. Build
+  `bafaf1a` of this branch, confirmed by the in-app overlay.
+
+  The route was the one the previous entry predicted would matter: **an existing
+  conversation**, not a list. Signed in as Raul (50000050) with Nora (50000051)
+  having blocked him — the block written as a **number**, the shape that actually
+  occurs — opening the thread and tapping her name in the header lands on
+  `profile/{userId}` and renders:
+
+  > 🚫  **[SEED] Nora (P-09 victim)** · ID: 50000051
+  > **This profile is not available**
+  > You have been blocked by this user
+  > **They need to unblock you before you can view their profile.**
+  > \[ Report User \]
+
+  That is the operator's requirement met literally: prevented, and *told why*,
+  rather than shown an empty or broken profile.
+
+  Checked with eyes, not only assertions: **no profile content leaks** — no bio,
+  no follower or following counts, no gift wall, no rooms. **Report User stays
+  available**, which is right: being blocked must not remove someone's ability to
+  report the person who blocked them.
+
+  One deliberate disclosure, flagged rather than hidden: the display name and
+  uniqueId ARE shown. On this route they are already known — the person just came
+  from a conversation with them — and without a name the message would be about
+  nobody. It is a judgement, not an oversight.
+
+- **2026-08-19 — the fix is tri-platform.** `getProfileForViewing` is
+  implemented on both sides (`UserRepositoryImpl` and `IosUserRepositoryImpl`)
+  and consumed by the shared `ProfileViewModel`, so the enforcement is not
+  Android-only.
+
+- **2026-08-19 — STILL OWED: the iOS device leg, and it is BLOCKED on something
+  bigger than this story.** An iOS build installed on a real iPhone points the
+  phone **at itself** for the local stack — that is SHY-0275, open as **PR #1696**
+  since 2026-08-17 with `Build & Test` failing.
+
+  **Correction to the mechanism, recorded because the wrong version would waste
+  someone's afternoon.** I first wrote that the cause is
+  `LOCAL_HOST = localhost` in `iosApp/Configurations/Local.xcconfig`. It is not.
+  SHY-0275's own analysis shows `LOCAL_HOST` and its siblings are **dead
+  configuration — nothing reads them**; a repo-wide search over
+  `*.swift`/`*.plist`/`*.xcconfig`/`*.pbxproj` finds only their own definitions
+  and comments. The live values are **Swift literals**:
+  `AppEnvironment.swift` (`localApiBaseUrl = "http://localhost:3000"`) and
+  `iOSApp.swift` (`options.databaseURL = "http://localhost:9000?ns=demo-shytalk"`).
+  Editing the xcconfig would change nothing and look like the fix had failed.
+
+  The consequence is not local to this story: **while #1696 is unmerged, the iOS
+  half of the LOCAL gauntlet cannot be run for ANY story.** Every iOS local leg
+  either gets skipped or gets faked with a simulator, and the operator has ruled
+  simulators out. That makes #1696 a gating dependency for the whole protocol,
+  not a single ticket, and it deserves priority accordingly.
+
+- **2026-08-19 — this branch did not COMPILE for iOS, and CI was green.** Found
+  while building the Debug-Dev variant for the iOS device leg:
+
+  ```
+  IosUserRepositoryImpl.kt:79:25: Unresolved reference 'jsonToMap'.
+  ```
+
+  `:shared:compileKotlinIosArm64` failed outright. The iOS implementation of
+  `getProfileForViewing` was written against a `jsonToMap` helper that lives on
+  the **SHY-0350 branch** (`core/util/JsonToMap.kt`) and is not on this one — a
+  cross-branch dependency picked up while working several branches at once.
+
+  Fixed by making this branch self-contained: the helper is copied in
+  **byte-identically** to 0350's copy (verified with `diff -q`), so whichever
+  branch merges second gets a trivial identical-content conflict rather than a
+  behavioural one. The obvious cheap alternative — the private `jsonToMap` in
+  `IosEconomyGiftRepositories.kt` — was rejected on inspection: it flattens
+  nested values with `v.toString()`, which would turn `blockedUserIds` and
+  `followingIds` into the string `["1","2"]` and break `User.fromMap`. The 0350
+  helper handles arrays, matches `JsonNull` before `JsonPrimitive`, and avoids
+  the `50000010.0.toString() == "5.000001E7"` trap.
+
+  `:shared:compileKotlinIosArm64` now exits 0; ktlint and detekt clean.
+
+- **2026-08-19 — the reason it got this far is a CI GAP, and it is not specific
+  to this story.** `grep -rl compileKotlinIosArm64 .github/workflows/` returns
+  **nothing**. No PR check compiles the iOS target, so any change under
+  `shared/src/{commonMain,iosMain}` can break the iOS build and still show every
+  check green — which is exactly what #1808 showed while the branch could not
+  build. CLAUDE.md's tri-platform policy says to verify with
+  `./gradlew :shared:compileKotlinIosArm64` after any shared change; nothing
+  enforces it. Filed separately as its own story.
+
+- **2026-08-19 07:4x WIB — iOS DEVICE-PROVEN on Sean's real iPhone** (iPhone Air,
+  iOS 27.0), build `2ba282a` of this branch, Debug-Dev over USB against the
+  **dev** backend. The blocker (Marcus, P-04) blocked the signed-in account with
+  the id stored as a **number**. Opening his card from a room seat and tapping
+  *View Profile* lands on `profile/{userId}` and renders:
+
+  > **This profile is not available**
+  > You have been blocked by this user
+  > **They need to unblock you before you can view their profile.**
+  > \[ Report User \]
+
+  The **rendered sentence** was asserted, not just the `profile_blockedUnblockRequired`
+  tag — a tag proves the component mounted, not that it says anything.
+
+  Both platforms are now proven: Android via an existing conversation, iOS via a
+  room seat. Two different non-list routes, which is the point — those are
+  exactly the paths the fix exists to cover.
+
+- **2026-08-19 — route note, and an open question that is NOT this story's.** The
+  iOS leg went via a room seat because the conversation route could not be
+  reached: a seeded 1:1 conversation satisfying the client's own query
+  (`participantIds contains me`, `crossCohortAtMigration == false`,
+  ordered by `lastMessageAt`) did **not** appear in the iOS conversation list for
+  a **minor** account, on two launches. The same fixture shape worked on Android
+  for an adult account. That smells like a minors' private-messaging restriction
+  (there is a `pm-lock-check` endpoint) rather than a bug, but it was **not**
+  established either way and is not claimed as a finding — recorded so the next
+  person starts from the observation rather than rediscovering it.
+
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** Read the
+  production diff. Three things checked:
+
+  - **Status mapping** — `getProfileForViewing` maps `403 → BlockedByOwner`,
+    `404 → NotFound`, and **rethrows** anything else rather than folding unknown
+    failures into "blocked". Correct: a 500 must not render as an accusation.
+  - **Locale coverage** — `blocked_unblock_required` is present in **21 of 21**
+    locale files, none missing. Checked by enumerating the directories rather
+    than trusting the diff to have covered them.
+  - **The fallback, and an interaction worth naming.** On a transport failure
+    `blockedByServer` is `false`, so the decision falls back to
+    `blockedByDoc` — and `blockedByDoc` is exactly the check that
+    `filterIsInstance<String>()` broke for numerically-stored ids until
+    SHY-0338's `asIdSet` landed. So the server path is not belt-and-braces here;
+    **it is the load-bearing one**, and the document path is a fast path that was
+    itself unreliable. The chosen degradation is still right — treating a network
+    hiccup as a block would be a worse lie than the bug — but it is worth being
+    clear that "fail open on transport error" means falling back to a check whose
+    reliability arrives with SHY-0338.
+
+Reviewed-up-to: 7d83b84050da5ca50c8bb9399b0ba65f61e31f84

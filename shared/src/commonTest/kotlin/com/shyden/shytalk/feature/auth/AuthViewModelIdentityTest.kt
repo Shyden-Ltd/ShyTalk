@@ -246,10 +246,7 @@ class AuthViewModelIdentityTest {
 
         override suspend fun getBlockedUserIds(userId: String) = Resource.Success(emptySet<String>())
 
-        override suspend fun checkBlockedBy(
-            userIds: List<String>,
-            targetUserId: String,
-        ) = Resource.Success(emptySet<String>())
+        override suspend fun checkBlockedBy(userIds: List<String>) = Resource.Success(emptySet<String>())
 
         override suspend fun followUser(
             currentUserId: String,
@@ -313,6 +310,11 @@ class AuthViewModelIdentityTest {
         ) = Resource.Success(0L)
 
         override suspend fun cancelAccountDeletion(userId: String) = Resource.Success(Unit)
+
+        override suspend fun getProfileForViewing(userId: String) =
+            Resource.Success<UserRepository.ProfileAccess>(
+                UserRepository.ProfileAccess.Visible(User()),
+            )
 
         override suspend fun getAccountDeletionStatus(userId: String) = Resource.Success(UserRepository.DeletionStatus())
 

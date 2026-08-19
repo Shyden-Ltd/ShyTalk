@@ -942,6 +942,7 @@
     <string name="block_description">Sie können Ihr Profil nicht sehen.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Sie wurden von diesem Benutzer blockiert</string>
+    <string name="blocked_unblock_required">Sie müssen deine Blockierung aufheben, bevor du ihr Profil ansehen kannst.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Ein Benutzer in diesem Raum hat Sie blockiert. Möglicherweise verfügen Sie nur über begrenzte Erfahrung. Trotzdem eintreten?</string>
     <!-- google-translated 2026-05-04 -->

@@ -4,13 +4,19 @@
    Xcode command-line dispatcher; resolving via PATH is the standard
    macOS pattern. Operator-installed; not user input. */
 /**
- * iOS driver backed by `xcrun simctl`.
+ * iOS driver backed by `xcrun simctl` (simulator).
  *
- * Exposes the ctx.uiDriver methods that manual-qa-runner.js matchers
- * call for iOS scenarios. Real implementations of UI taps + reads
- * require an instrumentation framework (XCUITest, Appium, or
- * idb-companion); the scaffold here provides `openurl`, `launch`,
- * `screenshot`, `status_bar` and stubs for the rest.
+ * NON-CANONICAL ALTERNATIVE (EPIC-0003, 2026-06-13): the canonical
+ * real-iPhone native path is `ios-appium-driver.js` (Appium + WebDriver-
+ * Agent on a REAL device). This simctl driver targets the simulator and
+ * is kept as a non-canonical alternative; the No-Stubs / Pre-Merge
+ * gauntlet requires a real device, so simctl is NOT on the gauntlet path
+ * and its unimplemented methods are not a violation to "complete".
+ *
+ * Exposes the ctx.uiDriver methods the runner's matchers call. It
+ * provides real `openurl`, `launch`, `screenshot`, `status_bar`; UI tap/
+ * read methods need an instrumentation framework (XCUITest/Appium/idb-
+ * companion) and fall through to the fail-loud fallback here.
  *
  * Wiring contract:
  *   - `createIosDriver({ udid })` picks a booted simulator; defaults
@@ -135,7 +141,18 @@ async function createIosDriver({ udid: preferred } = {}) {
       console.error(
         `[ios-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet (udid=${udid})`,
       );
-      return false;
+      // THROW, do not return false (SHY-0330). Returning false made an
+      // unimplemented method indistinguishable from a working one: 98 step
+      // handlers discarded the verdict and reported PASS, so the whole
+      // missing-driver inventory was invisible in pass/fail terms and a run
+      // could log hundreds of these while "passing". A step that calls a
+      // method nobody has written has not performed the step.
+      const err = new Error(
+        `[ios-driver] ${methodName} is NOT IMPLEMENTED (udid=${udid}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+      );
+      err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
+      err.method = methodName;
+      throw err;
     };
   }
 

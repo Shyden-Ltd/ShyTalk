@@ -5,12 +5,15 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -417,7 +420,66 @@ class UserRepositoryImplTest {
     @Test
     fun `checkBlockedBy returns empty set for empty input`() =
         runTest {
-            val result = repo.checkBlockedBy(emptyList(), "target-1")
+            val result = repo.checkBlockedBy(emptyList())
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+        }
+
+    // SHY-0351. The old implementation could never report a block: it queried
+    // Firestore directly (refused all-or-nothing by the cohort gate), swallowed
+    // that refusal into an empty list, and then dropped any id not stored as a
+    // String. Only the empty-input case above was ever tested — the one path
+    // that returns before any of that code runs, which is why it shipped.
+
+    @Test
+    fun `checkBlockedBy asks the API and returns the ids it reports`() =
+        runTest {
+            coEvery { api.post("/api/users/blocked-by", any()) } returns
+                JSONObject().put("blockedBy", JSONArray(listOf("50000010", "50000011")))
+
+            val result = repo.checkBlockedBy(listOf("50000010", "50000011", "50000012"))
+
+            assertTrue(result is Resource.Success)
+            assertEquals(setOf("50000010", "50000011"), (result as Resource.Success).data)
+        }
+
+    @Test
+    fun `checkBlockedBy sends every id it was asked about`() =
+        runTest {
+            val body = slot<JSONObject>()
+            coEvery { api.post("/api/users/blocked-by", capture(body)) } returns
+                JSONObject().put("blockedBy", JSONArray())
+
+            repo.checkBlockedBy(listOf("50000010", "50000011"))
+
+            val sent = body.captured.getJSONArray("userIds")
+            assertEquals(2, sent.length())
+            assertEquals("50000010", sent.getString(0))
+            assertEquals("50000011", sent.getString(1))
+        }
+
+    @Test
+    fun `checkBlockedBy surfaces a transport failure as an error, not an empty set`() =
+        runTest {
+            // THE defect. A refusal used to be caught and returned as
+            // Resource.Success(emptySet()) — the affirmative answer "nobody here
+            // has blocked you". An error and an empty set must never be the same
+            // value, because the caller cannot tell them apart afterwards.
+            coEvery { api.post("/api/users/blocked-by", any()) } throws
+                ApiException(403, "Missing or insufficient permissions")
+
+            val result = repo.checkBlockedBy(listOf("50000010"))
+
+            assertTrue("expected Resource.Error, got $result", result is Resource.Error)
+        }
+
+    @Test
+    fun `checkBlockedBy treats a response with no blockedBy field as no blocks`() =
+        runTest {
+            coEvery { api.post("/api/users/blocked-by", any()) } returns JSONObject()
+
+            val result = repo.checkBlockedBy(listOf("50000010"))
 
             assertTrue(result is Resource.Success)
             assertTrue((result as Resource.Success).data.isEmpty())
