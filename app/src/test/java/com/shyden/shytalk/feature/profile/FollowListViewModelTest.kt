@@ -45,6 +45,17 @@ class FollowListViewModelTest {
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
         every { userRepository.userUpdates } returns MutableSharedFlow()
+        // SHY-0338 — a benign default for the OWN-list stalker fetch.
+        //
+        // Two tests here broke when the view model stopped discarding this
+        // result, and they were right to: neither stubbed `getStalkers`, so the
+        // relaxed mock handed back a dummy `Resource.Error("")` and the old
+        // `else -> Unit` swallowed it. A failure nobody stubbed and nobody saw
+        // is the exact shape of the bug this story fixes, so the default is set
+        // once here rather than papered over per test. Tests that care override
+        // it.
+        coEvery { userRepository.getStalkers(any()) } returns
+            Resource.Success(UserRepository.StalkerPage())
     }
 
     @After
@@ -525,9 +536,16 @@ class FollowListViewModelTest {
                     TestData.createTestUser(uid = "following-1", displayName = "Following 1"),
                 ),
             )
-        coEvery { userRepository.getStalkers(currentUserId) } returns Resource.Success(listOf(stalkerA, stalkerB))
-        coEvery { userRepository.getUsers(match { it.containsAll(listOf("stalker-a", "stalker-b")) }) } returns
-            Resource.Success(listOf(stalkerUserA, stalkerUserB))
+        // SHY-0338 — ONE call now returns the visits AND the visitors'
+        // profiles. The separate getUsers(visitorIds) round trip is gone; it
+        // was the one that always failed.
+        coEvery { userRepository.getStalkers(currentUserId) } returns
+            Resource.Success(
+                UserRepository.StalkerPage(
+                    visitors = listOf(stalkerA, stalkerB),
+                    users = listOf(stalkerUserA, stalkerUserB),
+                ),
+            )
         coEvery { userRepository.markStalkersViewed(currentUserId) } returns Resource.Success(Unit)
     }
 
@@ -681,8 +699,14 @@ class FollowListViewModelTest {
         }
 
     @Test
-    fun `getStalkers error keeps empty list`() =
+    fun `getStalkers error SAYS SO instead of showing an empty list (SHY-0338)`() =
         runTest {
+            // This test used to be called "getStalkers error keeps empty list",
+            // and keeping the empty list was the whole defect: a refusal and
+            // "nobody is watching you" rendered identically, so three weeks of
+            // permission failures looked like an unpopular profile. An empty
+            // list is still shown — there is nothing to show — but the reason
+            // now reaches the screen with it.
             val profileUser =
                 TestData.createTestUser(
                     uid = currentUserId,
@@ -703,6 +727,36 @@ class FollowListViewModelTest {
                 vm.uiState.value.stalkerUsers
                     .isEmpty(),
             )
+            assertEquals("network error", vm.uiState.value.error)
+        }
+
+    @Test
+    fun `getUsers error SAYS SO instead of an empty follower list (SHY-0338)`() =
+        runTest {
+            // The headline case. The follower ids are known and non-empty, so
+            // an empty list here is never a legitimate answer — it can only
+            // mean the fetch failed. Before this story the failure became
+            // emptyMap(), then an empty list, then a blank screen that looked
+            // exactly like having no followers.
+            val profileUser =
+                TestData.createTestUser(
+                    uid = currentUserId,
+                    displayName = "Current User",
+                    followerIds = setOf("follower-a"),
+                    followingIds = emptySet(),
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+            coEvery { userRepository.getUsers(any()) } returns Resource.Error("PERMISSION_DENIED")
+
+            val vm = createViewModel(initialTab = "followers")
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.followers
+                    .isEmpty(),
+            )
+            assertFalse(vm.uiState.value.isLoading)
+            assertEquals("PERMISSION_DENIED", vm.uiState.value.error)
         }
 
     // ===== toggleFollow — unfollow path =====
@@ -838,7 +892,8 @@ class FollowListViewModelTest {
                         TestData.createTestUser(uid = "following-1", displayName = "Following 1"),
                     ),
                 )
-            coEvery { userRepository.getStalkers(currentUserId) } returns Resource.Success(emptyList())
+            coEvery { userRepository.getStalkers(currentUserId) } returns
+                Resource.Success(UserRepository.StalkerPage())
 
             val vm = createViewModel(initialTab = "stalkers")
             advanceUntilIdle()
@@ -898,19 +953,22 @@ class FollowListViewModelTest {
                 )
             coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
             coEvery { userRepository.getUsers(emptyList()) } returns Resource.Success(emptyList())
+            // The server already drops cross-cohort visitors, but the client
+            // keeps its own defence-in-depth filter — so the page here still
+            // carries a minor, and the view model must still drop them.
             coEvery { userRepository.getStalkers(currentUserId) } returns
                 Resource.Success(
-                    listOf(
-                        TestData.createTestProfileVisitor(visitorId = "visitor-adult"),
-                        TestData.createTestProfileVisitor(visitorId = "visitor-minor"),
-                    ),
-                )
-            // Stalker users are fetched via a separate getUsers(visitorIds) call.
-            coEvery { userRepository.getUsers(listOf("visitor-adult", "visitor-minor")) } returns
-                Resource.Success(
-                    listOf(
-                        TestData.createTestUser(uid = "visitor-adult", cohort = "adult"),
-                        TestData.createTestUser(uid = "visitor-minor", cohort = "minor"),
+                    UserRepository.StalkerPage(
+                        visitors =
+                            listOf(
+                                TestData.createTestProfileVisitor(visitorId = "visitor-adult"),
+                                TestData.createTestProfileVisitor(visitorId = "visitor-minor"),
+                            ),
+                        users =
+                            listOf(
+                                TestData.createTestUser(uid = "visitor-adult", cohort = "adult"),
+                                TestData.createTestUser(uid = "visitor-minor", cohort = "minor"),
+                            ),
                     ),
                 )
 

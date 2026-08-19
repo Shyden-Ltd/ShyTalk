@@ -26,6 +26,11 @@ import org.json.JSONObject
 
 private const val TAG = "UserRepository"
 
+// SHY-0338 — ids per POST /api/users/batch request. The server refuses more
+// than 200 rather than truncating, so stay comfortably inside it: a follow page
+// is 30, and 100 keeps a large graph to a couple of round trips.
+private const val BATCH_USER_PAGE = 100
+
 class UserRepositoryImpl(
     private val api: WorkerApiClient,
     private val firestore: FirebaseFirestore,
@@ -161,44 +166,66 @@ class UserRepositoryImpl(
                 ?.toSet() ?: emptySet()
         }
 
+    // SHY-0338 — batch profile read, via the API rather than Firestore.
+    //
+    // This used to be `collection("users").whereIn(FieldPath.documentId(),
+    // chunk)` straight from the client. `firestore.rules` gates a users read on
+    // `cohortMatchesCaller()`, and that refusal is ALL-OR-NOTHING: one member
+    // of the chunk failing the gate denies the WHOLE query and the other 29
+    // readable users go with it. `cohort` arrived with UK OSA #17, so a single
+    // older follower emptied a whole page — and the `catch` below returned
+    // `emptyList()`, so the screen showed a blank list with no error.
+    //
+    // `POST /api/users/batch` filters PER USER instead. The catch is gone on
+    // purpose: a failure must reach the caller as `Resource.Error`, not
+    // masquerade as "you follow nobody".
+    //
+
+    // Decode a `users` array from an API response.
+    //
+    // `uniqueId` is the document id, and the rest of the app keys users by
+    // `User.uid` — `FollowListViewModel` looks members up with
+    // `allUsers[followerId]`. Getting this wrong would produce an empty list
+    // again, from a completely different cause, so it is done in ONE place.
+    //
+    private fun usersFromArray(arr: JSONArray?): List<User> =
+        (0 until (arr?.length() ?: 0)).map { i ->
+            val obj = arr!!.getJSONObject(i)
+            User.fromMap(obj.toMap(), obj.optString("uniqueId"))
+        }
+
     override suspend fun getUsers(userIds: List<String>): Resource<List<User>> {
         if (userIds.isEmpty()) return Resource.Success(emptyList())
         return firebaseCall("Failed to get users") {
-            userIds.chunked(30).flatMap { chunk ->
-                try {
-                    val snapshot =
-                        firestore
-                            .collection("users")
-                            .whereIn(FieldPath.documentId(), chunk)
-                            .get()
-                            .await()
-                    snapshot.documents.mapNotNull { doc ->
-                        val data = doc.data ?: return@mapNotNull null
-                        User.fromMap(data, doc.id)
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to batch-load ${chunk.size} users", e)
-                    emptyList()
-                }
+            userIds.chunked(BATCH_USER_PAGE).flatMap { chunk ->
+                val body = JSONObject().put("ids", JSONArray(chunk))
+                usersFromArray(api.post("/api/users/batch", body).optJSONArray("users"))
             }
         }
     }
 
-    override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> =
+    // SHY-0338 — the stalker page, via the API rather than Firestore.
+    //
+    // The old ordered subcollection query was refused outright: the rule's
+    // second clause reads `resource.data`, which the engine cannot evaluate for
+    // a query. A stalker document also carries no `cohort` field, so an adult
+    // caller failed the gate even on a single-document read. Two independent
+    // reasons this list was always empty.
+    //
+    // The server now returns the visits AND the visitors' profiles in one
+    // response, so the second round trip that used to fail is gone with it.
+    //
+    override suspend fun getStalkers(profileUserId: String): Resource<UserRepository.StalkerPage> =
         firebaseCall("Failed to load stalkers") {
-            val snapshot =
-                firestore
-                    .collection("users/$profileUserId/stalkers")
-                    .orderBy("lastVisitedAt", com.google.firebase.firestore.Query.Direction.DESCENDING)
-                    .limit(50)
-                    .get()
-                    .await()
-            snapshot.documents.mapNotNull { doc ->
-                val data = doc.data ?: return@mapNotNull null
-                ProfileVisitor.fromMap(data)
-            }
+            val json = api.get("/api/users/$profileUserId/stalkers")
+            val visits = json.optJSONArray("stalkers")
+            UserRepository.StalkerPage(
+                visitors =
+                    (0 until (visits?.length() ?: 0)).map { i ->
+                        ProfileVisitor.fromMap(visits!!.getJSONObject(i).toMap())
+                    },
+                users = usersFromArray(json.optJSONArray("users")),
+            )
         }
 
     override suspend fun getAliases(userId: String): Resource<Map<String, String>> =

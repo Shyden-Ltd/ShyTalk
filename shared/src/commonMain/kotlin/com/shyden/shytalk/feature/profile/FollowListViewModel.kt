@@ -191,13 +191,27 @@ class FollowListViewModel(
             // Cache for observer-path re-filtering.
             viewer = loadedViewer
 
-            // Batch-fetch all user objects
+            // Batch-fetch all user objects.
+            //
+            // SHY-0338 — a failure here used to become `emptyMap()`, and an
+            // empty map became an empty list, and an empty list looks exactly
+            // like "you follow nobody". That is how a permission refusal
+            // reached the user as a plausible-looking blank screen. The failure
+            // is now carried to the UI instead of being discarded.
+            var loadError: String? = null
             val allIds = (followerIdsList + followingIdsList).distinct()
             val allUsers =
                 if (allIds.isNotEmpty()) {
                     when (val result = userRepository.getUsers(allIds)) {
                         is Resource.Success -> result.data.associateBy { it.uid }
-                        else -> emptyMap()
+
+                        is Resource.Error -> {
+                            logE(TAG, "Failed to load list members: ${result.message}")
+                            loadError = result.message
+                            emptyMap()
+                        }
+
+                        Resource.Loading -> emptyMap()
                     }
                 } else {
                     emptyMap()
@@ -211,22 +225,22 @@ class FollowListViewModel(
             var stalkersLastViewed = 0L
             if (_uiState.value.isOwnList) {
                 stalkersLastViewed = profileUser.stalkersLastViewedAt
+                // SHY-0338 — ONE call now: the server returns the visit
+                // records and the visitors' profiles together. The second call
+                // this used to make was the one that always failed, and its
+                // failure was discarded by the `else -> Unit` below it.
                 when (val stalkersResult = userRepository.getStalkers(profileUserId)) {
                     is Resource.Success -> {
-                        stalkerList = stalkersResult.data
-                        val visitorIds = stalkerList.map { it.visitorId }
-                        if (visitorIds.isNotEmpty()) {
-                            when (val usersResult = userRepository.getUsers(visitorIds)) {
-                                is Resource.Success -> {
-                                    stalkerUserMap = usersResult.data.associateBy { it.uid }
-                                }
-
-                                else -> Unit
-                            }
-                        }
+                        stalkerList = stalkersResult.data.visitors
+                        stalkerUserMap = stalkersResult.data.users.associateBy { it.uid }
                     }
 
-                    else -> Unit
+                    is Resource.Error -> {
+                        logE(TAG, "Failed to load stalkers: ${stalkersResult.message}")
+                        loadError = loadError ?: stalkersResult.message
+                    }
+
+                    Resource.Loading -> Unit
                 }
             }
 
@@ -254,6 +268,7 @@ class FollowListViewModel(
             _uiState.update {
                 it.copy(
                     isLoading = false,
+                    error = loadError,
                     isSuperShy = profileUser.isSuperShy,
                     followers = filteredFollowers,
                     following = filteredFollowing,
