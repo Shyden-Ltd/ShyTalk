@@ -76,7 +76,22 @@ function dependabotUpdateBlocks(yaml) {
     const end = k + 1 < starts.length ? starts[k + 1] : lines.length;
     const text = lines.slice(start, end).join('\n');
     const eco = (text.match(/package-ecosystem:\s*"([^"]+)"/) || [])[1] || '?';
-    const dir = (text.match(/directory:\s*"([^"]+)"/) || [])[1] || '?';
+    // Dependabot accepts BOTH `directory: "/"` (singular) and a `directories:`
+    // list. SHY-0226 moved the github-actions block to the plural form so every
+    // composite action under .github/actions/** is watched, and this parser only
+    // understood the singular — `directory:` does not match the literal text
+    // `directories:` — so the ecosystem read as '?' and the presence assertion
+    // failed. Accept either, taking the first entry of a list as the block's
+    // representative directory.
+    //
+    // Worth noting HOW this surfaced: it did not, for as long as `.github/**`
+    // diffs set no flag and never reached test-backend. SHY-0226 routing them to
+    // SCRIPTS is what ran this guard for the first time and found the mismatch —
+    // which is the story's whole thesis.
+    const dir =
+      (text.match(/^\s*directory:\s*"([^"]+)"/m) || [])[1] ||
+      (text.match(/^\s*directories:\s*\n(?:\s*#.*\n)*\s*-\s*"([^"]+)"/m) || [])[1] ||
+      '?';
     return { ecosystem: eco, directory: dir, text };
   });
 }
