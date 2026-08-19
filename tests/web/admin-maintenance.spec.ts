@@ -43,7 +43,8 @@ test.describe('Admin Maintenance Tab', () => {
     await expect(result).toBeVisible();
 
     // Result should contain size information (KB, MB, or B)
-    await expect.poll(async () => await result.textContent()).toMatch(/[KMG]?B/i);
+    const text = await result.textContent();
+    expect(text).toMatch(/[KMG]?B/i);
 
     // Button should re-enable
     await expect(auditBtn).toBeEnabled();
@@ -59,9 +60,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Verify the device binding exists first
     const deviceId = `e2e-${testData.prefix}-device`;
-    const devicesBefore = await testData.api.get(
-      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`,
-    );
+    const devicesBefore = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`);
     const hasBefore = (devicesBefore.devices || []).some((d: any) => d.id === deviceId);
 
     if (hasBefore) {
@@ -69,9 +68,7 @@ test.describe('Admin Maintenance Tab', () => {
       await testData.api.post(`/api/cleanup/device-binding/${uniqueId}`);
 
       // API verify: device should be removed
-      const devicesAfter = await testData.api.get(
-        `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`,
-      );
+      const devicesAfter = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`);
       const hasAfter = (devicesAfter.devices || []).some((d: any) => d.id === deviceId);
       expect(hasAfter).toBe(false);
 
@@ -124,17 +121,16 @@ test.describe('Admin Maintenance Tab', () => {
     // Click Clear All Reports
     await page.locator('#clear-reports-btn').click();
 
-    // Asserting ABSENCE (cancel means nothing happened) — bounded window.
-    await new Promise((r) => setTimeout(r, 1_000)); // sleep-ok: bounded window for a nothing-happened assertion
+    // Result should not appear (no action taken)
+    await page.waitForTimeout(1_000);
 
     // The result div should remain hidden
     const result = page.locator('#clear-reports-result');
     const isVisible = await result.isVisible();
     // If it was visible from a previous test, it should not have changed
     // The key assertion: the button should NOT have changed to "Processing..."
-    await expect
-      .poll(async () => await page.locator('#clear-reports-btn').textContent())
-      .toBe('Clear All Reports');
+    const btnText = await page.locator('#clear-reports-btn').textContent();
+    expect(btnText).toBe('Clear All Reports');
   });
 
   // ── Test 5: Individual operation result display ──
@@ -275,7 +271,8 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Description should explain what will be deleted
     const desc = page.locator('#nuclear-desc');
-    await expect(desc).toContainText('maintenance');
+    const descText = await desc.textContent();
+    expect(descText).toContain('maintenance');
 
     // Confirm input should NOT be visible yet
     const inputWrap = page.locator('#nuclear-input-wrap');

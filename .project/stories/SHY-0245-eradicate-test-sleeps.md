@@ -43,8 +43,9 @@ Because SHY-0242 made the develop gate force `playwright-web` on **every backend
 
 ### Happy path
 
-- [x] Zero `page.waitForTimeout` calls remain anywhere in the repository **except `tests/web/suggestions-board.spec.ts`**, which is carved out to [SHY-0357] — see Notes for why that file is a different job, not a deferred remainder.
-- [x] The ratchet counts what remains and **fails on any increase**, so the carved-out debt can only shrink.
+- [x] The ratchet counts every fixed-duration wait in the repository and **fails on any increase**, so the debt can only shrink. Baseline pinned at **312 across 59 files**.
+- [x] Sixteen sleeps are converted to conditions in four files — `roadmap-auth` (9), `admin-audit-log` (5), `shared-header` (1), `shared-header-signin-fallback` (1) — each verified against a green local baseline.
+- [ ] **The remaining 312 are carved out to [SHY-0357], not delivered here.** See Notes: the rebuild this PR was cut from could not supply them safely.
 - [x] Every replaced wait blocks on the **condition** — a retrying assertion, an auto-waiting locator, `waitForFunction`, `waitForResponse`, or an explicit DOM anchor — never on elapsed time.
 - [x] `webkit` and `mobile-safari` pass the previously-failing specs in CI, which is the only environment where the defect reproduces.
 
@@ -179,6 +180,31 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
 - [ ] Status flipped to `In Review` before merge.
 
 ## Notes (running log)
+
+- **2026-08-19 (second reduction) — the rebuild could not supply the conversions
+  safely, so this PR ships the ratchet and sixteen verified conversions, and
+  nothing else.** The rebuild took 107 spec files wholesale from a branch cut
+  months earlier. A first pass restored the 75 that never had a sleep. CI then
+  failed on 44 assertions across 8 MORE files — and the cause was the same in
+  every case: where develop's version DID have a sleep, my audit kept the
+  branch's version, and that version also carries product assertions from the
+  old world.
+
+  The clearest instance, before the second pass:
+  `suggestions-tag-options-i18n.spec.ts` asserted
+  `function tagOptions() { return [` while develop's
+  `public/js/suggestions-board.js:42` declares `var TAG_OPTIONS = [`. Neither
+  version of that spec contained a single `waitForTimeout`.
+
+  Chasing 22 stale assertions would have been fixing the wrong thing. Every
+  spec is now byte-identical to develop except the four converted here, and the
+  four helper modules the restored specs no longer import are deleted rather
+  than left orphaned.
+
+  **What this PR is worth, stated plainly:** the ratchet. New sleeps fail
+  immediately, and the 312 that exist can only shrink. The conversions
+  themselves are better done file-by-file against current develop, which is
+  [SHY-0357].
 
 Reviewed-up-to: eb5e0aa1297b66d21d32bd7a890c84fa5dae80d8
 
