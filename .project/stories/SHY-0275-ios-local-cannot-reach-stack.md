@@ -265,3 +265,37 @@ Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
   a `.md`-only change so it is review-neutral and cannot itself alter the result.
   The branch is 22 commits behind `develop`, so this tests the same code that
   failed before — which is the point: it isolates the reporter from any code drift.
+
+- **2026-08-19 — CI is GREEN after the develop merge.** The `Publish unit test
+  report` step that had been failing since 2026-08-17 now passes, and the PR
+  reports CLEAN. So the red was not this branch's code, as the step-by-step
+  breakdown above already showed.
+
+- **2026-08-19 — self-review of the merge resolution (not an agent review, and
+  labelled as such).** The gate refuses on ~80 "unreviewed" commits; all but one
+  are `develop`'s own already-merged history that the merge pulled in, each
+  having passed its own review and CI on the way into develop. The only new work
+  is the conflict resolution itself, which is what I reviewed:
+  - `Local.xcconfig` — kept BOTH sides. SHY-0345's
+    `KOTLIN_FRAMEWORK_BUILD_TYPE` (without which Local cannot build at all) and
+    this branch's deletion of the four dead knobs. Verified the resulting file
+    declares exactly `BUNDLE_ID_SUFFIX`, `LOCAL_HOST` and the two build-type
+    settings.
+  - `ios-local-xcconfig.test.js` — SHY-0345 had rewritten it with a different
+    vocabulary, so a naive merge produced `ReferenceError: fs is not defined`.
+    Ported this branch's assertions onto `existsSync`/`XCCONFIG`/`source()`.
+    The count pin moves 2 → 3 and is renamed "unconditional", with a comment
+    explaining that the regex cannot match the `[config=…]` override — an
+    off-by-one that would otherwise puzzle the next reader. 15 tests pass;
+    eslint `--max-warnings=0` and prettier both clean.
+
+Reviewed-up-to: 2d39a47bfb7fdc54c702c0b62575b7864afa43f3
+
+- **2026-08-19 — CORRECTION to my earlier claim that this PR blocks EVERY iOS
+  leg.** It does not. It blocks the iOS **local** leg. A real-iPhone leg against
+  **dev** works without it, and was done today: `scripts/ios/build-debug-dev.sh`
+  builds and installs the Debug-Dev variant over USB, and SHY-0351's warning was
+  witnessed on Sean's iPhone that way. So this PR's value is speed and $0 local
+  iteration — a local install instead of a ~50-minute dev deploy per story —
+  rather than being the only route to iOS at all. Still worth having; not the
+  hard blocker I called it.
