@@ -330,3 +330,24 @@ new-message search and read `PERMISSION_DENIED … for 'list' @ L74` on screen.
   the Kotlin tests and mutations added above, the story's outstanding work is
   closed apart from the journey scenarios, which are corpus work rather than
   verification of this fix.
+
+- **2026-08-19 — self-review of the whole change (labelled as a self-review, not
+  an agent pass).** Read the production diff rather than the summary, and checked
+  the one claim it makes about a precondition:
+
+  - **Android `searchUsers`** — the filtered Firestore query is gone; the API is
+    called with a trimmed, url-encoded query, an empty query short-circuits
+    without a call, and the caller is filtered out client-side as belt-and-braces.
+    All five behaviours are now pinned by tests, three of them mutation-proven.
+  - **`shapeForViewer`** — re-attaches `cohort` after the strip. The safety of
+    that rests on the refusal three lines above it, and the tests now assert the
+    property (`cohort` equals the CALLER's) rather than mere presence.
+  - **The exact-ID branch** — its comment claims "the exact-ID branch has already
+    enforced same-cohort above". **Checked, because if it were false this would
+    disclose a cross-cohort user's cohort.** It holds:
+    `requireSameCohort(req, res, q, () => target)` runs at `users.js:518` and
+    returns early with an existence-hiding 404 plus an audit write, so line 532
+    is only reachable for a same-cohort target — or for `isSelf`, where the value
+    is the caller's own. The comment is accurate.
+
+Reviewed-up-to: ccf09d57e9acc2e9ab2efca9081714a51d3b0c1d
