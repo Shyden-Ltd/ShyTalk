@@ -170,6 +170,18 @@ Reviewed-up-to: 875479f1e122a33f063f75be79520e9e24ca8126
   `MutationObserver.observe(document.documentElement)` threw and silently killed
   the observer, leaving an empty log that would have read as "no flash". Caught
   only because the spec asserted its own non-vacuity first.
+- **2026-08-19 — the repo's own discipline guard rejected my first spec, and
+  it was right to.** `auth-injection-discipline.spec.ts` forbids anything
+  outside the sanctioned gate from assigning `window.shytalkAuth`, because a
+  direct write cannot wait for the page's own sign-in check and is decided by a
+  race it cannot see (measured on this page: Chromium won at 505 ms, WebKit lost
+  at 594 ms). The spec now goes through `injectAuthState`.
+  A second constraint fell out of that: the gate waits for `authStateKnown ===
+  true` before every write, so a test cannot inject `false` and then `true` — the
+  second call deadlocks against the first. The settled signed-out case therefore
+  asserts the state the page reaches **on its own**, with no injection at all,
+  which is a truer assertion anyway.
+
 - **2026-08-19 — CROSS-BROWSER PROOF, all five projects, real browsers, local
   stack:** `shared-header`, `shared-header-signin-fallback`,
   `shared-header-auth-flash`, `roadmap-auth`, `auth-state-known-contract` —

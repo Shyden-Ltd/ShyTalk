@@ -14,33 +14,20 @@
  * resolves, so a load-timing test passes on a fast machine and proves nothing.
  */
 import { test, expect } from '@playwright/test';
+import { injectAuthState, waitForAuthStateKnown } from './helpers/roadmap-auth';
 
-/** Publish an auth state the way roadmap-auth.js does, then let the header react. */
-async function publishAuthState(
-  page: import('@playwright/test').Page,
-  state: { currentUser: unknown; profile: unknown; authStateKnown: boolean },
-) {
-  await page.evaluate((s) => {
-    const w = window as unknown as Record<string, unknown>;
-    const prev = (w.shytalkAuth as Record<string, unknown>) || {};
-    w.shytalkAuth = { ...prev, ...s };
-    document.dispatchEvent(new Event('shytalk-auth-changed'));
-  }, state);
-}
-
-const settled = (page: import('@playwright/test').Page) =>
-  page.waitForFunction(
-    () => !!(window as any).shytalkAuth && (window as any).shytalkAuth.authStateKnown === true,
-    undefined,
-    { timeout: 15_000 },
-  );
+// State is set ONLY through the sanctioned gate. SHY-0279 forbids a spec from
+// assigning `window.shytalkAuth` directly, because a direct write cannot wait
+// for the page's own sign-in check and is decided by a race it cannot see —
+// measured on this very page, Chromium won at 505 ms and WebKit lost at 594 ms.
+const settled = waitForAuthStateKnown;
 
 test.describe('Shared header — no signed-out flash before auth is known', () => {
   test('while the sign-in state is UNKNOWN, Sign In is not shown', async ({ page }) => {
     await page.goto('/roadmap.html');
     await settled(page); // start from a real, settled page
 
-    await publishAuthState(page, { currentUser: null, profile: null, authStateKnown: false });
+    await injectAuthState(page, { currentUser: null, profile: null, authStateKnown: false });
 
     // The control must be withheld, not merely hidden later.
     await expect(page.locator('[data-testid="header-signin-btn"]')).toHaveCount(0);
@@ -49,13 +36,14 @@ test.describe('Shared header — no signed-out flash before auth is known', () =
   });
 
   test('once the state is KNOWN and signed out, Sign In appears', async ({ page }) => {
+    // No injection: a settled signed-out visitor is exactly what the page
+    // reaches on its own, so this asserts the real end state. Driving it by
+    // injecting `authStateKnown:false` and then `true` cannot work — the gate
+    // waits for `true` before every write, so the second call would deadlock
+    // against the first. That constraint is the gate doing its job.
     await page.goto('/roadmap.html');
     await settled(page);
 
-    await publishAuthState(page, { currentUser: null, profile: null, authStateKnown: false });
-    await expect(page.locator('[data-testid="header-signin-btn"]')).toHaveCount(0);
-
-    await publishAuthState(page, { currentUser: null, profile: null, authStateKnown: true });
     await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible();
     await expect(page.locator('[data-testid="header-auth-pending"]')).toHaveCount(0);
   });
@@ -64,7 +52,7 @@ test.describe('Shared header — no signed-out flash before auth is known', () =
     await page.goto('/roadmap.html');
     await settled(page);
 
-    await publishAuthState(page, {
+    await injectAuthState(page, {
       currentUser: { uid: 'u1', displayName: 'Ada', photoURL: null },
       profile: { displayName: 'Ada' },
       authStateKnown: true,
