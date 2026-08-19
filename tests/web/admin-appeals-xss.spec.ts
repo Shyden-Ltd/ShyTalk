@@ -28,8 +28,8 @@ import { adminLogin, navigateToTab } from './helpers/admin-auth';
  * malicious value through the API path.
  */
 
-const SCRIPT_PAYLOAD = "<script>window.__xss_executed=true;</script>";
-const IMG_PAYLOAD = "<img src=x onerror=window.__xss_img=true>";
+const SCRIPT_PAYLOAD = '<script>window.__xss_executed=true;</script>';
+const IMG_PAYLOAD = '<img src=x onerror=window.__xss_img=true>';
 
 test.describe('Admin Appeals — XSS defense (mocked API)', () => {
   test.beforeEach(async ({ page }) => {

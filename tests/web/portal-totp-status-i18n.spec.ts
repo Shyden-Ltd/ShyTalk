@@ -23,8 +23,27 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'en',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
 
 const NEW_KEYS = [
@@ -56,17 +75,25 @@ test.describe('Portal TOTP + recovery + copy i18n', () => {
   test('portal.js no longer hardcodes the 8 English strings', async ({ request }) => {
     const res = await request.get(`${BASE}/portal/portal.js`);
     const src = await res.text();
-    expect(src, 'recovery message not hardcoded').not.toContain('If an account exists with that email');
+    expect(src, 'recovery message not hardcoded').not.toContain(
+      'If an account exists with that email',
+    );
     expect(src, 'totp managed not hardcoded').not.toContain('managed by your sign-in provider');
-    expect(src, 'totp enabled not hardcoded').not.toContain("'Two-factor authentication is enabled.'");
-    expect(src, 'totp disabled not hardcoded').not.toContain("'Two-factor authentication is not enabled.'");
+    expect(src, 'totp enabled not hardcoded').not.toContain(
+      "'Two-factor authentication is enabled.'",
+    );
+    expect(src, 'totp disabled not hardcoded').not.toContain(
+      "'Two-factor authentication is not enabled.'",
+    );
     expect(src, 'reset 2FA not hardcoded').not.toContain("'Reset 2FA'");
     expect(src, 'enable 2FA not hardcoded').not.toContain("'Enable 2FA'");
     expect(src, 'copied! not hardcoded').not.toContain("'Copied!'");
     // The plain "Copy" string IS hardcoded once in portal/index.html as
     // the inline default for `data-i18n="enroll_copy"`. portal.js should
     // no longer have `'Copy'` as a textContent assignment fallback.
-    expect(src, 'Copy fallback should use t(enroll_copy)').not.toMatch(/copyBtn\.textContent\s*=\s*['"]Copy['"]/);
+    expect(src, 'Copy fallback should use t(enroll_copy)').not.toMatch(
+      /copyBtn\.textContent\s*=\s*['"]Copy['"]/,
+    );
     // Sanity: the new t() calls are present.
     expect(src).toContain("t('recovery_code_sent')");
     expect(src).toContain("t('security_totp_managed')");
@@ -75,7 +102,11 @@ test.describe('Portal TOTP + recovery + copy i18n', () => {
 
   test('Korean locale: portal t() resolves all 7 keys to Hangul', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(

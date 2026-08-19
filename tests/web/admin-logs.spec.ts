@@ -1,6 +1,8 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
+import { waitForAlertsLoaded } from './helpers/alerts';
+import { seedLog } from './helpers/logs';
 
 /** Wait for the logs table to finish loading. */
 async function waitForLogsLoaded(page: Page): Promise<void> {
@@ -9,8 +11,7 @@ async function waitForLogsLoaded(page: Page): Promise<void> {
       const tbody = document.getElementById('logs-tbody');
       const empty = document.getElementById('logs-empty');
       if (!tbody) return false;
-      return tbody.querySelectorAll('tr').length > 0 ||
-        (empty && empty.style.display !== 'none');
+      return tbody.querySelectorAll('tr').length > 0 || (empty && empty.style.display !== 'none');
     },
     { timeout: 15_000 },
   );
@@ -73,44 +74,43 @@ test.describe('Admin Logs', () => {
   });
 
   // ── Test 2: Filter by level — ERROR, verify filtered, clear ──
-  test('filter by level shows only matching entries', async ({ page }) => {
-    // Select ERROR level
+  test('filter by level shows only matching entries', async ({ page, testData }) => {
+    // Seeded so the table CANNOT be empty. The old `if (rowCount > 0)` meant
+    // an empty table asserted nothing at all, so the level filter went
+    // unverified on every run where no error had been logged yet.
+    await seedLog({ testRunId: testData.testRunId, level: 'error', message: 'e2e level filter' });
+
     await page.locator('#log-filter-level').selectOption('error');
     await searchLogs(page);
 
-    // Verify all visible log rows have ERROR level (or table is empty)
     const rows = page.locator('#logs-tbody tr:not(.log-expanded-row)');
-    const rowCount = await rows.count();
+    await expect.poll(async () => rows.count()).toBeGreaterThan(0);
 
-    if (rowCount > 0) {
-      // Check each row's level cell (2nd column)
-      for (let i = 0; i < Math.min(rowCount, 10); i++) {
-        const levelCell = rows.nth(i).locator('td:nth-child(2)');
-        const text = await levelCell.textContent();
-        expect(text!.toLowerCase()).toBe('error');
-      }
+    for (const row of await rows.all()) {
+      await expect(row.locator('td:nth-child(2)')).toHaveText(/error/i);
     }
 
-    // Clear filters
     await clearLogFilters(page);
   });
 
   // ── Test 3: Filter by source — select source, verify ──
-  test('filter by source shows only matching entries', async ({ page }) => {
-    // Select express-api source
+  test('filter by source shows only matching entries', async ({ page, testData }) => {
+    // Seeded so an empty table is impossible; the old guard let this test pass
+    // without ever checking a single row's source.
+    await seedLog({
+      testRunId: testData.testRunId,
+      source: 'express-api',
+      message: 'e2e source filter',
+    });
+
     await page.locator('#log-filter-source').selectOption('express-api');
     await searchLogs(page);
 
     const rows = page.locator('#logs-tbody tr:not(.log-expanded-row)');
-    const rowCount = await rows.count();
+    await expect.poll(async () => rows.count()).toBeGreaterThan(0);
 
-    if (rowCount > 0) {
-      // Check the source cell (3rd column)
-      for (let i = 0; i < Math.min(rowCount, 5); i++) {
-        const sourceCell = rows.nth(i).locator('td:nth-child(3)');
-        const text = await sourceCell.textContent();
-        expect(text!.toLowerCase()).toContain('express-api');
-      }
+    for (const row of await rows.all()) {
+      await expect(row.locator('td:nth-child(3)')).toContainText(/express-api/i);
     }
 
     await clearLogFilters(page);
@@ -118,17 +118,21 @@ test.describe('Admin Logs', () => {
 
   // ── Test 4: Filter by userId — enter test user UID ──
   test('filter by userId shows only matching entries', async ({ page, testData }) => {
+    await seedLog({
+      testRunId: testData.testRunId,
+      message: 'e2e userId filter',
+      userId: testData.user.uid,
+    });
+
     await page.locator('#log-filter-userId').fill(testData.user.uid);
     await searchLogs(page);
 
     const rows = page.locator('#logs-tbody tr:not(.log-expanded-row)');
-    const rowCount = await rows.count();
+    await expect.poll(async () => rows.count()).toBeGreaterThan(0);
 
-    if (rowCount > 0) {
-      // Verify at least the first row has the user ID
-      const userCell = rows.first().locator('td:nth-child(4)');
-      const text = await userCell.textContent();
-      expect(text).toContain(testData.user.uid);
+    // EVERY row must belong to the filtered user, not merely the first one.
+    for (const row of await rows.all()) {
+      await expect(row.locator('td:nth-child(4)')).toContainText(testData.user.uid);
     }
 
     await clearLogFilters(page);
@@ -136,22 +140,24 @@ test.describe('Admin Logs', () => {
 
   // ── Test 5: Filter by traceId — enter a trace ID ──
   test('filter by traceId shows single trace entries', async ({ page, testData }) => {
-    // First, get a real trace ID from the API
-    const data = await testData.api.get('/api/admin/logs?limit=10');
-    const logs = data.logs || [];
-    const logWithTrace = logs.find((l: any) => l.sessionTraceId);
+    // Seeded with a KNOWN trace id. Hunting one in whatever the API happened
+    // to have logged meant the test skipped itself whenever no log carried a
+    // trace — and a skipped test proves nothing about trace filtering.
+    const { sessionTraceId } = await seedLog({
+      testRunId: testData.testRunId,
+      message: 'e2e traceId filter',
+    });
 
-    if (!logWithTrace) {
-      test.skip(true, 'No logs with trace IDs available');
-      return;
-    }
-
-    await page.locator('#log-filter-traceId').fill(logWithTrace.sessionTraceId);
+    await page.locator('#log-filter-traceId').fill(sessionTraceId);
     await searchLogs(page);
 
     const rows = page.locator('#logs-tbody tr:not(.log-expanded-row)');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThan(0);
+    await expect.poll(async () => rows.count()).toBeGreaterThan(0);
+
+    // Filtering by ONE trace must return only that trace's entries.
+    for (const row of await rows.all()) {
+      await expect(row).toContainText('e2e traceId filter');
+    }
 
     await clearLogFilters(page);
   });
@@ -218,23 +224,23 @@ test.describe('Admin Logs', () => {
   // ── Test 9: Trace viewer — click trace link, verify timeline, Back ──
   test('trace viewer opens and displays timeline', async ({ page, testData }) => {
     // Get a log with a trace ID
-    const data = await testData.api.get('/api/admin/logs?limit=50');
-    const logs = data.logs || [];
-    const logWithTrace = logs.find((l: any) => l.sessionTraceId);
-
-    if (!logWithTrace) {
-      test.skip(true, 'No logs with trace IDs available');
-      return;
-    }
+    // Seeded with a KNOWN trace, rather than hunting one among whatever the API
+    // happened to have logged — that hunt came up empty often enough that this
+    // test skipped itself and the trace view went unverified.
+    const { sessionTraceId } = await seedLog({
+      testRunId: testData.testRunId,
+      message: 'e2e trace view',
+    });
+    const logWithTrace = { sessionTraceId };
 
     // Click the trace link in the log row
     const traceLinks = page.locator('.log-trace-link');
-    const traceCount = await traceLinks.count();
-
-    if (traceCount === 0) {
-      test.skip(true, 'No trace links visible in current logs');
-      return;
-    }
+    // Seeded above with a known sessionTraceId, so a trace link must render.
+    await expect
+      .poll(async () => traceLinks.count(), {
+        message: 'a seeded log with a trace id must render a trace link',
+      })
+      .toBeGreaterThan(0);
 
     await traceLinks.first().click();
 
@@ -260,12 +266,13 @@ test.describe('Admin Logs', () => {
   });
 
   // ── Test 10: Alerts section — expand, verify seeded alert ──
-  test('alerts section shows seeded alert with message and severity', async ({ page, testData }) => {
+  test('alerts section shows seeded alert with message and severity', async ({
+    page,
+    testData,
+  }) => {
     // Expand alerts section (it may already be expanded)
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(
-      (el) => el.classList.contains('collapsed'),
-    );
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
@@ -278,7 +285,7 @@ test.describe('Admin Logs', () => {
     const alertsTable = page.locator('#alerts-tbody');
     const alertsEmpty = page.locator('#alerts-empty');
 
-    const hasAlerts = await alertsTable.locator('tr').count() > 0;
+    const hasAlerts = (await alertsTable.locator('tr').count()) > 0;
     const isEmpty = await alertsEmpty.isVisible();
 
     // Exactly one of these must be true (mutually exclusive)
@@ -294,13 +301,9 @@ test.describe('Admin Logs', () => {
   // ── Test 11: Acknowledge alert — click Ack, verify status ──
   test('acknowledge alert changes its status', async ({ page, testData }) => {
     // Seed our own alert to avoid sharing with admin-alerts.spec.ts
-    let ownAlertId: string;
-    try {
-      ownAlertId = await seedOwnAlert(testData, testData.prefix);
-    } catch {
-      test.skip(true, 'Cannot seed alert via API');
-      return;
-    }
+    // A seeding failure is a real failure; skipping on it left acknowledge
+    // untested whenever the API hiccupped.
+    const ownAlertId: string = await seedOwnAlert(testData, testData.prefix);
 
     // Reload to see the new alert
     await page.reload();
@@ -309,24 +312,17 @@ test.describe('Admin Logs', () => {
 
     // Expand alerts section
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(
-      (el) => el.classList.contains('collapsed'),
-    );
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
 
-    // Wait for alerts table to populate
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Find and click the Ack button on any alert
+    // The alert seeded above has status 'new', so its Ack button must render.
     const ackBtn = page.locator('#alerts-tbody .alert-btn').filter({ hasText: 'Ack' }).first();
-    const hasAckBtn = await ackBtn.count() > 0;
-
-    if (!hasAckBtn) {
-      test.skip(true, 'No acknowledgeable alerts visible');
-      return;
-    }
+    await expect(ackBtn).toBeVisible({ timeout: 15_000 });
 
     await ackBtn.click();
 
@@ -348,23 +344,17 @@ test.describe('Admin Logs', () => {
   test('resolve alert removes it from active list', async ({ page, testData }) => {
     // Expand alerts section
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(
-      (el) => el.classList.contains('collapsed'),
-    );
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
 
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Find and click a Resolve button
+    // An unresolved alert is seeded for this file, so Resolve must be present.
     const resolveBtn = page.locator('#alerts-tbody .alert-btn-resolve').first();
-    const hasResolveBtn = await resolveBtn.count() > 0;
-
-    if (!hasResolveBtn) {
-      test.skip(true, 'No resolvable alerts visible');
-      return;
-    }
+    await expect(resolveBtn).toBeVisible({ timeout: 15_000 });
 
     await resolveBtn.click();
 
@@ -376,15 +366,14 @@ test.describe('Admin Logs', () => {
 
   // ── Tests 13-14: Config tests — chromium only (singleton) ──
   test.describe('Config tests', () => {
+    // defect-detector:allow SKIP-COND — the log/alert config is one shared document, so running these mutations across several browser projects would have them overwrite each other
     test.skip(({ browserName }) => browserName !== 'chromium', 'Config is singleton');
 
     // ── Test 13: Alert config — change threshold, save, reload verify, restore ──
     test('alert config threshold change persists after reload', async ({ page, testData }) => {
       // Expand alerts section
       const alertsSection = page.locator('#logs-alerts-section');
-      const isCollapsed = await alertsSection.evaluate(
-        (el) => el.classList.contains('collapsed'),
-      );
+      const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
       if (isCollapsed) {
         await page.locator('#logs-alerts-section .logs-section-header').click();
       }
@@ -394,26 +383,22 @@ test.describe('Admin Logs', () => {
       const configPanel = page.locator('#alert-config-panel');
       await expect(configPanel).toBeVisible();
 
-      // Wait for config to load
-      await page.waitForTimeout(2_000);
+      // A populated threshold is the settled signal — the panel is visible
+      // before its values arrive, and an empty read would make
+      // `Number('') + 1` silently rewrite the threshold to 1.
+      await expect
+        .poll(() => page.locator('#alert-config-grid input[type="number"]').first().inputValue())
+        .not.toBe('');
 
       // Get current config via API for backup
-      let originalConfig: any;
-      try {
-        originalConfig = await testData.api.get('/api/admin/alert-config');
-      } catch {
-        test.skip(true, 'Alert config API not available');
-        return;
-      }
+      // A missing alert-config endpoint is a failure of the thing under test.
+      const originalConfig: any = await testData.api.get('/api/admin/alert-config');
 
       // Find the first threshold input and change it
+      // The config grid always renders its thresholds; an empty grid is a
+      // rendering failure, and skipping on it left threshold editing untested.
       const firstInput = page.locator('#alert-config-grid input[type="number"]').first();
-      const hasInput = await firstInput.count() > 0;
-
-      if (!hasInput) {
-        test.skip(true, 'No alert config fields available');
-        return;
-      }
+      await expect(firstInput).toBeVisible();
 
       const originalValue = await firstInput.inputValue();
       const newValue = String(Number(originalValue) + 1);
@@ -434,15 +419,14 @@ test.describe('Admin Logs', () => {
 
       // Re-expand and re-open config
       const alertsSectionAfter = page.locator('#logs-alerts-section');
-      const isCollapsedAfter = await alertsSectionAfter.evaluate(
-        (el) => el.classList.contains('collapsed'),
+      const isCollapsedAfter = await alertsSectionAfter.evaluate((el) =>
+        el.classList.contains('collapsed'),
       );
       if (isCollapsedAfter) {
         await page.locator('#logs-alerts-section .logs-section-header').click();
       }
       await page.locator('#alerts-config-toggle').click();
       await expect(page.locator('#alert-config-panel')).toBeVisible();
-      await page.waitForTimeout(2_000);
 
       // Verify the value persisted
       const inputAfter = page.locator('#alert-config-grid input[type="number"]').first();
@@ -461,17 +445,15 @@ test.describe('Admin Logs', () => {
       await page.locator('#logs-settings-section .logs-section-header').click();
       await expect(settingsSection).not.toHaveClass(/collapsed/, { timeout: 3_000 });
 
-      // Wait for config to load
-      await page.waitForTimeout(2_000);
+      // A populated retention value is the settled signal — the section
+      // un-collapses BEFORE its config arrives. This is also why the read
+      // below defaults to 72: an empty read would make `Number('') + 1`
+      // silently rewrite retention to 1 hour.
+      await expect.poll(() => page.locator('#log-cfg-retention').inputValue()).not.toBe('');
 
       // Get current config via API for backup
-      let originalConfig: any;
-      try {
-        originalConfig = await testData.api.get('/api/admin/log-config');
-      } catch {
-        test.skip(true, 'Log config API not available');
-        return;
-      }
+      // A missing log-config endpoint is a failure of the thing under test.
+      const originalConfig: any = await testData.api.get('/api/admin/log-config');
 
       const retentionInput = page.locator('#log-cfg-retention');
       const originalRetention = await retentionInput.inputValue();
@@ -499,8 +481,9 @@ test.describe('Admin Logs', () => {
 
       // Re-expand settings
       await page.locator('#logs-settings-section .logs-section-header').click();
-      await expect(page.locator('#logs-settings-section')).not.toHaveClass(/collapsed/, { timeout: 3_000 });
-      await page.waitForTimeout(2_000);
+      await expect(page.locator('#logs-settings-section')).not.toHaveClass(/collapsed/, {
+        timeout: 3_000,
+      });
 
       await expect(page.locator('#log-cfg-retention')).toHaveValue(newRetention);
 
@@ -535,10 +518,9 @@ test.describe('Admin Logs', () => {
     // Verify the quota label shows something (count / cap format or unavailable)
     const quotaLabel = page.locator('#quota-label');
     await expect(quotaLabel).toBeVisible();
-    const labelText = await quotaLabel.textContent();
-    expect(labelText).toBeTruthy();
+    await expect.poll(async () => await quotaLabel.textContent()).toBeTruthy();
     // Should contain "logs" or "Quota" or a number
-    expect(labelText!.length).toBeGreaterThan(0);
+    await expect.poll(async () => (await quotaLabel.textContent())!.length).toBeGreaterThan(0);
 
     // Verify the quota bar exists
     const quotaBar = page.locator('#quota-bar');
@@ -550,13 +532,12 @@ test.describe('Admin Logs', () => {
   });
 
   // ── Test 17: Export JSON — click, verify download triggers ──
-  test('export JSON triggers a download', async ({ page }) => {
-    // Ensure there are logs to export
-    const rowCount = await getLogRowCount(page);
-    if (rowCount === 0) {
-      test.skip(true, 'No logs to export');
-      return;
-    }
+  test('export JSON triggers a download', async ({ page, testData }) => {
+    // Seeded so there is always something to export — "no logs" meant the
+    // export path went unverified on every quiet run.
+    await seedLog({ testRunId: testData.testRunId, message: 'e2e export json' });
+    await searchLogs(page);
+    await expect.poll(async () => getLogRowCount(page)).toBeGreaterThan(0);
 
     // Listen for download
     const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
@@ -567,12 +548,10 @@ test.describe('Admin Logs', () => {
   });
 
   // ── Test 18: Export CSV — click, verify download triggers ──
-  test('export CSV triggers a download', async ({ page }) => {
-    const rowCount = await getLogRowCount(page);
-    if (rowCount === 0) {
-      test.skip(true, 'No logs to export');
-      return;
-    }
+  test('export CSV triggers a download', async ({ page, testData }) => {
+    await seedLog({ testRunId: testData.testRunId, message: 'e2e export csv' });
+    await searchLogs(page);
+    await expect.poll(async () => getLogRowCount(page)).toBeGreaterThan(0);
 
     const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
     await page.locator('#log-export-csv').click();
@@ -582,26 +561,29 @@ test.describe('Admin Logs', () => {
   });
 
   // ── Test 19: Load more pagination — verify button, click, verify more ──
-  test('load more button loads additional log entries', async ({ page }) => {
+  test('load more button loads additional log entries', async ({ page, testData }) => {
     // Check if the Load More button is visible (only if >50 logs)
-    const loadMoreBtn = page.locator('#logs-load-more');
-    const isVisible = await loadMoreBtn.isVisible();
+    // The pager only appears past a full page, so seed enough rows to cross it
+    // rather than skipping — the old guard meant "load more" was never clicked.
+    const PAGE_SIZE = 50;
+    await Promise.all(
+      Array.from({ length: PAGE_SIZE + 1 }, (_, i) =>
+        seedLog({ testRunId: testData.testRunId, message: `e2e load-more ${i}` }),
+      ),
+    );
+    await searchLogs(page);
 
-    if (!isVisible) {
-      test.skip(true, 'Fewer than 50 logs — Load More button not shown');
-      return;
-    }
+    const loadMoreBtn = page.locator('#logs-load-more');
+    await expect(loadMoreBtn).toBeVisible({ timeout: 20_000 });
 
     // Count current rows
     const initialCount = await getLogRowCount(page);
 
     // Click Load More
     await loadMoreBtn.click();
-    await page.waitForTimeout(3_000);
-
-    // Verify more rows appeared
-    const newCount = await getLogRowCount(page);
-    expect(newCount).toBeGreaterThan(initialCount);
+    // Retrying assertion instead of a 3s sleep: resolves the moment the next
+    // page renders and fails loudly if it never does.
+    await expect.poll(() => getLogRowCount(page)).toBeGreaterThan(initialCount);
   });
 
   // ── Test 20: Empty state — impossible filter, verify no results message ──

@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  * the "Saved" feedback to appear next to the field.
  */
 async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void> {
-  await page.locator(fieldSelector).evaluate(el => el.blur());
+  await page.locator(fieldSelector).evaluate((el) => el.blur());
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
@@ -66,8 +66,9 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Reload and verify persistence
     await reloadAndSearch(page, uid);
-    const value = await page.locator('[data-field="dateOfBirth"]').inputValue();
-    expect(value).toContain('2000-06-15');
+    await expect
+      .poll(async () => await page.locator('[data-field="dateOfBirth"]').inputValue())
+      .toContain('2000-06-15');
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -216,7 +217,10 @@ test.describe('Admin Users - Extra Profile Fields', () => {
   });
 
   // ── Test 8: Clear buttons for clearable fields ──
-  test('clear buttons work for nationality, description, and date of birth', async ({ page, testData }) => {
+  test('clear buttons work for nationality, description, and date of birth', async ({
+    page,
+    testData,
+  }) => {
     const uid = String(testData.user.uniqueId);
 
     // Set nationality to GB first
@@ -256,8 +260,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Verify result message appears (available or taken)
     await expect(resultDiv).not.toBeEmpty();
-    const resultText = await resultDiv.textContent();
-    expect(resultText).toBeTruthy();
+    await expect(resultDiv).not.toBeEmpty();
   });
 
   // ── Test 10: Temp ID — set + display ──
@@ -305,9 +308,9 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Verify display shows none/empty
     const currentDisplay = page.locator('#temp-id-current');
-    await page.waitForTimeout(2_000);
-    const displayText = await currentDisplay.textContent();
-    expect(displayText).not.toContain('55555555');
+    // Poll the text the assertion reads — it updates when the write lands, and
+    // 2s was a bet on that rather than an observation of it.
+    await expect.poll(() => currentDisplay.textContent()).not.toContain('55555555');
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
@@ -322,7 +325,10 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Add second user to blocked list
     const blockedWidget = page.locator('#list-blockedUserIds');
     const addInput = blockedWidget.locator('input[aria-label="Add blocked user ID"]');
-    const addBtn = blockedWidget.locator('button');
+    // Not `locator('button')` — once the list has an entry, its × remove button
+    // is a button inside this widget too, and the loose locator becomes
+    // ambiguous. It only ever resolved because the list started empty.
+    const addBtn = blockedWidget.getByRole('button', { name: 'Add' });
     await addInput.fill(secondUid);
     await addBtn.click();
 
@@ -334,23 +340,65 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     const blocked = apiData.blockedUserIds || [];
     expect(blocked).toContain(Number(secondUid));
 
-    // Remove the user by clicking the remove button
-    const removeBtn = blockedWidget.locator(`[data-remove="${secondUid}"]`).first();
-    if (await removeBtn.count() > 0) {
-      await removeBtn.click();
-    } else {
-      // Try the X button next to the item
-      const itemRemove = blockedWidget.locator('.list-item-remove').first();
-      if (await itemRemove.count() > 0) {
-        await itemRemove.click();
-      }
-    }
+    // Remove THAT user's row, not "whichever row is first". The previous
+    // version looked for `[data-remove="<uid>"]`, which has never existed in
+    // the admin panel — so the primary branch never matched and the fallback
+    // always ran. Targeting the row by the id it displays means a renamed
+    // control fails here instead of quietly falling through.
+    const blockedRow = blockedWidget
+      .locator('.list-item')
+      .filter({ has: page.getByText(secondUid, { exact: true }) });
+    await expect(blockedRow).toHaveCount(1);
+    await blockedRow.locator('.list-item-remove').click();
 
-    // Verify removed via API
-    await page.waitForTimeout(2_000);
+    // Poll the API until it reflects the removal, rather than sleeping and
+    // reading once — a slow write used to read as "still blocked".
+    await expect
+      .poll(async () => ((await testData.api.get(`/api/user/${uid}`)).blockedUserIds || []).length)
+      .toBe(0);
     const apiAfter = await testData.api.get(`/api/user/${uid}`);
     const blockedAfter = apiAfter.blockedUserIds || [];
     expect(blockedAfter).not.toContain(Number(secondUid));
+  });
+
+  // ── Test 12b: Blocked users list — removing one of several ──
+  test('removing one blocked user leaves the others alone', async ({ page, testData }) => {
+    // Every list test above works with exactly ONE entry, which is the one
+    // case where "remove the right row" cannot be distinguished from "remove
+    // any row". Each remove button closes over the index it was built with,
+    // so a one-item list can never show an off-by-one.
+    const uid = String(testData.user.uniqueId);
+    const ids = ['77700001', '77700002', '77700003'];
+
+    const blockedWidget = page.locator('#list-blockedUserIds');
+    const addInput = blockedWidget.locator('input[aria-label="Add blocked user ID"]');
+    // Not `locator('button')` — once the list has an entry, its × remove button
+    // is a button inside this widget too, and the loose locator becomes
+    // ambiguous. It only ever resolved because the list started empty.
+    const addBtn = blockedWidget.getByRole('button', { name: 'Add' });
+    for (const id of ids) {
+      await addInput.fill(id);
+      await addBtn.click();
+      await expect(blockedWidget.getByText(id, { exact: true })).toBeVisible();
+    }
+
+    // Remove the MIDDLE one — the position where a stale index shows up.
+    const middle = blockedWidget
+      .locator('.list-item')
+      .filter({ has: page.getByText(ids[1], { exact: true }) });
+    await middle.locator('.list-item-remove').click();
+
+    await expect
+      .poll(async () =>
+        ((await testData.api.get(`/api/user/${uid}`)).blockedUserIds || []).map(String).sort(),
+      )
+      .toEqual([ids[0], ids[2]]);
+
+    // And the UI agrees with the API — a list that removed the right record
+    // but rendered the wrong row is still broken from where the admin sits.
+    await expect(blockedWidget.getByText(ids[0], { exact: true })).toBeVisible();
+    await expect(blockedWidget.getByText(ids[2], { exact: true })).toBeVisible();
+    await expect(blockedWidget.getByText(ids[1], { exact: true })).toHaveCount(0);
   });
 
   // ── Test 13: Following list — add + remove ──
@@ -361,7 +409,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Add second user to following list
     const followingWidget = page.locator('#list-followingIds');
     const addInput = followingWidget.locator('input[aria-label="Add following user ID"]');
-    const addBtn = followingWidget.locator('button');
+    const addBtn = followingWidget.getByRole('button', { name: 'Add' });
     await addInput.fill(secondUid);
     await addBtn.click();
 
@@ -373,18 +421,17 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     const following = apiData.followingIds || [];
     expect(following).toContain(Number(secondUid));
 
-    // Remove
-    const removeBtn = followingWidget.locator(`[data-remove="${secondUid}"]`).first();
-    if (await removeBtn.count() > 0) {
-      await removeBtn.click();
-    } else {
-      const itemRemove = followingWidget.locator('.list-item-remove').first();
-      if (await itemRemove.count() > 0) {
-        await itemRemove.click();
-      }
-    }
+    // Remove that specific row — see the blocked-list test for why the old
+    // `[data-remove]` locator was dead.
+    const followingRow = followingWidget
+      .locator('.list-item')
+      .filter({ has: page.getByText(secondUid, { exact: true }) });
+    await expect(followingRow).toHaveCount(1);
+    await followingRow.locator('.list-item-remove').click();
 
-    await page.waitForTimeout(2_000);
+    await expect
+      .poll(async () => ((await testData.api.get(`/api/user/${uid}`)).followingIds || []).length)
+      .toBe(0);
     const apiAfter = await testData.api.get(`/api/user/${uid}`);
     const followingAfter = apiAfter.followingIds || [];
     expect(followingAfter).not.toContain(Number(secondUid));
@@ -398,7 +445,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Add second user to followers list
     const followerWidget = page.locator('#list-followerIds');
     const addInput = followerWidget.locator('input');
-    const addBtn = followerWidget.locator('button');
+    const addBtn = followerWidget.getByRole('button', { name: 'Add' });
     await addInput.fill(secondUid);
     await addBtn.click();
 
@@ -410,18 +457,17 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     const followers = apiData.followerIds || [];
     expect(followers).toContain(Number(secondUid));
 
-    // Remove
-    const removeBtn = followerWidget.locator(`[data-remove="${secondUid}"]`).first();
-    if (await removeBtn.count() > 0) {
-      await removeBtn.click();
-    } else {
-      const itemRemove = followerWidget.locator('.list-item-remove').first();
-      if (await itemRemove.count() > 0) {
-        await itemRemove.click();
-      }
-    }
+    // Remove that specific row — see the blocked-list test for why the old
+    // `[data-remove]` locator was dead.
+    const followerRow = followerWidget
+      .locator('.list-item')
+      .filter({ has: page.getByText(secondUid, { exact: true }) });
+    await expect(followerRow).toHaveCount(1);
+    await followerRow.locator('.list-item-remove').click();
 
-    await page.waitForTimeout(2_000);
+    await expect
+      .poll(async () => ((await testData.api.get(`/api/user/${uid}`)).followerIds || []).length)
+      .toBe(0);
     const apiAfter = await testData.api.get(`/api/user/${uid}`);
     const followersAfter = apiAfter.followerIds || [];
     expect(followersAfter).not.toContain(Number(secondUid));
@@ -434,9 +480,8 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Stalkers list should be read-only (no add input)
     const addInputs = stalkersList.locator('input');
-    const inputCount = await addInputs.count();
     // Stalkers list is display-only — may have zero or some entries, but no edit controls
-    expect(inputCount).toBe(0);
+    await expect(addInputs).toHaveCount(0);
   });
 
   // ── Test 16: Pre-suspension profile display ──
@@ -461,8 +506,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Verify pre-suspension name is shown
     const preSuspensionName = page.locator('#pre-suspension-name');
     await expect(preSuspensionName).toBeVisible();
-    const nameText = await preSuspensionName.textContent();
-    expect(nameText).toBeTruthy();
+    await expect(preSuspensionName).not.toBeEmpty();
 
     // Unsuspend and reset GCS
     await testData.api.post(`/api/user/${uid}/unsuspend`, {});

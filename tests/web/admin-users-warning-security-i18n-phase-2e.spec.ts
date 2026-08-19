@@ -63,7 +63,10 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     }
     // Reused key — must appear at least twice (Phase 2c primary site + Phase 2e catch fallback)
     const revokeMatches = src.match(/tAdmin\("btn_revoke"\)/g) || [];
-    expect(revokeMatches.length, 'btn_revoke should be referenced ≥2x (primary + catch)').toBeGreaterThanOrEqual(2);
+    expect(
+      revokeMatches.length,
+      'btn_revoke should be referenced ≥2x (primary + catch)',
+    ).toBeGreaterThanOrEqual(2);
   });
 
   test('All 21 locales define every Phase 2e key in ADMIN_TRANSLATIONS', async ({ request }) => {
@@ -73,8 +76,26 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
@@ -86,9 +107,7 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_2E_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
@@ -113,7 +132,11 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
       return {
         revoked: w.tAdmin('inline_revoked'),
         note: w.tAdminFmt('inline_warning_note', { note: 'spam detected' }),
-        meta: w.tAdminFmt('inline_warning_meta', { issuedBy: 'AdminBob', gcsBefore: 90, gcsAfter: 80 }),
+        meta: w.tAdminFmt('inline_warning_meta', {
+          issuedBy: 'AdminBob',
+          gcsBefore: 90,
+          gcsAfter: 80,
+        }),
         revokedToast: w.tAdminFmt('toast_warning_revoked_gcs', { deduction: 10 }),
         pinReset: w.tAdmin('toast_pin_lockout_reset'),
         biometric: w.tAdmin('toast_biometric_revoked'),

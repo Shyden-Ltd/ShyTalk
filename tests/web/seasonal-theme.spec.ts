@@ -5,10 +5,14 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 test.describe('Seasonal Theme System', () => {
   test('seasonal-theme.js loads without errors on landing page', async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
     await page.goto(BASE);
-    await page.waitForTimeout(1_000);
-    expect(errors.filter(e => e.includes('seasonal'))).toHaveLength(0);
+    // The theme script runs on load; wait for the document to be interactive
+    // rather than for a second to pass.
+    await page.waitForLoadState('domcontentloaded');
+    expect(errors.filter((e) => e.includes('seasonal'))).toHaveLength(0);
   });
 
   test('events.json is fetchable and valid JSON', async ({ page }) => {
@@ -27,7 +31,9 @@ test.describe('Seasonal Theme System', () => {
           if (args.length === 0) super(2026, 3, 14, 12, 0, 0);
           else super(...(args as [any]));
         }
-        static now() { return new MockDate().getTime(); }
+        static now() {
+          return new MockDate().getTime();
+        }
       }
       (globalThis as any).Date = MockDate;
     });
@@ -45,12 +51,13 @@ test.describe('Seasonal Theme System', () => {
           if (args.length === 0) super(2026, 0, 15, 12, 0, 0);
           else super(...(args as [any]));
         }
-        static now() { return new MockDate().getTime(); }
+        static now() {
+          return new MockDate().getTime();
+        }
       }
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
-    await page.waitForTimeout(2_000);
     await expect(page.locator('#seasonal-ribbon')).not.toBeVisible();
   });
 
@@ -62,15 +69,18 @@ test.describe('Seasonal Theme System', () => {
           if (args.length === 0) super(2026, 3, 14, 12, 0, 0);
           else super(...(args as [any]));
         }
-        static now() { return new MockDate().getTime(); }
+        static now() {
+          return new MockDate().getTime();
+        }
       }
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
     const ribbon = page.locator('#seasonal-ribbon');
     await expect(ribbon).toBeVisible({ timeout: 5_000 });
-    const href = await ribbon.getAttribute('href');
-    expect(href).toBe('/events/khmer-new-year.html');
+    await expect
+      .poll(async () => await ribbon.getAttribute('href'))
+      .toBe('/events/khmer-new-year.html');
   });
 
   test('CSS variables are overridden during active event', async ({ page }) => {
@@ -81,14 +91,24 @@ test.describe('Seasonal Theme System', () => {
           if (args.length === 0) super(2026, 3, 14, 12, 0, 0);
           else super(...(args as [any]));
         }
-        static now() { return new MockDate().getTime(); }
+        static now() {
+          return new MockDate().getTime();
+        }
       }
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
-    await page.waitForTimeout(2_000);
+    // Poll the variable the assertion reads — the theme applies when it
+    // applies, and 2s was a guess about that.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
+        ),
+      )
+      .not.toBe('');
     const primary = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+      getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
     );
     expect(primary).toBe('#d4a017');
   });
@@ -101,14 +121,24 @@ test.describe('Seasonal Theme System', () => {
           if (args.length === 0) super(2026, 0, 15, 12, 0, 0);
           else super(...(args as [any]));
         }
-        static now() { return new MockDate().getTime(); }
+        static now() {
+          return new MockDate().getTime();
+        }
       }
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
-    await page.waitForTimeout(2_000);
+    // Poll the variable the assertion reads — the theme applies when it
+    // applies, and 2s was a guess about that.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
+        ),
+      )
+      .not.toBe('');
     const primary = await page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+      getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
     );
     expect(primary).not.toBe('#d4a017');
   });
@@ -121,7 +151,9 @@ test.describe('Seasonal Theme System', () => {
           if (args.length === 0) super(2026, 3, 14, 12, 0, 0);
           else super(...(args as [any]));
         }
-        static now() { return new MockDate().getTime(); }
+        static now() {
+          return new MockDate().getTime();
+        }
       }
       (globalThis as any).Date = MockDate;
     });

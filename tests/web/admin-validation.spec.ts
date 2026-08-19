@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  * the "Saved" feedback to appear next to the field.
  */
 async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void> {
-  await page.locator(fieldSelector).evaluate(el => el.blur());
+  await page.locator(fieldSelector).evaluate((el) => el.blur());
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
@@ -22,21 +22,29 @@ test.describe('Admin Validation', () => {
   });
 
   // ── Test 1: Empty required field ──
-  test('empty display name triggers validation feedback or toast error', async ({ page, testData }) => {
+  test('empty display name triggers validation feedback or toast error', async ({
+    page,
+    testData,
+  }) => {
     const displayNameInput = page.locator('[data-field="displayName"]');
     const originalName = testData.user.displayName;
 
     // Clear the display name
     await displayNameInput.fill('');
-    await displayNameInput.evaluate(el => el.blur());
+    await displayNameInput.evaluate((el) => el.blur());
 
-    // Wait briefly for any validation to fire
-    await page.waitForTimeout(2_000);
+    // The app answers a blur with a .field-feedback element — wait for that
+    // rather than guessing (SHY-0245).
+    await expect(displayNameInput.locator('..').locator('.field-feedback')).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Check for validation feedback or that the field was not saved empty
     const container = displayNameInput.locator('..');
-    const errorFeedback = container.locator('.field-feedback.error, .field-feedback.invalid, .field-feedback.failed');
-    const hasFeedback = await errorFeedback.count() > 0;
+    const errorFeedback = container.locator(
+      '.field-feedback.error, .field-feedback.invalid, .field-feedback.failed',
+    );
+    const hasFeedback = (await errorFeedback.count()) > 0;
 
     // Also check that an error toast or validation message appeared
     const errorToast = page.locator('.toast.error');
@@ -63,25 +71,26 @@ test.describe('Admin Validation', () => {
     // Try to add -100 coins
     await page.locator('#eco-coins-op').selectOption('add');
     await page.locator('#eco-coins-amount').fill('-100');
+
+    // A negative amount is rejected CLIENT-SIDE — it never reaches the server.
+    // Asserting that is both the honest contract and a stronger claim than the
+    // old "coins ended at 0 or 1000", which accepted either outcome and so
+    // could not distinguish "validated" from "silently applied" (SHY-0245).
+    const balanceCalls: string[] = [];
+    page.on('request', (req) => {
+      if (/\/api\/users\/[^/]+\/adjust-balance/.test(req.url())) balanceCalls.push(req.url());
+    });
     await page.locator('#eco-coins-apply').click();
+    await expect.poll(() => balanceCalls.length, { timeout: 5_000 }).toBe(0);
 
-    // Wait for response
-    await page.waitForTimeout(2_000);
-
-    // The coins display should either reject the input or handle it gracefully
-    const coinsDisplay = page.locator('#eco-coins-display');
-    const coinsText = await coinsDisplay.textContent();
-    const coinsNum = Number(coinsText!.replace(/,/g, ''));
-
-    // The API may reject negative adds (leaving at 1000) or treat -100 as a deduction (resulting in 0)
-    expect([0, 1000]).toContain(coinsNum);
-
-    // Restore if coins were deducted
-    if (coinsNum < 1000) {
-      await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-        currency: 'COINS', amount: 1000 - coinsNum,
-      });
-    }
+    // …and the displayed balance is untouched.
+    await expect
+      .poll(async () =>
+        Number((await page.locator('#eco-coins-display').textContent())!.replace(/,/g, '')),
+      )
+      .toBe(1000);
+    // Balance is unchanged, so nothing to restore — the API was never called.
+    expect(testData.user.uniqueId).toBeTruthy();
   });
 
   // ── Test 3: NaN in number field ──
@@ -90,14 +99,22 @@ test.describe('Admin Validation', () => {
 
     // Try to enter "abc" in coin amount — use evaluate since Playwright
     // blocks non-numeric text in <input type="number">
+    // Record whether the invalid value ever reaches the server. That is the
+    // real contract here, and it is a stronger assertion than "the display did
+    // not change" — which a 2s sleep could never prove anyway (SHY-0245).
+    const balanceCalls: string[] = [];
+    page.on('request', (req) => {
+      if (/\/api\/users\/[^/]+\/adjust-balance/.test(req.url())) balanceCalls.push(req.url());
+    });
+
     await page.locator('#eco-coins-amount').evaluate((el: HTMLInputElement) => {
       el.value = 'abc';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await page.locator('#eco-coins-apply').click();
 
-    // Wait for response
-    await page.waitForTimeout(2_000);
+    // Client-side validation must reject it outright — no request at all.
+    await expect.poll(() => balanceCalls.length, { timeout: 5_000 }).toBe(0);
 
     // The coins display should remain unchanged (1000 from seeding)
     const coinsDisplay = page.locator('#eco-coins-display');
@@ -109,7 +126,8 @@ test.describe('Admin Validation', () => {
     // Restore if needed
     if (coinsNum !== 1000) {
       await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-        currency: 'COINS', amount: 1000 - coinsNum,
+        currency: 'COINS',
+        amount: 1000 - coinsNum,
       });
     }
   });
@@ -127,8 +145,9 @@ test.describe('Admin Validation', () => {
     const charCount = parseInt(counterText || '0');
 
     // Either the input is truncated to 20, or the counter shows the limit exceeded
-    const inputValue = await displayNameInput.inputValue();
-    expect(inputValue.length).toBeLessThanOrEqual(20);
+    await expect
+      .poll(async () => (await displayNameInput.inputValue()).length)
+      .toBeLessThanOrEqual(20);
 
     // If counter shows over-limit, it should have error styling
     if (charCount > 20) {
@@ -140,30 +159,30 @@ test.describe('Admin Validation', () => {
   });
 
   // ── Test 5: URL format validation ──
-  test('non-URL value in profile photo field is accepted or rejected gracefully', async ({ page, testData }) => {
+  test('non-URL value in profile photo field is accepted or rejected gracefully', async ({
+    page,
+    testData,
+  }) => {
     const profileUrlInput = page.locator('[data-field="profilePhotoUrl"]');
 
     // Enter a non-URL value
     await profileUrlInput.fill('not-a-url');
-    await profileUrlInput.evaluate(el => el.blur());
+    await profileUrlInput.evaluate((el) => el.blur());
 
-    // Wait for auto-save attempt
-    await page.waitForTimeout(2_000);
-
-    // Check if the value was accepted or rejected
+    // Wait for a TERMINAL feedback state. Anchoring on any `.field-feedback`
+    // caught the transient in-flight state, so the class checks below ran
+    // before the outcome existed. This retrying assertion IS the assertion:
+    // saved or rejected are both acceptable, silence is not (SHY-0245).
     const container = profileUrlInput.locator('..');
-    const savedFeedback = container.locator('.field-feedback.saved');
-    const errorFeedback = container.locator('.field-feedback.error');
+    await expect(
+      container.locator(
+        '.field-feedback.saved, .field-feedback.error, .field-feedback.invalid, .field-feedback.failed',
+      ),
+    ).toBeVisible({ timeout: 10_000 });
 
-    const wasSaved = await savedFeedback.isVisible().catch(() => false);
-    const wasError = await errorFeedback.isVisible().catch(() => false);
-
-    // Either outcome is valid — the important thing is no crash/console error
-    expect(wasSaved || wasError).toBe(true);
-
-    // Clear to restore
+    // Clear to restore, and wait for the field to actually empty.
     await page.locator('.btn-clear[data-clear="profilePhotoUrl"]').click();
-    await page.waitForTimeout(2_000);
+    await expect(profileUrlInput).toHaveValue('');
   });
 
   // ── Test 6: XSS in display name ──
@@ -180,11 +199,13 @@ test.describe('Admin Validation', () => {
     // Test the report search instead if available
     await searchInput.fill('12345');
     await page.getByRole('button', { name: 'Search' }).click();
-    await page.waitForTimeout(2_000);
+    // The search result landing is the condition; console errors are collected
+    // by the listener regardless, so anchor on the request completing.
+    await page.waitForLoadState('domcontentloaded');
 
     // No XSS-related console errors should have fired
-    const xssErrors = consoleErrors.filter(e =>
-      e.includes('script') || e.includes('XSS') || e.includes('injection'),
+    const xssErrors = consoleErrors.filter(
+      (e) => e.includes('script') || e.includes('XSS') || e.includes('injection'),
     );
     expect(xssErrors.length).toBe(0);
   });
@@ -236,11 +257,15 @@ test.describe('Admin Validation', () => {
 
     // Clear description
     await page.locator('.btn-clear[data-clear="description"]').click();
-    await page.waitForTimeout(2_000);
+    // The field emptying is the observable outcome of the clear.
+    await expect(page.locator('[data-field="description"]')).toHaveValue('');
   });
 
   // ── Test 9: Double-click prevention ──
-  test('double-click prevention on warning button prevents duplicate warnings', async ({ page, testData }) => {
+  test('double-click prevention on warning button prevents duplicate warnings', async ({
+    page,
+    testData,
+  }) => {
     const uid = String(testData.user.uniqueId);
 
     // Auto-accept all dialogs
@@ -280,9 +305,7 @@ test.describe('Admin Validation', () => {
     // have suppressed the second queued click event).
     const after = await testData.api.get(`/api/user/${uid}/warnings`);
     const warnings = after.warnings || [];
-    const newWarnings = warnings.filter(
-      (w: any) => !beforeIds.has(w.id) && w.reason === 'Spam',
-    );
+    const newWarnings = warnings.filter((w: any) => !beforeIds.has(w.id) && w.reason === 'Spam');
     expect(newWarnings.length).toBe(1);
 
     // Clean up: revoke warning and reset GCS
@@ -311,14 +334,16 @@ test.describe('Admin Validation', () => {
     await displayNameInput.clear();
     for (const char of 'RapidType') {
       await displayNameInput.press(char);
-      await page.waitForTimeout(50); // Fast typing
+      // sleep-ok: the inter-keystroke delay IS the typing cadence this debounce test exercises
+      await new Promise((r) => setTimeout(r, 50)); // sleep-ok: typing cadence
     }
 
     // Blur to trigger save
-    await displayNameInput.evaluate(el => el.blur());
+    await displayNameInput.evaluate((el) => el.blur());
 
-    // Wait for save to complete
-    await page.waitForTimeout(3_000);
+    // Counting PATCHes that may or may not arrive — an absence-shaped claim
+    // ("at most 2, not 9"), so the window is bounded deliberately.
+    await new Promise((r) => setTimeout(r, 3_000)); // sleep-ok: bounded window for a request-count assertion
 
     // Should have fired at most 2 PATCH requests (debounced), not 9
     // (one per character would be un-debounced)

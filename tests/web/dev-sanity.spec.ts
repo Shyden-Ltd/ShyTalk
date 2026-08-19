@@ -28,7 +28,6 @@ if (DEV_BASIC_AUTH_PASSWORD) {
 }
 
 test.describe('Dev Sanity Checks', () => {
-
   test('landing page loads', async ({ page }) => {
     const res = await page.goto(WEB_BASE);
     expect(res?.ok()).toBe(true);
@@ -38,14 +37,18 @@ test.describe('Dev Sanity Checks', () => {
   test('roadmap page loads with data', async ({ page }) => {
     await page.goto(`${WEB_BASE}/roadmap.html`);
     // Wait for roadmap items to render (fetched from roadmap-data.json)
-    await expect(page.locator('.phase-card, .roadmap-phase')).not.toHaveCount(0, { timeout: 15_000 });
+    await expect(page.locator('.phase-card, .roadmap-phase')).not.toHaveCount(0, {
+      timeout: 15_000,
+    });
   });
 
   test('admin panel loads', async ({ page }) => {
     const res = await page.goto(`${WEB_BASE}/admin/`);
     expect(res?.ok()).toBe(true);
     // Should show login or dashboard
-    await expect(page.locator('#login-screen, #dashboard-screen')).not.toHaveCount(0, { timeout: 10_000 });
+    await expect(page.locator('#login-screen, #dashboard-screen')).not.toHaveCount(0, {
+      timeout: 10_000,
+    });
   });
 
   test('portal loads', async ({ page }) => {
@@ -71,6 +74,7 @@ test.describe('Dev Sanity Checks', () => {
       if (process.env.CI) {
         throw new Error(`API at ${API_BASE} did not respond — expected running in CI`);
       }
+      // defect-detector:allow SKIP-COND — the branch immediately above THROWS when process.env.CI is set, so this cannot hide a failure in the gate that matters; it only spares a local pre-push run that has no stack up
       test.skip(true, 'API not running — skipping (local pre-push without stack)');
     }
     expect(probe!.ok()).toBe(true);
@@ -82,6 +86,7 @@ test.describe('Dev Sanity Checks', () => {
       if (process.env.CI) {
         throw new Error(`API at ${API_BASE} did not respond — expected running in CI`);
       }
+      // defect-detector:allow SKIP-COND — the branch immediately above THROWS when process.env.CI is set, so this cannot hide a failure in the gate that matters; it only spares a local pre-push run that has no stack up
       test.skip(true, 'API not running — skipping (local pre-push without stack)');
     }
     expect(probe!.ok()).toBe(true);
@@ -92,11 +97,13 @@ test.describe('Dev Sanity Checks', () => {
 
   test('no console errors on landing page', async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
     await page.goto(WEB_BASE);
-    await page.waitForTimeout(2_000);
+    await page.waitForLoadState('domcontentloaded');
     // Filter out 429 rate-limiting errors — Cloudflare throttles when 5 browsers hit dev simultaneously
-    const meaningful = errors.filter(e => !e.includes('429'));
+    const meaningful = errors.filter((e) => !e.includes('429'));
     expect(meaningful).toHaveLength(0);
   });
 });

@@ -63,7 +63,9 @@ async function recordAuthPublications(page: import('@playwright/test').Page): Pr
 }
 
 const readPublications = (page: import('@playwright/test').Page) =>
-  page.evaluate(() => (window as unknown as { __authPublications: PublishRecord[] }).__authPublications);
+  page.evaluate(
+    () => (window as unknown as { __authPublications: PublishRecord[] }).__authPublications,
+  );
 
 test.describe('SHY-0279 — sign-in resolution is observable', () => {
   test.beforeEach(async ({ page }) => {
@@ -130,11 +132,15 @@ test.describe('SHY-0279 — sign-in resolution is observable', () => {
     await injectAuthState(page, { profile: { uniqueId: 7, displayName: 'PartialUser' } });
 
     const after = await page.evaluate(() => {
-      const auth = (window as unknown as { shytalkAuth?: { currentUser?: { uid?: string }; profile?: unknown } })
-        .shytalkAuth;
+      const auth = (
+        window as unknown as { shytalkAuth?: { currentUser?: { uid?: string }; profile?: unknown } }
+      ).shytalkAuth;
       return { uid: auth?.currentUser?.uid ?? null, profile: auth?.profile ?? null };
     });
-    expect(after).toEqual({ uid: 'partial-1', profile: { uniqueId: 7, displayName: 'PartialUser' } });
+    expect(after).toEqual({
+      uid: 'partial-1',
+      profile: { uniqueId: 7, displayName: 'PartialUser' },
+    });
   });
 
   test('the injected visitor can produce an id token', async ({ page }) => {
@@ -151,8 +157,11 @@ test.describe('SHY-0279 — sign-in resolution is observable', () => {
     );
 
     const token = await page.evaluate(() => {
-      const auth = (window as unknown as { shytalkAuth?: { currentUser?: { getIdToken?: () => Promise<string> } } })
-        .shytalkAuth;
+      const auth = (
+        window as unknown as {
+          shytalkAuth?: { currentUser?: { getIdToken?: () => Promise<string> } };
+        }
+      ).shytalkAuth;
       return auth?.currentUser?.getIdToken?.() ?? null;
     });
     expect(token).toBe('a-specific-token');
@@ -167,7 +176,9 @@ test.describe('SHY-0279 — sign-in resolution is observable', () => {
     // rebuilds it — so a second one would detach `header-user-info` mid-click
     // and re-introduce the very instability this story removes
     // ("element was detached from the DOM, retrying").
-    const events = await page.evaluate(() => (window as unknown as { __authEvents: number }).__authEvents);
+    const events = await page.evaluate(
+      () => (window as unknown as { __authEvents: number }).__authEvents,
+    );
     expect(events).toBe(1);
   });
 
@@ -182,7 +193,9 @@ test.describe('SHY-0279 — sign-in resolution is observable', () => {
     // beforeEach defines the property, so an `in` check would pass while the
     // page still has no auth object at all.
     expect(
-      await page.evaluate(() => (window as unknown as { shytalkAuth?: unknown }).shytalkAuth === undefined),
+      await page.evaluate(
+        () => (window as unknown as { shytalkAuth?: unknown }).shytalkAuth === undefined,
+      ),
     ).toBe(true);
 
     await expect(waitForAuthStateKnown(page, 1_500)).rejects.toThrow(

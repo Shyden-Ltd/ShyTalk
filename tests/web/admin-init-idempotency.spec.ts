@@ -4,6 +4,20 @@ const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 /**
+ * Required, not optional. `helpers/admin-auth.ts` already THROWS when these are
+ * missing, and `helpers/api.ts` does the same for API_BASE_URL — but this file
+ * used a per-test conditional skip instead, so a missing credential quietly
+ * turned the whole admin suite into skips that nobody reads. Fail once, here,
+ * at load time (SHY-0245).
+ */
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error(
+    'ADMIN_EMAIL and ADMIN_PASSWORD must be set for the admin specs. ' +
+      'Use claude-test@shytalk.dev / localdev123 locally, or set them in the CI workflow.',
+  );
+}
+
+/**
  * Regression: admin sub-feature inits must be idempotent.
  *
  * Pre-fix bug: main.js calls `syncProd.init()`, `nuclearReset.init()`,
@@ -26,14 +40,25 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const SPIED_IDS = [
   // sync-prod overlay
-  'migrate-prod-btn', 'sync-cancel', 'sync-overlay',
-  'sync-confirm-input', 'sync-mute', 'sync-proceed',
+  'migrate-prod-btn',
+  'sync-cancel',
+  'sync-overlay',
+  'sync-confirm-input',
+  'sync-mute',
+  'sync-proceed',
   // nuclear-reset overlay
-  'reset-all-btn', 'nuclear-cancel', 'nuclear-overlay',
-  'nuclear-confirm-input', 'nuclear-mute', 'nuclear-proceed',
+  'reset-all-btn',
+  'nuclear-cancel',
+  'nuclear-overlay',
+  'nuclear-confirm-input',
+  'nuclear-mute',
+  'nuclear-proceed',
   // age-verification decision buttons
-  'age-verif-approve-btn', 'age-verif-reject-btn-yes',
-  'age-verif-reject-btn-no', 'age-verif-modify-btn', 'age-verif-jump-next',
+  'age-verif-approve-btn',
+  'age-verif-reject-btn-yes',
+  'age-verif-reject-btn-no',
+  'age-verif-modify-btn',
+  'age-verif-jump-next',
 ];
 
 async function loginWith(page: any, email: string, password: string) {
@@ -43,15 +68,21 @@ async function loginWith(page: any, email: string, password: string) {
 }
 
 test.describe('Admin init idempotency (regression)', () => {
-  test('sign-out + sign-in cycle does not stack click listeners on destructive buttons', async ({ page, browserName }) => {
-    test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
+  test('sign-out + sign-in cycle does not stack click listeners on destructive buttons', async ({
+    page,
+    browserName,
+  }) => {
     // The bug is in JavaScript event-listener accumulation — engine-independent.
     // Firefox + chromium-family give us 3 engines of coverage. WebKit's
     // Firebase-Auth + IndexedDB cleanup-on-signOut path is consistently
     // slow in CI (the 2nd sign-in's getIdTokenResult takes >30s after
     // signOut clears local persistence), so we skip there. The test does
     // not validate any webkit-specific behaviour.
-    test.skip(browserName === 'webkit', 'Skipped on WebKit — slow Firebase Auth IDB reseat after signOut, not a webkit-specific bug');
+    // defect-detector:allow SKIP-COND — WebKit's Firebase-Auth IndexedDB reseat after signOut exceeds the timeout for reasons unrelated to this behaviour, which is proven on the other engines
+    test.skip(
+      browserName === 'webkit',
+      'Skipped on WebKit — slow Firebase Auth IDB reseat after signOut, not a webkit-specific bug',
+    );
 
     // Install an addEventListener spy BEFORE the page's scripts run.
     // Keyed by (elementId, eventType). Only counts adds for the IDs
@@ -81,10 +112,14 @@ test.describe('Admin init idempotency (regression)', () => {
     // Wait until module inits have finished — `migrate-prod-btn` is wired
     // by sync-prod.init(), so once it has a click listener we know all
     // three sync inits have run.
-    await page.waitForFunction(() => {
-      const counts = (window as any).__addListenerCounts as Record<string, number> | undefined;
-      return !!counts && (counts['migrate-prod-btn:click'] || 0) > 0;
-    }, null, { timeout: 30_000 });
+    await page.waitForFunction(
+      () => {
+        const counts = (window as any).__addListenerCounts as Record<string, number> | undefined;
+        return !!counts && (counts['migrate-prod-btn:click'] || 0) > 0;
+      },
+      null,
+      { timeout: 30_000 },
+    );
 
     const baseline = await page.evaluate(() => ({
       ...((window as any).__addListenerCounts as Record<string, number>),
@@ -104,7 +139,7 @@ test.describe('Admin init idempotency (regression)', () => {
     // Give the post-login init flow a moment to settle. We can't poll
     // for "init done" cleanly because the contract is "no new listeners"
     // — we have to wait long enough that any new ones would have landed.
-    await page.waitForTimeout(2_000);
+    await new Promise((r) => setTimeout(r, 2_000)); // sleep-ok: bounded window — the contract is "NO new listeners", which has no state to wait for
 
     const afterReinit = await page.evaluate(() => ({
       ...((window as any).__addListenerCounts as Record<string, number>),

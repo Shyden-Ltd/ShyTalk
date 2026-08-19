@@ -31,7 +31,9 @@ const ADMIN_KEYS = [
 ];
 
 test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
-  test('translations.js exposes window.tAdmin helper with key fallback chain', async ({ request }) => {
+  test('translations.js exposes window.tAdmin helper with key fallback chain', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
@@ -77,8 +79,26 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     // Multi-line locales: en, ar, de, es, fr, hi, id, it, ja, km, ko
     // Single-line locales: nl, pl, pt, ru, sv, th, tr, uk, vi, zh
@@ -96,14 +116,15 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
       const block = localeBlock![1];
 
       for (const key of ADMIN_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
 
-  test('Korean locale: tAdmin runtime — eval translations.js standalone', async ({ page, request }) => {
+  test('Korean locale: tAdmin runtime — eval translations.js standalone', async ({
+    page,
+    request,
+  }) => {
     // Don't goto /admin/ (gated by auth). Fetch translations.js directly
     // and eval it in a blank-page context, then exercise tAdmin against
     // a Korean-set localStorage. This isolates the helper from the

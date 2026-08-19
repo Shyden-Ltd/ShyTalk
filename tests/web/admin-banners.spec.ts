@@ -7,18 +7,16 @@ async function waitForBannersLoaded(page: Page): Promise<void> {
   // Wait for either banner cards OR the empty-state <p> with "No banners yet".
   // Do NOT treat an empty/cleared list as loaded — that's a transient state between
   // clearing the old content and rendering the new content in renderBannersList().
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('banners-list');
-      if (!list) return false;
-      // Banner cards have been rendered
-      if (list.querySelector('.banner-card') !== null) return true;
-      // Empty state: a <p> element containing the "No banners yet" message
-      const p = list.querySelector('p');
-      if (p && p.textContent && p.textContent.includes('No banners yet')) return true;
-      return false;
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('banners-list');
+    if (!list) return false;
+    // Banner cards have been rendered
+    if (list.querySelector('.banner-card') !== null) return true;
+    // Empty state: a <p> element containing the "No banners yet" message
+    const p = list.querySelector('p');
+    if (p && p.textContent && p.textContent.includes('No banners yet')) return true;
+    return false;
+  });
 }
 
 /** Open the Add Banner dialog. */
@@ -108,7 +106,7 @@ test.describe('Admin Banners', () => {
   test('seeded banner appears in list with API verification', async ({ page, testData }) => {
     // Verify the seeded banner card is visible in the UI (retry once on reload if not found)
     const card = page.locator(`.banner-card[data-banner-id="${testData.banner.id}"]`);
-    if (!await card.isVisible().catch(() => false)) {
+    if (!(await card.isVisible().catch(() => false))) {
       // Banner not yet rendered — reload and retry once
       await page.reload();
       await adminLogin(page);
@@ -167,8 +165,8 @@ test.describe('Admin Banners', () => {
     await expect(newCard).toBeVisible();
 
     // Extract the banner ID for cleanup
+    await expect.poll(async () => await newCard.getAttribute('data-banner-id')).toBeTruthy();
     const newBannerId = await newCard.getAttribute('data-banner-id');
-    expect(newBannerId).toBeTruthy();
 
     // Reload and verify persistence
     await page.reload();
@@ -177,9 +175,9 @@ test.describe('Admin Banners', () => {
     await waitForBannersLoaded(page);
 
     await expect(page.locator(`.banner-card[data-banner-id="${newBannerId}"]`)).toBeVisible();
-    await expect(
-      page.locator(`.banner-card[data-banner-id="${newBannerId}"] strong`),
-    ).toHaveText(newTitle);
+    await expect(page.locator(`.banner-card[data-banner-id="${newBannerId}"] strong`)).toHaveText(
+      newTitle,
+    );
 
     // Cleanup: delete the created banner
     await deleteBannerViaApi(testData, newBannerId!);
@@ -405,9 +403,14 @@ test.describe('Admin Banners', () => {
 
     // Preview should now be visible with a data: URL (FileReader) or blob: URL
     await expect(preview).toHaveCSS('display', 'block');
-    const src = await preview.getAttribute('src');
-    expect(src).toBeTruthy();
-    expect(src!.startsWith('data:') || src!.startsWith('blob:')).toBe(true);
+    await expect.poll(async () => await preview.getAttribute('src')).toBeTruthy();
+    await expect
+      .poll(
+        async () =>
+          (await preview.getAttribute('src'))!.startsWith('data:') ||
+          (await preview.getAttribute('src'))!.startsWith('blob:'),
+      )
+      .toBe(true);
 
     await cancelDialog(page);
   });
@@ -428,12 +431,12 @@ test.describe('Admin Banners', () => {
 
     // Get the initial order of banner IDs
     const cardsBefore = page.locator('.banner-card');
+    await expect.poll(async () => await cardsBefore.count()).toBeGreaterThanOrEqual(2);
     const countBefore = await cardsBefore.count();
-    expect(countBefore).toBeGreaterThanOrEqual(2);
 
     const idsBefore: string[] = [];
     for (let i = 0; i < countBefore; i++) {
-      idsBefore.push(await cardsBefore.nth(i).getAttribute('data-banner-id') || '');
+      idsBefore.push((await cardsBefore.nth(i).getAttribute('data-banner-id')) || '');
     }
 
     // Find the indices of our two banners
@@ -448,8 +451,7 @@ test.describe('Admin Banners', () => {
 
     await srcCard.dragTo(dstCard);
 
-    // Wait for the reorder API call to complete
-    await page.waitForTimeout(1_000);
+    // Poll the API below until the new order lands, rather than betting 1s.
 
     // API: verify the order changed
     const bannersAfter = await getAllBannersViaApi(testData);
@@ -468,7 +470,7 @@ test.describe('Admin Banners', () => {
     const idsAfterReload: string[] = [];
     const countAfterReload = await cardsAfterReload.count();
     for (let i = 0; i < countAfterReload; i++) {
-      idsAfterReload.push(await cardsAfterReload.nth(i).getAttribute('data-banner-id') || '');
+      idsAfterReload.push((await cardsAfterReload.nth(i).getAttribute('data-banner-id')) || '');
     }
 
     // The order should have changed from the original
@@ -510,8 +512,8 @@ test.describe('Admin Banners', () => {
     // Find the new banner card
     const newCard = page.locator('.banner-card', { hasText: uploadTitle });
     await expect(newCard).toBeVisible();
+    await expect.poll(async () => await newCard.getAttribute('data-banner-id')).toBeTruthy();
     const newBannerId = await newCard.getAttribute('data-banner-id');
-    expect(newBannerId).toBeTruthy();
 
     // API: verify the imageUrl is a CDN URL
     const banners = await getAllBannersViaApi(testData);

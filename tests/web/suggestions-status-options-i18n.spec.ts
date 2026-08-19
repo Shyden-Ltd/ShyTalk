@@ -36,7 +36,11 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
 
     // Extract the STATUS_OPTIONS array literal — first 200 chars from
     // the const declaration suffice (5 entries on 7 lines).
-    const statusBlock = src.match(/var STATUS_OPTIONS = \[([\s\S]*?)\];/);
+    // The option lists became FUNCTIONS under SHY-0252 — as module-level
+    // `var`s they froze the locale active at script load, so a language
+    // switch could never change them. The anchor moved with them; the
+    // claim (labels are sgT()-driven) is unchanged.
+    const statusBlock = src.match(/function statusOptions\(\) \{\s*return \[([\s\S]*?)\];/);
     expect(statusBlock, 'STATUS_OPTIONS array not found').not.toBeNull();
     const arrSrc = statusBlock![1];
 
@@ -59,7 +63,11 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
 
   test('Korean locale: sgT() returns Hangul for all 5 status keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -78,7 +86,9 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
     for (const key of STATUS_KEYS) {
       const value = t[key];
       expect(value, `sgT(${key}) should not be English`).not.toBeNull();
-      expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(false);
+      expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(
+        false,
+      );
       expect(value, `sgT(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
     }
   });

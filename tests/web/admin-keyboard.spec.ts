@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures/admin';
+import { test, expect, EVIDENCE_IMAGE } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import type { Page, Locator } from '@playwright/test';
 
@@ -8,16 +8,21 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
     () => {
       const list = document.getElementById('reports-list');
       if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
+      return (
+        list.querySelector('.report-card') !== null ||
         list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
+        list.textContent!.includes('Failed')
+      );
     },
     { timeout: 15_000 },
   );
 }
 
 /** Filter reports by status. */
-async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archived'): Promise<void> {
+async function filterReports(
+  page: Page,
+  status: 'pending' | 'resolved' | 'archived',
+): Promise<void> {
   const btn = page.locator(`#report-filter-bar button[data-report-filter="${status}"]`);
   await btn.click();
   await expect(btn).toHaveClass(/active/);
@@ -84,7 +89,11 @@ test.describe('Admin Keyboard Shortcuts', () => {
   test.beforeEach(async ({ page, browserName }) => {
     // Keyboard shortcuts are desktop-only — skip on mobile viewports
     const projectName = test.info().project.name;
-    test.skip(projectName.includes('mobile'), 'Keyboard shortcuts not applicable on mobile viewports');
+    // defect-detector:allow SKIP-COND — a mobile viewport has no physical keyboard, so these shortcuts do not exist there at all
+    test.skip(
+      projectName.includes('mobile'),
+      'Keyboard shortcuts not applicable on mobile viewports',
+    );
     // Pause the Reports tab's 15s poll BEFORE login so the flag is
     // present in the JS realm by the time the Reports tab's
     // activate() schedules its setInterval. See reports.js:340 + the
@@ -93,7 +102,9 @@ test.describe('Admin Keyboard Shortcuts', () => {
     // select / sev-radio / selected-card state the keyboard handlers
     // operate on, flaking W/S/D/Enter shortcut tests.
     await page.addInitScript(() => {
-      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+      (
+        window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }
+      ).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);
   });
@@ -105,10 +116,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if (await firstCard.count() === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -129,10 +140,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if (await firstCard.count() === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -152,10 +163,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if (await firstCard.count() === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -184,10 +195,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if (await firstCard.count() === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     // Establish a stale selectedCardIndex by selecting card 0 first
     await selectFirstReportCard(page);
@@ -201,10 +212,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
 
     // Re-locate the first card after the rebuild
     const firstCardAfter = page.locator('.report-card').first();
-    if (await firstCardAfter.count() === 0) {
-      test.skip(true, 'No pending reports after round-trip');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCardAfter, 'No pending reports after round-trip').toBeVisible();
 
     // ArrowDown should land on card 0 — proving selectedCardIndex was
     // reset on tab re-entry, not preserved from the prior selection.
@@ -225,10 +236,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if (await firstCard.count() === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -284,31 +295,34 @@ test.describe('Admin Keyboard Shortcuts', () => {
   });
 
   // ── Test 6: Lightbox — Esc key closes evidence lightbox ──
-  test('Esc key closes evidence lightbox', async ({ page }) => {
+  test('Esc key closes evidence lightbox', async ({ page, testData }) => {
+    // Seed the evidence this test needs instead of hunting for someone else's.
+    // The old version read `thumbs.count()` ONCE right after the filter click,
+    // fell back to the Appeals tab if it was zero, and skipped if that was zero
+    // too. Two problems: the single count is a race against the list still
+    // rendering, and the Appeals evidence sits inside a collapsed <details>
+    // this test never opened, so the fallback could not have worked anyway.
+    await testData.api.testWrite('reports', {
+      reportedUserId: testData.user.uid,
+      reportedUserUniqueId: testData.user.uniqueId,
+      reporterId: testData.secondUser.uid,
+      reporterUniqueId: testData.secondUser.uniqueId,
+      reason: 'Spam',
+      description: 'E2E lightbox evidence',
+      status: 'pending',
+      evidenceUrls: [EVIDENCE_IMAGE],
+      createdAt: Date.now(),
+      _testRun: testData.testRunId,
+    });
+
     await navigateToTab(page, 'Reports');
     await waitForReportsLoaded(page);
     await filterReports(page, 'pending');
 
-    // Look for evidence thumbnails
     const thumbs = page.locator('#reports-list .evidence-thumb');
-    if (await thumbs.count() === 0) {
-      // Try appeals tab
-      await navigateToTab(page, 'Appeals');
-      await page.waitForFunction(() => {
-        const list = document.getElementById('appeals-list');
-        return list && (list.querySelector('.appeal-card') !== null ||
-          list.textContent!.includes('No appeals'));
-      }, { timeout: 15_000 });
-
-      const appealThumbs = page.locator('#appeals-list .evidence-thumb');
-      if (await appealThumbs.count() === 0) {
-        test.skip(true, 'No evidence thumbnails available');
-        return;
-      }
-      await appealThumbs.first().click();
-    } else {
-      await thumbs.first().click();
-    }
+    // A retrying assertion, not a one-shot count — the list renders async.
+    await expect(thumbs.first()).toBeVisible();
+    await thumbs.first().click();
 
     // Verify lightbox opened
     const lightbox = page.locator('.evidence-lightbox');
@@ -356,7 +370,7 @@ test.describe('Admin Keyboard Shortcuts', () => {
     // Overlay should close
     // Note: the nuclear dialog may or may not support Esc — verify
     // If Esc doesn't close it, click Cancel as fallback
-    const stillVisible = await overlay.evaluate(el => el.classList.contains('visible'));
+    const stillVisible = await overlay.evaluate((el) => el.classList.contains('visible'));
     if (stillVisible) {
       await page.locator('#nuclear-cancel').click();
     }

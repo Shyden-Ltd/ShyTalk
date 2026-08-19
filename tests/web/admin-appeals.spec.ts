@@ -1,20 +1,21 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
+import { expectListSettled } from './helpers/list-state';
 
 /** Wait for the appeals list to finish loading. */
 async function waitForAppealsLoaded(page: Page): Promise<void> {
   // Wait for either appeal cards or the empty/no-appeals message
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('appeals-list');
-      if (!list) return false;
-      // Either we have appeal cards, or a "No appeals" message
-      return list.querySelector('.appeal-card') !== null ||
-        list.textContent!.includes('No appeals') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('appeals-list');
+    if (!list) return false;
+    // Either we have appeal cards, or a "No appeals" message
+    return (
+      list.querySelector('.appeal-card') !== null ||
+      list.textContent!.includes('No appeals') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Click a filter button (Pending, Approved, Denied). */
@@ -28,7 +29,7 @@ async function filterAppeals(page: Page, status: 'pending' | 'approved' | 'denie
 /** Get all appeals via API with a status filter. */
 async function getAppealsViaApi(testData: TestData, status: string): Promise<any[]> {
   const raw = await testData.api.get(`/api/appeals?status=${status}`);
-  return Array.isArray(raw) ? raw : (raw.appeals || []);
+  return Array.isArray(raw) ? raw : raw.appeals || [];
 }
 
 /** Re-seed appeal: suspend user, enable canAppeal, create a new appeal. */
@@ -57,7 +58,10 @@ async function reseedAppeal(testData: TestData): Promise<string> {
   // We cannot use POST /api/appeals because that endpoint checks if the
   // *caller* (admin) is suspended, not the target user.
   const result = await testData.api.testWrite('suspensionAppeals', {
-    userId: testData.user.uniqueId,
+    // `uniqueId` is the field POST /api/users/:uniqueId/appeal writes. The
+    // legacy `userId` spelling is covered deliberately by a test in
+    // appeals-evidence.test.js; everywhere else should look like production.
+    uniqueId: testData.user.uniqueId,
     appealText: 'I did not do this (reseeded)',
     status: 'pending',
     createdAt: Date.now(),
@@ -104,7 +108,10 @@ test.describe('Admin Appeals', () => {
   });
 
   // ── Test 1: Seeded appeal appears in pending list — API verify ──
-  test('seeded appeal appears in pending list with API verification', async ({ page, testData }) => {
+  test('seeded appeal appears in pending list with API verification', async ({
+    page,
+    testData,
+  }) => {
     // Filter to pending (default, but be explicit)
     await filterAppeals(page, 'pending');
 
@@ -119,9 +126,10 @@ test.describe('Admin Appeals', () => {
     // API verification
     const appeals = await getAppealsViaApi(testData, 'pending');
     expect(appeals.length).toBeGreaterThanOrEqual(1);
-    const seeded = appeals.find((a: any) =>
-      a.appealText?.includes('I did not do this') ||
-      String(a.userUniqueId) === String(testData.user.uniqueId),
+    const seeded = appeals.find(
+      (a: any) =>
+        a.appealText?.includes('I did not do this') ||
+        String(a.userUniqueId) === String(testData.user.uniqueId),
     );
     expect(seeded).toBeTruthy();
   });
@@ -240,7 +248,10 @@ test.describe('Admin Appeals', () => {
   });
 
   // ── Test 6: User profile preview — avatar, name, uniqueId in card ──
-  test('appeal card shows user profile preview with name and uniqueId', async ({ page, testData }) => {
+  test('appeal card shows user profile preview with name and uniqueId', async ({
+    page,
+    testData,
+  }) => {
     // Ensure a pending appeal exists (previous test may have failed before reseeding)
     await reseedAppeal(testData);
 
@@ -259,32 +270,40 @@ test.describe('Admin Appeals', () => {
     await expect(profile).toBeVisible();
 
     // Verify the card contains the user's unique ID
-    const cardText = await firstCard.textContent();
-    expect(cardText).toContain(String(testData.user.uniqueId));
+    await expect(firstCard).toContainText(String(testData.user.uniqueId));
 
     // Verify either an avatar image or placeholder exists
     const avatar = firstCard.locator('.appeal-profile img, .appeal-profile .placeholder-avatar');
     await expect(avatar).toBeVisible();
   });
 
+  /**
+   * Open the appellant's report evidence and return the thumbnails.
+   *
+   * Both evidence tests below used to skip themselves when no thumbnail was
+   * found. They could never have found one: the evidence lives inside the
+   * "Reports & Evidence" disclosure, which `GET /api/appeals` never populated,
+   * and the seeded report carried no evidence anyway. Two tests, never once
+   * executed, both reporting green (SHY-0249).
+   */
+  async function openEvidence(page: Page, uniqueId: number) {
+    await filterAppeals(page, 'pending');
+    const card = page
+      .locator('.appeal-card')
+      .filter({ hasText: String(uniqueId) })
+      .first();
+    await card.locator('.appeal-reports summary').click();
+    const thumbs = card.locator('.evidence-thumb');
+    await expect(thumbs.first()).toBeVisible();
+    return thumbs;
+  }
+
   // ── Test 7: Evidence lightbox open — click thumbnail, verify lightbox ──
   test('evidence thumbnail opens lightbox', async ({ page, testData }) => {
-    await filterAppeals(page, 'pending');
+    const thumbs = await openEvidence(page, testData.user.uniqueId);
 
-    // Check if any evidence thumbnails exist
-    const thumbs = page.locator('#appeals-list .evidence-thumb');
-    const thumbCount = await thumbs.count();
-
-    if (thumbCount === 0) {
-      // No evidence to test — skip gracefully
-      test.skip(true, 'No evidence thumbnails in current appeals');
-      return;
-    }
-
-    // Click the first evidence thumbnail
     await thumbs.first().click();
 
-    // Verify lightbox opens
     const lightbox = page.locator('.evidence-lightbox');
     await expect(lightbox).toBeVisible();
 
@@ -294,15 +313,11 @@ test.describe('Admin Appeals', () => {
   });
 
   // ── Test 8: Evidence lightbox close — Esc, overlay click, X button ──
-  test('evidence lightbox closes via Esc, overlay click, and X button', async ({ page }) => {
-    // Check if any evidence thumbnails exist
-    const thumbs = page.locator('#appeals-list .evidence-thumb');
-    const thumbCount = await thumbs.count();
-
-    if (thumbCount === 0) {
-      test.skip(true, 'No evidence thumbnails in current appeals');
-      return;
-    }
+  test('evidence lightbox closes via Esc, overlay click, and X button', async ({
+    page,
+    testData,
+  }) => {
+    const thumbs = await openEvidence(page, testData.user.uniqueId);
 
     const lightbox = page.locator('.evidence-lightbox');
 
@@ -327,33 +342,44 @@ test.describe('Admin Appeals', () => {
   });
 
   // ── Test 9: Expandable reports section — click to expand, verify details ──
-  test('expandable reports section shows report details', async ({ page }) => {
+  test('expandable reports section shows report details', async ({ page, testData }) => {
+    // This test used to skip itself with "No related reports section in
+    // current appeals", phrased as though the data merely happened to be
+    // absent. It was not absent: GET /api/appeals never sent `reports`, so the
+    // section had never rendered for anybody, and an admin decided suspension
+    // appeals without being shown what the suspension was for (SHY-0249).
     await filterAppeals(page, 'pending');
 
-    const firstCard = page.locator('.appeal-card').first();
-    await expect(firstCard).toBeVisible();
+    // The worker fixture seeds a report against user 0 AND an appeal from
+    // user 0, so the appellant's card is the one carrying evidence.
+    const appealCard = page
+      .locator('.appeal-card')
+      .filter({ hasText: String(testData.user.uniqueId) })
+      .first();
+    await expect(appealCard).toBeVisible();
 
-    // Look for the <details>/<summary> element for reports
-    const reportsSummary = firstCard.locator('.appeal-reports summary');
-    const reportsExist = await reportsSummary.count() > 0;
+    const reportsSummary = appealCard.locator('.appeal-reports summary');
+    await expect(reportsSummary).toBeVisible();
+    // The count in the summary is what tells the admin there is anything to
+    // open — "Reports & Evidence (0)" would be worse than no section at all.
+    await expect(reportsSummary).toContainText('Reports & Evidence (1)');
 
-    if (!reportsExist) {
-      test.skip(true, 'No related reports section in current appeals');
-      return;
-    }
+    const reportItems = appealCard.locator('.appeal-report-item');
+    // Collapsed by default: the evidence must not push the decision buttons
+    // off-screen before the admin asks for it.
+    await expect(reportItems.first()).toBeHidden();
 
-    // Click to expand
     await reportsSummary.click();
-
-    // Verify report details are visible within the details element
-    const reportItems = firstCard.locator('.appeal-report-item');
+    await expect(reportItems).toHaveCount(1);
     await expect(reportItems.first()).toBeVisible();
 
-    // Verify report has a reason
-    const reportReason = firstCard.locator('.appeal-report-item .report-reason');
-    if (await reportReason.count() > 0) {
-      await expect(reportReason.first()).toBeVisible();
-    }
+    // The reason is the whole point of showing it — assert the seeded value,
+    // not merely that some text is present.
+    await expect(appealCard.locator('.appeal-report-item .report-reason')).toContainText('Spam');
+    // And who reported it, which is how an admin spots a retaliatory report.
+    await expect(appealCard.locator('.appeal-report-item .report-meta')).toContainText(
+      String(testData.secondUser.uniqueId),
+    );
   });
 
   // ── Test 10: Empty state per filter — filter with no results shows message ──
@@ -363,17 +389,16 @@ test.describe('Admin Appeals', () => {
     // But some could still be empty. Test the logic regardless.
 
     // Try all three filters and verify the empty message appears when no data
+    // EVERY filter is checked, and each must settle into a valid state: cards,
+    // or a message saying there are none. The old version returned on the first
+    // empty filter, so a run where all three had data verified nothing.
     for (const status of ['approved', 'denied', 'pending'] as const) {
       await filterAppeals(page, status);
-      const cards = page.locator('.appeal-card');
-      const cardCount = await cards.count();
-
-      if (cardCount === 0) {
-        // Verify the empty state message is shown
-        const emptyMsg = page.locator('#appeals-list');
-        await expect(emptyMsg).toContainText('No appeals found');
-        return; // Found an empty state, test passes
-      }
+      await expectListSettled(
+        page.locator('#appeals-list'),
+        page.locator('.appeal-card'),
+        'No appeals found',
+      );
     }
 
     // If all filters have data, we can create a specific condition:
@@ -389,8 +414,12 @@ test.describe('Admin Appeals', () => {
       await filterAppeals(page, 'pending');
       const pendingText = await page.locator('#appeals-list').textContent();
       await filterAppeals(page, 'approved');
-      const approvedText = await page.locator('#appeals-list').textContent();
-      expect(pendingText).not.toBe(approvedText);
+      // `pendingText` is a deliberate point-in-time snapshot, so it is the
+      // CURRENT text that must be polled until it differs from it — polling the
+      // snapshot itself would just re-read a frozen string forever.
+      await expect
+        .poll(async () => await page.locator('#appeals-list').textContent())
+        .not.toBe(pendingText);
     }
   });
 });

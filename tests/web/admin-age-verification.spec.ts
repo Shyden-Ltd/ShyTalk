@@ -14,11 +14,11 @@ import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab, searchUser } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
 
-async function createPendingSubmission(testData: TestData, opts: { dobMs?: number } = {}): Promise<string> {
-  const dobMs =
-    opts.dobMs !== undefined
-      ? opts.dobMs
-      : Date.UTC(2008, 0, 1); // ~17yo as of 2026 — borderline locked
+async function createPendingSubmission(
+  testData: TestData,
+  opts: { dobMs?: number } = {},
+): Promise<string> {
+  const dobMs = opts.dobMs !== undefined ? opts.dobMs : Date.UTC(2008, 0, 1); // ~17yo as of 2026 — borderline locked
   const result = await testData.api.testWrite('ageVerificationSubmissions', {
     userId: String(testData.user.uniqueId),
     idMethod: 'passport',
@@ -84,7 +84,10 @@ test.describe('Admin Age Verification subtab', () => {
     await navigateToTab(page, 'Users');
   });
 
-  test('subtab button + empty state render when no pending submission for user', async ({ page, testData }) => {
+  test('subtab button + empty state render when no pending submission for user', async ({
+    page,
+    testData,
+  }) => {
     await searchUser(page, String(testData.user.uniqueId));
     await openAgeVerifSubtab(page);
 
@@ -95,7 +98,10 @@ test.describe('Admin Age Verification subtab', () => {
     await expect(form).toBeHidden();
   });
 
-  test('pending submission for searched user → form renders with submitted data', async ({ page, testData }) => {
+  test('pending submission for searched user → form renders with submitted data', async ({
+    page,
+    testData,
+  }) => {
     const dob = Date.UTC(2008, 0, 1);
     const submissionId = await createPendingSubmission(testData, { dobMs: dob });
 

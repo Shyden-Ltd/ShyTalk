@@ -71,15 +71,35 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     }
   });
 
-  test('All 21 locales define every new Phase 2c key in ADMIN_TRANSLATIONS', async ({ request }) => {
+  test('All 21 locales define every new Phase 2c key in ADMIN_TRANSLATIONS', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
@@ -91,9 +111,7 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_2C_NEW_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });

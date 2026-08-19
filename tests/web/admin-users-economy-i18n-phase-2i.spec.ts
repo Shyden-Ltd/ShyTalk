@@ -42,8 +42,14 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     const hardcoded: Array<[string, RegExp]> = [
       ['No devices to ban', /showToast\("No devices to ban"/],
       ['Enter a positive amount', /showToast\("Enter a positive amount"/],
-      ['Added/Deducted N coins (op string concat)', /\(op === "add" \? "Added" : "Deducted"\) \+ " " \+ amount \+ " coins/],
-      ['Added/Deducted N beans (op string concat)', /\(op === "add" \? "Added" : "Deducted"\) \+ " " \+ amount \+ " beans/],
+      [
+        'Added/Deducted N coins (op string concat)',
+        /\(op === "add" \? "Added" : "Deducted"\) \+ " " \+ amount \+ " coins/,
+      ],
+      [
+        'Added/Deducted N beans (op string concat)',
+        /\(op === "add" \? "Added" : "Deducted"\) \+ " " \+ amount \+ " beans/,
+      ],
       ['Select a gift', /showToast\("Select a gift and enter a quantity"/],
       ['Added N (total now M)', /"Added " \+ qty \+ " \(total now /],
       ['Backpack already empty', /showToast\("Backpack is already empty"/],
@@ -63,7 +69,10 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     }
     // toast_enter_positive_amount is shared (coins + beans validation) — must appear ≥2x
     const positiveMatches = src.match(/tAdmin\("toast_enter_positive_amount"\)/g) || [];
-    expect(positiveMatches.length, 'toast_enter_positive_amount should appear ≥2x').toBeGreaterThanOrEqual(2);
+    expect(
+      positiveMatches.length,
+      'toast_enter_positive_amount should appear ≥2x',
+    ).toBeGreaterThanOrEqual(2);
   });
 
   test('All 21 locales define every Phase 2i key in ADMIN_TRANSLATIONS', async ({ request }) => {
@@ -73,8 +82,26 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
@@ -86,9 +113,7 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_2I_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });

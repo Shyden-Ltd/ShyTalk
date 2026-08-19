@@ -1,22 +1,26 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpers/admin-auth';
 import type { Page } from '@playwright/test';
+import { waitForAlertsLoaded } from './helpers/alerts';
 
 /** Wait for the reports list to finish loading. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('reports-list');
-      if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
-        list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('reports-list');
+    if (!list) return false;
+    return (
+      list.querySelector('.report-card') !== null ||
+      list.textContent!.includes('No reports') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Filter reports by status. */
-async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archived'): Promise<void> {
+async function filterReports(
+  page: Page,
+  status: 'pending' | 'resolved' | 'archived',
+): Promise<void> {
   const btn = page.locator(`#report-filter-bar button[data-report-filter="${status}"]`);
   await btn.click();
   await expect(btn).toHaveClass(/active/);
@@ -63,22 +67,22 @@ async function unsuspendAndResetGcs(testData: TestData): Promise<void> {
 
 /** Wait for appeals list to load. */
 async function waitForAppealsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('appeals-list');
-      if (!list) return false;
-      return list.querySelector('.appeal-card') !== null ||
-        list.textContent!.includes('No appeals') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('appeals-list');
+    if (!list) return false;
+    return (
+      list.querySelector('.appeal-card') !== null ||
+      list.textContent!.includes('No appeals') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Wait for devices table to load. */
 async function waitForDevicesLoaded(page: Page): Promise<void> {
-  await expect(
-    page.locator('#devices-tbody tr, #devices-empty[style*="block"]'),
-  ).not.toHaveCount(0);
+  await expect(page.locator('#devices-tbody tr, #devices-empty[style*="block"]')).not.toHaveCount(
+    0,
+  );
 }
 
 test.describe('Admin Cross-Tab Interactions', () => {
@@ -97,7 +101,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // sev-1. See reports.js:340 + [[feedback-test-isolation-no-leaks]].
     // Production code never sets this flag — only tests.
     await page.addInitScript(() => {
-      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+      (
+        window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }
+      ).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);
   });
@@ -115,7 +121,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
   });
 
   // ── Test 1: Report resolve-as-warned → warning in user history ──
-  test('report warned resolution creates warning in user moderation history', async ({ page, testData }) => {
+  test('report warned resolution creates warning in user moderation history', async ({
+    page,
+    testData,
+  }) => {
     // Seed a fresh report
     await seedReport(testData);
 
@@ -166,10 +175,14 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // `resolveInProgress = true`, so subsequent polls are also suppressed.
     await firstCard.evaluate((card: HTMLElement, evalUid: string) => {
       const group = card.querySelectorAll<HTMLInputElement>(`input[name="sev-${evalUid}"]`);
-      for (const r of group) r.checked = (r.value === '2');
-      const target = card.querySelector<HTMLInputElement>(`input[name="sev-${evalUid}"][value="2"]`);
+      for (const r of group) r.checked = r.value === '2';
+      const target = card.querySelector<HTMLInputElement>(
+        `input[name="sev-${evalUid}"][value="2"]`,
+      );
       if (target) target.dispatchEvent(new Event('change', { bubbles: true }));
-      const resolveBtn = card.querySelector<HTMLButtonElement>(`button[data-resolve-first="${evalUid}"]`);
+      const resolveBtn = card.querySelector<HTMLButtonElement>(
+        `button[data-resolve-first="${evalUid}"]`,
+      );
       if (resolveBtn) resolveBtn.click();
     }, uid);
 
@@ -183,12 +196,16 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // The resolve endpoint creates the warning synchronously, but the emulator
     // may have propagation lag. Poll the API until the warning appears.
     const userUniqueId = String(testData.user.uniqueId);
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const warningsData = await testData.api.get(`/api/user/${userUniqueId}/warnings`);
-      const warnings = warningsData.warnings || [];
-      if (warnings.some((w: any) => !w.revoked && w.severity === 2)) break;
-      await page.waitForTimeout(1_000);
-    }
+    await expect
+      .poll(
+        async () => {
+          const warningsData = await testData.api.get(`/api/user/${userUniqueId}/warnings`);
+          const warnings = warningsData.warnings || [];
+          return warnings.some((w: any) => !w.revoked && w.severity === 2);
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
 
     // Navigate to Users → search → Moderation subtab
     await navigateToTab(page, 'Users');
@@ -198,12 +215,21 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Poll the UI for the warning — re-search if needed (the moderation
     // subtab loads warnings on activation, but may cache stale state).
     const warningList = page.locator('#warning-history-list');
-    for (let retry = 0; retry < 3; retry++) {
-      if (await warningList.locator('.warning-item').count() > 0) break;
-      await page.waitForTimeout(2_000);
-      await searchUser(page, userUniqueId);
-      await switchUserSubtab(page, 'moderation');
-    }
+    await expect
+      .poll(
+        async () => {
+          const seen = await warningList.locator('.warning-item').count();
+          if (seen > 0) return seen;
+          // The subtab loads warnings on activation and can hold stale state,
+          // so a passive re-read would never converge — re-search to force the
+          // reload, then let the next poll iteration re-count.
+          await searchUser(page, userUniqueId);
+          await switchUserSubtab(page, 'moderation');
+          return 0;
+        },
+        { timeout: 30_000 },
+      )
+      .toBeGreaterThan(0);
     await expect(warningList.locator('.warning-item')).not.toHaveCount(0, { timeout: 10_000 });
 
     const firstWarning = warningList.locator('.warning-item').first();
@@ -281,7 +307,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
   });
 
   // ── Test 3: Device ban → appears in user ban list ──
-  test('device ban from Devices tab appears in user moderation bans', async ({ page, testData }) => {
+  test('device ban from Devices tab appears in user moderation bans', async ({
+    page,
+    testData,
+  }) => {
     const deviceId = `e2e-${testData.prefix}-device`;
 
     // Navigate to Devices
@@ -291,7 +320,6 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Search for the test device
     await page.locator('#devices-search-input').fill(deviceId);
     await page.locator('#devices-search-btn').click();
-    await page.waitForTimeout(1_000);
     await waitForDevicesLoaded(page);
 
     // Accept confirm and prompt dialogs
@@ -304,13 +332,21 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const rows = page.locator('#devices-tbody tr:not(:has(.device-detail))');
     const banBtn = rows.first().locator('[data-ban-device]');
     await banBtn.click();
-    await page.waitForTimeout(2_000);
 
-    // Verify via API that ban exists
-    const bansData = await testData.api.get('/api/admin/bans');
-    const deviceBans = bansData.deviceBans || [];
-    const banned = deviceBans.find((b: any) => b.deviceId === deviceId);
-    expect(banned).toBeTruthy();
+    // Verify via API that the ban exists. The ban lands server-side after the
+    // click returns, so poll the API for it — the poll IS the assertion, so a
+    // ban that never arrives fails here by name rather than on a bare
+    // truthiness check that only ever saw one snapshot.
+    await expect
+      .poll(
+        async () => {
+          const bansData = await testData.api.get('/api/admin/bans');
+          const deviceBans = bansData.deviceBans || [];
+          return deviceBans.some((b: any) => b.deviceId === deviceId);
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
 
     // Cleanup: unban
     await testData.api.delete(`/api/admin/bans/device/${encodeURIComponent(deviceId)}`);
@@ -325,7 +361,6 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     await page.locator('#devices-search-input').fill(deviceId);
     await page.locator('#devices-search-btn').click();
-    await page.waitForTimeout(1_000);
     await waitForDevicesLoaded(page);
 
     // Click View Logs
@@ -339,28 +374,48 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Verify the userId filter is populated
     const userIdFilter = page.locator('#log-filter-userId');
-    const filterValue = await userIdFilter.inputValue();
-    expect(filterValue).toBe(testData.user.uniqueId.toString());
+    await expect(userIdFilter).toHaveValue(testData.user.uniqueId.toString());
   });
 
   // ── Test 5: Alert trace → Logs tab filtered ──
   test('alert trace link navigates to Logs with traceId filter', async ({ page, testData }) => {
+    // An alert only renders its "View Logs" affordance when it carries a
+    // `sampleTraceId` (logs.js), so seed one that does. Nothing else in the
+    // suite guarantees such an alert exists.
+    const traceId = `e2e-xtab-trace-${Date.now()}`;
+    await testData.api.testWrite('alerts', {
+      type: 'error_rate',
+      severity: 'high',
+      message: `e2e-${testData.prefix}-trace-alert`,
+      status: 'new',
+      sampleTraceId: traceId,
+      createdAt: Date.now(),
+      _testRun: testData.testRunId,
+    });
+
     await navigateToTab(page, 'Logs');
 
     // Expand alerts section
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(el => el.classList.contains('collapsed'));
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
+      // The class flip is the observable that the section opened.
+      await expect(alertsSection).not.toHaveClass(/collapsed/);
     }
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
-    // Look for trace links
-    const traceLinks = page.locator('#alerts-tbody .log-trace-link, #alerts-tbody [data-trace-id]');
-    if (await traceLinks.count() === 0) {
-      test.skip(true, 'No trace links in current alerts');
-      return;
-    }
+    // `.log-trace-link` is the LOG row affordance and appears nowhere in an
+    // alert row — so the old locator matched nothing and the test skipped
+    // itself every run. Alert rows use `.alert-link` ("View Logs"), rendered
+    // only when the alert has a sampleTraceId.
+    const traceLinks = page.locator('#alerts-tbody .alert-link');
+    await expect
+      .poll(async () => traceLinks.count(), {
+        message: 'the seeded alert carries a sampleTraceId, so its View Logs link must render',
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
 
     await traceLinks.first().click();
 
@@ -369,8 +424,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const traceIdFilter = page.locator('#log-filter-traceId');
 
     const traceViewVisible = await traceView.isVisible();
-    const filterValue = await traceIdFilter.inputValue();
-    expect(traceViewVisible || filterValue.length > 0).toBe(true);
+    await expect
+      .poll(async () => traceViewVisible || (await traceIdFilter.inputValue()).length > 0)
+      .toBe(true);
   });
 
   // ── Test 6: Report View User → Users tab ──
@@ -380,10 +436,14 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await filterReports(page, 'pending');
 
     const navigateLink = page.locator(`[data-navigate-uid="${testData.user.uniqueId}"]`).first();
-    if (await navigateLink.count() === 0) {
-      test.skip(true, 'No navigable user link in current pending reports');
-      return;
-    }
+    // The fixture seeds a pending report against testData.user, so a navigable
+    // user link must exist. Skipping here left the whole cross-tab navigation
+    // path unverified on every run.
+    await expect
+      .poll(async () => navigateLink.count(), {
+        message: 'seeded pending report must link to its user',
+      })
+      .toBeGreaterThan(0);
 
     await navigateLink.click();
 
@@ -404,26 +464,38 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Test 1: Maintenance — Clear Reports cancel
     await navigateToTab(page, 'Maintenance');
     await expect(page.locator('#maintenance-panel')).toBeVisible();
-    await page.locator('#clear-reports-btn').click();
-    await page.waitForTimeout(500);
-    // Button should NOT show "Processing..."
-    const btnText1 = await page.locator('#clear-reports-btn').textContent();
-    expect(btnText1).toBe('Clear All Reports');
+    const clearBtn = page.locator('#clear-reports-btn');
+    await clearBtn.click();
+    // `runAction` bails on a dismissed confirm SYNCHRONOUSLY, before it sets
+    // `disabled` or the "Processing..." label (maintenance.js:94 precedes 96),
+    // so the abort is already complete once click() resolves — no wait needed.
+    // Assert BOTH signals: label alone would still pass if the button were
+    // left disabled by a future regression.
+    await expect(clearBtn).toHaveText('Clear All Reports');
+    await expect(clearBtn).toBeEnabled();
 
     // Test 2: Devices — Unbind cancel
     await navigateToTab(page, 'Devices');
     await waitForDevicesLoaded(page);
+    // The worker fixture seeds a device for user 0 (fixtures/admin.ts
+    // `deviceInfo`), so a row and its Unbind button are guaranteed here. The
+    // two nested count-guards this replaces meant a broken seed produced a
+    // PASSING test that had silently checked 2 of the 3 dialogs its name
+    // promises.
     const rows = page.locator('#devices-tbody tr:not(:has(.device-detail))');
-    if (await rows.count() > 0) {
-      const unbindBtn = rows.first().locator('[data-unbind]');
-      if (await unbindBtn.count() > 0) {
-        await unbindBtn.click();
-        await page.waitForTimeout(500);
-        // Device should still be there
-        const rowsAfter = page.locator('#devices-tbody tr:not(:has(.device-detail))');
-        expect(await rowsAfter.count()).toBeGreaterThanOrEqual(1);
-      }
-    }
+    await expect(rows.first()).toBeVisible();
+    const unbindBtn = rows.first().locator('[data-unbind]');
+    await expect(unbindBtn).toBeVisible();
+    const rowsBefore = await rows.count();
+
+    await unbindBtn.click();
+    // Same dismissed-confirm contract as above: the abort completes before
+    // click() resolves, so assert the row survived with a retrying
+    // assertion rather than sleeping and reading one snapshot. Pinning the
+    // exact count, not just "not zero" — cancelling must remove nothing.
+    await expect(page.locator('#devices-tbody tr:not(:has(.device-detail))')).toHaveCount(
+      rowsBefore,
+    );
 
     // Test 3: Maintenance — Nuclear reset cancel
     await navigateToTab(page, 'Maintenance');
@@ -447,10 +519,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
     });
     await expect(toast).toHaveClass(/visible/);
 
-    // Wait for auto-dismiss (4s timer + buffer)
-    await page.waitForTimeout(5_000);
-    const hasVisible = await toast.evaluate(el => el.classList.contains('visible'));
-    expect(hasVisible).toBe(false);
+    // Auto-dismiss is observable as the `visible` class dropping — wait on
+    // that, not on a clock. Stricter than the old fixed 5s too: a toast that
+    // never dismisses now fails by name instead of on a stale snapshot read.
+    await expect(toast).not.toHaveClass(/visible/, { timeout: 15_000 });
   });
 
   // ── Test 9: Toast error persists ──
@@ -462,22 +534,28 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await searchInput.fill('99999999');
     await page.getByRole('button', { name: 'Search' }).click();
 
-    // Wait for toast error to appear
-    const errorToast = page.locator('.toast.error');
-    const appeared = await errorToast.isVisible().catch(() => false);
+    // The toast is opacity-animated, so Playwright's visibility check can't
+    // tell shown from hidden — the `visible` class is the real contract, and
+    // it arrives asynchronously after the failed lookup. Wait for it.
+    const toast = page.locator('#toast');
+    await expect(toast).toHaveClass(/\berror\b/, { timeout: 15_000 });
+    await expect(toast).toHaveClass(/\bvisible\b/);
 
-    if (appeared) {
-      // Error toast should persist longer than success toasts
-      await page.waitForTimeout(3_000);
-      // Should still be visible (errors don't auto-dismiss quickly)
-      const stillVisible = await errorToast.isVisible();
-      expect(stillVisible).toBe(true);
-    } else {
-      // If no error toast appears, verify some other form of error feedback is shown
-      const noResultsMsg = page.locator('.no-results, .user-not-found, .toast');
-      const hasAnyFeedback = await noResultsMsg.count() > 0;
-      expect(hasAnyFeedback).toBe(true);
-    }
+    // Persistence is a NEGATIVE temporal property: give the toast the whole
+    // success-dismiss window to drop `visible` and require that it doesn't.
+    // Bounded wait on element STATE, never a bare clock — an early dismissal
+    // resolves the wait and fails the assertion by name.
+    let dismissedEarly = true;
+    await page
+      .waitForFunction(
+        () => !document.getElementById('toast')!.classList.contains('visible'),
+        null,
+        { timeout: 3_000 },
+      )
+      .catch(() => {
+        dismissedEarly = false;
+      });
+    expect(dismissedEarly).toBe(false);
   });
 
   // ── Test 10: API 500 error handling ──
@@ -488,8 +566,8 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const searchInput = page.getByRole('spinbutton', { name: 'ShyTalk User ID' });
     await searchInput.fill('0'); // Invalid user ID
 
-    const responsePromise = page.waitForResponse(
-      resp => resp.url().includes('/api/search/uniqueId/0'),
+    const responsePromise = page.waitForResponse((resp) =>
+      resp.url().includes('/api/search/uniqueId/0'),
     );
 
     await page.getByRole('button', { name: 'Search' }).click();
@@ -498,11 +576,21 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Verify the response was handled (404 or other error)
     expect(response.status()).toBeGreaterThanOrEqual(400);
 
-    // The user form should NOT become visible
-    const userForm = page.locator('#user-form');
-    await page.waitForTimeout(1_000);
-    const isVisible = await userForm.evaluate(el => el.classList.contains('visible'));
-    expect(isVisible).toBe(false);
+    // The user form should NOT become visible. Negative property again: give
+    // the error handler a bounded window to wrongly reveal it and require that
+    // it never does. Watching the STATE catches a form that appears anywhere
+    // in the window — the old post-sleep snapshot only ever looked at t=1s.
+    let formAppeared = true;
+    await page
+      .waitForFunction(
+        () => document.getElementById('user-form')!.classList.contains('visible'),
+        null,
+        { timeout: 2_000 },
+      )
+      .catch(() => {
+        formAppeared = false;
+      });
+    expect(formAppeared).toBe(false);
   });
 
   // ── Test 11: Button disable during API call ──
@@ -537,8 +625,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Let in-flight API calls from previous tabs settle before switching
     // back to Users — rapid switching aborts pending requests and some
-    // error handlers may briefly modify the DOM.
-    await page.waitForTimeout(500);
+    // error handlers may briefly modify the DOM. "Settled" is a condition on
+    // network activity, so wait for THAT; a fixed 500ms was simultaneously too
+    // long when the tabs were quick and too short under a slow CI runner.
+    await page.waitForLoadState('networkidle');
 
     // Verify we can still perform operations after rapid switching.
     // Navigate to Users and wait for the panel to be ready before searching.

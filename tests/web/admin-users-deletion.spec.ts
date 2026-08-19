@@ -120,7 +120,9 @@ test.describe('Admin Users - Account Deletion', () => {
     const uid = String(testData.user.uniqueId);
 
     // Schedule deletion via API
-    const scheduleResult = await testData.api.post(`/api/user/${uid}/delete`, { reason: 'round-trip test' });
+    const scheduleResult = await testData.api.post(`/api/user/${uid}/delete`, {
+      reason: 'round-trip test',
+    });
     expect(scheduleResult.success).toBe(true);
 
     // Verify via API

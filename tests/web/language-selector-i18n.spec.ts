@@ -44,7 +44,9 @@ test.describe('Language selector modal i18n', () => {
 
     const title = (await page.locator('[data-i18n="lang_select_title"]').textContent())?.trim();
     expect(title, 'lang_select_title in es should NOT be English').not.toBe('Select Language');
-    expect(title, 'lang_select_title in es should be "Seleccionar idioma"').toBe('Seleccionar idioma');
+    expect(title, 'lang_select_title in es should be "Seleccionar idioma"').toBe(
+      'Seleccionar idioma',
+    );
   });
 
   test('Spanish locale empty-state renders Spanish text', async ({ page }) => {
@@ -115,8 +117,26 @@ test.describe('Language selector modal i18n', () => {
     const src = await res.text();
 
     const SUPPORTED = [
-      'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-      'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
+      'es',
+      'fr',
+      'de',
+      'pt',
+      'it',
+      'ja',
+      'ko',
+      'zh',
+      'ar',
+      'hi',
+      'tr',
+      'ru',
+      'uk',
+      'th',
+      'vi',
+      'id',
+      'pl',
+      'nl',
+      'sv',
+      'km',
     ];
     for (const lang of SUPPORTED) {
       const rowRe = new RegExp(

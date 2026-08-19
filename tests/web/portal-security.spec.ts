@@ -24,9 +24,14 @@ test.describe('Portal — XSS Prevention via Hash Routing', () => {
   test('only allowlisted routes are valid', async ({ page }) => {
     // These should all fall back to login
     const invalidRoutes = [
-      'admin', 'settings', 'config', 'debug',
-      '../admin', '../../etc/passwd',
-      'dashboard/admin', 'profile/../admin',
+      'admin',
+      'settings',
+      'config',
+      'debug',
+      '../admin',
+      '../../etc/passwd',
+      'dashboard/admin',
+      'profile/../admin',
     ];
     for (const route of invalidRoutes) {
       await page.goto(`/portal/#${route}`);
@@ -42,9 +47,7 @@ test.describe('Portal — CSP & Security Headers', () => {
     await expect(page.locator('#login-section')).toBeVisible({ timeout: 15_000 });
     // Verify CSS is applied — login section should have styles from portal.css
     const loginSection = page.locator('#login-section');
-    const display = await loginSection.evaluate(
-      (el) => window.getComputedStyle(el).display,
-    );
+    const display = await loginSection.evaluate((el) => window.getComputedStyle(el).display);
     // Should not be 'none' — the section should be visible via CSS
     expect(display).not.toBe('none');
   });
@@ -65,8 +68,16 @@ test.describe('Portal — CSP & Security Headers', () => {
       const allElements = document.querySelectorAll('*');
       let count = 0;
       const handlerAttrs = [
-        'onclick', 'onload', 'onerror', 'onsubmit', 'onchange',
-        'onfocus', 'onblur', 'onkeydown', 'onkeyup', 'onmouseover',
+        'onclick',
+        'onload',
+        'onerror',
+        'onsubmit',
+        'onchange',
+        'onfocus',
+        'onblur',
+        'onkeydown',
+        'onkeyup',
+        'onmouseover',
       ];
       for (const el of allElements) {
         for (const attr of handlerAttrs) {
@@ -119,7 +130,8 @@ test.describe('Portal — Environment Isolation', () => {
   test('no network requests to dev API when running locally', async ({ page }) => {
     const devRequests: string[] = [];
     page.on('request', (req) => {
-      if (req.url().includes('dev-api.shytalk.shyden.co.uk')) { // localhost isolation check
+      if (req.url().includes('dev-api.shytalk.shyden.co.uk')) {
+        // localhost isolation check
         devRequests.push(req.url());
       }
     });
@@ -132,7 +144,8 @@ test.describe('Portal — Environment Isolation', () => {
     const prodRequests: string[] = [];
     page.on('request', (req) => {
       const url = req.url();
-      if (url.includes('api.shytalk.shyden.co.uk') && !url.includes('dev-api')) { // localhost isolation check
+      if (url.includes('api.shytalk.shyden.co.uk') && !url.includes('dev-api')) {
+        // localhost isolation check
         prodRequests.push(url);
       }
     });
@@ -193,9 +206,8 @@ test.describe('Portal — Authentication Section Security', () => {
   test('noindex prevents search engine indexing', async ({ page }) => {
     await page.goto('/portal/');
     const robots = page.locator('meta[name="robots"]');
-    const content = await robots.getAttribute('content');
-    expect(content).toContain('noindex');
-    expect(content).toContain('nofollow');
+    await expect.poll(async () => await robots.getAttribute('content')).toContain('noindex');
+    await expect.poll(async () => await robots.getAttribute('content')).toContain('nofollow');
   });
 });
 
@@ -204,43 +216,37 @@ test.describe('Portal — Form Action Security', () => {
     await page.goto('/portal/');
     await expect(page.locator('#login-section')).toBeVisible({ timeout: 15_000 });
     const form = page.locator('#login-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('TOTP form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#totp-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('enroll form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#enroll-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('re-auth form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#reauth-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('recovery send form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#recovery-send-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('recovery verify form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#recovery-verify-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 });
 
@@ -249,9 +255,8 @@ test.describe('Portal — Link Security', () => {
     await page.goto('/portal/#no-account');
     await expect(page.locator('#no-account-section')).toBeVisible({ timeout: 15_000 });
     const link = page.locator('#no-account-section a[href*="play.google.com"]');
-    const rel = await link.getAttribute('rel');
-    expect(rel).toContain('noopener');
-    expect(rel).toContain('noreferrer');
+    await expect.poll(async () => await link.getAttribute('rel')).toContain('noopener');
+    await expect.poll(async () => await link.getAttribute('rel')).toContain('noreferrer');
   });
 
   test('Google Play link opens in new tab', async ({ page }) => {

@@ -70,8 +70,9 @@ test.describe('CCPA "Do Not Sell" footer link (C2)', () => {
         name: /Do Not Sell or Share My Personal Information/i,
       });
       await expect(link.first()).toBeVisible();
-      const href = await link.first().getAttribute('href');
-      expect(href).toMatch(/\/do-not-sell(\.html)?$/);
+      await expect
+        .poll(async () => await link.first().getAttribute('href'))
+        .toMatch(/\/do-not-sell(\.html)?$/);
     });
   }
 });

@@ -55,8 +55,10 @@ test.describe('Shared header Sign In — modal hook + portal fallback', () => {
       const btn = document.querySelector('[data-testid="header-signin-btn"]') as HTMLElement | null;
       if (!btn) return { invoked: false, calledWith };
       btn.click();
-      // Brief settle so any deferred navigation / state change runs
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      // Bounded settle inside page.evaluate: the assertion is that a deferred
+      // handler either did or did not fire, which has no observable state to
+      // poll from inside the page context.
+      await new Promise((resolve) => setTimeout(resolve, 250)); // sleep-ok: bounded in-page settle
       return { invoked: !!calledWith, calledWith };
     });
 

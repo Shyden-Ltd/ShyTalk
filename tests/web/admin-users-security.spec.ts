@@ -17,7 +17,6 @@ async function reloadAndNavigateToSecurity(
 }
 
 test.describe('Admin Users - Security Subtab', () => {
-
   test.beforeEach(async ({ page, testData }) => {
     await adminLogin(page);
     await navigateToTab(page, 'Users');
@@ -49,22 +48,21 @@ test.describe('Admin Users - Security Subtab', () => {
       undefined,
       { timeout: 15_000 },
     );
+    await expect.poll(async () => await pinSet.textContent()).toBeTruthy();
     const pinSetText = await pinSet.textContent();
-    expect(pinSetText).toBeTruthy();
     expect(['Yes', 'No']).toContain(pinSetText!.trim());
 
     // Verify #pin-attempts shows a number
     const pinAttempts = page.locator('#pin-attempts');
     await expect(pinAttempts).toBeVisible({ timeout: 15_000 });
-    const pinAttemptsText = await pinAttempts.textContent();
-    expect(pinAttemptsText).toBeTruthy();
-    expect(Number(pinAttemptsText!.trim())).not.toBeNaN();
+    await expect.poll(async () => await pinAttempts.textContent()).toBeTruthy();
+    await expect.poll(async () => Number((await pinAttempts.textContent())!.trim())).not.toBeNaN();
 
     // Verify #pin-is-locked shows "Yes" or "No"
     const pinIsLocked = page.locator('#pin-is-locked');
     await expect(pinIsLocked).toBeVisible({ timeout: 15_000 });
+    await expect.poll(async () => await pinIsLocked.textContent()).toBeTruthy();
     const pinIsLockedText = await pinIsLocked.textContent();
-    expect(pinIsLockedText).toBeTruthy();
     expect(['Yes', 'No']).toContain(pinIsLockedText!.trim());
 
     // API: verify displayed values match auth-status endpoint
@@ -75,7 +73,9 @@ test.describe('Admin Users - Security Subtab', () => {
     expect(pinSetText!.trim()).toBe(expectedPinSet);
 
     // Compare pinAttempts: API returns number
-    expect(Number(pinAttemptsText!.trim())).toBe(authStatus.pinAttempts ?? 0);
+    await expect
+      .poll(async () => Number((await pinAttempts.textContent())!.trim()))
+      .toBe(authStatus.pinAttempts ?? 0);
 
     // Compare isLocked: API returns boolean, UI shows "Yes"/"No"
     const expectedIsLocked = authStatus.isLocked ? 'Yes' : 'No';
@@ -87,7 +87,9 @@ test.describe('Admin Users - Security Subtab', () => {
     const uid = String(testData.user.uniqueId);
 
     // Verify heading "Biometric Keys" is visible under security subpanel
-    const heading = page.locator('.user-subpanel[data-subtab="security"] h3', { hasText: 'Biometric Keys' });
+    const heading = page.locator('.user-subpanel[data-subtab="security"] h3', {
+      hasText: 'Biometric Keys',
+    });
     await expect(heading).toBeVisible({ timeout: 15_000 });
 
     // Verify #biometric-keys-list is present
@@ -123,8 +125,7 @@ test.describe('Admin Users - Security Subtab', () => {
     // Verify #otp-count is visible
     const otpCount = page.locator('#otp-count');
     await expect(otpCount).toBeVisible({ timeout: 15_000 });
-    const otpCountText = await otpCount.textContent();
-    expect(otpCountText).toBeTruthy();
+    await expect(otpCount).not.toBeEmpty();
 
     // Verify #otp-limit is visible and contains "100"
     const otpLimit = page.locator('#otp-limit');
@@ -211,39 +212,58 @@ test.describe('Admin Users - Security Subtab', () => {
     await switchUserSubtab(page, 'profile');
 
     // Wait for profile to be visible
-    await expect(page.locator('.user-subpanel[data-subtab="profile"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.user-subpanel[data-subtab="profile"]')).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Switch back to Security subtab
     await switchUserSubtab(page, 'security');
 
     // Wait for security panel to be visible
-    await expect(page.locator('.user-subpanel[data-subtab="security"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.user-subpanel[data-subtab="security"]')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(pinStatusGrid).toBeVisible({ timeout: 15_000 });
 
     // Verify all PIN fields still show correct data (not stale or empty)
-    const pinSetAfter = await page.locator('#pin-set').textContent();
-    const pinAttemptsAfter = await page.locator('#pin-attempts').textContent();
-    const pinIsLockedAfter = await page.locator('#pin-is-locked').textContent();
 
-    expect(pinSetAfter!.trim()).toBeTruthy();
-    expect(pinAttemptsAfter!.trim()).toBeTruthy();
-    expect(pinIsLockedAfter!.trim()).toBeTruthy();
+    await expect
+      .poll(async () => (await page.locator('#pin-set').textContent())!.trim())
+      .toBeTruthy();
+    await expect
+      .poll(async () => (await page.locator('#pin-attempts').textContent())!.trim())
+      .toBeTruthy();
+    await expect
+      .poll(async () => (await page.locator('#pin-is-locked').textContent())!.trim())
+      .toBeTruthy();
 
     // Values should not be placeholder dashes
-    expect(pinSetAfter!.trim()).not.toBe('—');
-    expect(pinAttemptsAfter!.trim()).not.toBe('—');
-    expect(pinIsLockedAfter!.trim()).not.toBe('—');
+    await expect
+      .poll(async () => (await page.locator('#pin-set').textContent())!.trim())
+      .not.toBe('—');
+    await expect
+      .poll(async () => (await page.locator('#pin-attempts').textContent())!.trim())
+      .not.toBe('—');
+    await expect
+      .poll(async () => (await page.locator('#pin-is-locked').textContent())!.trim())
+      .not.toBe('—');
 
     // Compare to API data to confirm correctness
     const authStatus = await testData.api.get(`/api/user/${uid}/auth-status`);
 
     const expectedPinSet = authStatus.pinSet ? 'Yes' : 'No';
-    expect(pinSetAfter!.trim()).toBe(expectedPinSet);
+    await expect
+      .poll(async () => (await page.locator('#pin-set').textContent())!.trim())
+      .toBe(expectedPinSet);
 
-    expect(Number(pinAttemptsAfter!.trim())).toBe(authStatus.pinAttempts ?? 0);
+    await expect
+      .poll(async () => Number((await page.locator('#pin-attempts').textContent())!.trim()))
+      .toBe(authStatus.pinAttempts ?? 0);
 
     const expectedIsLocked = authStatus.isLocked ? 'Yes' : 'No';
-    expect(pinIsLockedAfter!.trim()).toBe(expectedIsLocked);
+    await expect
+      .poll(async () => (await page.locator('#pin-is-locked').textContent())!.trim())
+      .toBe(expectedIsLocked);
   });
 
   // ── Test 6: PIN status matches Firestore state ──
@@ -299,9 +319,9 @@ test.describe('Admin Users - Security Subtab', () => {
     // isLocked: Firestore `pinLockedUntil` exists and is in the future → "Yes", otherwise "No"
     const lockedUntil = firestoreDoc.pinLockedUntil;
     const isCurrentlyLocked = lockedUntil
-      ? (typeof lockedUntil === 'object' && lockedUntil._seconds
+      ? typeof lockedUntil === 'object' && lockedUntil._seconds
         ? lockedUntil._seconds * 1000 > Date.now()
-        : new Date(lockedUntil).getTime() > Date.now())
+        : new Date(lockedUntil).getTime() > Date.now()
       : false;
     const expectedIsLocked = isCurrentlyLocked ? 'Yes' : 'No';
     expect(pinIsLockedText).toBe(expectedIsLocked);

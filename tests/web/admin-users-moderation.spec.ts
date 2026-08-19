@@ -146,6 +146,7 @@ test.describe('Admin Users - Moderation Subtab', () => {
     // in 22-43min. The user-facing behaviour is correct on Safari (the
     // confirm() dialog renders normally for real users); this is a
     // CI-harness issue, not a product bug. Tracked for follow-up.
+    // defect-detector:allow SKIP-COND — a WebKit+Playwright+emulator harness stall documented above, not a product difference; the same flow is proven on every other engine
     test.skip(
       browserName === 'webkit',
       'webkit + playwright + emulator stall (1h+) on suspend→unsuspend cycle',
@@ -194,7 +195,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // Wait for unsuspend to take effect
     await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
-    await expect(page.locator('#suspension-status')).toHaveClass(/not-suspended/, { timeout: 15_000 });
+    await expect(page.locator('#suspension-status')).toHaveClass(/not-suspended/, {
+      timeout: 15_000,
+    });
 
     // Reload → verify cleared
     await reloadAndNavigateToModeration(page, uid);
@@ -248,9 +251,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // The "already unsuspended" neutral toast must appear instead of the
     // affirmative "User unsuspended" lift toast.
-    await expect(
-      page.locator('text=User is already unsuspended').first(),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('text=User is already unsuspended').first()).toBeVisible({
+      timeout: 5_000,
+    });
     // Negative assertion: the affirmative "User unsuspended" toast
     // must NOT appear (would imply the UI branch was bypassed).
     await expect(page.locator('text=/^User unsuspended$/').first()).toBeHidden();
@@ -415,7 +418,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
       // Wait for the warning button to re-enable (indicates the previous warning was processed)
       await expect(page.locator('#direct-warn-btn')).toBeEnabled({ timeout: 15_000 });
-      await expect(page.locator('#direct-warn-btn')).toContainText('Issue Warning', { timeout: 15_000 });
+      await expect(page.locator('#direct-warn-btn')).toContainText('Issue Warning', {
+        timeout: 15_000,
+      });
     }
 
     // Verify at least 3 warnings appear in history (previous tests may have left revoked warnings).
@@ -448,19 +453,17 @@ test.describe('Admin Users - Moderation Subtab', () => {
     // Verify #field-createdAt displays a date
     const createdAt = page.locator('#field-createdAt');
     await expect(createdAt).toBeVisible({ timeout: 15_000 });
-    const createdAtText = await createdAt.textContent();
-    expect(createdAtText).toBeTruthy();
-    expect(createdAtText!.length).toBeGreaterThan(0);
+    await expect.poll(async () => await createdAt.textContent()).toBeTruthy();
+    await expect.poll(async () => (await createdAt.textContent())!.length).toBeGreaterThan(0);
     // Should not be a placeholder dash
-    expect(createdAtText).not.toBe('—');
+    await expect.poll(async () => await createdAt.textContent()).not.toBe('—');
 
     // Verify #field-lastSeenAt displays a date
     const lastSeenAt = page.locator('#field-lastSeenAt');
     await expect(lastSeenAt).toBeVisible({ timeout: 15_000 });
-    const lastSeenAtText = await lastSeenAt.textContent();
-    expect(lastSeenAtText).toBeTruthy();
-    expect(lastSeenAtText!.length).toBeGreaterThan(0);
-    expect(lastSeenAtText).not.toBe('—');
+    await expect.poll(async () => await lastSeenAt.textContent()).toBeTruthy();
+    await expect.poll(async () => (await lastSeenAt.textContent())!.length).toBeGreaterThan(0);
+    await expect.poll(async () => await lastSeenAt.textContent()).not.toBe('—');
 
     // Verify #account-info-section has 2 .readonly-badge elements
     const accountInfoSection = page.locator('#account-info-section');

@@ -6,19 +6,28 @@ import type { Page } from '@playwright/test';
  * Helper: wait for the devices table to finish loading (tbody has rows or empty message shows).
  */
 async function waitForDevicesLoaded(page: Page): Promise<void> {
-  await expect(
-    page.locator('#devices-tbody tr, #devices-empty[style*="block"]'),
-  ).not.toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('#devices-tbody tr, #devices-empty[style*="block"]')).not.toHaveCount(
+    0,
+    { timeout: 15_000 },
+  );
 }
 
 /**
  * Helper: search for a device query string and wait for results.
  */
 async function searchDevices(page: Page, query: string): Promise<void> {
+  // Wait for the SEARCH RESPONSE, not just for the table to be "loaded".
+  // waitForDevicesLoaded only proves a table is present — it returns
+  // immediately against the PREVIOUS, unfiltered rows, so callers read stale
+  // data and act on the wrong device. Several tests papered over that with a
+  // sleep; anchoring on the response fixes every call site at once (SHY-0245).
+  const response = page.waitForResponse(
+    (r) => /\/api\/admin\/devices/.test(r.url()) && r.request().method() === 'GET',
+    { timeout: 15_000 },
+  );
   await page.locator('#devices-search-input').fill(query);
   await page.locator('#devices-search-btn').click();
-  // Wait for results to refresh
-  await page.waitForTimeout(1_000);
+  await response;
   await waitForDevicesLoaded(page);
 }
 
@@ -63,15 +72,16 @@ test.describe('Admin Devices Tab', () => {
 
     // Verify at least one row matches
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
 
     // Verify the first row contains expected data
     const firstRow = rows.first();
     await expect(firstRow).toContainText(testData.user.uniqueId.toString());
 
     // API verify: GET /api/admin/devices returns the device
-    const data = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`);
+    const data = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`,
+    );
     const devices = data.devices || [];
     const seeded = devices.find((d: any) => d.id === deviceId);
     expect(seeded).toBeTruthy();
@@ -85,13 +95,12 @@ test.describe('Admin Devices Tab', () => {
 
     await searchDevices(page, deviceId);
 
+    // The retrying assertion IS the wait: searchDevices waits for the table to
+    // LOAD, not for the FILTER to apply, so a snapshot here reads stale rows.
+    // Previously a sleep papered over that gap (SHY-0245).
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    // First row should contain the device ID (truncated or full)
-    const firstRowText = await rows.first().textContent();
-    expect(firstRowText).toContain(deviceId.substring(0, 16));
+    await expect(rows.first()).toContainText(deviceId.substring(0, 16));
+    await expect(rows).not.toHaveCount(0);
   });
 
   // ── Test 3: Search by user ID ──
@@ -100,13 +109,11 @@ test.describe('Admin Devices Tab', () => {
 
     await searchDevices(page, uniqueId);
 
+    // Same shape as the device-ID search: let the retrying assertion be the
+    // wait, so the filtered row is what gets read rather than a stale one.
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    // Row should contain the user ID
-    const firstRowText = await rows.first().textContent();
-    expect(firstRowText).toContain(uniqueId);
+    await expect(rows.first()).toContainText(uniqueId);
+    await expect(rows).not.toHaveCount(0);
   });
 
   // ── Test 4: Search by model ──
@@ -114,19 +121,12 @@ test.describe('Admin Devices Tab', () => {
     await searchDevices(page, 'Pixel 6');
 
     const rows = deviceRows(page);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
     const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
 
-    // At least one row should show Pixel 6
-    let found = false;
-    for (let i = 0; i < count; i++) {
-      const text = await rows.nth(i).textContent();
-      if (text?.includes('Pixel 6')) {
-        found = true;
-        break;
-      }
-    }
-    expect(found).toBe(true);
+    // A locator filter says the same thing as the manual scan-and-flag loop,
+    // but retries and reports which rows it saw when it fails.
+    await expect(rows.filter({ hasText: 'Pixel 6' })).not.toHaveCount(0);
   });
 
   // ── Test 5: Search via Enter key ──
@@ -137,12 +137,10 @@ test.describe('Admin Devices Tab', () => {
     await page.locator('#devices-search-input').press('Enter');
 
     // Wait for results
-    await page.waitForTimeout(1_000);
     await waitForDevicesLoaded(page);
 
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
   });
 
   // ── Test 6: Expand device detail ──
@@ -150,8 +148,11 @@ test.describe('Admin Devices Tab', () => {
     const deviceId = `e2e-${testData.prefix}-device`;
     await searchDevices(page, deviceId);
 
-    // Click the first device row to expand detail
+    // Wait for the FILTER to land before clicking — searchDevices waits for the
+    // table to load, not for the query to apply, so clicking immediately hits a
+    // stale row belonging to a different device (SHY-0245).
     const rows = deviceRows(page);
+    await expect(rows.first()).toContainText(deviceId.substring(0, 16));
     await rows.first().click();
 
     // The detail panel should become visible
@@ -159,12 +160,11 @@ test.describe('Admin Devices Tab', () => {
     await expect(detail).toBeVisible();
 
     // Verify detail contains expected fields
-    const detailText = await detail.textContent();
-    expect(detailText).toContain('Device ID');
-    expect(detailText).toContain('User ID');
-    expect(detailText).toContain('Manufacturer');
-    expect(detailText).toContain('Model');
-    expect(detailText).toContain('Last IP');
+    await expect.poll(async () => await detail.textContent()).toContain('Device ID');
+    await expect.poll(async () => await detail.textContent()).toContain('User ID');
+    await expect.poll(async () => await detail.textContent()).toContain('Manufacturer');
+    await expect.poll(async () => await detail.textContent()).toContain('Model');
+    await expect.poll(async () => await detail.textContent()).toContain('Last IP');
   });
 
   // ── Test 7: Unbind device — confirm, verify removed, re-seed ──
@@ -173,8 +173,7 @@ test.describe('Admin Devices Tab', () => {
     await searchDevices(page, deviceId);
 
     const rows = deviceRows(page);
-    const countBefore = await rows.count();
-    expect(countBefore).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
 
     // Accept the confirm dialog
     page.on('dialog', (dialog) => dialog.accept());
@@ -183,35 +182,28 @@ test.describe('Admin Devices Tab', () => {
     const unbindBtn = rows.first().locator('[data-unbind]');
     await unbindBtn.click();
 
-    // Wait for the table to refresh
-    await page.waitForTimeout(2_000);
+    // The row disappearing IS the "table refreshed" signal — wait for that
+    // rather than guessing 2s (SHY-0245).
+    await expect(rows.filter({ hasText: deviceId.substring(0, 16) })).toHaveCount(0);
 
-    // Reload and verify the device is gone
+    // Reload and verify it is still gone
     await page.reload();
     await adminLogin(page);
     await navigateToTab(page, 'Devices');
     await waitForDevicesLoaded(page);
     await searchDevices(page, deviceId);
 
-    // The device should no longer be in results (or no results at all)
-    const emptyVisible = await page.locator('#devices-empty').isVisible();
-    if (!emptyVisible) {
-      const rowsAfter = deviceRows(page);
-      const countAfter = await rowsAfter.count();
-      // Check that the specific device is not present
-      let found = false;
-      for (let i = 0; i < countAfter; i++) {
-        const text = await rowsAfter.nth(i).textContent();
-        if (text?.includes(deviceId.substring(0, 16))) {
-          found = true;
-          break;
-        }
-      }
-      expect(found).toBe(false);
-    }
+    // Asserted unconditionally. The old `if (!emptyVisible)` skipped the check
+    // entirely whenever the empty state happened to show, and the manual
+    // index loop raced the re-render (rows detach mid-iteration). A retrying
+    // filtered-count assertion covers BOTH outcomes — empty table or a table
+    // without this device — and cannot pass by skipping.
+    await expect(deviceRows(page).filter({ hasText: deviceId.substring(0, 16) })).toHaveCount(0);
 
     // API verify: device should be gone
-    const data = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`);
+    const data = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`,
+    );
     const devices = data.devices || [];
     const stillExists = devices.find((d: any) => d.id === deviceId);
     expect(stillExists).toBeFalsy();
@@ -231,15 +223,17 @@ test.describe('Admin Devices Tab', () => {
     const unbindBtn = deviceRows(page).first().locator('[data-unbind]');
     await unbindBtn.click();
 
-    // Wait a moment then verify device is still there
-    await page.waitForTimeout(1_000);
+    // Asserting the device is STILL there — a negative claim with no state to
+    // wait for, so the window is bounded deliberately.
+    await new Promise((r) => setTimeout(r, 1_000)); // sleep-ok: bounded window for a not-removed assertion
 
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
 
     // API verify: device still exists
-    const data = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`);
+    const data = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`,
+    );
     const devices = data.devices || [];
     const exists = devices.find((d: any) => d.id === deviceId);
     expect(exists).toBeTruthy();
@@ -263,8 +257,7 @@ test.describe('Admin Devices Tab', () => {
     const banBtn = deviceRows(page).first().locator('[data-ban-device]');
     await banBtn.click();
 
-    // Wait for the action to complete
-    await page.waitForTimeout(2_000);
+    // Poll the API below until the ban lands, instead of betting 2s on it.
 
     // API verify: GET /api/admin/bans → deviceBans includes the device
     const bansData = await testData.api.get('/api/admin/bans');
@@ -294,13 +287,14 @@ test.describe('Admin Devices Tab', () => {
     const banNetBtn = deviceRows(page).first().locator('[data-ban-net-ip]');
     await banNetBtn.click();
 
-    // Wait for the action
-    await page.waitForTimeout(2_000);
+    // Poll the API below until the ban lands.
 
     // API verify: GET /api/admin/bans → networkBans includes the IP
     const bansData = await testData.api.get('/api/admin/bans');
     const networkBans = bansData.networkBans || [];
-    const banned = networkBans.find((b: any) => b.value === '203.0.113.1' || b.ip === '203.0.113.1');
+    const banned = networkBans.find(
+      (b: any) => b.value === '203.0.113.1' || b.ip === '203.0.113.1',
+    );
     expect(banned).toBeTruthy();
 
     // Cleanup: unban the network
@@ -323,9 +317,14 @@ test.describe('Admin Devices Tab', () => {
     // The cross-nav is done by the switchTab logic in the JS.
     // Since there's no dedicated "View User" button in the devices table,
     // we verify the user ID is displayed and that navigating to Users tab works.
+    // Target THIS test's device row explicitly. Asserting on `.first()` read
+    // whichever row the table happened to show — a different tenant's device
+    // when the query matched loosely — so the failure looked like a stale-read
+    // race. Filtering by the device id makes it deterministic (SHY-0245).
     const uniqueId = testData.user.uniqueId.toString();
-    const firstRowText = await deviceRows(page).first().textContent();
-    expect(firstRowText).toContain(uniqueId);
+    const ownRow = deviceRows(page).filter({ hasText: deviceId.substring(0, 16) });
+    await expect(ownRow).toHaveCount(1);
+    await expect(ownRow).toContainText(uniqueId);
 
     // Navigate to Users tab and search for the user
     await navigateToTab(page, 'Users');
@@ -348,8 +347,7 @@ test.describe('Admin Devices Tab', () => {
 
     // Verify the userId filter is populated
     const userIdFilter = page.locator('#log-filter-userId');
-    const filterValue = await userIdFilter.inputValue();
-    expect(filterValue).toBe(testData.user.uniqueId.toString());
+    await expect(userIdFilter).toHaveValue(testData.user.uniqueId.toString());
   });
 
   // ── Test 13: Pagination ──
@@ -357,14 +355,12 @@ test.describe('Admin Devices Tab', () => {
     // Clear search to see all devices
     await page.locator('#devices-search-input').fill('');
     await page.locator('#devices-search-btn').click();
-    await page.waitForTimeout(1_000);
     await waitForDevicesLoaded(page);
 
     // Verify pagination elements exist
     const pageInfo = page.locator('#devices-page-info');
     await expect(pageInfo).toBeVisible();
-    const pageText = await pageInfo.textContent();
-    expect(pageText).toContain('Page');
+    await expect(pageInfo).toContainText('Page');
 
     const totalInfo = page.locator('#devices-total-info');
     await expect(totalInfo).toBeVisible();

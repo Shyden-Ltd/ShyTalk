@@ -44,7 +44,9 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 const NEW_KEYS = ['suspended_reason_label', 'default_user_name'];
 
 test.describe('Portal greeting + suspension i18n', () => {
-  test('PORTAL_T defines suspended_reason_label + default_user_name × 21 locales', async ({ request }) => {
+  test('PORTAL_T defines suspended_reason_label + default_user_name × 21 locales', async ({
+    request,
+  }) => {
     // Parser shared with portal-ban-i18n.spec.ts: two independent copies could
     // drift, so one could silently stop matching after a reformat (R18-I2).
     const src = await fetchPortalTranslations(request, BASE);
@@ -59,21 +61,35 @@ test.describe('Portal greeting + suspension i18n', () => {
     }
   });
 
-  test('portal.js no longer hardcodes "Reason: " or "Welcome back, " or toLocaleDateString(undefined)', async ({ request }) => {
+  test('portal.js no longer hardcodes "Reason: " or "Welcome back, " or toLocaleDateString(undefined)', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/portal/portal.js`);
     const src = await res.text();
     expect(src, 'should not have "\'Reason: \' +" hardcoded').not.toContain("'Reason: ' +");
-    expect(src, 'should not have "\'Welcome back, \' +" hardcoded').not.toContain("'Welcome back, ' +");
-    expect(src, 'toLocaleDateString should not pass undefined as locale').not.toContain('toLocaleDateString(undefined,');
+    expect(src, 'should not have "\'Welcome back, \' +" hardcoded').not.toContain(
+      "'Welcome back, ' +",
+    );
+    expect(src, 'toLocaleDateString should not pass undefined as locale').not.toContain(
+      'toLocaleDateString(undefined,',
+    );
     // Sanity: the new helper + key references are present.
-    expect(src, "should call t('suspended_reason_label')").toMatch(/t\(['"]suspended_reason_label['"]\)/);
+    expect(src, "should call t('suspended_reason_label')").toMatch(
+      /t\(['"]suspended_reason_label['"]\)/,
+    );
     expect(src, "should call t('dashboard_welcome')").toMatch(/t\(['"]dashboard_welcome['"]\)/);
-    expect(src, "should call getCurrentLang() for date format").toMatch(/toLocaleDateString\(getCurrentLang\(\),/);
+    expect(src, 'should call getCurrentLang() for date format').toMatch(
+      /toLocaleDateString\(getCurrentLang\(\),/,
+    );
   });
 
   test('Korean locale: portal t() helper resolves new keys to Hangul', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(

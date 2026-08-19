@@ -47,7 +47,9 @@ test.describe('Roadmap footer links i18n', () => {
 
     const privacy = (await page.locator('[data-i18n="footer_privacy"]').textContent())?.trim();
     const terms = (await page.locator('[data-i18n="footer_terms"]').textContent())?.trim();
-    const guidelines = (await page.locator('[data-i18n="footer_guidelines"]').textContent())?.trim();
+    const guidelines = (
+      await page.locator('[data-i18n="footer_guidelines"]').textContent()
+    )?.trim();
     const dns = (await page.locator('[data-i18n="footer_do_not_sell"]').textContent())?.trim();
 
     expect(privacy, 'footer_privacy should not be English').not.toBe('Privacy Policy');

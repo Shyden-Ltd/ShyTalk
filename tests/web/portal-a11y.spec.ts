@@ -9,15 +9,13 @@ test.describe('Portal — Accessibility: Labels & ARIA', () => {
   test('email input has associated label (sr-only)', async ({ page }) => {
     const label = page.locator('label[for="login-email"]');
     await expect(label).toHaveCount(1);
-    const classes = await label.getAttribute('class');
-    expect(classes).toContain('sr-only');
+    await expect.poll(async () => await label.getAttribute('class')).toContain('sr-only');
   });
 
   test('password input has associated label (sr-only)', async ({ page }) => {
     const label = page.locator('label[for="login-password"]');
     await expect(label).toHaveCount(1);
-    const classes = await label.getAttribute('class');
-    expect(classes).toContain('sr-only');
+    await expect.poll(async () => await label.getAttribute('class')).toContain('sr-only');
   });
 
   test('TOTP code input has associated label', async ({ page }) => {
@@ -51,7 +49,13 @@ test.describe('Portal — Accessibility: Labels & ARIA', () => {
   });
 
   test('all error messages have role="alert"', async ({ page }) => {
-    const errorIds = ['login-error', 'totp-error', 'enroll-error', 'recovery-error', 'reauth-error'];
+    const errorIds = [
+      'login-error',
+      'totp-error',
+      'enroll-error',
+      'recovery-error',
+      'reauth-error',
+    ];
     for (const id of errorIds) {
       await expect(page.locator(`#${id}`)).toHaveAttribute('role', 'alert');
     }
@@ -63,8 +67,8 @@ test.describe('Portal — Accessibility: Labels & ARIA', () => {
 
   test('ShyTalk logo has aria-label', async ({ page }) => {
     const logos = page.locator('.portal-logo');
+    await expect.poll(async () => await logos.count()).toBeGreaterThan(0);
     const count = await logos.count();
-    expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       await expect(logos.nth(i)).toHaveAttribute('aria-label', 'ShyTalk');
     }
@@ -75,7 +79,10 @@ test.describe('Portal — Accessibility: Labels & ARIA', () => {
   });
 
   test('QR container has aria-label', async ({ page }) => {
-    await expect(page.locator('#enroll-qr')).toHaveAttribute('aria-label', 'QR code for TOTP setup');
+    await expect(page.locator('#enroll-qr')).toHaveAttribute(
+      'aria-label',
+      'QR code for TOTP setup',
+    );
   });
 
   test('copy button has aria-label', async ({ page }) => {
@@ -193,7 +200,8 @@ test.describe('Portal — Accessibility: Keyboard Navigation', () => {
       const btn = page.locator(`#${id}`);
       await btn.focus();
       await expect(btn).toBeFocused();
-      const accessibleName = (await btn.textContent())?.trim() || (await btn.getAttribute('aria-label'))?.trim();
+      const accessibleName =
+        (await btn.textContent())?.trim() || (await btn.getAttribute('aria-label'))?.trim();
       expect(accessibleName, `${id} must expose an accessible name`).toBeTruthy();
     }
   });
@@ -204,9 +212,11 @@ test.describe('Portal — Accessibility: Keyboard Navigation', () => {
     await page.locator('#login-password').press('Enter');
     // Form should be submitted — we'll see an error since the credentials are invalid
     // but the form submission should have triggered
-    // Wait for either an error message or a network request
-    await page.waitForTimeout(2000);
-    // The form should have attempted to submit
+    // Assert the submission actually happened rather than sleeping and ending
+    // on a comment: an invalid login must surface an error, not fail silently.
+    await expect(page.locator('#totp-error, .error-message, [role="alert"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });
 
@@ -218,9 +228,16 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('login section has data-i18n attributes on all translatable elements', async ({ page }) => {
     const expectedKeys = [
-      'login_subtitle', 'login_google', 'login_apple', 'login_or',
-      'login_email_label', 'login_password_label', 'login_remember',
-      'login_submit', 'login_no_account', 'login_download',
+      'login_subtitle',
+      'login_google',
+      'login_apple',
+      'login_or',
+      'login_email_label',
+      'login_password_label',
+      'login_remember',
+      'login_submit',
+      'login_no_account',
+      'login_download',
     ];
     for (const key of expectedKeys) {
       const el = page.locator(`[data-i18n="${key}"]`);
@@ -230,7 +247,11 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('TOTP section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'totp_heading', 'totp_subtitle', 'totp_code_label', 'totp_verify', 'totp_lost',
+      'totp_heading',
+      'totp_subtitle',
+      'totp_code_label',
+      'totp_verify',
+      'totp_lost',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -239,7 +260,11 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('enrollment section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'enroll_heading', 'enroll_subtitle', 'enroll_copy', 'enroll_code_label', 'enroll_confirm',
+      'enroll_heading',
+      'enroll_subtitle',
+      'enroll_copy',
+      'enroll_code_label',
+      'enroll_confirm',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -248,8 +273,13 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('recovery section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'recovery_heading', 'recovery_subtitle', 'recovery_email_label',
-      'recovery_send', 'recovery_code_label', 'recovery_verify', 'recovery_back',
+      'recovery_heading',
+      'recovery_subtitle',
+      'recovery_email_label',
+      'recovery_send',
+      'recovery_code_label',
+      'recovery_verify',
+      'recovery_back',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -258,8 +288,12 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('suspended section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'suspended_heading', 'suspended_reason', 'suspended_until',
-      'suspended_appeal', 'suspended_contact', 'suspended_signout',
+      'suspended_heading',
+      'suspended_reason',
+      'suspended_until',
+      'suspended_appeal',
+      'suspended_contact',
+      'suspended_signout',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -274,8 +308,12 @@ test.describe('Portal — i18n: Data Attributes', () => {
     // test red — and would have shown a banned user copy written for a
     // suspended one.
     const expectedKeys = [
-      'banned_heading', 'banned_reason', 'banned_until',
-      'banned_appeal', 'banned_contact', 'banned_signout',
+      'banned_heading',
+      'banned_reason',
+      'banned_until',
+      'banned_appeal',
+      'banned_contact',
+      'banned_signout',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -284,8 +322,11 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('no-account section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'no_account_heading', 'no_account_subtitle',
-      'no_account_google_play', 'no_account_app_store', 'no_account_back',
+      'no_account_heading',
+      'no_account_subtitle',
+      'no_account_google_play',
+      'no_account_app_store',
+      'no_account_back',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -294,9 +335,16 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('dashboard section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'dashboard_welcome', 'dashboard_signout', 'dashboard_panels',
-      'dashboard_community', 'dashboard_roadmap', 'dashboard_suggestions',
-      'dashboard_account', 'dashboard_profile', 'dashboard_security', 'dashboard_data_privacy',
+      'dashboard_welcome',
+      'dashboard_signout',
+      'dashboard_panels',
+      'dashboard_community',
+      'dashboard_roadmap',
+      'dashboard_suggestions',
+      'dashboard_account',
+      'dashboard_profile',
+      'dashboard_security',
+      'dashboard_data_privacy',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -305,8 +353,11 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('profile section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'profile_heading', 'profile_display_name', 'profile_unique_id',
-      'profile_user_type', 'profile_coming_soon',
+      'profile_heading',
+      'profile_display_name',
+      'profile_unique_id',
+      'profile_user_type',
+      'profile_coming_soon',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -315,10 +366,17 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('security section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'security_heading', 'security_password', 'security_password_desc',
-      'security_change_password', 'security_totp', 'security_totp_status',
-      'security_totp_enable', 'security_sessions', 'security_sessions_desc',
-      'security_revoke_all', 'security_providers',
+      'security_heading',
+      'security_password',
+      'security_password_desc',
+      'security_change_password',
+      'security_totp',
+      'security_totp_status',
+      'security_totp_enable',
+      'security_sessions',
+      'security_sessions_desc',
+      'security_revoke_all',
+      'security_providers',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -327,9 +385,17 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('data-privacy section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'data_privacy_heading', 'data_export', 'data_export_desc', 'data_export_btn',
-      'data_delete', 'data_delete_desc', 'data_delete_btn',
-      'data_legal', 'data_privacy_policy', 'data_terms', 'data_guidelines',
+      'data_privacy_heading',
+      'data_export',
+      'data_export_desc',
+      'data_export_btn',
+      'data_delete',
+      'data_delete_desc',
+      'data_delete_btn',
+      'data_legal',
+      'data_privacy_policy',
+      'data_terms',
+      'data_guidelines',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -338,8 +404,12 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('modal sections have data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
-      'reauth_title', 'reauth_desc', 'reauth_code_label',
-      'reauth_cancel', 'reauth_confirm', 'modal_close',
+      'reauth_title',
+      'reauth_desc',
+      'reauth_code_label',
+      'reauth_cancel',
+      'reauth_confirm',
+      'modal_close',
     ];
     for (const key of expectedKeys) {
       await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
@@ -348,7 +418,8 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('placeholder data-i18n attributes exist', async ({ page }) => {
     const expectedKeys = [
-      'login_email_placeholder', 'login_password_placeholder',
+      'login_email_placeholder',
+      'login_password_placeholder',
       'recovery_email_placeholder',
     ];
     for (const key of expectedKeys) {
@@ -358,8 +429,9 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('back_to_dashboard appears on all subpages', async ({ page }) => {
     // back_to_dashboard should appear on profile, security, and data-privacy
-    const count = await page.locator('[data-i18n="back_to_dashboard"]').count();
-    expect(count).toBe(3);
+    await expect
+      .poll(async () => await page.locator('[data-i18n="back_to_dashboard"]').count())
+      .toBe(3);
   });
 
   test('loading text has data-i18n', async ({ page }) => {
@@ -452,9 +524,8 @@ test.describe('Portal — Semantic HTML Structure', () => {
 
   test('sections use semantic section elements', async ({ page }) => {
     const sections = page.locator('main section.portal-section');
-    const count = await sections.count();
+    await expect.poll(async () => await sections.count()).toBeGreaterThanOrEqual(8);
     // Should have all portal sections
-    expect(count).toBeGreaterThanOrEqual(8);
   });
 
   test('dashboard has header element', async ({ page }) => {
@@ -479,7 +550,6 @@ test.describe('Portal — Semantic HTML Structure', () => {
 
   test('page has description meta tag', async ({ page }) => {
     const desc = page.locator('meta[name="description"]');
-    const content = await desc.getAttribute('content');
-    expect(content).toContain('ShyTalk');
+    await expect.poll(async () => await desc.getAttribute('content')).toContain('ShyTalk');
   });
 });

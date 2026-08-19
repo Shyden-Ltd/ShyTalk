@@ -62,7 +62,7 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     }
 
     // Verify each key is wired (tAdmin or tAdminFmt depending on shape)
-    for (const key of PHASE_2D_KEYS.filter(k => k !== 'msg_suspended_since_until_format')) {
+    for (const key of PHASE_2D_KEYS.filter((k) => k !== 'msg_suspended_since_until_format')) {
       expect(src, `users.js should reference "${key}"`).toMatch(
         new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
       );
@@ -76,8 +76,26 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
@@ -89,9 +107,7 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_2D_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });

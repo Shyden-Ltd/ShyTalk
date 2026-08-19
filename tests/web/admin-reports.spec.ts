@@ -1,22 +1,25 @@
-import { test, expect, TestData } from './fixtures/admin';
+import { test, expect, TestData, EVIDENCE_IMAGE } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
 
 /** Wait for the reports list to finish loading. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('reports-list');
-      if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
-        list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('reports-list');
+    if (!list) return false;
+    return (
+      list.querySelector('.report-card') !== null ||
+      list.textContent!.includes('No reports') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Click a report filter button (pending, resolved, archived). */
-async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archived'): Promise<void> {
+async function filterReports(
+  page: Page,
+  status: 'pending' | 'resolved' | 'archived',
+): Promise<void> {
   const btn = page.locator(`#report-filter-bar button[data-report-filter="${status}"]`);
   await expect(btn).toBeVisible({ timeout: 5_000 });
   await btn.click();
@@ -41,7 +44,10 @@ async function getReportStatsViaApi(testData: TestData, period = '7d'): Promise<
  * and it accumulates as orphaned data ("Unknown user" cards at the top
  * of the Reports tab) once the test user is torn down.
  */
-async function seedReportViaApi(testData: TestData): Promise<string> {
+async function seedReportViaApi(
+  testData: TestData,
+  extra: Record<string, unknown> = {},
+): Promise<string> {
   const result = await testData.api.testWrite('reports', {
     reportedUserId: testData.user.uid,
     reportedUserUniqueId: testData.user.uniqueId,
@@ -52,6 +58,7 @@ async function seedReportViaApi(testData: TestData): Promise<string> {
     status: 'pending',
     createdAt: Date.now(),
     _testRun: testData.testRunId,
+    ...extra,
   });
   return result.id;
 }
@@ -101,7 +108,9 @@ test.describe('Admin Reports', () => {
     // [[feedback-test-isolation-no-leaks]] for context. Production
     // code never sets this flag — only tests.
     await page.addInitScript(() => {
-      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+      (
+        window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }
+      ).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);
     await navigateToTab(page, 'Reports');
@@ -109,7 +118,10 @@ test.describe('Admin Reports', () => {
   });
 
   // ── Test 1: Seeded report appears in pending list — API verify ──
-  test('seeded report appears in pending list with API verification', async ({ page, testData }) => {
+  test('seeded report appears in pending list with API verification', async ({
+    page,
+    testData,
+  }) => {
     await filterReports(page, 'pending');
 
     // Verify at least one report card is visible
@@ -156,7 +168,7 @@ test.describe('Admin Reports', () => {
     // waitForReportsLoaded would return immediately seeing stale cards.
     await searchInput.fill(String(testData.user.uniqueId));
     const searchResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/reports') && resp.url().includes('search='),
+      (resp) => resp.url().includes('/api/reports') && resp.url().includes('search='),
     );
     await searchBtn.click();
     await searchResponse;
@@ -165,17 +177,32 @@ test.describe('Admin Reports', () => {
     // Verify the results show the user
     const reportsList = page.locator('#reports-list');
     const cards = page.locator('.report-card');
-    const cardCount = await cards.count();
+    // The fixture seeds a report against testData.user, so searching for that
+    // id must return something. Guarding on the count meant a search returning
+    // nothing — the exact failure worth catching — passed silently.
+    await expect.poll(async () => cards.count()).toBeGreaterThan(0);
 
-    if (cardCount > 0) {
-      // Verify the displayed user matches the search
-      await expect(reportsList).toContainText(String(testData.user.uniqueId));
-    }
+    // The list GROUPS by reported user, but a report also matches on its
+    // REPORTER's id (SHY-0251) — so the searched id need not be the one on the
+    // card header. What must hold is that the seeded user's report is among the
+    // results, which the API can confirm directly.
+    const results = await testData.api.get(
+      `/api/reports?status=pending&search=${testData.user.uniqueId}`,
+    );
+    const involved = (results.users || []).flatMap((u: any) => u.reports || []);
+    expect(
+      involved.some(
+        (r: any) =>
+          String(r.reportedUserUniqueId) === String(testData.user.uniqueId) ||
+          String(r.reporterUniqueId) === String(testData.user.uniqueId),
+      ),
+      'the searched id must appear as the reported user or the reporter on some result',
+    ).toBe(true);
 
     // Clear search — same pattern: wait for API response
     await searchInput.fill('');
     const clearResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/reports') && !resp.url().includes('search='),
+      (resp) => resp.url().includes('/api/reports') && !resp.url().includes('search='),
     );
     await searchBtn.click();
     await clearResponse;
@@ -235,10 +262,12 @@ test.describe('Admin Reports', () => {
     // (`reports.js:694` falls back to 1 when no input is `:checked`).
     // Set `checked` and dispatch `change` directly so the chosen severity
     // is actually applied.
-    await firstCard.locator(`input[name="sev-${uid}"][value="2"]`).evaluate((el: HTMLInputElement) => {
-      el.checked = true;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await firstCard
+      .locator(`input[name="sev-${uid}"][value="2"]`)
+      .evaluate((el: HTMLInputElement) => {
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
 
     // Click Resolve Latest
     const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
@@ -254,7 +283,7 @@ test.describe('Admin Reports', () => {
     // Cross-check: verify warning exists via API
     try {
       const warnings = await testData.api.get(`/api/user/${testData.user.uniqueId}/warnings`);
-      const warningList = Array.isArray(warnings) ? warnings : (warnings.warnings || []);
+      const warningList = Array.isArray(warnings) ? warnings : warnings.warnings || [];
       const recentWarning = warningList.find((w: any) => w.severity === 2);
       expect(recentWarning).toBeTruthy();
     } catch (err) {
@@ -330,9 +359,19 @@ test.describe('Admin Reports', () => {
 
     await waitForReportsLoaded(page);
 
-    // API verify: no more pending reports for this user — Firestore emulator
-    // may need a moment to propagate the writes from the resolve-all batch.
-    await page.waitForTimeout(1_000);
+    // Poll for the ACTUAL claim — this user gone from pending — not for a
+    // proxy. A first attempt polled `users.length <= 1`, which was already
+    // true (this user was the only one) and so returned instantly while the
+    // reports were still pending. Polling the wrong condition is just a
+    // shorter sleep.
+    await expect
+      .poll(async () => {
+        const pending = await getReportsViaApi(testData, 'pending');
+        return (pending.users ?? []).some(
+          (u: any) => String(u.uniqueId) === String(testData.user.uniqueId),
+        );
+      })
+      .toBe(false);
     const result = await getReportsViaApi(testData, 'pending');
     const userReports = result.users?.find(
       (u: any) => String(u.uniqueId) === String(testData.user.uniqueId),
@@ -400,8 +439,7 @@ test.describe('Admin Reports', () => {
     await expect(reviewersStat).toBeVisible();
 
     // Verify stats have content
-    const pendingText = await pendingStat.textContent();
-    expect(pendingText).toBeTruthy();
+    await expect(pendingStat).not.toBeEmpty();
 
     // API verify
     const stats = await getReportStatsViaApi(testData);
@@ -475,24 +513,26 @@ test.describe('Admin Reports', () => {
   });
 
   // ── Test 14: Conversation viewer — click View, verify messages ──
-  test('conversation viewer displays messages when available', async ({ page }) => {
+  test('conversation viewer displays messages', async ({ page, testData }) => {
+    // This skipped every run. Not because reports never carry a conversation
+    // — the worker fixture seeds one — but because the resolve/bulk-resolve
+    // tests ahead of it in this serial file consume every pending report. The
+    // test was reporting green on a queue its own neighbours had emptied.
+    await seedReportViaApi(testData, { conversationId: testData.conversation.id });
+    await page.reload();
+    await adminLogin(page);
+    await navigateToTab(page, 'Reports');
     await filterReports(page, 'pending');
 
     const viewConvLink = page.locator('.view-conversation-btn').first();
-    const hasConversation = await viewConvLink.count() > 0;
-
-    if (!hasConversation) {
-      test.skip(true, 'No reports with conversation context available');
-      return;
-    }
+    await expect(viewConvLink).toBeVisible();
 
     await viewConvLink.click();
 
     const convViewer = page.locator('.conv-viewer');
     await expect(convViewer).toBeVisible();
 
-    const viewerText = await convViewer.textContent();
-    expect(viewerText!.length).toBeGreaterThan(0);
+    await expect.poll(async () => (await convViewer.textContent())!.length).toBeGreaterThan(0);
 
     // Click again to toggle close
     await viewConvLink.click();
@@ -500,16 +540,17 @@ test.describe('Admin Reports', () => {
   });
 
   // ── Test 15: Evidence lightbox — click image, verify opens ──
-  test('evidence lightbox opens from report evidence thumbnail', async ({ page }) => {
+  test('evidence lightbox opens from report evidence thumbnail', async ({ page, testData }) => {
+    // Same story as test 14 — and additionally, nothing seeded evidence at
+    // all, so there was never a thumbnail for this to find.
+    await seedReportViaApi(testData, { evidenceUrls: [EVIDENCE_IMAGE] });
+    await page.reload();
+    await adminLogin(page);
+    await navigateToTab(page, 'Reports');
     await filterReports(page, 'pending');
 
     const thumbs = page.locator('#reports-list .evidence-thumb');
-    const thumbCount = await thumbs.count();
-
-    if (thumbCount === 0) {
-      test.skip(true, 'No evidence thumbnails in current reports');
-      return;
-    }
+    await expect(thumbs.first()).toBeVisible();
 
     await thumbs.first().click();
 
@@ -525,13 +566,10 @@ test.describe('Admin Reports', () => {
   test('clicking user name in report navigates to Users tab', async ({ page, testData }) => {
     await filterReports(page, 'pending');
 
+    // The fixture seeds a pending report against testData.user, so its
+    // navigate link must exist — skipping left cross-tab navigation untested.
     const navigateLink = page.locator(`[data-navigate-uid="${testData.user.uniqueId}"]`).first();
-    const hasLink = await navigateLink.count() > 0;
-
-    if (!hasLink) {
-      test.skip(true, 'No navigable user link in current pending reports');
-      return;
-    }
+    await expect(navigateLink).toBeVisible({ timeout: 15_000 });
 
     await navigateLink.click();
 
@@ -549,24 +587,22 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const cards = page.locator('.report-card');
-    const cardCount = await cards.count();
-
-    if (cardCount === 0) {
-      test.skip(true, 'No pending reports to verify grouping');
-      return;
-    }
+    // The fixture seeds a pending report, so an empty pending list is a real
+    // failure — skipping here meant grouping was never verified.
+    await expect
+      .poll(async () => cards.count(), { message: 'the fixture seeds a pending report' })
+      .toBeGreaterThan(0);
 
     // Each card represents a user group (card has data-uid)
+    const cardCount = await cards.count();
     for (let i = 0; i < Math.min(cardCount, 5); i++) {
       const card = cards.nth(i);
-      const uid = await card.getAttribute('data-uid');
-      expect(uid).toBeTruthy();
+      await expect.poll(async () => await card.getAttribute('data-uid')).toBeTruthy();
 
       // Each card should show a report count badge
       const countBadge = card.locator('.report-count-badge');
       await expect(countBadge).toBeVisible();
-      const badgeText = await countBadge.textContent();
-      expect(badgeText).toMatch(/\d+ reports?/);
+      await expect.poll(async () => await countBadge.textContent()).toMatch(/\d+ reports?/);
     }
   });
 
@@ -574,12 +610,9 @@ test.describe('Admin Reports', () => {
   test('keyboard shortcut W selects warn action', async ({ page }) => {
     await filterReports(page, 'pending');
 
+    // The fixture seeds a pending report, so an empty list is a real failure.
     const firstCard = page.locator('.report-card').first();
-    const cardExists = await firstCard.count() > 0;
-    if (!cardExists) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    await expect(firstCard).toBeVisible({ timeout: 15_000 });
 
     await selectFirstReportCard(page);
 
@@ -597,12 +630,9 @@ test.describe('Admin Reports', () => {
   test('keyboard shortcut D selects dismiss action', async ({ page }) => {
     await filterReports(page, 'pending');
 
+    // The fixture seeds a pending report, so an empty list is a real failure.
     const firstCard = page.locator('.report-card').first();
-    const cardExists = await firstCard.count() > 0;
-    if (!cardExists) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    await expect(firstCard).toBeVisible({ timeout: 15_000 });
 
     // Use the same selection helper as the W test (real Playwright
     // keyboard.press) — synthetic `document.dispatchEvent(new
@@ -628,12 +658,15 @@ test.describe('Admin Reports', () => {
     try {
       const auditLog = await testData.api.get('/api/admin/audit-log?limit=5');
       expect(auditLog).toBeTruthy();
-      const entries = Array.isArray(auditLog) ? auditLog : (auditLog.entries || auditLog.logs || []);
+      const entries = Array.isArray(auditLog) ? auditLog : auditLog.entries || auditLog.logs || [];
       expect(Array.isArray(entries)).toBe(true);
     } catch (err: any) {
-      // If 404, endpoint may not exist yet
+      // The audit-log endpoint DOES exist and is exercised elsewhere in this
+      // suite, so a 404 here is a routing regression, not an unbuilt feature.
       if (err.message?.includes('404')) {
-        test.skip(true, 'Audit log endpoint not yet implemented');
+        throw new Error(
+          `admin audit-log endpoint returned 404 — it exists and is used by admin-audit-log.spec.ts, so this is a regression: ${err.message}`,
+        );
       } else {
         throw err;
       }

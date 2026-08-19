@@ -41,7 +41,10 @@ const ASSIGNMENT_PATTERNS: ReadonlyArray<readonly [string, RegExp]> = [
   // visitor, and that spec already re-applies it through a late-binding setter
   // so the page's wholesale replace cannot drop it. Flagging it would make
   // this rule something to work around rather than obey.
-  ['sub-property assignment', /\bshytalkAuth\s*\.\s*(currentUser|profile|authStateKnown)\s*=\s*(?!=)/],
+  [
+    'sub-property assignment',
+    /\bshytalkAuth\s*\.\s*(currentUser|profile|authStateKnown)\s*=\s*(?!=)/,
+  ],
   ['bracket-notation assignment', /\[\s*['"]shytalkAuth['"]\s*\]\s*=\s*(?!=)/],
 ];
 
@@ -105,7 +108,9 @@ const rel = (file: string) => path.relative(WEB_TESTS_DIR, file);
 
 test.describe('SHY-0279 — auth injection discipline', () => {
   test('the comment stripper actually strips (guards every rule below)', () => {
-    const stripped = codeOnly('const a = 1; // window.shytalkAuth = {}\n/* shytalkAuth = {} */\nconst b = 2;');
+    const stripped = codeOnly(
+      'const a = 1; // window.shytalkAuth = {}\n/* shytalkAuth = {} */\nconst b = 2;',
+    );
     expect(assignsAuthState(stripped)).toBe(false);
     // A URL must survive: `//` inside `https://` is not a comment.
     expect(codeOnly('const u = "https://example.com/x";')).toContain('https://example.com/x');
@@ -130,7 +135,10 @@ test.describe('SHY-0279 — auth injection discipline', () => {
   for (const [form, sample] of [
     ['comparison', 'if (window.shytalkAuth === undefined) return;'],
     ['optional read', 'const k = window.shytalkAuth?.authStateKnown;'],
-    ['observation via defineProperty', "Object.defineProperty(window, 'shytalkAuth', { get: () => held });"],
+    [
+      'observation via defineProperty',
+      "Object.defineProperty(window, 'shytalkAuth', { get: () => held });",
+    ],
     ['sign-in method override', 'window.shytalkAuth.signInWithGoogle = () => {};'],
   ] as const) {
     test(`${form} is NOT treated as an assignment`, () => {
@@ -171,7 +179,9 @@ test.describe('SHY-0279 — auth injection discipline', () => {
         // Quote-agnostic: nothing lints `tests/web/**/*.ts`, so an editor's
         // double-quoted auto-import would otherwise be reported as an offender
         // for a difference that changes nothing.
-        return code.includes('injectAuthState(') && !/from ['"].*helpers\/roadmap-auth['"]/.test(code);
+        return (
+          code.includes('injectAuthState(') && !/from ['"].*helpers\/roadmap-auth['"]/.test(code)
+        );
       })
       .map(rel);
     expect(offenders).toEqual([]);

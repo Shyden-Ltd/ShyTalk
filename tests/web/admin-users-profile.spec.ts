@@ -6,9 +6,12 @@ import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpe
  * the "Saved" feedback to appear next to the field.  Auto-save fires on blur
  * for text inputs and on change for selects/checkboxes.
  */
-async function waitForAutoSave(page: import('@playwright/test').Page, fieldSelector: string): Promise<void> {
+async function waitForAutoSave(
+  page: import('@playwright/test').Page,
+  fieldSelector: string,
+): Promise<void> {
   // Blur triggers auto-save for text fields
-  await page.locator(fieldSelector).evaluate(el => el.blur());
+  await page.locator(fieldSelector).evaluate((el) => el.blur());
   // Wait for the PATCH request to complete — look for the green "Saved" feedback
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
@@ -19,7 +22,10 @@ async function waitForAutoSave(page: import('@playwright/test').Page, fieldSelec
  * The change event already fired from Playwright's check/selectOption, so
  * we just need to wait for the save feedback.
  */
-async function waitForAutoSaveAfterChange(page: import('@playwright/test').Page, fieldSelector: string): Promise<void> {
+async function waitForAutoSaveAfterChange(
+  page: import('@playwright/test').Page,
+  fieldSelector: string,
+): Promise<void> {
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
 }
@@ -77,7 +83,9 @@ test.describe('Admin Users - Profile Subtab', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(page.locator('[data-field="displayName"]')).toHaveValue(newName, { timeout: 15_000 });
+    await expect(page.locator('[data-field="displayName"]')).toHaveValue(newName, {
+      timeout: 15_000,
+    });
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -110,7 +118,9 @@ test.describe('Admin Users - Profile Subtab', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(page.locator('[data-field="description"]')).toHaveValue(description, { timeout: 15_000 });
+    await expect(page.locator('[data-field="description"]')).toHaveValue(description, {
+      timeout: 15_000,
+    });
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -221,7 +231,9 @@ test.describe('Admin Users - Profile Subtab', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(page.locator('select[data-field="userType"]')).toHaveValue('SHYTALK_OFFICIAL', { timeout: 15_000 });
+    await expect(page.locator('select[data-field="userType"]')).toHaveValue('SHYTALK_OFFICIAL', {
+      timeout: 15_000,
+    });
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -252,8 +264,7 @@ test.describe('Admin Users - Profile Subtab', () => {
     await expect(emailToggle).toContainText('Hide');
 
     // Email input should no longer be readonly
-    const readonlyAfterShow = await emailInput.getAttribute('readonly');
-    expect(readonlyAfterShow).toBeNull();
+    await expect.poll(async () => await emailInput.getAttribute('readonly')).toBeNull();
 
     // Click Hide — toggle text should change back to "Show"
     await emailToggle.click();
@@ -333,10 +344,11 @@ test.describe('Admin Users - Profile Subtab', () => {
     // Verify values match API data
     const apiData = await testData.api.get(userPath);
     if (apiData.createdAt) {
-      const createdAtText = await createdAtField.textContent();
       // The API returns ISO/epoch, the UI formats with toLocaleString — just verify it's not empty
-      expect(createdAtText).not.toBe('—');
-      expect(createdAtText!.length).toBeGreaterThan(0);
+      await expect.poll(async () => await createdAtField.textContent()).not.toBe('—');
+      await expect
+        .poll(async () => (await createdAtField.textContent())!.length)
+        .toBeGreaterThan(0);
     }
   });
 
@@ -347,7 +359,7 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // Listen for the API response
     const responsePromise = page.waitForResponse(
-      resp => resp.url().includes('/api/search/uniqueId/99999999'),
+      (resp) => resp.url().includes('/api/search/uniqueId/99999999'),
       { timeout: 15_000 },
     );
 
@@ -357,16 +369,14 @@ test.describe('Admin Users - Profile Subtab', () => {
     const response = await responsePromise;
     expect(response.status()).toBe(404);
 
-    // The user form should NOT become visible
-    const userForm = page.locator('#user-form');
-    // Wait a moment for any UI updates to settle
-    await page.waitForTimeout(1_000);
-    const isVisible = await userForm.evaluate(el => el.classList.contains('visible'));
-    expect(isVisible).toBe(false);
+    // Anchor on the app's OWN acknowledgement of the 404 — the error toast —
+    // rather than sleeping and hoping the UI settled (SHY-0245). The timeout
+    // bounds the failure; it is not the wait. Without a positive anchor the
+    // "form stays hidden" assertion below could pass trivially, before the
+    // app would ever have rendered it.
+    await expect(page.locator('.toast.error')).toBeVisible({ timeout: 10_000 });
 
-    // A toast error should have appeared (user not found)
-    const toast = page.locator('.toast.error');
-    // The toast may have already faded — check if it appeared at all
-    // by verifying the form stays hidden (primary assertion above)
+    // Only now is "not visible" meaningful: the app has processed the 404.
+    await expect(page.locator('#user-form')).not.toHaveClass(/\bvisible\b/);
   });
 });
