@@ -497,3 +497,30 @@ Against the **real** local emulator stack, per the real-only rule.
   group key. Not filed as a story from a single PR's evidence; recorded here so
   the next person who sees a green board with a red gate does not re-run three
   times before questioning it.
+
+- **2026-08-19 — self-review (labelled as such, not an agent pass).** Read the
+  production diff end to end:
+
+  - **The endpoint takes its subject from `req.auth.uniqueId` only.** There is no
+    code path by which a body field can redirect it, which is the property the
+    `answers about the CALLER only` test pins and a mutation proves.
+  - **Ids are validated before they become document paths** —
+    `/^[1-9][0-9]*$/` — so `../admin/secrets` is refused rather than
+    normalised. Also mutation-proven.
+  - **`db.getAll` sidesteps the rules engine entirely**, which is the actual
+    fix: there is no filtered query to be refused all-or-nothing, and each
+    document is read on its own merits.
+  - **The comparison reuses `viewerIsBlocked`** rather than reimplementing it,
+    so the `String()` coercion on both sides is inherited from the one place
+    that already had it right.
+  - **Both clients lost the parameter, not just its use.** `checkBlockedBy(userIds)`
+    cannot be asked about anybody else, and the KDoc states that an `Error` is
+    not an empty set.
+
+  One thing noted rather than changed: `BLOCKED_BY_MAX_IDS = 1000` bounds a
+  `db.getAll` fan-out. A room cannot approach that, so the cap is generous
+  rather than tight, and it exists to stop an unbounded read rather than to
+  model a room. Left as is; flagged so a future reader knows it was a deliberate
+  bound and not a guess at capacity.
+
+Reviewed-up-to: 0bdc61eccd891560c224f8ada5a90188e4af673e
