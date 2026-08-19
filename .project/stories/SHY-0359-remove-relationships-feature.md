@@ -1,6 +1,6 @@
 ---
 id: SHY-0359
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P1
@@ -186,6 +186,8 @@ one back.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: b2e5016cb9d1f4c54a611102994d89aeea344612
 
 - **2026-08-20** — Operator chose "just delete it, no automation", plus a standing
   rule in the project `CLAUDE.md` to stay alert to dating drift on every surface.
