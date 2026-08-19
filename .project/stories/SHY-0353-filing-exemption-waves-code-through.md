@@ -205,3 +205,27 @@ it. The full non-device gauntlet still runs.
   Filing a brand-new Draft story is legitimate and common. What is missing is one
   extra question — *does this pull request contain anything that is not a story
   document?* — which both gates already have the data to answer.
+
+- **2026-08-19 — the story INDEX was 8 stories stale, and fixing it here creates
+  this story's own edge case.** `SHY-INDEX.md` is described in `CLAUDE.md` as
+  "the live backlog", and it listed up to **SHY-0344** while `develop` carried
+  stories up to **SHY-0352** — SHY-0345 through SHY-0353 were all absent. Anyone
+  reading the backlog got a picture eight stories out of date, including four P0
+  bugs. Backfilled in this PR from each story's own frontmatter rather than from
+  memory.
+
+  That makes this PR carry a non-story file — and `SHY-INDEX.md` does **not**
+  match the `SHY-[0-9]{4}-*.md` pattern the validator and both gates key on. So
+  this pull request is precisely the case the Edge-cases AC above names: *"a pull
+  request whose only non-story change is another `.project/` document"*.
+
+  **The classification this story recommends, stated rather than left to
+  accident:** `.project/stories/SHY-INDEX.md` should count as a **story
+  document** for the filing exemption. It is pure backlog metadata, it ships no
+  behaviour, and keeping it out of the exemption would mean the framework
+  punishes you for maintaining its own index — which is how it got eight stories
+  behind. Any file outside `.project/stories/` should not be exempt.
+
+  Under today's gate this PR is exempt anyway, because the gate never looks past
+  the story. That is the bug. Under the rule proposed here it stays exempt, but
+  *deliberately*, and a PR carrying `express-api/src/**` would not.
