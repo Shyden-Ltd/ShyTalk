@@ -1,6 +1,6 @@
 ---
 id: SHY-0366
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P2
@@ -124,6 +124,8 @@ the open PR list — the same two sources the table now claims to reflect.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: 2e3544dbe7fbc1a49798116fa85dc28c68f528ea
 
 - **2026-08-20** — Filed after hitting the stale table while preparing to start
   EPIC-0004. The previous session had flagged exactly this and it had still not
