@@ -231,7 +231,7 @@ first can happen without the second being checked.
 
 - **2026-08-17 — `code-reviewer` round 1 on `1727417b9d3`; findings applied in `de58319835d`. Full detail in SHY-0272's log.**
 
-Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
+_(superseded — see the current marker at the end of this log.)_
 
 - **2026-08-19 — why this PR is red, diagnosed rather than re-run blindly.**
   `Build & Test` has been failing since 2026-08-17 and it reads as "the tests
@@ -289,7 +289,7 @@ Reviewed-up-to: de58319835d932031db8ff5ac2136c106b1aab89
     off-by-one that would otherwise puzzle the next reader. 15 tests pass;
     eslint `--max-warnings=0` and prettier both clean.
 
-Reviewed-up-to: 2d39a47bfb7fdc54c702c0b62575b7864afa43f3
+Reviewed-up-to: 3efedf035b61a1ddcaac8861295db39e389cfe39
 
 - **2026-08-19 — CORRECTION to my earlier claim that this PR blocks EVERY iOS
   leg.** It does not. It blocks the iOS **local** leg. A real-iPhone leg against
