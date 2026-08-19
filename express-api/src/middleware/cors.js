@@ -24,4 +24,16 @@ module.exports = cors({
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Authorization', 'Content-Type', 'x-session-trace-id', 'x-device-id'],
+  // SHY-0147 — the portal's MFA-remember cookie is httpOnly, and the portal is
+  // a different ORIGIN from this API (shytalk.shyden.co.uk -> api.shytalk...),
+  // so without this the browser silently discards the Set-Cookie and the
+  // feature does nothing at all.
+  //
+  // This does NOT widen who may call the API. The origin check above is an
+  // explicit allowlist and is unchanged; `credentials` only permits the
+  // browser to attach cookies on requests from origins already allowed. It is
+  // safe precisely BECAUSE the allowlist never contains `*` — the two are
+  // mutually exclusive in the CORS spec, and a wildcard here would be rejected
+  // by the browser rather than silently accepted.
+  credentials: true,
 });

@@ -111,7 +111,57 @@ function verifyMfaRememberToken(token, { uniqueId, epoch, now } = {}) {
   return { valid: true, browserId };
 }
 
+/** The cookie name. Named explicitly so tests and routes cannot drift apart. */
+const MFA_REMEMBER_COOKIE = 'shytalk_mfa';
+
+/**
+ * Read one cookie from the raw header.
+ *
+ * Deliberately dependency-free: express-api carries no cookie middleware at
+ * all, and adding one to a security-sensitive backend for eight lines of
+ * parsing is a poor trade. `res.cookie()` is core Express, so only the read
+ * side needs doing here.
+ *
+ * Splits on the FIRST `=` only — the value must survive intact even if it
+ * contains `=`. Matches the cookie NAME exactly, so `evil_shytalk_mfa` can
+ * never be read as `shytalk_mfa`.
+ */
+function readCookie(req, name) {
+  const header = req && req.headers && req.headers.cookie;
+  if (typeof header !== 'string' || header.length === 0) return null;
+  for (const part of header.split(';')) {
+    const trimmed = part.trim();
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    if (trimmed.slice(0, eq) !== name) continue;
+    const value = trimmed.slice(eq + 1);
+    return value.length > 0 ? value : null;
+  }
+  return null;
+}
+
+/**
+ * Cookie attributes.
+ *
+ * httpOnly is the point of the whole design: the Security AC asks for a store
+ * that is not script-readable, so any XSS on the portal cannot exfiltrate the
+ * MFA-remember value. SameSite=strict keeps it off cross-site requests, and the
+ * path is the portal's own origin root.
+ */
+function mfaRememberCookieOptions({ maxAgeMs, secure }) {
+  return {
+    httpOnly: true,
+    secure: !!secure,
+    sameSite: 'strict',
+    path: '/',
+    maxAge: maxAgeMs,
+  };
+}
+
 module.exports = {
+  MFA_REMEMBER_COOKIE,
+  readCookie,
+  mfaRememberCookieOptions,
   MFA_REMEMBER_DEFAULT_TTL_MS,
   issueMfaRememberToken,
   verifyMfaRememberToken,

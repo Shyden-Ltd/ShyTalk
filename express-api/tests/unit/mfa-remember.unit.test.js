@@ -116,3 +116,57 @@ describe('SHY-0147 — MFA-remember token', () => {
     expect(issue()).not.toContain(process.env.MFA_REMEMBER_SECRET || 'dev-mfa-remember-secret');
   });
 });
+
+// ── cookie plumbing ────────────────────────────────────────────────────────
+const {
+  MFA_REMEMBER_COOKIE,
+  readCookie,
+  mfaRememberCookieOptions,
+} = require('../../src/utils/mfa-remember');
+
+describe('SHY-0147 — cookie plumbing', () => {
+  const req = (header) => ({ headers: header === undefined ? {} : { cookie: header } });
+
+  test('reads the named cookie out of a real header', () => {
+    expect(readCookie(req(`a=1; ${MFA_REMEMBER_COOKIE}=xyz; b=2`), MFA_REMEMBER_COOKIE)).toBe(
+      'xyz',
+    );
+  });
+
+  test('tolerates the shapes a browser actually sends', () => {
+    expect(readCookie(req(`${MFA_REMEMBER_COOKIE}=xyz`), MFA_REMEMBER_COOKIE)).toBe('xyz');
+    expect(readCookie(req(`  ${MFA_REMEMBER_COOKIE}=xyz  `), MFA_REMEMBER_COOKIE)).toBe('xyz');
+    expect(readCookie(req(`x=1;${MFA_REMEMBER_COOKIE}=xyz`), MFA_REMEMBER_COOKIE)).toBe('xyz');
+  });
+
+  test('a value containing "=" survives intact — the token is dot-separated but this must not truncate', () => {
+    expect(readCookie(req(`${MFA_REMEMBER_COOKIE}=a=b=c`), MFA_REMEMBER_COOKIE)).toBe('a=b=c');
+  });
+
+  test('does NOT match a cookie whose name merely ends with ours', () => {
+    // `evil_shytalk_mfa=...` must not be read as `shytalk_mfa=...`.
+    expect(readCookie(req(`evil_${MFA_REMEMBER_COOKIE}=attacker`), MFA_REMEMBER_COOKIE)).toBeNull();
+  });
+
+  test.each([
+    ['no header', undefined],
+    ['empty header', ''],
+    ['unrelated cookies', 'a=1; b=2'],
+    ['name present with no value', `${MFA_REMEMBER_COOKIE}=`],
+  ])('%s yields null rather than throwing', (_l, header) => {
+    expect(() => readCookie(req(header), MFA_REMEMBER_COOKIE)).not.toThrow();
+    expect(readCookie(req(header), MFA_REMEMBER_COOKIE)).toBeNull();
+  });
+
+  test('the cookie is httpOnly, SameSite and path-scoped; Secure outside local dev', () => {
+    const opts = mfaRememberCookieOptions({ maxAgeMs: 1000, secure: true });
+    expect(opts.httpOnly).toBe(true);
+    expect(opts.sameSite).toBe('strict');
+    expect(opts.secure).toBe(true);
+    expect(opts.path).toBe('/');
+    expect(opts.maxAge).toBe(1000);
+    // Not script-readable is the whole point — a JS-readable store would be
+    // exfiltratable by any XSS on the portal.
+    expect(mfaRememberCookieOptions({ maxAgeMs: 1, secure: false }).secure).toBe(false);
+  });
+});

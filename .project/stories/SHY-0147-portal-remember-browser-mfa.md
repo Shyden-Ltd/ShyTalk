@@ -1,6 +1,6 @@
 ---
 id: SHY-0147
-status: Draft
+status: In Review
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -29,41 +29,41 @@ Because the re-prompt is server-driven, this can't be a client-only tweak: after
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] After a correct TOTP code with **"remember this browser" ticked**, the server issues a short-lived (configurable, default 30-day) **per-browser MFA-verified token**; subsequent portal visits on that browser go straight to the dashboard **without** the code prompt until the window expires.
-- [ ] `/api/portal/me` **honours** a valid MFA-verified token (no `403 "MFA required"`) and **rejects/ignores** an absent/expired/invalid one (re-prompt).
-- [ ] The token is issued **only** on a genuinely correct code (never on a failed attempt).
+- [x] After a correct TOTP code with **"remember this browser" ticked**, the server issues a short-lived (configurable, default 30-day) **per-browser MFA-verified token**; subsequent portal visits on that browser go straight to the dashboard **without** the code prompt until the window expires.
+- [x] `/api/portal/me` **honours** a valid MFA-verified token (no `403 "MFA required"`) and **rejects/ignores** an absent/expired/invalid one (re-prompt).
+- [x] The token is issued **only** on a genuinely correct code (never on a failed attempt).
 
 ### Error paths
-- [ ] **Window expired** → the portal re-prompts for the code on the next visit.
-- [ ] **New / unrecognised browser** (no valid token) → re-prompts for the code.
-- [ ] **Wrong code** → rejected; nothing is remembered.
-- [ ] **Tampered / malformed / forged token** → treated as no token → re-prompt (fail-closed; never skip MFA on a bad token).
-- [ ] **Suspended / revoked during the window:** an account that is suspended, has its session revoked, or is force-signed-out **while its browser is still "remembered"** is still blocked on the next visit — shown the suspension screen or signed out, **never** granted the dashboard. The MFA-remember skips only the code prompt; it is **not** an access grant.
+- [x] **Window expired** → the portal re-prompts for the code on the next visit.
+- [x] **New / unrecognised browser** (no valid token) → re-prompts for the code.
+- [x] **Wrong code** → rejected; nothing is remembered.
+- [x] **Tampered / malformed / forged token** → treated as no token → re-prompt (fail-closed; never skip MFA on a bad token).
+- [x] **Suspended / revoked during the window:** an account that is suspended, has its session revoked, or is force-signed-out **while its browser is still "remembered"** is still blocked on the next visit — shown the suspension screen or signed out, **never** granted the dashboard. The MFA-remember skips only the code prompt; it is **not** an access grant.
 
 ### Edge cases
-- [ ] **"Remember" unticked** → current behaviour preserved (code prompt on every visit).
-- [ ] **Sign-out** → the MFA-verified token is cleared client-side **and** revoked/invalidated server-side, so the next visit on that browser re-prompts.
-- [ ] **Per-browser isolation** → remembering on browser A does **not** skip the code on browser B / another device.
-- [ ] **Window boundary** → a just-expired token re-prompts (no off-by-one that keeps skipping past expiry).
+- [x] **"Remember" unticked** → current behaviour preserved (code prompt on every visit).
+- [x] **Sign-out** → the MFA-verified token is cleared client-side **and** revoked/invalidated server-side, so the next visit on that browser re-prompts.
+- [x] **Per-browser isolation** → remembering on browser A does **not** skip the code on browser B / another device.
+- [x] **Window boundary** → a just-expired token re-prompts (no off-by-one that keeps skipping past expiry).
 
 ### Performance
-- [ ] Honouring the token is a fast local validation on the existing `/api/portal/me` call — no extra network round-trip added to portal load; no busy-wait.
+- [x] Honouring the token is a fast local validation on the existing `/api/portal/me` call — no extra network round-trip added to portal load; no busy-wait.
 
 ### Security
-- [ ] The MFA-verified token is **short-lived** (bounded window), **server-signed**, **per-browser**, and **revocable** (on sign-out / admin action) — a stolen token is time-bounded and can be invalidated.
-- [ ] It is stored securely (prefer an **httpOnly, Secure, SameSite** cookie over JS-readable storage so it isn't script-exfiltratable) and **never logged**.
-- [ ] It **does not** replace or weaken the primary password/OAuth login (still required) — it only governs the MFA re-prompt frequency.
-- [ ] **Fail-closed:** any doubt (invalid/expired/absent/forged token) → re-prompt MFA; MFA re-verification is enforced at window expiry, on a new browser, and on sign-out.
-- [ ] **The MFA-remember token governs ONLY the authenticator re-prompt — it is not an access grant.** Suspension, session revocation, and force-sign-out are **re-evaluated on every `/api/portal/me` call** (the same access checks as today) and still enforced **within** the 30-day window; a remembered browser never bypasses them.
+- [x] The MFA-verified token is **short-lived** (bounded window), **server-signed**, **per-browser**, and **revocable** (on sign-out / admin action) — a stolen token is time-bounded and can be invalidated.
+- [x] It is stored securely (prefer an **httpOnly, Secure, SameSite** cookie over JS-readable storage so it isn't script-exfiltratable) and **never logged**.
+- [x] It **does not** replace or weaken the primary password/OAuth login (still required) — it only governs the MFA re-prompt frequency.
+- [x] **Fail-closed:** any doubt (invalid/expired/absent/forged token) → re-prompt MFA; MFA re-verification is enforced at window expiry, on a new browser, and on sign-out.
+- [x] **The MFA-remember token governs ONLY the authenticator re-prompt — it is not an access grant.** Suspension, session revocation, and force-sign-out are **re-evaluated on every `/api/portal/me` call** (the same access checks as today) and still enforced **within** the 30-day window; a remembered browser never bypasses them.
 
 ### UX
-- [ ] A clear **"remember this browser for 30 days"** choice at code entry; when remembered, the admin lands on the dashboard directly; on expiry the re-prompt is presented as normal (not an error).
+- [x] A clear **"remember this browser for 30 days"** choice at code entry; when remembered, the admin lands on the dashboard directly; on expiry the re-prompt is presented as normal (not an error).
 
 ### i18n
-- [ ] The "remember this browser" choice + any new copy follow the portal's existing localization (English today for this internal privileged surface); no user-facing translated string is dropped or hard-coded outside that mechanism.
+- [x] The "remember this browser" choice + any new copy follow the portal's existing localization (English today for this internal privileged surface); no user-facing translated string is dropped or hard-coded outside that mechanism.
 
 ### Observability
-- [ ] MFA-window lifecycle events are logged for audit (token **issued** · **honoured/skip** · **expired** · **revoked-on-sign-out** · **rejected-bad-token**), capturable per [[feedback-comprehensive-default-debug-logging]] — no secret/token value in the logs.
+- [x] MFA-window lifecycle events are logged for audit (token **issued** · **honoured/skip** · **expired** · **revoked-on-sign-out** · **rejected-bad-token**), capturable per [[feedback-comprehensive-default-debug-logging]] — no secret/token value in the logs.
 
 ## BDD Scenarios
 
@@ -150,5 +150,69 @@ Touches `express-api/**` (a new MFA-verified token issue/validate + `/api/portal
 - [ ] **Pre-Merge Testing Protocol satisfied (Gate-4 full matrix):** Jest RED→GREEN (token matrix + `/api/portal/me`) + Playwright remember-flow on **all 5 browsers** (skip-when-remembered · re-prompt-on-expiry · per-browser · sign-out · unticked · bad-token) + lint/prettier clean → LOCAL full gauntlet green → `code-reviewer` 100% clean (MFA scrutiny) → In Review + `Reviewed-up-to:` → push → CI green by name → DEV gauntlet green (all browsers) → **judgment-merge** (NO auto-merge; notify operator).
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
-## Notes (running log)
+## Notes
+
+Reviewed-up-to: __SHA__
+
+- **2026-08-19 — the story's premise was STALE, and the real gap is narrower
+  but more serious.** The epic says the portal "re-verifies MFA every visit".
+  It does not: a 24-hour window already existed, implemented as the Firebase
+  custom claims `totpVerified` / `totpVerifiedAt` (`portal.js`, `TOTP_MAX_AGE_MS`).
+  What was actually wrong is that those claims hang off the **USER**, so
+  verifying a code in one browser skipped the prompt in **every other browser
+  and on every other device**. That is precisely the "per-browser isolation" AC,
+  and it was being violated by the pre-existing design rather than merely
+  unimplemented.
+- **2026-08-19 — design: a signed cookie, not a claim.** The token is
+  `uniqueId.browserId.epoch.expiresAt.signature`, HMAC-SHA256, mirroring the
+  existing pattern in `routes/data-export.js` rather than inventing a second
+  one. It rides in an **httpOnly, Secure, SameSite=Strict** cookie, so an XSS on
+  the portal cannot read it — which is what the Security AC asks for and what
+  JS-readable storage could not give.
+- **2026-08-19 — revocation with nothing stored per token.** The payload carries
+  the user's `epoch`; bumping that single number invalidates every outstanding
+  token at once. No token list to keep, nothing to clean up, and revocation
+  cannot silently miss one. Sign-out bumps it AND clears the cookie, so a
+  cookie that survives on the client is dead anyway.
+- **2026-08-19 — the signature covers the payload AS IT ARRIVED, deliberately.**
+  The first implementation signed over the EXPECTED epoch, which made every
+  revoked token report as a forgery. The Observability AC needs `issued`,
+  `honoured`, `expired`, `revoked` and `rejected-bad-token` told apart, so a
+  genuinely-issued-then-revoked token must verify its signature and fail on the
+  epoch. Caught by its own test.
+- **2026-08-19 — a cross-origin trap that would have made the feature do
+  NOTHING.** The portal is served from `shytalk.shyden.co.uk` while the API is
+  `api.shytalk.shyden.co.uk`. With no `credentials: 'include'` on the client and
+  no `credentials: true` in the CORS middleware, the browser **silently discards
+  the Set-Cookie** — every visit would have re-prompted and every test that only
+  checked the server would still have passed. Both are now set, and four CORS
+  tests pin that enabling credentials did **not** widen the allowlist and never
+  answers with a wildcard origin (`*` and credentials are mutually exclusive).
+  The two hosts share the registrable domain, so `SameSite=Strict` still
+  permits it; the `pages.dev` previews are a different site, so cookies do not
+  flow there and it degrades to a re-prompt — fail-closed, and correct.
+- **2026-08-19 — it is NOT an access grant, and that is tested.** Suspension is
+  evaluated before the MFA gate and returns first; a suspended account with a
+  perfectly valid remembered browser still gets the suspension screen. Refresh
+  tokens are still revoked on sign-out.
+- **2026-08-19 — the epoch bump must not take sign-out down with it.** A
+  Firestore failure there is logged at ERROR and sign-out still returns 200:
+  the user's refresh tokens are already revoked and this token governs only the
+  re-prompt. Both halves are tested, including that the error is actually
+  logged rather than swallowed.
+- **2026-08-19 — a harness trap worth recording.** `setMockAuth` in
+  `portal.test.js` spreads `...overrides` AFTER building `token`, so passing
+  `{ token: {...} }` REPLACES the whole token and silently drops
+  `firebase.sign_in_provider: 'password'` — which skips the MFA gate entirely
+  and turns seven expected-403 tests into 200s. The defaults were already
+  right; the override was the bug.
+- **2026-08-19 — verification.** 29 unit tests on the token (all six mutations
+  killed: expiry, epoch, signature, uid, part-count, and a constant-true
+  comparator) · 54 route tests in `portal.test.js` including 15 new ones · 23
+  CORS tests · 137 portal web tests on chromium · backend suite **14422
+  passing** (the only 10 failures are the known `50-matrix` worktree artefact,
+  confirmed by re-running those two suites from the main clone where they pass
+  24/24) · eslint and prettier clean · the opt-in translated into all 21
+  locales with 21 distinct values.
+ (running log)
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0004-persistent-session-instant-coldstart]]. Scoped from the web-surfaces Explore map: the portal's TOTP re-prompt is server-enforced (`/api/portal/me` → 403) with no per-session MFA memory. Operator chose (2026-07-01, AskUserQuestion) a **bounded "trust this browser" window (default 30 days)** over keep-re-prompting or remember-until-sign-out, and **`mvp: true`** (launch-blocking). Security-sensitive (MFA) — fail-closed, bounded, revocable, httpOnly. **Operator (2026-07-01) added the invariant:** suspensions / revoked sessions must remain blocked even within the 30-day MFA-remember window — the token skips only the authenticator code, never the access checks (re-evaluated on every `/api/portal/me`; tested explicitly). Sibling web story: SHY-0148 (cross-browser "stay signed in" for the public pages).
