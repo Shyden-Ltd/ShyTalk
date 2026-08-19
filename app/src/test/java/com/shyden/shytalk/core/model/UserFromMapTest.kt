@@ -59,13 +59,25 @@ class UserFromMapTest {
     }
 
     @Test
-    fun `fromMap filters non-string items from blockedUserIds`() {
+    fun `fromMap KEEPS a numeric blockedUserId — dropping it un-blocked people (SHY-0338)`() {
+        // INVERTED 2026-08-18. This test used to assert that `42` was DISCARDED,
+        // which encoded the defect as the contract.
+        //
+        // `express-api/src/utils/block-check.js:4` states it plainly: "ShyTalk
+        // stores blocks as a `blockedUserIds: number[]` field", and the server
+        // defensively does `.map(String)` before comparing. The client did not
+        // — so every numerically-stored block vanished from client state.
+        //
+        // The server-side gate still held, so this was never an enforcement
+        // hole; but the client believed nobody was blocked, and a block the UI
+        // cannot see is one the user cannot manage. Nulls are still dropped —
+        // there is no id to keep.
         val map =
             mapOf<String, Any?>(
                 "blockedUserIds" to listOf("user-1", 42, null, "user-2"),
             )
         val user = User.fromMap(map, "uid")
-        assertEquals(setOf("user-1", "user-2"), user.blockedUserIds)
+        assertEquals(setOf("user-1", "42", "user-2"), user.blockedUserIds)
     }
 
     @Test
@@ -498,5 +510,78 @@ class UserFromMapTest {
             )
         val roundtripped = User.fromMap(original.toMap(), "user-1")
         assertEquals(original, roundtripped)
+    }
+
+    // ── follow-id arrays (SHY-0338) ─────────────────────────────────────────
+    //
+    // The follow lists were empty for everyone, and this is why. The API writes
+    // these ids as NUMBERS — `users.js:1236` does
+    // `followingIds: FieldValue.arrayUnion(targetId)` where
+    // `targetId = Number.parseInt(...)` — while `fromMap` filtered with
+    // `filterIsInstance<String>()`, which silently drops every one of them.
+    //
+    // Measured on a real device 2026-08-18: a document holding
+    // `followingIds = [50000060, 50000080, 1, 50000020, 50000040]` and seven
+    // followers produced "Loaded 1 followers, 0 following". The single survivor
+    // was the one entry that happened to be stored as a string.
+    //
+    // Nothing covered these two fields before, which is why a type filter that
+    // discards mismatches survived.
+
+    @Test
+    fun `fromMap reads follow ids stored as NUMBERS — the SHY-0338 defect`() {
+        val user =
+            User.fromMap(
+                mapOf(
+                    "followingIds" to listOf(50000060L, 50000080L, 1L),
+                    "followerIds" to listOf(50000020L, 50000040L),
+                ),
+                "50000010",
+            )
+        assertEquals(setOf("50000060", "50000080", "1"), user.followingIds)
+        assertEquals(setOf("50000020", "50000040"), user.followerIds)
+    }
+
+    @Test
+    fun `fromMap still reads follow ids stored as strings`() {
+        val user =
+            User.fromMap(
+                mapOf(
+                    "followingIds" to listOf("50000060", "50000080"),
+                    "followerIds" to listOf("50000020"),
+                ),
+                "50000010",
+            )
+        assertEquals(setOf("50000060", "50000080"), user.followingIds)
+        assertEquals(setOf("50000020"), user.followerIds)
+    }
+
+    @Test
+    fun `fromMap reads a MIXED array — real documents carry both`() {
+        // Exactly the state a live document reaches: rows written by the API
+        // (numbers) alongside rows written by older paths (strings).
+        val user =
+            User.fromMap(
+                mapOf("followerIds" to listOf(50000020L, "50009999", 50000040L)),
+                "50000010",
+            )
+        assertEquals(setOf("50000020", "50009999", "50000040"), user.followerIds)
+    }
+
+    @Test
+    fun `fromMap does not render a numeric id in scientific notation`() {
+        // Firestore hands integers back as Long here, but a Double would
+        // stringify as "5.000001E7" and address a document that does not
+        // exist — an empty list again, from a new cause.
+        val user =
+            User.fromMap(mapOf("followerIds" to listOf(50000010.0)), "1")
+        assertEquals(setOf("50000010"), user.followerIds)
+    }
+
+    @Test
+    fun `fromMap drops nulls rather than inventing an id`() {
+        val user =
+            User.fromMap(mapOf("followerIds" to listOf(50000020L, null, "50000040")), "1")
+        assertEquals(setOf("50000020", "50000040"), user.followerIds)
     }
 }

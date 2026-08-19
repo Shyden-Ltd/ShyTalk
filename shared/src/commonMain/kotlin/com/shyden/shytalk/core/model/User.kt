@@ -1,6 +1,7 @@
 package com.shyden.shytalk.core.model
 
 import com.shyden.shytalk.core.util.asBool
+import com.shyden.shytalk.core.util.asIdSet
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.timestampToMillis
 
@@ -260,18 +261,9 @@ data class User(
                             LinkedProvider.fromMap(it as Map<String, Any?>)
                         }
                         ?: emptyList(),
-                blockedUserIds =
-                    (map["blockedUserIds"] as? List<*>)
-                        ?.filterIsInstance<String>()
-                        ?.toSet() ?: emptySet(),
-                followingIds =
-                    (map["followingIds"] as? List<*>)
-                        ?.filterIsInstance<String>()
-                        ?.toSet() ?: emptySet(),
-                followerIds =
-                    (map["followerIds"] as? List<*>)
-                        ?.filterIsInstance<String>()
-                        ?.toSet() ?: emptySet(),
+                blockedUserIds = map["blockedUserIds"].asIdSet("blockedUserIds"),
+                followingIds = map["followingIds"].asIdSet("followingIds"),
+                followerIds = map["followerIds"].asIdSet("followerIds"),
                 dateOfBirth = (map["dateOfBirth"] ?: map["date_of_birth"])?.let { timestampToMillis(it) },
                 hideFollowing = map["hideFollowing"].asBool(),
                 hideOnlineStatus = map["hideOnlineStatus"].asBool(),

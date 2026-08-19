@@ -6,8 +6,44 @@
  *
  * Written for PR C to verify audit-log.js module works identically to inline code.
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
+
+/**
+ * Settle on the audit log's real loaded state.
+ *
+ * `load()` (public/admin/js/tabs/audit-log.js) writes a "Loading…" row
+ * synchronously before it awaits the fetch, then replaces it with either
+ * `.audit-admin-name` rows or the `#audit-log-empty` state. Waiting on that
+ * transition is therefore never a no-op: at click time the table is always in
+ * the Loading state, so this cannot pass on the PREVIOUS result set.
+ *
+ * SHY-0245 — replaces the fixed delays that stood in for this condition. A
+ * load that never completes now fails here, naming what was awaited, instead
+ * of letting the assertion run against stale rows.
+ */
+async function waitForAuditLogSettled(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const tbody = document.getElementById('audit-log-tbody');
+      const empty = document.getElementById('audit-log-empty');
+      if (!tbody) return false;
+      if (tbody.textContent?.includes('Loading')) return false;
+      return (
+        tbody.querySelector('.audit-admin-name') !== null ||
+        (empty !== null && empty.style.display !== 'none')
+      );
+    },
+    { timeout: 15_000 },
+  );
+}
+
+/** Run a filtered search and wait for the result to actually land. */
+async function searchAndSettle(page: Page): Promise<void> {
+  await page.locator('#audit-log-search-btn').click();
+  await waitForAuditLogSettled(page);
+}
 
 test.describe('Admin Audit Log Tab', () => {
   test.beforeEach(async ({ page }) => {
@@ -22,15 +58,7 @@ test.describe('Admin Audit Log Tab', () => {
     // can still be in flight and, if it resolves after a test's filtered
     // response, repopulate the shared tbody with UNFILTERED rows mid-assert.
     // Settle on a real `.audit-admin-name` row or the empty state.
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      const empty = document.getElementById('audit-log-empty');
-      if (!tbody) return false;
-      return (
-        tbody.querySelector('.audit-admin-name') !== null ||
-        (empty && empty.style.display !== 'none')
-      );
-    }, { timeout: 15_000 });
+    await waitForAuditLogSettled(page);
   });
 
   // ── Loading & Rendering ──
@@ -41,7 +69,9 @@ test.describe('Admin Audit Log Tab', () => {
     await expect(page.locator('#audit-log-panel')).toBeVisible();
 
     // Table should have Admin, Action, Target Type, Target, Timestamp, Details columns
-    const headerRow = page.locator('#audit-log-panel table thead tr, #audit-log-panel [class*="header"]').first();
+    const headerRow = page
+      .locator('#audit-log-panel table thead tr, #audit-log-panel [class*="header"]')
+      .first();
     await expect(headerRow).toBeVisible({ timeout: 5_000 });
   });
 
@@ -51,14 +81,17 @@ test.describe('Admin Audit Log Tab', () => {
     const empty = page.locator('#audit-log-empty');
 
     // Wait for loading to complete — data loaded OR empty state shown
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      const empty = document.getElementById('audit-log-empty');
-      const loading = tbody?.textContent?.includes('Loading');
-      const hasRows = tbody && tbody.querySelectorAll('tr').length > 0 && !loading;
-      const isEmpty = empty && empty.style.display !== 'none';
-      return hasRows || isEmpty;
-    }, { timeout: 15_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        const empty = document.getElementById('audit-log-empty');
+        const loading = tbody?.textContent?.includes('Loading');
+        const hasRows = tbody && tbody.querySelectorAll('tr').length > 0 && !loading;
+        const isEmpty = empty && empty.style.display !== 'none';
+        return hasRows || isEmpty;
+      },
+      { timeout: 15_000 },
+    );
 
     const rowCount = await tbody.locator('tr').count();
     if (await empty.isVisible()) {
@@ -76,10 +109,13 @@ test.describe('Admin Audit Log Tab', () => {
     // Click search to load entries
     await page.locator('#audit-log-search-btn').click();
 
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
 
     const tbody = page.locator('#audit-log-tbody');
     const rowCount = await tbody.locator('tr').count();
@@ -114,23 +150,13 @@ test.describe('Admin Audit Log Tab', () => {
     await responded;
     // Settle on a REAL data row (`.audit-admin-name`, on every buildRow) or the
     // empty state — never the unclassed "Loading" placeholder <tr>.
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      const empty = document.getElementById('audit-log-empty');
-      if (!tbody) return false;
-      return (
-        tbody.querySelector('.audit-admin-name') !== null ||
-        (empty && empty.style.display !== 'none')
-      );
-    }, { timeout: 15_000 });
+    await waitForAuditLogSettled(page);
 
     // Every returned row must match the admin filter. (No strict non-empty
     // assert: this spec has no request mock — the claude-test admin's own
     // audit entries drive it, whose presence at this instant isn't guaranteed;
     // the acute racy-stale-row read is what this fixes.)
-    const adminNames = await page
-      .locator('#audit-log-tbody .audit-admin-name')
-      .allTextContents();
+    const adminNames = await page.locator('#audit-log-tbody .audit-admin-name').allTextContents();
     for (const name of adminNames) {
       expect(name.toLowerCase()).toContain('claude');
     }
@@ -148,8 +174,7 @@ test.describe('Admin Audit Log Tab', () => {
     // Select a specific action type
     if (options.length > 1) {
       await actionSelect.selectOption({ index: 1 });
-      await page.locator('#audit-log-search-btn').click();
-      await page.waitForTimeout(2_000);
+      await searchAndSettle(page);
     }
 
     // Reset filter
@@ -163,8 +188,7 @@ test.describe('Admin Audit Log Tab', () => {
 
     if (options.length > 1) {
       await targetSelect.selectOption({ index: 1 });
-      await page.locator('#audit-log-search-btn').click();
-      await page.waitForTimeout(2_000);
+      await searchAndSettle(page);
     }
 
     // Reset
@@ -181,10 +205,13 @@ test.describe('Admin Audit Log Tab', () => {
     await page.locator('#audit-log-filter-end').fill(fmt(now));
     await page.locator('#audit-log-search-btn').click();
 
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
 
     // Results should exist (seed data is recent)
     const count = await page.locator('#audit-log-tbody tr').count();
@@ -201,10 +228,13 @@ test.describe('Admin Audit Log Tab', () => {
     await page.locator('#audit-log-filter-end').fill(fmt(now));
     await page.locator('#audit-log-search-btn').click();
 
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
 
     expect(await page.locator('#audit-log-tbody tr').count()).not.toBeNaN();
   });
@@ -214,10 +244,13 @@ test.describe('Admin Audit Log Tab', () => {
   test('load more button is visible or hidden based on entry count', async ({ page }) => {
     await page.locator('#audit-log-search-btn').click();
 
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
 
     const loadMore = page.locator('#audit-log-load-more');
     const rowCount = await page.locator('#audit-log-tbody tr').count();
@@ -262,13 +295,16 @@ test.describe('Admin Audit Log Tab', () => {
 
   test('export CSV downloads a file', async ({ page }) => {
     // Wait for data to load
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
 
     // Only test if there are entries
-    if (await page.locator('#audit-log-tbody tr').count() === 0) {
+    if ((await page.locator('#audit-log-tbody tr').count()) === 0) {
       test.skip(true, 'No audit entries to export');
       return;
     }
@@ -283,21 +319,27 @@ test.describe('Admin Audit Log Tab', () => {
 
   test('audit log auto-refreshes via polling', async ({ page }) => {
     // Wait for initial load to complete
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
 
     // Verify the polling interval is set up by checking that the tab
     // continues to make API requests over time
     const requests: string[] = [];
     page.on('request', (req) => {
-      if (req.url().includes('audit-log') && !req.url().includes('search')) requests.push(req.url());
+      if (req.url().includes('audit-log') && !req.url().includes('search'))
+        requests.push(req.url());
     });
 
-    // Wait for at least two polling cycles (4s each + buffer)
-    await page.waitForTimeout(10_000);
-    expect(requests.length).toBeGreaterThanOrEqual(1);
+    // Poll for the request the tab's own 4s timer must make. This still
+    // FAILS if polling never fires — the bound is the timeout, not a sleep.
+    await expect
+      .poll(() => requests.length, { timeout: 15_000 })
+      .toBeGreaterThanOrEqual(1);
   });
 
   // ── Tab Lifecycle ──
@@ -305,17 +347,20 @@ test.describe('Admin Audit Log Tab', () => {
   test('switching away stops polling, switching back resumes', async ({ page }) => {
     // We're on Audit Log tab. Switch to Users, then back.
     await page.getByRole('button', { name: 'Users' }).click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('#audit-log-panel')).toBeHidden({ timeout: 10_000 });
 
     // Switch back to Audit Log
     await page.getByRole('button', { name: 'Audit Log' }).click();
     await expect(page.locator('#audit-log-panel')).toBeVisible({ timeout: 5_000 });
 
     // Verify data reloads after switching back
-    await page.waitForFunction(() => {
-      const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const tbody = document.getElementById('audit-log-tbody');
+        return tbody && !tbody.textContent?.includes('Loading');
+      },
+      { timeout: 10_000 },
+    );
   });
 
   // ── Console Errors ──
@@ -327,11 +372,10 @@ test.describe('Admin Audit Log Tab', () => {
     });
 
     // Interact with the tab
-    await page.locator('#audit-log-search-btn').click();
-    await page.waitForTimeout(2_000);
+    await searchAndSettle(page);
 
     // Filter out known non-issues (429 rate limiting)
-    const meaningful = errors.filter(e => !e.includes('429'));
+    const meaningful = errors.filter((e) => !e.includes('429'));
     expect(meaningful).toHaveLength(0);
   });
 });

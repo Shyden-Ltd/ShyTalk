@@ -159,7 +159,12 @@ function classifyFiles(yamlText, files) {
   // production case statement — dropped to avoid implying a
   // production variable that doesn't exist.
   const flagsInit =
-    'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false';
+    // SCRIPTS added by SHY-0226's develop merge. SHY-0284 introduced this
+    // flag in production pr-checks.yml but taught neither behavioural harness
+    // to observe it, so it shipped with no behavioural coverage: a case-arm
+    // change routing a path to SCRIPTS was invisible here, read as undefined,
+    // and passed.
+    'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false SCRIPTS=false WEB=false INTEGRATION=false OTHER=false';
   const fileList = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
   const script = `
 set -e
@@ -171,6 +176,7 @@ echo "ANDROID_APP=$ANDROID_APP"
 echo "IOS_APP=$IOS_APP"
 echo "APP=$APP"
 echo "BACKEND=$BACKEND"
+echo "SCRIPTS=$SCRIPTS"
 echo "WEB=$WEB"
 echo "INTEGRATION=$INTEGRATION"
 echo "OTHER=$OTHER"

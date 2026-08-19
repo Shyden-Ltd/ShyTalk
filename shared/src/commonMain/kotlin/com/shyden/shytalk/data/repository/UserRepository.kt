@@ -120,7 +120,25 @@ interface UserRepository {
         visitorId: String,
     ): Resource<Unit>
 
-    suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>>
+    /**
+     * One page of "who has been viewing me" — SHY-0338.
+     *
+     * Returns the visit records AND the visitors' profiles together. The
+     * caller used to fetch the records and then batch-fetch the profiles
+     * separately, and the second call was the one that failed: it queried
+     * Firestore directly, and `firestore.rules` refuses such a query
+     * ALL-OR-NOTHING when any one member fails the cohort gate. Both halves
+     * now come from `GET /api/users/:uniqueId/stalkers`, where the Admin SDK
+     * can drop individual visitors instead of refusing the list.
+     *
+     * Owner-only. Asking for somebody else's is refused by the server.
+     */
+    data class StalkerPage(
+        val visitors: List<ProfileVisitor> = emptyList(),
+        val users: List<User> = emptyList(),
+    )
+
+    suspend fun getStalkers(profileUserId: String): Resource<StalkerPage>
 
     suspend fun markStalkersViewed(userId: String): Resource<Unit>
 

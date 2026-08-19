@@ -257,7 +257,15 @@
     updateGlobalAuth();
   }
 
-  function updateGlobalAuth() {
+  /**
+   * Assign the global WITHOUT dispatching.
+   *
+   * SHY-0148 — the module-load publish must not cost an extra
+   * `shytalk-auth-changed`. SHY-0279 pins "exactly one" dispatch on the
+   * signed-out path, because every dispatch makes the shared header rebuild
+   * itself and a second one detaches elements mid-click.
+   */
+  function publishGlobalAuth() {
     window.shytalkAuth = {
       currentUser: currentUser,
       profile: shytalkProfile,
@@ -273,6 +281,10 @@
       signInWithEmail: signInWithEmail,
       API_BASE: API_BASE,
     };
+  }
+
+  function updateGlobalAuth() {
+    publishGlobalAuth();
     document.dispatchEvent(new CustomEvent('shytalk-auth-changed', {
       detail: { user: currentUser, profile: shytalkProfile },
     }));
@@ -298,6 +310,16 @@
   // ─── Initialize ───────────────────────────────────────────────
 
   window.shytalkAuth = { currentUser: null, profile: null, getToken: getToken, signOut: signOut, API_BASE: API_BASE };
+
+  // SHY-0148 — publish the contract IMMEDIATELY, before any async work.
+  // Consumers (the shared header) need three states, and until this ran there
+  // was no way to tell "this page has auth, still resolving" from "this page
+  // has no auth module at all" — both looked like
+  // `window.shytalkAuth === undefined`. Publishing here with
+  // authStateKnown:false makes the unknown window observable, which is the
+  // whole point of the flag (SHY-0279). Publish only -- dispatching here would
+  // break SHY-0279's "exactly one auth-changed event" contract.
+  publishGlobalAuth();
 
   // Wait for Firebase config from API before initializing
   if (window.SHYTALK_FIREBASE_CONFIG) {

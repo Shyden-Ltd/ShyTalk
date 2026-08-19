@@ -1,6 +1,5 @@
 package com.shyden.shytalk.feature.auth
 
-import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AppLockRepository
@@ -270,7 +269,7 @@ class AuthViewModelIdentityTest {
             visitorId: String,
         ) = Resource.Success(Unit)
 
-        override suspend fun getStalkers(profileUserId: String) = Resource.Success(emptyList<ProfileVisitor>())
+        override suspend fun getStalkers(profileUserId: String) = Resource.Success(UserRepository.StalkerPage())
 
         override suspend fun markStalkersViewed(userId: String) = Resource.Success(Unit)
 
