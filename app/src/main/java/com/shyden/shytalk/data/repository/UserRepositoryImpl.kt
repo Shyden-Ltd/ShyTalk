@@ -1,7 +1,6 @@
 package com.shyden.shytalk.data.repository
 
 import android.util.Log
-import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.ProfileVisitor
