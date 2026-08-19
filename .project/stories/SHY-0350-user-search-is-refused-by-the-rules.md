@@ -312,3 +312,21 @@ new-message search and read `PERMISSION_DENIED … for 'list' @ L74` on screen.
   `scripts/pre-merge-check.sh`'s own concern and deserves its own change with its
   own test. Recorded, and the story is being moved to `In Review` properly rather
   than merged on the exemption.
+
+- **2026-08-19 07:5x WIB — iOS DEVICE-PROVEN on Sean's real iPhone** (iPhone Air,
+  iOS 27.0), build `5b592cd` of this branch, Debug-Dev over USB against the
+  **dev** backend. Signed in as a minor account, *New Message* → typed
+  `60000010` (a same-cohort user) → enabled *Search all users*:
+
+  > **[SEED] Marcus (P-04 minor power)**
+
+  The search field held `60000010` and the match came back. That is the exact
+  query shape that previously returned nothing at all, because the client asked
+  Firestore directly and the cohort-gated rule refused the filtered query — a
+  refusal the client then swallowed into an empty list, so the screen said
+  "No users found" about somebody who plainly exists.
+
+  Both device legs are now done: Android earlier on the OnePlus, iOS here. With
+  the Kotlin tests and mutations added above, the story's outstanding work is
+  closed apart from the journey scenarios, which are corpus work rather than
+  verification of this fix.
