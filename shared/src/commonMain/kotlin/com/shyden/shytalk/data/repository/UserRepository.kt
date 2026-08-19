@@ -82,10 +82,21 @@ interface UserRepository {
 
     suspend fun getBlockedUserIds(userId: String): Resource<Set<String>>
 
-    suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>>
+    /**
+     * Which of [userIds] have blocked the SIGNED-IN user?
+     *
+     * The subject is always the caller — the server derives it from the auth
+     * token — so there is deliberately no parameter for it. A parameter that
+     * cannot change the answer would invite a caller to ask about somebody
+     * else and quietly receive an answer about themselves.
+     *
+     * Returns [Resource.Error] when the check could not be completed. That is
+     * NOT the same as an empty set, and callers must not conflate them: an
+     * empty set means "nobody here has blocked you", an error means "we do not
+     * know". (SHY-0351 — the old implementation returned the former for the
+     * latter, so the room-join warning could never fire.)
+     */
+    suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>>
 
     suspend fun followUser(
         currentUserId: String,

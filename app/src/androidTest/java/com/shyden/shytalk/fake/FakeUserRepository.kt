@@ -76,14 +76,14 @@ class FakeUserRepository : UserRepository {
 
     override suspend fun getBlockedUserIds(userId: String): Resource<Set<String>> = Resource.Success(emptySet())
 
-    override suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>> {
+    /** Who "me" is for [checkBlockedBy], mirroring the auth-derived subject on the server. */
+    var signedInUserId: String = "test-user-1"
+
+    override suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>> {
         val blockers =
             userIds
                 .filter { uid ->
-                    users[uid]?.blockedUserIds?.contains(targetUserId) == true
+                    users[uid]?.blockedUserIds?.contains(signedInUserId) == true
                 }.toSet()
         return Resource.Success(blockers)
     }
