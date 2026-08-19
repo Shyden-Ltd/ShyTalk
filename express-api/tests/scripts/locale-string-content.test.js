@@ -13,7 +13,7 @@
  * `composeResources` does NOT unescape them, so they render literally.
  *
  * What Compose DOES unescape was settled empirically rather than argued, by
- * resolving all 838 strings through the real pipeline on a real device
+ * resolving all 838 strings (839 since SHY-0348) through the real pipeline on a real device
  * (`StringResourceContentTest`): `\uXXXX` IS unescaped, `\'` is NOT. The corpus
  * has since been normalised so the only backslash sequence remaining anywhere
  * is `\n`, a genuine line break — which lets the rule below be a flat "no
@@ -69,7 +69,11 @@ describe('locale strings render as written', () => {
     });
     expect(report.filter((r) => r.parsed !== r.raw)).toEqual([]);
     // Every locale carries the same key count; a change here is deliberate.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([838]);
+    // 838 -> 839 on 2026-08-19: SHY-0348 added `blocked_unblock_required` to
+    // every locale ("They need to unblock you before you can view their
+    // profile."). The count is pinned precisely so an addition has to be
+    // acknowledged here rather than sliding in unnoticed.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([839]);
   });
 
   test('no string carries an Android-style escape sequence', () => {
