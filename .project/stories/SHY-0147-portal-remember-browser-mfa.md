@@ -152,7 +152,7 @@ Touches `express-api/**` (a new MFA-verified token issue/validate + `/api/portal
 
 ## Notes
 
-Reviewed-up-to: 66c8f76566bf91f48ac1b5b73caad2dd6592118a
+Reviewed-up-to: 890f463d48316fe547e36e4a9efefa0d2bd97881
 
 - **2026-08-19 — the story's premise was STALE, and the real gap is narrower
   but more serious.** The epic says the portal "re-verifies MFA every visit".
