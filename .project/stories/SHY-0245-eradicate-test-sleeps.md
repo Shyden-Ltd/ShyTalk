@@ -213,6 +213,17 @@ The correct fix is test-side isolation (serialise the process-sensitive specs), 
   yet load-bearing in that file — two of its five sites sit in tests with **no
   assertion after the search at all**. That is evidence for [SHY-0357], and it
   is written down here rather than presented as a clean mutation kill.
+- **2026-08-19 — one honest caveat on my own AC claim.** The AC lists the
+  sanctioned conditions as "a retrying assertion, an auto-waiting locator,
+  `waitForFunction`, `waitForResponse`, or an explicit DOM anchor". Three of
+  the sixteen conversions use `waitForLoadState('networkidle')` instead, which
+  is a **quiescence** condition, not a DOM one — it is "the page stopped doing
+  things", and it is strictly better than a fixed delay but weaker than an
+  anchor. It was used only where the test asserts an ABSENCE after an action
+  and offers no positive DOM state to anchor on, because those tests assert
+  nothing that would settle. Once [SHY-0357] gives them real assertions, those
+  three should become real anchors. Flagged rather than counted as clean.
+
 - **2026-08-19 — local verification**: 124 passed, exit 0, across
   `roadmap-auth`, `shared-header`, `auth-injection-discipline` and
   `admin-audit-log` on chromium against the canonical local stack
