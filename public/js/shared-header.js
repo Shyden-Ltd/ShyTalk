@@ -15,6 +15,20 @@
   var isRendered = false;
   var documentClickHandler = null;
 
+  /**
+   * True when this page has an auth module that has NOT yet concluded.
+   *
+   * SHY-0148 — three states, not two. `window.shytalkAuth` absent means the
+   * page carries no auth module at all (the homepage, terms, privacy, 404 and
+   * three more do not load one), and those must render Sign In immediately or
+   * they would sit pending forever. Present-but-not-known is the real unknown
+   * window, and that is the one worth waiting out.
+   */
+  function isAuthStatePending() {
+    var auth = window.shytalkAuth;
+    return !!auth && auth.authStateKnown !== true;
+  }
+
   function getAuth() {
     var auth = window.shytalkAuth;
     if (!auth) return null;
@@ -72,6 +86,12 @@
         '<div class="sh-dropdown" data-testid="header-dropdown">' +
           '<button class="sh-dropdown-item" data-testid="header-signout-btn" data-i18n="signOut">Sign Out</button>' +
         '</div>';
+    } else if (isAuthStatePending()) {
+      // Withhold the control rather than assert something untrue. The
+      // placeholder keeps the slot occupied so the header does not jump when
+      // the real state arrives.
+      rightHtml =
+        '<span class="sh-auth-pending" data-testid="header-auth-pending" aria-hidden="true"></span>';
     } else {
       rightHtml =
         '<button class="sh-signin-btn" data-testid="header-signin-btn" data-i18n="signIn">Sign In</button>';
@@ -199,6 +219,14 @@
         'align-items: center;' +
         'gap: 12px;' +
         'position: relative;' +
+      '}' +
+      // SHY-0148: the pending placeholder reserves the same footprint the
+      // real control will take, so the header does not shift when the sign-in
+      // state resolves. Invisible, not merely transparent-coloured.
+      '.sh-auth-pending {' +
+        'display: inline-block;' +
+        'min-height: 40px;' +
+        'min-width: 88px;' +
       '}' +
       '.sh-signin-btn {' +
         'padding: 8px 20px;' +
