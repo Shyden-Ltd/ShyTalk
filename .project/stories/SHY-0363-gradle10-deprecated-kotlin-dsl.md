@@ -1,6 +1,6 @@
 ---
 id: SHY-0363
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P2
@@ -136,6 +136,8 @@ deprecation and the Gradle 10 banner. That is the failing state.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: 9536d5a1cb371215f2428d4e7474655949d8e124
 
 - **2026-08-20** — Raised with the operator while fixing SHY-0362, who asked for
   it to be investigated and fixed if small. `--warning-mode all` showed a single
