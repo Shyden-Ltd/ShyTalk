@@ -132,4 +132,29 @@ iOS-only change (shared `iosMain` DI + a new iOS integrity checker; no Android/w
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
 ## Notes (running log)
+
+- **2026-08-20 — re-validated at pickup. TWO CORRECTIONS; read before starting.**
+
+  **1. The "needs a multi-GB iOS Simulator runtime download" blocker is GONE —
+  proven, not assumed.** The iOS 27.0 runtime **is** installed (7.8 GB, Ready).
+  Only simulator *devices* were missing. Verified end to end tonight:
+  `xcrun simctl create` returned a UDID in seconds, `xcrun simctl boot` reached
+  `Booted` on the first poll, and the probe device was shut down and deleted
+  afterwards. **This story is startable today.** The simulator is the condition
+  under test here, per the operator's standing carve-out.
+
+  **2. Part of the premise is now STALE.** The Why (line ~25) and AC (line ~33)
+  both describe `IosPlatformModule.kt:131` hard-coding
+  `single(named("bypassDeviceChecks")) { true }`, and the AC asks this story to
+  replace it. **SHY-0151 already did that.** Its increment 1 made the flag
+  variant-resolved and fail-closed — only `.local` bypasses; `.dev` and
+  `.release` enforce — and that was **device-proven on a real iPhone on
+  2026-08-20** (device-lock refused a second persona; a suspended persona hit the
+  `ban_device` screen). See SHY-0151's Notes for the walk.
+
+  So the remaining scope here is **narrower than written**: it is the actual iOS
+  *integrity checker* (jailbreak / simulator / tamper detection) plus wiring it to
+  the shared `UnsafeDeviceScreen` — **not** the DI bypass, which is done. Rewrite
+  the Why and the AC accordingly before implementing, or the story will read as
+  asking for work that already shipped.
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0004-persistent-session-instant-coldstart]]. Split from SHY-0143 by operator decision (2026-07-01, AskUserQuestion "Add an iOS jailbreak/integrity-detection story") after the anti-abuse map found iOS runs with `bypassDeviceChecks = true` (no in-app integrity detection; platform-level only). Implements Android parity via the shared `UnsafeDeviceScreen` + pre-auth gate. **`mvp: true`** (operator decision 2026-07-01: launch-blocking — "modified devices blocked always" must hold in-app on both platforms day one, not relying on App Store review as iOS's only defense).
