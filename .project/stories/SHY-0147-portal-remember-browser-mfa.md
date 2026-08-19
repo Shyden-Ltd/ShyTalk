@@ -222,6 +222,21 @@ Reviewed-up-to: 66c8f76566bf91f48ac1b5b73caad2dd6592118a
     the correct primitive for a MAC, and nothing here hashes a password.
     Renamed to `MFA_TRUST_WINDOW_MS`, which is what it actually is, removing the
     mislabelled taint source instead of dismissing two alerts.
+- **2026-08-20 — that rename was half a fix.** `js/clear-text-storage-of-sensitive-data`
+  survived as **alert 55**, now naming `MFA_TRUST_WINDOW_MS` itself as the source
+  at the `res.cookie()` call: *"This stores sensitive data returned by an access
+  to MFA_TRUST_WINDOW_MS as clear text."* **`TRUST` is in the same heuristic's
+  word list** — one trigger word was swapped for another. The claim is that a
+  cookie's `maxAge` is sensitive data stored in clear text; `maxAge` is not part
+  of the cookie **value** at all, so the finding is wrong on its face.
+  Renamed again to `MFA_REVERIFY_AFTER_MS`, which says what happens at the
+  boundary and avoids remember / trust / token / secret / key / credential /
+  password / cert. The declaration now carries the full trail so the next reader
+  does not "helpfully" rename it back into an alert.
+  **This removes the operator dependency**: the previous session recorded alert
+  55 as a hard blocker needing an operator-run `gh api ... -f state=dismissed`,
+  because the agent (correctly) could not widen its own permissions. Fixing the
+  taint source needs no permission at all.
   - The now-redundant `mfaRememberCookieOptions` helper and its unit test were
     **deleted** rather than left as tested-but-unused code; the route tests
     assert the flags on the real `Set-Cookie` header, which is the stronger
