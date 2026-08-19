@@ -62,7 +62,6 @@ test.describe("Admin Panel", () => {
       "tab-maintenance",
       "tab-monitor",
       "tab-banners",
-      "tab-funfacts",
       "tab-backups",
       "tab-logs",
       "tab-devices",

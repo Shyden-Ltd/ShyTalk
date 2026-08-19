@@ -108,8 +108,12 @@ describe('backups cron — local/dev scope (real Firestore emulator + real MinIO
     // The env-driven selection picked the dev subset here (NODE_ENV=local).
     expect(devBackups.TOP_LEVEL_COLLECTIONS).toEqual(devBackups.DEV_TOP_LEVEL_COLLECTIONS);
     expect(devBackups.SUBCOLLECTIONS).toEqual([]);
-    // The full production candidate set is complete (27 top-level + 11 sub-pairs).
-    expect(devBackups.ALL_TOP_LEVEL_COLLECTIONS).toHaveLength(27);
+    // The full production candidate set is complete (26 top-level + 11 sub-pairs).
+    // 27 -> 26 on 2026-08-20: SHY-0145 decommissioned the fun-facts pipeline, so
+    // `funFacts` is no longer a collection to back up. The count is pinned so a
+    // collection appearing or disappearing has to be acknowledged here rather
+    // than sliding in — a REMOVAL for the same reason an addition would.
+    expect(devBackups.ALL_TOP_LEVEL_COLLECTIONS).toHaveLength(26);
     expect(devBackups.ALL_TOP_LEVEL_COLLECTIONS).toEqual(
       expect.arrayContaining(['users', 'rooms', 'conversations', 'deviceBans', 'networkBans']),
     );

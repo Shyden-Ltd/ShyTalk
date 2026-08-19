@@ -30,14 +30,6 @@ export interface SetupBannerPayload {
   sortOrder?: number;
 }
 
-export interface SetupFunFactPayload {
-  text?: string;
-  category?: string;
-  emoji?: string;
-  sourceLanguage?: string;
-  isActive?: boolean;
-}
-
 export interface SetupReportPayload {
   reportedUserIndex?: number;
   reporterUserIndex?: number;
@@ -67,7 +59,6 @@ export interface SetupConversationPayload {
 export interface SetupPayload {
   users?: SetupUserPayload[];
   banners?: SetupBannerPayload[];
-  funFacts?: SetupFunFactPayload[];
   reports?: SetupReportPayload[];
   appeals?: SetupAppealPayload[];
   alerts?: SetupAlertPayload[];
@@ -79,7 +70,6 @@ export interface SetupResult {
   users: Array<{ uid: string; uniqueId: number; displayName: string }>;
   gifts: Array<{ id: string; name: string; coinValue: number }>;
   banners: Array<{ id: string; title: string }>;
-  funFacts: Array<{ id: string; text: string }>;
   reports: Array<{ id: string; reportedUserId: string; reporterId: string }>;
   appeals: Array<{ id: string }>;
   alerts: Array<{ id: string }>;

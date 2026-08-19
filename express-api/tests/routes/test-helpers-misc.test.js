@@ -205,7 +205,6 @@ describe('POST /api/test/setup', () => {
     expect(res.body.rooms).toEqual([]);
     expect(res.body.gifts).toEqual([]);
     expect(res.body.banners).toEqual([]);
-    expect(res.body.funFacts).toEqual([]);
     expect(res.body.reports).toEqual([]);
     expect(res.body.appeals).toEqual([]);
     expect(res.body.alerts).toEqual([]);
@@ -616,51 +615,6 @@ describe('POST /api/test/setup', () => {
     expect(banner.sortOrder).toBe(0);
   });
 
-  test('creates test fun fact with correct fields and _testRun tag', async () => {
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/test/setup')
-      .set('X-Test-Api-Key', VALID_API_KEY)
-      .send({
-        funFacts: [
-          {
-            text: 'Octopi have three hearts',
-            category: 'Science',
-            emoji: '🐙',
-            sourceLanguage: 'English',
-            isActive: true,
-          },
-        ],
-      })
-      .expect(200);
-
-    expect(res.body.funFacts).toHaveLength(1);
-    const fact = res.body.funFacts[0];
-    expect(fact.text).toBe('Octopi have three hearts');
-    expect(fact.category).toBe('Science');
-    expect(fact.emoji).toBe('🐙');
-    expect(fact.sourceLanguage).toBe('English');
-    expect(fact.isActive).toBe(true);
-    expect(fact._testRun).toBe(res.body.testRunId);
-    expect(fact.id).toContain(res.body.testRunId);
-    expect(mockDoc).toHaveBeenCalledWith(`funFacts/${fact.id}`);
-  });
-
-  test('creates test fun fact with default values', async () => {
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/test/setup')
-      .set('X-Test-Api-Key', VALID_API_KEY)
-      .send({ funFacts: [{}] })
-      .expect(200);
-
-    const fact = res.body.funFacts[0];
-    expect(fact.text).toBe('Test fact');
-    expect(fact.category).toBe('trivia');
-    expect(fact.sourceLanguage).toBe('English');
-    expect(fact.isActive).toBe(true);
-  });
-
   test('creates test report with index-based user references', async () => {
     const app = createApp();
     const res = await request(app)
@@ -937,7 +891,6 @@ describe('GET /api/test/verify/:collection/:id', () => {
     'gifts',
     'conversations',
     'banners',
-    'funFacts',
     'reports',
     'suspensionAppeals',
     'alerts',

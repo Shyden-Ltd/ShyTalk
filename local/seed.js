@@ -292,12 +292,6 @@ async function seed() {
     order: 0,
   });
 
-  // Fun fact
-  await seedIfMissing("funFacts/local-fact-1", {
-    text: "ShyTalk connects people through voice \u2014 no camera needed!",
-    isActive: true,
-  });
-
   // Seasonal event banner
   console.log("\nSeasonal banners:");
   await seedIfMissing("banners/khmer-new-year-2026", {

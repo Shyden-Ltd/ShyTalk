@@ -44,7 +44,6 @@ router.post('/test/setup', async (req, res) => {
       rooms: [],
       gifts: [],
       banners: [],
-      funFacts: [],
       reports: [],
       appeals: [],
       alerts: [],
@@ -180,23 +179,6 @@ router.post('/test/setup', async (req, res) => {
       };
       await db.doc(`banners/${bannerId}`).set(bannerData);
       created.banners.push(bannerData);
-    }
-
-    // Create test fun facts
-    for (const factSpec of spec.funFacts || []) {
-      const factId = `${testRunId}_fact_${generateId()}`;
-      const factData = {
-        id: factId,
-        text: factSpec.text || 'Test fact',
-        category: factSpec.category || 'trivia',
-        emoji: factSpec.emoji || '📝',
-        sourceLanguage: factSpec.sourceLanguage || 'English',
-        isActive: factSpec.isActive ?? true,
-        createdAt: now,
-        _testRun: testRunId,
-      };
-      await db.doc(`funFacts/${factId}`).set(factData);
-      created.funFacts.push(factData);
     }
 
     // Create test conversations with messages subcollection
@@ -340,7 +322,6 @@ router.get('/test/verify/:collection/:id', async (req, res) => {
       'gifts',
       'conversations',
       'banners',
-      'funFacts',
       'reports',
       'suspensionAppeals',
       'alerts',
@@ -420,7 +401,6 @@ router.post('/test/write/:collection', async (req, res) => {
       'gifts',
       'conversations',
       'banners',
-      'funFacts',
       'reports',
       'suspensionAppeals',
       'alerts',
@@ -716,13 +696,12 @@ async function deleteTestData(testRunId) {
   // Deleted bans must stop gating the NEXT test scenario immediately.
   clearBanCache();
 
-  // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations, etc.)
+  // 4. Delete other top-level test docs (gifts, rooms, banners, conversations, etc.)
   // Note: system PMs created by admin actions won't have _testRun set — accepted trade-off
   const otherCollections = [
     'gifts',
     'rooms',
     'banners',
-    'funFacts',
     'conversations',
     'reports',
     'suspensionAppeals',
@@ -810,7 +789,6 @@ const CLEARABLE_COLLECTIONS = new Set([
   'auditLog',
   'adminAuditLog',
   'blockedTopics',
-  'funFacts',
   'reports',
   'suspensionAppeals',
 ]);

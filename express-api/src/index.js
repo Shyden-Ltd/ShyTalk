@@ -237,7 +237,6 @@ app.use('/api', require('./routes/age-verification'));
 app.use('/api', require('./routes/pm-lock-check'));
 app.use('/api', require('./routes/conversations'));
 app.use('/api', require('./routes/banners'));
-app.use('/api', require('./routes/fun-facts'));
 app.use('/api', require('./routes/admin-users'));
 app.use('/api', require('./routes/admin-age-verification'));
 app.use('/api', require('./routes/admin-economy'));

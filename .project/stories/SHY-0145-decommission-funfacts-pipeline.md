@@ -1,6 +1,6 @@
 ---
 id: SHY-0145
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -127,4 +127,53 @@ Touches `express-api/**` (routes) + `firestore.rules` + `public/admin/**` → **
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
 ## Notes (running log)
+
+- **2026-08-20 — implemented. The AC named 5 surfaces; the sweep found 16.**
+  The story listed the Express route, the admin tab, the firestore rule and the
+  collection. Also carrying the pipeline, and removed here:
+  `express-api/src/index.js` (route registration), `cron/backups.js`,
+  `cron/testDataCleanup.js`, `routes/admin-migrate.js` and
+  `routes/test-helpers.js` (seeding + four collection lists), plus
+  `local/seed.js`, `scripts/reset-data.mjs` and `scripts/seed-dev-fixtures.mjs`,
+  and seven test files. `public/roadmap-data.json` keeps its mention — it is a
+  historical description of a past story, not a live surface.
+
+- **2026-08-20 — SHY-0144's guard designed the hand-off, and it is now closed.**
+  `no-funfact-splash-app-surface.test.js` carved out a `SHY_0145_PATHS` list so
+  the two stories could be told apart. That list is now **empty**, and its
+  sibling `no-funfacts-backend-admin-surface.test.js` asserts this half — so the
+  two guards together cover the whole repository. Emptying the carve-out is the
+  completion signal its author built in.
+
+- **2026-08-20 — the guard skips COMMENT lines, deliberately.** It reported
+  itself on the first run, and then reported the comment in `backups.test.js`
+  explaining why the backup-collection count dropped. A guard that forbids a
+  token cannot be *explained* in any file it scans. Comments do not execute, so
+  they cannot resurrect anything. Mutation-proven both ways: a comment naming
+  the collection passes (5/5), a real `require('./routes/fun-facts')` fails
+  (2 of 5 red).
+
+- **2026-08-20 — two ratchets/pins needed acknowledging, as expected for a
+  deletion.** The no-stubs baseline went stale on the deleted
+  `fun-facts.test.js` (3 entries, regenerated — the ratchet only tightened,
+  0 new offenders), and `backups.test.js` pins the backup-collection count,
+  which moves 27 -> 26.
+
+- **2026-08-20 — the data half.** The `funFacts` collection was **exported from
+  dev** via `GET /api/admin/fun-facts` (never by touching Firestore directly) to
+  `~/.shytalk/funfacts-export-2026-08-20.json`, mode 600. **It is empty**, and
+  that was verified rather than assumed: the admin endpoint uses
+  `orderBy('createdAt')`, and Firestore's `orderBy` silently excludes documents
+  missing that field, so `[]` alone was ambiguous. Cross-checked against the
+  public endpoint's completely different query shape
+  (`where('isActive','==',true)`), also `[]`. A sidecar README records this, and
+  records that **production was deliberately not touched** — the delete must not
+  be run against prod on the strength of a dev export.
+
+- **2026-08-20 — verification.** Express suite **14,380 passing / 451 suites**;
+  the only 2 failing suites are the known linked-worktree artefact (SHY-0302),
+  which fail identically on untouched `develop`. Prettier and ESLint clean.
+  `no-direct-backend` ratchet clean. The `check-no-test-sleeps` script exits 1
+  on **untouched develop too** (311 pre-existing waits, the SHY-0357 backlog) —
+  checked rather than assumed.
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0004-persistent-session-instant-coldstart]]. Scope from the splash blast-radius Explore pass (fun-facts = `funFacts` collection + `/api/fun-facts` + admin tab + rules; banners independent + kept). Operator decisions (2026-07-01): launch-blocking (`mvp:true`) + **delete the collection after a backup export**. The irreversible prod deletion is operator-gated, post-merge. Lands last in EPIC-0004 (after SHY-0144 removes the consumer).

@@ -18,7 +18,7 @@
  *   2. Resets the uniqueId counter to 10000000
  *   3. Deletes ALL R2 objects (except system/ folder)
  *   4. Clears RTDB rooms + conversations nodes
- *   5. Re-seeds fixtures (dev only — gifts, economy config, fun facts, banner)
+ *   5. Re-seeds fixtures (dev only — gifts, economy config, banner)
  *
  * Safety:
  *   - Dev: aborts if the project_id does not contain "dev"
@@ -131,7 +131,7 @@ console.log(`   RTDB: ${rtdbUrl}\n`);
 // ── Collections ──
 const TOP_LEVEL_COLLECTIONS = [
   'users', 'rooms', 'conversations', 'deviceBindings', 'gifts',
-  'giftCatalog', 'economyConfig', 'funFacts', 'banners', 'reports',
+  'giftCatalog', 'economyConfig', 'banners', 'reports',
   'appeals', 'subscriptions', 'logConfig', 'deviceBans', 'networkBans',
   'config', 'coinPackages', 'purchaseReceipts', 'reportLocks',
   'reportsArchive', 'suspensionAppeals', 'broadcasts', 'adminAuditLog',
@@ -278,7 +278,7 @@ async function run() {
   console.log(`\n✅ ${envLabel} environment reset complete!`);
   console.log(`   Firestore: ${grandTotal} docs deleted, counter reset to 10000000`);
   if (!isProd) {
-    console.log('   Fixtures: gifts, economy config, fun facts, banner re-seeded');
+    console.log('   Fixtures: gifts, economy config, banner re-seeded');
   }
 }
 
@@ -303,17 +303,6 @@ async function seedFixtures() {
   console.log(`  Created ${gifts.length} gifts`);
 
   // Fun facts
-  const funFacts = [
-    { id: 'ff1', text: 'Honey never spoils.', category: 'science' },
-    { id: 'ff2', text: 'Octopuses have three hearts.', category: 'animals' },
-    { id: 'ff3', text: 'Bananas are berries, but strawberries are not.', category: 'food' },
-  ];
-
-  for (const f of funFacts) {
-    await db.doc(`funFacts/${f.id}`).set({ ...f, createdAt: Date.now() });
-  }
-  console.log(`  Created ${funFacts.length} fun facts`);
-
   // Banner
   await db.doc('banners/dev_banner_1').set({
     id: 'dev_banner_1',
