@@ -1,6 +1,6 @@
 ---
 id: SHY-0370
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P0
@@ -143,6 +143,8 @@ exactly what the VM does, so it cannot be wrong about what the VM will do.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: e3278bf5450446d4f505d0bf183f74f76b5d7033
 
 - **2026-08-20** — Found only because the SHY-0369 deploy still failed. The
   honest sequence: diagnosed one cause, fixed it, asserted the class was clear on
