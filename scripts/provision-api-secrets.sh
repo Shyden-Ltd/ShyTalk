@@ -25,6 +25,9 @@
 #     picking a winner is not this script's call — and NOTHING is applied.
 #   * The duplicate scan runs BEFORE any mutation, so a refusal never leaves the
 #     file half-changed.
+#   * --collapse-conflicts-to-live overrides that refusal, keeping the LAST
+#     occurrence. That is safe by construction: the earlier line is already dead
+#     to the loader, so deleting it cannot change what the service reads.
 #   * A timestamped, owner-only backup is taken before any change, and no backup
 #     is written when there is nothing to change.
 #
@@ -84,6 +87,7 @@ HEALTH_URL=""
 DRY_RUN=0
 ROTATE_KEYS=""
 SSH_KEY=""
+COLLAPSE_CONFLICTS=0
 
 usage() {
   cat <<'USAGE'
@@ -105,6 +109,13 @@ Options:
                            Costs: everyone signed out of "remember this browser",
                            and every outstanding download link invalidated.
   --dry-run                Report what would change; write nothing.
+  --collapse-conflicts-to-live
+                           Collapse a setting that appears twice with DIFFERENT
+                           values, keeping the LAST occurrence -- the one the
+                           loader already uses, so the running service is
+                           unaffected. This deletes a line nothing reads; it does
+                           not choose between two live values. Opt-in, because a
+                           disagreement is a mistake a human should see first.
   -h, --help               This text.
 
 Exit codes:
@@ -136,6 +147,7 @@ while [ $# -gt 0 ]; do
     --ssh-key)    [ $# -ge 2 ] || die "$E_USAGE" "--ssh-key needs a path"; SSH_KEY="$2"; shift 2 ;;
     --rotate)     [ $# -ge 2 ] || die "$E_USAGE" "--rotate needs a key name"; ROTATE_KEYS="$ROTATE_KEYS $2"; shift 2 ;;
     --dry-run)    DRY_RUN=1; shift ;;
+    --collapse-conflicts-to-live) COLLAPSE_CONFLICTS=1; shift ;;
     -h|--help)    usage; exit 0 ;;
     *)            die "$E_USAGE" "unknown argument: $1" ;;
   esac
@@ -217,16 +229,18 @@ provision_local() {
     END { for (k in bad) print k }
   ' "$file" | sort)
 
-  if [ -n "$conflicts" ]; then
+  if [ -n "$conflicts" ] && [ "$COLLAPSE_CONFLICTS" -ne 1 ]; then
     printf 'REFUSED: these settings appear more than once with DIFFERENT values:\n' >&2
     printf '%s\n' "$conflicts" | while IFS= read -r k; do printf '  %s\n' "$k" >&2; done
-    printf 'Choosing a winner is not this script'"'"'s call. Resolve by hand, then re-run.\n' >&2
+    printf 'Choosing a winner is not this script'"'"'s call. Resolve by hand, then re-run,\n' >&2
+    printf 'or pass --collapse-conflicts-to-live to keep the value already in use.\n' >&2
     printf 'Nothing was changed.\n' >&2
     exit "$E_CONFLICT"
   fi
 
-  local agreeing_dupes
-  agreeing_dupes=$(awk '
+  # Every key appearing more than once, whether or not the copies agree.
+  local duplicate_keys
+  duplicate_keys=$(awk '
     match($0, /^[A-Za-z_][A-Za-z0-9_]*=/) { n[substr($0, 1, RLENGTH - 1)]++ }
     END { for (k in n) if (n[k] > 1) print k }
   ' "$file" | sort)
@@ -251,12 +265,18 @@ provision_local() {
     for key in $to_add;    do printf '%s: would add a new key\n' "$key"; done
     for key in $to_rotate; do printf '%s: would ROTATE the existing key\n' "$key"; done
     for key in $unchanged; do printf '%s: already set, would leave alone\n' "$key"; done
-    for key in $agreeing_dupes; do printf '%s: would collapse duplicate copies (values agree)\n' "$key"; done
+    for key in $duplicate_keys; do
+      if printf '%s\n' "$conflicts" | grep -qx "$key"; then
+        printf '%s: would collapse duplicate copies, KEEPING THE VALUE ALREADY IN USE\n' "$key"
+      else
+        printf '%s: would collapse duplicate copies (values agree)\n' "$key"
+      fi
+    done
     return 0
   fi
 
   # ── Nothing to do: report and leave no backup behind. ──
-  if [ -z "$to_add" ] && [ -z "$to_rotate" ] && [ -z "$agreeing_dupes" ]; then
+  if [ -z "$to_add" ] && [ -z "$to_rotate" ] && [ -z "$duplicate_keys" ]; then
     for key in $unchanged; do
       printf '%s: already set (fingerprint %s)\n' \
         "$key" "$(printf '%s' "$(env_value "$key" "$file")" | fingerprint)"
@@ -337,7 +357,14 @@ provision_local() {
   for key in $to_add;    do printf '%s: added (fingerprint %s)\n'   "$key" "$(printf '%s' "$(env_value "$key" "$file")" | fingerprint)"; done
   for key in $to_rotate; do printf '%s: ROTATED (fingerprint %s)\n' "$key" "$(printf '%s' "$(env_value "$key" "$file")" | fingerprint)"; done
   for key in $unchanged; do printf '%s: already set (fingerprint %s)\n' "$key" "$(printf '%s' "$(env_value "$key" "$file")" | fingerprint)"; done
-  for key in $agreeing_dupes; do printf '%s: duplicate copies collapsed to one (values agreed)\n' "$key"; done
+  for key in $duplicate_keys; do
+    if printf '%s\n' "$conflicts" | grep -qx "$key"; then
+      printf '%s: duplicate copies collapsed to one, KEEPING THE VALUE ALREADY IN USE\n' "$key"
+      printf '        (the discarded copy was already dead to the loader)\n'
+    else
+      printf '%s: duplicate copies collapsed to one (values agreed)\n' "$key"
+    fi
+  done
   printf 'Backup: %s\n' "$backup"
 }
 
@@ -374,13 +401,18 @@ provision_remote() {
   local rc=0
   local rotate_args=""
   for key in $ROTATE_KEYS; do rotate_args="$rotate_args --rotate $key"; done
-  local dry_arg=""
-  [ "$DRY_RUN" -eq 1 ] && dry_arg="--dry-run"
+  # Every flag that changes LOCAL behaviour must be forwarded, or it silently
+  # does nothing over SSH. `if` rather than a bare `&&`: as the last statement
+  # of a function the `&&` form returns non-zero and, under `set -e`, takes the
+  # caller down with it.
+  local pass_through=""
+  if [ "$DRY_RUN" -eq 1 ]; then pass_through="$pass_through --dry-run"; fi
+  if [ "$COLLAPSE_CONFLICTS" -eq 1 ]; then pass_through="$pass_through --collapse-conflicts-to-live"; fi
 
   # The remote command is built from validated, non-secret arguments and must
   # expand on the remote side.
   # shellcheck disable=SC2029
-  ssh_target "bash $remote_script --env-file '$remote_env' $rotate_args $dry_arg" || rc=$?
+  ssh_target "bash $remote_script --env-file '$remote_env' $rotate_args $pass_through" || rc=$?
 
   if [ "$rc" -ne 0 ]; then
     ssh_target "rm -f $remote_script" >/dev/null 2>&1 || true

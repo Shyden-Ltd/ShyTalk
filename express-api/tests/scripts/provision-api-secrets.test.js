@@ -274,11 +274,102 @@ describe('provision-api-secrets.sh — duplicate keys', () => {
     expect(r.output).toMatch(/FIREBASE_WEB_API_KEY/);
   });
 
+  test('--collapse-conflicts-to-live keeps the value the loader already uses', () => {
+    // Deleting the earlier copy is NOT choosing a winner: dotenv parses
+    // top-down, so the earlier line is already dead to the running service.
+    // Removing it therefore cannot change behaviour, which is why this is
+    // allowed at all -- but it stays opt-in, because a disagreement is a
+    // config mistake a human should see.
+    const file = writeEnv('DUP=stale\nKEEP=1\nDUP=live\n');
+    const r = runScript(['--env-file', file, '--collapse-conflicts-to-live']);
+    expect(r.code).toBe(0);
+    expect(countOccurrences(file, 'DUP')).toBe(1);
+    expect(parseEnv(file).DUP).toBe('live');
+    expect(parseEnv(file).KEEP).toBe('1');
+  });
+
+  test('--collapse-conflicts-to-live still installs the managed secrets', () => {
+    const file = writeEnv('DUP=stale\nDUP=live\n');
+    expect(runScript(['--env-file', file, '--collapse-conflicts-to-live']).code).toBe(0);
+    for (const key of MANAGED) {
+      expect(parseEnv(file)[key]).toMatch(/^[0-9a-f]{64,}$/);
+    }
+  });
+
+  test('--collapse-conflicts-to-live names the key but prints neither value', () => {
+    const file = writeEnv('DUP=stale-value-here\nDUP=live-value-here\n');
+    const r = runScript(['--env-file', file, '--collapse-conflicts-to-live']);
+    expect(r.code).toBe(0);
+    expect(r.output).toMatch(/DUP/);
+    expect(r.output).not.toContain('stale-value-here');
+    expect(r.output).not.toContain('live-value-here');
+  });
+
+  test('--collapse-conflicts-to-live under --dry-run writes nothing', () => {
+    const before = 'DUP=stale\nDUP=live\n';
+    const file = writeEnv(before);
+    const r = runScript(['--env-file', file, '--collapse-conflicts-to-live', '--dry-run']);
+    expect(r.code).toBe(0);
+    expect(fs.readFileSync(file, 'utf-8')).toBe(before);
+    expect(r.output).toMatch(/DUP/);
+  });
+
   test('the conflict message does not print either conflicting value', () => {
     const file = writeEnv('SOME_KEY=alpha-secret-one\nSOME_KEY=beta-secret-two\n');
     const r = runScript(['--env-file', file]);
     expect(r.code).toBe(4);
     expect(r.output).not.toMatch(/alpha-secret-one|beta-secret-two/);
+  });
+});
+
+describe('provision-api-secrets.sh — remote mode forwards every local flag', () => {
+  // Remote mode is a transport: it uploads this same script and runs it on the
+  // target in --env-file mode. Any flag that changes LOCAL behaviour must
+  // therefore be passed through, or it silently does nothing over SSH — which
+  // is exactly what happened to --collapse-conflicts-to-live on first run.
+  const TRANSPORT_ONLY = [
+    '--env-file',
+    '--host',
+    '--remote-dir',
+    '--pm2-name',
+    '--health-url',
+    '--ssh-key',
+    '-h',
+    '--help',
+  ];
+
+  const source = fs.readFileSync(SCRIPT, 'utf-8');
+
+  /** The body of provision_remote(), where forwarding is built. */
+  function remoteBody() {
+    const start = source.indexOf('provision_remote() {');
+    expect(start).toBeGreaterThan(-1);
+    const end = source.indexOf('\n}', start);
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  /** Every flag the argument parser accepts. */
+  function acceptedFlags() {
+    const flags = new Set();
+    for (const m of source.matchAll(/^\s{4}(-[^)]*)\)/gm)) {
+      for (const f of m[1].split('|')) flags.add(f.trim());
+    }
+    return [...flags];
+  }
+
+  test('the parser is discoverable, so this test cannot pass vacuously', () => {
+    const flags = acceptedFlags();
+    expect(flags).toEqual(expect.arrayContaining(['--env-file', '--dry-run', '--rotate']));
+    expect(flags.length).toBeGreaterThanOrEqual(8);
+  });
+
+  test('every behaviour-changing flag is forwarded to the target', () => {
+    const body = remoteBody();
+    const missing = acceptedFlags()
+      .filter((f) => !TRANSPORT_ONLY.includes(f))
+      .filter((f) => !body.includes(f));
+    expect(missing).toEqual([]);
   });
 });
 
