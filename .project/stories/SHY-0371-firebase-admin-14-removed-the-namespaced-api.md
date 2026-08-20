@@ -1,6 +1,6 @@
 ---
 id: SHY-0371
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P0
@@ -206,6 +206,8 @@ restarts.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: 9dbe3b6dad76ff27a82eb84234dd144e6643fc86
 
 - **2026-08-20 — found by reading the VM, not the repo.** The handover said one
   merge would clear the outage. It would not have: the live crash was neither of
