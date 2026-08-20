@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Wiadomości prywatne i gacha są dostępne tylko dla użytkowników w wieku 18 lat lub starszych. Na podstawie daty urodzenia w Twoim koncie nie kwalifikujesz się jeszcze. Jeśli uważasz, że to błąd, skontaktuj się z pomocą — nie możemy zaakceptować dokumentów tożsamości w celu zmiany zapisanej daty urodzenia.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Skontaktuj się z pomocą</string>
+    <string name="support_form_hint">Napisz, co jest nie tak, a my się temu przyjrzymy.</string>
+    <string name="support_form_send">Wyślij</string>
+    <string name="support_form_sent">Dziękujemy. Otrzymaliśmy Twoją wiadomość i sprawdzimy ją.</string>
+    <string name="support_form_error_empty">Napisz wiadomość przed wysłaniem.</string>
+    <string name="support_form_error_too_long">Twoja wiadomość jest za długa. Skróć ją i spróbuj ponownie.</string>
+    <string name="support_form_error_generic">Nie udało się wysłać wiadomości. Sprawdź połączenie i spróbuj ponownie.</string>
+    <string name="support_form_error_already_open">Masz już otwarte zgłoszenie. Odpowiemy w nim.</string>
     <string name="age_restriction_sub_eighteen_confirm">Skontaktuj się z pomocą</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Anuluj</string>

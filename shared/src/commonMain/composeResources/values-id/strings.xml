@@ -1658,9 +1658,17 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">Fitur tidak tersedia</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">Pesan pribadi dan gacha hanya tersedia untuk pengguna berusia 18 tahun atau lebih. Berdasarkan tanggal lahir di akun Anda, Anda belum memenuhi syarat. Kami tidak dapat menerima kartu identitas untuk mengubah tanggal lahir yang tercatat.</string>
+    <string name="age_restriction_sub_eighteen_body">Pesan pribadi dan gacha hanya tersedia untuk pengguna berusia 18 tahun atau lebih. Berdasarkan tanggal lahir di akun Anda, Anda belum memenuhi syarat. Jika Anda yakin ini salah, harap hubungi dukungan — kami tidak dapat menerima kartu identitas untuk mengubah tanggal lahir yang tercatat.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">Hubungi dukungan</string>
+    <string name="support_form_title">Hubungi dukungan</string>
+    <string name="support_form_hint">Ceritakan masalahnya dan kami akan menindaklanjuti.</string>
+    <string name="support_form_send">Kirim</string>
+    <string name="support_form_sent">Terima kasih. Pesan Anda sudah kami terima dan akan kami tindak lanjuti.</string>
+    <string name="support_form_error_empty">Silakan tulis pesan sebelum mengirim.</string>
+    <string name="support_form_error_too_long">Pesan Anda terlalu panjang. Persingkat lalu coba lagi.</string>
+    <string name="support_form_error_generic">Kami tidak dapat mengirim pesan Anda. Periksa koneksi Anda lalu coba lagi.</string>
+    <string name="support_form_error_already_open">Anda sudah memiliki permintaan yang terbuka. Kami akan membalas di sana.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Batal</string>
 

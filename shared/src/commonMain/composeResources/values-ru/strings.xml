@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Личные сообщения и гача доступны только пользователям 18 лет и старше. Согласно дате рождения в вашей учётной записи, вы пока не соответствуете требованиям. Если вы считаете, что это ошибка, обратитесь в поддержку — мы не можем принимать документы, удостоверяющие личность, для изменения указанной даты рождения.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Связаться с поддержкой</string>
+    <string name="support_form_hint">Расскажите, что не так, и мы разберёмся.</string>
+    <string name="support_form_send">Отправить</string>
+    <string name="support_form_sent">Спасибо. Мы получили ваше сообщение и разберёмся.</string>
+    <string name="support_form_error_empty">Напишите сообщение перед отправкой.</string>
+    <string name="support_form_error_too_long">Ваше сообщение слишком длинное. Сократите его и попробуйте снова.</string>
+    <string name="support_form_error_generic">Не удалось отправить сообщение. Проверьте соединение и попробуйте снова.</string>
+    <string name="support_form_error_already_open">У вас уже есть открытый запрос. Мы ответим на него.</string>
     <string name="age_restriction_sub_eighteen_confirm">Связаться с поддержкой</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Отмена</string>

@@ -1658,9 +1658,17 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">功能不可用</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">私信和嘎查仅向年满 18 周岁的用户开放。根据您账户的出生日期，您尚不符合条件。我们无法接受身份证件提交以覆盖记录中的出生日期。</string>
+    <string name="age_restriction_sub_eighteen_body">私信和嘎查仅向年满 18 周岁的用户开放。根据您账户的出生日期，您尚不符合条件。如果您认为这是错误，请联系支持 — 我们无法接受身份证件提交以覆盖记录中的出生日期。</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">联系支持</string>
+    <string name="support_form_title">联系支持</string>
+    <string name="support_form_hint">请告诉我们遇到的问题，我们会跟进处理。</string>
+    <string name="support_form_send">发送</string>
+    <string name="support_form_sent">谢谢，我们已收到您的信息，会尽快处理。</string>
+    <string name="support_form_error_empty">请先输入信息再发送。</string>
+    <string name="support_form_error_too_long">您的信息太长，请缩短后再试。</string>
+    <string name="support_form_error_generic">无法发送您的信息，请检查网络连接后重试。</string>
+    <string name="support_form_error_already_open">您已有一个待处理的请求，我们会在该请求中回复您。</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">取消</string>
 

@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Privéberichten en gacha zijn alleen beschikbaar voor gebruikers van 18 jaar of ouder. Op basis van de geboortedatum in je account voldoe je nog niet aan de eisen. Als je denkt dat dit onjuist is, neem dan contact op met support — we kunnen geen ID-documenten accepteren om de geregistreerde geboortedatum te overschrijven.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Contact opnemen met support</string>
+    <string name="support_form_hint">Vertel ons wat er mis is, dan kijken we ernaar.</string>
+    <string name="support_form_send">Verzenden</string>
+    <string name="support_form_sent">Bedankt. We hebben je bericht ontvangen en kijken ernaar.</string>
+    <string name="support_form_error_empty">Schrijf een bericht voordat je verzendt.</string>
+    <string name="support_form_error_too_long">Je bericht is te lang. Maak het korter en probeer het opnieuw.</string>
+    <string name="support_form_error_generic">We konden je bericht niet verzenden. Controleer je verbinding en probeer het opnieuw.</string>
+    <string name="support_form_error_already_open">Je hebt al een openstaand verzoek. Daar reageren we op.</string>
     <string name="age_restriction_sub_eighteen_confirm">Contact opnemen met support</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Annuleren</string>

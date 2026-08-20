@@ -1656,9 +1656,17 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">ฟีเจอร์ไม่พร้อมใช้งาน</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">ข้อความส่วนตัวและกาชาให้บริการเฉพาะผู้ใช้ที่มีอายุ 18 ปีขึ้นไปเท่านั้น ตามวันเกิดในบัญชีของคุณ คุณยังไม่มีคุณสมบัติ เราไม่สามารถรับการส่งบัตรประจำตัวเพื่อเปลี่ยนวันเกิดที่บันทึกไว้ได้</string>
+    <string name="age_restriction_sub_eighteen_body">ข้อความส่วนตัวและกาชาให้บริการเฉพาะผู้ใช้ที่มีอายุ 18 ปีขึ้นไปเท่านั้น ตามวันเกิดในบัญชีของคุณ คุณยังไม่มีคุณสมบัติ หากคุณคิดว่านี่ไม่ถูกต้อง โปรดติดต่อฝ่ายสนับสนุน — เราไม่สามารถรับการส่งบัตรประจำตัวเพื่อเปลี่ยนวันเกิดที่บันทึกไว้ได้</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">ติดต่อฝ่ายสนับสนุน</string>
+    <string name="support_form_title">ติดต่อฝ่ายสนับสนุน</string>
+    <string name="support_form_hint">บอกเราว่าเกิดปัญหาอะไร แล้วเราจะตรวจสอบให้</string>
+    <string name="support_form_send">ส่ง</string>
+    <string name="support_form_sent">ขอบคุณ เราได้รับข้อความของคุณแล้วและจะตรวจสอบให้</string>
+    <string name="support_form_error_empty">กรุณาเขียนข้อความก่อนส่ง</string>
+    <string name="support_form_error_too_long">ข้อความของคุณยาวเกินไป กรุณาย่อแล้วลองใหม่</string>
+    <string name="support_form_error_generic">เราไม่สามารถส่งข้อความของคุณได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่</string>
+    <string name="support_form_error_already_open">คุณมีคำขอที่เปิดอยู่แล้ว เราจะตอบกลับในคำขอนั้น</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">ยกเลิก</string>
 

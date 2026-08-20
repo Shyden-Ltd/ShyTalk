@@ -1015,11 +1015,38 @@ fun PrivateChatScreen(
     // (TAG_NEEDS_VERIFICATION_CONFIRM etc.). NeedsVerification routes to
     // the submit screen; SubEighteen offers contact-support (no entry
     // into the verification flow — they need to age in).
+    // SHY-0385: same support route as the room. See RoomScreen for the reasoning
+    // about closing the age dialog first rather than stacking two.
+    var showSupportForm by remember { mutableStateOf(false) }
     com.shyden.shytalk.feature.ageverification.AgeRestrictionDialog(
         state = ageRestrictionDialogState,
         onDismiss = { viewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
+        onContactSupport = {
+            viewModel.dismissAgeRestrictionDialog()
+            showSupportForm = true
+        },
     )
+
+    if (showSupportForm) {
+        // Same shape as the room's entry point: the admin should not have to ask
+        // which refusal sent them here.
+        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
+            org.koin.compose.viewmodel.koinViewModel {
+                parametersOf(
+                    com.shyden.shytalk.data.repository.SupportCategory.Age,
+                    mapOf(
+                        "feature" to "private_messages",
+                        "reason" to "age_restriction",
+                        "screen" to "private_chat",
+                    ),
+                )
+            }
+        com.shyden.shytalk.feature.support.SupportFormDialog(
+            viewModel = supportViewModel,
+            onDismiss = { showSupportForm = false },
+        )
+    }
 }
 
 @Composable

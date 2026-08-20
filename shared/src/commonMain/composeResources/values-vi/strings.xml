@@ -1658,9 +1658,17 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">Tính năng không khả dụng</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">Tin nhắn riêng và gacha chỉ dành cho người dùng từ 18 tuổi trở lên. Dựa trên ngày sinh trên tài khoản của bạn, bạn chưa đủ điều kiện. Chúng tôi không thể chấp nhận giấy tờ tùy thân để thay đổi ngày sinh đã đăng ký.</string>
+    <string name="age_restriction_sub_eighteen_body">Tin nhắn riêng và gacha chỉ dành cho người dùng từ 18 tuổi trở lên. Dựa trên ngày sinh trên tài khoản của bạn, bạn chưa đủ điều kiện. Nếu bạn cho rằng điều này không chính xác, vui lòng liên hệ hỗ trợ — chúng tôi không thể chấp nhận giấy tờ tùy thân để thay đổi ngày sinh đã đăng ký.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">Liên hệ hỗ trợ</string>
+    <string name="support_form_title">Liên hệ hỗ trợ</string>
+    <string name="support_form_hint">Hãy cho chúng tôi biết vấn đề của bạn và chúng tôi sẽ xem xét.</string>
+    <string name="support_form_send">Gửi</string>
+    <string name="support_form_sent">Cảm ơn bạn. Chúng tôi đã nhận được tin nhắn và sẽ xem xét.</string>
+    <string name="support_form_error_empty">Vui lòng viết nội dung trước khi gửi.</string>
+    <string name="support_form_error_too_long">Nội dung của bạn quá dài. Vui lòng rút ngắn rồi thử lại.</string>
+    <string name="support_form_error_generic">Chúng tôi không thể gửi nội dung của bạn. Vui lòng kiểm tra kết nối và thử lại.</string>
+    <string name="support_form_error_already_open">Bạn đã có một yêu cầu đang mở. Chúng tôi sẽ trả lời trong yêu cầu đó.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Hủy</string>
 

@@ -1272,11 +1272,40 @@ fun RoomScreen(
     // NeedsVerification routes to the submit screen; SubEighteen offers
     // contact-support (no entry into the verification flow).
     val gachaAgeRestrictionState by gachaViewModel.ageRestrictionDialogState.collectAsStateWithLifecycle()
+    // SHY-0385: "Contact support" opens the in-app form, which raises a ticket an
+    // admin actions. The age dialog closes first -- two stacked dialogs would be
+    // confusing, and the person has already read the explanation.
+    var showSupportForm by remember { mutableStateOf(false) }
     com.shyden.shytalk.feature.ageverification.AgeRestrictionDialog(
         state = gachaAgeRestrictionState,
         onDismiss = { gachaViewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
+        onContactSupport = {
+            gachaViewModel.dismissAgeRestrictionDialog()
+            showSupportForm = true
+        },
     )
+
+    if (showSupportForm) {
+        // The context tells an admin where this came from, so the person does not
+        // have to explain that the wheel refused them. Only the keys in the
+        // server's CONTEXT_ALLOWED_FIELDS survive; anything else is dropped there.
+        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
+            org.koin.compose.viewmodel.koinViewModel {
+                parametersOf(
+                    com.shyden.shytalk.data.repository.SupportCategory.Age,
+                    mapOf(
+                        "feature" to "lucky_spin",
+                        "reason" to "age_restriction",
+                        "screen" to "room",
+                    ),
+                )
+            }
+        com.shyden.shytalk.feature.support.SupportFormDialog(
+            viewModel = supportViewModel,
+            onDismiss = { showSupportForm = false },
+        )
+    }
 
     // B3 — room message report dialog (UK OSA per-message reporting).
     // Shown when a non-self TEXT message is long-pressed. The dialog itself

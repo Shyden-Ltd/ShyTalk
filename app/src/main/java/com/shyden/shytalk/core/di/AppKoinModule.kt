@@ -66,6 +66,8 @@ import com.shyden.shytalk.data.repository.SeatRequestRepositoryImpl
 import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.StorageRepositoryImpl
+import com.shyden.shytalk.data.repository.SupportRepository
+import com.shyden.shytalk.data.repository.SupportRepositoryImpl
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TranslationRepositoryImpl
 import com.shyden.shytalk.data.repository.TypingRepository
@@ -139,6 +141,7 @@ val appModule =
         singleOf(::SeatRequestRepositoryImpl) bind SeatRequestRepository::class
         single<StorageRepository> { StorageRepositoryImpl(get(), BuildConfig.WORKER_URL, get()) }
         singleOf(::AgeVerificationRepositoryImpl) bind AgeVerificationRepository::class
+        singleOf(::SupportRepositoryImpl) bind SupportRepository::class
         singleOf(::DeviceRepositoryImpl) bind DeviceRepository::class
         singleOf(::IdentityRepositoryImpl) bind IdentityRepository::class
         singleOf(::PrivateMessageRepositoryImpl) bind PrivateMessageRepository::class

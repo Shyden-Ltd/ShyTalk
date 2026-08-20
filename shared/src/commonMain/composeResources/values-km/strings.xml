@@ -1745,6 +1745,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">សារឯកជន និងហ្គាចាមានសម្រាប់តែអ្នកប្រើដែលមានអាយុ ១៨ ឆ្នាំ ឬច្រើនជាងនេះប៉ុណ្ណោះ។ ផ្អែកលើថ្ងៃខែឆ្នាំកំណើតក្នុងគណនីរបស់អ្នក អ្នកមិនទាន់មានសិទ្ធិទេ។ ប្រសិនបើអ្នកជឿថានេះខុស សូមទាក់ទងជំនួយ — យើងមិនអាចទទួលយកឯកសារសម្គាល់ខ្លួនដើម្បីផ្លាស់ប្តូរថ្ងៃខែឆ្នាំកំណើតដែលបានកត់ត្រាបានទេ។</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">ទាក់ទងផ្នែកជំនួយ</string>
+    <string name="support_form_hint">ប្រាប់យើងពីបញ្ហា ហើយយើងនឹងពិនិត្យមើល។</string>
+    <string name="support_form_send">ផ្ញើ</string>
+    <string name="support_form_sent">អរគុណ។ យើងបានទទួលសាររបស់អ្នក ហើយនឹងពិនិត្យមើល។</string>
+    <string name="support_form_error_empty">សូមសរសេរសារមុនពេលផ្ញើ។</string>
+    <string name="support_form_error_too_long">សាររបស់អ្នកវែងពេក។ សូមកាត់បន្ថយ ហើយព្យាយាមម្តងទៀត។</string>
+    <string name="support_form_error_generic">យើងមិនអាចផ្ញើសាររបស់អ្នកបានទេ។ សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្តងទៀត។</string>
+    <string name="support_form_error_already_open">អ្នកមានសំណើបើកចំហរួចហើយ។ យើងនឹងឆ្លើយតបនៅទីនោះ។</string>
     <string name="age_restriction_sub_eighteen_confirm">ទាក់ទងជំនួយ</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">បោះបង់</string>

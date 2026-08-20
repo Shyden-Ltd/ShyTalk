@@ -15,6 +15,7 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
@@ -538,3 +539,65 @@ class IosAgeVerificationRepositoryImpl(
             api.post("/api/age-verification/submit", body)
         }
 }
+
+// ── SupportRepository (SHY-0385) ───────────────────────────────────
+
+/**
+ * iOS side of raising a support ticket.
+ *
+ * The 409 mapping is the only interesting part: the server refuses a second
+ * ticket while one is still open, and that is not a failure a retry can fix.
+ * Matched on `statusCode` rather than on the server's English message, so it
+ * survives a rewording and works for somebody reading the app in any language.
+ */
+class IosSupportRepositoryImpl(
+    private val api: IosApiClient,
+) : SupportRepository {
+    override suspend fun raiseTicket(
+        message: String,
+        category: SupportCategory?,
+        context: Map<String, String>,
+    ): RaiseTicketOutcome =
+        try {
+            val fields = mutableMapOf<String, JsonElement>("message" to JsonPrimitive(message))
+            category?.let { fields["category"] = JsonPrimitive(it.wireValue) }
+            if (context.isNotEmpty()) {
+                fields["context"] = JsonObject(context.mapValues { JsonPrimitive(it.value) })
+            }
+
+            val resp = api.post("/api/support-tickets", JsonObject(fields))
+            // `IosApiClient.parseResponse` answers an EMPTY object for a non-JSON
+            // 2xx rather than throwing, so a captive portal's login page arrives
+            // here as a success carrying no ticket id. Android reached the same
+            // state down a different route; both platforms must refuse it, or the
+            // person is told their message arrived when nothing was sent.
+            val ticketId = resp["ticketId"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            if (ticketId.isBlank()) {
+                logW(TAG_SUPPORT, "Support ticket: a 2xx response carried no ticketId")
+                RaiseTicketOutcome.Failed("Support request did not come back with a ticket")
+            } else {
+                RaiseTicketOutcome.Raised(ticketId)
+            }
+        } catch (e: CancellationException) {
+            // Never swallow cancellation -- it is control flow, not a failure.
+            // It must stay ABOVE the broad catch below.
+            throw e
+        } catch (e: ApiException) {
+            if (e.statusCode == HTTP_CONFLICT_SUPPORT) {
+                RaiseTicketOutcome.AlreadyOpen
+            } else {
+                // ApiException.message is non-nullable on iOS, so no elvis here.
+                RaiseTicketOutcome.Failed(e.message)
+            }
+        } catch (e: Exception) {
+            // A Ktor transport failure is not an ApiException, so a dropped
+            // connection used to escape this repository entirely and take the app
+            // down from inside `viewModelScope.launch`. Android caught IOException
+            // and iOS caught nothing -- the same hole, one platform wide.
+            logW(TAG_SUPPORT, "Support ticket failed unexpectedly: ${e.message}")
+            RaiseTicketOutcome.Failed(e.message ?: "Support request failed")
+        }
+}
+
+private const val HTTP_CONFLICT_SUPPORT = 409
+private const val TAG_SUPPORT = "SupportRepository"

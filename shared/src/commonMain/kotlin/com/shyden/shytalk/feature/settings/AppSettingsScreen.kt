@@ -86,6 +86,7 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 private enum class SettingsPage {
     Main,
@@ -1672,6 +1673,24 @@ private fun AboutPage(
     snackbarHostState: SnackbarHostState,
     platformSettings: PlatformSettingsService,
 ) {
+    // SHY-0385: the general way in to support, for anyone not coming from a
+    // refusal. Filed as Other, and with no `reason` -- nothing turned this person
+    // away, and inventing one would mislead whoever triages the ticket.
+    var showSupportForm by remember { mutableStateOf(false) }
+    if (showSupportForm) {
+        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
+            koinViewModel {
+                parametersOf(
+                    com.shyden.shytalk.data.repository.SupportCategory.Other,
+                    mapOf("screen" to "settings"),
+                )
+            }
+        com.shyden.shytalk.feature.support.SupportFormDialog(
+            viewModel = supportViewModel,
+            onDismiss = { showSupportForm = false },
+        )
+    }
+
     SettingsSubPage(
         title = stringResource(Res.string.about),
         onBack = onBack,
@@ -1732,7 +1751,11 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable {
-                            platformSettings.openEmail("shytalk.help@gmail.com")
+                            // SHY-0385: opens the in-app support form, which raises
+                            // a ticket an admin actions. It used to open a mail
+                            // composer to an address that is not monitored --
+                            // operator, 2026-08-20: there is no support mailbox.
+                            showSupportForm = true
                         }.padding(vertical = 12.dp)
                         .testTag("settings_contactUsLink"),
                 verticalAlignment = Alignment.CenterVertically,

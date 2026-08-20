@@ -1659,6 +1659,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Особисті повідомлення та Гача доступні лише користувачам 18 років або старшим. На основі дати народження у вашому обліковому записі ви ще не відповідаєте вимогам. Якщо ви вважаєте це помилкою, зверніться до підтримки — ми не можемо приймати документи, що посвідчують особу, для зміни вказаної дати народження.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Звʼязатися з підтримкою</string>
+    <string name="support_form_hint">Розкажіть, що сталося, і ми розберемося.</string>
+    <string name="support_form_send">Надіслати</string>
+    <string name="support_form_sent">Дякуємо. Ми отримали ваше повідомлення та розберемося.</string>
+    <string name="support_form_error_empty">Напишіть повідомлення перед надсиланням.</string>
+    <string name="support_form_error_too_long">Ваше повідомлення задовге. Скоротіть його та спробуйте ще раз.</string>
+    <string name="support_form_error_generic">Не вдалося надіслати повідомлення. Перевірте зʼєднання та спробуйте ще раз.</string>
+    <string name="support_form_error_already_open">У вас уже є відкритий запит. Ми відповімо на нього.</string>
     <string name="age_restriction_sub_eighteen_confirm">Звернутися до підтримки</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Скасувати</string>

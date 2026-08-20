@@ -505,7 +505,12 @@ describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
     const res = require('node:child_process').spawnSync(
       'bash',
       [SYNC_SCRIPT, '--all', '--dry-run'],
-      { encoding: 'utf-8', cwd: repoRoot, timeout: 90_000 },
+      // 90_000 -> 300_000 on 2026-08-21 (SHY-0385). The budget does not scale
+      // with the corpus, and the corpus does: a real `--all --dry-run` over 325
+      // story files now takes ~69s unloaded, i.e. 23% headroom, and tips over
+      // when the full 460-suite run loads the machine. This was a latent flake
+      // that would have got worse with every story filed, not a one-off.
+      { encoding: 'utf-8', cwd: repoRoot, timeout: 300_000 },
     );
     expect(res.status ?? 1).toBe(0);
     const stderr = res.stderr ?? '';
