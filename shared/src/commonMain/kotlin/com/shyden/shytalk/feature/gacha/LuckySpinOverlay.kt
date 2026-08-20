@@ -184,6 +184,23 @@ fun LuckySpinOverlay(
         }
     }
 
+    // SHY-0372: recover from a pull that was refused BEFORE it ever started.
+    //
+    // The effect above cannot do this. It is keyed on `isPulling`, and every
+    // refusal in `GachaViewModel.pull()` returns before `isPulling` is set — so
+    // the key never CHANGES, the effect never re-runs, and the wheel stays on a
+    // spinning frame where no play buttons are rendered. That is the reported
+    // bug: tap play, cancel the age prompt, and the wheel is dead until the
+    // overlay is closed and reopened.
+    //
+    // `pullRefusedCount` is a counter precisely so that this key changes on
+    // EVERY refusal, including two identical ones in a row.
+    LaunchedEffect(gachaState.pullRefusedCount) {
+        if (phase == SpinPhase.ANIMATING) {
+            resetBoard()
+        }
+    }
+
     // Handle single spin result (1x)
     LaunchedEffect(gachaState.currentWin) {
         val win = gachaState.currentWin ?: return@LaunchedEffect

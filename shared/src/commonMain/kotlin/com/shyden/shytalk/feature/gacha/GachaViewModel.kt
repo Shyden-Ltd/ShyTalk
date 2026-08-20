@@ -45,6 +45,23 @@ data class GachaUiState(
     val pullCosts: Map<Int, Int> = emptyMap(),
     val configLoaded: Boolean = false,
     val wheelInnerThreshold: Int = 18888,
+    /**
+     * SHY-0372. Incremented every time a pull is refused BEFORE it starts, so
+     * the wheel can leave its optimistic spinning state.
+     *
+     * The overlay sets `SpinPhase.ANIMATING` the instant a play button is
+     * tapped, because waiting for the server would put a visible delay on every
+     * spin. Its recovery used to be keyed solely on [isPulling] -- but none of
+     * the refusal paths in `pull()` ever set [isPulling], so it never CHANGED,
+     * the recovery never re-ran, and the wheel stayed on a spinning frame with
+     * no play buttons.
+     *
+     * It is a COUNTER, not a flag and not the error text, because two identical
+     * refusals in a row must still be two distinct signals. A flag would already
+     * be set, and the same error text twice is the same value -- either way the
+     * second refusal would latch the wheel exactly as before.
+     */
+    val pullRefusedCount: Int = 0,
 )
 
 class GachaViewModel(
@@ -181,11 +198,34 @@ class GachaViewModel(
 
     fun pullHundred() = pull(100)
 
+    /**
+     * Tell the UI that a pull attempt ended without starting.
+     *
+     * SHY-0372. Every early return in [pull] must call this, or the wheel
+     * latches on its optimistic spinning frame -- see [GachaUiState.pullRefusedCount].
+     */
+    private fun refusePull(error: UiText? = null) {
+        _uiState.update {
+            it.copy(
+                // `?: it.error` and not `= error`: a refusal with no message of
+                // its own must not silently clear a message already on screen.
+                error = error ?: it.error,
+                pullRefusedCount = it.pullRefusedCount + 1,
+            )
+        }
+    }
+
     private fun pull(count: Int) {
         logI(TAG, "Gacha spin started: count=$count")
-        val cost = _uiState.value.pullCosts[count] ?: return
+        val cost = _uiState.value.pullCosts[count]
+        if (cost == null) {
+            logI(TAG, "Gacha pull refused: no configured cost for tier count=$count")
+            refusePull()
+            return
+        }
         if (_uiState.value.coinBalance < cost) {
-            _uiState.update { it.copy(error = UiText.res(Res.string.error_not_enough_coins)) }
+            logI(TAG, "Gacha pull refused: insufficient coins for tier count=$count")
+            refusePull(UiText.res(Res.string.error_not_enough_coins))
             return
         }
         viewModelScope.launch {
@@ -200,7 +240,8 @@ class GachaViewModel(
             val restriction = checkAgeRestriction()
             if (restriction != AgeRestrictionDialogState.Hidden) {
                 _ageRestrictionDialogState.value = restriction
-                logI(TAG, "Gacha pull blocked by age restriction: $restriction")
+                logI(TAG, "Gacha pull refused by age restriction: $restriction")
+                refusePull()
                 return@launch
             }
 
