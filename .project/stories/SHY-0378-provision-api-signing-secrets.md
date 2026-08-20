@@ -184,11 +184,61 @@ health check.
 ## Definition of Done
 
 - [ ] Script and tests merged to `develop`, all checks green.
-- [ ] Dev provisioned; `/api/health` returns 200; both secrets confirmed live on
+- [x] Dev provisioned; `/api/health` returns 200; both secrets confirmed live on
       the running service by fingerprint.
-- [ ] The duplicate setting resolved or explicitly reported as conflicting.
-- [ ] Handover and story updated with what was applied — never with values.
-- [ ] Production procedure documented and ready for the operator to run.
+- [x] The duplicate setting resolved or explicitly reported as conflicting.
+- [x] Handover and story updated with what was applied — never with values.
+- [x] Production procedure documented and ready for the operator to run.
+
+## Applied to dev — 2026-08-20 08:36 UTC
+
+Command:
+
+```sh
+scripts/provision-api-secrets.sh \
+  --host ubuntu@<dev-vm> --ssh-key ~/.ssh/shytalk-oci \
+  --remote-dir /home/ubuntu/express-api --pm2-name shytalk-api \
+  --health-url https://dev-api.shytalk.shyden.co.uk/api/health \
+  --collapse-conflicts-to-live
+```
+
+| Setting | Outcome | File fingerprint | Live fingerprint |
+| --- | --- | --- | --- |
+| `MFA_REMEMBER_SECRET` | added | `93730bd00b83` | `93730bd00b83` |
+| `EXPORT_DOWNLOAD_SECRET` | added | `4b5dd988e085` | `4b5dd988e085` |
+| `FIREBASE_WEB_API_KEY` | duplicate collapsed, kept the value already in use | — | — |
+
+The file and live fingerprints match, which is the part that matters: it proves
+the running process re-read the file rather than keeping an older environment.
+A fingerprint is the first 12 hex characters of the SHA-256 of a 256-bit random
+value, so it discloses nothing.
+
+Verified after the change:
+
+- `/api/health` → `200 {"status":"ok"}`, serving sha `487ef30e636`.
+- `/api/firebase-config` → **byte-identical** key and project to before the
+  collapse (`shytalk-dev`), confirming the collapse was a no-op.
+- pm2 `online`, restart counter static.
+
+Backup on the VM: `/home/ubuntu/express-api/.env.bak.20260820T083649Z`.
+
+### The duplicate was not what the handover recorded
+
+Part 6 called it "harmless last-wins". The two copies held **different values**.
+It was harmless only because dotenv is last-wins — and the intuitive tidy-up,
+keeping the first, would have moved dev onto a different Firebase key.
+
+Which copy was correct was established, not assumed: the live value is served on
+the deliberately public `/api/firebase-config`, and Identity Toolkit answered
+`INVALID_LOGIN_CREDENTIALS` rather than `API_KEY_INVALID`, proving it is a
+working key for `shytalk-dev`.
+
+### Production
+
+Same command with the production host, `--health-url` pointing at the
+production health endpoint, and **without** `--collapse-conflicts-to-live`
+unless production shows the same duplicate. Run a `--dry-run` first. Production
+throws rather than falling back, so this must happen **before** the cut.
 
 ## Notes
 
