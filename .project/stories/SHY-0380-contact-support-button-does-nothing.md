@@ -4,54 +4,44 @@ status: Draft
 owner: unassigned
 created: 2026-08-20
 priority: P1
-effort: L
+effort: M
 type: feature
 roadmap_ids: []
 epic: EPIC-0012
 mvp: true
 ---
 
-# SHY-0380: "Contact support" should raise a ticket an admin can action
+# SHY-0380: A support-ticket queue an admin can action
 
 ## User Story
 
-As **someone who needs help**, I want to send ShyTalk a message from inside the
-app and know it has been received, so that I am not left guessing whether
-anyone will ever see it.
+As **an administrator**, I want support requests to arrive in a queue I can work
+through, so that nobody's request is sitting in a place nobody looks.
 
 ## Why
 
-**Reported by the operator, 2026-08-20.** The age-restriction dialog says:
+**Operator design, 2026-08-20:** *"contacting support should open a form, similar
+to reporting, where the support becomes a ticket for an admin on the admin
+dashboard to action. not an email."*
 
-> If you believe this is wrong, please **contact support** — we cannot accept ID
-> submissions to override the date of birth on file.
+This is **part one of two**, split at the operator's direction: the queue and its
+admin surface first, the in-app form second ([[SHY-0385]]). Building it this way
+means the form is written against a surface already proven to work, rather than
+two unproven halves at once.
 
-…and offers a **Contact support** button that **closes the dialog and does
-nothing else**. Both call sites pass the same lambda as the dismiss action:
+The origin is a broken control. **Contact support** on the age-restriction dialog
+closed the dialog and did nothing else — both call sites passed the dismiss
+action. That control is removed in the interim by [[SHY-0384]] and restored by
+SHY-0385 once there is something real behind it.
 
-| Call site | What it passes |
-| --- | --- |
-| `RoomScreen.kt:1279` | `onContactSupport = { gachaViewModel.dismissAgeRestrictionDialog() }` |
-| `PrivateChatScreen.kt:1022` | `onContactSupport = { viewModel.dismissAgeRestrictionDialog() }` |
+An email was considered and ruled out by the operator. It leaves support with no
+queue, no status, no audit trail, and no way to know whether anything was
+answered, and it fails outright on a device with no mail app.
 
-So the confirm button is behaviourally identical to Cancel. The screen tells
-someone to do a thing, offers a control for it, and the control is inert.
+### Copy the appeals shape; do not invent a third one
 
-### The operator's design — a ticket, not an email
-
-**Operator, 2026-08-20:** "contacting support should open a form, similar to
-reporting. where the support becomes a ticket for an admin on the admin
-dashboard to action. not an email."
-
-This is the right call and it supersedes the obvious quick fix. An email leaves
-support with no queue, no status, no audit trail, and no way to tell whether
-anything was answered. A ticket is trackable, and it works for someone who has
-no mail app configured.
-
-### There is already a precedent to copy, not invent
-
-**Appeals** is structurally the same thing — a person submits free text about
-their account, it lands in a queue, an admin actions it:
+**Appeals** is structurally the same thing — someone submits free text about
+their account, it queues, an admin actions it:
 
 | Layer | Existing appeals implementation |
 | --- | --- |
@@ -60,169 +50,129 @@ their account, it lands in a queue, an admin actions it:
 | Admin action | `PATCH /appeals/:id` (`:1465`) |
 | Dashboard | `public/admin/js/tabs/appeals.js`, registered in `main.js:77` |
 
-Support tickets must follow this shape. A **third** differently-shaped
-user→admin queue in the same product would be the wrong outcome.
+ShyTalk already has two user→admin queues (reports, appeals). A **third**
+differently-shaped one would be the wrong outcome.
 
-There is no in-app appeal *screen* to copy, so the form itself is new work.
+### Deliberately the interim surface
 
-### The ticket should already know why it was raised
-
-The age-gate case is almost always "my date of birth is wrong on file". The
-person should not have to explain where they came from — the ticket carries the
-originating context (which feature refused them, and what the app believed about
-their eligibility) so an admin can act without a round trip.
+[[EPIC-0012]] takes this further — a dedicated support-agent user type working
+tickets from the **website portal**, which is gated on the portal existing. This
+story ships an **admin-dashboard** surface on purpose and must not grow features
+that epic will replace.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-- [ ] Choosing **Contact support** opens a form inside the app, not a mail app
-      and not a browser.
-- [ ] Submitting it tells the person plainly that it has been received.
-- [ ] The submission appears in the admin dashboard as an actionable item.
-- [ ] An admin can mark it handled, and the person's view reflects that.
-- [ ] It works from every place the age-restriction message appears — a room and
-      a private chat.
+- [ ] A ticket can be raised by an authenticated account and is stored.
+- [ ] An admin sees open tickets in the dashboard, newest first.
+- [ ] An admin can mark a ticket handled, and the change persists.
+- [ ] An admin can see how many are open.
 
 ### Error paths
 
-- [ ] A failed submission says so and keeps what the person typed. Nothing is
-      lost to a dropped connection.
-- [ ] An empty or whitespace-only message is refused before it is sent, with a
-      reason.
-- [ ] If the person already has an open ticket, they are told, rather than
-      silently creating a duplicate — the behaviour `POST /appeals` already has.
+- [ ] An empty or whitespace-only message is refused with a reason.
+- [ ] A second ticket while one is still open is refused with a clear response,
+      matching what `POST /appeals` already does.
+- [ ] A malformed request is refused without a stack trace reaching the caller.
 
 ### Edge cases
 
-- [ ] Submitting twice quickly creates one ticket, not two.
-- [ ] A very long message is either accepted whole or bounded with a visible
-      limit — never silently truncated.
-- [ ] Someone under 18 can raise a ticket. **This route must survive SHY-0379**,
-      which hides age-gated features from known minors; support is not an
-      age-gated feature and hiding it would strand exactly the person most
-      likely to need it.
-- [ ] Works on Android and iOS.
+- [ ] Two near-simultaneous submissions produce one ticket, not two.
+- [ ] A very long message is bounded explicitly, never silently truncated.
+- [ ] A ticket raised by an account that is later deleted does not break the
+      queue view.
 
 ### Performance
 
-- [ ] Submitting is a single request; the form does not block the app while it
-      sends.
+- [ ] Listing the queue is paginated or bounded; it must not degrade as tickets
+      accumulate.
 
 ### Security
 
-- [ ] Submission is authenticated and the ticket is bound to the account that
-      raised it. Nobody can raise or read a ticket for another account.
-- [ ] Rate-limited, so the endpoint cannot be used to flood the admin queue.
-- [ ] The message body is treated as untrusted text everywhere it is displayed,
-      including the admin dashboard.
-- [ ] The admin action is **audit-logged**. `PUT /config/:key` currently writes
-      no audit entry and that is a known gap — do not repeat it here.
-- [ ] Automatically attached context contains no more than is needed to action
-      the ticket, and no credentials or tokens.
+- [ ] Raising a ticket is authenticated, and the ticket is bound to that account.
+      Nobody can raise or read a ticket for another account.
+- [ ] Listing and actioning are **admin-only**, enforced server-side.
+- [ ] Rate-limited, so the queue cannot be flooded.
+- [ ] The message body is treated as untrusted text wherever it is rendered,
+      including the dashboard.
+- [ ] Every admin action is **audit-logged**. `PUT /config/:key` currently writes
+      no audit entry and that is a known gap — do not repeat it.
 
 ### UX
 
-- [ ] Any control that says it will do something either does it, or is not
-      shown. This is the general rule the bug violates.
-- [ ] The person can tell, after the fact, that they raised a ticket.
+- [ ] The dashboard tab reads consistently with the existing appeals and reports
+      tabs.
 
 ### i18n
 
-- [ ] All new copy goes to the **5 MVP locales only** (en, zh, id, vi, th) — not
-      the retired `values-*` directories.
+- [ ] Any admin-facing copy follows the existing dashboard's conventions.
 
 ### Observability
 
-- [ ] A raised ticket is visible in logs without recording the message body.
-- [ ] It is possible to tell how many tickets are open, as `GET /reports/stats`
-      does for reports.
+- [ ] A raised ticket is visible in logs **without** recording the message body.
+- [ ] Open count and age of the oldest ticket are obtainable, as
+      `GET /reports/stats` does for reports.
 
 ## BDD Scenarios
 
-**Scenario: Someone raises a ticket and knows it arrived**
+**Scenario: A raised ticket reaches the queue**
 
-- **Given** someone is looking at the age-restriction message
-- **When** they choose Contact support and send a message
-- **Then** they are told it has been received
-
-**Scenario: An admin can act on it**
-
-- **Given** someone has raised a ticket
+- **Given** somebody has asked for help
 - **When** an admin opens the dashboard
-- **Then** the ticket is listed and can be marked handled
+- **Then** the request is listed and can be marked handled
 
-**Scenario: A second ticket is not silently created**
+**Scenario: A second request is not silently duplicated**
 
-- **Given** someone already has an open ticket
-- **When** they try to raise another
+- **Given** somebody already has an open request
+- **When** they raise another
 - **Then** they are told about the one they already have
 
-**Scenario: A failed send does not lose what was typed**
+**Scenario: Only admins can read the queue**
 
-- **Given** someone has written a message
-- **When** the send fails
-- **Then** they are told, and their message is still there
+- **Given** somebody who is not an admin
+- **When** they try to list tickets
+- **Then** they are refused
 
 ## Test Plan
 
 | Layer | What it proves |
 | --- | --- |
-| Source guard | No `onContactSupport` call site is wired to a dismiss-only lambda. This is the test that would have caught the original bug, and it covers call sites that do not exist yet. |
-| API tests | Submit, list, action; ownership enforced; duplicate-pending refused; rate limit; admin action writes an audit entry. Against real Firestore emulator, not mocks. |
-| App tests | Form validation, failed-send retains input, confirmation shown. |
-| Admin dashboard | Ticket renders, action changes status, message body is escaped. |
-| Device journeys | Real Android and real iPhone: raise a ticket from the age dialog and see it land in the dashboard. |
+| API tests | Submit, list, action. Ownership enforced. Non-admin refused. Duplicate-pending refused. Rate limit honoured. Admin action writes an audit entry. Against the **real Firestore emulator**, not mocks. |
+| Mutation | Remove the admin check; the authorisation test must go red. Remove the audit write; its test must go red. |
+| Dashboard tests | Ticket renders, action changes status, the message body is escaped — asserted with a payload that would execute if it were not. |
+| Journey | Raise a ticket via the API, action it in a real browser, verify the stored state agrees with the UI. |
 
 ## Out of Scope
 
-- Replying to the person inside the app. Deciding *how* support answers is a
-  separate conversation; this story delivers the queue.
-- Migrating appeals or reports onto a shared ticket model. Worth considering
-  later; not while introducing the first one.
-- Reconciling the app's `Constants.CONTACT_EMAIL` (`shytalk.help@gmail.com`)
-  with the web portal's `support@shytalk.dev`. Flagged, not decided here.
-- SHY-0379, which hides age-gated features from known minors.
+- The in-app form ([[SHY-0385]]).
+- Removing the dead control ([[SHY-0384]]).
+- Replying to the person in-app; that belongs to [[EPIC-0012]].
+- Migrating appeals or reports onto this model.
 
 ## Dependencies
 
-- SHY-0379 must **not** hide the support route. Support is not age-gated.
-- The appeals implementation is the template: `reports.js:1363-1500` and
-  `public/admin/js/tabs/appeals.js`.
+- None to start. [[SHY-0385]] depends on this.
 
 ## Risks & Mitigations
 
 | Risk | Mitigation |
 | --- | --- |
-| The broken button stays broken until this lands, and this is effort L | **Operator decision needed** — see Notes. Either hide the button in the interim, or accept it. |
-| A third user→admin queue shape diverges from appeals and reports | Follow the appeals shape exactly; call it out in review. |
-| The admin queue is floodable | Rate limit plus duplicate-pending refusal, both already proven in `POST /appeals`. |
-| Admin actions are untraceable | Audit entry is an explicit acceptance criterion, because the config endpoint already got this wrong. |
-| SHY-0379 hides support from minors | Called out in both stories; the minor cohort is the likeliest user of this route. |
+| A third user→admin queue diverges from appeals and reports | Follow the appeals shape exactly; call it out in review. |
+| The queue is floodable | Rate limit plus duplicate-pending refusal, both already proven in `POST /appeals`. |
+| Admin actions are untraceable | Audit entry is an explicit criterion, with a mutation test, because the config endpoint already got this wrong. |
+| Untrusted text rendered into the dashboard | Escaping asserted with a payload that would execute if unescaped. |
 
 ## Definition of Done
 
 - [ ] Merged to `develop`, all checks green.
-- [ ] Ticket raised from a real Android device and a real iPhone, and actioned in
-      the dashboard.
-- [ ] Source guard present and proven to fail against the old wiring.
+- [ ] Ticket raised via the API and actioned in a real browser.
 - [ ] Audit entry verified for the admin action.
+- [ ] Mutation tests confirm the authorisation and audit guards can fail.
 
 ## Notes
 
-- **Open decision for the operator.** This started as a one-line wiring fix and
-  is now effort **L** (app form + API + admin tab). Until it ships, the button
-  remains inert. The options are: leave it, or hide it in the interim per the
-  operator's own earlier instruction ("if its not meant to be do anything, don't
-  display it"). Hiding it is the smaller, safer change and can ship immediately.
-- **Part of [[EPIC-0012]]** — support ticketing with a dedicated support-agent
-  role working from the website portal. That epic is gated on the portal work,
-  which is why this story deliberately ships an **admin-dashboard** surface and
-  should not grow features the epic will replace.
-- **Splitting is reasonable** if L is too big for one PR: API + admin tab first,
-  app form second. The button stays hidden until the second lands.
-- Found while reviewing the age gate during SHY-0372.
-- Third silent-failure of the same shape in one session: a control or code path
-  that does nothing and says nothing. The others are
-  `HomeViewModel.createRoom():369` (early return above its own log line) and
-  SHY-0372 itself.
+- Part one of two. Order: [[SHY-0384]] → this → [[SHY-0385]].
+- Under [[EPIC-0012]], which replaces this admin surface with a support-agent
+  portal once the website portal exists.
+- Origin: the operator found **Contact support** did nothing during SHY-0372.

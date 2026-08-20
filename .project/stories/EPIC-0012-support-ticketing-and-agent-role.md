@@ -5,7 +5,7 @@ owner: unassigned
 created: 2026-08-20
 priority: P2
 title: Support ticketing — a dedicated agent role working tickets from the website portal
-child_shys: [SHY-0380]
+child_shys: [SHY-0384, SHY-0380, SHY-0385]
 ---
 
 # EPIC-0012: Support ticketing and the support-agent role
@@ -69,7 +69,9 @@ should be as small as the job allows.
 
 | Story | State | What |
 | --- | --- | --- |
-| **SHY-0380** | Draft | Contact support raises a ticket an admin can action. The interim surface, and the reason this epic exists. |
+| **SHY-0384** | Draft | Remove the inert Contact support control, and the copy telling people to use it. Interim; reversed by SHY-0385. |
+| **SHY-0380** | Draft | The ticket queue and its admin-dashboard surface. Part one of two. |
+| **SHY-0385** | Draft | The in-app form, and restoring the control SHY-0384 removed. Part two of two. |
 | _to be filed_ | — | Support-agent user type and permission model |
 | _to be filed_ | — | Agent sign-in and ticket queue in the website portal |
 | _to be filed_ | — | Claim / assign / reassign lifecycle |
