@@ -154,3 +154,65 @@ describe('SHY-0147 — cookie plumbing', () => {
     expect(readCookie(req(header), MFA_REMEMBER_COOKIE)).toBeNull();
   });
 });
+
+/**
+ * SHY-0369 — the missing secret must not take down the whole API.
+ *
+ * The module used to throw at LOAD time when NODE_ENV=production and
+ * MFA_REMEMBER_SECRET was unset. `index.js` requires `routes/portal`, which
+ * requires this module, so that throw killed the server during startup: pm2
+ * crash-looped and every endpoint returned 502 — the dev outage of 2026-08-19.
+ *
+ * The guard is right; its BLAST RADIUS was wrong. One portal feature's missing
+ * configuration must not stop the rest of the API from serving.
+ */
+describe('SHY-0369 a missing secret fails the FEATURE, not the process', () => {
+  const ORIGINAL_ENV = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    jest.resetModules();
+  });
+
+  test('requiring the module in production without the secret does NOT throw', () => {
+    jest.resetModules();
+    process.env.NODE_ENV = 'production';
+    delete process.env.MFA_REMEMBER_SECRET;
+    // The regression: this used to throw and take the whole server with it.
+    expect(() => require('../../src/utils/mfa-remember')).not.toThrow();
+  });
+
+  test('issuing a token in production without the secret DOES throw — still fail-closed', () => {
+    jest.resetModules();
+    process.env.NODE_ENV = 'production';
+    delete process.env.MFA_REMEMBER_SECRET;
+    const mod = require('../../src/utils/mfa-remember');
+    expect(() =>
+      mod.issueMfaRememberToken({ uniqueId: UID, browserId: BROWSER, epoch: EPOCH }),
+    ).toThrow(/MFA_REMEMBER_SECRET/);
+  });
+
+  test('with the secret configured, production issues a token normally', () => {
+    jest.resetModules();
+    process.env.NODE_ENV = 'production';
+    process.env.MFA_REMEMBER_SECRET = 'a-real-configured-secret';
+    const mod = require('../../src/utils/mfa-remember');
+    const token = mod.issueMfaRememberToken({
+      uniqueId: UID,
+      browserId: BROWSER,
+      epoch: EPOCH,
+    });
+    expect(typeof token).toBe('string');
+    expect(token.length).toBeGreaterThan(0);
+  });
+
+  test('outside production the dev fallback still applies', () => {
+    jest.resetModules();
+    process.env.NODE_ENV = 'development';
+    delete process.env.MFA_REMEMBER_SECRET;
+    const mod = require('../../src/utils/mfa-remember');
+    expect(() =>
+      mod.issueMfaRememberToken({ uniqueId: UID, browserId: BROWSER, epoch: EPOCH }),
+    ).not.toThrow();
+  });
+});
