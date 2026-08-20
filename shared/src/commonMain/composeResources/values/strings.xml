@@ -959,7 +959,7 @@
     <string name="age_restriction_needs_verification_body">Private messages and gacha are 18+ features. To use them, please verify your age by submitting a government-issued ID. The image is reviewed by a human and deleted as soon as a decision is made.</string>
     <string name="age_restriction_needs_verification_confirm">Verify now</string>
     <string name="age_restriction_sub_eighteen_title">Feature unavailable</string>
-    <string name="age_restriction_sub_eighteen_body">Private messages and gacha are only available to users 18 or older. Based on the date of birth on your account, you are not yet eligible. If you believe this is wrong, please contact support — we cannot accept ID submissions to override the date of birth on file.</string>
+    <string name="age_restriction_sub_eighteen_body">Private messages and gacha are only available to users 18 or older. Based on the date of birth on your account, you are not yet eligible. We cannot accept ID submissions to override the date of birth on file.</string>
     <string name="age_restriction_sub_eighteen_confirm">Contact support</string>
     <string name="age_restriction_dismiss">Cancel</string>
 

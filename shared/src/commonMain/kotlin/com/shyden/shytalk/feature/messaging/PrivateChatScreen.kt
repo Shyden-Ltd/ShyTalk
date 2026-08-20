@@ -1019,7 +1019,6 @@ fun PrivateChatScreen(
         state = ageRestrictionDialogState,
         onDismiss = { viewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
-        onContactSupport = { viewModel.dismissAgeRestrictionDialog() },
     )
 }
 
