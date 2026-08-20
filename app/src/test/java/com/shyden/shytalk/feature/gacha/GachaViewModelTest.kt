@@ -776,4 +776,123 @@ class GachaViewModelTest {
             vm.dismissAgeRestrictionDialog()
             assertEquals(AgeRestrictionDialogState.Hidden, vm.ageRestrictionDialogState.value)
         }
+
+    // ── SHY-0372: every refused pull must be observable ──────────────
+    //
+    // The overlay enters SpinPhase.ANIMATING optimistically the moment a play
+    // button is tapped, and its only recovery is keyed on `isPulling`. None of
+    // pull()'s three early returns ever set `isPulling`, so it never CHANGES,
+    // the recovery effect never re-runs, and the wheel latches on ANIMATING
+    // with no play buttons rendered.
+    //
+    // These tests pin the contract that fixes the whole class: a refusal that
+    // happens BEFORE the pull starts must emit a signal that always changes.
+    // A counter is used rather than a flag or the error text precisely because
+    // two identical refusals in a row must still be two distinct signals --
+    // see `two identical refusals signal twice`.
+
+    @Test
+    fun `age gate refusal signals that the pull was refused`() =
+        runTest {
+            coEvery { userRepository.getUser("u1") } returns
+                Resource.Success(
+                    User(uid = "u1", dateOfBirth = twentyFiveYearsAgoMs, ageVerified = false),
+                )
+
+            val vm = createViewModel()
+            vm.updateBalance(100, 0)
+            val before = vm.uiState.value.pullRefusedCount
+            vm.pullSingle()
+            advanceUntilIdle()
+
+            assertEquals(
+                AgeRestrictionDialogState.NeedsVerification,
+                vm.ageRestrictionDialogState.value,
+            )
+            assertEquals(before + 1, vm.uiState.value.pullRefusedCount)
+        }
+
+    @Test
+    fun `insufficient coins refusal signals that the pull was refused`() =
+        runTest {
+            val vm = createViewModel()
+            vm.updateBalance(5, 0)
+            val before = vm.uiState.value.pullRefusedCount
+            vm.pullSingle()
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.error is UiText.Res)
+            assertEquals(before + 1, vm.uiState.value.pullRefusedCount)
+        }
+
+    @Test
+    fun `unknown tier refusal signals that the pull was refused`() =
+        runTest {
+            // A config that does not price the 1x tier -- the `pullCosts[count]
+            // ?: return` path, reachable on a config mismatch.
+            every { economyRepository.observeEconomyConfig() } returns
+                flowOf(EconomyConfig(pullCosts = emptyMap()))
+
+            val vm = createViewModel()
+            vm.updateBalance(100, 0)
+            val before = vm.uiState.value.pullRefusedCount
+            vm.pullSingle()
+            advanceUntilIdle()
+
+            assertEquals(before + 1, vm.uiState.value.pullRefusedCount)
+        }
+
+    @Test
+    fun `a successful pull does not signal a refusal`() =
+        runTest {
+            coEvery { economyRepository.pullGacha(1, any()) } returns
+                Resource.Success(singleResult)
+
+            val vm = createViewModel()
+            vm.updateBalance(100, 0)
+            val before = vm.uiState.value.pullRefusedCount
+            vm.pullSingle()
+            advanceUntilIdle()
+
+            assertNotNull(vm.uiState.value.currentWin)
+            assertEquals(before, vm.uiState.value.pullRefusedCount)
+        }
+
+    @Test
+    fun `two identical refusals signal twice, not once`() =
+        runTest {
+            // THE test for this bug class. Keying recovery on `error` or on a
+            // boolean would collapse these two into one unchanged value, and
+            // the second tap would latch the wheel exactly as before.
+            val vm = createViewModel()
+            vm.updateBalance(5, 0)
+            val before = vm.uiState.value.pullRefusedCount
+
+            vm.pullSingle()
+            advanceUntilIdle()
+            vm.pullSingle()
+            advanceUntilIdle()
+
+            assertEquals(before + 2, vm.uiState.value.pullRefusedCount)
+        }
+
+    @Test
+    fun `the refusal signal is monotonic across mixed outcomes`() =
+        runTest {
+            coEvery { economyRepository.pullGacha(1, any()) } returns
+                Resource.Success(singleResult)
+
+            val vm = createViewModel()
+            vm.updateBalance(5, 0)
+            vm.pullSingle() // refused -- too few coins
+            advanceUntilIdle()
+            val afterRefusal = vm.uiState.value.pullRefusedCount
+
+            vm.updateBalance(100, 0)
+            vm.pullSingle() // accepted
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.pullRefusedCount >= afterRefusal)
+            assertEquals(afterRefusal, vm.uiState.value.pullRefusedCount)
+        }
 }

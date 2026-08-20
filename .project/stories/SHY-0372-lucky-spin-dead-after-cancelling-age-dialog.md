@@ -1,7 +1,7 @@
 ---
 id: SHY-0372
-status: Draft
-owner: unassigned
+status: In Progress
+owner: shyden
 created: 2026-08-20
 priority: P1
 effort: S
