@@ -152,12 +152,19 @@ It is the unstyled `text/plain` 401 body (SHY-0377).
 
 ## ⚠️ Outstanding operator actions
 
-1. **Two secrets are still unset on the VM** — `MFA_REMEMBER_SECRET` and
-   `EXPORT_DOWNLOAD_SECRET`. Neither is an outage (dev is not production) but
-   both are needed before prod. The deploy excludes `.env`, so this is an
-   SSH-side edit, not a `gh secret set`.
-2. **`FIREBASE_WEB_API_KEY` appears twice** in the VM's `.env`. Harmless
-   last-wins today; worth tidying.
+1. ~~**Two secrets are still unset on the VM**~~ — **DONE 2026-08-20**, SHY-0378.
+   `MFA_REMEMBER_SECRET` and `EXPORT_DOWNLOAD_SECRET` are provisioned on dev and
+   confirmed live on the running process by fingerprint. There was nothing to
+   look up: both are HMAC keys that had never been generated. See
+   `scripts/provision-api-secrets.sh`; **production still needs the same
+   command run against the prod host before the cut.**
+2. ~~**`FIREBASE_WEB_API_KEY` appears twice**~~ — **DONE 2026-08-20**, SHY-0378,
+   **and it was not harmless.** The two copies held **different values**. It was
+   harmless only because dotenv is last-wins; the intuitive tidy-up — keeping
+   the first occurrence — would have moved dev onto a different Firebase key.
+   Collapsed to the value already in use, which is a no-op by construction, and
+   `/api/firebase-config` returns a byte-identical key and project afterwards.
+   **Check prod for the same duplicate before provisioning it.**
 3. **#1519 — do NOT merge.** develop deliberately pins firebase-bom at 34.14.1
    until SHY-0244.
 
