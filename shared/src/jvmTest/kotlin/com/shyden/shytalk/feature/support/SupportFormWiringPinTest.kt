@@ -113,6 +113,44 @@ class SupportFormWiringPinTest {
         }
     }
 
+    private val dialog =
+        "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/support/SupportFormDialog.kt"
+
+    @Test
+    fun `every way out of the dialog resets the form`() {
+        val code = codeOf(dialog)
+        assertTrue(
+            code.contains("viewModel.reset()"),
+            "$dialog never resets. The ViewModel is scoped to the SCREEN, so closing the dialog " +
+                "leaves it holding submitted = true and the next visit shows the confirmation " +
+                "instead of a form.",
+        )
+        // Four ways out: the confirmation's button and dismiss-request, and the
+        // form's button and dismiss-request. Any one of them still calling
+        // `onDismiss` directly skips the reset.
+        for (leak in listOf("onClick = onDismiss", "onDismissRequest = onDismiss")) {
+            assertTrue(
+                !code.contains(leak),
+                "$dialog still has `$leak`, which closes the dialog without resetting it",
+            )
+        }
+    }
+
+    @Test
+    fun `an already-open request is shown as information, not as the person's mistake`() {
+        val code = codeOf(dialog)
+        assertTrue(
+            code.contains("state.alreadyHasOpenTicket"),
+            "$dialog ignores alreadyHasOpenTicket entirely, so the flag is dead state and the " +
+                "person is told they made an error when they did not",
+        )
+        assertTrue(
+            code.contains("!state.alreadyHasOpenTicket"),
+            "$dialog leaves Send enabled while a request is already open, so the only thing the " +
+                "button can do is earn the same refusal again",
+        )
+    }
+
     /**
      * The two platform repositories, each reduced to the `raiseTicket` body.
      *

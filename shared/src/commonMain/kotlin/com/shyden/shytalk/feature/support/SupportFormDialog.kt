@@ -49,16 +49,24 @@ fun SupportFormDialog(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    // Every way out of this dialog goes through here. The ViewModel outlives the
+    // dialog — it is scoped to the screen — so leaving it holding `submitted` is
+    // what made a second visit show the confirmation instead of a form.
+    val dismiss = {
+        viewModel.reset()
+        onDismiss()
+    }
+
     if (state.submitted) {
         AlertDialog(
-            onDismissRequest = onDismiss,
+            onDismissRequest = dismiss,
             title = {
                 Text(stringResource(Res.string.support_form_title), fontWeight = FontWeight.Bold)
             },
             text = { Text(stringResource(Res.string.support_form_sent)) },
             confirmButton = {
                 TextButton(
-                    onClick = onDismiss,
+                    onClick = dismiss,
                     modifier = Modifier.testTag(TAG_SUPPORT_FORM_CLOSE),
                 ) {
                     Text(stringResource(Res.string.close))
@@ -71,7 +79,7 @@ fun SupportFormDialog(
     AlertDialog(
         // Dismissing mid-typing is allowed, but only while nothing is in flight —
         // closing during a send would leave the person unsure whether it went.
-        onDismissRequest = { if (!state.isSubmitting) onDismiss() },
+        onDismissRequest = { if (!state.isSubmitting) dismiss() },
         title = {
             Text(stringResource(Res.string.support_form_title), fontWeight = FontWeight.Bold)
         },
@@ -86,7 +94,9 @@ fun SupportFormDialog(
                     value = state.message,
                     onValueChange = viewModel::updateMessage,
                     enabled = !state.isSubmitting,
-                    isError = state.error != null,
+                    // An open request is not a mistake they made, so the field is
+                    // not marked wrong for it.
+                    isError = state.error != null && !state.alreadyHasOpenTicket,
                     minLines = 4,
                     modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_FORM_INPUT),
                 )
@@ -94,7 +104,12 @@ fun SupportFormDialog(
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         error.resolve(),
-                        color = MaterialTheme.colorScheme.error,
+                        color =
+                            if (state.alreadyHasOpenTicket) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.error
+                            },
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -103,7 +118,10 @@ fun SupportFormDialog(
         confirmButton = {
             TextButton(
                 onClick = viewModel::submit,
-                enabled = !state.isSubmitting,
+                // Sending again while a request is already open can only earn the
+                // same refusal. Editing the message clears the flag and re-enables
+                // this, which is the one action that can change the answer.
+                enabled = !state.isSubmitting && !state.alreadyHasOpenTicket,
                 modifier = Modifier.testTag(TAG_SUPPORT_FORM_SEND),
             ) {
                 if (state.isSubmitting) {
@@ -115,7 +133,7 @@ fun SupportFormDialog(
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss,
+                onClick = dismiss,
                 enabled = !state.isSubmitting,
                 modifier = Modifier.testTag(TAG_SUPPORT_FORM_CLOSE),
             ) {

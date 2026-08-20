@@ -59,6 +59,27 @@ class SupportFormViewModel(
     private val _uiState = MutableStateFlow(SupportFormUiState(category = initialCategory))
     val uiState: StateFlow<SupportFormUiState> = _uiState.asStateFlow()
 
+    /**
+     * Back to a blank form, keeping the entry point's category.
+     *
+     * This ViewModel is scoped to the SCREEN, not to the dialog — closing the
+     * dialog does not destroy it. Without this, re-opening support after a
+     * successful send re-attached the same instance with `submitted = true`, so
+     * the person got the "we have your request" confirmation instead of a form
+     * and could not raise a second ticket without leaving the screen entirely.
+     *
+     * Called on dismissal rather than on open: both land before the next
+     * recomposition, so nobody sees a blank form flash over the confirmation.
+     */
+    fun reset() {
+        _uiState.update {
+            // Total, not a guarded no-op: a send in flight keeps its state. The
+            // dialog cannot be dismissed while one is running, so this branch is
+            // defensive rather than reachable.
+            if (it.isSubmitting) it else SupportFormUiState(category = it.category)
+        }
+    }
+
     fun updateMessage(value: String) {
         // Typing clears a previous complaint: the person is already acting on it,
         // and leaving the error up reads as though it applies to the new text.

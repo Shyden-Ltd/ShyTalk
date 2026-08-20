@@ -114,6 +114,48 @@ class SupportFormViewModelTest {
             assertNull(viewModel.uiState.value.error)
         }
 
+    // ─── Coming back a second time ──────────────────────────────
+
+    /**
+     * The ViewModel is scoped to the SCREEN. Closing the dialog does not destroy
+     * it, so without a reset the second visit re-attached an instance still
+     * holding `submitted = true` and showed the confirmation instead of a form.
+     */
+    @Test
+    fun `re-opening after a successful send offers a fresh form`() =
+        runTest {
+            viewModel = SupportFormViewModel(repo, SupportCategory.Age, mapOf("screen" to "room"))
+            viewModel.updateMessage("The wheel will not let me spin.")
+            viewModel.submit()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.submitted)
+
+            viewModel.reset()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.submitted, "a second visit must start at a form, not a confirmation")
+            assertEquals("", state.message)
+            assertNull(state.error)
+            assertFalse(state.alreadyHasOpenTicket)
+            assertEquals(SupportCategory.Age, state.category, "the entry point still knows why they are here")
+        }
+
+    @Test
+    fun `reset leaves a send that is still in flight alone`() =
+        runTest {
+            viewModel.updateMessage("Help")
+            // `submit` marks the send in flight synchronously and the launched
+            // coroutine only runs on advance, so this is the in-flight moment.
+            viewModel.submit()
+            assertTrue(viewModel.uiState.value.isSubmitting)
+
+            viewModel.reset()
+
+            assertTrue(viewModel.uiState.value.isSubmitting, "a reset must not orphan a request already sent")
+            assertEquals("Help", viewModel.uiState.value.message)
+            advanceUntilIdle()
+        }
+
     // ─── Refusing before it reaches the server ──────────────────
 
     @Test
