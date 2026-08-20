@@ -16,18 +16,22 @@ const mockCert = jest.fn().mockReturnValue('mock-credential');
 const mockInitializeApp = jest.fn();
 
 // firebase-admin 14 removed the namespaced surface this used to mock:
-// `admin.apps`, `admin.firestore()`, `admin.auth()`, `admin.database()`,
-// `admin.messaging()` and `admin.firestore.FieldValue` are all gone. The
-// module under test now reads them from the modular entry points, so the
-// mocks follow it there — mocking the shape the SDK no longer has would
-// have passed while production threw.
+// `admin.apps`, `admin.credential`, `admin.firestore()`, `admin.auth()`,
+// `admin.database()`, `admin.messaging()` and `admin.firestore.FieldValue` are
+// all gone. The module under test reads them from the modular entry points, so
+// the mocks follow it there — mocking the shape the SDK no longer has passes
+// while production throws, which is exactly what happened: `credential.cert`
+// was still doubled here while the real call crash-looped dev (SHY-0371).
+//
+// `initializeApp` is the ONLY member still on the root export that this module
+// uses; everything else must be doubled on its own entry point.
 function setupFirebaseAdminMock(appsLength = 0) {
   jest.doMock('firebase-admin', () => ({
-    credential: { cert: mockCert },
     initializeApp: mockInitializeApp,
   }));
   jest.doMock('firebase-admin/app', () => ({
     getApps: jest.fn().mockReturnValue(new Array(appsLength).fill({})),
+    cert: mockCert,
   }));
   jest.doMock('firebase-admin/firestore', () => ({
     getFirestore: jest.fn().mockReturnValue(mockFirestore),
@@ -134,7 +138,7 @@ describe('firebase.js', () => {
     );
   });
 
-  test('does not use credential.cert when no service account path set', () => {
+  test('does not call cert() when no service account path set', () => {
     setupFirebaseAdminMock(0);
 
     require('../../src/utils/firebase');
@@ -163,7 +167,7 @@ describe('firebase.js', () => {
     mockConsoleError.mockRestore();
   });
 
-  test('exports db, auth, rtdb, messaging, FieldValue, and admin', () => {
+  test('exports db, auth, rtdb, messaging and FieldValue — but NOT the admin root', () => {
     setupFirebaseAdminMock(0);
 
     const firebase = require('../../src/utils/firebase');
@@ -173,7 +177,11 @@ describe('firebase.js', () => {
     expect(firebase.rtdb).toBe(mockDatabase);
     expect(firebase.messaging).toBe(mockMessaging);
     expect(firebase.FieldValue).toBe(mockFieldValue);
-    expect(firebase.admin).toBeDefined();
+    // Deliberately absent: on 14 the root object carries only the app
+    // lifecycle, so re-exporting it just hands callers a bag of `undefined`
+    // namespaces. That re-export is how `admin.appCheck()` survived in
+    // middleware/app-check.js (SHY-0371).
+    expect(firebase.admin).toBeUndefined();
   });
 
   test('FIREBASE_SERVICE_ACCOUNT_PATH takes priority over GOOGLE_APPLICATION_CREDENTIALS', () => {
