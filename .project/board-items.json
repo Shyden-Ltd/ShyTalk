@@ -1828,5 +1828,41 @@
     "contentId": "I_kwDORJ_E_s8AAAABNh-vng",
     "issueNumber": 1899,
     "itemId": "PVTI_lADOEOcG584BZ_lNzg3TqbI"
+  },
+  "SHY-0380": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNjc6lg",
+    "issueNumber": 1901,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3VHEM"
+  },
+  "SHY-0381": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNjc9Wg",
+    "issueNumber": 1902,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3VHI4"
+  },
+  "SHY-0382": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNjdAqQ",
+    "issueNumber": 1903,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3VHMg"
+  },
+  "SHY-0383": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNjdETg",
+    "issueNumber": 1904,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3VHRo"
+  },
+  "SHY-0384": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNjdHIQ",
+    "issueNumber": 1905,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3VHVY"
+  },
+  "SHY-0385": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNjdJmQ",
+    "issueNumber": 1906,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3VHZc"
   }
 }
