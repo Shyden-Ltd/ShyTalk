@@ -95,6 +95,36 @@ restores both the control and the sentence, pointing at a real form.
 
 - [ ] Not applicable; no behaviour is added.
 
+## Device proof — OnePlus CPH2653 (Android 16), dev, 2026-08-20
+
+Walked as **[SEED] Marcus (P-04 minor power)**, UID 60000010, cohort `minor`.
+Build `0.97.15-bdeaa059a232 (176)`, commit `deaa059*`, against dev `api 487ef30`.
+
+Tapped **1x SPIN** in Lucky Spin to raise the sub-eighteen dialog:
+
+| Checked | Result |
+| --- | --- |
+| Buttons present | **exactly one — "OK"** |
+| "Contact support" | **absent** |
+| "Cancel" | absent |
+| Body text | *"Private messages and gacha are only available to users 18 or older. Based on the date of birth on your account, you are not yet eligible. We cannot accept ID submissions to override the date of birth on file."* |
+| Tapping OK | dialog closes |
+| After closing | **1x / 10x / 100x all present** — SHY-0372's recovery still works |
+| Coin balance | 350 → 350, nothing charged |
+
+Read both from the accessibility tree and from a screenshot, so the assertion is
+on **rendered text**, not on a resource key.
+
+The last two rows matter beyond this story: they are a regression check that
+SHY-0384 did not undo SHY-0372. The dialog's single action is wired to
+`onDismiss`, which is the same path the wheel's recovery depends on.
+
+### iOS still owed
+
+The change is in `commonMain` and `:shared:compileKotlinIosArm64` is clean, but
+it has **not** been seen on a real iPhone. The Definition of Done is not met
+until it has been.
+
 ## BDD Scenarios
 
 **Scenario: No dead control is offered**
