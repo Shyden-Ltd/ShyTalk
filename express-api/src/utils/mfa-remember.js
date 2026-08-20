@@ -60,17 +60,35 @@ const crypto = require('node:crypto');
 // security findings.
 const MFA_TRUST_WINDOW_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-if (!process.env.MFA_REMEMBER_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('MFA_REMEMBER_SECRET is required in production');
+/**
+ * Resolved LAZILY, per call — never at module load.
+ *
+ * SHY-0369: this used to be a module-level `throw` when NODE_ENV=production and
+ * the secret was unset. `index.js` requires `routes/portal`, which requires
+ * this file, so the throw killed the server DURING STARTUP — pm2 crash-looped
+ * and every endpoint returned 502. That was the dev outage of 2026-08-19.
+ *
+ * The guard itself is right and is kept: production must not fall back to a
+ * known development secret. What was wrong was its BLAST RADIUS. One portal
+ * feature's missing configuration must not stop the rest of the API serving,
+ * so the failure is now scoped to the MFA-remember calls that actually need
+ * the secret.
+ */
+function secret() {
+  const configured = process.env.MFA_REMEMBER_SECRET;
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('MFA_REMEMBER_SECRET is required in production');
+  }
+  return 'dev-mfa-remember-secret';
 }
-const SECRET = process.env.MFA_REMEMBER_SECRET || 'dev-mfa-remember-secret';
 
 /** Field separator. Chosen because none of the payload fields can contain it. */
 const SEP = '.';
 const SIG_HEX_LEN = 64; // sha256 hex
 
 function sign(payload) {
-  return crypto.createHmac('sha256', SECRET).update(payload).digest('hex');
+  return crypto.createHmac('sha256', secret()).update(payload).digest('hex');
 }
 
 /**
