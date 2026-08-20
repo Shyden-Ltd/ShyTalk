@@ -771,3 +771,57 @@ describe('POST /api/admin/migrate-prod-data', () => {
     expect(res.body.errors.some((e) => e.error === 'batch commit failed')).toBe(true);
   });
 });
+
+// ─── Credential resolution failures ─────────────────────────────
+
+describe('getProdDb() credential resolution', () => {
+  // A realistic absolute path: the point of the test is that this string must
+  // not appear anywhere a caller can see.
+  const BAD_SA_PATH = '/var/secrets/shytalk/prod-service-account.json';
+
+  /** A fresh router: `prodDb` is module-scoped and caches after the first success. */
+  function createAppWithFreshRouter() {
+    let router;
+    jest.isolateModules(() => {
+      router = require('../../src/routes/admin-migrate');
+    });
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'admin-uid', uniqueId: 'admin-1', token: { admin: true } };
+      next();
+    });
+    app.use('/api', router);
+    return app;
+  }
+
+  test('an unreadable service-account file fails WITHOUT leaking its path', async () => {
+    process.env.PROD_SERVICE_ACCOUNT_PATH = BAD_SA_PATH;
+
+    const res = await request(createAppWithFreshRouter())
+      .post('/api/admin/migrate-prod-data')
+      .expect(500);
+
+    // Names the variable an operator can act on ...
+    expect(res.body.error).toContain('PROD_SERVICE_ACCOUNT_PATH');
+    // ... and never the path. Node's MODULE_NOT_FOUND message embeds the
+    // absolute path, and this body goes over the wire (SHY-0371 security AC).
+    expect(JSON.stringify(res.body)).not.toContain(BAD_SA_PATH);
+    expect(JSON.stringify(res.body)).not.toContain('/var/secrets');
+
+    // The log must not carry it either.
+    const logged = JSON.stringify(require('../../src/utils/log').error.mock.calls);
+    expect(logged).not.toContain(BAD_SA_PATH);
+    expect(logged).not.toContain('/var/secrets');
+  });
+
+  test('an unset PROD_SERVICE_ACCOUNT_PATH names the variable to set', async () => {
+    delete process.env.PROD_SERVICE_ACCOUNT_PATH;
+
+    const res = await request(createAppWithFreshRouter())
+      .post('/api/admin/migrate-prod-data')
+      .expect(500);
+
+    expect(res.body.error).toContain('PROD_SERVICE_ACCOUNT_PATH');
+  });
+});

@@ -114,3 +114,47 @@ describe('SHY-0371 the server entry loads with a service account configured', ()
     expect(r.status).not.toBe(0);
   });
 });
+
+describe('SHY-0371 a bad service account fails as CONFIGURATION, not as a TypeError', () => {
+  /**
+   * The distinction this pins is the whole story. Before the fix, a perfectly
+   * valid service account still died with
+   * "Cannot read properties of undefined (reading 'cert')" — an SDK-API failure
+   * wearing the costume of a config failure, which is why three sessions read
+   * the outage as a missing secret. A genuine config problem must be
+   * unmistakably a config problem.
+   */
+  let dir;
+
+  beforeAll(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shy0371-bad-sa-'));
+  });
+
+  afterAll(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('a MISSING service-account file names the file it could not read', () => {
+    const missing = path.join(dir, 'does-not-exist.json');
+    const r = loadEntryWithServiceAccount(missing);
+    const why = (r.stderr || '').split('\n').find((l) => l.startsWith('LOAD_ERROR:')) || '';
+
+    expect(r.status).not.toBe(0);
+    expect(why).toContain('Cannot find module');
+    expect(why).toContain(missing);
+    // The regression that matters: never again a bare undefined-property read.
+    expect(why).not.toContain('Cannot read properties of undefined');
+  });
+
+  test('a MALFORMED service-account file fails on the file, not on the SDK', () => {
+    const malformed = path.join(dir, 'malformed.json');
+    fs.writeFileSync(malformed, '{ "type": "service_account", ');
+
+    const r = loadEntryWithServiceAccount(malformed);
+    const why = (r.stderr || '').split('\n').find((l) => l.startsWith('LOAD_ERROR:')) || '';
+
+    expect(r.status).not.toBe(0);
+    expect(why).toContain(malformed);
+    expect(why).not.toContain('Cannot read properties of undefined');
+  });
+});

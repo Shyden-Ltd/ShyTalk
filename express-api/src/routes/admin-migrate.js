@@ -69,7 +69,22 @@ function getProdDb() {
 
   // firebase-admin 14 removed `admin.credential` and the App object's
   // `.firestore()` accessor; both now come from modular entry points.
-  const prodApp = initializeApp({ credential: cert(require(prodSaPath)) }, 'prod-readonly');
+  let credential;
+  try {
+    credential = cert(require(prodSaPath));
+  } catch (cause) {
+    // Node's MODULE_NOT_FOUND and JSON-parse messages embed the ABSOLUTE PATH of
+    // the service-account file, and this error reaches the HTTP response body
+    // (see the catch at the bottom of this route). Name the variable to fix
+    // instead: it is all an operator needs, and it leaks nothing about where
+    // prod credentials live on disk. `cause` keeps the detail for a stack trace
+    // without putting it on the wire.
+    throw new Error('PROD_SERVICE_ACCOUNT_PATH does not point to a readable service-account JSON', {
+      cause,
+    });
+  }
+
+  const prodApp = initializeApp({ credential }, 'prod-readonly');
   prodDb = getFirestore(prodApp);
   return prodDb;
 }

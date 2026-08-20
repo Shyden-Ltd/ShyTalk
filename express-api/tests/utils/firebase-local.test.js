@@ -9,16 +9,19 @@ const mockCert = jest.fn().mockReturnValue('mock-credential');
 const mockInitializeApp = jest.fn();
 
 // See tests/utils/firebase.test.js — firebase-admin 14 removed the namespaced
-// surface (`admin.apps`, `admin.firestore()`, `admin.firestore.FieldValue`,
-// `admin.auth()`, `admin.database()`, `admin.messaging()`). The module under
-// test reads them from the modular entry points now, so the mocks follow.
+// surface (`admin.apps`, `admin.credential`, `admin.firestore()`,
+// `admin.firestore.FieldValue`, `admin.auth()`, `admin.database()`,
+// `admin.messaging()`). The module under test reads them from the modular entry
+// points now, so the mocks follow it there. `initializeApp` is the only root
+// member left that this module uses; doubling anything else on the root
+// describes an SDK that does not exist (SHY-0371).
 function setupFirebaseAdminMock(appsLength = 0) {
   jest.doMock('firebase-admin', () => ({
-    credential: { cert: mockCert },
     initializeApp: mockInitializeApp,
   }));
   jest.doMock('firebase-admin/app', () => ({
     getApps: jest.fn().mockReturnValue(new Array(appsLength).fill({})),
+    cert: mockCert,
   }));
   jest.doMock('firebase-admin/firestore', () => ({
     getFirestore: jest.fn().mockReturnValue(mockFirestore),
@@ -42,6 +45,12 @@ describe('firebase.js local mode', () => {
     jest.resetModules();
     jest.clearAllMocks();
     process.env = { ...originalEnv };
+    // These decide which branch firebase.js takes. gcloud tooling and CI runners
+    // both set them ambiently; leaving them in place sends the module down the
+    // NON-local path, so this suite would pass or fail on the host's shell
+    // rather than on the code. The sibling firebase.test.js already does this.
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
   });
 
   afterAll(() => {
@@ -107,6 +116,12 @@ describe('fcm.js local mode', () => {
     jest.resetModules();
     jest.clearAllMocks();
     process.env = { ...originalEnv };
+    // These decide which branch firebase.js takes. gcloud tooling and CI runners
+    // both set them ambiently; leaving them in place sends the module down the
+    // NON-local path, so this suite would pass or fail on the host's shell
+    // rather than on the code. The sibling firebase.test.js already does this.
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
   });
 
   afterAll(() => {

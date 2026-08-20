@@ -41,9 +41,9 @@ cert deleteApp getApp getApps initializeApp refreshToken
 ```
 
 `admin.credential`, `admin.auth`, `admin.firestore`, `admin.database`,
-`admin.messaging`, `admin.apps` and `admin.app` are all **gone**, and the `App`
-object the SDK returns no longer carries `.firestore()` / `.auth()` /
-`.database()` either.
+`admin.messaging`, `admin.appCheck`, `admin.apps` and `admin.app` are all
+**gone**, and the `App` object the SDK returns carries only `name` and
+`options` — every `.firestore()` / `.auth()` / `.database()` accessor with it.
 
 The 13→14 bump (#1520) migrated `admin.apps` and `admin.firestore` but left
 `admin.credential.cert()` at `utils/firebase.js:71`. `middleware/auth.js`
@@ -84,8 +84,13 @@ access against what v14 actually keeps.
 
 ### Error paths
 
-- [ ] A malformed or missing service-account file fails with a message naming
-      the file, not a `TypeError` on `undefined`.
+- [ ] **At startup**, a malformed or missing service-account file fails with a
+      message naming the file, not a `TypeError` on `undefined`. The operator
+      reads this in the process log, so naming the path is correct there.
+- [ ] **Over HTTP**, `admin-migrate.js` fails with a message naming
+      `PROD_SERVICE_ACCOUNT_PATH` and **never the path it holds**. Node's
+      `MODULE_NOT_FOUND` embeds the absolute path and that message is returned in
+      the response body — a different trust boundary from a startup log.
 - [ ] `admin-migrate.js` `getProdDb()` opens the secondary prod app and returns
       a Firestore handle rather than throwing.
 
@@ -94,8 +99,15 @@ access against what v14 actually keeps.
 - [ ] **No `admin.<member>` access anywhere in the repo resolves to `undefined`
       on 14.2.0.** Enforced by diffing every access against the SDK's real
       export surface, across `src/`, `scripts/` and `local/`.
-- [ ] Objects the SDK *returns* are covered too — no `app.firestore()`,
-      `app.auth()` or `app.database()` remains.
+- [ ] Every spelling of that access is covered, not just the obvious one: a
+      plain binding, a destructure straight off the root, a member chained onto
+      an unbound `require('firebase-admin')`, and bracket access. A shape the
+      detector cannot see is a shape the outage can return through.
+- [ ] Objects the SDK *returns* are covered by an **allowlist** — an App carries
+      only `name` and `options`, so `app.remoteConfig()` and every accessor
+      nobody has enumerated are findings too, not just `.firestore()`.
+- [ ] Importing `middleware/app-check` does not configure Firebase, so the
+      module stays safe to load before the SDK is initialised.
 - [ ] The installed firebase-admin matches the lockfile, so local runs cannot
       pass against an older major.
 
@@ -164,7 +176,11 @@ restarts.
 - **Provisioning `MFA_REMEMBER_SECRET` and `EXPORT_DOWNLOAD_SECRET`.** Still
   unset on the VM; still needs the operator. Tracked on SHY-0369 / SHY-0370.
 - **PR #1882 (SHY-0370).** A separate module-load throw, already fixed and
-  awaiting merge. Both are needed: this one crashes first, that one crashes next.
+  awaiting merge. It is **not** part of this outage and merging it would not have
+  restored dev: its throw and SHY-0369's are both gated on
+  `NODE_ENV === 'production'`, the dev VM has run `NODE_ENV=development` since
+  2026-05-16, and both sit behind `index.js:14` while this crash is at
+  `index.js:7`. Worth merging on its own terms — it protects production.
 - **The duplicate `FIREBASE_WEB_API_KEY` line in the VM's `.env`.** Noted while
   reading key names; harmless last-wins today. Worth its own tidy-up.
 
@@ -195,3 +211,12 @@ restarts.
   merge would clear the outage. It would not have: the live crash was neither of
   the two documented module-load throws. `pm2 logs --err` named the real one in
   seconds. When a diagnosis and a live system disagree, the live system wins.
+- **2026-08-20 — review response.** A reviewer pass found four blind spots in the
+  first cut of the scanner: it could not see a destructure off the root, a member
+  chained onto an unbound `require()`, bracket access, or any App accessor
+  outside a hardcoded five. The App half was a blocklist inside a file whose own
+  header argues against blocklists. All four are closed, the App side is now an
+  allowlist of `name`/`options`, and the self-test drives the REAL analyser over
+  every shape instead of re-implementing its logic. It also found a live
+  path-leak in `admin-migrate.js` (Node's `MODULE_NOT_FOUND` reaches the HTTP
+  response body) and a sibling test still doubling `credential: { cert }`.
