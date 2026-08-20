@@ -1,6 +1,6 @@
 ---
 id: SHY-0369
-status: In Progress
+status: In Review
 owner: unassigned
 created: 2026-08-20
 priority: P0
@@ -160,6 +160,8 @@ scoped to the calls that need it.
 - [ ] `released_in:` set on the next release cut.
 
 ## Notes (running log)
+
+Reviewed-up-to: 154539508353c6179aea6bdc62ef8afed2fbc435
 
 - **2026-08-20 — OPERATOR ACTION STILL NEEDED.** `MFA_REMEMBER_SECRET` is not
   set anywhere in CI or on the dev VM. Until it is, the portal's
