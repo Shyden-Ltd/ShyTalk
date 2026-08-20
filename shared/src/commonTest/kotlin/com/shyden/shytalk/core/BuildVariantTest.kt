@@ -23,10 +23,53 @@ class BuildVariantTest {
         )
         BuildVariant.initApiBaseUrl(null)
         BuildVariant.initBypassDeviceChecks(false)
+        BuildVariant.initBypassIntegrityGate(false)
         // SHY-0275: without this, the FIRST test that sets a liveKitUrl leaks it
         // into every test that runs after it in this class — the slot is a
         // process-wide singleton, so the leak is silent and order-dependent.
         BuildVariant.initLiveKitUrl(null)
+    }
+
+    @Test
+    fun `BuildVariantConfig bypassIntegrityGate defaults to false so an absent initialiser enforces`() {
+        // SHY-0146 fail-closed pin, asserted on a FRESH constructor instance —
+        // not the shared object getter, which the teardown forces to false and
+        // which would make this a tautology.
+        assertFalse(BuildVariantConfig().bypassIntegrityGate)
+    }
+
+    @Test
+    fun `initBypassIntegrityGate captures true for local and dev builds`() {
+        BuildVariant.initBypassIntegrityGate(true)
+        assertTrue(BuildVariant.bypassIntegrityGate)
+    }
+
+    @Test
+    fun `initBypassIntegrityGate toggles back to false`() {
+        BuildVariant.initBypassIntegrityGate(true)
+        BuildVariant.initBypassIntegrityGate(false)
+        assertFalse(BuildVariant.bypassIntegrityGate)
+    }
+
+    @Test
+    fun `the two gates are INDEPENDENT slots`() {
+        // The reason they are separate fields at all: dev enforces the
+        // auth-stage checks while bypassing the integrity gate. If someone
+        // collapses them into one, this fails.
+        BuildVariant.initBypassDeviceChecks(false)
+        BuildVariant.initBypassIntegrityGate(true)
+        assertFalse(BuildVariant.bypassDeviceChecks)
+        assertTrue(BuildVariant.bypassIntegrityGate)
+    }
+
+    @Test
+    fun `bypassIntegrityGate survives an initLocalEmulator holder copy`() {
+        BuildVariant.initBypassIntegrityGate(true)
+        BuildVariant.initLocalEmulator(false)
+        assertTrue(
+            BuildVariant.bypassIntegrityGate,
+            "initLocalEmulator's holder copy must not clobber the integrity slot",
+        )
     }
 
     @Test

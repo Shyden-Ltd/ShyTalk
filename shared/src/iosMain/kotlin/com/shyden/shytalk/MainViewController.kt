@@ -14,6 +14,7 @@ import com.shyden.shytalk.core.PreviewWatermark
 import com.shyden.shytalk.core.push.chatDeepLinks
 import com.shyden.shytalk.core.push.consumeChatDeepLink
 import com.shyden.shytalk.core.push.verifyPushNavigation
+import com.shyden.shytalk.core.util.IosDeviceSecurityChecker
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.logI
@@ -30,6 +31,7 @@ import com.shyden.shytalk.feature.legal.CyberBullyingPolicyScreen
 import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
+import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
 import com.shyden.shytalk.navigation.BanState
 import com.shyden.shytalk.navigation.ColdStartSequencer
 import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
@@ -58,9 +60,18 @@ private fun IosApp() {
     }
     var viewingLegalDoc by remember { mutableStateOf<String?>(null) }
 
+    // SHY-0146 — pre-auth device-integrity gate, the iOS counterpart of
+    // Android's `UnsafeDeviceGate.isBlocked()` at MainActivity. Evaluated ONCE
+    // per process (`remember`), above every other branch, so a jailbroken
+    // device or the Simulator never reaches the legal gate, sign-in or Main.
+    // The bypass is build-flavour-resolved and defaults to ENFORCE.
+    val isUnsafeDevice = remember { IosDeviceSecurityChecker.isBlocked() }
+
     ShyTalkTheme(darkTheme = true) {
         PreviewWatermark {
-            if (!legalAccepted) {
+            if (isUnsafeDevice) {
+                UnsafeDeviceScreen()
+            } else if (!legalAccepted) {
                 when (viewingLegalDoc) {
                     "privacy" ->
                         PrivacyPolicyScreen(

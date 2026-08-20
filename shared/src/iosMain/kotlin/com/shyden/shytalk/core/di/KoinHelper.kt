@@ -42,6 +42,7 @@ fun doInitKoin(
     apiBaseUrl: String? = null,
     googleWebClientId: String? = null,
     bypassDeviceChecks: Boolean = false,
+    bypassIntegrityGate: Boolean = false,
     gitBranch: String = "",
     gitSha: String = "",
     gitDirty: Boolean = false,
@@ -97,6 +98,11 @@ fun doInitKoin(
     // BuildConfig.BYPASS_DEVICE_CHECKS. Fixes the SHY-0170 iOS gap where
     // IosPlatformModule hardcoded the bypass to true for EVERY build.
     BuildVariant.initBypassDeviceChecks(bypassDeviceChecks)
+    // Pre-auth device-integrity gate (SHY-0146). Default false = enforce; Swift
+    // passes true for `.local` and `.dev` so QA can run on the Simulator, and
+    // false for `.release`. Separate from bypassDeviceChecks because dev wants
+    // one enforced and the other bypassed.
+    BuildVariant.initBypassIntegrityGate(bypassIntegrityGate)
     // SHY-0275 — same fail-closed shape as apiBaseUrl. Express omits `url` from
     // the token response on local by design, so without this the iOS voice
     // service fell through to "" and refused its own connection before any

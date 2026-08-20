@@ -26,6 +26,19 @@ struct AppEnvironmentConfig: Equatable {
     /// `doInitKoin(bypassDeviceChecks:)`; Kotlin defaults to false
     /// (enforce) if this is ever dropped from the call.
     let bypassDeviceChecks: Bool
+    /// Pre-auth device-INTEGRITY gate (jailbreak / Simulator / tamper) is
+    /// bypassed on `.local` and `.dev` — mirroring Android's per-flavor
+    /// `BuildConfig.BYPASS_EMULATOR_GATE` — so QA can run on the Simulator.
+    ///
+    /// A SEPARATE flag from `bypassDeviceChecks` on purpose: they differ on
+    /// `.dev`, which ENFORCES the auth-stage checks while BYPASSING this one.
+    ///
+    /// It also cannot be derived from `environment`: `.release` resolves
+    /// `environment == "dev"` (the app does not point at prod yet), so an
+    /// `environment != "prod"` shortcut would silently disable the gate on the
+    /// only variant that ships. Kotlin defaults to false (enforce) if this is
+    /// ever dropped from the call.
+    let bypassIntegrityGate: Bool
 }
 
 /// Side-effect-free env resolution, extracted from `iOSApp.swift`'s `init()`
@@ -107,7 +120,8 @@ enum AppEnvironment {
                 apiBaseUrl: localApiBaseUrl,
                 devPersonasPassword: cleaned,
                 googleWebClientId: nil,
-                bypassDeviceChecks: true
+                bypassDeviceChecks: true,
+                bypassIntegrityGate: true
             )
         case .dev:
             return AppEnvironmentConfig(
@@ -116,7 +130,8 @@ enum AppEnvironment {
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: cleaned,
                 googleWebClientId: devGoogleWebClientId,
-                bypassDeviceChecks: false
+                bypassDeviceChecks: false,
+                bypassIntegrityGate: true
             )
         case .release:
             // Distributable build: NEVER carry the persona picker, regardless
@@ -128,7 +143,8 @@ enum AppEnvironment {
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: nil,
                 googleWebClientId: devGoogleWebClientId,
-                bypassDeviceChecks: false
+                bypassDeviceChecks: false,
+                bypassIntegrityGate: false
             )
         }
     }

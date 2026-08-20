@@ -1,6 +1,6 @@
 ---
 id: SHY-0146
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -132,4 +132,49 @@ iOS-only change (shared `iosMain` DI + a new iOS integrity checker; no Android/w
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
 ## Notes (running log)
+
+- **2026-08-20 — IMPLEMENTED except the simulator device-proof. Left In Progress
+  deliberately.** The AC requires *"on the iOS Simulator with a prod build →
+  blocked"*, and that evidence is not yet in hand, so the story is not ready for
+  review no matter how complete the code is.
+
+  **Done:**
+  - `DeviceIntegrity.kt` (commonMain) — the pure decision: 13 conservative
+    jailbreak paths, a sandbox-escape write probe, 4 Simulator env keys, and the
+    gate. **12 unit tests passing on the JVM** (verified from the XML report, not
+    the build banner), because a jailbroken iPhone is a device nobody has.
+  - `IosDeviceSecurityChecker.kt` (iosMain) — the real Foundation probes, each
+    LENIENT on error so a transient filesystem failure can never block a
+    legitimate device.
+  - `bypassIntegrityGate` threaded Swift → Koin → `BuildVariant`: 4 new
+    `AppEnvironmentTests` + 5 new `BuildVariantTest` cases (102 total, 0 fail).
+  - Gate wired into `IosApp()` **above every other branch**, so a blocked device
+    never reaches the legal gate, sign-in or Main.
+  - iOS **and** Android compile clean under `-Werror`; ktlint clean.
+
+- **2026-08-20 — why a SEPARATE flag, not `bypassDeviceChecks` and not
+  `environment`.** The two gates differ on `.dev`: it ENFORCES the auth-stage
+  checks (SHY-0151) but must BYPASS the integrity gate so QA can use the
+  Simulator. And it cannot be derived from `environment`, because **`.release`
+  resolves `environment == "dev"`** — the app does not point at prod yet — so an
+  `environment != "prod"` shortcut would have silently disabled this gate on the
+  only variant that ships. That is the same class of defect SHY-0151 just fixed.
+
+- **2026-08-20 — the remaining step, and why it is not trivial.** Two routes to
+  the simulator proof, both blocked tonight:
+  1. `:shared:iosSimulatorArm64Test` would run the real probes ON the simulator —
+     the best evidence. It **fails to link**: `ld: framework 'FirebaseCore' not
+     found`, because the Gradle test binary has no CocoaPods framework search
+     paths. Fixing that is its own infra task. The test was written and then
+     removed rather than left broken.
+  2. A **Release**-configuration simulator app build (the only non-bypassing
+     variant) ran over an hour without finishing and was stopped.
+
+  Either route finishes the story. Neither is a code change to this feature.
+
+- **2026-08-20 — the Why and AC above are still partly STALE.** They ask this
+  story to replace the hard-coded `bypassDeviceChecks = true`; **SHY-0151 already
+  did**, and it was device-proven on a real iPhone. Rewrite those two sections
+  when finishing — the remaining scope is the checker plus the screen wiring,
+  which is what was actually built here.
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0004-persistent-session-instant-coldstart]]. Split from SHY-0143 by operator decision (2026-07-01, AskUserQuestion "Add an iOS jailbreak/integrity-detection story") after the anti-abuse map found iOS runs with `bypassDeviceChecks = true` (no in-app integrity detection; platform-level only). Implements Android parity via the shared `UnsafeDeviceScreen` + pre-auth gate. **`mvp: true`** (operator decision 2026-07-01: launch-blocking — "modified devices blocked always" must hold in-app on both platforms day one, not relying on App Store review as iOS's only defense).

@@ -24,6 +24,7 @@ data class BuildVariantConfig(
     val deviceInfo: String = "?",
     val apiBaseUrl: String? = null,
     val bypassDeviceChecks: Boolean = false,
+    val bypassIntegrityGate: Boolean = false,
     val liveKitUrl: String? = null,
     val gitBranch: String = "?",
     val gitSha: String = "?",
@@ -172,6 +173,23 @@ object BuildVariant {
      * TestFlight included) is no longer expressible by omission.
      */
     val bypassDeviceChecks: Boolean get() = holder.bypassDeviceChecks
+
+    /**
+     * Whether the PRE-AUTH device-INTEGRITY gate (jailbreak / Simulator /
+     * tamper, SHY-0146) is BYPASSED. Mirrors Android's per-flavor
+     * `BuildConfig.BYPASS_EMULATOR_GATE` (local + dev → true; prod → false).
+     *
+     * Default `false` = fail-closed: a platform that never calls
+     * [initBypassIntegrityGate] gets ENFORCEMENT, so a bypass must be asked for
+     * explicitly, per build.
+     *
+     * SEPARATE from [bypassDeviceChecks] on purpose — they differ on `.dev`,
+     * which enforces the auth-stage checks while bypassing this one so QA can
+     * run on the Simulator. It is also NOT derivable from [environment]:
+     * `.release` resolves `environment == "dev"`, so keying off that would
+     * silently disable this gate on the only variant that ships.
+     */
+    val bypassIntegrityGate: Boolean get() = holder.bypassIntegrityGate
 
     /**
      * Local LiveKit signalling URL for iOS (SHY-0275). `null` on dev/prod,
@@ -401,6 +419,17 @@ object BuildVariant {
      */
     fun initBypassDeviceChecks(value: Boolean) {
         holder = holder.copy(bypassDeviceChecks = value)
+    }
+
+    /**
+     * One-shot integrity-gate-bypass initialiser (SHY-0146). Called from
+     * `KoinHelper.doInitKoin(bypassIntegrityGate = ...)` with the
+     * variant-resolved value from Swift's `AppEnvironment.resolve`
+     * (`.local` → true, `.dev` → true, `.release` → false). See
+     * [bypassIntegrityGate] for the fail-closed rationale.
+     */
+    fun initBypassIntegrityGate(value: Boolean) {
+        holder = holder.copy(bypassIntegrityGate = value)
     }
 
     /**

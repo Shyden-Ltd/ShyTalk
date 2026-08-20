@@ -152,6 +152,48 @@ final class AppEnvironmentTests: XCTestCase {
                        "distributable builds must NEVER skip device-lock/ban checks")
     }
 
+    // ── bypassIntegrityGate — pre-auth device integrity (Security, SHY-0146) ──
+    //
+    // A SEPARATE flag from bypassDeviceChecks on purpose. They differ on `.dev`:
+    // dev ENFORCES the auth-stage checks (SHY-0151) but BYPASSES the integrity
+    // gate, so QA can run on the Simulator. Folding them into one flag would
+    // force a choice between "QA cannot use the Simulator" and "dev skips the
+    // device-lock".
+    //
+    // And it cannot be derived from `environment`: `.release` resolves
+    // environment == "dev" (the app does not point at prod yet), so a
+    // `environment != "prod"` shortcut would silently disable the gate on the
+    // ONLY variant that ships.
+
+    func test_local_bypassesIntegrityGate_forSimulatorAndE2E() {
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+        XCTAssertTrue(cfg.bypassIntegrityGate,
+                      "local runs on the Simulator and the emulator stack")
+    }
+
+    func test_dev_bypassesIntegrityGate_soQACanUseTheSimulator() {
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+        XCTAssertTrue(cfg.bypassIntegrityGate,
+                      "dev mirrors Android's BYPASS_EMULATOR_GATE=true")
+    }
+
+    func test_release_enforcesIntegrityGate() {
+        // The whole point of the flag. A distributable build must block a
+        // jailbroken device or the Simulator, exactly as Android's prod flavor
+        // does via UnsafeDeviceGate.
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil)
+        XCTAssertFalse(cfg.bypassIntegrityGate,
+                       "distributable builds must NEVER skip the integrity gate")
+    }
+
+    func test_theTwoGatesAreIndependent_onDev() {
+        // Pins the reason they are separate fields: dev enforces one and
+        // bypasses the other. If someone later collapses them, this fails.
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+        XCTAssertFalse(cfg.bypassDeviceChecks, "dev enforces the auth-stage checks")
+        XCTAssertTrue(cfg.bypassIntegrityGate, "dev bypasses the integrity gate")
+    }
+
     // ── SHY-0275 — the local host a real iPhone uses to reach the Mac ──
     //
     // `LOCAL_HOST` (Local.xcconfig) → `ShyTalkLocalHost` (Info.plist) →
