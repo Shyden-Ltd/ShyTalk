@@ -1,7 +1,7 @@
 ---
 id: SHY-0380
-status: Draft
-owner: unassigned
+status: In Review
+owner: shyden
 created: 2026-08-20
 priority: P1
 effort: M
@@ -138,7 +138,8 @@ that epic will replace.
 
 | Layer | What it proves |
 | --- | --- |
-| API tests | Submit, list, action. Ownership enforced. Non-admin refused. Duplicate-pending refused. Rate limit honoured. Admin action writes an audit entry. Against the **real Firestore emulator**, not mocks. |
+| API tests | Submit, list, action. Ownership enforced. Non-admin refused. Duplicate-pending refused. Admin action writes an audit entry. Uses **supertest with a mocked Firestore**, which is this codebase's established convention for route tests (`express-api/tests/routes/`). |
+| Integration | The real-service proof lives in `tests/integration/*.spec.ts`, where a ticket is raised and read back against running services. Route tests prove the logic; the integration spec proves the wiring. |
 | Mutation | Remove the admin check; the authorisation test must go red. Remove the audit write; its test must go red. |
 | Dashboard tests | Ticket renders, action changes status, the message body is escaped — asserted with a payload that would execute if it were not. |
 | Journey | Raise a ticket via the API, action it in a real browser, verify the stored state agrees with the UI. |

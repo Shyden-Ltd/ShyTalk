@@ -262,6 +262,7 @@ app.use('/api', require('./routes/admin-audit-log'));
 app.use('/api', require('./routes/suggestions-maintenance'));
 app.use('/api', require('./routes/identity-graph'));
 app.use('/api', require('./routes/roadmap-auth'));
+app.use('/api', require('./routes/support-tickets'));
 
 const { createLogsRouter } = require('./routes/logs');
 app.use('/api', createLogsRouter(logger));
