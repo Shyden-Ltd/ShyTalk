@@ -18,6 +18,41 @@ to develop's version, so **SHY-0379 on disk is knowingly stale — read the park
 spec before picking it up.** SHY-0394 asks whether the gate should learn a
 declared spec-only mode; the status was not faked.
 
+## What the review of #1909 found
+
+The PR had never been reviewed. Two passes plus mutation testing found that
+**the support form was never wired**: Koin bound `SupportFormViewModel(get())`
+and all three screens resolved it with a bare `koinViewModel()`, so every ticket
+carried `category = null` and `context = {}`. The server's
+`CONTEXT_ALLOWED_FIELDS` allowlist and the admin tab's `contextHtml` — both built
+for that data — had been filtering and rendering nothing since SHY-0380 merged.
+
+`SupportFormViewModelTest` did not catch it because it constructs the ViewModel
+directly, a path production never takes. **That is the lesson worth keeping: a
+green unit test proves the behaviour, not that anything reaches it.**
+`SupportFormWiringPinTest` now reads the DI binding, all three call sites, both
+platform repositories and the dialog.
+
+Six more silent paths came out of the same review, all now fixed and pinned:
+
+| What | Was |
+| --- | --- |
+| Message bound | measured on the raw field, sent `trimmed` — trailing space cost a refusal |
+| `Failed.message` | collected by both repositories, then discarded; failures logged nothing |
+| `optString("ticketId")` | `""` on an absent key read as success — what a captive portal looks like |
+| Terminal catch | absent on both platforms; a non-JSON 2xx (Android) or any dropped connection (iOS) crashed the app |
+| Re-opening support | screen-scoped ViewModel kept `submitted`, so a second visit showed the confirmation, never a form |
+| `alreadyHasOpenTicket` | dead state — shown as the person's error, with Send still enabled |
+
+**A pin of mine also failed its own mutation test**: a whole-file
+`contains("!state.alreadyHasOpenTicket")` stayed green with the guard deleted,
+because the same substring sits on the `isError` line. It is anchored now. Mutate
+every source-scanning guard — that one would have shipped as decoration.
+
+The sweep for the same wiring defect elsewhere is clean: 18 `viewModel` bindings
+take no params, only `AuthViewModel` and `AgeVerificationSubmitViewModel` declare
+defaulted constructor parameters, and both are correct.
+
 ## Merged this session
 
 | Story | PR | State |
