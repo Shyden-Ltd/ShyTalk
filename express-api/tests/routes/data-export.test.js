@@ -502,3 +502,37 @@ describe('Async export processing', () => {
     expect(failCall).toBeDefined();
   });
 });
+
+/**
+ * SHY-0370 — the secret resolves LAZILY, and still fails closed.
+ *
+ * The production branch is unreachable through a route, because tests do not
+ * run with NODE_ENV=production — and it is precisely the branch that took dev
+ * down, so it is asserted directly.
+ */
+describe('SHY-0370 exportDownloadSecret fails the FEATURE, not the process', () => {
+  const ORIGINAL_ENV = { ...process.env };
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  test('returns the configured secret when one is set', () => {
+    process.env.EXPORT_DOWNLOAD_SECRET = 'a-real-configured-secret';
+    const { exportDownloadSecret } = require('../../src/routes/data-export');
+    expect(exportDownloadSecret()).toBe('a-real-configured-secret');
+  });
+
+  test('throws in production when the secret is missing — still fail-closed', () => {
+    delete process.env.EXPORT_DOWNLOAD_SECRET;
+    process.env.NODE_ENV = 'production';
+    const { exportDownloadSecret } = require('../../src/routes/data-export');
+    expect(() => exportDownloadSecret()).toThrow(/EXPORT_DOWNLOAD_SECRET/);
+  });
+
+  test('falls back to the development secret outside production', () => {
+    delete process.env.EXPORT_DOWNLOAD_SECRET;
+    process.env.NODE_ENV = 'development';
+    const { exportDownloadSecret } = require('../../src/routes/data-export');
+    expect(exportDownloadSecret()).toBe('dev-export-secret');
+  });
+});
