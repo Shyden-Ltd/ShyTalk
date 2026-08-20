@@ -117,9 +117,13 @@ function findRemovedMemberAccesses() {
     } catch {
       continue; // deleted-but-tracked during a rebase
     }
-    // Cheap pre-filter: a file cannot bind the admin root without naming the
-    // package or the module that re-exports it.
-    if (!source.includes('firebase-admin') && !source.includes('utils/firebase')) continue;
+    // Cheap pre-filter, deliberately broad. It must not be able to produce a
+    // FALSE NEGATIVE: a sibling in src/utils requires the re-exporting module as
+    // './firebase', which contains neither 'firebase-admin' nor 'utils/firebase'
+    // — a narrower filter silently skipped a dozen real files. Any binding this
+    // test cares about comes from a specifier containing 'firebase', so that is
+    // the widest useful net; the AST decides everything after it.
+    if (!source.includes('firebase')) continue;
 
     let ast;
     try {
