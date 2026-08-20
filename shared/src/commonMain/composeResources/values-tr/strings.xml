@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Özel mesajlar ve Gaça yalnızca 18 yaş ve üzeri kullanıcılar tarafından kullanılabilir. Hesabınızdaki doğum tarihine göre henüz uygun değilsiniz. Bunun bir hata olduğunu düşünüyorsanız lütfen destekle iletişime geçin — kayıtlı doğum tarihinizi değiştirmek için kimlik belgesi gönderilmesini kabul edemiyoruz.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Destek ile iletişime geçin</string>
+    <string name="support_form_hint">Sorunun ne olduğunu bize anlatın, inceleyelim.</string>
+    <string name="support_form_send">Gönder</string>
+    <string name="support_form_sent">Teşekkürler. Mesajınızı aldık ve inceleyeceğiz.</string>
+    <string name="support_form_error_empty">Göndermeden önce lütfen bir mesaj yazın.</string>
+    <string name="support_form_error_too_long">Mesajınız çok uzun. Lütfen kısaltıp tekrar deneyin.</string>
+    <string name="support_form_error_generic">Mesajınızı gönderemedik. Bağlantınızı kontrol edip tekrar deneyin.</string>
+    <string name="support_form_error_already_open">Zaten açık bir talebiniz var. Oradan yanıtlayacağız.</string>
     <string name="age_restriction_sub_eighteen_confirm">Destekle iletişime geç</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">İptal</string>

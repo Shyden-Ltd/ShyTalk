@@ -1672,6 +1672,20 @@ private fun AboutPage(
     snackbarHostState: SnackbarHostState,
     platformSettings: PlatformSettingsService,
 ) {
+    // SHY-0385: the general way in to support, for anyone not coming from a
+    // refusal. Category defaults to Other -- the entry point knows the context,
+    // so the person is not asked to categorise their own problem.
+    var showSupportForm by remember { mutableStateOf(false) }
+    if (showSupportForm) {
+        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
+            org.koin.compose.viewmodel
+                .koinViewModel()
+        com.shyden.shytalk.feature.support.SupportFormDialog(
+            viewModel = supportViewModel,
+            onDismiss = { showSupportForm = false },
+        )
+    }
+
     SettingsSubPage(
         title = stringResource(Res.string.about),
         onBack = onBack,
@@ -1732,7 +1746,11 @@ private fun AboutPage(
                     Modifier
                         .fillMaxWidth()
                         .clickable {
-                            platformSettings.openEmail("shytalk.help@gmail.com")
+                            // SHY-0385: opens the in-app support form, which raises
+                            // a ticket an admin actions. It used to open a mail
+                            // composer to an address that is not monitored --
+                            // operator, 2026-08-20: there is no support mailbox.
+                            showSupportForm = true
                         }.padding(vertical = 12.dp)
                         .testTag("settings_contactUsLink"),
                 verticalAlignment = Alignment.CenterVertically,

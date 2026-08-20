@@ -1658,7 +1658,7 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">Fitur tidak tersedia</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">Pesan pribadi dan gacha hanya tersedia untuk pengguna berusia 18 tahun atau lebih. Berdasarkan tanggal lahir di akun Anda, Anda belum memenuhi syarat. Kami tidak dapat menerima kartu identitas untuk mengubah tanggal lahir yang tercatat.</string>
+    <string name="age_restriction_sub_eighteen_body">Pesan pribadi dan gacha hanya tersedia untuk pengguna berusia 18 tahun atau lebih. Berdasarkan tanggal lahir di akun Anda, Anda belum memenuhi syarat. Jika Anda yakin ini salah, harap hubungi dukungan — kami tidak dapat menerima kartu identitas untuk mengubah tanggal lahir yang tercatat.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">Hubungi dukungan</string>
     <string name="support_form_title">Hubungi dukungan</string>

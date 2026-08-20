@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">プライベートメッセージとガチャは 18 歳以上のお客様限定の機能です。アカウントに登録された生年月日に基づくと、まだご利用いただけません。誤りと思われる場合はサポートまでお問い合わせください。登録済みの生年月日を上書きするための身分証明書の提出は承れません。</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">サポートに問い合わせる</string>
+    <string name="support_form_hint">どうされましたか。内容を確認いたします。</string>
+    <string name="support_form_send">送信</string>
+    <string name="support_form_sent">ありがとうございます。メッセージを受け取りました。確認いたします。</string>
+    <string name="support_form_error_empty">送信する前にメッセージを入力してください。</string>
+    <string name="support_form_error_too_long">メッセージが長すぎます。短くしてもう一度お試しください。</string>
+    <string name="support_form_error_generic">メッセージを送信できませんでした。接続を確認してもう一度お試しください。</string>
+    <string name="support_form_error_already_open">すでに対応中のお問い合わせがあります。そちらでご返信します。</string>
     <string name="age_restriction_sub_eighteen_confirm">サポートに問い合わせる</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">キャンセル</string>

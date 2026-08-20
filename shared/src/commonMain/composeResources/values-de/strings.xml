@@ -1658,6 +1658,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Private Nachrichten und Gacha sind nur für Nutzer ab 18 Jahren verfügbar. Basierend auf dem Geburtsdatum in deinem Konto bist du noch nicht berechtigt. Falls du glaubst, dass dies ein Fehler ist, wende dich bitte an den Support — wir können keine Ausweisdokumente akzeptieren, um das hinterlegte Geburtsdatum zu überschreiben.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Support kontaktieren</string>
+    <string name="support_form_hint">Sagen Sie uns, was nicht stimmt, und wir kümmern uns darum.</string>
+    <string name="support_form_send">Senden</string>
+    <string name="support_form_sent">Danke. Wir haben Ihre Nachricht erhalten und schauen sie uns an.</string>
+    <string name="support_form_error_empty">Bitte schreiben Sie eine Nachricht, bevor Sie senden.</string>
+    <string name="support_form_error_too_long">Ihre Nachricht ist zu lang. Bitte kürzen Sie sie und versuchen Sie es erneut.</string>
+    <string name="support_form_error_generic">Ihre Nachricht konnte nicht gesendet werden. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.</string>
+    <string name="support_form_error_already_open">Sie haben bereits eine offene Anfrage. Wir antworten darauf.</string>
     <string name="age_restriction_sub_eighteen_confirm">Support kontaktieren</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Abbrechen</string>

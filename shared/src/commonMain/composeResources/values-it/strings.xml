@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">I messaggi privati e la gacha sono disponibili solo per utenti di 18 anni o più. In base alla data di nascita del tuo account, non sei ancora idoneo. Se ritieni che si tratti di un errore, contatta l'assistenza: non possiamo accettare documenti d'identità per modificare la data di nascita registrata.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Contatta il supporto</string>
+    <string name="support_form_hint">Dicci cosa non va e ce ne occuperemo.</string>
+    <string name="support_form_send">Invia</string>
+    <string name="support_form_sent">Grazie. Abbiamo ricevuto il tuo messaggio e lo esamineremo.</string>
+    <string name="support_form_error_empty">Scrivi un messaggio prima di inviare.</string>
+    <string name="support_form_error_too_long">Il tuo messaggio è troppo lungo. Accorcialo e riprova.</string>
+    <string name="support_form_error_generic">Non siamo riusciti a inviare il tuo messaggio. Controlla la connessione e riprova.</string>
+    <string name="support_form_error_already_open">Hai già una richiesta aperta. Ti risponderemo lì.</string>
     <string name="age_restriction_sub_eighteen_confirm">Contatta l'assistenza</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Annulla</string>

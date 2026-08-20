@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">As mensagens privadas e o gacha só estão disponíveis para utilizadores com 18 anos ou mais. Com base na data de nascimento da sua conta, ainda não é elegível. Se acredita que isto é um erro, contacte o suporte — não podemos aceitar o envio de documentos para alterar a data de nascimento registada.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Contactar o suporte</string>
+    <string name="support_form_hint">Diga-nos o que se passa e iremos analisar.</string>
+    <string name="support_form_send">Enviar</string>
+    <string name="support_form_sent">Obrigado. Recebemos a sua mensagem e iremos analisá-la.</string>
+    <string name="support_form_error_empty">Escreva uma mensagem antes de enviar.</string>
+    <string name="support_form_error_too_long">A sua mensagem é demasiado longa. Encurte-a e tente novamente.</string>
+    <string name="support_form_error_generic">Não foi possível enviar a sua mensagem. Verifique a ligação e tente novamente.</string>
+    <string name="support_form_error_already_open">Já tem um pedido em aberto. Iremos responder aí.</string>
     <string name="age_restriction_sub_eighteen_confirm">Contactar suporte</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Cancelar</string>

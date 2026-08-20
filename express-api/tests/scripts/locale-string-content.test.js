@@ -77,7 +77,14 @@ describe('locale strings render as written', () => {
     // `splash_tagline` ("Voice chat rooms, reimagined.") out of all 21 locales
     // along with the screen that rendered it. A REMOVAL has to be acknowledged
     // here for the same reason an addition does.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([838]);
+    // 838 -> 846 on 2026-08-21: SHY-0385 added the in-app support form -- title,
+    // hint, send, sent, and four error strings -- to all 21 locales. Worth noting
+    // for the next person: the MVP locale rule (en/zh/id/vi/th) governs which
+    // languages the PRODUCT ships in, not which files must stay in parity. The
+    // 16 retired `values-*` directories still exist, and this pin plus the
+    // locale-parity guard require every key in every one of them until SHY-0194
+    // deletes them.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([846]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

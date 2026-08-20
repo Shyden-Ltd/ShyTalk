@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">개인 메시지와 가챠는 18세 이상 사용자만 이용할 수 있습니다. 계정에 등록된 생년월일을 기준으로 아직 이용 자격이 없습니다. 잘못된 경우 고객 지원에 문의해 주세요. 등록된 생년월일을 변경하기 위한 신분증 제출은 받지 않습니다.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">고객지원 문의</string>
+    <string name="support_form_hint">무엇이 문제인지 알려주시면 확인하겠습니다.</string>
+    <string name="support_form_send">보내기</string>
+    <string name="support_form_sent">감사합니다. 메시지를 받았으며 확인하겠습니다.</string>
+    <string name="support_form_error_empty">보내기 전에 메시지를 입력해 주세요.</string>
+    <string name="support_form_error_too_long">메시지가 너무 깁니다. 줄인 후 다시 시도해 주세요.</string>
+    <string name="support_form_error_generic">메시지를 보내지 못했습니다. 연결을 확인한 후 다시 시도해 주세요.</string>
+    <string name="support_form_error_already_open">이미 처리 중인 요청이 있습니다. 해당 요청으로 답변드리겠습니다.</string>
     <string name="age_restriction_sub_eighteen_confirm">고객 지원 문의</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">취소</string>

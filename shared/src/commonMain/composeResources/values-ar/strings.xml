@@ -1660,6 +1660,14 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">الرسائل الخاصة وميزة غاشا متاحة فقط للمستخدمين الذين تبلغ أعمارهم 18 عامًا أو أكثر. بناءً على تاريخ الميلاد في حسابك، فأنت غير مؤهل بعد. إذا كنت تعتقد أن هذا خطأ، يرجى التواصل مع الدعم — لا يمكننا قبول وثائق الهوية لتغيير تاريخ الميلاد المسجل.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">اتصل بالدعم</string>
+    <string name="support_form_hint">أخبرنا بما حدث وسنقوم بمراجعته.</string>
+    <string name="support_form_send">إرسال</string>
+    <string name="support_form_sent">شكرًا لك. لقد استلمنا رسالتك وسنقوم بمراجعتها.</string>
+    <string name="support_form_error_empty">يرجى كتابة رسالة قبل الإرسال.</string>
+    <string name="support_form_error_too_long">رسالتك طويلة جدًا. يرجى اختصارها والمحاولة مرة أخرى.</string>
+    <string name="support_form_error_generic">تعذر إرسال رسالتك. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</string>
+    <string name="support_form_error_already_open">لديك بالفعل طلب مفتوح. سنرد عليه.</string>
     <string name="age_restriction_sub_eighteen_confirm">التواصل مع الدعم</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">إلغاء</string>

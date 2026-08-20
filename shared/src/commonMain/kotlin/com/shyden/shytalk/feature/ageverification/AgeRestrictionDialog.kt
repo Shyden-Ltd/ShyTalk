@@ -14,8 +14,8 @@ import com.shyden.shytalk.resources.age_restriction_needs_verification_body
 import com.shyden.shytalk.resources.age_restriction_needs_verification_confirm
 import com.shyden.shytalk.resources.age_restriction_needs_verification_title
 import com.shyden.shytalk.resources.age_restriction_sub_eighteen_body
+import com.shyden.shytalk.resources.age_restriction_sub_eighteen_confirm
 import com.shyden.shytalk.resources.age_restriction_sub_eighteen_title
-import com.shyden.shytalk.resources.ok
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -24,8 +24,8 @@ import org.jetbrains.compose.resources.stringResource
  *
  * - [AgeRestrictionDialogState.NeedsVerification] → "Verify now" CTA
  *   that should route to the verification submit flow (PR 9).
- * - [AgeRestrictionDialogState.SubEighteen] → explanation only, no CTA
- *   (SHY-0384; SHY-0385 restores one pointing at a real support form).
+ * - [AgeRestrictionDialogState.SubEighteen] → explanation + a "Contact support"
+ *   CTA that opens the in-app support form (SHY-0385).
  *   The user CANNOT enter the verification flow until they age in.
  *
  * Renders nothing on [AgeRestrictionDialogState.Hidden] — the host
@@ -36,6 +36,7 @@ import org.jetbrains.compose.resources.stringResource
 fun AgeRestrictionDialog(
     state: AgeRestrictionDialogState,
     onDismiss: () -> Unit,
+    onContactSupport: () -> Unit,
     onVerifyNow: () -> Unit,
 ) {
     when (state) {
@@ -93,26 +94,32 @@ fun AgeRestrictionDialog(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 },
-                // SHY-0384: ONE action, and it closes.
+                // SHY-0385: the control is back, and now it DOES something --
+                // it opens the in-app support form, which raises a ticket an
+                // admin actions in the dashboard.
                 //
-                // A "Contact support" button used to sit in the confirm slot,
-                // running `onDismiss(); onContactSupport()` -- and every caller
-                // passed a dismiss for onContactSupport, so it was behaviourally
-                // identical to Cancel while the body text told people to use it.
+                // SHY-0384 removed it because every caller passed a dismiss for
+                // `onContactSupport`, making it behaviourally identical to
+                // Cancel while the body text told people to use it. The rule was
+                // never "no button"; it was "nothing inert".
                 //
-                // It sits in `confirmButton` rather than `dismissButton` because
-                // Material3's AlertDialog requires confirmButton, and it is
-                // labelled OK rather than Cancel: with nothing to confirm and
-                // nothing to cancel, the only honest label is an acknowledgement.
-                //
-                // SHY-0385 restores a real support action here, pointing at the
-                // ticket form.
+                // It does NOT call onDismiss here. The caller decides what to do
+                // with this dialog when the form opens, so the two are not
+                // silently coupled.
                 confirmButton = {
+                    TextButton(
+                        onClick = onContactSupport,
+                        modifier = Modifier.testTag(TAG_SUB_EIGHTEEN_CONFIRM),
+                    ) {
+                        Text(stringResource(Res.string.age_restriction_sub_eighteen_confirm))
+                    }
+                },
+                dismissButton = {
                     TextButton(
                         onClick = onDismiss,
                         modifier = Modifier.testTag(TAG_SUB_EIGHTEEN_DISMISS),
                     ) {
-                        Text(stringResource(Res.string.ok))
+                        Text(stringResource(Res.string.age_restriction_dismiss))
                     }
                 },
             )
@@ -122,4 +129,5 @@ fun AgeRestrictionDialog(
 
 const val TAG_NEEDS_VERIFICATION_CONFIRM = "ageRestriction_needsVerification_confirm"
 const val TAG_NEEDS_VERIFICATION_DISMISS = "ageRestriction_needsVerification_dismiss"
+const val TAG_SUB_EIGHTEEN_CONFIRM = "ageRestriction_subEighteen_confirm"
 const val TAG_SUB_EIGHTEEN_DISMISS = "ageRestriction_subEighteen_dismiss"
