@@ -144,3 +144,12 @@ already known to work rather than two unproven halves at once.
 ## Notes
 
 - Part two of two. Order: [[SHY-0384]] → [[SHY-0380]] → this.
+- Reviewed twice. The first pass found the form was never wired — Koin supplied
+  neither the category nor the context, so every ticket reached the admin queue
+  with nothing to triage on. The second found that re-opening support showed the
+  previous confirmation instead of a form. Both are fixed and pinned; the details
+  are in `.project/handoff/2026-08-21-session-handover-part8.md`.
+- Every new source-scanning pin was mutation-tested. One of them failed that test
+  and was anchored — see the handoff note.
+
+Reviewed-up-to: b2f92f8432b0c5f2477e2902002b4ddeba7db3fc
