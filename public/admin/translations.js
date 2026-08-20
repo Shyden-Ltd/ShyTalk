@@ -258,6 +258,7 @@ var ADMIN_TRANSLATIONS = {
     toast_failed_to_save: "Failed to save: {error}",
   },
   ar: {
+    tab_support: "الدعم",
     tab_users: "\u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645\u0648\u0646",
     tab_appeals: "\u0627\u0644\u0637\u0639\u0648\u0646",
     tab_reports: "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631",
@@ -557,6 +558,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "تم إلغاء تعليق المستخدم بالفعل",
   },
   de: {
+    tab_support: "Support",
     tab_users: "Benutzer",
     tab_appeals: "Einsprüche",
     tab_reports: "Berichte",
@@ -847,6 +849,7 @@ var ADMIN_TRANSLATIONS = {
       "Die Suspendierung des Benutzers wurde bereits aufgehoben",
   },
   es: {
+    tab_support: "Soporte",
     tab_users: "Usuarios",
     tab_appeals: "Apelaciones",
     tab_reports: "Informes",
@@ -1139,6 +1142,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "El usuario ya no está suspendido",
   },
   fr: {
+    tab_support: "Assistance",
     tab_users: "Utilisateurs",
     tab_appeals: "Appels",
     tab_reports: "Signalements",
@@ -1432,6 +1436,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "L'utilisateur n'est déjà pas suspendu",
   },
   hi: {
+    tab_support: "सहायता",
     tab_users: "\u0909\u092A\u092F\u094B\u0917\u0915\u0930\u094D\u0924\u093E",
     tab_appeals: "\u0905\u092A\u0940\u0932",
     tab_reports: "\u0930\u093F\u092A\u094B\u0930\u094D\u091F",
@@ -2014,6 +2019,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "Penangguhan pengguna sudah dibatalkan",
   },
   it: {
+    tab_support: "Supporto",
     tab_users: "Utenti",
     tab_appeals: "Ricorsi",
     tab_reports: "Segnalazioni",
@@ -2301,6 +2307,7 @@ var ADMIN_TRANSLATIONS = {
       "L'utente è già riattivato dalla sospensione",
   },
   ja: {
+    tab_support: "サポート",
     tab_users: "\u30E6\u30FC\u30B6\u30FC",
     tab_appeals: "\u7570\u8B70\u7533\u7ACB",
     tab_reports: "\u5831\u544A",
@@ -2584,6 +2591,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "ユーザーはすでに停止解除されています",
   },
   km: {
+    tab_support: "ជំនួយ",
     tab_users:
       "\u1780\u17B6\u179A\u17B7\u1794\u17D2\u179A\u17BE\u1794\u17D2\u179A\u17B6\u179F\u17CB",
     tab_appeals:
@@ -2892,6 +2900,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "អ្នកប្រើត្រូវបានដកការផ្អាករួចហើយ",
   },
   ko: {
+    tab_support: "지원",
     tab_users: "\uC0AC\uC6A9\uC790",
     tab_appeals: "\uC774\uC758 \uC2E0\uCCAD",
     tab_reports: "\uC2E0\uACE0",
@@ -3170,6 +3179,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "사용자가 이미 정지 해제되었습니다.",
   },
   nl: {
+    tab_support: "Ondersteuning",
     tab_users: "Gebruikers",
     tab_appeals: "Bezwaren",
     tab_reports: "Meldingen",
@@ -3464,6 +3474,7 @@ var ADMIN_TRANSLATIONS = {
       "De opschorting van de gebruiker is al ongedaan gemaakt",
   },
   pl: {
+    tab_support: "Wsparcie",
     tab_users: "Użytkownicy",
     tab_appeals: "Odwołania",
     tab_reports: "Zgłoszenia",
@@ -3753,6 +3764,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "Użytkownik nie jest już zawieszony",
   },
   pt: {
+    tab_support: "Suporte",
     tab_users: "Usuários",
     tab_appeals: "Recursos",
     tab_reports: "Denúncias",
@@ -4040,6 +4052,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "O usuário não está mais suspenso",
   },
   ru: {
+    tab_support: "Поддержка",
     tab_users:
       "\u041F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u0438",
     tab_appeals: "\u0410\u043F\u0435\u043B\u043B\u044F\u0446\u0438\u0438",
@@ -4349,6 +4362,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "Пользователь уже разблокирован",
   },
   sv: {
+    tab_support: "Support",
     tab_users: "Användare",
     tab_appeals: "Överklaganden",
     tab_reports: "Rapporter",
@@ -4927,6 +4941,7 @@ var ADMIN_TRANSLATIONS = {
     toast_user_already_unsuspended: "ผู้ใช้ยกเลิกการระงับแล้ว",
   },
   tr: {
+    tab_support: "Destek",
     tab_users: "Kullanıcılar",
     tab_appeals: "İtirazlar",
     tab_reports: "Raporlar",
@@ -5212,6 +5227,7 @@ var ADMIN_TRANSLATIONS = {
       "Kullanıcının askıya alma durumu zaten kaldırıldı",
   },
   uk: {
+    tab_support: "Підтримка",
     tab_users:
       "\u041A\u043E\u0440\u0438\u0441\u0442\u0443\u0432\u0430\u0447\u0456",
     tab_appeals: "\u0410\u043F\u0435\u043B\u044F\u0446\u0456\u0457",

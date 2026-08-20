@@ -14,6 +14,11 @@
  *   - the audit entry, because `PUT /config/:key` currently writes none and that
  *     gap must not be reproduced in a new queue.
  *
+ * Named `.unit.test.js` deliberately. This isolates the router with mocked
+ * collaborators, and the repository's no-stubs ratchet allows doubles ONLY in
+ * unit-test locations — so the name has to tell the truth about what this is.
+ * Real-service proof belongs in `tests/integration/`, not here.
+ *
  * See `.project/stories/SHY-0380-contact-support-button-does-nothing.md`.
  */
 
