@@ -107,7 +107,10 @@ describe('SHY-0145 — the fun-facts pipeline is decommissioned', () => {
     const offenders = ALL_FILES.filter((f) => {
       if (!SURFACE_EXTENSIONS.has(path.extname(f))) return false;
       if (ALLOWED.has(rel(f))) return false;
-      return /fun-facts|funfacts/i.test(codeOf(f));
+      // `fun facts` with a SPACE matters: the admin tab is referenced by its
+      // LABEL in the Playwright specs, and a hyphen/concatenation-only pattern
+      // missed three of them until CI failed (SHY-0145).
+      return /fun-facts|funfacts|fun facts|funFact/i.test(codeOf(f));
     }).map(rel);
     expect(offenders).toEqual([]);
   });

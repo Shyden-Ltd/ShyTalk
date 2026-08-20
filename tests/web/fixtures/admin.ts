@@ -11,7 +11,6 @@ export interface TestData {
   secondUser: { uid: string; uniqueId: number; displayName: string };
   gift: { id: string; name: string; coinValue: number };
   banner: { id: string; title: string };
-  funFact: { id: string; text: string };
   report: { id: string; reportedUserId: string; reporterId: string };
   appeal: { id: string };
   alert: { id: string };
