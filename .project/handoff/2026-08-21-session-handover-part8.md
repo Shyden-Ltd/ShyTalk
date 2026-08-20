@@ -9,6 +9,15 @@ before doing anything.
 still running its gate when this session ended.** Merge it when clean, then
 dispatch Deploy To Dev. Nothing else is in flight.
 
+**Its gate failed on 2026-08-21 and has been fixed.** `check-pr-story-status.js`
+refused the PR because it *modified* SHY-0379 while that story is still `Draft`
+— the exemption is add-only, so the six newly filed Drafts passed and the one
+rewrite did not. The refinement is parked in
+`.project/handoff/2026-08-21-SHY-0379-refined-spec.md` and the story file is back
+to develop's version, so **SHY-0379 on disk is knowingly stale — read the parked
+spec before picking it up.** SHY-0394 asks whether the gate should learn a
+declared spec-only mode; the status was not faked.
+
 ## Merged this session
 
 | Story | PR | State |
@@ -67,6 +76,7 @@ Health 200, restarts 21 → 22, backup at `.env.bak.20260820T131216Z`.
 | **SHY-0390** | P2 | XS | Message-report reasons render in English for everyone. |
 | **SHY-0386** | P3 | XS | `routes/health.js` has never been mounted. |
 | **SHY-0381/0382/0383** | P2–P3 | S/XS | Flaky admin spec · silent `createRoom` · retired emulator host default. |
+| **SHY-0394** | P2 | S | The story gate refuses a spec-only refinement of a Draft. Operator call. |
 
 **Sequence that matters:** SHY-0391 → SHY-0388 → SHY-0389. The privacy claim on
 the warning screen is not true until the age default flips, and suspending
