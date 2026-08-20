@@ -25,7 +25,6 @@ const ALL_TOP_LEVEL_COLLECTIONS = [
   'giftRankings',
   'broadcasts',
   'coinPackages',
-  'funFacts',
   'banners',
   'reports',
   'reportsArchive',

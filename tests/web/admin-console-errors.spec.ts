@@ -131,7 +131,6 @@ test.describe("Admin Console Error Checks", () => {
       "Devices",
       "Gifts",
       "Banners",
-      "Fun Facts",
       "Economy",
       "Spin Monitor",
       "Backups",

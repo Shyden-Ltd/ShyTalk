@@ -73,7 +73,6 @@ mockBackupFn.TOP_LEVEL_COLLECTIONS = [
   'giftRankings',
   'broadcasts',
   'coinPackages',
-  'funFacts',
   'banners',
   'reports',
   'reportsArchive',

@@ -11,7 +11,6 @@ export interface TestData {
   secondUser: { uid: string; uniqueId: number; displayName: string };
   gift: { id: string; name: string; coinValue: number };
   banner: { id: string; title: string };
-  funFact: { id: string; text: string };
   report: { id: string; reportedUserId: string; reporterId: string };
   appeal: { id: string };
   alert: { id: string };
@@ -99,7 +98,6 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
           },
         ],
         banners: [{ title: `e2e-${prefix}-banner`, imageUrl: 'https://placehold.co/600x200/png' }],
-        funFacts: [{ text: `e2e-${prefix}-fact`, category: 'Science', emoji: '🔬' }],
         conversations: [{
           participants: ['placeholder'],
           messages: [{ text: 'test message', senderId: 'placeholder' }],
@@ -117,7 +115,6 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
         secondUser: result.users[1],
         gift: result.gifts?.[0] || { id: '', name: '', coinValue: 0 },
         banner: result.banners?.[0] || { id: '', title: '' },
-        funFact: result.funFacts?.[0] || { id: '', text: '' },
         report: result.reports?.[0] || { id: '', reportedUserId: '', reporterId: '' },
         appeal: result.appeals?.[0] || { id: '' },
         alert: result.alerts?.[0] || { id: '' },

@@ -479,7 +479,6 @@ describe('POST /api/admin/migrate-prod-data', () => {
       'giftRankings',
       'broadcasts',
       'coinPackages',
-      'funFacts',
       'banners',
       'reports',
       'reportsArchive',

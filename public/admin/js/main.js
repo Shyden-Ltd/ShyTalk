@@ -81,7 +81,6 @@ const _tabPaths = {
   maintenance: '/admin/js/tabs/maintenance.js',
   monitor: '/admin/js/tabs/spin-monitor.js',
   banners: '/admin/js/tabs/banners.js',
-  funfacts: '/admin/js/tabs/fun-facts.js',
   backups: '/admin/js/tabs/backups.js',
   logs: '/admin/js/tabs/logs.js',
   devices: '/admin/js/tabs/devices.js',
@@ -173,7 +172,7 @@ async function initTabModule(tabId) {
 // All tab IDs in presentation order
 const TAB_IDS = [
   'users', 'appeals', 'reports', 'gifts', 'economy', 'maintenance',
-  'monitor', 'banners', 'funfacts', 'backups', 'logs', 'devices',
+  'monitor', 'banners', 'backups', 'logs', 'devices',
   'starting-screens', 'suggestions', 'audit-log', 'age-segregation',
 ];
 
@@ -187,7 +186,6 @@ const PANEL_MAP = {
   maintenance:        'maintenance-panel',
   monitor:            'monitor-panel',
   banners:            'banners-panel',
-  funfacts:           'funfacts-panel',
   backups:            'backups-panel',
   logs:               'logs-panel',
   devices:            'devices-panel',

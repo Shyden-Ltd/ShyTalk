@@ -28,16 +28,15 @@ const SKIP_DIRS = new Set([
   '.project',
 ]);
 
-/** SHY-0145's surface — excluded here on purpose (see the file header). */
-const SHY_0145_PATHS = [
-  'express-api/src/routes/fun-facts.js',
-  'express-api/tests/routes/fun-facts.test.js',
-  'public/admin/js/tabs/fun-facts.js',
-  'public/admin/js/main.js',
-  'public/admin/translations.js',
-  'tests/web/admin-funfacts.spec.ts',
-  'local/seed.js',
-];
+/**
+ * SHY-0145's surface — was excluded here on purpose so the two stories could be
+ * told apart (see the file header). **SHY-0145 has now landed**, so the list is
+ * empty: the backend routes, the admin tab and the collection are gone, and
+ * `no-funfacts-backend-admin-surface.test.js` asserts that half. Kept as an
+ * empty list rather than deleted so the header's explanation still has the thing
+ * it refers to, and so a future carve-out has an obvious home.
+ */
+const SHY_0145_PATHS = [];
 
 const APP_EXTENSIONS = new Set(['.kt', '.kts', '.swift', '.xml', '.feature']);
 

@@ -84,7 +84,7 @@ test.describe('Admin Login Flow', () => {
     const expectedTabs = [
       'Users', 'Appeals', 'Reports', 'Gifts',
       'Economy', 'Maintenance', 'Spin Monitor', 'Banners',
-      'Fun Facts', 'Backups', 'Logs', 'Devices',
+      'Backups', 'Logs', 'Devices',
       'Age Segregation',
     ];
     for (const tabName of expectedTabs) {
