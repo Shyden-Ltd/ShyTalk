@@ -282,3 +282,7 @@ router.get('/users/:uniqueId/data-export/download', async (req, res) => {
 });
 
 module.exports = router;
+// Exported for tests only: the production-throw branch is unreachable through a
+// route (tests do not run with NODE_ENV=production), and it is the branch that
+// caused the 2026-08-19 outage, so it must be covered directly.
+module.exports.exportDownloadSecret = exportDownloadSecret;
