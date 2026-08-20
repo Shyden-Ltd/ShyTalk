@@ -1,6 +1,6 @@
 ---
 id: SHY-0372
-status: In Progress
+status: In Review
 owner: shyden
 created: 2026-08-20
 priority: P1
@@ -119,6 +119,43 @@ next person reports the same bug through the coin path.
 
 - [ ] A refused pull is logged with its reason, so "the wheel is dead" is
       diagnosable from a log rather than by reproducing it.
+
+## Device proof — OnePlus CPH2653 (Android 16), dev, 2026-08-20
+
+Walked as **[SEED] Marcus (P-04 minor power)**, UID 60000010, cohort `minor`,
+in room `SHY0372dev`. Build `0.97.15-b9ac76d549e2 (176)`, branch
+`bug/SHY-0372…`, commit `9ac76d5*`, talking to dev `api 487ef30`.
+
+| Step | Result |
+| --- | --- |
+| Tap **1x SPIN** | "Feature unavailable" age prompt appears |
+| Tap **Cancel** | **Wheel returns to idle; 1x / 10x / 100x all present** |
+| Tap **1x SPIN** again | Prompt appears **again** — not suppressed |
+| Tap **Cancel** again | **Wheel recovers again** |
+| Tap **10x SPIN** | Prompt appears |
+| Tap **Cancel** | Wheel recovers; all three buttons present |
+| Coin balance throughout | **350 → 350** — nothing charged on any refused pull |
+
+The second cancel is the one that matters. It is the on-device form of
+`two identical refusals signal twice, not once`: a flag, or keying recovery on
+the error text, would have latched the wheel on that tap. Both optimistic call
+sites were exercised — 1x (`LuckySpinOverlay:708`) and quick-spin (`:631`).
+
+### The `local` half of the protocol could not be walked
+
+Not because of this change. On the `local` flavour
+`HomeViewModel.createRoom():369` does `authRepository.currentUserId ?: return`,
+and Firebase Auth is not established against the local emulator, so no room can
+be created and Lucky Spin is unreachable. Two incidental findings recorded for
+separate tickets:
+
+1. **`createRoom` fails silently** — the early return sits *above* its own
+   `logI`, so tapping Create closes the dialog and produces no room, no error,
+   and no log line. Same silent-failure class as this bug.
+2. **The `local` flavour still defaults to `10.0.2.2`** (`app/build.gradle.kts:155`),
+   the Android *emulator's* host alias, five weeks after emulators were retired
+   (2026-07-15). Real-device local builds need `-PlocalHost=localhost` plus
+   `adb reverse`; the default now costs ten minutes to rediscover.
 
 ## BDD Scenarios
 
