@@ -40,7 +40,7 @@ class SupportFormViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         repo = FakeSupportRepository()
-        viewModel = SupportFormViewModel(repo)
+        viewModel = SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
     }
 
     @AfterTest
@@ -64,10 +64,10 @@ class SupportFormViewModelTest {
         }
 
     @Test
-    fun `the chosen category is sent`() =
+    fun `the entry point's category is sent`() =
         runTest {
+            viewModel = SupportFormViewModel(repo, SupportCategory.Age, emptyMap())
             viewModel.updateMessage("Help")
-            viewModel.selectCategory(SupportCategory.Age)
             viewModel.submit()
             advanceUntilIdle()
 
@@ -77,12 +77,41 @@ class SupportFormViewModelTest {
     @Test
     fun `originating context is passed through`() =
         runTest {
-            viewModel = SupportFormViewModel(repo, context = mapOf("feature" to "gacha"))
+            viewModel =
+                SupportFormViewModel(
+                    repo,
+                    SupportCategory.Age,
+                    mapOf("feature" to "lucky_spin", "reason" to "age_restriction"),
+                )
             viewModel.updateMessage("Help")
             viewModel.submit()
             advanceUntilIdle()
 
-            assertEquals(mapOf("feature" to "gacha"), repo.raiseCalls[0].context)
+            assertEquals(
+                mapOf("feature" to "lucky_spin", "reason" to "age_restriction"),
+                repo.raiseCalls[0].context,
+            )
+        }
+
+    /**
+     * The category and context only matter if PRODUCTION supplies them. It did
+     * not: Koin bound `SupportFormViewModel(get())` and every screen resolved it
+     * with a bare `koinViewModel()`, so these two tests passed while every real
+     * ticket carried `null` and `{}`. `SupportFormWiringPinTest` is what stops
+     * that returning; this comment is here so the next person reading these two
+     * green tests knows they are only half the proof.
+     */
+    @Test
+    fun `a message that is only too long before trimming is still sent`() =
+        runTest {
+            val atTheLimit = "x".repeat(SUPPORT_MESSAGE_MAX_LENGTH)
+            viewModel.updateMessage("  $atTheLimit  ")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.raiseCalls.size, "trailing whitespace must not cost a refusal")
+            assertEquals(atTheLimit, repo.raiseCalls[0].message)
+            assertNull(viewModel.uiState.value.error)
         }
 
     // ─── Refusing before it reaches the server ──────────────────

@@ -1288,10 +1288,19 @@ fun RoomScreen(
 
     if (showSupportForm) {
         // The context tells an admin where this came from, so the person does not
-        // have to explain that the wheel refused them.
+        // have to explain that the wheel refused them. Only the keys in the
+        // server's CONTEXT_ALLOWED_FIELDS survive; anything else is dropped there.
         val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
-            org.koin.compose.viewmodel
-                .koinViewModel()
+            org.koin.compose.viewmodel.koinViewModel {
+                parametersOf(
+                    com.shyden.shytalk.data.repository.SupportCategory.Age,
+                    mapOf(
+                        "feature" to "lucky_spin",
+                        "reason" to "age_restriction",
+                        "screen" to "room",
+                    ),
+                )
+            }
         com.shyden.shytalk.feature.support.SupportFormDialog(
             viewModel = supportViewModel,
             onDismiss = { showSupportForm = false },

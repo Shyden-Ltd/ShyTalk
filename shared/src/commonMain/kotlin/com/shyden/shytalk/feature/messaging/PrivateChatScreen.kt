@@ -1029,9 +1029,19 @@ fun PrivateChatScreen(
     )
 
     if (showSupportForm) {
+        // Same shape as the room's entry point: the admin should not have to ask
+        // which refusal sent them here.
         val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
-            org.koin.compose.viewmodel
-                .koinViewModel()
+            org.koin.compose.viewmodel.koinViewModel {
+                parametersOf(
+                    com.shyden.shytalk.data.repository.SupportCategory.Age,
+                    mapOf(
+                        "feature" to "private_messages",
+                        "reason" to "age_restriction",
+                        "screen" to "private_chat",
+                    ),
+                )
+            }
         com.shyden.shytalk.feature.support.SupportFormDialog(
             viewModel = supportViewModel,
             onDismiss = { showSupportForm = false },

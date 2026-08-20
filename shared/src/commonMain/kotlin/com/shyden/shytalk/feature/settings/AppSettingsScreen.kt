@@ -86,6 +86,7 @@ import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 private enum class SettingsPage {
     Main,
@@ -1673,13 +1674,17 @@ private fun AboutPage(
     platformSettings: PlatformSettingsService,
 ) {
     // SHY-0385: the general way in to support, for anyone not coming from a
-    // refusal. Category defaults to Other -- the entry point knows the context,
-    // so the person is not asked to categorise their own problem.
+    // refusal. Filed as Other, and with no `reason` -- nothing turned this person
+    // away, and inventing one would mislead whoever triages the ticket.
     var showSupportForm by remember { mutableStateOf(false) }
     if (showSupportForm) {
         val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
-            org.koin.compose.viewmodel
-                .koinViewModel()
+            koinViewModel {
+                parametersOf(
+                    com.shyden.shytalk.data.repository.SupportCategory.Other,
+                    mapOf("screen" to "settings"),
+                )
+            }
         com.shyden.shytalk.feature.support.SupportFormDialog(
             viewModel = supportViewModel,
             onDismiss = { showSupportForm = false },

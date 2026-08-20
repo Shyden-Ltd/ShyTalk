@@ -27,6 +27,7 @@ import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
@@ -83,6 +84,10 @@ class ViewModelModuleTest {
                     // Named qualifiers (String for deviceId, Boolean for bypassDeviceChecks)
                     String::class,
                     Boolean::class,
+                    // Supplied by the CALLER via parametersOf, not by the graph:
+                    // SupportFormViewModel's category and originating context.
+                    SupportCategory::class,
+                    Map::class,
                 ),
         )
     }

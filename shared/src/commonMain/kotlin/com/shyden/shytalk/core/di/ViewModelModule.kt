@@ -51,7 +51,7 @@ val viewModelModule =
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }
         viewModel { RequiredDOBViewModel(get(), get()) }
         viewModel { AgeVerificationSubmitViewModel(get()) }
-        viewModel { SupportFormViewModel(get()) }
+        viewModel { params -> SupportFormViewModel(get(), params[0], params[1]) }
         viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
         viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { AppSettingsViewModel(get(), get(), get(), get()) }

@@ -206,6 +206,17 @@ tasks.named("jvmTest") {
             rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/ShyTalkApp.kt"),
             rootProject.layout.projectDirectory.file("app/build.gradle.kts"),
             rootProject.layout.projectDirectory.file("express-api/src/middleware/app-check.js"),
+            // SHY-0385: SupportFormWiringPinTest reads both platform support
+            // repositories to assert they refuse the same failures. Neither is a
+            // jvmTest compile input, so without these the parity pin would go
+            // stale the moment one platform changed — which is the only moment it
+            // matters.
+            rootProject.layout.projectDirectory.file(
+                "app/src/main/java/com/shyden/shytalk/data/repository/SupportRepositoryImpl.kt",
+            ),
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosSmallRepositories.kt",
+            ),
         ).withPropertyName("appLockWiringPinnedSources")
         .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
 }
