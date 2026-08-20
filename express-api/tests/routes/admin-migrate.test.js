@@ -79,16 +79,27 @@ jest.mock('../../src/utils/firebase', () => ({
   db: mockDevDb,
 }));
 
-// Mock firebase-admin for getProdDb() — admin.initializeApp + admin.credential.cert
-const mockInitializeApp = jest.fn().mockReturnValue({
-  firestore: () => mockProdFirestore,
-});
+// getProdDb() opens a SECOND app for the prod project. firebase-admin 14 takes
+// the credential from `firebase-admin/app` and the Firestore handle from
+// `firebase-admin/firestore`: the v13 `admin.credential` and `app.firestore()`
+// this suite used to double are `undefined` on 14, so doubling them kept the
+// suite green while the real call crashed the API (SHY-0371). A prod project
+// cannot be reached from a test, so the seam stays — but the SDK's real shape
+// is now asserted independently by firebase-admin-namespace-surface.test.js.
+const PROD_APP = { name: 'prod-readonly' };
+const mockInitializeApp = jest.fn().mockReturnValue(PROD_APP);
+const mockGetFirestore = jest.fn(() => mockProdFirestore);
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
   initializeApp: (...args) => mockInitializeApp(...args),
-  credential: {
-    cert: jest.fn((sa) => ({ type: 'cert', sa })),
-  },
+  cert: jest.fn((sa) => ({ type: 'cert', sa })),
+}));
+
+// Spread the real module: `getFirestore` is the only export this route needs
+// doubled, and other modules in the tree rely on the genuine FieldValue.
+jest.mock('firebase-admin/firestore', () => ({
+  ...jest.requireActual('firebase-admin/firestore'),
+  getFirestore: (...args) => mockGetFirestore(...args),
 }));
 
 // Mock the prod service account JSON file that getProdDb() will require().
@@ -758,5 +769,59 @@ describe('POST /api/admin/migrate-prod-data', () => {
 
     expect(res.body.errors.length).toBeGreaterThan(0);
     expect(res.body.errors.some((e) => e.error === 'batch commit failed')).toBe(true);
+  });
+});
+
+// ─── Credential resolution failures ─────────────────────────────
+
+describe('getProdDb() credential resolution', () => {
+  // A realistic absolute path: the point of the test is that this string must
+  // not appear anywhere a caller can see.
+  const BAD_SA_PATH = '/var/secrets/shytalk/prod-service-account.json';
+
+  /** A fresh router: `prodDb` is module-scoped and caches after the first success. */
+  function createAppWithFreshRouter() {
+    let router;
+    jest.isolateModules(() => {
+      router = require('../../src/routes/admin-migrate');
+    });
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'admin-uid', uniqueId: 'admin-1', token: { admin: true } };
+      next();
+    });
+    app.use('/api', router);
+    return app;
+  }
+
+  test('an unreadable service-account file fails WITHOUT leaking its path', async () => {
+    process.env.PROD_SERVICE_ACCOUNT_PATH = BAD_SA_PATH;
+
+    const res = await request(createAppWithFreshRouter())
+      .post('/api/admin/migrate-prod-data')
+      .expect(500);
+
+    // Names the variable an operator can act on ...
+    expect(res.body.error).toContain('PROD_SERVICE_ACCOUNT_PATH');
+    // ... and never the path. Node's MODULE_NOT_FOUND message embeds the
+    // absolute path, and this body goes over the wire (SHY-0371 security AC).
+    expect(JSON.stringify(res.body)).not.toContain(BAD_SA_PATH);
+    expect(JSON.stringify(res.body)).not.toContain('/var/secrets');
+
+    // The log must not carry it either.
+    const logged = JSON.stringify(require('../../src/utils/log').error.mock.calls);
+    expect(logged).not.toContain(BAD_SA_PATH);
+    expect(logged).not.toContain('/var/secrets');
+  });
+
+  test('an unset PROD_SERVICE_ACCOUNT_PATH names the variable to set', async () => {
+    delete process.env.PROD_SERVICE_ACCOUNT_PATH;
+
+    const res = await request(createAppWithFreshRouter())
+      .post('/api/admin/migrate-prod-data')
+      .expect(500);
+
+    expect(res.body.error).toContain('PROD_SERVICE_ACCOUNT_PATH');
   });
 });

@@ -39,6 +39,7 @@
  * share says it is safe.
  */
 
+const { getAppCheck } = require('firebase-admin/app-check');
 const log = require('../utils/log');
 
 const OFF = 'off';
@@ -66,8 +67,11 @@ const counts = { verified: 0, missing: 0, invalid: 0, error: 0, off: 0, refused:
 let verifier = null;
 function getVerifier() {
   if (!verifier) {
-    const { admin } = require('../utils/firebase');
-    verifier = (token) => admin.appCheck().verifyToken(token);
+    // Required for its side effect only: utils/firebase runs initializeApp,
+    // and getAppCheck() needs the default app to already exist. `admin.appCheck`
+    // itself is `undefined` on firebase-admin 14 (SHY-0371).
+    require('../utils/firebase');
+    verifier = (token) => getAppCheck().verifyToken(token);
   }
   return verifier;
 }

@@ -7,10 +7,14 @@
  */
 
 const admin = require('firebase-admin');
-// firebase-admin 14 REMOVED the `admin.apps` array (deprecated in 13). `getApps()`
-// from the modular entry point is its replacement; reading `admin.apps.length`
-// now throws "Cannot read properties of undefined" before a single test runs.
-const { getApps } = require('firebase-admin/app');
+// firebase-admin 14 REMOVED the ENTIRE namespaced root surface, not just one or
+// two names: `admin.apps`, `admin.credential`, `admin.auth`, `admin.firestore`,
+// `admin.database`, `admin.messaging`, `admin.appCheck` and `admin.app` are all
+// `undefined` on 14.x. Only the app lifecycle survives on the root export, so
+// everything else must come from a modular entry point. Reading any of them
+// throws "Cannot read properties of undefined" — at module load, which is a
+// crash loop rather than a failed request (SHY-0371).
+const { getApps, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 const { getDatabase } = require('firebase-admin/database');
@@ -68,7 +72,7 @@ if (!getApps().length) {
 
     if (serviceAccountPath) {
       const serviceAccount = require(serviceAccountPath);
-      initOptions.credential = admin.credential.cert(serviceAccount);
+      initOptions.credential = cert(serviceAccount);
     }
 
     admin.initializeApp(initOptions);
@@ -81,5 +85,10 @@ const rtdb = getDatabase();
 const messaging = getMessaging();
 // FieldValue now comes from the modular entry point above — firebase-admin 14
 // removed the `admin.firestore` namespace it used to hang off.
-
-module.exports = { admin, db, auth, rtdb, messaging, FieldValue, configureLocalEmulators };
+//
+// The raw `admin` root object is deliberately NOT re-exported. On 14 it carries
+// only the app lifecycle, so every namespace a caller would reach for through it
+// is `undefined` — that re-export is exactly how `admin.appCheck()` survived in
+// middleware/app-check.js (SHY-0371). Callers take the typed handles below, or a
+// modular entry point of their own.
+module.exports = { db, auth, rtdb, messaging, FieldValue, configureLocalEmulators };

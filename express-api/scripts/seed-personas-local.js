@@ -26,7 +26,7 @@ const {
   buildSocialGraphWrites,
   assertSafeProject,
 } = require('./provision-test-personas');
-const admin = require('firebase-admin');
+const { getApp } = require('firebase-admin/app');
 const { db } = require('../src/utils/firebase');
 const { FieldValue } = require('firebase-admin/firestore');
 
@@ -38,7 +38,7 @@ const pw = process.env.PERSONAS_PASSWORD || 'localdev123';
   // Without it, a stray prod credential in the environment (no --env-file)
   // could overwrite real accounts with the local QA password.
   assertSafeProject(
-    admin.app().options.projectId || process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID,
+    getApp().options.projectId || process.env.GCLOUD_PROJECT || process.env.FIREBASE_PROJECT_ID,
   );
   const ctx = { auth: require('firebase-admin/auth').getAuth(), db, pw, FieldValue };
   for (const p of personas) {

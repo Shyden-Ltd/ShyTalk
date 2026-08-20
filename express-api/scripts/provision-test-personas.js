@@ -545,7 +545,7 @@ module.exports = {
 
 // ── Runner ───────────────────────────────────────────────────────────
 if (require.main === module) {
-  const admin = require('firebase-admin');
+  const { getApp } = require('firebase-admin/app');
   const { db } = require('../src/utils/firebase');
   const { FieldValue } = require('firebase-admin/firestore');
 
@@ -558,7 +558,7 @@ if (require.main === module) {
   }
 
   const projectId =
-    admin.app().options.projectId || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+    getApp().options.projectId || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
   try {
     assertSafeProject(projectId);
   } catch (e) {
