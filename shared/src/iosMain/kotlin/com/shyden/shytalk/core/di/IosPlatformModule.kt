@@ -50,6 +50,7 @@ import com.shyden.shytalk.data.repository.IosReportRepositoryImpl
 import com.shyden.shytalk.data.repository.IosRoomRepositoryImpl
 import com.shyden.shytalk.data.repository.IosSeatRequestRepositoryImpl
 import com.shyden.shytalk.data.repository.IosStorageRepositoryImpl
+import com.shyden.shytalk.data.repository.IosSupportRepositoryImpl
 import com.shyden.shytalk.data.repository.IosTranslationRepositoryImpl
 import com.shyden.shytalk.data.repository.IosUserRepositoryImpl
 import com.shyden.shytalk.data.repository.MessageRepository
@@ -62,6 +63,7 @@ import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -146,6 +148,7 @@ val iosPlatformModule =
         single<SeatRequestRepository> { IosSeatRequestRepositoryImpl(get(), get()) }
         single<StorageRepository> { IosStorageRepositoryImpl(get()) }
         single<AgeVerificationRepository> { IosAgeVerificationRepositoryImpl(get()) }
+        single<SupportRepository> { IosSupportRepositoryImpl(get()) }
         single<DeviceRepository> { IosDeviceRepositoryImpl(get()) }
         single<IdentityRepository> { IosIdentityRepositoryImpl(get(), get()) }
         single<PrivateMessageRepository> { IosPrivateMessageRepositoryImpl(get(), get(), get()) }

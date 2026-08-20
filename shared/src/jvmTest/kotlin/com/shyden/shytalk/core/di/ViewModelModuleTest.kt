@@ -27,6 +27,7 @@ import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -52,6 +53,7 @@ class ViewModelModuleTest {
                     SeatRequestRepository::class,
                     StorageRepository::class,
                     AgeVerificationRepository::class,
+                    SupportRepository::class,
                     DeviceRepository::class,
                     IdentityRepository::class,
                     PrivateMessageRepository::class,

@@ -24,6 +24,7 @@ import com.shyden.shytalk.feature.settings.AppSettingsViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.feature.support.SupportFormViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -50,6 +51,7 @@ val viewModelModule =
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }
         viewModel { RequiredDOBViewModel(get(), get()) }
         viewModel { AgeVerificationSubmitViewModel(get()) }
+        viewModel { SupportFormViewModel(get()) }
         viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
         viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { AppSettingsViewModel(get(), get(), get(), get()) }
