@@ -144,7 +144,7 @@ exactly what the VM does, so it cannot be wrong about what the VM will do.
 
 ## Notes (running log)
 
-Reviewed-up-to: e3278bf5450446d4f505d0bf183f74f76b5d7033
+Reviewed-up-to: 6345067fea0a59202245c85229430f1cd6d578d5
 
 - **2026-08-20** — Found only because the SHY-0369 deploy still failed. The
   honest sequence: diagnosed one cause, fixed it, asserted the class was clear on
