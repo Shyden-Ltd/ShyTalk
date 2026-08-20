@@ -8,7 +8,8 @@
  */
 
 const router = require('express').Router();
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 const { db } = require('../utils/firebase');
 const { clearBanCache } = require('../utils/bans');
 const { requireAdmin } = require('../middleware/auth');
@@ -66,11 +67,10 @@ function getProdDb() {
     throw new Error('PROD_SERVICE_ACCOUNT_PATH env var not set');
   }
 
-  const prodApp = admin.initializeApp(
-    { credential: admin.credential.cert(require(prodSaPath)) },
-    'prod-readonly',
-  );
-  prodDb = prodApp.firestore();
+  // firebase-admin 14 removed `admin.credential` and the App object's
+  // `.firestore()` accessor; both now come from modular entry points.
+  const prodApp = initializeApp({ credential: cert(require(prodSaPath)) }, 'prod-readonly');
+  prodDb = getFirestore(prodApp);
   return prodDb;
 }
 

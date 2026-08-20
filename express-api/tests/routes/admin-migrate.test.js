@@ -79,16 +79,27 @@ jest.mock('../../src/utils/firebase', () => ({
   db: mockDevDb,
 }));
 
-// Mock firebase-admin for getProdDb() — admin.initializeApp + admin.credential.cert
-const mockInitializeApp = jest.fn().mockReturnValue({
-  firestore: () => mockProdFirestore,
-});
+// getProdDb() opens a SECOND app for the prod project. firebase-admin 14 takes
+// the credential from `firebase-admin/app` and the Firestore handle from
+// `firebase-admin/firestore`: the v13 `admin.credential` and `app.firestore()`
+// this suite used to double are `undefined` on 14, so doubling them kept the
+// suite green while the real call crashed the API (SHY-0371). A prod project
+// cannot be reached from a test, so the seam stays — but the SDK's real shape
+// is now asserted independently by firebase-admin-namespace-surface.test.js.
+const PROD_APP = { name: 'prod-readonly' };
+const mockInitializeApp = jest.fn().mockReturnValue(PROD_APP);
+const mockGetFirestore = jest.fn(() => mockProdFirestore);
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
   initializeApp: (...args) => mockInitializeApp(...args),
-  credential: {
-    cert: jest.fn((sa) => ({ type: 'cert', sa })),
-  },
+  cert: jest.fn((sa) => ({ type: 'cert', sa })),
+}));
+
+// Spread the real module: `getFirestore` is the only export this route needs
+// doubled, and other modules in the tree rely on the genuine FieldValue.
+jest.mock('firebase-admin/firestore', () => ({
+  ...jest.requireActual('firebase-admin/firestore'),
+  getFirestore: (...args) => mockGetFirestore(...args),
 }));
 
 // Mock the prod service account JSON file that getProdDb() will require().
