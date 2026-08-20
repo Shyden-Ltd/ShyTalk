@@ -144,10 +144,23 @@ class SupportFormWiringPinTest {
             "$dialog ignores alreadyHasOpenTicket entirely, so the flag is dead state and the " +
                 "person is told they made an error when they did not",
         )
+        // Anchored to the Send button's own `enabled` expression. A whole-file
+        // `contains` passed this assertion with the guard deleted, because the
+        // same substring also appears on the field's `isError` line — the exact
+        // defect class this file exists to catch, found by mutating the dialog.
+        val sendButton =
+            code
+                .substringAfter("onClick = viewModel::submit,", "")
+                .substringBefore("modifier = Modifier.testTag(TAG_SUPPORT_FORM_SEND)", "")
         assertTrue(
-            code.contains("!state.alreadyHasOpenTicket"),
+            sendButton.isNotEmpty(),
+            "$dialog: could not isolate the Send button's attributes — the pin cannot see what " +
+                "it is meant to check",
+        )
+        assertTrue(
+            sendButton.contains("!state.alreadyHasOpenTicket"),
             "$dialog leaves Send enabled while a request is already open, so the only thing the " +
-                "button can do is earn the same refusal again",
+                "button can do is earn the same refusal again. Found: `$sendButton`",
         )
     }
 
