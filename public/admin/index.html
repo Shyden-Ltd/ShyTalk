@@ -580,6 +580,8 @@
         /* --- Appeals panel --- */
         #appeals-panel { display: none; }
         #appeals-panel.visible { display: block; }
+        #support-panel { display: none; }
+        #support-panel.visible { display: block; }
 
         .filter-bar {
           display: flex;
@@ -3155,6 +3157,7 @@
         <div class="tab-bar">
             <button class="tab-btn active" id="tab-users" data-i18n="tab_users">Users</button>
             <button class="tab-btn" id="tab-appeals" data-i18n="tab_appeals">Appeals</button>
+            <button class="tab-btn" id="tab-support" data-i18n="tab_support">Support</button>
             <button class="tab-btn" id="tab-reports" data-i18n="tab_reports">Reports</button>
             <button class="tab-btn" id="tab-gifts" data-i18n="tab_gifts">Gifts</button>
             <button class="tab-btn" id="tab-economy" data-i18n="tab_economy">Economy</button>
@@ -3879,6 +3882,15 @@
                 <button class="tab-btn" data-appeal-filter="denied">Denied</button>
             </div>
             <div id="appeals-list"></div>
+        </div>
+
+        <!-- Support Panel (SHY-0380) -->
+        <div id="support-panel">
+            <div class="filter-bar">
+                <button class="tab-btn active" data-support-filter="open">Open</button>
+                <button class="tab-btn" data-support-filter="resolved">Resolved</button>
+            </div>
+            <div id="support-list"></div>
         </div>
 
         <!-- Reports Panel -->

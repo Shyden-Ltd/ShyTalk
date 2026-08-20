@@ -56,6 +56,7 @@ test.describe("Admin Panel", () => {
     const expectedTabs = [
       "tab-users",
       "tab-appeals",
+      "tab-support",
       "tab-reports",
       "tab-gifts",
       "tab-economy",
