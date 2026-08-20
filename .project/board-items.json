@@ -1804,5 +1804,17 @@
     "contentId": "I_kwDORJ_E_s8AAAABNfvJMQ",
     "issueNumber": 1892,
     "itemId": "PVTI_lADOEOcG584BZ_lNzg3RSgA"
+  },
+  "SHY-0376": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNgEJTQ",
+    "issueNumber": 1894,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3RoYQ"
+  },
+  "SHY-0377": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNgELCg",
+    "issueNumber": 1895,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3Roaw"
   }
 }
