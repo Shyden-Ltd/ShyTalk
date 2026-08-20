@@ -1276,7 +1276,6 @@ fun RoomScreen(
         state = gachaAgeRestrictionState,
         onDismiss = { gachaViewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
-        onContactSupport = { gachaViewModel.dismissAgeRestrictionDialog() },
     )
 
     // B3 — room message report dialog (UK OSA per-message reporting).
