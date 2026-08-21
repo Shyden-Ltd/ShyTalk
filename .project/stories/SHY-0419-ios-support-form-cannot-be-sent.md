@@ -1,6 +1,6 @@
 ---
 id: SHY-0419
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-22
 priority: P1
@@ -225,3 +225,58 @@ believe this was handled.
   only become reachable after a scroll, so that judgement was unsound. It was
   re-run with a scroll (attempt 3) and the button still did not move — the
   conclusion holds, but it did not hold for the reason originally given.
+
+## FIXED — 2026-08-22, device-proven on both platforms
+
+**The cause, precisely.** `imePadding()` is `windowInsetsPadding(WindowInsets.ime)`,
+and `windowInsetsPadding` respects insets a parent has already **consumed**. The
+raw `WindowInsets.ime.getBottom()` read does not. Something above this Column
+consumes the IME inset, so the modifier applied exactly zero while the raw value
+was correct all along — which is why the probe read 960 and the button never
+moved. Padding by the raw value sidesteps the consumption:
+
+```kotlin
+val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
+...
+    .padding(bottom = imeBottom)
+    .verticalScroll(rememberScrollState()),
+```
+
+**iPhone Air, iOS 27, against the dev backend (`api 30cd430`):**
+
+| Step | Before | After |
+| --- | --- | --- |
+| Keyboard closed | Send y=616, `visible=true` | Send y=616, `visible=true` |
+| Keyboard open (starts y=609) | Send y=616, `visible=false` | Send y=620, `visible=false` — viewport now shrunk |
+| One scroll | **y=616, unmoved** | **y=470, `visible=TRUE`** — above the keyboard |
+| Tap Send | unreachable | **"Thanks. We have your message and will look into it."** |
+
+That the button *moves at all* is the proof the inset is being applied — before
+the fix it read 616 with the keyboard open or closed, and scrolling changed
+nothing.
+
+The confirmation is not merely a screen: `SupportRepositoryImpl` treats a 2xx
+carrying a blank `ticketId` as a FAILURE, so that message can only appear if the
+server returned a real ticket id.
+
+**OnePlus CPH2653, Android 16, same build, same backend** — the padding runs on
+both platforms and Android already resizes its window, so the risk was
+double-counting. It does not: Send sat at y=2143–2311 with the keyboard closed,
+left the visible tree when the keyboard opened, and came back at y=1552–1720
+after **one** scroll — reachable, exactly as before the change.
+
+The Android send answered **"You already have a request open. We will reply to
+that one."** — the 409 path, because the iPhone had just raised one as the same
+persona (P-02, UID 50000010). Unplanned, and worth keeping: duplicate prevention
+works ACROSS devices, and it explains itself rather than showing a raw error.
+
+### What is still owed on this story
+
+- The other 14 text-input screens listed in the Notes. Each needs the same
+  treatment and its own device check; none has been walked on an iPhone.
+- A guard so the 16th screen cannot repeat this. The right shape is asserting
+  that every Compose screen taking text input handles the IME inset by the
+  agreed mechanism — worth writing once the mechanism is settled, since
+  `imePadding()` is demonstrably not it here.
+
+Reviewed-up-to: 8df33d1d69bb1b0cf04c690acfa2b2e24471fe68
