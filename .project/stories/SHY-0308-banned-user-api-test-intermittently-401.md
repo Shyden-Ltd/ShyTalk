@@ -340,18 +340,87 @@ pinned security posture, every client's handling, and the shape of a control
 that is currently, correctly, fail-closed. Fail-closed must survive either way —
 only the label is in question. Raised rather than taken.
 
-**Still open: WHICH call throws.** Four candidates sit inside that block —
-`verifyIdToken`, `resolveUniqueId`, `checkSuspension`, `checkUserBans`. Today's
-evidence narrows the failure to the block, not to a line. `token_rejected` vs
-`standing_unavailable` is exactly the instrument that separates the first from
-the other three on the next occurrence; the story's own Risk section already
-named instrumentation as the honest fallback to guessing. This PR builds the
-instrument. It does not claim the diagnosis.
+### Root cause — CONFIRMED, not inferred
 
-**So this PR does not close the story.** The AC "20 consecutive runs green"
-is untouched: if a lookup genuinely fails under load, the test still fails —
-it now just says why. Closing it needs the next occurrence's `code`, and then
-either a bounded retry on a transient read or the status decision above.
+The instrument answered on its first reproduction. The refusal came back
+`code: "token_rejected"`, and a temporary probe on the rejection path named it
+exactly:
+
+```
+[SHY-0308-PROBE] token rejected: auth/id-token-revoked
+                 | The Firebase ID token has been revoked.
+```
+
+No lookup ever failed. The chain:
+
+1. Banning revokes the account's refresh tokens — `syncBannedClaim` calls
+   `auth.revokeRefreshTokens(firebaseUid)` deliberately, so "the session cannot
+   outlive the current ID token".
+2. `authMiddleware` calls `verifyIdToken(idToken)` with no `checkRevoked`, so in
+   PRODUCTION that revocation is not consulted and the request reaches the ban
+   gate and gets its 403.
+3. Against the **Auth emulator** it is consulted anyway. `firebase-admin`'s
+   `base-auth.js` reads:
+
+   ```js
+   verifyIdToken(idToken, checkRevoked = false) {
+     const isEmulator = this.emulatorMode;
+     ...
+     if (checkRevoked || isEmulator) {   // ← revocation forced on
+   ```
+
+   So under emulators — local AND CI — a banned user's pre-ban token is refused
+   as revoked *before* the ban gate runs. The test was asserting production
+   behaviour in an environment that is strictly harsher.
+4. `iat` and `validSince` are second-granular, so even a forced refresh can mint
+   a token inside the same second as the revoke and be refused too.
+5. Worse, the revoke kills the REFRESH token, so `getIdToken(true)` can have
+   nothing to refresh with and keeps returning the same dead token — retrying
+   alone never converges.
+
+Which is why it looked random: the outcome hung on whether the SDK happened to
+hold a token minted after `validSince`. Nothing about the ban logic was ever
+involved. **Hypotheses 1 and 2 above were both partly right and neither was
+complete; hypothesis 3 is eliminated.**
+
+### The fix, and why it is not a weakening
+
+`suggestions-security.spec.ts` now signs in again when — and only when — the
+server reports `token_rejected`, then retries until the deadline. A fresh
+sign-in mints a refresh token issued after `validSince`, which is the only route
+back to a live session, and is exactly what a banned person does in life: they
+sign in again and are told they are banned.
+
+Every other outcome is taken on the FIRST response. A 2xx is never retried, so
+the loop cannot paper over a ban that is not being enforced — proven below, not
+asserted.
+
+| Check | Result |
+| --- | --- |
+| webkit, `--retries=0`, 20 consecutive runs | **20/20** (was 17/20 with a forced refresh alone, and 15/20 with a capped retry) |
+| chromium, `--retries=0`, 10 consecutive runs | **10/10** |
+| whole spec file, chromium + webkit | 66/66 |
+| Mutation: `/suggestions` added to `isBanExemptPath` | **caught on the first response** — `Got 201 {"title":"Ban bypass attempt"...}`, the suggestion actually created |
+
+The mutation matters more than the green. An earlier, blunter mutant (disabling
+the ban gate outright) also reddened the test — but at the *standing-banner*
+assertion, never reaching the 403 check. That would have "proven" a mutation
+score while leaving the assertion under test unexercised. The targeted mutant
+keeps the banner working and lets only the POST through, so it is the 403
+assertion itself that catches it.
+
+### A production gap this uncovered — separate from the test
+
+`authMiddlewareStrict` DOES pass `checkRevoked = true`, in production as well as
+under emulators. So on portal and admin routes a banned user whose token predates
+the ban is refused `401 token_rejected` — the revocation check runs first and the
+ban gate never does. The middleware's own docblock says `/portal/me` is
+deliberately NOT ban-exempt precisely so that the gate's 403 (`code: 'banned'` +
+reason + expiresAt) reaches them as the ban notice. Revocation defeats that
+intent: they get an unexplained 401 and look merely signed out.
+
+Not fixed here — it is a real behaviour change on authenticated routes and wants
+its own story and its own decision. Filed as a finding, not folded in silently.
 
 ### Test coverage added
 
