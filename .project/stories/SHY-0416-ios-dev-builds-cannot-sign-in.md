@@ -153,6 +153,30 @@ does nothing, with a comment describing behaviour that was never written.
 - [ ] Merged to `develop`, all checks green.
 - [ ] A CI dev build signs in as a persona on the real iPhone.
 
+## What the review caught
+
+The first fix added the empty state **inside a dialog that was itself gated on
+the credential**:
+
+```kotlin
+if (showPersonaPicker && BuildVariant.isPersonaPickerAvailable) { … }
+```
+
+So the new branch was unreachable — and, more importantly, that gate was the
+actual cause of "the button does nothing": the tap set `showPersonaPicker`, and
+then nothing rendered.
+
+The comment above it credits that check with a security property — defence
+against a patched prod build reaching Firebase Auth with a persona password. It
+was never that line that enforced it. The row's own handler re-reads the password
+and fails closed, and on prod the button is hidden by `isDevAffordancesVisible`
+so the dialog is unreachable regardless. What the line actually did was hide the
+diagnosis.
+
+`persona-picker-explains-itself` pins both halves: the dialog is not gated on the
+credential, and the sign-in path still fails closed. Mutation-proven by restoring
+the old condition.
+
 ## Notes
 
 - Found 2026-08-21 while trying to walk SHY-0387 on the iPhone, after the

@@ -485,7 +485,18 @@ fun SignInScreen(
             // gate is somehow bypassed (Frida-style runtime patching) —
             // the inner check fails closed and never reaches Firebase
             // Auth with the persona password.
-            if (showPersonaPicker && BuildVariant.isPersonaPickerAvailable) {
+            // SHY-0416 — the credential check moved INSIDE the dialog. Gating the
+            // dialog itself on it is what made the button "do nothing": the tap
+            // set showPersonaPicker, and then nothing rendered. Every iOS dev
+            // build was in that state.
+            //
+            // The security property above is unchanged. It was never this line
+            // that enforced it: the row's own handler re-reads the password and
+            // fails closed, so a patched prod build still cannot reach Firebase
+            // Auth with a persona password — and on prod the BUTTON is hidden by
+            // isDevAffordancesVisible, so the dialog is unreachable regardless.
+            // What this line actually did was hide the diagnosis.
+            if (showPersonaPicker) {
                 AlertDialog(
                     onDismissRequest = { if (!isBusy) showPersonaPicker = false },
                     confirmButton = {},
