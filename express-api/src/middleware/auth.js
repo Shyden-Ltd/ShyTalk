@@ -172,6 +172,46 @@ async function checkSuspension(uniqueId) {
  * Express middleware: verifies Firebase ID token, resolves uniqueId,
  * checks suspension. Sets req.auth = { uid, uniqueId, token }.
  */
+/**
+ * Verify the caller's credential, or answer 401 `token_rejected` and return
+ * null. Both middlewares share this so they cannot drift apart -- they
+ * previously held byte-identical blocks, which is exactly how one of them gets
+ * a fix the other does not (SHY-0308).
+ *
+ * Returns the decoded token, or null when it has ALREADY answered the request.
+ * Callers must `return` on null; they must not fall through.
+ *
+ * @param {boolean} checkRevoked - strict routes pass true, so a revoked session
+ *   is refused here as the rejected credential it is.
+ */
+async function verifyCredentialOrReject(res, idToken, checkRevoked) {
+  try {
+    return await auth.verifyIdToken(idToken, checkRevoked);
+  } catch (err) {
+    log.error('auth', 'Authentication failed: token rejected', {
+      error: err.message,
+      firebaseCode: err.code,
+    });
+    res.status(401).json({ error: 'Authentication failed', code: 'token_rejected' });
+    return null;
+  }
+}
+
+/**
+ * Refuse a request whose credential was ACCEPTED but whose standing could not
+ * be established -- identity resolution, the suspension check, or the ban
+ * lookup failing. Refusing is correct (a control that fails open is not a
+ * control); the caller's credential was simply never the problem, and saying
+ * so is the difference this story exists for.
+ */
+function rejectStandingUnavailable(req, res, err) {
+  log.error('auth', 'Authentication failed: standing lookup failed', {
+    error: err.message,
+    path: req.path,
+  });
+  return res.status(401).json({ error: 'Authentication failed', code: 'standing_unavailable' });
+}
+
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -193,16 +233,8 @@ async function authMiddleware(req, res, next) {
   // string -- so a refusal could not be attributed to either. It cost a dig
   // through a Playwright trace to learn that a suite failure reading
   // "Expected 403, Received 401" had never reached the ban gate at all.
-  let decoded;
-  try {
-    decoded = await auth.verifyIdToken(idToken);
-  } catch (err) {
-    log.error('auth', 'Authentication failed: token rejected', {
-      error: err.message,
-      firebaseCode: err.code,
-    });
-    return res.status(401).json({ error: 'Authentication failed', code: 'token_rejected' });
-  }
+  const decoded = await verifyCredentialOrReject(res, idToken, false);
+  if (!decoded) return undefined; // verifyCredentialOrReject already answered.
 
   try {
     const uid = decoded.uid;
@@ -263,15 +295,7 @@ async function authMiddleware(req, res, next) {
     req.auth = { uid, uniqueId, token: decoded };
     next();
   } catch (err) {
-    // Reached only AFTER the credential was accepted, so this is identity
-    // resolution, the suspension check or the ban lookup failing -- never the
-    // token. Refusing is still correct (a control that fails open is not a
-    // control); the caller's credential was simply never the problem.
-    log.error('auth', 'Authentication failed: standing lookup failed', {
-      error: err.message,
-      path: req.path,
-    });
-    return res.status(401).json({ error: 'Authentication failed', code: 'standing_unavailable' });
+    return rejectStandingUnavailable(req, res, err);
   }
 }
 
@@ -356,18 +380,10 @@ async function authMiddlewareStrict(req, res, next) {
   // string -- so a refusal could not be attributed to either. It cost a dig
   // through a Playwright trace to learn that a suite failure reading
   // "Expected 403, Received 401" had never reached the ban gate at all.
-  let decoded;
-  try {
-    decoded = await auth.verifyIdToken(idToken, true);
-  } catch (err) {
-    // Includes `auth/id-token-revoked`: the strict variant asks for revocation
-    // checking, and a revoked session IS a rejected credential.
-    log.error('auth', 'Authentication failed: token rejected', {
-      error: err.message,
-      firebaseCode: err.code,
-    });
-    return res.status(401).json({ error: 'Authentication failed', code: 'token_rejected' });
-  }
+  // `true` = check revocation, so `auth/id-token-revoked` lands here too: a
+  // revoked session IS a rejected credential.
+  const decoded = await verifyCredentialOrReject(res, idToken, true);
+  if (!decoded) return undefined; // verifyCredentialOrReject already answered.
 
   try {
     const uid = decoded.uid;
@@ -428,15 +444,7 @@ async function authMiddlewareStrict(req, res, next) {
     req.auth = { uid, uniqueId, token: decoded };
     next();
   } catch (err) {
-    // Reached only AFTER the credential was accepted, so this is identity
-    // resolution, the suspension check or the ban lookup failing -- never the
-    // token. Refusing is still correct (a control that fails open is not a
-    // control); the caller's credential was simply never the problem.
-    log.error('auth', 'Authentication failed: standing lookup failed', {
-      error: err.message,
-      path: req.path,
-    });
-    return res.status(401).json({ error: 'Authentication failed', code: 'standing_unavailable' });
+    return rejectStandingUnavailable(req, res, err);
   }
 }
 
