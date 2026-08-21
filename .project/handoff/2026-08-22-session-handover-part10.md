@@ -17,7 +17,7 @@ Everything else below is done or in flight.
 | **#1941 — SHY-0416** (no iOS dev build could sign in) | **MERGED** 15:08Z, deployed to dev |
 | Deploy To Dev from `develop` (`32495997153`) | **success**, all jobs green |
 | iOS TestFlight from `develop` | **success** — first build carrying the persona credential |
-| **#1943 — SHY-0308** (the intermittent ban-test 401) | **OPEN**, CI running, ready to merge on green |
+| **#1943 — SHY-0308** (the intermittent ban-test 401) | **MERGED** 20:57Z, deployed to dev, device-verified |
 
 ### SHY-0416 is proven, not assumed
 
@@ -124,8 +124,39 @@ Traps met on the way, all real:
 - `admin-users-profile.spec.ts:36` was "1 flaky" in every full run today. Not
   investigated.
 
+## #1943 is in and verified
+
+Merged 20:57Z; Deploy To Dev `32526194065` — backend, web, personas, sanity and
+smoke all green. Verified against the DEPLOYED dev API, not inferred:
+
+```
+POST https://dev-api.shytalk.shyden.co.uk/api/support-tickets
+  Bearer not.a.real.token
+  -> 401 {"error":"Authentication failed","code":"token_rejected"}
+
+  (no Authorization header)
+  -> 401 {"error":"Missing or invalid Authorization header"}   # unchanged
+```
+
+Then on the real iPhone against dev: persona sign-in worked and the profile
+loaded (Wallet 5,000, 5 followers, UID 50000010 · adult). That is the
+auth-critical path proven on a device for a change every authenticated request
+goes through.
+
+Two things en route, both worth knowing:
+
+- SonarCloud refused it first on `new_duplicated_lines_density` 16.2% vs a 3%
+  threshold. It was right — splitting the catch had copied the same block into
+  both middlewares, which is the exact hazard the story is about. Extracting
+  `verifyCredentialOrReject()` / `rejectStandingUnavailable()` took it to 1.6%
+  AND removed the drift risk. New coverage 100%.
+- A single malformed story of mine (`### UX / i18n` merged into one heading)
+  reddened THREE checks: the lint gate runs the validator directly, the
+  board-sync script exits 40 when a story will not parse, and PR Gate aggregates
+  both. Each AC dimension needs its own `###` heading.
+
 ## Suggested order next
 
-1. Merge **#1943** on green, then `gh workflow run "Deploy To Dev" --ref develop`.
-2. **SHY-0419** — it blocks #1940 and it is the flagship help path.
-3. Then #1940, re-walked on the iPhone.
+1. **SHY-0419** — blocks #1940 and it is the flagship help path.
+2. Then #1940, re-walked on the iPhone.
+3. SHY-0417 (banned user gets a bare 401 on strict routes) and SHY-0418.
