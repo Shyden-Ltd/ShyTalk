@@ -14,6 +14,7 @@ import com.shyden.shytalk.resources.support_form_error_already_open
 import com.shyden.shytalk.resources.support_form_error_attachment_failed
 import com.shyden.shytalk.resources.support_form_error_attachment_too_large
 import com.shyden.shytalk.resources.support_form_error_attachment_too_many
+import com.shyden.shytalk.resources.support_form_error_attachment_type
 import com.shyden.shytalk.resources.support_form_error_empty
 import com.shyden.shytalk.resources.support_form_error_generic
 import com.shyden.shytalk.resources.support_form_error_too_long
@@ -155,6 +156,19 @@ class SupportFormViewModel(
                     it.copy(isAttaching = false, error = UiText.res(Res.string.support_form_error_attachment_failed))
                 }
             }
+        }
+    }
+
+    /**
+     * The person picked a file the server will not accept.
+     *
+     * Refused before any upload starts, so nobody spends a video's worth of
+     * mobile data to be told no at the end. Separate from [attach] because
+     * nothing is uploaded here — there is no in-flight state to enter.
+     */
+    fun refuseAttachmentType() {
+        _uiState.update {
+            it.copy(error = UiText.res(Res.string.support_form_error_attachment_type))
         }
     }
 

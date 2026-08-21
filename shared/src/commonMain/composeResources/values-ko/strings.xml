@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">파일을 업로드하지 못했습니다. 파일 없이 메시지를 보낼 수 있습니다.</string>
     <string name="support_form_error_attachment_too_large">파일이 너무 큽니다. 25MB 미만의 파일을 선택해 주세요.</string>
     <string name="support_form_error_attachment_too_many">파일은 최대 10개까지 첨부할 수 있습니다.</string>
+    <string name="support_form_error_attachment_type">이 형식의 파일은 첨부할 수 없습니다. 이미지나 동영상을 선택해 주세요.</string>
     <string name="support_category_label">어떤 내용인가요?</string>
     <string name="support_category_account">계정 및 로그인</string>
     <string name="support_category_age">나이 및 인증</string>

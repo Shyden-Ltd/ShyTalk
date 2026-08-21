@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">Nie udało się przesłać tego pliku. Możesz wysłać wiadomość bez niego.</string>
     <string name="support_form_error_attachment_too_large">Ten plik jest za duży. Wybierz plik mniejszy niż 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Możesz dołączyć maksymalnie 10 plików.</string>
+    <string name="support_form_error_attachment_type">Tego rodzaju pliku nie można dołączyć. Wybierz obraz lub film.</string>
     <string name="support_category_label">Czego dotyczy sprawa?</string>
     <string name="support_category_account">Konto i logowanie</string>
     <string name="support_category_age">Wiek i weryfikacja</string>

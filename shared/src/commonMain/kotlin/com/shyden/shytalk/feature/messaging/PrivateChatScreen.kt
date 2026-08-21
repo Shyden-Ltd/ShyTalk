@@ -75,6 +75,7 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.isKeyboardVisible
 import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
@@ -100,6 +101,9 @@ fun PrivateChatScreen(
     // Every host of this screen renders the 18+ wall, so every host must be
     // able to route its "Verify now" CTA somewhere real.
     onNavigateToAgeVerification: () -> Unit,
+    // Non-defaulted for the same reason (SHY-0387): the wall here offers support
+    // to anybody too young to verify, and that offer must lead somewhere.
+    onNavigateToSupport: (SupportSource) -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     conversationId: String? = null,
@@ -1017,36 +1021,15 @@ fun PrivateChatScreen(
     // into the verification flow — they need to age in).
     // SHY-0385: same support route as the room. See RoomScreen for the reasoning
     // about closing the age dialog first rather than stacking two.
-    var showSupportForm by remember { mutableStateOf(false) }
     com.shyden.shytalk.feature.ageverification.AgeRestrictionDialog(
         state = ageRestrictionDialogState,
         onDismiss = { viewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
         onContactSupport = {
             viewModel.dismissAgeRestrictionDialog()
-            showSupportForm = true
+            onNavigateToSupport(SupportSource.PrivateMessageAgeWall)
         },
     )
-
-    if (showSupportForm) {
-        // Same shape as the room's entry point: the admin should not have to ask
-        // which refusal sent them here.
-        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
-            org.koin.compose.viewmodel.koinViewModel {
-                parametersOf(
-                    com.shyden.shytalk.data.repository.SupportCategory.Age,
-                    mapOf(
-                        "feature" to "private_messages",
-                        "reason" to "age_restriction",
-                        "screen" to "private_chat",
-                    ),
-                )
-            }
-        com.shyden.shytalk.feature.support.SupportFormDialog(
-            viewModel = supportViewModel,
-            onDismiss = { showSupportForm = false },
-        )
-    }
 }
 
 @Composable

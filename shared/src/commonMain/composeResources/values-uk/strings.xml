@@ -1670,6 +1670,7 @@
     <string name="support_form_error_attachment_failed">Не вдалося завантажити цей файл. Ви можете надіслати повідомлення без нього.</string>
     <string name="support_form_error_attachment_too_large">Файл завеликий. Оберіть файл до 25 МБ.</string>
     <string name="support_form_error_attachment_too_many">Можна долучити не більше 10 файлів.</string>
+    <string name="support_form_error_attachment_type">Такий файл не можна долучити. Оберіть зображення або відео.</string>
     <string name="support_category_label">Про що ваше звернення?</string>
     <string name="support_category_account">Обліковий запис і вхід</string>
     <string name="support_category_age">Вік і підтвердження</string>

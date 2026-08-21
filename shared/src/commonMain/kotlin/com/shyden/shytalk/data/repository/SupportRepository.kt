@@ -54,6 +54,24 @@ enum class AttachmentType(
     Webp("image/webp"),
     Mp4("video/mp4"),
     QuickTime("video/quicktime"),
+    ;
+
+    companion object {
+        /**
+         * What the picker handed back, or `null` if the server would refuse it.
+         *
+         * Refusing HERE is the point: the alternative is asking for an upload
+         * slot, uploading, and being refused at the end, which costs somebody a
+         * video's worth of mobile data to be told no.
+         *
+         * Matched case-insensitively and without parameters, because a platform
+         * may answer `image/jpeg; charset=binary` or `IMAGE/JPEG`.
+         */
+        fun fromContentType(raw: String?): AttachmentType? {
+            val bare = raw?.substringBefore(';')?.trim()?.lowercase() ?: return null
+            return entries.firstOrNull { it.wireValue == bare }
+        }
+    }
 }
 
 data class UploadHandle(

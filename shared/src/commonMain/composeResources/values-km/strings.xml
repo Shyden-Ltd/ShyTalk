@@ -1756,6 +1756,7 @@
     <string name="support_form_error_attachment_failed">យើងមិនអាចផ្ទុកឯកសារនោះបានទេ។ អ្នកអាចផ្ញើសាររបស់អ្នកដោយគ្មានវា។</string>
     <string name="support_form_error_attachment_too_large">ឯកសារនេះធំពេក។ សូមជ្រើសរើសឯកសារតិចជាង 25 MB។</string>
     <string name="support_form_error_attachment_too_many">អ្នកអាចភ្ជាប់ឯកសារបានច្រើនបំផុត 10។</string>
+    <string name="support_form_error_attachment_type">ប្រភេទឯកសារនេះមិនអាចភ្ជាប់បានទេ។ សូមជ្រើសរើសរូបភាព ឬវីដេអូ។</string>
     <string name="support_category_label">នេះអំពីអ្វី?</string>
     <string name="support_category_account">គណនី និងការចូល</string>
     <string name="support_category_age">អាយុ និងការផ្ទៀងផ្ទាត់</string>

@@ -58,90 +58,104 @@ class SupportFormWiringPinTest {
             .replace(Regex("\\s+"), " ")
     }
 
-    /** The three places a person can open the support form. */
-    private val entryPoints =
+    /**
+     * Hosts that must be able to route somebody to support.
+     *
+     * SHY-0387 moved the form from a dialog to a page, so these screens no longer
+     * resolve the ViewModel — they navigate, and the nav graph resolves it. The
+     * compiler now enforces the wiring itself, because each callback is
+     * NON-DEFAULTED. That is stronger than a pin.
+     *
+     * So this pin guards the GUARD: it fails if anybody gives those parameters a
+     * default, which would silently restore the dead-button shape SHY-0384 was
+     * filed for.
+     */
+    private val nonDefaultedHosts =
         mapOf(
-            "room (age gate on Lucky Spin)" to
-                "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/room/RoomScreen.kt",
-            "private chat (age gate on messages)" to
+            "room" to "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/room/RoomScreen.kt",
+            "private chat" to
                 "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/messaging/PrivateChatScreen.kt",
-            "settings (the general way in)" to
+            "pm sheet" to
+                "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/messaging/PmBottomSheet.kt",
+            "settings" to
                 "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/settings/AppSettingsScreen.kt",
+            "screen params" to
+                "shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/PlatformScreens.kt",
         )
 
-    private val viewModelModule =
-        "shared/src/commonMain/kotlin/com/shyden/shytalk/core/di/ViewModelModule.kt"
-
-    @Test
-    fun `the Koin binding accepts the category and context parameters`() {
-        val code = codeOf(viewModelModule)
-        assertTrue(
-            code.contains("SupportFormViewModel("),
-            "$viewModelModule no longer binds SupportFormViewModel — this pin would pass vacuously",
-        )
-        assertTrue(
-            Regex("params\\s*->\\s*SupportFormViewModel\\(").containsMatchIn(code),
-            "$viewModelModule binds SupportFormViewModel without `params ->`, so the category and " +
-                "context arguments can only ever take their defaults (null, emptyMap()). " +
-                "Follow the house form used by RoomViewModel: `viewModel { params -> … }`.",
-        )
-    }
+    private val navGraph =
+        "shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/SharedNavGraph.kt"
 
     @Test
-    fun `every entry point resolves the form with its own category and context`() {
-        for ((where, rel) in entryPoints) {
+    fun `the route to support is never optional`() {
+        for ((where, rel) in nonDefaultedHosts) {
             val code = codeOf(rel)
             assertTrue(
-                code.contains("SupportFormViewModel"),
-                "$rel ($where) no longer references SupportFormViewModel — this pin would pass vacuously",
+                code.contains("onNavigateToSupport"),
+                "$rel ($where) no longer offers a route to support — this pin would pass vacuously",
             )
-            // Between naming the type and handing it to the dialog, the resolution
-            // must carry parameters. A bare `koinViewModel()` is the defect.
-            val match = Regex("SupportFormViewModel\\s*=(.*?)SupportFormDialog\\(").find(code)
             assertTrue(
-                match != null,
-                "$rel ($where): could not find the SupportFormViewModel resolution ahead of " +
-                    "SupportFormDialog( — the pin cannot see what it is meant to check",
-            )
-            val resolution = match.groupValues[1]
-            assertTrue(
-                resolution.contains("parametersOf("),
-                "$rel ($where) resolves SupportFormViewModel with a bare koinViewModel(), so its " +
-                    "ticket carries no category and no context and an admin cannot tell where it " +
-                    "came from. Pass `koinViewModel { parametersOf(category, context) }`.",
+                !Regex("onNavigateToSupport:\\s*\\([^)]*\\)\\s*->\\s*Unit\\s*=").containsMatchIn(code),
+                "$rel ($where) gives onNavigateToSupport a DEFAULT. A default lets a host ship " +
+                    "without a route out, which is the dead \"Contact support\" button SHY-0384 " +
+                    "was filed for. Keep the compiler as the enforcement.",
             )
         }
     }
 
-    private val dialog =
-        "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/support/SupportFormDialog.kt"
+    @Test
+    fun `the nav graph resolves the form with the category and context of where they came from`() {
+        val code = codeOf(navGraph)
+        assertTrue(
+            code.contains("SupportPage("),
+            "$navGraph no longer hosts SupportPage — this pin would pass vacuously",
+        )
+        assertTrue(
+            Regex("parametersOf\\(\\s*source\\.category,\\s*source\\.context\\(\\)").containsMatchIn(code),
+            "$navGraph resolves SupportPage without the source's category and context, so every " +
+                "ticket would carry defaults and an admin could not tell where it came from",
+        )
+    }
 
     @Test
-    fun `every way out of the dialog resets the form`() {
-        val code = codeOf(dialog)
+    fun `an unrecognised source still opens support`() {
+        val code = codeOf(navGraph)
+        assertTrue(
+            code.contains("SupportSource.fromWire("),
+            "$navGraph does not go through SupportSource.fromWire, so a deeplink from an older " +
+                "build would fail to open support at all rather than opening it generically",
+        )
+    }
+
+    private val page =
+        "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/support/SupportPage.kt"
+
+    @Test
+    fun `every way out of the page resets the form`() {
+        val code = codeOf(page)
         assertTrue(
             code.contains("viewModel.reset()"),
-            "$dialog never resets. The ViewModel is scoped to the SCREEN, so closing the dialog " +
+            "$page never resets. The ViewModel outlives the page, so leaving it " +
                 "leaves it holding submitted = true and the next visit shows the confirmation " +
                 "instead of a form.",
         )
         // Four ways out: the confirmation's button and dismiss-request, and the
         // form's button and dismiss-request. Any one of them still calling
         // `onDismiss` directly skips the reset.
-        for (leak in listOf("onClick = onDismiss", "onDismissRequest = onDismiss")) {
+        for (leak in listOf("onClick = onBack", "IconButton(onClick = onBack")) {
             assertTrue(
                 !code.contains(leak),
-                "$dialog still has `$leak`, which closes the dialog without resetting it",
+                "$page still has `$leak`, which leaves the page without resetting it",
             )
         }
     }
 
     @Test
     fun `an already-open request is shown as information, not as the person's mistake`() {
-        val code = codeOf(dialog)
+        val code = codeOf(page)
         assertTrue(
             code.contains("state.alreadyHasOpenTicket"),
-            "$dialog ignores alreadyHasOpenTicket entirely, so the flag is dead state and the " +
+            "$page ignores alreadyHasOpenTicket entirely, so the flag is dead state and the " +
                 "person is told they made an error when they did not",
         )
         // Anchored to the Send button's own `enabled` expression. A whole-file
@@ -151,15 +165,15 @@ class SupportFormWiringPinTest {
         val sendButton =
             code
                 .substringAfter("onClick = viewModel::submit,", "")
-                .substringBefore("modifier = Modifier.testTag(TAG_SUPPORT_FORM_SEND)", "")
+                .substringBefore("testTag(TAG_SUPPORT_SEND)", "")
         assertTrue(
             sendButton.isNotEmpty(),
-            "$dialog: could not isolate the Send button's attributes — the pin cannot see what " +
+            "$page: could not isolate the Send button's attributes — the pin cannot see what " +
                 "it is meant to check",
         )
         assertTrue(
             sendButton.contains("!state.alreadyHasOpenTicket"),
-            "$dialog leaves Send enabled while a request is already open, so the only thing the " +
+            "$page leaves Send enabled while a request is already open, so the only thing the " +
                 "button can do is earn the same refusal again. Found: `$sendButton`",
         )
     }
@@ -232,20 +246,8 @@ class SupportFormWiringPinTest {
         }
     }
 
-    @Test
-    fun `the settings entry point is not miscategorised as an age refusal`() {
-        val settings = codeOf(entryPoints.getValue("settings (the general way in)"))
-        val resolution =
-            Regex("SupportFormViewModel\\s*=(.*?)SupportFormDialog\\(")
-                .find(settings)
-                ?.groupValues
-                ?.get(1)
-                .orEmpty()
-        assertTrue(
-            resolution.contains("SupportCategory.Other"),
-            "Settings is the general way in — somebody arriving there was not refused anything, " +
-                "so filing their ticket under Age would mislead the admin triaging it. " +
-                "Expected SupportCategory.Other, got: $resolution",
-        )
-    }
+    // The settings-is-not-an-age-refusal assertion moved to SupportSourceTest when
+    // SHY-0387 turned the three inline context maps into `SupportSource`. It is a
+    // better test there: real logic with a real assertion, rather than a regex over
+    // Compose source that could only ever prove the literal was present.
 }

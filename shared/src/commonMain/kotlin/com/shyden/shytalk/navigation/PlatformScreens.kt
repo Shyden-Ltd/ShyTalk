@@ -1,6 +1,7 @@
 package com.shyden.shytalk.navigation
 
 import androidx.compose.runtime.Composable
+import com.shyden.shytalk.feature.support.SupportSource
 
 // Parameters for platform-specific screens injected into the shared NavGraph.
 // Instead of expect/actual composables (which would require moving Android-specific
@@ -26,6 +27,9 @@ data class AppSettingsScreenParams(
     // App-Lock enrolment, so a platform that forgets to wire it must fail
     // to compile rather than ship a dead row (SHY-0187).
     val onNavigateToSecurity: () -> Unit,
+    // Non-defaulted (SHY-0387): Contact Us in About is the general way in to
+    // support. SHY-0384 removed it precisely because it did nothing.
+    val onNavigateToSupport: (SupportSource) -> Unit,
     val onSignOut: () -> Unit,
 )
 
@@ -66,6 +70,10 @@ data class RoomScreenParams(
     // construct room params without a route out of the 18+ wall, which is the
     // dead-end this story closed. Keep the compiler as the enforcement.
     val onNavigateToAgeVerification: () -> Unit,
+    // Non-defaulted for the same reason (SHY-0387): the age wall in this room
+    // offers support to anybody it cannot offer verification to, and SHY-0384
+    // was that exact button wired to nothing. The compiler is the enforcement.
+    val onNavigateToSupport: (SupportSource) -> Unit,
 )
 
 /**

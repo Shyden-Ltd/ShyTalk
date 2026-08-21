@@ -48,7 +48,12 @@ object IosImagePicker {
         }
     }
 
-    private fun presentPicker(picker: PHPickerViewController) {
+    /**
+     * Internal rather than private: [IosMediaPicker] presents the same way, and
+     * a second copy of the root-view-controller walk is a second thing to get
+     * wrong when the window hierarchy changes.
+     */
+    internal fun presentPicker(picker: PHPickerViewController) {
         val rootVc = getRootViewController()
         if (rootVc == null) {
             logW("IosImagePicker", "No root view controller available to present picker")

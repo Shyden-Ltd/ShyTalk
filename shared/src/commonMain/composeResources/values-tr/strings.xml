@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">Bu dosyayı yükleyemedik. Mesajınızı dosya olmadan gönderebilirsiniz.</string>
     <string name="support_form_error_attachment_too_large">Bu dosya çok büyük. Lütfen 25 MB'tan küçük bir dosya seçin.</string>
     <string name="support_form_error_attachment_too_many">En fazla 10 dosya ekleyebilirsiniz.</string>
+    <string name="support_form_error_attachment_type">Bu tür bir dosya eklenemez. Lütfen bir görsel veya video seçin.</string>
     <string name="support_category_label">Konu nedir?</string>
     <string name="support_category_account">Hesap ve giriş</string>
     <string name="support_category_age">Yaş ve doğrulama</string>

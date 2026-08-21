@@ -1672,6 +1672,7 @@
     <string name="support_form_error_attachment_failed">Kami tidak dapat mengunggah file itu. Anda tetap bisa mengirim pesan tanpa file tersebut.</string>
     <string name="support_form_error_attachment_too_large">File itu terlalu besar. Pilih file di bawah 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Anda dapat melampirkan maksimal 10 file.</string>
+    <string name="support_form_error_attachment_type">Jenis file itu tidak dapat dilampirkan. Pilih gambar atau video.</string>
     <string name="support_category_label">Ini tentang apa?</string>
     <string name="support_category_account">Akun &amp; masuk</string>
     <string name="support_category_age">Usia &amp; verifikasi</string>

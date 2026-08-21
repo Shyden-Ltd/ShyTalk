@@ -87,7 +87,7 @@ describe('locale strings render as written', () => {
     // 16 retired `values-*` directories still exist, and this pin plus the
     // locale-parity guard require every key in every one of them until SHY-0194
     // deletes them.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([859]);
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([860]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

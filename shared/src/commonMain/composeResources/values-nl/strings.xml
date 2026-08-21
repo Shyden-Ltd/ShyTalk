@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">We konden dat bestand niet uploaden. Je kunt je bericht ook zonder versturen.</string>
     <string name="support_form_error_attachment_too_large">Dat bestand is te groot. Kies er een van minder dan 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Je kunt maximaal 10 bestanden toevoegen.</string>
+    <string name="support_form_error_attachment_type">Dit soort bestand kan niet worden toegevoegd. Kies een afbeelding of video.</string>
     <string name="support_category_label">Waar gaat het over?</string>
     <string name="support_category_account">Account &amp; inloggen</string>
     <string name="support_category_age">Leeftijd &amp; verificatie</string>

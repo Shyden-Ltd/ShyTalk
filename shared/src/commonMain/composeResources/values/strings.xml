@@ -972,6 +972,7 @@
     <string name="support_form_error_attachment_failed">We could not upload that file. You can send your message without it.</string>
     <string name="support_form_error_attachment_too_large">That file is too large. Please choose one under 25 MB.</string>
     <string name="support_form_error_attachment_too_many">You can attach up to 10 files.</string>
+    <string name="support_form_error_attachment_type">That kind of file cannot be attached. Please choose an image or a video.</string>
     <string name="support_category_label">What is this about?</string>
     <string name="support_category_account">Account &amp; login</string>
     <string name="support_category_age">Age &amp; verification</string>

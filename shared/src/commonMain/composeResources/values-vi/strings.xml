@@ -1672,6 +1672,7 @@
     <string name="support_form_error_attachment_failed">Chúng tôi không thể tải tệp đó lên. Bạn vẫn có thể gửi nội dung mà không cần tệp.</string>
     <string name="support_form_error_attachment_too_large">Tệp này quá lớn. Vui lòng chọn tệp dưới 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Bạn có thể đính kèm tối đa 10 tệp.</string>
+    <string name="support_form_error_attachment_type">Không thể đính kèm loại tệp này. Vui lòng chọn ảnh hoặc video.</string>
     <string name="support_category_label">Vấn đề của bạn là gì?</string>
     <string name="support_category_account">Tài khoản &amp; đăng nhập</string>
     <string name="support_category_age">Tuổi &amp; xác minh</string>

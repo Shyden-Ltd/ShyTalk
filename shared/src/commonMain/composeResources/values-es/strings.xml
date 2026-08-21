@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">No pudimos subir ese archivo. Puedes enviar tu mensaje sin él.</string>
     <string name="support_form_error_attachment_too_large">Ese archivo es demasiado grande. Elige uno de menos de 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Puedes adjuntar hasta 10 archivos.</string>
+    <string name="support_form_error_attachment_type">Ese tipo de archivo no se puede adjuntar. Elige una imagen o un vídeo.</string>
     <string name="support_category_label">¿De qué se trata?</string>
     <string name="support_category_account">Cuenta e inicio de sesión</string>
     <string name="support_category_age">Edad y verificación</string>

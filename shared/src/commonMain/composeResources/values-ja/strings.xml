@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">そのファイルをアップロードできませんでした。ファイルなしでメッセージを送信できます。</string>
     <string name="support_form_error_attachment_too_large">ファイルが大きすぎます。25 MB 未満のファイルを選んでください。</string>
     <string name="support_form_error_attachment_too_many">添付できるファイルは 10 件までです。</string>
+    <string name="support_form_error_attachment_type">この種類のファイルは添付できません。画像または動画を選んでください。</string>
     <string name="support_category_label">どのようなご用件ですか？</string>
     <string name="support_category_account">アカウントとログイン</string>
     <string name="support_category_age">年齢と認証</string>

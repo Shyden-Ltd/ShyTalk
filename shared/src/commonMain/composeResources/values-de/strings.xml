@@ -1669,6 +1669,7 @@
     <string name="support_form_error_attachment_failed">Diese Datei konnte nicht hochgeladen werden. Du kannst deine Nachricht auch ohne sie senden.</string>
     <string name="support_form_error_attachment_too_large">Diese Datei ist zu groß. Bitte wähle eine unter 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Du kannst bis zu 10 Dateien anhängen.</string>
+    <string name="support_form_error_attachment_type">Diese Art von Datei kann nicht angehängt werden. Bitte wähle ein Bild oder ein Video.</string>
     <string name="support_category_label">Worum geht es?</string>
     <string name="support_category_account">Konto &amp; Anmeldung</string>
     <string name="support_category_age">Alter &amp; Verifizierung</string>

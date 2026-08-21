@@ -1672,6 +1672,7 @@
     <string name="support_form_error_attachment_failed">无法上传该文件。您可以不带文件发送信息。</string>
     <string name="support_form_error_attachment_too_large">该文件太大。请选择小于 25 MB 的文件。</string>
     <string name="support_form_error_attachment_too_many">最多可附加 10 个文件。</string>
+    <string name="support_form_error_attachment_type">无法附加此类文件。请选择图片或视频。</string>
     <string name="support_category_label">您想咨询什么？</string>
     <string name="support_category_account">账号与登录</string>
     <string name="support_category_age">年龄与认证</string>

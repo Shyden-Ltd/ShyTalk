@@ -37,9 +37,11 @@ const ROUTE = 'express-api/src/routes/support-tickets.js';
  * other is a pin that ships the other unattested. Per platform, always.
  */
 const ENTRY_POINT_SOURCES = [
-  'shared/src/commonMain/kotlin/com/shyden/shytalk/feature/room/RoomScreen.kt',
-  'shared/src/commonMain/kotlin/com/shyden/shytalk/feature/messaging/PrivateChatScreen.kt',
-  'shared/src/commonMain/kotlin/com/shyden/shytalk/feature/settings/AppSettingsScreen.kt',
+  // SHY-0387 moved the three inline maps out of the Compose files and into one
+  // enum, which is why this list shrank from three screens to one. That is the
+  // improvement: the context is now ordinary logic with ordinary tests
+  // (SupportSourceTest), and this seam check has one producer to look at.
+  'shared/src/commonMain/kotlin/com/shyden/shytalk/feature/support/SupportSource.kt',
 ];
 
 /** Fields the PLATFORM owns; each platform must supply them independently. */
@@ -84,8 +86,10 @@ describe('support ticket context: allowlist vs what any client can send', () => 
   test.each(allowed.filter((f) => !PLATFORM_OWNED.includes(f)))(
     'an entry point sends context field "%s"',
     (field) => {
+      // Either Kotlin map form — `"feature" to x` or `put("feature", x)`. The
+      // assertion is that the field is EMITTED, not how it happens to be written.
       const emitted = ENTRY_POINT_SOURCES.some((rel) =>
-        new RegExp(`"${field}"\\s+to\\b`).test(codeOf(rel)),
+        new RegExp(`"${field}"\\s*(?:to\\b|,)`).test(codeOf(rel)),
       );
 
       expect(emitted).toBe(true);
@@ -98,6 +102,6 @@ describe('support ticket context: allowlist vs what any client can send', () => 
       Object.entries(PLATFORM_SOURCES).map(([name, rel]) => [field, name, rel]),
     ),
   )('%s is sent by the %s client', (field, _name, rel) => {
-    expect(codeOf(rel)).toMatch(new RegExp(`"${field}"\\s+to\\b`));
+    expect(codeOf(rel)).toMatch(new RegExp(`"${field}"\\s*(?:to\\b|,)`));
   });
 });

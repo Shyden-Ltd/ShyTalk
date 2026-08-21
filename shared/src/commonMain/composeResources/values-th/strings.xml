@@ -1670,6 +1670,7 @@
     <string name="support_form_error_attachment_failed">เราไม่สามารถอัปโหลดไฟล์นั้นได้ คุณสามารถส่งข้อความโดยไม่มีไฟล์ได้</string>
     <string name="support_form_error_attachment_too_large">ไฟล์นี้ใหญ่เกินไป กรุณาเลือกไฟล์ที่เล็กกว่า 25 MB</string>
     <string name="support_form_error_attachment_too_many">คุณแนบไฟล์ได้สูงสุด 10 ไฟล์</string>
+    <string name="support_form_error_attachment_type">ไม่สามารถแนบไฟล์ประเภทนี้ได้ กรุณาเลือกรูปภาพหรือวิดีโอ</string>
     <string name="support_category_label">เรื่องนี้เกี่ยวกับอะไร</string>
     <string name="support_category_account">บัญชีและการเข้าสู่ระบบ</string>
     <string name="support_category_age">อายุและการยืนยัน</string>

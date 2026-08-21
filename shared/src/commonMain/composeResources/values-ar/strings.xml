@@ -1671,6 +1671,7 @@
     <string name="support_form_error_attachment_failed">تعذّر رفع هذا الملف. يمكنك إرسال رسالتك بدونه.</string>
     <string name="support_form_error_attachment_too_large">هذا الملف كبير جدًا. يرجى اختيار ملف أصغر من 25 ميجابايت.</string>
     <string name="support_form_error_attachment_too_many">يمكنك إرفاق 10 ملفات كحد أقصى.</string>
+    <string name="support_form_error_attachment_type">لا يمكن إرفاق هذا النوع من الملفات. يرجى اختيار صورة أو فيديو.</string>
     <string name="support_category_label">ما موضوع طلبك؟</string>
     <string name="support_category_account">الحساب وتسجيل الدخول</string>
     <string name="support_category_age">العمر والتحقق</string>

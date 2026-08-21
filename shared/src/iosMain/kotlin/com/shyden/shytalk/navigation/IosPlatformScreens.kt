@@ -29,6 +29,7 @@ fun createIosPlatformScreens(): PlatformScreens =
                 onNavigateToTermsAndConditions = params.onNavigateToTermsAndConditions,
                 onNavigateToCyberBullyingPolicy = params.onNavigateToCyberBullyingPolicy,
                 onNavigateToSecurity = params.onNavigateToSecurity,
+                onNavigateToSupport = params.onNavigateToSupport,
                 onSignOut = params.onSignOut,
             )
         },
@@ -56,6 +57,7 @@ fun createIosPlatformScreens(): PlatformScreens =
                 onNavigateToChat = params.onNavigateToChat,
                 onNavigateToWallet = params.onNavigateToWallet,
                 onNavigateToAgeVerification = params.onNavigateToAgeVerification,
+                onNavigateToSupport = params.onNavigateToSupport,
             )
         },
     )

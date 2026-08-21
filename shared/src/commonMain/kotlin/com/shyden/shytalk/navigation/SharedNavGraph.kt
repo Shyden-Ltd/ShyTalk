@@ -71,6 +71,8 @@ import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.feature.support.SupportPage
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.back
@@ -505,6 +507,9 @@ fun SharedNavGraph(
                         onNavigateToAgeVerification = {
                             navController.navigate(Screen.AgeVerificationSubmit.route)
                         },
+                        onNavigateToSupport = { source ->
+                            navController.navigate(Screen.Support.createRoute(source.wireValue))
+                        },
                     ),
                 )
             }
@@ -577,6 +582,9 @@ fun SharedNavGraph(
                     onNavigateToAgeVerification = {
                         navController.navigate(Screen.AgeVerificationSubmit.route)
                     },
+                    onNavigateToSupport = { source ->
+                        navController.navigate(Screen.Support.createRoute(source.wireValue))
+                    },
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoom?.name,
                     viewModel = chatViewModel,
@@ -623,6 +631,9 @@ fun SharedNavGraph(
                             navController.navigate(Screen.CyberBullyingPolicy.route)
                         },
                         onNavigateToSecurity = { navController.navigate(Screen.SecuritySettings.route) },
+                        onNavigateToSupport = { source ->
+                            navController.navigate(Screen.Support.createRoute(source.wireValue))
+                        },
                         onSignOut = {
                             val signOutUserId = authRepository.currentUserId
                             if (signOutUserId != null) {
@@ -662,6 +673,25 @@ fun SharedNavGraph(
                     onDecline = { navController.safePopBackStack() },
                     onNavigateBack = { navController.safePopBackStack() },
                     showActions = false,
+                )
+            }
+
+            composable(
+                route = Screen.Support.route,
+                arguments = listOf(navArgument("source") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                // An unrecognised source still opens support, categorised
+                // generically. Being unable to reach help is worse than one
+                // ticket labelled Other.
+                val source =
+                    SupportSource.fromWire(backStackEntry.savedStateHandle.get<String>("source"))
+                SupportPage(
+                    viewModel =
+                        org.koin.compose.viewmodel.koinViewModel {
+                            org.koin.core.parameter
+                                .parametersOf(source.category, source.context())
+                        },
+                    onBack = { navController.safePopBackStack() },
                 )
             }
 
@@ -765,6 +795,9 @@ fun SharedNavGraph(
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
                     onNavigateToAgeVerification = {
                         navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
+                    onNavigateToSupport = { source ->
+                        navController.navigate(Screen.Support.createRoute(source.wireValue))
                     },
                     activeRoomId = groupActiveRoomId,
                     activeRoomName = groupActiveRoom?.name,

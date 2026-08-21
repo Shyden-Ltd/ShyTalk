@@ -1667,6 +1667,7 @@
     <string name="support_form_error_attachment_failed">Nous n'avons pas pu envoyer ce fichier. Vous pouvez envoyer votre message sans lui.</string>
     <string name="support_form_error_attachment_too_large">Ce fichier est trop volumineux. Choisissez-en un de moins de 25 Mo.</string>
     <string name="support_form_error_attachment_too_many">Vous pouvez joindre jusqu'à 10 fichiers.</string>
+    <string name="support_form_error_attachment_type">Ce type de fichier ne peut pas être joint. Veuillez choisir une image ou une vidéo.</string>
     <string name="support_category_label">De quoi s'agit-il ?</string>
     <string name="support_category_account">Compte et connexion</string>
     <string name="support_category_age">Âge et vérification</string>
