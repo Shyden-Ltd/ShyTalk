@@ -2,11 +2,36 @@
 
 Previous: `2026-08-21-session-handover-part9.md`.
 
-## Read this first
+## Read this first — the merge rule CHANGED
 
-**#1940 (SHY-0387) must NOT merge.** The iOS device walk found a P1: the support
-form can be filled in and cannot be sent on an iPhone. Details in **SHY-0419**.
-Everything else below is done or in flight.
+**Operator rule, 2026-08-22. A ticket no longer progresses on green CI.** For
+anything that changes product behaviour:
+
+1. Run its tests on **ALL devices and ALL browsers, LOCALLY**.
+2. Any RED ⇒ fix. Do not present a partial run.
+3. At 100% green, build an **interactive evidence web page** and give him the
+   link: every journey covering the ticket, every step, every assertion, each
+   result, with **a screenshot per assertion and a video per journey**.
+4. He checks each test off and says whether more are needed.
+5. **Only after his explicit sign-off** may the ticket progress.
+
+Four points he settled when setting it:
+
+| Question | Answer |
+| --- | --- |
+| Applies to PRs already open? | **Yes, immediately** |
+| How the page reaches him | **Hosted artifact link** — opens on his phone, outlives the session |
+| Evidence depth | **Screenshot per assertion + video per journey** |
+| Test-only / CI / docs changes | **Exempt** from page and sign-off; still must be 100% green |
+
+Full rule: `feedback-tickets-need-an-evidence-page-and-operator-signoff` in
+memory. **#1940 is the first ticket that must go through it.**
+
+## Then this
+
+**#1940 (SHY-0387) is no longer blocked by a defect** — SHY-0419 is fixed and
+device-proven on both platforms (below). It is blocked only by the new evidence
+gate: the page has NOT been built yet. That is the next piece of work.
 
 ---
 
@@ -155,8 +180,34 @@ Two things en route, both worth knowing:
   board-sync script exits 40 when a story will not parse, and PR Gate aggregates
   both. Each AC dimension needs its own `###` heading.
 
+## SHY-0419 — fixed and device-proven
+
+`imePadding()` is `windowInsetsPadding(WindowInsets.ime)`, which respects insets
+a parent has already **consumed**; the raw `WindowInsets.ime.getBottom()` read
+does not. Something above the Column consumes the IME inset, so the modifier
+applied exactly zero while the raw value was correct — which is why a probe read
+960 and the button never moved. Padding by the raw value fixes it.
+
+| | Before | After |
+| --- | --- | --- |
+| iPhone, keyboard open | Send y=616 `visible=false`, and scrolling changed nothing | y=620, then **y=470 `visible=TRUE`** after one scroll |
+| iPhone, tap Send | unreachable | **"Thanks. We have your message and will look into it."** |
+| Android | reachable after one scroll | unchanged — 2143 → 1552, no double-count |
+
+Android's send answered the 409 "you already have a request open", because the
+iPhone had just raised one as the same persona. Duplicate prevention proven
+across devices, unplanned.
+
+**Still owed on SHY-0419:** the other 14 text-input screens (list in the story),
+and a guard — worth writing only once the mechanism is settled, since
+`imePadding()` is demonstrably not it here.
+
 ## Suggested order next
 
-1. **SHY-0419** — blocks #1940 and it is the flagship help path.
-2. Then #1940, re-walked on the iPhone.
-3. SHY-0417 (banned user gets a bare 401 on strict routes) and SHY-0418.
+1. **Build the evidence page for #1940** — the new gate, and the first ticket
+   through it. Needs: the journey list for SHY-0387, all devices + all browsers
+   locally, screenshot per assertion, video per journey, published as an
+   artifact link.
+2. Then #1940 on his sign-off.
+3. SHY-0417 (banned user gets a bare 401 on strict routes).
+4. The 16 journey-gap tickets SHY-0400–0415, none started.
