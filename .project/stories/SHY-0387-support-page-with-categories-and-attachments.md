@@ -210,7 +210,34 @@ unreachable.
 The 409 path was walked too: "You already have a request open", message kept,
 shown as information rather than the person's error.
 
-**iOS proof is owed** — a TestFlight build from this branch is in flight.
+### The room age wall — the walk that mattered
+
+Walking from Settings could not prove the entry-point wiring, because there the
+correct value and the fallback are the SAME value. Re-walked from the room:
+
+| | |
+| --- | --- |
+| Minor persona, 500 coins, Lucky Spin | the 18+ wall, offering support |
+| Category **preselected** | `Age` — not the generic fallback |
+| Ticket `JfLEilMl6WFizZRf4mz9` | `category = "age"` |
+| Context | `{reason age_restriction, feature lucky_spin, screen room, appVersion 0.97.15, platform android}` |
+
+Two entry points, two genuinely different tickets. A reviewer flagged the nav
+argument as the risk and was right; this is the assertion that closes it.
+
+### iOS proof is BLOCKED, and it needs two operator actions
+
+The TestFlight build from this branch uploaded and auto-distributed
+successfully. It cannot be walked from here:
+
+1. **Install it from TestFlight on the iPhone.** The workflow's IPA cannot be
+   sideloaded — `devicectl` refuses it with "Attempted to install a Beta profile
+   without the proper entitlement".
+2. **Settings → Developer → Enable UI Automation.** Appium reports
+   "xcodebuild failed with code 65", which reads like signing and is not: the
+   real error is *"Timed out while enabling automation mode"*. `devicectl` still
+   launches apps, which is how you tell the two apart. **Do not re-sign
+   WebDriverAgent** — that churns working device signing for a toggle.
 
 ## Notes
 
