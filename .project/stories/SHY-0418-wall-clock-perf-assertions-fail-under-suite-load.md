@@ -73,9 +73,13 @@ assertions is a small enough surface to fix before it becomes a norm.
 
 - [ ] N/A.
 
-### UX / i18n
+### UX
 
-- [ ] N/A — test-suite change.
+- [ ] N/A — test-suite change, no user-facing surface.
+
+### i18n
+
+- [ ] N/A — test-suite change, no user-facing copy.
 
 ### Observability
 
