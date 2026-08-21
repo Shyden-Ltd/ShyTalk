@@ -2050,5 +2050,17 @@
     "contentId": "I_kwDORJ_E_s8AAAABNt3tyg",
     "issueNumber": 1942,
     "itemId": "PVTI_lADOEOcG584BZ_lNzg3fLHY"
+  },
+  "SHY-0417": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNwZ9pQ",
+    "issueNumber": 1944,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3hoE4"
+  },
+  "SHY-0418": {
+    "backing": "ISSUE",
+    "contentId": "I_kwDORJ_E_s8AAAABNwZ-7A",
+    "issueNumber": 1945,
+    "itemId": "PVTI_lADOEOcG584BZ_lNzg3hoGA"
   }
 }
