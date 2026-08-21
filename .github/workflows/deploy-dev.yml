@@ -851,6 +851,12 @@ jobs:
       - name: Build, archive, and export iOS app
         timeout-minutes: 50
         env:
+          # SHY-0416 — the same credential `distribute-android` passes. Without
+          # it every iOS dev build ships with an empty persona password, so
+          # `BuildVariant.isPersonaPickerAvailable` is false and NOBODY can sign
+          # in to an iOS dev build. That is why iOS journey proof was
+          # perpetually "owed": no persona-based iOS walk was ever possible.
+          DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           # SHY-0205 — effective deployed ref for the watermark stamp
