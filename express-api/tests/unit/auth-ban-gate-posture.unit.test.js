@@ -109,7 +109,57 @@ describe('ban-lookup failure is fail-closed', () => {
       .send({});
 
     expect(res.status).toBe(401);
-    expect(res.body).toEqual({ error: 'Authentication failed' });
+    expect(res.body).toEqual({ error: 'Authentication failed', code: 'standing_unavailable' });
+  });
+});
+
+describe('a refused request says WHICH check refused it (SHY-0308)', () => {
+  // A bad credential and a failed standing lookup both answered
+  // `401 Authentication failed`, byte for byte. Nothing could tell them
+  // apart -- not the caller, not the logs, not a test. That cost a dig
+  // through a Playwright trace to establish that a suite failure reading
+  // "Expected 403, Received 401" had never reached the ban gate at all.
+  //
+  // The STATUS is deliberately unchanged: fail-closed stays fail-closed, and
+  // no client's handling of 401 shifts underneath it. Only the class of
+  // refusal is now named. Whether a lookup failure should keep answering 401
+  // at all is a posture decision recorded in the story, not taken here.
+  test.each([
+    ['authMiddleware', authMiddleware],
+    ['authMiddlewareStrict', authMiddlewareStrict],
+  ])('%s: a rejected TOKEN is named token_rejected', async (_name, mw) => {
+    mockVerifyIdToken.mockRejectedValue(new Error('Firebase ID token has expired'));
+
+    const res = await request(appWith(mw))
+      .post('/api/probe/sensitive')
+      .set('Authorization', 'Bearer live-token')
+      .send({});
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Authentication failed', code: 'token_rejected' });
+    // The credential never cleared, so no standing lookup should have been
+    // attempted -- that ordering is what makes the two codes mean something.
+    expect(mockCheckUserBans).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['authMiddleware', authMiddleware],
+    ['authMiddlewareStrict', authMiddlewareStrict],
+  ])('%s: a failed standing LOOKUP is named standing_unavailable', async (_name, mw) => {
+    mockCheckUserBans.mockRejectedValue(new Error('firestore unavailable'));
+
+    const res = await request(appWith(mw))
+      .post('/api/probe/sensitive')
+      .set('Authorization', 'Bearer live-token')
+      .send({});
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Authentication failed', code: 'standing_unavailable' });
+    // The credential WAS accepted; it is the standing that could not be
+    // established. If this ever asserts the same code as the test above, the
+    // distinction has been collapsed and this file has stopped earning its
+    // keep.
+    expect(mockVerifyIdToken).toHaveBeenCalled();
   });
 });
 
@@ -159,7 +209,7 @@ describe('a failing ban lookup must not confiscate the rights a ban itself spare
       .set('Authorization', 'Bearer live-token');
 
     expect(res.status).toBe(401);
-    expect(res.body).toEqual({ error: 'Authentication failed' });
+    expect(res.body).toEqual({ error: 'Authentication failed', code: 'standing_unavailable' });
     // The 401 must come from the gate running and failing — not from the route
     // being unreachable for some unrelated reason (reviewer R6-I4).
     expect(mockCheckUserBans).toHaveBeenCalled();

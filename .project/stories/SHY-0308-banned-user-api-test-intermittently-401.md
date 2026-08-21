@@ -225,3 +225,142 @@ the fix, then the loop again.
   completely broken iOS build, the failure is unrelated to its diff by three
   independent lines of evidence, and blocking it would have kept iOS broken for
   the sake of a defect in another suite.
+
+- **2026-08-21 — reproduced LOCALLY on chromium, and the layer is now pinned.**
+  Hit during the pre-push hook on `bug/SHY-0416-ios-dev-cannot-sign-in` (a
+  one-line story edit — again unrelated to the diff). Suite result:
+  1416 passed, 1 failed, 1 flaky, 20.1m. It failed on the initial attempt AND
+  on retry #1, both `Expected: 403, Received: 401`.
+
+  **New evidence, from the saved trace rather than inference.**
+  `test-results/…-returns-403-chromium/trace.zip` carries the actual response
+  body for the POST:
+
+  ```
+  POST http://localhost:3000/api/suggestions -> 401 Unauthorized
+  {"error":"Authentication failed"}
+  ```
+
+  That string appears in exactly one place: the `catch` at the bottom of
+  `authMiddleware` (`express-api/src/middleware/auth.js`). It is **not**
+  `'Missing or invalid Authorization header'` (the header guard) and **not**
+  `'Authentication required'` (`suggestions.js`'s local `requireAuth`). So the
+  Authorization header WAS well-formed and the request DID enter the `try` —
+  something inside it threw.
+
+  Inside that `try`, in order: `auth.verifyIdToken(idToken)`,
+  `resolveUniqueId(uid)`, `checkSuspension(uniqueId)`, `checkUserBans(uniqueId,
+  req.ip)`. `checkUserBans` has no `catch` — it is fail-closed BY PROPAGATION,
+  and `auth.js` documents that exact consequence in situ: *"a lookup FAILURE
+  (fail-closed, rejects into the catch → 401)"*. `syncBannedClaim` is excluded:
+  it swallows its own errors by design.
+
+  **Hypothesis 3 (shared-persona contention) is eliminated.** The persona is
+  unique per test — the failure snapshot shows `banned-1787319326808-824901`,
+  a timestamped id minted by `signInWithStanding`. No other spec can be writing
+  to it.
+
+  **Load, not logic.** Reproduction attempts, all against the same live local
+  stack (API :3000 and web :8888 both verified serving THIS worktree):
+
+  | Scope | Runs | Result |
+  | --- | --- | --- |
+  | The single test alone | 1 | passed (1.7s) |
+  | The whole spec file (33 tests) | 3 | passed, passed, passed (~60s each) |
+  | The full chromium suite (~1450) | 1 | **FAILED, twice (initial + retry)** |
+
+  So it needs full-suite load to appear, which fits a transient error from the
+  Firestore/Auth emulators under contention far better than it fits anything in
+  the ban logic. That also explains the CI pattern: webkit, under a loaded
+  runner, then green on a plain re-run.
+
+### The product defect this exposes, which outranks the flaky test
+
+The `catch` collapses *every* failure in that block into
+`401 {"error":"Authentication failed"}`. Two very different conditions are
+being given the same answer:
+
+- **the credential is bad** — 401 is right, and the client should re-authenticate;
+- **a ban/suspension LOOKUP failed** — the credential was fine and was never
+  judged. This is a server-side fault, and answering 401 tells the client the
+  session is invalid.
+
+Clients treat 401 as "signed out". So a transient Firestore blip in production
+does not merely refuse one request — it tells every affected client their
+session died. Fail-CLOSED is correct (never wave a possibly-banned caller
+through); fail-closed *labelled as a credential failure* is not.
+
+This is the same silent-failure shape as
+[[feedback-silent-guards-and-stringly-typed-contracts]]: one catch, one string,
+several causes.
+
+**Direction (not yet implemented):** separate the two in both `authMiddleware`
+and `authMiddlewareStrict` — token-verification errors stay 401; a
+standing-lookup failure answers a distinct retryable status with its own code
+and log line. That makes the next occurrence self-diagnosing (the Observability
+AC above) instead of needing a trace dig like this one, and it stops a
+Firestore blip from reading as a mass sign-out. Whether the lookup should also
+get a bounded retry is a separate decision to take with the operator, because
+it trades a slower refusal against a spurious one.
+
+**Scope note.** Left unfixed in this session's merge queue on purpose: the fix
+changes authenticated-request behaviour for every route, so it belongs in its
+own PR with its own tests, not folded into an iOS-signing bug branch.
+
+### What shipped in this PR, and what deliberately did not
+
+**Shipped — the refusal now names itself.** `authMiddleware` and
+`authMiddlewareStrict` each had ONE `try` wrapping the credential check *and*
+every standing lookup, and ONE `catch` answering
+`401 {"error":"Authentication failed"}` for all of it. The credential check is
+now separated from what follows it, and the body carries a `code`:
+
+| Condition | Status | `code` |
+| --- | --- | --- |
+| `verifyIdToken` rejected the token (expired, malformed, revoked under strict) | 401 | `token_rejected` |
+| Token accepted; identity/suspension/ban lookup could not complete | 401 | `standing_unavailable` |
+
+The log lines diverge too — `token rejected` vs `standing lookup failed`, the
+latter carrying `req.path`.
+
+**The status code is UNCHANGED, on purpose.** 401 for a failed lookup is not an
+accident: `tests/unit/auth-ban-gate-posture.unit.test.js` pins it, simulating
+`firestore unavailable` and asserting `401 Authentication failed`. It is a
+decision someone took. This PR does not overturn it, because doing so silently
+would change what every client concludes when a request is refused.
+
+**The decision left for the operator.** A 401 tells a client *"your credential
+is bad"*, and clients respond by signing the user out or forcing a refresh. But
+in the `standing_unavailable` case the credential was fine and was never
+judged — the server simply could not reach Firestore. So a transient Firestore
+blip does not merely refuse requests; it can read to every affected client as a
+mass sign-out. A retryable status (503) would say what actually happened and
+let clients back off instead of dropping the session. Against that: it changes a
+pinned security posture, every client's handling, and the shape of a control
+that is currently, correctly, fail-closed. Fail-closed must survive either way —
+only the label is in question. Raised rather than taken.
+
+**Still open: WHICH call throws.** Four candidates sit inside that block —
+`verifyIdToken`, `resolveUniqueId`, `checkSuspension`, `checkUserBans`. Today's
+evidence narrows the failure to the block, not to a line. `token_rejected` vs
+`standing_unavailable` is exactly the instrument that separates the first from
+the other three on the next occurrence; the story's own Risk section already
+named instrumentation as the honest fallback to guessing. This PR builds the
+instrument. It does not claim the diagnosis.
+
+**So this PR does not close the story.** The AC "20 consecutive runs green"
+is untouched: if a lookup genuinely fails under load, the test still fails —
+it now just says why. Closing it needs the next occurrence's `code`, and then
+either a bounded retry on a transient read or the status decision above.
+
+### Test coverage added
+
+| Test | Proves | Doubles? |
+| --- | --- | --- |
+| `auth-ban-gate-posture.unit.test.js` — `a rejected TOKEN is named token_rejected` (both middlewares) | A bad credential is named, and NO standing lookup is attempted after it | unit-exception doubles |
+| same file — `a failed standing LOOKUP is named standing_unavailable` (both middlewares) | An accepted credential whose lookup failed is named differently | unit-exception doubles |
+| `auth-ban-gate.test.js` — bindings beyond the scannable window | The same `standing_unavailable` from a **real** Firestore read that cannot complete | none — real emulator |
+| `suggestions-security.spec.ts:218` | On 401 the failure states that the ban check never ran, and which class of refusal occurred | none — real stack |
+
+Both middlewares are covered for both codes: the two `catch` blocks were byte
+identical, which is precisely how one of them would have been left behind.

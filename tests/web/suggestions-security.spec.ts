@@ -231,7 +231,18 @@ test.describe('Anti-Abuse', () => {
       return { status: res.status, body: await res.json().catch(() => ({})) };
     }, API_BASE);
 
-    expect(result.status).toBe(403);
+    // SHY-0308: a bare "Expected 403, Received 401" sends the reader to the
+    // wrong layer entirely. 401 means the request never reached the ban gate,
+    // and the server now names which check refused it, so the failure explains
+    // itself instead of costing a dig through the trace.
+    expect(
+      result.status,
+      `Expected the ban gate to refuse this with 403. Got ${result.status}: ` +
+        `${JSON.stringify(result.body)}. A 401 means the ban check never ran -- ` +
+        `code=token_rejected is a credential the server would not accept; ` +
+        `code=standing_unavailable is an accepted credential whose standing ` +
+        `lookup could not complete (SHY-0308).`,
+    ).toBe(403);
     expect(result.body.code).toBe('banned');
     expect(result.body.reason).toBe(BAN_REASON);
 
