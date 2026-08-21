@@ -30,9 +30,14 @@ actual fun PlatformMediaPicker(
 
     // ImageAndVideo, not ImageOnly. The whole point of this picker.
     content {
-        launcher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-        )
+        Log.i(TAG, "launching media picker")
+        try {
+            launcher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "media picker failed to launch", e)
+        }
     }
 }
 

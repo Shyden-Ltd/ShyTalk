@@ -234,7 +234,11 @@ class SupportFormViewModel(
                     _uiState.update { it.copy(isSubmitting = false, submitted = true) }
                 }
 
-                RaiseTicketOutcome.AlreadyOpen ->
+                RaiseTicketOutcome.AlreadyOpen -> {
+                    // Logged like the other two outcomes. Without this, "my
+                    // ticket never sent" and "I already had one open" look
+                    // identical in the logs — and they need different answers.
+                    logI(TAG, "Support ticket refused: one is already open")
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
@@ -242,6 +246,7 @@ class SupportFormViewModel(
                             error = UiText.res(Res.string.support_form_error_already_open),
                         )
                     }
+                }
 
                 is RaiseTicketOutcome.Failed -> {
                     // The person sees one plain sentence — the server's wording is
