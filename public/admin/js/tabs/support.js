@@ -19,6 +19,10 @@
 
 import { apiCall } from "/js/core/api.js";
 import { showToast, escapeHtml } from "/js/core/ui.js";
+// Reused, never re-implemented: this already renders BOTH an image and a video
+// with a lightbox. SHY-0400 exists because a second, images-only path was built
+// beside it and the video branch became unreachable.
+import { renderEvidence } from "/js/tabs/users.js";
 
 // ── State ──────────────────────────────────────────────────────────
 
@@ -98,6 +102,33 @@ async function load(status) {
   }
 }
 
+/**
+ * Fill in a card's attachments once their short-lived links come back.
+ *
+ * A failure is shown rather than swallowed. An attachment that silently does not
+ * appear looks exactly like a ticket that never had one, and the moderator would
+ * act on a report while unaware evidence exists.
+ */
+async function loadAttachments(ticketId, card) {
+  const slot = card.querySelector(
+    `[data-attachments-for="${CSS.escape(String(ticketId))}"]`,
+  );
+  if (!slot) return;
+
+  try {
+    const res = await apiCall(
+      `/api/support-tickets/${encodeURIComponent(ticketId)}/attachments`,
+    );
+    const urls = Array.isArray(res?.attachments) ? res.attachments : [];
+    if (urls.length === 0) return;
+    slot.innerHTML = `<div style="margin-top:8px;">${renderEvidence(urls)}</div>`;
+  } catch (err) {
+    slot.innerHTML =
+      '<div style="font-size:11px;color:var(--danger);margin-top:6px;">' +
+      "Attachments could not be loaded</div>";
+  }
+}
+
 function renderCard(ticket, status) {
   const card = document.createElement("div");
   card.className = "appeal-card";
@@ -146,8 +177,15 @@ function renderCard(ticket, status) {
     </div>
     <div style="margin-top:8px;font-size:13px;white-space:pre-wrap;">${escapeHtml(String(ticket.message ?? ""))}</div>
     ${contextHtml}
+    <div data-attachments-for="${escapeHtml(String(ticket.id))}"></div>
     ${resolvedHtml}
     ${actionHtml}`;
+
+  // Attachments are stored as storage KEYS, so the links have to be requested.
+  // Fetched per card rather than in the list, which returns up to 200 tickets:
+  // signing every attachment of every ticket would be thousands of signatures
+  // per page load, nearly all for tickets nobody opens.
+  loadAttachments(ticket.id, card);
 
   return card;
 }

@@ -27,7 +27,7 @@ const { db } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
-const { getSignedPutUrl } = require('../utils/r2');
+const { getSignedPutUrl, getSignedGetUrl } = require('../utils/r2');
 const { writeLimiter } = require('../middleware/rateLimit');
 const log = require('../utils/log');
 
@@ -232,6 +232,48 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
   } catch (err) {
     log.error('support-tickets', 'POST /api/support-tickets failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── View a ticket's attachments (admin) ────────────────────────
+
+/**
+ * Short-lived links for one ticket's attachments — SHY-0387.
+ *
+ * On demand rather than folded into the list, which returns up to 200 tickets:
+ * signing every attachment of every ticket would mean thousands of signatures
+ * per page load, nearly all of them for tickets nobody opens. Same shape as
+ * `admin-age-verification`, which signs an ID image only when an admin looks at
+ * it.
+ *
+ * The links expire. A link that does not is a permanent public URL to somebody's
+ * support attachment, handed out by an endpoint that is behind a bearer token
+ * precisely because the object should not be public.
+ */
+const ATTACHMENT_LINK_TTL_SEC = 300;
+
+router.get('/support-tickets/:id/attachments', async (req, res) => {
+  try {
+    if (await requireAdmin(req, res)) return;
+
+    const doc = await db.doc(`${COLLECTION}/${req.params.id}`).get();
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Tickets raised before SHY-0387 have no `attachments` field at all, so an
+    // absent one is an empty list rather than a crash.
+    const keys = doc.data().attachments ?? [];
+    const attachments = await Promise.all(
+      keys.map((key) => getSignedGetUrl(key, ATTACHMENT_LINK_TTL_SEC)),
+    );
+
+    return res.json({ attachments });
+  } catch (err) {
+    log.error('support-tickets', 'GET /api/support-tickets/:id/attachments failed', {
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

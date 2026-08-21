@@ -90,8 +90,10 @@ jest.mock('../../src/middleware/rateLimit', () => ({
 }));
 
 const mockGetSignedPutUrl = jest.fn();
+const mockGetSignedGetUrl = jest.fn();
 jest.mock('../../src/utils/r2', () => ({
   getSignedPutUrl: (...args) => mockGetSignedPutUrl(...args),
+  getSignedGetUrl: (...args) => mockGetSignedGetUrl(...args),
 }));
 
 jest.mock('../../src/utils/log', () => ({
@@ -107,6 +109,7 @@ beforeEach(() => {
   mockIsLiveAdmin.mockResolvedValue(true);
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
   mockGetSignedPutUrl.mockResolvedValue('https://r2.example/signed-put');
+  mockGetSignedGetUrl.mockImplementation(async (key) => `https://r2.example/get/${key}`);
 });
 
 // ─── App setup ──────────────────────────────────────────────────
@@ -380,6 +383,85 @@ describe('POST /api/support-tickets — attachments', () => {
       .send({ message: 'Odd.', attachments: 'support-tickets/10000001/a.png' });
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/support-tickets/:id/attachments', () => {
+  const ticketWith = (attachments) => ({
+    exists: true,
+    data: () => ({ userId: 10000001, attachments }),
+  });
+
+  test('an admin gets a short-lived link for each attachment', async () => {
+    mockDocGet.mockResolvedValue(
+      ticketWith(['support-tickets/10000001/a.png', 'support-tickets/10000001/b.mp4']),
+    );
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.attachments).toEqual([
+      'https://r2.example/get/support-tickets/10000001/a.png',
+      'https://r2.example/get/support-tickets/10000001/b.mp4',
+    ]);
+  });
+
+  test('the links expire', async () => {
+    mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
+
+    await request(createApp({ admin: true })).get('/api/support-tickets/t-1/attachments');
+
+    // A link that never expires is a permanent public URL to somebody's
+    // support attachment, handed out by a bearer-token endpoint.
+    const [, expiry] = mockGetSignedGetUrl.mock.calls[0];
+    expect(typeof expiry).toBe('number');
+    expect(expiry).toBeGreaterThan(0);
+  });
+
+  test('a ticket with nothing attached returns an empty list, not an error', async () => {
+    mockDocGet.mockResolvedValue(ticketWith([]));
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.attachments).toEqual([]);
+  });
+
+  test('a ticket predating attachments does not crash', async () => {
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ userId: 10000001 }) });
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.attachments).toEqual([]);
+  });
+
+  test('a ticket that does not exist is a 404', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/nope/attachments',
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  test('a non-admin is refused and no link is issued', async () => {
+    mockIsLiveAdmin.mockResolvedValue(false);
+    mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
+
+    const res = await request(createApp({ admin: false })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(403);
+    expect(mockGetSignedGetUrl).not.toHaveBeenCalled();
   });
 });
 
