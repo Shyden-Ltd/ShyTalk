@@ -150,9 +150,9 @@ router.post('/support-tickets/upload-url', writeLimiter, async (req, res) => {
     // would let somebody who knows it name a stranger's past uploads.
     const ext = ATTACHMENT_CONTENT_TYPES.get(contentType);
     const r2Key = `${attachmentPrefix(req.auth.uniqueId)}${generateId()}.${ext}`;
-    const uploadUrl = await getSignedPutUrl(r2Key, contentType);
+    const uploadUrl = await getSignedPutUrl(r2Key, contentType, UPLOAD_SLOT_TTL_SEC);
 
-    return res.json({ uploadUrl, r2Key, expiresInSec: 300 });
+    return res.json({ uploadUrl, r2Key, expiresInSec: UPLOAD_SLOT_TTL_SEC });
   } catch (err) {
     log.error('support-tickets', 'POST /api/support-tickets/upload-url failed', {
       error: err.message,
@@ -252,7 +252,20 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
  */
 const ATTACHMENT_LINK_TTL_SEC = 300;
 
-router.get('/support-tickets/:id/attachments', async (req, res) => {
+/**
+ * Same lifetime for the upload slot.
+ *
+ * Passed EXPLICITLY rather than relying on `getSignedPutUrl`'s default, because
+ * the response tells the client `expiresInSec` and the two would drift apart
+ * silently — the client would schedule against a lifetime the URL does not have,
+ * and uploads would start failing as an undiagnosable "upload failed".
+ */
+const UPLOAD_SLOT_TTL_SEC = 300;
+
+// Rate-limited despite being a GET: each call mints up to MAX_ATTACHMENTS signed
+// URLs, which makes it the cheapest signature-generation endpoint an
+// authenticated token can loop on. Every other signing route here is limited.
+router.get('/support-tickets/:id/attachments', writeLimiter, async (req, res) => {
   try {
     if (await requireAdmin(req, res)) return;
 

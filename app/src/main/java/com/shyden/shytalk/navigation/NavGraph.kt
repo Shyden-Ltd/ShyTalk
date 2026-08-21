@@ -794,8 +794,12 @@ fun NavGraph(
                 // An unrecognised source still opens support, categorised
                 // generically — being unable to reach help is worse than one
                 // ticket labelled Other.
-                val source =
-                    SupportSource.fromWire(backStackEntry.savedStateHandle.get<String>("source"))
+                // `arguments`, like every other route in this graph. The
+                // savedStateHandle form is used in SharedNavGraph but is NOT the
+                // convention here, and reading an unseeded handle would make
+                // fromWire fall back for EVERY entry point — silently turning the
+                // per-source categorisation this story adds into a constant.
+                val source = SupportSource.fromWire(backStackEntry.arguments?.getString("source"))
                 SupportPage(
                     viewModel =
                         org.koin.compose.viewmodel.koinViewModel {
