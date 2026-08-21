@@ -182,3 +182,8 @@ the old condition.
 - Found 2026-08-21 while trying to walk SHY-0387 on the iPhone, after the
   operator cleared the two blockers that were previously believed to be the
   cause. Those were real and are now fixed; this was underneath them.
+- Reviewed. The first fix put the empty state behind the very gate that caused
+  the symptom; the reviewer caught it and the story records why that gate was
+  never the security control it was credited as.
+
+Reviewed-up-to: 3e0ecb08fba0bd22c9cf7d465208c50361c28475
