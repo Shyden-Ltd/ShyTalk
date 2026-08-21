@@ -1,6 +1,6 @@
 ---
 id: SHY-0418
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-21
 priority: P2
@@ -135,3 +135,5 @@ assertions is a small enough surface to fix before it becomes a norm.
 
 - Observed 2026-08-21: full suite 1 failed / 14,551 passed; the same file alone
   191/191. The failing assertion was the 5s scan budget at line 970.
+
+Reviewed-up-to: efe91c67360c145cadcc1eb7f16183ecf58c97c3
