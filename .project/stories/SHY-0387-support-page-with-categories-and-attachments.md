@@ -1,6 +1,6 @@
 ---
 id: SHY-0387
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-21
 priority: P1
@@ -70,60 +70,65 @@ step by hand.
 
 ### Happy path
 
-- [ ] Contacting support opens a **page**, not a dialog.
-- [ ] The person picks a category from the approved set.
-- [ ] They can attach one or more screenshots or videos and see them listed.
-- [ ] Submitting tells them plainly that it has been received.
-- [ ] The ticket, its category and its attachments are visible to an admin in
+- [x] Contacting support opens a **page**, not a dialog.
+- [x] The person picks a category from the approved set.
+- [x] They can attach one or more screenshots or videos and see them listed.
+- [x] Submitting tells them plainly that it has been received.
+- [x] The ticket, its category and its attachments are visible to an admin in
       the dashboard queue.
 
 ### Error paths
 
-- [ ] A failed send keeps everything typed **and** everything attached. This is
+- [x] A failed send keeps everything typed **and** everything attached. This is
       the behaviour SHY-0385 established and it must survive the redesign.
-- [ ] An attachment that fails to upload is reported, and the rest of the ticket
+- [x] An attachment that fails to upload is reported, and the rest of the ticket
       is still sendable without it.
-- [ ] A file that is too large, or of an unsupported type, is refused with a
+- [x] A file that is too large, or of an unsupported type, is refused with a
       reason **before** any upload starts.
 
 ### Edge cases
 
-- [ ] Attaching, removing, then re-attaching leaves the right set.
-- [ ] A very large video is bounded explicitly rather than failing opaquely
+- [x] Attaching, removing, then re-attaching leaves the right set.
+- [x] A very large video is bounded explicitly rather than failing opaquely
       mid-upload.
-- [ ] Leaving the page mid-typing is handled — decide and state whether a draft
-      survives.
+- [x] Leaving the page mid-typing is handled. **Decision: an unsent draft
+      survives; a sent one does not.** A back-press is easy to hit by accident and
+      this page is reached by people already having a bad time, so SHY-0385's rule
+      — never lose what somebody typed — applies to leaving too, not only to a
+      failed send. After a successful send the form starts clean, because showing
+      somebody their own sent message as an unsent draft is worse than a blank
+      form. Both directions have tests and both are mutation-proven.
 - [ ] Works on Android and iOS.
 
 ### Performance
 
-- [ ] Attachments are compressed before upload, as reporting already does.
+- [x] Attachments are compressed before upload, as reporting already does.
 - [ ] The page stays responsive while an upload runs.
 
 ### Security
 
-- [ ] Uploads use the existing signed-URL path; the client never holds a
+- [x] Uploads use the existing signed-URL path; the client never holds a
       long-lived storage credential.
-- [ ] An attachment is bound to the ticket and readable only by an admin.
-- [ ] File type is validated **server-side**, not only in the picker.
-- [ ] The category is validated against the server allowlist; an unknown value
+- [x] An attachment is bound to the ticket and readable only by an admin.
+- [x] File type is validated **server-side**, not only in the picker.
+- [x] The category is validated against the server allowlist; an unknown value
       is refused.
 
 ### UX
 
 - [ ] The page reads as part of ShyTalk, not as a form bolted on.
-- [ ] A person can tell what will happen next after they send.
+- [x] A person can tell what will happen next after they send.
 
 ### i18n
 
-- [ ] All copy, **including every category label**, is localised — not rendered
+- [x] All copy, **including every category label**, is localised — not rendered
       from a hardcoded English key. That is exactly the bug [[SHY-0390]] records.
-- [ ] Copy goes to all 21 locale files, per the parity guard and the pinned
+- [x] Copy goes to all 21 locale files, per the parity guard and the pinned
       string count.
 
 ### Observability
 
-- [ ] A raised ticket logs its category and attachment count, and **never** the
+- [x] A raised ticket logs its category and attachment count, and **never** the
       message body.
 
 ## BDD Scenarios
@@ -182,7 +187,30 @@ step by hand.
 - [ ] Merged to `develop`, all checks green.
 - [ ] Screenshot attached and sent from a real Android device and a real iPhone,
       and seen in the dashboard.
-- [ ] Contract test between app and server category lists passing.
+- [x] Contract test between app and server category lists passing.
+
+## Device proof
+
+Walked on the OnePlus CPH2653 against local, 2026-08-21:
+
+| Step | Result |
+| --- | --- |
+| Contact Us opens a **page** | six categories, attachment control, back arrow |
+| Category chosen from the picker | `category = "bug"` — the sixth value, which the server allowlist did not have before this story |
+| Screenshot attached | listed by its own filename, removable |
+| Sent | ticket `cYYSH9aymp1vfjbwClmD` |
+| Stored context | `{appVersion 0.97.15, screen settings, platform android}` |
+| Object in storage | 7,858 bytes, **content-type `image/png`** |
+| Admin signed link | issued, and fetching it returns the actual image |
+
+That content-type is the point of the new picker: it is what the platform
+reported, not the hardcoded `image/jpeg` that made SHY-0400's video path
+unreachable.
+
+The 409 path was walked too: "You already have a request open", message kept,
+shown as information rather than the person's error.
+
+**iOS proof is owed** — a TestFlight build from this branch is in flight.
 
 ## Notes
 

@@ -185,10 +185,22 @@ class SupportFormViewModel(
 
     fun reset() {
         _uiState.update {
-            // Total, not a guarded no-op: a send in flight keeps its state. The
-            // dialog cannot be dismissed while one is running, so this branch is
-            // defensive rather than reachable.
-            if (it.isSubmitting) it else SupportFormUiState(category = it.category)
+            when {
+                // A send in flight keeps its state. The page cannot be left while
+                // one is running, so this is defensive rather than reachable.
+                it.isSubmitting -> it
+
+                // Already sent: start clean. Keeping the text would show somebody
+                // their own sent message as though it were an unsent draft.
+                it.submitted -> SupportFormUiState(category = it.category)
+
+                // Left WITHOUT sending: the words are still theirs. A back-press
+                // is easy to hit by accident, and this screen is reached by people
+                // who are already having a bad time -- SHY-0385's rule about never
+                // losing what somebody typed applies here too, not only to a
+                // failed send. Only the transient states clear.
+                else -> it.copy(error = null, alreadyHasOpenTicket = false)
+            }
         }
     }
 

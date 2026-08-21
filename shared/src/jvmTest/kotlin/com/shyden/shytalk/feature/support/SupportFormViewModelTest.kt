@@ -272,9 +272,12 @@ class SupportFormViewModelTest {
         }
 
     @Test
-    fun `resetting clears the attachments too`() =
+    fun `a sent ticket's attachments do not follow them back`() =
         runTest {
             viewModel.attach("one.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            viewModel.updateMessage("Sending this")
+            viewModel.submit()
             advanceUntilIdle()
 
             viewModel.reset()
@@ -283,6 +286,44 @@ class SupportFormViewModelTest {
                 viewModel.uiState.value.attachments
                     .isEmpty(),
             )
+        }
+
+    /**
+     * A back-press is easy to hit by accident, and this page is reached by people
+     * already having a bad time. SHY-0385's rule -- never lose what somebody
+     * typed -- applies to LEAVING the page, not only to a failed send.
+     */
+    @Test
+    fun `leaving without sending keeps what was typed`() =
+        runTest {
+            viewModel.updateMessage("Half a sentence I have not finished")
+
+            viewModel.reset()
+
+            assertEquals("Half a sentence I have not finished", viewModel.uiState.value.message)
+        }
+
+    @Test
+    fun `leaving without sending keeps the attachments too`() =
+        runTest {
+            viewModel.attach("one.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+
+            viewModel.reset()
+
+            assertEquals(1, viewModel.uiState.value.attachments.size)
+        }
+
+    @Test
+    fun `leaving without sending clears a stale complaint`() =
+        runTest {
+            viewModel.submit()
+            advanceUntilIdle()
+            assertNotNull(viewModel.uiState.value.error)
+
+            viewModel.reset()
+
+            assertNull(viewModel.uiState.value.error, "an old complaint must not greet them on the way back")
         }
 
     // ─── Refusing before it reaches the server ──────────────────
