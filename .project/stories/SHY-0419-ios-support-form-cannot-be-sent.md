@@ -70,17 +70,34 @@ anything:**
 2. `.imePadding().verticalScroll(...)` — before the scroll, so the viewport
    itself should shrink. `support_send` stayed at y=616, `visible="false"`.
 
-If `imePadding()` had any effect the layout would have moved. It did not, in
-either order. The working conclusion is that **`WindowInsets.ime` is not
-reported on iOS** in this Compose Multiplatform version, which would make
-`imePadding()` a no-op there — and would mean the three sibling screens above
-have the same problem and nobody has noticed, because nothing walks them on a
-real iPhone.
+3. Scrolling after applying (2). The viewport should have shrunk, making the
+   content below it scrollable; a 700 ms drag with hold changed nothing.
 
-That is a hypothesis with strong evidence, not a confirmed finding. Confirming
-it is the first job of this story: instrument `WindowInsets.ime` on iOS and
-print the reported height while the keyboard is open. If it reads zero, the fix
-is a platform keyboard-height source, not a modifier.
+### The insets ARE reported — that hypothesis is dead
+
+The first write-up of this story guessed that `WindowInsets.ime` was not
+reported on iOS. **That was measured and it is false.** A temporary probe
+rendering `WindowInsets.ime.getBottom(density)` into the page, read off the
+device:
+
+| Keyboard | `XCUIElementTypeKeyboard` | `support_send` | `ime` inset |
+| --- | --- | --- | --- |
+| closed | absent | y=629, `visible="true"` | **0** |
+| open | y=609 | y=629, `visible="false"` | **960** |
+
+So the inset is reported and tracks the keyboard exactly (960 px ≈ the keyboard
+height at this device's density). `imePadding()` is not inert for lack of an
+inset. Something between that inset and this layout is not applying it — the
+`Scaffold` content slot, the `fillMaxSize()` ahead of it, or how the scroll
+viewport is constrained.
+
+**So the first job of this story is no longer "is the inset reported".** It is:
+given a correct inset, why does `imePadding()` not shrink this viewport? Worth
+trying next, roughly in order of cheapness: applying the inset to the `Scaffold`
+via `contentWindowInsets` rather than to the content Column; dropping
+`fillMaxSize()` so the Column is not pinned to the incoming max constraints;
+moving Send out of the scrolling content into a `bottomBar`; or padding by the
+measured inset by hand, which the probe proves is available.
 
 The speculative change was **reverted rather than shipped** — a change that does
 not move the button is not a fix, and merging it would have made the next person
@@ -198,7 +215,13 @@ believe this was handled.
   `feature/messaging/GroupSetupScreen.kt`, `feature/suspension/SuspensionScreen.kt`.
   Not all are necessarily broken — a centred dialog may reposition — but none of
   them has been walked on an iPhone.
-- Caveat worth stating plainly: both `imePadding()` attempts were verified by a
-  full rebuild and reinstall (`scripts/ios/build-debug-dev.sh`, exit 0, "App
-  installed") followed by a fresh Appium session. If a later attempt finds
-  `imePadding()` does work, check first that the build genuinely shipped.
+- Every attempt was verified by a full rebuild and reinstall
+  (`scripts/ios/build-debug-dev.sh`, exit 0, "App installed") followed by a fresh
+  Appium session. Builds do ship: the probe appeared in the tree on the build
+  that added it, and the debug overlay tracked the API sha across deploys.
+- One correction worth keeping, because it nearly became a wrong finding: the
+  first two attempts were judged only on whether `support_send` moved,
+  **without scrolling afterwards**. With a shrunken viewport the button would
+  only become reachable after a scroll, so that judgement was unsound. It was
+  re-run with a scroll (attempt 3) and the button still did not move — the
+  conclusion holds, but it did not hold for the reason originally given.
