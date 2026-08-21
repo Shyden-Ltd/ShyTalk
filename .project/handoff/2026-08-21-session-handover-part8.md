@@ -157,16 +157,22 @@ somebody for something they were never warned about is indefensible.
   attempts and had actually accumulated every string typed into it. Verify by
   re-dumping after a pause, not by re-typing.
 
-## iOS proof is blocked by the device, not by discipline
+## ~~iOS proof is blocked~~ — WRONG, corrected 2026-08-21
 
-The iPhone has only `com.shyden.shytalk` at **1.0 (1)** — the prod bundle, stale
-— and **TestFlight is not installed**. So there is no route to a dev build except
-a local Xcode build needing `-allowProvisioningUpdates` against a real device,
-which the never-churn-signing rule makes a bad idea unattended.
+**TestFlight IS installed.** The claim above came from
+`xcrun devicectl device info apps`, which lists **developer-installed apps only**
+— on this iPhone, just ShyTalk and WebDriverAgentRunner. App Store apps need
+`--include-default-apps`, and with that flag TestFlight is right there. The
+operator corrected it; the tool had been answering a narrower question than the
+one being asked.
 
-**Installing TestFlight once is a one-time operator action** that turns every
-future iOS proof into a two-minute update. Until then, "iOS proof owed" is not a
-memory failure — the path does not exist.
+So **iOS proof is available** and "iOS proof owed" is a discipline problem again,
+not a device one. The stale `com.shyden.shytalk 1.0 (1)` on the phone is the
+PRODUCTION bundle and is a red herring — dev builds arrive through TestFlight
+under a different bundle id.
+
+The lesson generalises: an inherited "blocked by the environment" note is exactly
+the one to re-verify, because it is the note that stops anybody trying.
 
 ## The pattern this session kept finding
 
