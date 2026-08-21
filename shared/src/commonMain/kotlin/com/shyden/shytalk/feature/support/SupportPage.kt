@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -33,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -116,12 +119,29 @@ fun SupportPage(
             return@Scaffold
         }
 
+        // SHY-0419. `imePadding()` did nothing here, in either modifier order and
+        // even after scrolling -- but the inset itself is fine: a probe on a real
+        // iPhone read WindowInsets.ime.getBottom() as 0 with the keyboard closed
+        // and 960 with it open. The difference is that `imePadding()` is
+        // `windowInsetsPadding(WindowInsets.ime)`, which respects insets a parent
+        // has already CONSUMED, while the raw read does not. Something above this
+        // Column consumes the IME inset, so the modifier applied zero. Reading the
+        // raw value and padding by it sidesteps that entirely.
+        //
+        // Without it the Send button sat at y=616 under a keyboard starting at
+        // y=609, with no way to reach it: tapping outside, tapping between
+        // sections and the iOS swipe-down convention all left the keyboard up, and
+        // the page did not scroll. Somebody could fill this form in and never send
+        // it.
+        val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
+
         Column(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(padding)
                     .padding(16.dp)
+                    .padding(bottom = imeBottom)
                     .verticalScroll(rememberScrollState()),
         ) {
             Text(stringResource(Res.string.support_form_hint), style = MaterialTheme.typography.bodyMedium)
