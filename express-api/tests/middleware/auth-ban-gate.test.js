@@ -282,7 +282,11 @@ describe('device bans are enforced per-request, from any client', () => {
     await floodBindings('5016');
 
     const res = await probeAs(caller).expect(401);
-    expect(res.body).toEqual({ error: 'Authentication failed' });
+    // SHY-0308: named, so this REAL truncation is distinguishable from a bad
+    // credential. This is the mock-free half of the contract the posture unit
+    // test states -- an actual Firestore read that cannot complete, not a
+    // rejected promise standing in for one.
+    expect(res.body).toEqual({ error: 'Authentication failed', code: 'standing_unavailable' });
   });
 
   test('…but that caller keeps their appeal and data-export rights (fail-closed ≠ rightless)', async () => {

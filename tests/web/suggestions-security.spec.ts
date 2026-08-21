@@ -221,17 +221,66 @@ test.describe('Anti-Abuse', () => {
 
     // Bypass the UI entirely: call the API straight from the page with the
     // user's REAL Firebase ID token, exactly as `curl` would.
-    const result = await page.evaluate(async (apiBase) => {
-      const token = await (window as any).shytalkAuth.currentUser.getIdToken();
-      const res = await fetch(`${apiBase}/api/suggestions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: 'Ban bypass attempt', description: 'Should be refused' }),
-      });
-      return { status: res.status, body: await res.json().catch(() => ({})) };
-    }, API_BASE);
+    //
+    // SHY-0308. Banning revokes the user's refresh tokens
+    // (syncBannedClaim -> revokeRefreshTokens), and firebase-admin runs the
+    // revocation check on EVERY verifyIdToken when pointed at the Auth
+    // emulator -- `if (checkRevoked || isEmulator)` in base-auth.js -- which
+    // the production non-strict path does not do. Worse, `validSince` and a
+    // token's `iat` are second-granular, so even a FORCED refresh can mint a
+    // token in the same second as the revoke and be refused. That is the whole
+    // of the intermittency: the request was rejected as `auth/id-token-revoked`
+    // before the ban gate ever ran, and the bare `Expected 403, Received 401`
+    // pointed at the wrong layer entirely.
+    //
+    // So exactly ONE condition is retried: a token the server refuses as
+    // revoked. Every other outcome is taken on the first response -- a 2xx
+    // bypass is never retried, so this cannot paper over a ban that is not
+    // being enforced.
+    const callAsBannedUser = () =>
+      page.evaluate(async (apiBase) => {
+        const token = await (window as any).shytalkAuth.currentUser.getIdToken(true);
+        const res = await fetch(`${apiBase}/api/suggestions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ title: 'Ban bypass attempt', description: 'Should be refused' }),
+        });
+        return { status: res.status, body: await res.json().catch(() => ({})) };
+      }, API_BASE);
 
-    expect(result.status).toBe(403);
+    const wasRefusedAsRevoked = (r: { status: number; body: { code?: string } }) =>
+      r.status === 401 && r.body?.code === 'token_rejected';
+
+    let result = await callAsBannedUser();
+
+    if (wasRefusedAsRevoked(result)) {
+      // The ban revoked this session's REFRESH token, so `getIdToken(true)` has
+      // nothing left to refresh with and will keep handing back the same dead
+      // ID token however often it is asked -- retrying alone never converges.
+      // Signing in again mints a refresh token issued after `validSince`, which
+      // is the only way back to a live session. That is exactly what a banned
+      // person does in real life: they sign in again and are told they are
+      // banned. The assertion below is unchanged.
+      await roadmapLogin(page, user.email, user.password);
+
+      // `iat` and `validSince` are second-granular, so a token minted in the
+      // same second as the revoke is still refused. The deadline governs rather
+      // than an attempt count, and there is no sleep: each attempt is a real
+      // sign-and-send round trip, so the clock advances by doing the work.
+      const deadline = Date.now() + 15_000;
+      while (wasRefusedAsRevoked(result) && Date.now() < deadline) {
+        result = await callAsBannedUser();
+      }
+    }
+
+    expect(
+      result.status,
+      `Expected the ban gate to refuse this with 403. Got ${result.status}: ` +
+        `${JSON.stringify(result.body)}. A 401 means the ban check never ran -- ` +
+        `code=token_rejected is a credential the server would not accept; ` +
+        `code=standing_unavailable is an accepted credential whose standing ` +
+        `lookup could not complete (SHY-0308).`,
+    ).toBe(403);
     expect(result.body.code).toBe('banned');
     expect(result.body.reason).toBe(BAN_REASON);
 

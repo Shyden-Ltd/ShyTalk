@@ -1050,7 +1050,10 @@ describe('Synthetic-token bypass', () => {
     expect(res.status).toBe(401);
     // In production the bypass is inert — the token reaches verifyIdToken
     // and fails the real check.
-    expect(mockVerifyIdToken).toHaveBeenCalledWith('synthetic:Mia:60000010');
+    // SHY-0308: the second argument is checkRevoked. authMiddleware passes
+    // false -- it does NOT consult revocation, which is why a banned user's
+    // pre-ban token reaches the ban gate in production and gets the 403.
+    expect(mockVerifyIdToken).toHaveBeenCalledWith('synthetic:Mia:60000010', false);
   });
 
   test('refuses synthetic:* with NODE_ENV undefined', async () => {
@@ -1102,7 +1105,7 @@ describe('Synthetic-token bypass', () => {
       .get('/api/users/50000010')
       .set('Authorization', 'Bearer real.firebase.jwt');
     expect(res.status).toBe(200);
-    expect(mockVerifyIdToken).toHaveBeenCalledWith('real.firebase.jwt');
+    expect(mockVerifyIdToken).toHaveBeenCalledWith('real.firebase.jwt', false);
   });
 
   test('synthetic-uid is namespaced so it cannot collide with a real Firebase UID', async () => {
