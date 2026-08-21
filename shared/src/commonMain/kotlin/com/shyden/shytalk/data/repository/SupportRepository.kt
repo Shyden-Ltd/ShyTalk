@@ -14,20 +14,69 @@ interface SupportRepository {
         message: String,
         category: SupportCategory?,
         context: Map<String, String>,
+        attachments: List<String> = emptyList(),
     ): RaiseTicketOutcome
+
+    /**
+     * Step 1 of attaching a screenshot or video — SHY-0387.
+     *
+     * The API issues a short-lived signed PUT URL and the key it belongs to. The
+     * `r2Key` must be handed back to [raiseTicket] verbatim: it encodes the
+     * caller's own prefix and the server validates it against the token, so a
+     * key that has been "tidied up" client-side is a key the server refuses.
+     *
+     * Same flow as age verification, deliberately. The API never carries the
+     * bytes and the client never holds a long-lived storage credential.
+     */
+    suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle?
+
+    /**
+     * Step 2 — PUT the bytes straight to the signed URL. No auth header; the URL
+     * is the authorisation. A failure here is expiry or network, not identity.
+     */
+    suspend fun uploadAttachment(
+        uploadUrl: String,
+        contentType: AttachmentType,
+        bytes: ByteArray,
+    ): Boolean
 }
+
+/**
+ * What somebody may attach. Mirrors `ATTACHMENT_CONTENT_TYPES` in
+ * `express-api/src/routes/support-tickets.js` — a type here the server does not
+ * know is an upload that is refused after the person has already chosen the file.
+ */
+enum class AttachmentType(
+    val wireValue: String,
+) {
+    Jpeg("image/jpeg"),
+    Png("image/png"),
+    Webp("image/webp"),
+    Mp4("video/mp4"),
+    QuickTime("video/quicktime"),
+}
+
+data class UploadHandle(
+    val uploadUrl: String,
+    val r2Key: String,
+    val expiresInSec: Int,
+)
 
 /**
  * Categories exist to help an admin triage, so the set is closed and mirrors the
  * server-side allowlist in `express-api/src/routes/support-tickets.js`.
+ *
+ * Declaration order is the order they are OFFERED — SHY-0387's approved set,
+ * with the honest catch-all last. `Bug` is "Something is broken".
  */
 enum class SupportCategory(
     val wireValue: String,
 ) {
-    Age("age"),
     Account("account"),
+    Age("age"),
     Payment("payment"),
     Safety("safety"),
+    Bug("bug"),
     Other("other"),
 }
 

@@ -77,6 +77,9 @@ describe('locale strings render as written', () => {
     // `splash_tagline` ("Voice chat rooms, reimagined.") out of all 21 locales
     // along with the screen that rendered it. A REMOVAL has to be acknowledged
     // here for the same reason an addition does.
+    // 846 -> 859 on 2026-08-21: SHY-0387 turned the support dialog into a page --
+    // three attachment errors, the category question, six category labels, and
+    // three attachment controls.
     // 838 -> 846 on 2026-08-21: SHY-0385 added the in-app support form -- title,
     // hint, send, sent, and four error strings -- to all 21 locales. Worth noting
     // for the next person: the MVP locale rule (en/zh/id/vi/th) governs which
@@ -84,7 +87,7 @@ describe('locale strings render as written', () => {
     // 16 retired `values-*` directories still exist, and this pin plus the
     // locale-parity guard require every key in every one of them until SHY-0194
     // deletes them.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([846]);
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([859]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

@@ -6,6 +6,7 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.json.JSONException
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -25,7 +26,8 @@ import kotlin.coroutines.cancellation.CancellationException
  */
 class SupportRepositoryImplTest {
     private val api = mockk<WorkerApiClient>()
-    private val repo = SupportRepositoryImpl(api)
+    private val httpClient = OkHttpClient()
+    private val repo = SupportRepositoryImpl(api, httpClient)
 
     @Test
     fun `a raised ticket returns its id`() =
@@ -88,8 +90,126 @@ class SupportRepositoryImplTest {
 
             repo.raiseTicket("help", null, emptyMap())
 
-            assertTrue(!body.captured.has("category"))
-            assertTrue(!body.captured.has("context"))
+            assertTrue("a category must never be guessed on the client", !body.captured.has("category"))
+        }
+
+    /**
+     * Context is now ALWAYS sent, even when the entry point supplies none —
+     * `platform` and `appVersion` apply to every ticket and are the first two
+     * things an admin asks. They were in the server's allowlist and no client
+     * ever sent them, which is the same dead-branch defect as SHY-0400.
+     */
+    @Test
+    fun `context always carries the platform and app version, even with no entry-point context`() =
+        runTest {
+            val body = slot<JSONObject>()
+            coEvery { api.post(any(), capture(body)) } returns JSONObject().put("ticketId", "t-6")
+
+            repo.raiseTicket("help", null, emptyMap())
+
+            val ctx = body.captured.getJSONObject("context")
+            assertEquals("android", ctx.getString("platform"))
+            assertTrue("appVersion must not be blank", ctx.getString("appVersion").isNotBlank())
+        }
+
+    @Test
+    fun `the entry point's context is preserved alongside the platform fields`() =
+        runTest {
+            val body = slot<JSONObject>()
+            coEvery { api.post(any(), capture(body)) } returns JSONObject().put("ticketId", "t-7")
+
+            repo.raiseTicket("help", null, mapOf("feature" to "lucky_spin", "reason" to "age_restriction"))
+
+            val ctx = body.captured.getJSONObject("context")
+            assertEquals("lucky_spin", ctx.getString("feature"))
+            assertEquals("age_restriction", ctx.getString("reason"))
+            assertEquals("android", ctx.getString("platform"))
+        }
+
+    // ─── SHY-0387: attachments ──────────────────────────────────
+
+    @Test
+    fun `attachment keys are sent with the ticket`() =
+        runTest {
+            val body = slot<JSONObject>()
+            coEvery { api.post(any(), capture(body)) } returns JSONObject().put("ticketId", "t-4")
+
+            repo.raiseTicket(
+                "look at this",
+                null,
+                emptyMap(),
+                listOf("support-tickets/1/a.png", "support-tickets/1/b.mp4"),
+            )
+
+            val sent = body.captured.getJSONArray("attachments")
+            assertEquals(2, sent.length())
+            assertEquals("support-tickets/1/a.png", sent.getString(0))
+        }
+
+    /**
+     * An empty list must not become an empty `attachments` field on the wire —
+     * the server would accept it, but every other absent-optional in this payload
+     * is absent rather than empty, and one field behaving differently is how a
+     * contract drifts.
+     */
+    @Test
+    fun `no attachments means no attachments field`() =
+        runTest {
+            val body = slot<JSONObject>()
+            coEvery { api.post(any(), capture(body)) } returns JSONObject().put("ticketId", "t-5")
+
+            repo.raiseTicket("nothing to show", null, emptyMap(), emptyList())
+
+            assertTrue(!body.captured.has("attachments"))
+        }
+
+    @Test
+    fun `an upload handle is read from the server response`() =
+        runTest {
+            coEvery { api.post("/api/support-tickets/upload-url", any()) } returns
+                JSONObject()
+                    .put("uploadUrl", "https://r2.example/put")
+                    .put("r2Key", "support-tickets/1/a.png")
+                    .put("expiresInSec", 300)
+
+            val handle = repo.requestAttachmentUpload(AttachmentType.Png)
+
+            assertEquals("https://r2.example/put", handle?.uploadUrl)
+            assertEquals("support-tickets/1/a.png", handle?.r2Key)
+        }
+
+    @Test
+    fun `the content type is sent so the signature matches the upload`() =
+        runTest {
+            val body = slot<JSONObject>()
+            coEvery { api.post("/api/support-tickets/upload-url", capture(body)) } returns
+                JSONObject().put("uploadUrl", "u").put("r2Key", "k")
+
+            repo.requestAttachmentUpload(AttachmentType.Mp4)
+
+            assertEquals("video/mp4", body.captured.getString("contentType"))
+        }
+
+    /**
+     * A refused upload URL must be `null`, not a handle with empty strings — the
+     * ViewModel decides what the person sees from this, and an empty URL would
+     * be reported as an upload failure after a pointless network round trip.
+     */
+    @Test
+    fun `a refused upload URL is null, not an empty handle`() =
+        runTest {
+            coEvery { api.post("/api/support-tickets/upload-url", any()) } throws
+                ApiException(400, "contentType must be one of: image/jpeg, ...")
+
+            assertEquals(null, repo.requestAttachmentUpload(AttachmentType.Png))
+        }
+
+    @Test
+    fun `a network failure requesting an upload URL is null, not a crash`() =
+        runTest {
+            coEvery { api.post("/api/support-tickets/upload-url", any()) } throws IOException("offline")
+
+            assertEquals(null, repo.requestAttachmentUpload(AttachmentType.Png))
         }
 
     // ─── The paths that used to say nothing ─────────────────────

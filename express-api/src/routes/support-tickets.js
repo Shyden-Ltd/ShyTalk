@@ -27,6 +27,7 @@ const { db } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
+const { getSignedPutUrl } = require('../utils/r2');
 const { writeLimiter } = require('../middleware/rateLimit');
 const log = require('../utils/log');
 
@@ -39,8 +40,71 @@ const COLLECTION = 'supportTickets';
 const MAX_MESSAGE_LENGTH = 2000;
 const MAX_ADMIN_NOTE_LENGTH = 2000;
 
-/** Categories exist to help triage, so the set is closed. */
-const CATEGORIES = ['age', 'account', 'payment', 'safety', 'other'];
+/**
+ * Categories exist to help triage, so the set is closed.
+ *
+ * `bug` is SHY-0387's sixth approved category ("Something is broken"). The other
+ * five predate it. The app's `SupportCategory` enum mirrors this list exactly —
+ * a value here with no counterpart there is a category nobody can choose.
+ */
+const CATEGORIES = ['age', 'account', 'payment', 'safety', 'bug', 'other'];
+
+/**
+ * What somebody may attach — SHY-0387. The operator asked for screenshots AND
+ * videos, so the set spans both.
+ */
+const ATTACHMENT_CONTENT_TYPES = new Map([
+  ['image/jpeg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+  ['video/mp4', 'mp4'],
+  ['video/quicktime', 'mov'],
+]);
+
+/**
+ * Bounded because each attachment is an object an admin has to open. Ten is
+ * generous for "show me the problem" and small enough that a ticket cannot be
+ * used to park a media library.
+ */
+const MAX_ATTACHMENTS = 10;
+
+/** Every attachment key lives under the owner's own folder. */
+const attachmentPrefix = (uniqueId) => `support-tickets/${uniqueId}/`;
+
+/**
+ * Validate client-supplied R2 keys — the same three defences age-verification
+ * applies, for the same reason: the key comes from the client, so each one is a
+ * candidate route into somebody else's folder.
+ *
+ *   1. must sit under the caller's own prefix
+ *   2. must not contain `..` or `//` — the literal key stores as-is, but a
+ *      downstream consumer (admin viewer, signed GET, CDN) may normalise it
+ *   3. the remainder must be a single segment, so a valid prefix cannot be
+ *      extended into another account's directory
+ *
+ * @returns {{ok: true, keys: string[]} | {ok: false, error: string}}
+ */
+function validateAttachments(raw, uniqueId) {
+  if (raw === undefined || raw === null) return { ok: true, keys: [] };
+  if (!Array.isArray(raw)) return { ok: false, error: 'attachments must be a list' };
+  if (raw.length > MAX_ATTACHMENTS) {
+    return { ok: false, error: `at most ${MAX_ATTACHMENTS} attachments are allowed` };
+  }
+
+  const prefix = attachmentPrefix(uniqueId);
+  for (const key of raw) {
+    if (typeof key !== 'string' || key.length === 0) {
+      return { ok: false, error: 'each attachment must be an upload key' };
+    }
+    if (!key.startsWith(prefix) || key.includes('..') || key.includes('//')) {
+      return { ok: false, error: 'attachment does not belong to this account' };
+    }
+    if (key.slice(prefix.length).includes('/')) {
+      return { ok: false, error: 'attachment does not belong to this account' };
+    }
+  }
+  return { ok: true, keys: raw };
+}
 
 const STATUS_OPEN = 'open';
 const STATUS_RESOLVED = 'resolved';
@@ -64,6 +128,38 @@ function sanitiseContext(raw) {
   }
   return out;
 }
+
+// ─── Issue an upload URL for an attachment ──────────────────────
+
+/**
+ * The client PUTs the bytes straight to R2 with this short-lived signed URL, so
+ * the API never carries the file and never holds a long-lived storage
+ * credential. Same flow as age verification.
+ */
+router.post('/support-tickets/upload-url', writeLimiter, async (req, res) => {
+  try {
+    const contentType = (req.body ?? {}).contentType;
+    if (typeof contentType !== 'string' || !ATTACHMENT_CONTENT_TYPES.has(contentType)) {
+      return res.status(400).json({
+        error: `contentType must be one of: ${[...ATTACHMENT_CONTENT_TYPES.keys()].join(', ')}`,
+      });
+    }
+
+    // The random component matters: R2 is bucket-private, but this flow HANDS
+    // the key back to the client, so a key derived only from the account id
+    // would let somebody who knows it name a stranger's past uploads.
+    const ext = ATTACHMENT_CONTENT_TYPES.get(contentType);
+    const r2Key = `${attachmentPrefix(req.auth.uniqueId)}${generateId()}.${ext}`;
+    const uploadUrl = await getSignedPutUrl(r2Key, contentType);
+
+    return res.json({ uploadUrl, r2Key, expiresInSec: 300 });
+  } catch (err) {
+    log.error('support-tickets', 'POST /api/support-tickets/upload-url failed', {
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Failed to issue upload URL' });
+  }
+});
 
 // ─── Raise a ticket ─────────────────────────────────────────────
 
@@ -90,6 +186,11 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
     // carrying its own userId is ignored, not honoured.
     const uniqueId = req.auth.uniqueId;
 
+    const attachments = validateAttachments(body.attachments, uniqueId);
+    if (!attachments.ok) {
+      return res.status(400).json({ error: attachments.error });
+    }
+
     const existing = await queryDocs(
       db
         .collection(COLLECTION)
@@ -108,6 +209,7 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
         message: message.trim(),
         category: category ?? 'other',
         context: sanitiseContext(body.context),
+        attachments: attachments.keys,
         status: STATUS_OPEN,
         resolvedBy: null,
         resolvedAt: null,
@@ -119,7 +221,12 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
 
     // Deliberately not logging the message body: a support request can contain
     // anything, and logs are read by more people than the queue is.
-    log.info('support-tickets', 'Support ticket raised', { ticketId, uniqueId, category });
+    log.info('support-tickets', 'Support ticket raised', {
+      ticketId,
+      uniqueId,
+      category,
+      attachmentCount: attachments.keys.length,
+    });
 
     res.json({ success: true, ticketId });
   } catch (err) {

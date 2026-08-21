@@ -89,6 +89,11 @@ jest.mock('../../src/middleware/rateLimit', () => ({
   sensitiveLimiter: (_req, _res, next) => next(),
 }));
 
+const mockGetSignedPutUrl = jest.fn();
+jest.mock('../../src/utils/r2', () => ({
+  getSignedPutUrl: (...args) => mockGetSignedPutUrl(...args),
+}));
+
 jest.mock('../../src/utils/log', () => ({
   debug: jest.fn(),
   info: jest.fn(),
@@ -101,6 +106,7 @@ beforeEach(() => {
   mockQueryDocs.mockResolvedValue([]);
   mockIsLiveAdmin.mockResolvedValue(true);
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+  mockGetSignedPutUrl.mockResolvedValue('https://r2.example/signed-put');
 });
 
 // ─── App setup ──────────────────────────────────────────────────
@@ -253,6 +259,129 @@ describe('POST /api/support-tickets', () => {
 });
 
 // ─── Listing (admin) ────────────────────────────────────────────
+
+// ─── SHY-0387: categories and attachments ───────────────────────
+
+describe('POST /api/support-tickets — the sixth approved category', () => {
+  test('accepts "bug", the wire value for "Something is broken"', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'The wheel spins forever.', category: 'bug' });
+
+    expect(res.status).toBe(200);
+    expect(writtenTicket().category).toBe('bug');
+  });
+});
+
+describe('POST /api/support-tickets/upload-url', () => {
+  test('issues a signed PUT URL and a key under the caller own prefix', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.uploadUrl).toBe('https://r2.example/signed-put');
+    expect(res.body.r2Key).toMatch(/^support-tickets\/10000001\/[^/]+\.png$/);
+  });
+
+  test('accepts video, because the operator asked for screenshots AND videos', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'video/mp4' });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('refuses a content type outside the allowed set', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'application/x-msdownload' });
+
+    expect(res.status).toBe(400);
+    expect(mockGetSignedPutUrl).not.toHaveBeenCalled();
+  });
+
+  test('refuses a missing content type rather than guessing one', async () => {
+    const res = await request(createApp()).post('/api/support-tickets/upload-url').send({});
+
+    expect(res.status).toBe(400);
+    expect(mockGetSignedPutUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/support-tickets — attachments', () => {
+  const own = (name) => `support-tickets/10000001/${name}`;
+
+  test('stores attachments the caller uploaded', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('a.png'), own('b.mp4')] });
+
+    expect(res.status).toBe(200);
+    expect(writtenTicket().attachments).toEqual([own('a.png'), own('b.mp4')]);
+  });
+
+  test('a ticket with no attachments stores an empty list, not undefined', async () => {
+    await request(createApp()).post('/api/support-tickets').send({ message: 'No picture.' });
+
+    expect(writtenTicket().attachments).toEqual([]);
+  });
+
+  // The three defences age-verification already applies to an R2 key. A key
+  // arrives from the client, so each one is a way into somebody else's folder.
+  test('refuses a key belonging to another account', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Sneaky.', attachments: ['support-tickets/10000002/theirs.png'] });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses a key containing a path-traversal sequence', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Sneaky.', attachments: [own('../10000002/theirs.png')] });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses a key that extends the prefix into another folder', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Sneaky.', attachments: [own('nested/deeper.png')] });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses a non-string attachment', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Odd.', attachments: [{ key: 'x' }] });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('bounds how many attachments one ticket may carry', async () => {
+    const many = Array.from({ length: 11 }, (_, i) => own(`f${i}.png`));
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Too many.', attachments: many });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses attachments that are not a list', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Odd.', attachments: 'support-tickets/10000001/a.png' });
+
+    expect(res.status).toBe(400);
+  });
+});
 
 describe('GET /api/support-tickets', () => {
   test('refuses a non-admin', async () => {

@@ -1667,6 +1667,19 @@
     <string name="support_form_error_too_long">ข้อความของคุณยาวเกินไป กรุณาย่อแล้วลองใหม่</string>
     <string name="support_form_error_generic">เราไม่สามารถส่งข้อความของคุณได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่</string>
     <string name="support_form_error_already_open">คุณมีคำขอที่เปิดอยู่แล้ว เราจะตอบกลับในคำขอนั้น</string>
+    <string name="support_form_error_attachment_failed">เราไม่สามารถอัปโหลดไฟล์นั้นได้ คุณสามารถส่งข้อความโดยไม่มีไฟล์ได้</string>
+    <string name="support_form_error_attachment_too_large">ไฟล์นี้ใหญ่เกินไป กรุณาเลือกไฟล์ที่เล็กกว่า 25 MB</string>
+    <string name="support_form_error_attachment_too_many">คุณแนบไฟล์ได้สูงสุด 10 ไฟล์</string>
+    <string name="support_category_label">เรื่องนี้เกี่ยวกับอะไร</string>
+    <string name="support_category_account">บัญชีและการเข้าสู่ระบบ</string>
+    <string name="support_category_age">อายุและการยืนยัน</string>
+    <string name="support_category_payment">เหรียญ ถั่ว และการซื้อ</string>
+    <string name="support_category_safety">ความปลอดภัยและผู้ใช้อื่น</string>
+    <string name="support_category_bug">มีบางอย่างใช้งานไม่ได้</string>
+    <string name="support_category_other">เรื่องอื่น ๆ</string>
+    <string name="support_attachments_label">เพิ่มภาพหน้าจอหรือวิดีโอ</string>
+    <string name="support_attachment_add">เพิ่มไฟล์</string>
+    <string name="support_attachment_remove">ลบออก</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">ยกเลิก</string>
 

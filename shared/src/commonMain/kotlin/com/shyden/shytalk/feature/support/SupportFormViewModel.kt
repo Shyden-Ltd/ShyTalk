@@ -5,11 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.data.repository.AttachmentType
 import com.shyden.shytalk.data.repository.RaiseTicketOutcome
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.support_form_error_already_open
+import com.shyden.shytalk.resources.support_form_error_attachment_failed
+import com.shyden.shytalk.resources.support_form_error_attachment_too_large
+import com.shyden.shytalk.resources.support_form_error_attachment_too_many
 import com.shyden.shytalk.resources.support_form_error_empty
 import com.shyden.shytalk.resources.support_form_error_generic
 import com.shyden.shytalk.resources.support_form_error_too_long
@@ -23,6 +27,30 @@ private const val TAG = "SupportForm"
 
 /** Mirrors the server's bound in `routes/support-tickets.js`. */
 const val SUPPORT_MESSAGE_MAX_LENGTH = 2000
+
+/** Mirrors `MAX_ATTACHMENTS` in `routes/support-tickets.js`. */
+const val MAX_ATTACHMENTS = 10
+
+/**
+ * Checked BEFORE the bytes leave the device — SHY-0387.
+ *
+ * The alternative is a video that uploads for two minutes on a phone connection
+ * and then fails, which costs the person their data allowance and tells them
+ * nothing they could have acted on.
+ */
+const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+
+/**
+ * Something the person attached and the server has accepted the bytes for.
+ *
+ * [displayName] is theirs — the file they picked — so the list reads as the
+ * things they chose. [r2Key] is the server's, and is what travels with the
+ * ticket; it is never shown.
+ */
+data class PendingAttachment(
+    val displayName: String,
+    val r2Key: String,
+)
 
 data class SupportFormUiState(
     val message: String = "",
@@ -40,6 +68,9 @@ data class SupportFormUiState(
      * whole point.
      */
     val alreadyHasOpenTicket: Boolean = false,
+    /** Uploaded and ready to travel with the ticket, in the order they were added. */
+    val attachments: List<PendingAttachment> = emptyList(),
+    val isAttaching: Boolean = false,
     val error: UiText? = null,
 )
 
@@ -71,6 +102,73 @@ class SupportFormViewModel(
      * Called on dismissal rather than on open: both land before the next
      * recomposition, so nobody sees a blank form flash over the confirmation.
      */
+    fun selectCategory(category: SupportCategory) {
+        _uiState.update { it.copy(category = category) }
+    }
+
+    /**
+     * Take a file the person picked, upload it, and list it — SHY-0387.
+     *
+     * The size bound is checked FIRST, so an oversized video never leaves the
+     * device. Everything after that can fail, and every failure path says so:
+     * a file that did not upload is not added to the list, because a list entry
+     * for a file the server never received is a ticket that references nothing.
+     */
+    fun attach(
+        displayName: String,
+        contentType: AttachmentType,
+        bytes: ByteArray,
+    ) {
+        val state = _uiState.value
+        if (bytes.size > MAX_ATTACHMENT_BYTES) {
+            _uiState.update { it.copy(error = UiText.res(Res.string.support_form_error_attachment_too_large)) }
+            return
+        }
+        if (state.attachments.size >= MAX_ATTACHMENTS) {
+            _uiState.update { it.copy(error = UiText.res(Res.string.support_form_error_attachment_too_many)) }
+            return
+        }
+
+        _uiState.update { it.copy(isAttaching = true, error = null) }
+
+        viewModelScope.launch {
+            val handle = supportRepository.requestAttachmentUpload(contentType)
+            if (handle == null) {
+                logW(TAG, "Attachment upload URL refused for $contentType")
+                _uiState.update {
+                    it.copy(isAttaching = false, error = UiText.res(Res.string.support_form_error_attachment_failed))
+                }
+                return@launch
+            }
+
+            val uploaded = supportRepository.uploadAttachment(handle.uploadUrl, contentType, bytes)
+            if (uploaded) {
+                _uiState.update {
+                    it.copy(
+                        isAttaching = false,
+                        attachments = it.attachments + PendingAttachment(displayName, handle.r2Key),
+                    )
+                }
+            } else {
+                logW(TAG, "Attachment upload failed for $displayName")
+                _uiState.update {
+                    it.copy(isAttaching = false, error = UiText.res(Res.string.support_form_error_attachment_failed))
+                }
+            }
+        }
+    }
+
+    /**
+     * Take one back off the ticket.
+     *
+     * The object stays in R2 unreferenced; nothing here deletes it, because a
+     * delete that races the send would strip an attachment off a ticket already
+     * on its way. Unreferenced objects are the storage lifecycle's problem.
+     */
+    fun removeAttachment(r2Key: String) {
+        _uiState.update { it.copy(attachments = it.attachments.filterNot { a -> a.r2Key == r2Key }) }
+    }
+
     fun reset() {
         _uiState.update {
             // Total, not a guarded no-op: a send in flight keeps its state. The
@@ -109,7 +207,14 @@ class SupportFormViewModel(
         _uiState.update { it.copy(isSubmitting = true, error = null, alreadyHasOpenTicket = false) }
 
         viewModelScope.launch {
-            when (val outcome = supportRepository.raiseTicket(trimmed, state.category, context)) {
+            val outcome =
+                supportRepository.raiseTicket(
+                    trimmed,
+                    state.category,
+                    context,
+                    state.attachments.map { it.r2Key },
+                )
+            when (outcome) {
                 is RaiseTicketOutcome.Raised -> {
                     logI(TAG, "Support ticket raised: ${outcome.ticketId}")
                     _uiState.update { it.copy(isSubmitting = false, submitted = true) }

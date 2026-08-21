@@ -1666,6 +1666,19 @@
     <string name="support_form_error_too_long">Ihre Nachricht ist zu lang. Bitte kürzen Sie sie und versuchen Sie es erneut.</string>
     <string name="support_form_error_generic">Ihre Nachricht konnte nicht gesendet werden. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.</string>
     <string name="support_form_error_already_open">Sie haben bereits eine offene Anfrage. Wir antworten darauf.</string>
+    <string name="support_form_error_attachment_failed">Diese Datei konnte nicht hochgeladen werden. Du kannst deine Nachricht auch ohne sie senden.</string>
+    <string name="support_form_error_attachment_too_large">Diese Datei ist zu groß. Bitte wähle eine unter 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Du kannst bis zu 10 Dateien anhängen.</string>
+    <string name="support_category_label">Worum geht es?</string>
+    <string name="support_category_account">Konto &amp; Anmeldung</string>
+    <string name="support_category_age">Alter &amp; Verifizierung</string>
+    <string name="support_category_payment">Münzen, Bohnen &amp; Käufe</string>
+    <string name="support_category_safety">Sicherheit &amp; andere Nutzer</string>
+    <string name="support_category_bug">Etwas funktioniert nicht</string>
+    <string name="support_category_other">Etwas anderes</string>
+    <string name="support_attachments_label">Screenshot oder Video hinzufügen</string>
+    <string name="support_attachment_add">Datei hinzufügen</string>
+    <string name="support_attachment_remove">Entfernen</string>
     <string name="age_restriction_sub_eighteen_confirm">Support kontaktieren</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Abbrechen</string>

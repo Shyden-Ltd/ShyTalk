@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">आपका संदेश बहुत लंबा है। कृपया इसे छोटा करके फिर से प्रयास करें।</string>
     <string name="support_form_error_generic">हम आपका संदेश नहीं भेज सके। कृपया अपना कनेक्शन जांचें और फिर से प्रयास करें।</string>
     <string name="support_form_error_already_open">आपका पहले से एक अनुरोध खुला है। हम उसी पर उत्तर देंगे।</string>
+    <string name="support_form_error_attachment_failed">हम वह फ़ाइल अपलोड नहीं कर सके। आप उसके बिना अपना संदेश भेज सकते हैं।</string>
+    <string name="support_form_error_attachment_too_large">यह फ़ाइल बहुत बड़ी है। कृपया 25 MB से छोटी फ़ाइल चुनें।</string>
+    <string name="support_form_error_attachment_too_many">आप अधिकतम 10 फ़ाइलें जोड़ सकते हैं।</string>
+    <string name="support_category_label">यह किस बारे में है?</string>
+    <string name="support_category_account">खाता और लॉगिन</string>
+    <string name="support_category_age">आयु और सत्यापन</string>
+    <string name="support_category_payment">सिक्के, बीन्स और खरीदारी</string>
+    <string name="support_category_safety">सुरक्षा और कोई अन्य व्यक्ति</string>
+    <string name="support_category_bug">कुछ काम नहीं कर रहा</string>
+    <string name="support_category_other">कुछ और</string>
+    <string name="support_attachments_label">स्क्रीनशॉट या वीडियो जोड़ें</string>
+    <string name="support_attachment_add">फ़ाइल जोड़ें</string>
+    <string name="support_attachment_remove">हटाएँ</string>
     <string name="age_restriction_sub_eighteen_confirm">सहायता से संपर्क करें</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">रद्द करें</string>

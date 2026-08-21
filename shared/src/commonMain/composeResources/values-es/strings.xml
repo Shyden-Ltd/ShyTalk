@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">Tu mensaje es demasiado largo. Acórtalo e inténtalo de nuevo.</string>
     <string name="support_form_error_generic">No pudimos enviar tu mensaje. Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="support_form_error_already_open">Ya tienes una solicitud abierta. Te responderemos ahí.</string>
+    <string name="support_form_error_attachment_failed">No pudimos subir ese archivo. Puedes enviar tu mensaje sin él.</string>
+    <string name="support_form_error_attachment_too_large">Ese archivo es demasiado grande. Elige uno de menos de 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Puedes adjuntar hasta 10 archivos.</string>
+    <string name="support_category_label">¿De qué se trata?</string>
+    <string name="support_category_account">Cuenta e inicio de sesión</string>
+    <string name="support_category_age">Edad y verificación</string>
+    <string name="support_category_payment">Monedas, frijoles y compras</string>
+    <string name="support_category_safety">Seguridad y otra persona</string>
+    <string name="support_category_bug">Algo no funciona</string>
+    <string name="support_category_other">Otra cosa</string>
+    <string name="support_attachments_label">Añade una captura o un vídeo</string>
+    <string name="support_attachment_add">Añadir archivo</string>
+    <string name="support_attachment_remove">Quitar</string>
     <string name="age_restriction_sub_eighteen_confirm">Contactar con soporte</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Cancelar</string>

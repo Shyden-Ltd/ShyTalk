@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">Je bericht is te lang. Maak het korter en probeer het opnieuw.</string>
     <string name="support_form_error_generic">We konden je bericht niet verzenden. Controleer je verbinding en probeer het opnieuw.</string>
     <string name="support_form_error_already_open">Je hebt al een openstaand verzoek. Daar reageren we op.</string>
+    <string name="support_form_error_attachment_failed">We konden dat bestand niet uploaden. Je kunt je bericht ook zonder versturen.</string>
+    <string name="support_form_error_attachment_too_large">Dat bestand is te groot. Kies er een van minder dan 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Je kunt maximaal 10 bestanden toevoegen.</string>
+    <string name="support_category_label">Waar gaat het over?</string>
+    <string name="support_category_account">Account &amp; inloggen</string>
+    <string name="support_category_age">Leeftijd &amp; verificatie</string>
+    <string name="support_category_payment">Munten, bonen &amp; aankopen</string>
+    <string name="support_category_safety">Veiligheid &amp; andere gebruikers</string>
+    <string name="support_category_bug">Er werkt iets niet</string>
+    <string name="support_category_other">Iets anders</string>
+    <string name="support_attachments_label">Voeg een screenshot of video toe</string>
+    <string name="support_attachment_add">Bestand toevoegen</string>
+    <string name="support_attachment_remove">Verwijderen</string>
     <string name="age_restriction_sub_eighteen_confirm">Contact opnemen met support</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Annuleren</string>

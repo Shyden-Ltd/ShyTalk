@@ -15,6 +15,7 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -557,12 +558,29 @@ class IosSupportRepositoryImpl(
         message: String,
         category: SupportCategory?,
         context: Map<String, String>,
+        attachments: List<String>,
     ): RaiseTicketOutcome =
         try {
             val fields = mutableMapOf<String, JsonElement>("message" to JsonPrimitive(message))
             category?.let { fields["category"] = JsonPrimitive(it.wireValue) }
-            if (context.isNotEmpty()) {
-                fields["context"] = JsonObject(context.mapValues { JsonPrimitive(it.value) })
+            // Same two fields Android fills in, for the same reason: an admin
+            // should not have to ask which platform and which build.
+            val enriched =
+                context +
+                    mapOf(
+                        "platform" to "ios",
+                        "appVersion" to
+                            (
+                                platform.Foundation.NSBundle.mainBundle
+                                    .objectForInfoDictionaryKey("CFBundleShortVersionString") as? String
+                                    ?: "unknown"
+                            ),
+                    )
+            fields["context"] = JsonObject(enriched.mapValues { JsonPrimitive(it.value) })
+            // Absent rather than empty, matching Android and every other optional
+            // in this payload.
+            if (attachments.isNotEmpty()) {
+                fields["attachments"] = JsonArray(attachments.map { JsonPrimitive(it) })
             }
 
             val resp = api.post("/api/support-tickets", JsonObject(fields))
@@ -597,6 +615,56 @@ class IosSupportRepositoryImpl(
             logW(TAG_SUPPORT, "Support ticket failed unexpectedly: ${e.message}")
             RaiseTicketOutcome.Failed(e.message ?: "Support request failed")
         }
+
+    override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? =
+        try {
+            val body = JsonObject(mapOf("contentType" to JsonPrimitive(contentType.wireValue)))
+            val resp = api.post("/api/support-tickets/upload-url", body)
+            val uploadUrl = resp["uploadUrl"]?.jsonPrimitive?.contentOrNull
+            val r2Key = resp["r2Key"]?.jsonPrimitive?.contentOrNull
+            // `parseResponse` answers an EMPTY object for a non-JSON 2xx rather
+            // than throwing, so a missing field here is indistinguishable from a
+            // captive portal. Null either way -- there is no upload to attempt.
+            if (uploadUrl.isNullOrEmpty() || r2Key.isNullOrEmpty()) {
+                logW(TAG_SUPPORT, "Attachment upload URL response was missing its fields")
+                null
+            } else {
+                UploadHandle(uploadUrl, r2Key, resp["expiresInSec"]?.jsonPrimitive?.int ?: 300)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Attachment upload URL refused: ${e.message}")
+            null
+        }
+
+    override suspend fun uploadAttachment(
+        uploadUrl: String,
+        contentType: AttachmentType,
+        bytes: ByteArray,
+    ): Boolean {
+        val client = io.ktor.client.HttpClient()
+        return try {
+            // The signed URL IS the auth -- no token. The Content-Type must match
+            // what the URL was signed for or R2 refuses the object.
+            val response =
+                client.put(uploadUrl) {
+                    contentType(
+                        io.ktor.http.ContentType
+                            .parse(contentType.wireValue),
+                    )
+                    setBody(bytes)
+                }
+            response.status.value in 200..299
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Attachment upload failed: ${e.message}")
+            false
+        } finally {
+            client.close()
+        }
+    }
 }
 
 private const val HTTP_CONFLICT_SUPPORT = 409

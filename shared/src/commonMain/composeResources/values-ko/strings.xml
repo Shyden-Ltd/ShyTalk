@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">메시지가 너무 깁니다. 줄인 후 다시 시도해 주세요.</string>
     <string name="support_form_error_generic">메시지를 보내지 못했습니다. 연결을 확인한 후 다시 시도해 주세요.</string>
     <string name="support_form_error_already_open">이미 처리 중인 요청이 있습니다. 해당 요청으로 답변드리겠습니다.</string>
+    <string name="support_form_error_attachment_failed">파일을 업로드하지 못했습니다. 파일 없이 메시지를 보낼 수 있습니다.</string>
+    <string name="support_form_error_attachment_too_large">파일이 너무 큽니다. 25MB 미만의 파일을 선택해 주세요.</string>
+    <string name="support_form_error_attachment_too_many">파일은 최대 10개까지 첨부할 수 있습니다.</string>
+    <string name="support_category_label">어떤 내용인가요?</string>
+    <string name="support_category_account">계정 및 로그인</string>
+    <string name="support_category_age">나이 및 인증</string>
+    <string name="support_category_payment">코인, 콩 및 결제</string>
+    <string name="support_category_safety">안전 및 다른 사용자</string>
+    <string name="support_category_bug">무언가 작동하지 않음</string>
+    <string name="support_category_other">기타</string>
+    <string name="support_attachments_label">스크린샷 또는 동영상 추가</string>
+    <string name="support_attachment_add">파일 추가</string>
+    <string name="support_attachment_remove">제거</string>
     <string name="age_restriction_sub_eighteen_confirm">고객 지원 문의</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">취소</string>

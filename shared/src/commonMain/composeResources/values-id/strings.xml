@@ -1669,6 +1669,19 @@
     <string name="support_form_error_too_long">Pesan Anda terlalu panjang. Persingkat lalu coba lagi.</string>
     <string name="support_form_error_generic">Kami tidak dapat mengirim pesan Anda. Periksa koneksi Anda lalu coba lagi.</string>
     <string name="support_form_error_already_open">Anda sudah memiliki permintaan yang terbuka. Kami akan membalas di sana.</string>
+    <string name="support_form_error_attachment_failed">Kami tidak dapat mengunggah file itu. Anda tetap bisa mengirim pesan tanpa file tersebut.</string>
+    <string name="support_form_error_attachment_too_large">File itu terlalu besar. Pilih file di bawah 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Anda dapat melampirkan maksimal 10 file.</string>
+    <string name="support_category_label">Ini tentang apa?</string>
+    <string name="support_category_account">Akun &amp; masuk</string>
+    <string name="support_category_age">Usia &amp; verifikasi</string>
+    <string name="support_category_payment">Koin, kacang &amp; pembelian</string>
+    <string name="support_category_safety">Keamanan &amp; pengguna lain</string>
+    <string name="support_category_bug">Ada yang rusak</string>
+    <string name="support_category_other">Hal lain</string>
+    <string name="support_attachments_label">Tambahkan tangkapan layar atau video</string>
+    <string name="support_attachment_add">Tambah file</string>
+    <string name="support_attachment_remove">Hapus</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Batal</string>
 

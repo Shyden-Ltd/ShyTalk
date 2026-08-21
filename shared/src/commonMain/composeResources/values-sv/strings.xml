@@ -1667,6 +1667,19 @@
     <string name="support_form_error_too_long">Ditt meddelande är för långt. Korta ner det och försök igen.</string>
     <string name="support_form_error_generic">Vi kunde inte skicka ditt meddelande. Kontrollera din anslutning och försök igen.</string>
     <string name="support_form_error_already_open">Du har redan en öppen förfrågan. Vi svarar på den.</string>
+    <string name="support_form_error_attachment_failed">Vi kunde inte ladda upp filen. Du kan skicka ditt meddelande ändå.</string>
+    <string name="support_form_error_attachment_too_large">Filen är för stor. Välj en som är under 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Du kan bifoga upp till 10 filer.</string>
+    <string name="support_category_label">Vad gäller det?</string>
+    <string name="support_category_account">Konto och inloggning</string>
+    <string name="support_category_age">Ålder och verifiering</string>
+    <string name="support_category_payment">Mynt, bönor och köp</string>
+    <string name="support_category_safety">Säkerhet och andra användare</string>
+    <string name="support_category_bug">Något fungerar inte</string>
+    <string name="support_category_other">Något annat</string>
+    <string name="support_attachments_label">Lägg till en skärmbild eller video</string>
+    <string name="support_attachment_add">Lägg till fil</string>
+    <string name="support_attachment_remove">Ta bort</string>
     <string name="age_restriction_sub_eighteen_confirm">Kontakta supporten</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Avbryt</string>

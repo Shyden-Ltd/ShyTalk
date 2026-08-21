@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">Twoja wiadomość jest za długa. Skróć ją i spróbuj ponownie.</string>
     <string name="support_form_error_generic">Nie udało się wysłać wiadomości. Sprawdź połączenie i spróbuj ponownie.</string>
     <string name="support_form_error_already_open">Masz już otwarte zgłoszenie. Odpowiemy w nim.</string>
+    <string name="support_form_error_attachment_failed">Nie udało się przesłać tego pliku. Możesz wysłać wiadomość bez niego.</string>
+    <string name="support_form_error_attachment_too_large">Ten plik jest za duży. Wybierz plik mniejszy niż 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Możesz dołączyć maksymalnie 10 plików.</string>
+    <string name="support_category_label">Czego dotyczy sprawa?</string>
+    <string name="support_category_account">Konto i logowanie</string>
+    <string name="support_category_age">Wiek i weryfikacja</string>
+    <string name="support_category_payment">Monety, fasolki i zakupy</string>
+    <string name="support_category_safety">Bezpieczeństwo i inna osoba</string>
+    <string name="support_category_bug">Coś nie działa</string>
+    <string name="support_category_other">Coś innego</string>
+    <string name="support_attachments_label">Dodaj zrzut ekranu lub film</string>
+    <string name="support_attachment_add">Dodaj plik</string>
+    <string name="support_attachment_remove">Usuń</string>
     <string name="age_restriction_sub_eighteen_confirm">Skontaktuj się z pomocą</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Anuluj</string>

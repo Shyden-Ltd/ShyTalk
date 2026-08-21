@@ -1753,6 +1753,19 @@
     <string name="support_form_error_too_long">សាររបស់អ្នកវែងពេក។ សូមកាត់បន្ថយ ហើយព្យាយាមម្តងទៀត។</string>
     <string name="support_form_error_generic">យើងមិនអាចផ្ញើសាររបស់អ្នកបានទេ។ សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្តងទៀត។</string>
     <string name="support_form_error_already_open">អ្នកមានសំណើបើកចំហរួចហើយ។ យើងនឹងឆ្លើយតបនៅទីនោះ។</string>
+    <string name="support_form_error_attachment_failed">យើងមិនអាចផ្ទុកឯកសារនោះបានទេ។ អ្នកអាចផ្ញើសាររបស់អ្នកដោយគ្មានវា។</string>
+    <string name="support_form_error_attachment_too_large">ឯកសារនេះធំពេក។ សូមជ្រើសរើសឯកសារតិចជាង 25 MB។</string>
+    <string name="support_form_error_attachment_too_many">អ្នកអាចភ្ជាប់ឯកសារបានច្រើនបំផុត 10។</string>
+    <string name="support_category_label">នេះអំពីអ្វី?</string>
+    <string name="support_category_account">គណនី និងការចូល</string>
+    <string name="support_category_age">អាយុ និងការផ្ទៀងផ្ទាត់</string>
+    <string name="support_category_payment">កាក់ សណ្តែក និងការទិញ</string>
+    <string name="support_category_safety">សុវត្ថិភាព និងអ្នកប្រើផ្សេង</string>
+    <string name="support_category_bug">មានអ្វីមួយខូច</string>
+    <string name="support_category_other">រឿងផ្សេងទៀត</string>
+    <string name="support_attachments_label">បន្ថែមរូបថតអេក្រង់ ឬវីដេអូ</string>
+    <string name="support_attachment_add">បន្ថែមឯកសារ</string>
+    <string name="support_attachment_remove">លុបចេញ</string>
     <string name="age_restriction_sub_eighteen_confirm">ទាក់ទងជំនួយ</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">បោះបង់</string>

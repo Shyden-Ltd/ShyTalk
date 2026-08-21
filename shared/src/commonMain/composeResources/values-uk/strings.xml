@@ -1667,6 +1667,19 @@
     <string name="support_form_error_too_long">Ваше повідомлення задовге. Скоротіть його та спробуйте ще раз.</string>
     <string name="support_form_error_generic">Не вдалося надіслати повідомлення. Перевірте зʼєднання та спробуйте ще раз.</string>
     <string name="support_form_error_already_open">У вас уже є відкритий запит. Ми відповімо на нього.</string>
+    <string name="support_form_error_attachment_failed">Не вдалося завантажити цей файл. Ви можете надіслати повідомлення без нього.</string>
+    <string name="support_form_error_attachment_too_large">Файл завеликий. Оберіть файл до 25 МБ.</string>
+    <string name="support_form_error_attachment_too_many">Можна долучити не більше 10 файлів.</string>
+    <string name="support_category_label">Про що ваше звернення?</string>
+    <string name="support_category_account">Обліковий запис і вхід</string>
+    <string name="support_category_age">Вік і підтвердження</string>
+    <string name="support_category_payment">Монети, боби та покупки</string>
+    <string name="support_category_safety">Безпека та інший користувач</string>
+    <string name="support_category_bug">Щось не працює</string>
+    <string name="support_category_other">Інше</string>
+    <string name="support_attachments_label">Додайте знімок екрана або відео</string>
+    <string name="support_attachment_add">Додати файл</string>
+    <string name="support_attachment_remove">Видалити</string>
     <string name="age_restriction_sub_eighteen_confirm">Звернутися до підтримки</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Скасувати</string>

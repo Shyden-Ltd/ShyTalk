@@ -1,8 +1,10 @@
 package com.shyden.shytalk.feature.support
 
+import com.shyden.shytalk.data.repository.AttachmentType
 import com.shyden.shytalk.data.repository.RaiseTicketOutcome
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
+import com.shyden.shytalk.data.repository.UploadHandle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -156,6 +158,133 @@ class SupportFormViewModelTest {
             advanceUntilIdle()
         }
 
+    // ─── SHY-0387: choosing a category, showing the problem ─────
+
+    /**
+     * `selectCategory` was removed in SHY-0385 because nothing called it — the
+     * dialog had no picker. The page has one, so it is back, and this test is
+     * paired with the wiring pin that proves the picker actually calls it.
+     */
+    @Test
+    fun `choosing a category overrides the entry point's default`() =
+        runTest {
+            viewModel = SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
+            viewModel.updateMessage("Charged twice")
+            viewModel.selectCategory(SupportCategory.Payment)
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(SupportCategory.Payment, repo.raiseCalls[0].category)
+        }
+
+    @Test
+    fun `an attached file is uploaded and its key travels with the ticket`() =
+        runTest {
+            viewModel.attach("shot.png", AttachmentType.Png, ByteArray(64))
+            advanceUntilIdle()
+            viewModel.updateMessage("Here is what I see.")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(listOf(64), repo.uploadedBytes)
+            assertEquals(listOf("support-tickets/1/a.png"), repo.raiseCalls[0].attachments)
+        }
+
+    @Test
+    fun `the person can see what they attached`() =
+        runTest {
+            viewModel.attach("shot.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+
+            val shown = viewModel.uiState.value.attachments
+            assertEquals(1, shown.size)
+            assertEquals("shot.png", shown[0].displayName)
+        }
+
+    /**
+     * The story is explicit: an attachment that fails must be reported AND the
+     * rest of the ticket must still be sendable without it. A failed upload that
+     * silently drops the file is the worse half of that.
+     */
+    @Test
+    fun `a failed upload is reported and does not block the ticket`() =
+        runTest {
+            repo.uploadSucceeds = false
+            viewModel.attach("shot.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+                "a file that did not upload is not attached",
+            )
+
+            viewModel.updateMessage("Sending anyway.")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.raiseCalls.size)
+            assertTrue(repo.raiseCalls[0].attachments.isEmpty())
+        }
+
+    @Test
+    fun `an upload the server refuses to authorise is reported, not silently dropped`() =
+        runTest {
+            repo.handleOrNull = { null }
+            viewModel.attach("shot.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `attaching, removing and re-attaching leaves the right set`() =
+        runTest {
+            viewModel.attach("one.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            viewModel.attach("two.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            viewModel.removeAttachment("support-tickets/1/a.png")
+            viewModel.updateMessage("Just the second one.")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(listOf("support-tickets/1/b.png"), repo.raiseCalls[0].attachments)
+        }
+
+    @Test
+    fun `a file too large to send is refused before any upload starts`() =
+        runTest {
+            viewModel.attach("huge.mp4", AttachmentType.Mp4, ByteArray(MAX_ATTACHMENT_BYTES + 1))
+            advanceUntilIdle()
+
+            assertTrue(repo.uploadedBytes.isEmpty(), "the bytes must never leave the device")
+            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `resetting clears the attachments too`() =
+        runTest {
+            viewModel.attach("one.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+
+            viewModel.reset()
+
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+        }
+
     // ─── Refusing before it reaches the server ──────────────────
 
     @Test
@@ -286,17 +415,39 @@ private class FakeSupportRepository : SupportRepository {
         val message: String,
         val category: SupportCategory?,
         val context: Map<String, String>,
+        val attachments: List<String>,
     )
 
     val raiseCalls = mutableListOf<Call>()
     var result: RaiseTicketOutcome = RaiseTicketOutcome.Raised("ticket-1")
 
+    /** Keys handed out in order, so a test can name the one it expects. */
+    var nextKeys = ArrayDeque(listOf("support-tickets/1/a.png", "support-tickets/1/b.png"))
+    var handleOrNull: (() -> UploadHandle?)? = null
+    var uploadSucceeds = true
+    val uploadedBytes = mutableListOf<Int>()
+
     override suspend fun raiseTicket(
         message: String,
         category: SupportCategory?,
         context: Map<String, String>,
+        attachments: List<String>,
     ): RaiseTicketOutcome {
-        raiseCalls.add(Call(message, category, context))
+        raiseCalls.add(Call(message, category, context, attachments))
         return result
+    }
+
+    override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? {
+        handleOrNull?.let { return it() }
+        return UploadHandle("https://r2.example/put", nextKeys.removeFirst(), 300)
+    }
+
+    override suspend fun uploadAttachment(
+        uploadUrl: String,
+        contentType: AttachmentType,
+        bytes: ByteArray,
+    ): Boolean {
+        uploadedBytes.add(bytes.size)
+        return uploadSucceeds
     }
 }

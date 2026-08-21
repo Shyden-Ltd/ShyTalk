@@ -1669,6 +1669,19 @@
     <string name="support_form_error_too_long">您的信息太长，请缩短后再试。</string>
     <string name="support_form_error_generic">无法发送您的信息，请检查网络连接后重试。</string>
     <string name="support_form_error_already_open">您已有一个待处理的请求，我们会在该请求中回复您。</string>
+    <string name="support_form_error_attachment_failed">无法上传该文件。您可以不带文件发送信息。</string>
+    <string name="support_form_error_attachment_too_large">该文件太大。请选择小于 25 MB 的文件。</string>
+    <string name="support_form_error_attachment_too_many">最多可附加 10 个文件。</string>
+    <string name="support_category_label">您想咨询什么？</string>
+    <string name="support_category_account">账号与登录</string>
+    <string name="support_category_age">年龄与认证</string>
+    <string name="support_category_payment">硬币、豆子与购买</string>
+    <string name="support_category_safety">安全与其他用户</string>
+    <string name="support_category_bug">有功能无法使用</string>
+    <string name="support_category_other">其他事项</string>
+    <string name="support_attachments_label">添加截图或视频</string>
+    <string name="support_attachment_add">添加文件</string>
+    <string name="support_attachment_remove">移除</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">取消</string>
 

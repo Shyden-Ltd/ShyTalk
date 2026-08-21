@@ -1669,6 +1669,19 @@
     <string name="support_form_error_too_long">Nội dung của bạn quá dài. Vui lòng rút ngắn rồi thử lại.</string>
     <string name="support_form_error_generic">Chúng tôi không thể gửi nội dung của bạn. Vui lòng kiểm tra kết nối và thử lại.</string>
     <string name="support_form_error_already_open">Bạn đã có một yêu cầu đang mở. Chúng tôi sẽ trả lời trong yêu cầu đó.</string>
+    <string name="support_form_error_attachment_failed">Chúng tôi không thể tải tệp đó lên. Bạn vẫn có thể gửi nội dung mà không cần tệp.</string>
+    <string name="support_form_error_attachment_too_large">Tệp này quá lớn. Vui lòng chọn tệp dưới 25 MB.</string>
+    <string name="support_form_error_attachment_too_many">Bạn có thể đính kèm tối đa 10 tệp.</string>
+    <string name="support_category_label">Vấn đề của bạn là gì?</string>
+    <string name="support_category_account">Tài khoản &amp; đăng nhập</string>
+    <string name="support_category_age">Tuổi &amp; xác minh</string>
+    <string name="support_category_payment">Xu, đậu &amp; giao dịch</string>
+    <string name="support_category_safety">An toàn &amp; người dùng khác</string>
+    <string name="support_category_bug">Có gì đó bị lỗi</string>
+    <string name="support_category_other">Việc khác</string>
+    <string name="support_attachments_label">Thêm ảnh chụp màn hình hoặc video</string>
+    <string name="support_attachment_add">Thêm tệp</string>
+    <string name="support_attachment_remove">Xóa</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Hủy</string>
 

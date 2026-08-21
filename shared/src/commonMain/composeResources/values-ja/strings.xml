@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">メッセージが長すぎます。短くしてもう一度お試しください。</string>
     <string name="support_form_error_generic">メッセージを送信できませんでした。接続を確認してもう一度お試しください。</string>
     <string name="support_form_error_already_open">すでに対応中のお問い合わせがあります。そちらでご返信します。</string>
+    <string name="support_form_error_attachment_failed">そのファイルをアップロードできませんでした。ファイルなしでメッセージを送信できます。</string>
+    <string name="support_form_error_attachment_too_large">ファイルが大きすぎます。25 MB 未満のファイルを選んでください。</string>
+    <string name="support_form_error_attachment_too_many">添付できるファイルは 10 件までです。</string>
+    <string name="support_category_label">どのようなご用件ですか？</string>
+    <string name="support_category_account">アカウントとログイン</string>
+    <string name="support_category_age">年齢と認証</string>
+    <string name="support_category_payment">コイン・豆・購入</string>
+    <string name="support_category_safety">安全と他のユーザー</string>
+    <string name="support_category_bug">不具合がある</string>
+    <string name="support_category_other">その他</string>
+    <string name="support_attachments_label">スクリーンショットまたは動画を追加</string>
+    <string name="support_attachment_add">ファイルを追加</string>
+    <string name="support_attachment_remove">削除</string>
     <string name="age_restriction_sub_eighteen_confirm">サポートに問い合わせる</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">キャンセル</string>

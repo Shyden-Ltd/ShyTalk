@@ -1668,6 +1668,19 @@
     <string name="support_form_error_too_long">Mesajınız çok uzun. Lütfen kısaltıp tekrar deneyin.</string>
     <string name="support_form_error_generic">Mesajınızı gönderemedik. Bağlantınızı kontrol edip tekrar deneyin.</string>
     <string name="support_form_error_already_open">Zaten açık bir talebiniz var. Oradan yanıtlayacağız.</string>
+    <string name="support_form_error_attachment_failed">Bu dosyayı yükleyemedik. Mesajınızı dosya olmadan gönderebilirsiniz.</string>
+    <string name="support_form_error_attachment_too_large">Bu dosya çok büyük. Lütfen 25 MB'tan küçük bir dosya seçin.</string>
+    <string name="support_form_error_attachment_too_many">En fazla 10 dosya ekleyebilirsiniz.</string>
+    <string name="support_category_label">Konu nedir?</string>
+    <string name="support_category_account">Hesap ve giriş</string>
+    <string name="support_category_age">Yaş ve doğrulama</string>
+    <string name="support_category_payment">Jetonlar, fasulyeler ve satın alımlar</string>
+    <string name="support_category_safety">Güvenlik ve başka bir kullanıcı</string>
+    <string name="support_category_bug">Bir şey çalışmıyor</string>
+    <string name="support_category_other">Başka bir şey</string>
+    <string name="support_attachments_label">Ekran görüntüsü veya video ekleyin</string>
+    <string name="support_attachment_add">Dosya ekle</string>
+    <string name="support_attachment_remove">Kaldır</string>
     <string name="age_restriction_sub_eighteen_confirm">Destekle iletişime geç</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">İptal</string>
