@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      MEASURED, not guessed: sampled from an on-device screenshot of the real
+      app running in dark mode (journey J38, OnePlus CPH2653, 2026-08-22) at
+      four separate empty-background points, all #141218. That is Material 3's
+      baseline dark `surface`, which is what darkColorScheme() resolves to
+      since ShyTalkTheme does not override `background`.
+
+      Re-measure the same way if the scheme ever sets one explicitly.
+    -->
+    <color name="shytalk_window_background">#FF141218</color>
+</resources>
