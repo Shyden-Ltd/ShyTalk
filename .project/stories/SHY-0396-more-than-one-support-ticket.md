@@ -291,3 +291,24 @@ so the block still contained the word while the untrusted half went out
 unescaped. The assertion is now bound to `m?.message` itself. A guard that
 cannot fail for the case it names is worse than no guard, because it is counted
 as coverage.
+
+## A note SHY-0397 will need
+
+[[SHY-0397]]'s Notes section says:
+
+> The app string `support_form_error_already_open` says "We will reply to that
+> one." That sentence becomes true when this ships.
+
+**That string no longer exists.** This story deleted both the refusal and the
+sentence on 2026-08-22, in all 21 locales. So SHY-0397 no longer inherits a
+promise the product cannot keep, and is free to write its own copy.
+
+Recorded HERE rather than edited into SHY-0397 itself, because SHY-0397 is a
+Draft and the pre-merge gate's Draft exemption is ADD-only — editing an existing
+Draft story blocks the merge, and flipping its status to clear the gate would be
+claiming a review that never happened.
+
+What SHY-0396 leaves behind for it is `support_duplicate_reminder`, which tells
+somebody a duplicate goes to the back of the queue. If SHY-0397 starts emailing
+people about their ticket, that sentence needs re-reading alongside whatever the
+email says.

@@ -87,7 +87,15 @@ describe('locale strings render as written', () => {
     // 16 retired `values-*` directories still exist, and this pin plus the
     // locale-parity guard require every key in every one of them until SHY-0194
     // deletes them.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([860]);
+    // 860 -> 867 on 2026-08-22: SHY-0396 replaced the refusal with a choice.
+    // OUT: `support_form_error_already_open` ("You already have a request open.
+    // We will reply to that one.") and `support_duplicate_title`, both of which
+    // said a second request would not be taken. IN: nine -- the confirmation for
+    // a message ADDED to an open request, the back-of-the-queue reminder, the
+    // three choices, and singular/plural/overflow forms of how many are open.
+    // Net 860 - 2 + 9 = 867, and every one of the 21 files agrees on it, which
+    // is what proves the removals did not silently take a neighbour with them.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([867]);
   });
 
   test('no string carries an Android-style escape sequence', () => {
