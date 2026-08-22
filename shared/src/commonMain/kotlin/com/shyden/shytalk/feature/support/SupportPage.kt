@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -119,6 +120,12 @@ fun SupportPage(
         onBack()
     }
 
+    // SHY-0419, read a second time. `imePadding()` is a no-op on this screen —
+    // something above consumes the IME inset — so the raw value is read and
+    // applied by hand. Hoisted out of the body because the pinned Send bar needs
+    // it too.
+    val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -132,6 +139,44 @@ fun SupportPage(
                     }
                 },
             )
+        },
+        bottomBar = {
+            // Send is PINNED above the keyboard rather than left at the bottom
+            // of a scrolling form — SHY-0419, which came back.
+            //
+            // The first fix extended the scroll range so Send could be REACHED.
+            // It was still DRAWN under the keyboard at rest, and on a real
+            // iPhone the keyboard covered y 609-854 with Send at y 675: tapping
+            // the button's own centre typed a "y" into the message instead of
+            // sending, and the stray character shipped in the ticket. "Scroll
+            // first" is not something the screen tells anybody to do.
+            //
+            // A pinned bar is length-independent: it holds however long the form
+            // grows and whatever size keyboard the person uses.
+            if (!state.submitted && !state.awaitingDuplicateChoice) {
+                Surface(tonalElevation = 3.dp) {
+                    Button(
+                        onClick = viewModel::submit,
+                        // SHY-0396: never disabled for an already-open request.
+                        // Send is how somebody REACHES the choice, so disabling
+                        // it here is what blocked a genuinely different problem
+                        // from ever being reported.
+                        enabled = !state.isSubmitting,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                                .padding(bottom = imeBottom)
+                                .testTag(TAG_SUPPORT_SEND),
+                    ) {
+                        if (state.isSubmitting) {
+                            CircularProgressIndicator(modifier = Modifier.height(18.dp))
+                        } else {
+                            Text(stringResource(Res.string.support_form_send))
+                        }
+                    }
+                }
+            }
         },
     ) { padding ->
         if (state.submitted) {
@@ -157,8 +202,6 @@ fun SupportPage(
         // sections and the iOS swipe-down convention all left the keyboard up, and
         // the page did not scroll. Somebody could fill this form in and never send
         // it.
-        val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
-
         // SHY-0396. Asked BEFORE anything is sent, and it replaces the form
         // rather than floating over it: a dialog above a form with the keyboard
         // up is the exact geometry that made Send unreachable on iOS (SHY-0419).
@@ -236,21 +279,6 @@ fun SupportPage(
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
-            Button(
-                onClick = viewModel::submit,
-                // SHY-0396: never disabled for an already-open request. Send is
-                // how somebody reaches the choice, so disabling it here is what
-                // blocked a genuinely different problem from ever being reported.
-                enabled = !state.isSubmitting,
-                modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_SEND),
-            ) {
-                if (state.isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.height(18.dp))
-                } else {
-                    Text(stringResource(Res.string.support_form_send))
-                }
-            }
             Spacer(Modifier.height(24.dp))
         }
     }

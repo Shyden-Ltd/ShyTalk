@@ -249,6 +249,44 @@ class SupportFormWiringPinTest {
     }
 
     /**
+     * SHY-0419, pinned so it cannot come back a third time.
+     *
+     * The first fix extended the scroll range so Send could be REACHED. It was
+     * still DRAWN under the keyboard at rest: on a real iPhone the keyboard
+     * covered y 609-854 with Send at y 675, and tapping the button's own centre
+     * typed a "y" into the message instead of sending — the stray character
+     * shipped in the ticket. Reachable-after-scrolling is not the same as
+     * usable, and nothing on the screen tells anybody to scroll.
+     *
+     * Send therefore belongs in the Scaffold's bottomBar, above the keyboard,
+     * where its position does not depend on how long the form has grown.
+     */
+    @Test
+    fun `Send is pinned above the keyboard, not left at the bottom of the form`() {
+        val code = codeOf(page)
+        val bottomBar =
+            code
+                .substringAfter("bottomBar = {", "")
+                .substringBefore(") { padding ->", "")
+        assertTrue(
+            bottomBar.isNotEmpty(),
+            "$page has no bottomBar — Send is back inside the scrolling form, where a keyboard " +
+                "covers it (SHY-0419)",
+        )
+        assertTrue(
+            bottomBar.contains("TAG_SUPPORT_SEND"),
+            "$page does not put Send in the bottomBar. Found there: `$bottomBar`",
+        )
+        // The raw inset, because `imePadding()` is a no-op on this screen —
+        // something above it consumes the IME inset, which is the whole reason
+        // SHY-0419 existed.
+        assertTrue(
+            bottomBar.contains("imeBottom"),
+            "$page pins Send but does not lift it above the keyboard",
+        )
+    }
+
+    /**
      * SHY-0396's UX clause: "it appears before they have typed the whole thing
      * again, not after they press send".
      *
