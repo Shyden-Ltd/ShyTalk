@@ -45,6 +45,21 @@ point and `imePadding()` has lifted the whole Scaffold clear. Step 12 comes
 immediately after **"Go back"**, which dismisses the keyboard. Same button, same
 screen, opposite outcome — which is exactly the shape that reads as flakiness.
 
+### iOS had it too — measured after the fix
+
+The ticket was written believing this was Android-only. Frame measurement of the
+pre-change and post-change iOS walks says otherwise (screen 2736px = 912pt at 3x):
+
+| | Send's bottom edge | Bottom-bar surface |
+| --- | --- | --- |
+| Before (`imePadding()`) | **20.0 pt** from the screen bottom | edge to edge |
+| After (`ime ∪ navigationBars`) | **54.0 pt** | stops at 34.0 pt |
+
+iOS's bottom safe area is **34 pt**, so Send's lower ~14 pt sat underneath the
+home indicator. Same defect, same cause — one inset reasoned about while the
+screen has two — on both platforms. The measured 34.0 pt also confirms
+`WindowInsets.navigationBars` maps correctly to the iOS safe area.
+
 ### Scope
 
 `MainScreen` is the only other screen with a `bottomBar` and is **not** affected:
@@ -70,8 +85,8 @@ precisely one screen was wrong.
 - [ ] Holds for gesture navigation as well as three-button navigation.
 - [ ] Holds through open → close → reopen of the keyboard within one visit.
 - [ ] Holds on the duplicate-choice screen, which replaces the form.
-- [ ] iOS is unchanged: Send still clears the keyboard, and the form does not
-      collapse (the SHY-0419 regression).
+- [ ] On iOS, Send clears the home indicator as well as the keyboard, and the
+      form does not collapse (the SHY-0419 regression).
 
 ### Performance
 
@@ -152,6 +167,12 @@ precisely one screen was wrong.
 - [ ] iOS journey still green.
 
 ## Notes
+
+- **Introduced by the fix, tracked as SHY-0431:** `windowInsetsPadding` on the
+  Scaffold insets the bar's BACKGROUND along with its content, so on iOS the
+  bottom 34 pt is now unpainted black. Android is unaffected because the system
+  navigation bar paints that band itself. Cosmetic, and a fair trade against the
+  overlap it fixes, but it is a real inconsistency this change caused.
 
 - Fixed by replacing `Modifier.imePadding()` with
   `Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))`.
