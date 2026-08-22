@@ -23,6 +23,7 @@
 
 const {
   occluderOf,
+  looksLikeSystemOverlay,
   assertReachable,
   parseNodes,
   tapId,
@@ -89,25 +90,103 @@ describe('occluderOf', () => {
     expect(occluderOf(nodes, send)).toBeNull();
   });
 
-  test('a node drawn EARLIER cannot occlude one drawn later', () => {
-    // Document order is paint order in both dumps. A background behind the
-    // button is not covering it.
-    const background = boxed({ id: 'page_background' }, 0, 0, 420, 900);
+  test('a keyboard drawn EARLIER cannot occlude a button drawn later', () => {
+    // Document order is paint order, so an overlay listed before the control
+    // is behind it.
+    const keyboard = boxed({ cls: 'XCUIElementTypeKeyboard' }, 0, 0, 420, 900);
     const send = boxed({ id: 'support_send' }, 40, 300, 380, 380);
-    expect(occluderOf([background, send], send)).toBeNull();
+    expect(occluderOf([keyboard, send], send)).toBeNull();
   });
 
-  test("a control's own children do not occlude it", () => {
-    // A button's label sits inside the button and comes later in the tree. If
-    // containment alone counted, every button would look covered by its text.
+  test('ordinary content on top of a control is not treated as covering it', () => {
+    // Only system overlays count. A UI tree is not a stack of painted
+    // rectangles, and the general rule fired on the first real screen it met.
     const send = boxed({ id: 'support_send' }, 40, 300, 380, 380);
-    const label = boxed({ text: 'Send' }, 100, 320, 320, 360);
+    const label = boxed({ text: 'Send', cls: 'android.widget.TextView' }, 0, 0, 420, 900);
     expect(occluderOf([send, label], send)).toBeNull();
   });
 
   test('a node with no box cannot occlude anything', () => {
     const send = boxed({ id: 'support_send' }, 40, 300, 380, 380);
     expect(occluderOf([send, node({ id: 'ghost' })], send)).toBeNull();
+  });
+});
+
+/**
+ * THE FALSE POSITIVE, from the real device.
+ *
+ * The first version of this check asked a general question — is anything drawn
+ * later holding this point — and fired on the first screen it met. The tree,
+ * verbatim from the live dump of the daily-reward dialog:
+ *
+ *   <View clickable="true"  bounds="[405,2166][608,2334]">     the actual button
+ *     <TextView text="Later" bounds="[461,2219][553,2282]"/>   the target
+ *     <Button   text=""      bounds="[405,2180][608,2320]"/>   flagged as coverer
+ *   </View>
+ *
+ * Compose SEMANTICS nodes, not painted views. The `Button` is the Role.Button
+ * node for the same composable as the label: `clickable="false"`, a sibling,
+ * and LARGER than the label — so the "wholly inside" exemption, which
+ * anticipated label-inside-button, failed in the other direction.
+ *
+ * Every Compose button reached by its text has this shape. `Claim Today's
+ * Reward` on the same dialog is identical.
+ */
+describe('Compose semantics siblings are not occluders', () => {
+  const REWARD_DIALOG_XML = [
+    '<hierarchy>',
+    '<node class="android.view.View" clickable="true" bounds="[405,2166][608,2334]" enabled="true">',
+    '<node text="Later" class="android.widget.TextView" clickable="false" bounds="[461,2219][553,2282]" enabled="true" />',
+    '<node text="" class="android.widget.Button" clickable="false" bounds="[405,2180][608,2320]" enabled="true" />',
+    '</node>',
+    '</hierarchy>',
+  ].join('');
+
+  test('the sibling Button does not occlude the label', () => {
+    const nodes = parseNodes(REWARD_DIALOG_XML);
+    const later = nodes.find((n) => n.text === 'Later');
+    expect(occluderOf(nodes, later)).toBeNull();
+  });
+
+  test('tapping it by text goes through, as it did before the check existed', async () => {
+    const device = {
+      kind: 'android',
+      taps: [],
+      async dumpXml() {
+        return REWARD_DIALOG_XML;
+      },
+      async tap(x, y) {
+        this.taps.push({ x, y });
+      },
+    };
+    const nodes = parseNodes(REWARD_DIALOG_XML);
+    const later = nodes.find((n) => n.text === 'Later');
+    const { tapResolved } = require('../../scripts/device-journey-runner');
+    await tapResolved(device, later, {
+      relocate: (fresh) => fresh.find((n) => n.text === 'Later'),
+    });
+    // The label's own centre: (461+553)/2 = 507, (2219+2282)/2 = 2250.5 -> 2251.
+    expect(device.taps).toEqual([{ x: 507, y: 2251 }]);
+  }, 15000);
+});
+
+describe('looksLikeSystemOverlay', () => {
+  test.each([
+    ['XCUIElementTypeKeyboard', ''],
+    ['android.inputmethodservice.SoftInputWindow', ''],
+    ['android.view.View', 'android:id/navigationBarBackground'],
+    ['android.widget.FrameLayout', 'com.android.systemui:id/status_bar'],
+  ])('%s / %s is an overlay', (cls, id) => {
+    expect(looksLikeSystemOverlay({ cls, id })).toBe(true);
+  });
+
+  test.each([
+    ['android.widget.Button', ''],
+    ['android.view.View', ''],
+    ['XCUIElementTypeOther', ''],
+    ['android.widget.TextView', 'support_send'],
+  ])('%s / %s is ordinary content', (cls, id) => {
+    expect(looksLikeSystemOverlay({ cls, id })).toBe(false);
   });
 });
 

@@ -580,28 +580,61 @@ const boxHolds = (box, point) =>
   point.y >= box.y1 &&
   point.y <= box.y2;
 
-/** Is `inner` entirely inside `outer`? Used to spot a control's own children. */
-const boxInside = (inner, outer) =>
-  Boolean(inner && outer) &&
-  inner.x1 >= outer.x1 &&
-  inner.y1 >= outer.y1 &&
-  inner.x2 <= outer.x2 &&
-  inner.y2 <= outer.y2;
+/**
+ * Things that genuinely paint over an app's controls and swallow taps.
+ *
+ * Deliberately a SHORT, specific list rather than a general rule. The general
+ * version — "anything drawn later whose box holds the point" — was tried and
+ * was wrong on the very first device run, because a UI tree is not a stack of
+ * painted rectangles.
+ */
+const SYSTEM_OVERLAY_HINTS = [
+  'keyboard', // XCUIElementTypeKeyboard
+  'inputmethod', // android.inputmethodservice.SoftInputWindow
+  'navigationbar', // android:id/navigationBarBackground
+  'statusbar',
+  'systemui',
+];
+
+const looksLikeSystemOverlay = (n) =>
+  SYSTEM_OVERLAY_HINTS.some((hint) => `${n.cls || ''} ${n.id || ''}`.toLowerCase().includes(hint));
 
 /**
  * What is covering `target`, if anything.
  *
- * Document order is paint order in both dumps, so only a node drawn LATER can
- * be on top. It occludes when its box contains the target's tappable CENTRE —
- * the centre and not the whole box, because a control covered only in part is
- * still what SHY-0428 was: Send's lower half under the navigation bar, its
- * centre landing on HOME.
+ * ## Why this is narrow on purpose
  *
- * A control's own children come later and sit inside it, so anything wholly
- * within the target's box is excluded. Without that every button would look
- * covered by its own label.
+ * The first version asked a general question: is any node drawn LATER holding
+ * this point? It fired on the first real screen it met, and the tree says why:
  *
- * @returns {object|null} the covering node, or null
+ * ```xml
+ * <View clickable="true"  bounds="[405,2166][608,2334]">   <- the actual button
+ *   <TextView text="Later" bounds="[461,2219][553,2282]"/> <- the target
+ *   <Button   text=""      bounds="[405,2180][608,2320]"/> <- flagged as coverer
+ * </View>
+ * ```
+ *
+ * Those are **Compose semantics nodes**, not painted views. The `Button` is the
+ * `Role.Button` node for the SAME composable as the label — `clickable="false"`,
+ * a sibling, and LARGER than the label. Sibling semantics nodes cannot occlude
+ * one another, and a tap at the label's centre resolves to the one clickable
+ * ancestor either way. Every Compose button reached by its text has this shape,
+ * so the general rule would have reddened healthy walks broadly.
+ *
+ * The only exemption then was "candidate wholly INSIDE the target", which
+ * anticipated label-inside-button. Compose emits the inverse.
+ *
+ * So this asks a specific question instead: **is a SYSTEM OVERLAY on top of
+ * it?** That is exactly the two defects this exists for — SHY-0419's keyboard
+ * and SHY-0428's navigation bar — and a system overlay is never a sibling of an
+ * app control, so the Compose shape cannot reach it.
+ *
+ * A product modal covering a control is NOT caught. That is a deliberate trade:
+ * a check that reddens healthy walks gets disabled, and then catches nothing at
+ * all. Widening it needs tree DEPTH so ancestry can be reasoned about, which
+ * neither parser records today.
+ *
+ * @returns {object|null} the covering overlay, or null
  */
 function occluderOf(nodes, target) {
   if (!target?.bounds || !target?.center) return null;
@@ -609,8 +642,7 @@ function occluderOf(nodes, target) {
   if (from === -1) return null;
   for (let i = from + 1; i < nodes.length; i += 1) {
     const other = nodes[i];
-    if (!other?.bounds) continue;
-    if (boxInside(other.bounds, target.bounds)) continue;
+    if (!other?.bounds || !looksLikeSystemOverlay(other)) continue;
     if (boxHolds(other.bounds, target.center)) return other;
   }
   return null;
@@ -2241,6 +2273,7 @@ if (require.main === module) {
 module.exports = {
   parseArgs,
   occluderOf,
+  looksLikeSystemOverlay,
   assertReachable,
   tapResolved,
   tapId,
