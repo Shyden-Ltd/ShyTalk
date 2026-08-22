@@ -256,8 +256,38 @@ duplicate ticket; the alternative costs somebody their report.
 | `SupportFormWiringPinTest` | 13 |
 | `SupportRepositoryImplTest` (Android) | 24 |
 | `support-duplicate-copy.test.js` (21 locales) | 231 |
+| `support-follow-up-reaches-the-admin.test.js` | 4 |
 
 **Journey** — `journey-tests/j38-asking-for-help-twice.feature`, 10 scenarios.
 
 **Still to do before this can move:** the local device walk on Android and
 iPhone, then the evidence page and operator sign-off.
+
+
+## A defect this story nearly shipped (2026-08-22)
+
+**A follow-up message reached Firestore and no human.**
+
+`POST /support-tickets/{id}/messages` was built, tested and green. The admin
+list route returns whole ticket documents, so `messages` genuinely reached the
+browser. And `public/admin/js/tabs/support.js` rendered `ticket.message` and
+`ticket.adminNote` and stopped there — it had never heard of `messages`, because
+the field did not exist when it was written.
+
+So choosing "it is the problem I already reported" wrote somebody's words into a
+field no admin surface displayed. That is the exact outcome this story exists to
+prevent — a follow-up with nowhere to go — arrived at by a longer route, with
+three green halves and a broken seam between them.
+
+**How it was found:** the journey audit, not a failing test. j38's scenario *"An
+admin sees the added words on the original request"* had nothing behind it.
+Naming the scenario that walks each behaviour is what surfaced the one that
+nothing walked.
+
+**Second-order finding.** The first version of the guard asserted
+`expect(block).toContain('escapeHtml')`. It SURVIVED a mutation that rendered
+the follow-up raw, because the timestamp beside each follow-up is escaped too —
+so the block still contained the word while the untrusted half went out
+unescaped. The assertion is now bound to `m?.message` itself. A guard that
+cannot fail for the case it names is worse than no guard, because it is counted
+as coverage.
