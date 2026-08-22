@@ -60,6 +60,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const { IosDevice, selectCoreDeviceUuid } = require('./drivers/ios-journey-device');
 
 // --------------------------------------------------------------------------
 // Repo / target configuration
@@ -82,6 +83,11 @@ const TARGETS = {
     // livekit-local-node-ip.test.js, which caught this list having silently
     // drifted from the gauntlet's (it was missing 8888).
     reversePorts: [3000, 7880, 7881, 8080, 8888, 9000, 9002, 9099],
+    // iOS has no flavour suffix -- Debug-Local and Release share one bundle id,
+    // and the environment is baked in at build time by
+    // scripts/dev/ios-local-install.sh, which points the app at THIS Mac's LAN
+    // address. There is no adb-reverse equivalent to fall back on.
+    iosBundleId: 'com.shyden.shytalk',
   },
   dev: {
     pkg: 'com.shyden.shytalk.dev',
@@ -89,6 +95,7 @@ const TARGETS = {
     gradleTask: ':app:assembleDevDebug',
     gradleArgs: [],
     reversePorts: [], // dev backend is remote; no tunnelling
+    iosBundleId: 'com.shyden.shytalk',
   },
 };
 
@@ -98,6 +105,7 @@ const TARGETS = {
 function parseArgs(argv) {
   const a = {
     target: 'local',
+    platform: 'android',
     serial: process.env.ANDROID_SERIAL || null,
     journeys: null,
     rebuild: false,
@@ -115,6 +123,7 @@ function parseArgs(argv) {
   for (; i < argv.length; i++) {
     const v = argv[i];
     if (v === '--target') a.target = next('--target');
+    else if (v === '--platform') a.platform = next('--platform');
     else if (v === '--serial') a.serial = next('--serial');
     else if (v === '--journeys')
       a.journeys = next('--journeys')
@@ -129,6 +138,12 @@ function parseArgs(argv) {
     else throw new Error(`Unknown option: ${v}`);
   }
   if (!TARGETS[a.target]) throw new Error(`Unknown --target "${a.target}" (use local|dev)`);
+  // Validated rather than defaulted. A typo'd `--platform iOS` silently running
+  // Android would report a full green pass for a phone nobody touched, which is
+  // worse than not running it at all.
+  if (!['android', 'ios'].includes(a.platform)) {
+    throw new Error(`Unknown --platform "${a.platform}" (use android|ios)`);
+  }
   return a;
 }
 
@@ -250,7 +265,66 @@ class Device {
 // --------------------------------------------------------------------------
 // Dump parsing
 // --------------------------------------------------------------------------
+/**
+ * Normalise EITHER accessibility tree into one node shape.
+ *
+ * uiautomator emits `<node resource-id="tag" text="..." bounds="[x,y][x,y]">`.
+ * XCUITest emits `<XCUIElementTypeButton name="tag" label="..." x y width
+ * height>`. Everything above this function -- `tapId`, `waitForId`,
+ * `waitForText`, and every journey -- works on the normalised shape, which is
+ * what lets ONE journey definition assert the same things on both phones.
+ *
+ * Dispatched on the content rather than on a flag the caller passes: a caller
+ * that says "android" while holding an iPhone dump would produce zero nodes and
+ * a timeout that reads like the screen never appeared.
+ */
 function parseNodes(xml) {
+  return xml.includes('XCUIElementType') ? parseXcuiNodes(xml) : parseUiautomatorNodes(xml);
+}
+
+/**
+ * XCUITest's tree.
+ *
+ * `name` is the accessibility identifier -- the iOS projection of Compose's
+ * `testTag`, so it lines up with Android's `resource-id` without translation.
+ * `label` is what a person reads, and `value` carries a text field's CONTENTS,
+ * which is how "the words she typed are still there" is checked on iOS.
+ */
+function parseXcuiNodes(xml) {
+  const nodes = [];
+  const tagRe = /<XCUIElementType[A-Za-z]+\b[^>]*?\/?>/g;
+  let m;
+  while ((m = tagRe.exec(xml)) !== null) {
+    const attrs = {};
+    const attrRe = /([\w-]{1,64})="([^"]{0,8192})"/g;
+    let a;
+    while ((a = attrRe.exec(m[0])) !== null) attrs[a[1]] = a[2];
+    const x = Number(attrs.x);
+    const y = Number(attrs.y);
+    const w = Number(attrs.width);
+    const h = Number(attrs.height);
+    const hasBox = [x, y, w, h].every(Number.isFinite) && w > 0 && h > 0;
+    nodes.push({
+      id: attrs.name || '',
+      // A text field's typed contents live in `value`; a button's caption lives
+      // in `label`. Preferring value means an assertion on what somebody typed
+      // reads the field rather than its placeholder.
+      text: attrs.value || attrs.label || '',
+      desc: attrs.label || '',
+      clickable: attrs.enabled === 'true',
+      enabled: attrs.enabled === 'true',
+      checked: attrs.selected === 'true',
+      // `visible` is XCUITest's own word for on-screen. A node the person
+      // cannot see must not satisfy a wait -- that is the SHY-0419 defect
+      // exactly: a Send button that existed, at coordinates under the keyboard.
+      visible: attrs.visible !== 'false',
+      center: hasBox ? { x: Math.round(x + w / 2), y: Math.round(y + h / 2) } : null,
+    });
+  }
+  return nodes;
+}
+
+function parseUiautomatorNodes(xml) {
   const nodes = [];
   const tagRe = /<node\b[^>]*?\/?>/g;
   let m;
@@ -271,6 +345,10 @@ function parseNodes(xml) {
       clickable: attrs.clickable === 'true',
       enabled: attrs.enabled === 'true',
       checked: attrs.checked === 'true',
+      // uiautomator only reports what is on screen, so everything it emits is
+      // visible by construction. Stated rather than left undefined, so the
+      // shared matchers can read one field on both platforms.
+      visible: true,
       center,
     });
   }
@@ -470,6 +548,14 @@ async function tapLowestText(device, text) {
  * its first word, which looks like a truncation bug in the product.
  */
 async function typeInto(device, id, text) {
+  if (device.kind === 'ios') {
+    // Addressed by identifier and set directly. Typing key-by-key through the
+    // on-screen keyboard is slower and can drop characters when the field
+    // scrolls under it -- which looks like the product losing input.
+    await device.typeText(id, text);
+    await sleep(400);
+    return;
+  }
   await tapId(device, id);
   device.shell(`input text ${JSON.stringify(text.replace(/ /g, '%s'))}`);
   await sleep(500);
@@ -1650,32 +1736,56 @@ async function main() {
     return 0;
   }
 
-  const serial = selectSerial(opts.serial);
-  if (!serial) throw new Error('No adb device found. Connect a device (adb devices) and retry.');
-  const device = new Device(serial);
+  // ONE journey definition, TWO device backends. A journey written once
+  // asserts the same things on both phones, so a platform difference surfaces
+  // as a failing step rather than as a walk nobody ran -- which is how
+  // SHY-0419's keyboard-occluded Send button survived two green Android walks.
+  let device;
+  let serial;
   let deviceModel = '?';
-  try {
-    deviceModel = device.shell('getprop ro.product.model').trim();
-  } catch (_e) {
-    /* ignore */
+  if (opts.platform === 'ios') {
+    const udid = selectCoreDeviceUuid(opts.serial);
+    if (!udid) {
+      throw new Error(
+        'No connected iPhone found (xcrun devicectl list devices). A SIMULATOR is not a ' +
+          'substitute -- SHY-0419 was invisible to everything except the real device.',
+      );
+    }
+    serial = udid;
+    deviceModel = 'iPhone';
+    device = new IosDevice({ udid, bundleId: cfg.iosBundleId || 'com.shyden.shytalk' });
+    await device.measure();
+  } else {
+    serial = selectSerial(opts.serial);
+    if (!serial) throw new Error('No adb device found. Connect a device (adb devices) and retry.');
+    device = new Device(serial);
+    try {
+      deviceModel = device.shell('getprop ro.product.model').trim();
+    } catch (_e) {
+      /* ignore */
+    }
   }
 
   const reporter = new Reporter(opts.out, { target: opts.target, serial, device: deviceModel });
   console.log(`Target=${opts.target} pkg=${cfg.pkg} serial=${serial} (${deviceModel})`);
   console.log(`Results -> ${opts.out}`);
 
-  const apkAbs = ensureApk(cfg, opts, reporter.runDir);
-
-  // Tunnel device-localhost -> Mac so the on-device app reaches the stack.
-  for (const port of cfg.reversePorts) {
-    try {
-      device.reverse(port);
-    } catch (e) {
-      console.log(`  (warn) adb reverse tcp:${port} failed: ${e.message.split('\n')[0]}`);
+  // Both are adb-only. An iPhone has no `adb reverse` equivalent, so the iOS
+  // build is pointed at this Mac's LAN address at BUILD time by
+  // scripts/dev/ios-local-install.sh -- which is also why the app must not be
+  // reinstalled from here.
+  const apkAbs = opts.platform === 'ios' ? null : ensureApk(cfg, opts, reporter.runDir);
+  if (opts.platform !== 'ios') {
+    for (const port of cfg.reversePorts) {
+      try {
+        device.reverse(port);
+      } catch (e) {
+        console.log(`  (warn) adb reverse tcp:${port} failed: ${e.message.split('\n')[0]}`);
+      }
     }
+    if (cfg.reversePorts.length)
+      console.log(`adb reverse set for ports: ${cfg.reversePorts.join(', ')}`);
   }
-  if (cfg.reversePorts.length)
-    console.log(`adb reverse set for ports: ${cfg.reversePorts.join(', ')}`);
 
   const db = initDb(opts.target);
   if (db) console.log('Firestore assertions: ON (local emulator)');
