@@ -541,6 +541,71 @@ describe('GET /api/support-tickets/:id/attachments', () => {
   });
 });
 
+describe('a caller with no resolved identity — SHY-0426', () => {
+  /**
+   * `resolveUniqueId` answers null when a Firebase uid has no identityMap
+   * entry, and the auth middleware passes that straight through as
+   * `req.auth.uniqueId = null`. Nothing downstream treated null as "unknown" —
+   * it was used as though it were an account number.
+   *
+   * Reproduced against the real stack on 2026-08-22: two personas whose
+   * uniqueId was null could READ each other's support tickets, including the
+   * summary of a SAFETY report, and APPEND to each other's tickets (HTTP 200).
+   * Their attachments also shared one `support-tickets/null/` folder, so each
+   * could attach the other's uploads.
+   *
+   * The cause is that `null === null`. Every ownership test in this file is of
+   * the form `where('userId','==',uniqueId)` or `doc.userId !== uniqueId`, and
+   * both are satisfied when everybody's id is the same absent value.
+   *
+   * An account we cannot identify cannot be authorised. Refused, not guessed.
+   */
+  test('cannot raise a ticket', async () => {
+    const res = await request(createApp({ uniqueId: null }))
+      .post('/api/support-tickets')
+      .send({ message: 'Who am I?' });
+
+    expect(res.status).toBe(403);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test("cannot list open tickets — this is how one account read another's", async () => {
+    mockQueryDocs.mockResolvedValue([
+      { id: 'someone-else', userId: null, status: 'open', message: 'my private problem' },
+    ]);
+
+    const res = await request(createApp({ uniqueId: null })).get('/api/support-tickets/mine/open');
+
+    expect(res.status).toBe(403);
+    expect(res.body.tickets).toBeUndefined();
+  });
+
+  test("cannot append to a ticket — this is how one account wrote into another's", async () => {
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ userId: null }) });
+
+    const res = await request(createApp({ uniqueId: null }))
+      .post('/api/support-tickets/someone-elses/messages')
+      .send({ message: "writing into a stranger's ticket" });
+
+    expect(res.status).toBe(403);
+  });
+
+  test('cannot be issued an upload slot, so no shared null folder exists', async () => {
+    const res = await request(createApp({ uniqueId: null }))
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'image/png' });
+
+    expect(res.status).toBe(403);
+  });
+
+  /** Zero is a real account number and must not be caught by a falsy test. */
+  test('an account whose id is 0 is still a real account', async () => {
+    mockQueryDocs.mockResolvedValue([]);
+    const res = await request(createApp({ uniqueId: 0 })).get('/api/support-tickets/mine/open');
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('GET /api/support-tickets/mine/open — SHY-0396', () => {
   // The client cannot offer "it's the problem I already reported" without
   // something to show. A summary of their own words is enough to recognise the

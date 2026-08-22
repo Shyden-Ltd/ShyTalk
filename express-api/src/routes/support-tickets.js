@@ -68,6 +68,42 @@ const ATTACHMENT_CONTENT_TYPES = new Map([
  */
 const MAX_ATTACHMENTS = 10;
 
+/**
+ * Refuse a caller we cannot identify — SHY-0426.
+ *
+ * `resolveUniqueId` answers null when a Firebase uid has no identityMap entry,
+ * and the auth middleware passes that through as `req.auth.uniqueId = null`.
+ * Nothing here treated null as "unknown"; it was used as though it were an
+ * account number. Because `null === null`, every ownership test in this file
+ * then passed for everybody at once:
+ *
+ *   - `where('userId','==',null)` matched every unidentified caller's tickets
+ *   - `doc.userId !== uniqueId` was false, so appends were allowed
+ *   - `support-tickets/null/` was one shared attachment folder
+ *
+ * Reproduced against the real stack: two accounts read each other's support
+ * tickets — including the summary of a SAFETY report — and wrote into each
+ * other's. An account we cannot identify cannot be authorised for anything
+ * scoped to an account, so it is refused rather than guessed at.
+ *
+ * `Number.isInteger`, not a falsy test: uniqueId 0 is a real account and a
+ * `!uniqueId` guard would lock it out.
+ *
+ * This is the SUPPORT surface only. The same shape exists across 29 route
+ * files — see SHY-0426 for the central fix, which cannot simply reject in the
+ * middleware because account creation legitimately runs before an identity
+ * exists.
+ */
+function requireIdentity(req, res) {
+  if (Number.isInteger(req.auth?.uniqueId)) return false;
+  log.warn('support-tickets', 'Refused a caller with no resolved identity', {
+    uid: req.auth?.uid,
+    path: req.path,
+  });
+  res.status(403).json({ error: 'Your account could not be identified', code: 'no_identity' });
+  return true;
+}
+
 /** Every attachment key lives under the owner's own folder. */
 const attachmentPrefix = (uniqueId) => `support-tickets/${uniqueId}/`;
 
@@ -175,6 +211,7 @@ function sanitiseContext(raw) {
  */
 router.post('/support-tickets/upload-url', writeLimiter, async (req, res) => {
   try {
+    if (requireIdentity(req, res)) return;
     const contentType = (req.body ?? {}).contentType;
     if (typeof contentType !== 'string' || !ATTACHMENT_CONTENT_TYPES.has(contentType)) {
       return res.status(400).json({
@@ -202,6 +239,7 @@ router.post('/support-tickets/upload-url', writeLimiter, async (req, res) => {
 
 router.post('/support-tickets', writeLimiter, async (req, res) => {
   try {
+    if (requireIdentity(req, res)) return;
     const body = req.body ?? {};
     const message = body.message;
 
@@ -324,6 +362,7 @@ const UPLOAD_SLOT_TTL_SEC = 300;
  */
 router.get('/support-tickets/mine/open', async (req, res) => {
   try {
+    if (requireIdentity(req, res)) return;
     const uniqueId = req.auth.uniqueId;
     const docs = await queryDocs(
       db
@@ -361,6 +400,7 @@ router.get('/support-tickets/mine/open', async (req, res) => {
  */
 router.post('/support-tickets/:id/messages', writeLimiter, async (req, res) => {
   try {
+    if (requireIdentity(req, res)) return;
     const uniqueId = req.auth.uniqueId;
     const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
     if (!message) {
