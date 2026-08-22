@@ -151,6 +151,33 @@ function renderCard(ticket, status) {
         .join(" &middot; ")}</div>`
     : "";
 
+  // SHY-0396: what somebody ADDED after choosing "it is the problem I already
+  // reported". Without this the append endpoint writes their words into
+  // Firestore where no human ever reads them -- the same outcome as dropping
+  // the message, reached by a longer route.
+  //
+  // Escaped with the same function as the original message: a follow-up is the
+  // same untrusted text, typed by the same person, into the same queue.
+  const followUps = Array.isArray(ticket.messages) ? ticket.messages : [];
+  const followUpsHtml = followUps.length
+    ? `<div style="margin-top:8px;border-left:2px solid var(--text2);padding-left:8px;">
+         ${followUps
+           .map(
+             (
+               m,
+             ) => `<div style="margin-top:6px;font-size:13px;white-space:pre-wrap;">
+                       ${escapeHtml(String(m?.message ?? ""))}
+                       <div style="font-size:11px;color:var(--text2);">Added${
+                         m?.addedAt
+                           ? ` ${escapeHtml(new Date(m.addedAt).toLocaleString())}`
+                           : ""
+                       }</div>
+                     </div>`,
+           )
+           .join("")}
+       </div>`
+    : "";
+
   const resolvedHtml =
     status === "resolved"
       ? `<div style="font-size:11px;color:var(--text2);margin-top:8px;">
@@ -176,6 +203,7 @@ function renderCard(ticket, status) {
       <div style="font-size:11px;color:var(--text2);">${escapeHtml(category)} &middot; ${escapeHtml(raised)}</div>
     </div>
     <div style="margin-top:8px;font-size:13px;white-space:pre-wrap;">${escapeHtml(String(ticket.message ?? ""))}</div>
+    ${followUpsHtml}
     ${contextHtml}
     <div data-attachments-for="${escapeHtml(String(ticket.id))}"></div>
     ${resolvedHtml}
