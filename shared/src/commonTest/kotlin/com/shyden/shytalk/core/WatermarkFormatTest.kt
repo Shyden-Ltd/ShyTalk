@@ -238,10 +238,94 @@ class WatermarkFormatTest {
                 route = null,
                 journeyMarker = null,
                 serverSha = null,
+                verbosity = WatermarkVerbosity.FULL,
             )
         assertEquals("dev · ? · api ?", content.statusLine)
         assertNull(content.detailLines.firstOrNull { it.isBlank() })
     }
+
+    // ── COMPACT verbosity (SHY-0430) ──
+    //
+    // The device badge draws OVER the app. At FULL it is eight lines
+    // deep and reached into the duplicate-request screen's body copy —
+    // covering the very sentence journey J38 step 10 asserts on, so a
+    // human could not check the claim the test was making
+    // (operator, 2026-08-22). COMPACT keeps only what cannot be
+    // recovered from anywhere else.
+
+    @Test
+    fun `compact keeps build identity, which no other artefact can prove`() {
+        // The runner's report can read git in the WORKTREE, but that
+        // says what was BUILT, not what is INSTALLED. This line on the
+        // frame is the only evidence of the binary actually running.
+        assertEquals(listOf("abc1234 · 07-18 11:40"), compactContent().detailLines)
+    }
+
+    @Test
+    fun `compact still marks a dirty build`() {
+        assertEquals(listOf("abc1234* · 07-18 11:40"), compactContent(gitDirty = true).detailLines)
+    }
+
+    @Test
+    fun `compact still names the environment, version and api health slot`() {
+        assertEquals("local · 0.97.15 (176) · api abc1234", compactContent().statusLine)
+        assertEquals("ShyTalk Preview", compactContent().title)
+    }
+
+    @Test
+    fun `compact drops the lines the run report already carries`() {
+        // env, device and the signed-in account are in report.md — on the
+        // header and on every step line. Repeating them on each frame buys
+        // nothing and costs the copy underneath.
+        val lines = compactContent().detailLines
+        assertFalse(lines.any { it.contains("OnePlus") }, "device: $lines")
+        assertFalse(lines.any { it.startsWith("UID:") }, "uid: $lines")
+    }
+
+    @Test
+    fun `compact never burns a display name into a recording`() {
+        // Every frame of every walk carried `Name: <persona>` and a
+        // numeric account id. On a non-seed device that is a real person's
+        // name and account, published into whatever the video is shared
+        // with. COMPACT removes it from the artefact entirely.
+        val lines = compactContent().detailLines
+        assertFalse(lines.any { it.startsWith("Name:") }, "name: $lines")
+    }
+
+    @Test
+    fun `compact is strictly shorter than full for the same inputs`() {
+        // Guards the point of the change: if COMPACT ever grows back to
+        // FULL's height it has stopped solving anything.
+        assertTrue(
+            compactContent().detailLines.size < fullContent().detailLines.size,
+            "compact must render fewer lines than full",
+        )
+        assertEquals(WatermarkFormat.MAX_LINES_COMPACT, 2 + compactContent().detailLines.size)
+    }
+
+    @Test
+    fun `compact renders a placeholder rather than a blank when git identity is unknown`() {
+        assertEquals(listOf("?"), compactContent(gitSha = "?", builtAt = "?").detailLines)
+    }
+
+    @Test
+    fun `compact carries the server sha rules of the status line`() {
+        assertEquals("local · 0.97.15 (176) · api ?", compactContent(serverSha = null).statusLine)
+    }
+
+    private fun compactContent(
+        gitSha: String = "abc1234def5678",
+        gitDirty: Boolean = false,
+        builtAt: String = "07-18 11:40",
+        serverSha: String? = "abc1234",
+    ): WatermarkContent =
+        fullContent(
+            gitSha = gitSha,
+            gitDirty = gitDirty,
+            builtAt = builtAt,
+            serverSha = serverSha,
+            verbosity = WatermarkVerbosity.COMPACT,
+        )
 
     private fun fullContent(
         environment: String = "local",
@@ -258,6 +342,7 @@ class WatermarkFormatTest {
         route: String? = "main",
         journeyMarker: String? = "j01 s03",
         serverSha: String? = "abc1234",
+        verbosity: WatermarkVerbosity = WatermarkVerbosity.FULL,
     ): WatermarkContent =
         WatermarkFormat.content(
             environment = environment,
@@ -274,5 +359,6 @@ class WatermarkFormatTest {
             route = route,
             journeyMarker = journeyMarker,
             serverSha = serverSha,
+            verbosity = verbosity,
         )
 }

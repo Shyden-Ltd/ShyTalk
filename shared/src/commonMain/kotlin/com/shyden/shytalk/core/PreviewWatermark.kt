@@ -130,8 +130,16 @@ private const val WATERMARK_TAG = "PreviewWatermark"
  * Reads every watermark input (BuildVariant, QaContext, AuthRepository
  * via Koin) and assembles the compact content through [WatermarkFormat]
  * — the pure, jvm-tested layout contract (SHY-0205).
+ *
+ * `internal` rather than private so `PreviewWatermarkContentTest` can
+ * pin THIS function's choice of [WatermarkVerbosity]. Proving the
+ * formatter honours COMPACT says nothing about whether the badge asks
+ * for it; without a test here, flipping the argument below back to FULL
+ * regrows the badge over the app with an entirely green suite. The
+ * composable itself stays untestable (see the note on
+ * [PreviewWatermarkConstants]) — this is the seam that is not.
  */
-private fun assembleContent(locale: String): WatermarkContent {
+internal fun assembleContent(locale: String): WatermarkContent {
     // `getOrNull()` on the context returns the Koin instance (or null if
     // Koin hasn't started yet — possible early in `setContent` before
     // `doInitKoin` completes).
@@ -154,6 +162,12 @@ private fun assembleContent(locale: String): WatermarkContent {
         route = QaContext.currentRoute,
         journeyMarker = QaContext.journeyMarker,
         serverSha = QaContext.serverSha,
+        // COMPACT on device (SHY-0430): the badge draws over the app, and
+        // at FULL its eight lines reached into body copy — including the
+        // exact sentence journey J38 step 10 asserts on, which made the
+        // frame useless as evidence for its own claim. The web badge
+        // stays FULL; see WatermarkVerbosity for why they differ.
+        verbosity = WatermarkVerbosity.COMPACT,
     )
 }
 
