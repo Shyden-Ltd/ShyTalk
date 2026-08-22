@@ -37,6 +37,9 @@ const {
   DEFAULT_RECORDING_FPS,
   resolveBinary,
   BINARY_SEARCH_PATHS,
+  desiredStayOn,
+  STAY_ON_USB,
+  waitForGrowth,
   createRecorder,
   RECORDING_STOP_SIGNAL,
 } = require('../../../scripts/drivers/journey-screen-recorder');
@@ -244,6 +247,112 @@ describe('ffmpegMjpegArgs', () => {
     expect(ffmpegMjpegArgs({ file, port: 9123 })).toEqual(
       expect.arrayContaining(['-i', 'http://localhost:9123']),
     );
+  });
+});
+
+describe('scrcpy flag compatibility', () => {
+  const file = '/tmp/walk.mp4';
+
+  test('--stay-awake is NOT passed, because --no-control forbids it', () => {
+    // Found on the real device, not in review. scrcpy keeps the screen on by
+    // sending a CONTROL message, so with control disabled it refuses to start
+    // at all: "Cannot request to stay awake if control is disabled", exit 1,
+    // before a single frame. Every Android recording failed.
+    //
+    // It shipped because the flags were added AFTER the command was proven. A
+    // bare `scrcpy -s ... --record=...` probe worked, then --stay-awake and
+    // --no-control were added on the strength of that probe and never re-run
+    // against the binary. The unit tests asserted the argv CONTENTS, which is
+    // not the same as asserting scrcpy accepts them.
+    //
+    // Wakefulness is handled device-side instead (keepAwakeWhilePluggedIn).
+    const args = scrcpyArgs({ serial: 'X', file });
+    expect({
+      stayAwake: args.includes('--stay-awake'),
+      noControl: args.includes('--no-control'),
+    }).toEqual({ stayAwake: false, noControl: true });
+  });
+});
+
+describe('desiredStayOn', () => {
+  test('ORs the USB bit rather than overwriting the setting', () => {
+    // This runs against the operator's own handset. Assignment would silently
+    // drop their AC and wireless stay-on bits and restore only what we read.
+    expect({
+      fromNothing: desiredStayOn(0),
+      keepsAc: desiredStayOn(1),
+      keepsWireless: desiredStayOn(4),
+      keepsAll: desiredStayOn(7),
+    }).toEqual({ fromNothing: 2, keepsAc: 3, keepsWireless: 6, keepsAll: 7 });
+  });
+
+  test('is idempotent when USB stay-on is already set', () => {
+    // The recorder skips the write (and the restore) when nothing changes, so
+    // this equality is what stops it touching a device it need not touch.
+    expect(desiredStayOn(STAY_ON_USB)).toBe(STAY_ON_USB);
+  });
+});
+
+describe('waitForGrowth', () => {
+  /** A real child that writes a header, pauses, then writes frames. */
+  function spawnWriter(target, { headerOnly = false } = {}) {
+    const src = `
+      const fs = require('node:fs');
+      fs.writeFileSync(${JSON.stringify(target)}, 'HEADER');
+      console.log('header');
+      ${headerOnly ? '' : `setTimeout(() => fs.appendFileSync(${JSON.stringify(target)}, 'FRAMESFRAMES'), 250);`}
+      setInterval(() => {}, 1000);
+    `;
+    const child = spawn(process.execPath, ['-e', src], { stdio: ['ignore', 'pipe', 'pipe'] });
+    return new Promise((r) => child.stdout.once('data', () => r(child)));
+  }
+
+  test('a header alone is NOT readiness', async () => {
+    // Both recorders open the container and write a short header before the
+    // first frame is encoded. Treating that as "recording" starts the walk
+    // against an encoder that has not produced a frame -- and the opening
+    // screens, which are exactly what a walk needs to show, are lost.
+    const target = path.join(tmp, 'header-only.mp4');
+    const child = await spawnWriter(target, { headerOnly: true });
+    await expect(
+      waitForGrowth(target, child, () => '', { timeoutMs: 900, pollMs: 100 }),
+    ).rejects.toThrow(/no growing video/i);
+    await stopGracefully(child, { graceMs: 500 });
+  });
+
+  test('resolves once the file actually grows', async () => {
+    const target = path.join(tmp, 'grows.mp4');
+    const child = await spawnWriter(target);
+    await expect(
+      waitForGrowth(target, child, () => '', { timeoutMs: 5000, pollMs: 100 }),
+    ).resolves.toBeUndefined();
+    await stopGracefully(child, { graceMs: 500 });
+  });
+
+  test('a recorder that dies is reported as a death, not a timeout', async () => {
+    // The distinction matters to whoever reads the failure: "exited with 1"
+    // sends you to the command line, "wrote nothing" sends you to the device.
+    const child = spawn(process.execPath, ['-e', 'process.exit(3)'], { stdio: 'ignore' });
+    await expect(
+      waitForGrowth(path.join(tmp, 'never.mp4'), child, () => 'boom', {
+        timeoutMs: 5000,
+        pollMs: 100,
+      }),
+    ).rejects.toThrow(/exited with 3/);
+  });
+
+  test('a recorder that died BEFORE we listened is still reported as a death', async () => {
+    // The listener-attach race. `exit` has already fired and will not fire
+    // again, so a naive wait sits out the full timeout and blames the device
+    // for a process that crashed on startup.
+    const child = spawn(process.execPath, ['-e', 'process.exit(4)'], { stdio: 'ignore' });
+    await new Promise((r) => child.once('exit', r));
+    await expect(
+      waitForGrowth(path.join(tmp, 'never2.mp4'), child, () => 'boom', {
+        timeoutMs: 5000,
+        pollMs: 100,
+      }),
+    ).rejects.toThrow(/exited with 4/);
   });
 });
 

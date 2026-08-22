@@ -51,7 +51,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, execFileSync } = require('node:child_process');
 
 /**
  * SIGINT, always. scrcpy traps it and finalises the container; SIGKILL cannot
@@ -62,6 +62,15 @@ const RECORDING_STOP_SIGNAL = 'SIGINT';
 
 /** How long a recorder gets to write its index before we stop being polite. */
 const DEFAULT_GRACE_MS = 10_000;
+
+/**
+ * How long to wait for the first frames to reach the file before giving up.
+ *
+ * Generous on purpose. Recording is ALREADY running while this waits, so a
+ * long wait costs nothing but a slightly later start to the walk, whereas a
+ * short one aborts a healthy run on a slow first flush.
+ */
+const RECORDING_READY_TIMEOUT_MS = 20_000;
 
 /**
  * Argv for scrcpy.
@@ -85,11 +94,15 @@ function scrcpyArgs({ serial, file, watch = true, bitRate = '8M' }) {
     `--record=${file}`,
     '--video-bit-rate',
     bitRate,
-    // Keeps the phone awake for the length of the walk. A screen that blanks
-    // mid-journey records a black rectangle and fails nothing.
-    '--stay-awake',
     // The walk drives the device over adb; scrcpy is here to observe, and a
     // stray click on the mirror window must not perturb the run.
+    //
+    // `--stay-awake` CANNOT be combined with this. scrcpy keeps the screen on
+    // by sending a control message, so with control disabled it refuses to
+    // start at all -- "Cannot request to stay awake if control is disabled",
+    // exit 1, before a single frame is written (scrcpy 4.1). An unperturbable
+    // walk is the stronger requirement, so wakefulness is handled device-side
+    // instead; see `keepAwakeWhilePluggedIn`.
     '--no-control',
   ];
   // The operator watches these runs. `--no-playback` is the headless switch,
@@ -299,14 +312,87 @@ function createRecorder({
   throw new Error(`Cannot record: unknown platform "${platform}" (expected android|ios)`);
 }
 
+/**
+ * `stay_on_while_plugged_in` bit for USB power. The handsets here are USB-only.
+ */
+const STAY_ON_USB = 2;
+
+/**
+ * The value to write, given what the setting already holds.
+ *
+ * OR, never assignment. This runs against the operator's own handset, and
+ * overwriting would silently drop their AC/wireless stay-on bits and put back
+ * only what we happened to read. Extracted so that rule is assertable without
+ * a phone attached.
+ *
+ * @param {number} previous
+ * @returns {number}
+ */
+function desiredStayOn(previous) {
+  return previous | STAY_ON_USB;
+}
+
+/**
+ * Keep the screen on for the length of the walk, device-side.
+ *
+ * Stands in for scrcpy's `--stay-awake`, which is unavailable while control is
+ * disabled (see `scrcpyArgs`). This is not a nicety: a screen that blanks
+ * mid-journey records a black rectangle, and the video of a failed run and the
+ * video of a passing one become indistinguishable.
+ *
+ * The previous value is OR-ed rather than overwritten, and put back on stop --
+ * this runs against the operator's own handset, and a test must not leave its
+ * power settings changed.
+ *
+ * @param {string} serial
+ * @returns {() => void} restore, safe to call once
+ */
+function keepAwakeWhilePluggedIn(serial) {
+  const adb = resolveBinary('adb', 'Install it with: brew install android-platform-tools');
+  const setting = ['shell', 'settings', 'get', 'global', 'stay_on_while_plugged_in'];
+  const previous = Number.parseInt(
+    execFileSync(adb, ['-s', serial, ...setting], { encoding: 'utf8' }).trim(),
+    10,
+  );
+  // Unreadable setting: leave the device alone rather than guess at a value to
+  // put back afterwards. The walk still records, it just relies on the phone's
+  // own screen timeout.
+  if (!Number.isInteger(previous)) return () => {};
+
+  const desired = desiredStayOn(previous);
+  if (desired === previous) return () => {};
+
+  const put = (v) =>
+    execFileSync(adb, [
+      '-s',
+      serial,
+      'shell',
+      'settings',
+      'put',
+      'global',
+      'stay_on_while_plugged_in',
+      String(v),
+    ]);
+  put(desired);
+  return () => put(previous);
+}
+
 function androidRecorder({ serial, file, watch }) {
   let child = null;
   let stderr = '';
+  let restoreAwake = null;
+  /** Idempotent: the setting is put back exactly once, however the run ends. */
+  const releaseAwake = () => {
+    const restore = restoreAwake;
+    restoreAwake = null;
+    if (restore) restore();
+  };
 
   return {
     file,
     async start() {
       fs.mkdirSync(path.dirname(file), { recursive: true });
+      restoreAwake = keepAwakeWhilePluggedIn(serial);
       const bin = resolveBinary('scrcpy', 'Install it with: brew install scrcpy');
       child = spawn(bin, scrcpyArgs({ serial, file, watch }), {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -315,32 +401,45 @@ function androidRecorder({ serial, file, watch }) {
         stderr += d.toString();
       });
 
-      // scrcpy prints "Recording started" once the encoder is live. Waiting
-      // for it means step 1 of the journey is IN the video; starting the walk
-      // immediately loses the first seconds, which is where the launch and
-      // the sign-in screen are.
-      await new Promise((resolve, reject) => {
-        const ready = setTimeout(
-          () => reject(new Error(`scrcpy did not start recording within 15s:\n${stderr}`)),
-          15_000,
-        );
-        const watchFor = (d) => {
-          if (/Recording started/i.test(d.toString())) {
-            clearTimeout(ready);
-            child.stdout.off('data', watchFor);
-            child.stderr.off('data', watchFor);
-            resolve();
-          }
-        };
-        child.stdout.on('data', watchFor);
-        child.stderr.on('data', watchFor);
-        child.once('exit', (code) => {
-          clearTimeout(ready);
-          reject(new Error(`scrcpy exited with ${code} before recording:\n${stderr}`));
-        });
+      // Readiness is read from the FILE, not from a log line.
+      //
+      // scrcpy does still announce "Recording started", but on STDOUT, which
+      // is block-buffered when it is a pipe rather than a terminal: every INFO
+      // line stays in libc's buffer and is flushed only when the process
+      // EXITS. Waiting for that string therefore waits forever while the
+      // recording runs perfectly -- measured on scrcpy 4.1, where the whole
+      // INFO block arrived in one burst at shutdown, 9s after recording began.
+      //
+      // Bytes arriving in the mp4 prove the encoder is live without depending
+      // on how a scrcpy version words or buffers its logging, and are the same
+      // evidence `stop` already trusts.
+      //
+      // Waiting matters because step 1 of the journey has to be IN the video;
+      // starting the walk immediately loses the launch and the sign-in screen.
+      //
+      // Shared with the iOS recorder rather than reimplemented: both write a
+      // container header before the first frame, so both need GROWTH rather
+      // than the first byte, and one rule should have one implementation.
+      await waitForGrowth(file, child, () => stderr, {
+        timeoutMs: RECORDING_READY_TIMEOUT_MS,
+      }).catch(async (e) => {
+        // scrcpy never came up. Put the power setting back, and REAP the
+        // child, before the failure propagates.
+        //
+        // Both halves matter. A run that dies in its first second must not
+        // leave the phone configured by a recorder that is no longer running
+        // -- and it must not leave scrcpy ALIVE either: an orphan holds the
+        // device's video stream open, so the NEXT run gets no frames and
+        // fails for a reason that has nothing to do with it. That cascade is
+        // exactly how this path was found.
+        releaseAwake();
+        await stopGracefully(child);
+        child = null;
+        throw e;
       });
     },
     async stop() {
+      releaseAwake();
       if (!child) return null;
       await stopGracefully(child);
       child = null;
@@ -380,7 +479,7 @@ function iosRecorder({ device, file, port, fps }) {
       // Waiting for the file to gain bytes proves the STREAM is flowing --
       // an ffmpeg that started and immediately failed to connect exits with
       // an empty file, and starting the walk anyway would waste the run.
-      await waitForBytes(file, child, () => stderr);
+      await waitForGrowth(file, child, () => stderr);
     },
     async stop() {
       if (!child) return null;
@@ -395,7 +494,16 @@ function iosRecorder({ device, file, port, fps }) {
 }
 
 /**
- * Resolve once `file` has real bytes, or reject if the recorder dies first.
+ * Resolve once `file` is GROWING, or reject if the recorder dies first.
+ *
+ * Growth, not the first byte. Both recorders write a container header before a
+ * single frame is encoded, so a non-zero size proves only that the file was
+ * OPENED. Treating that as readiness starts the walk against an encoder that
+ * may still fail, and loses the opening screens if it does not.
+ *
+ * The Android path was found to need exactly this on a real device; ffmpeg
+ * behaves the same way, so the rule lives here and both platforms use it
+ * rather than one being fixed and the other left.
  *
  * Polled rather than slept: a fixed sleep is either too short on a cold
  * WebDriverAgent or wasted on a warm one, and this project does not sleep in
@@ -407,9 +515,22 @@ function iosRecorder({ device, file, port, fps }) {
  * @param {{timeoutMs?: number, pollMs?: number}} [o]
  * @returns {Promise<void>}
  */
-function waitForBytes(file, child, readStderr, { timeoutMs = 20_000, pollMs = 200 } = {}) {
+function waitForGrowth(file, child, readStderr, { timeoutMs = 20_000, pollMs = 200 } = {}) {
   return new Promise((resolve, reject) => {
+    // Already gone before we could listen. `exit` has fired and will not fire
+    // again, so without this the caller waits out the whole timeout and
+    // reports "wrote nothing" for a process that actually crashed -- pointing
+    // the reader at the device instead of at the command.
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return reject(
+        new Error(
+          `recorder exited with ${child.exitCode ?? child.signalCode} before recording:\n` +
+            readStderr(),
+        ),
+      );
+    }
     const deadline = Date.now() + timeoutMs;
+    let firstSeen = null;
     let died = false;
     child.once('exit', (code) => {
       died = true;
@@ -423,9 +544,14 @@ function waitForBytes(file, child, readStderr, { timeoutMs = 20_000, pollMs = 20
       } catch (_e) {
         /* not created yet */
       }
-      if (size > 0) return resolve();
+      if (size > 0) {
+        if (firstSeen === null) firstSeen = size;
+        else if (size > firstSeen) return resolve();
+      }
       if (Date.now() > deadline) {
-        return reject(new Error(`ffmpeg wrote nothing within ${timeoutMs}ms:\n${readStderr()}`));
+        return reject(
+          new Error(`no growing video at ${file} within ${timeoutMs}ms:\n${readStderr()}`),
+        );
       }
       setTimeout(tick, pollMs).unref?.();
     };
@@ -441,6 +567,9 @@ module.exports = {
   DEFAULT_MJPEG_PORT,
   DEFAULT_RECORDING_FPS,
   resolveBinary,
+  desiredStayOn,
+  STAY_ON_USB,
+  waitForGrowth,
   BINARY_SEARCH_PATHS,
   RECORDING_STOP_SIGNAL,
   DEFAULT_GRACE_MS,
