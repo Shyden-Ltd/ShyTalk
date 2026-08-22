@@ -67,6 +67,18 @@ https://claude.ai/code/artifact/7a12acb2-5ee0-4d9b-b4f2-f7d3374600c7
 | SHY-0423 (P3) | `resolvedCohort` is never recomputed after the date-of-birth gate, and the stale value is persisted into the iOS session cache. No age gate reads it today. |
 | SHY-0424 (P3) | "You already have 5 requests open" is a display cap read back as a count. |
 
+## CI
+
+**All 20 checks green on PR #1940 at `11b492b87e2`.** Four real failures were
+fixed after the first push, each a different kind of mistake:
+
+| Check | Cause |
+| --- | --- |
+| `lint` | I wrote my own `sleep` + dump-retry when `ui-dump-retry.js` already existed, is unit-tested with an injected delay, and is baselined. Reused it — one retry policy across both platforms instead of two that drift. |
+| `qa-runner-driver-checks` | Everything in `scripts/drivers/` must export a `create*` factory and `listMethods()`. Satisfying it surfaced a real gap: the inventory named `swipe`, which Android had and my iOS adapter did not. |
+| `sonarcloud` | The locale count pin, 860 → 867 (2 out, 9 in). All 21 files agree, which is what proves the regex removals took no neighbour with them. |
+| `Pre-Merge Gate` | SHY-0397 is an existing DRAFT story I edited; the Draft exemption is ADD-only. Reverted, note moved into SHY-0396. This trap was already in my memory. |
+
 ## Where to pick up
 
 1. **Operator sign-off** on the evidence page. Nothing merges before it.
