@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">Bạn đã có 1 yêu cầu mở.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Bạn đã mở %1$d yêu cầu.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">và %1$d nữa</string>
 </resources>

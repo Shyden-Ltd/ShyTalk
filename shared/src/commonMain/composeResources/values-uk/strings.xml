@@ -1776,4 +1776,6 @@
     <string name="support_open_requests_one">У вас уже відкритий 1 запит.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">У вас уже є %1$d відкритих запитів.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">і ще %1$d</string>
 </resources>

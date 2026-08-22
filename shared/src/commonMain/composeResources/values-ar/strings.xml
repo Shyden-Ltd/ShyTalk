@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">لديك بالفعل طلب واحد مفتوح.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">لديك بالفعل %1$d طلب مفتوح.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">و%1$d أخرى</string>
 </resources>

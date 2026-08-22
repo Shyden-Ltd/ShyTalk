@@ -68,6 +68,7 @@ import com.shyden.shytalk.resources.support_form_send
 import com.shyden.shytalk.resources.support_form_sent
 import com.shyden.shytalk.resources.support_form_title
 import com.shyden.shytalk.resources.support_open_requests_many
+import com.shyden.shytalk.resources.support_open_requests_more
 import com.shyden.shytalk.resources.support_open_requests_one
 import org.jetbrains.compose.resources.stringResource
 
@@ -190,7 +191,11 @@ fun SupportPage(
             // still wait for Send -- "it is the problem I already reported" needs
             // the words it is going to add.
             if (state.openTickets.isNotEmpty()) {
-                OpenRequestsNotice(state.openTickets)
+                OpenRequestsNotice(
+                    total = state.openTickets.size,
+                    shown = state.openTicketsPreview,
+                    beyond = state.openTicketsBeyondPreview,
+                )
                 Spacer(Modifier.height(20.dp))
             }
 
@@ -300,15 +305,19 @@ private fun openRequestsHeading(count: Int): String =
  * carries straight on, which is the whole point of the story.
  */
 @Composable
-private fun OpenRequestsNotice(openTickets: List<OpenTicketSummary>) {
+private fun OpenRequestsNotice(
+    total: Int,
+    shown: List<OpenTicketSummary>,
+    beyond: Int,
+) {
     Card(modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_OPEN_NOTICE)) {
         Column(Modifier.padding(16.dp)) {
             Text(
-                openRequestsHeading(openTickets.size),
+                openRequestsHeading(total),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
             )
-            for (ticket in openTickets) {
+            for (ticket in shown) {
                 Spacer(Modifier.height(8.dp))
                 Text(
                     supportCategoryLabel(ticket.category),
@@ -316,6 +325,18 @@ private fun OpenRequestsNotice(openTickets: List<OpenTicketSummary>) {
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(ticket.summary, style = MaterialTheme.typography.bodySmall)
+            }
+            // Counted, never silently dropped: telling somebody with five open
+            // requests about two would be a smaller lie than the refusal this
+            // story removed, but a lie all the same. The choice screen still
+            // lists every one, because that is where they are chosen between.
+            if (beyond > 0) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(Res.string.support_open_requests_more, beyond),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

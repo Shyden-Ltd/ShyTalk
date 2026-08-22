@@ -1776,4 +1776,6 @@
     <string name="support_open_requests_one">Du har redan 1 förfrågan öppen.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Du har redan %1$d förfrågningar öppna.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">och %1$d till</string>
 </resources>

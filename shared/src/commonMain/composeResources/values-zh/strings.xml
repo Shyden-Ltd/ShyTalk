@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">您已有 1 个未决请求。</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">您已打开 %1$d 个请求。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">还有%1$d</string>
 </resources>

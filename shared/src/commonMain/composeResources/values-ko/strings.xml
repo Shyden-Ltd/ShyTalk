@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">이미 1개의 요청이 열려 있습니다.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">이미 %1$d개의 요청이 열려 있습니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">외 %1$d개</string>
 </resources>

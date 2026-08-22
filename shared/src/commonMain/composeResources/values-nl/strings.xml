@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">U heeft al 1 aanvraag openstaan.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Je hebt al %1$d verzoeken openstaan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">en %1$d meer</string>
 </resources>

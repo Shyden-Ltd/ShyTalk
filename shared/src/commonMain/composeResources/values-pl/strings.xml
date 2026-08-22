@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">Masz już 1 otwartą prośbę.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Masz już otwarte %1$d żądań.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">i %1$d więcej</string>
 </resources>

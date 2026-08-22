@@ -1773,4 +1773,6 @@
     <string name="support_open_requests_one">Vous avez déjà 1 demande ouverte.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Vous avez déjà %1$d demandes ouvertes.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">et %1$d de plus</string>
 </resources>

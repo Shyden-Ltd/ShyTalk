@@ -968,6 +968,7 @@
     <string name="support_form_added">Thanks. We have added this to the request you already had open.</string>
     <string name="support_open_requests_one">You already have 1 request open.</string>
     <string name="support_open_requests_many">You already have %1$d requests open.</string>
+    <string name="support_open_requests_more">and %1$d more</string>
     <string name="support_duplicate_reminder">Sending the same problem again does not make it faster. A second request for something you have already told us goes to the back of the queue, behind everyone else waiting.</string>
     <string name="support_duplicate_same">It is the problem I already reported</string>
     <string name="support_duplicate_new">It is a new problem</string>

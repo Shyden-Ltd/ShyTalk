@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">आपके पास पहले से ही 1 अनुरोध खुला है.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">आपके पास पहले से ही %1$d अनुरोध खुले हैं।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">और %1$d अधिक</string>
 </resources>

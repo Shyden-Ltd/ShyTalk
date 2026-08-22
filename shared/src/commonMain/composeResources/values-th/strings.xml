@@ -1775,4 +1775,6 @@
     <string name="support_open_requests_one">คุณมีคำขอที่เปิดอยู่แล้ว 1 รายการ</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">คุณมีคำขอที่เปิดอยู่ %1$d รายการแล้ว</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">และอีก %1$d</string>
 </resources>

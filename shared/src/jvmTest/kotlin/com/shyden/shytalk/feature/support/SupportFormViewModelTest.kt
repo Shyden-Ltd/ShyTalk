@@ -62,6 +62,10 @@ class SupportFormViewModelTest {
             OpenTicketSummary("ticket-77", SupportCategory.Payment, "I was charged twice for coins")
         val ACCOUNT =
             OpenTicketSummary("ticket-88", SupportCategory.Account, "I cannot change my name")
+        val SAFETY =
+            OpenTicketSummary("ticket-99", SupportCategory.Safety, "Somebody is harassing me")
+        val BUG =
+            OpenTicketSummary("ticket-11", SupportCategory.Bug, "The wheel will not spin")
     }
 
     // ─── Sending ────────────────────────────────────────────────
@@ -675,6 +679,57 @@ class SupportFormViewModelTest {
             advanceUntilIdle()
 
             assertEquals(1, repo.addCalls.size)
+        }
+
+    /**
+     * Found on a real phone: with four open requests the notice card grew tall
+     * enough to push Send off the bottom of the form. The person most likely to
+     * be in that state is the one who has already asked several times, so it is
+     * exactly the wrong person to make hunt for the button.
+     *
+     * The FORM states the count and shows a couple of examples; the CHOICE
+     * screen still shows every one, because that is where the summaries are
+     * actually used to decide.
+     */
+    @Test
+    fun `the form shows at most a couple of examples, however many are open`() =
+        runTest {
+            viewModel = formWith(BILLING, ACCOUNT, SAFETY, BUG)
+            advanceUntilIdle()
+
+            val shown = viewModel.uiState.value.openTicketsPreview
+            assertEquals(SUPPORT_NOTICE_PREVIEW_LIMIT, shown.size)
+            assertEquals(listOf(BILLING, ACCOUNT), shown, "the newest first, as the server ordered them")
+            assertEquals(
+                2,
+                viewModel.uiState.value.openTicketsBeyondPreview,
+                "the rest are counted, not silently dropped",
+            )
+        }
+
+    @Test
+    fun `nothing is hidden when there are only a couple open`() =
+        runTest {
+            viewModel = formWith(BILLING, ACCOUNT)
+            advanceUntilIdle()
+
+            assertEquals(listOf(BILLING, ACCOUNT), viewModel.uiState.value.openTicketsPreview)
+            assertEquals(0, viewModel.uiState.value.openTicketsBeyondPreview)
+        }
+
+    @Test
+    fun `the choice screen still offers every open request`() =
+        runTest {
+            viewModel = formWith(BILLING, ACCOUNT, SAFETY, BUG)
+            advanceUntilIdle()
+            viewModel.updateMessage("Another thing")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            // The preview is a FORM concern. Capping what somebody can choose
+            // from would make a ticket unreachable to add to.
+            assertEquals(4, viewModel.uiState.value.openTickets.size)
+            assertTrue(viewModel.uiState.value.awaitingDuplicateChoice)
         }
 
     @Test

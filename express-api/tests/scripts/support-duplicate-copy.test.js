@@ -25,6 +25,7 @@ const { ALL_LOCALE_DIRS, readLocaleStrings } = require('../_helpers/compose-loca
 const DUPLICATE_KEYS = [
   'support_open_requests_one',
   'support_open_requests_many',
+  'support_open_requests_more',
   'support_duplicate_reminder',
   'support_duplicate_same',
   'support_duplicate_new',
@@ -56,15 +57,19 @@ describe('SHY-0396 — the copy for somebody who already has a request open', ()
       expect((strings.get(key) ?? '').trim()).not.toBe('');
     });
 
-    test('the count sentence keeps its number', () => {
-      const value = strings.get('support_open_requests_many') ?? '';
-      const placeholders = value.match(/%1\$d/g) ?? [];
-      expect({ dir, value, placeholders: placeholders.length }).toEqual({
-        dir,
-        value,
-        placeholders: 1,
-      });
-    });
+    test.each(['support_open_requests_many', 'support_open_requests_more'])(
+      '%s keeps its number',
+      (key) => {
+        const value = strings.get(key) ?? '';
+        const placeholders = value.match(/%1\$d/g) ?? [];
+        expect({ dir, key, value, placeholders: placeholders.length }).toEqual({
+          dir,
+          key,
+          value,
+          placeholders: 1,
+        });
+      },
+    );
 
     test('the singular sentence does NOT take a number it will not be given', () => {
       // It is rendered without arguments, so a `%1$d` that a translator

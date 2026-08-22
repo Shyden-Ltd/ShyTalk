@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">Zaten 1 açık isteğiniz var.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Zaten açık %1$d isteğiniz var.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">ve %1$d tane daha</string>
 </resources>

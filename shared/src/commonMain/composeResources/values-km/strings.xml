@@ -1862,4 +1862,6 @@
     <string name="support_open_requests_one">អ្នកមានសំណើ 1 រួចហើយដែលបើក។</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">អ្នកបានបើកសំណើ %1$d រួចហើយ។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">និង %1$d ទៀត។</string>
 </resources>

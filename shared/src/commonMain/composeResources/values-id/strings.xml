@@ -1777,4 +1777,6 @@
     <string name="support_open_requests_one">Anda sudah memiliki 1 permintaan yang terbuka.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_many">Anda sudah membuka %1$d permintaan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">dan %1$d lainnya</string>
 </resources>

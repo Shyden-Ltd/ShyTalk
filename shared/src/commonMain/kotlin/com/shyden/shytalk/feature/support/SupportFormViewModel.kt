@@ -42,6 +42,19 @@ const val MAX_ATTACHMENTS = 10
 const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 /**
+ * How many open requests the FORM lists before it stops naming them.
+ *
+ * Found on a real phone: with four open requests the notice card grew tall
+ * enough to push Send off the bottom of the form. The person in that state is
+ * the one who has already asked several times, which makes them exactly the
+ * wrong person to send hunting for the button.
+ *
+ * The choice screen is deliberately NOT capped -- capping what somebody can
+ * choose from would make a ticket impossible to add to.
+ */
+const val SUPPORT_NOTICE_PREVIEW_LIMIT = 2
+
+/**
  * Something the person attached and the server has accepted the bytes for.
  *
  * [displayName] is theirs — the file they picked — so the list reads as the
@@ -91,7 +104,19 @@ data class SupportFormUiState(
     val attachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
     val error: UiText? = null,
-)
+) {
+    /** What the FORM names, at most [SUPPORT_NOTICE_PREVIEW_LIMIT] of them. */
+    val openTicketsPreview: List<OpenTicketSummary>
+        get() = openTickets.take(SUPPORT_NOTICE_PREVIEW_LIMIT)
+
+    /**
+     * How many are open beyond the ones named. Counted rather than dropped: a
+     * silent truncation would tell somebody with five open requests that they
+     * have two.
+     */
+    val openTicketsBeyondPreview: Int
+        get() = (openTickets.size - SUPPORT_NOTICE_PREVIEW_LIMIT).coerceAtLeast(0)
+}
 
 /**
  * The in-app support form — SHY-0385.
