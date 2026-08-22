@@ -4,11 +4,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -134,8 +138,23 @@ fun SupportPage(
     // platforms. Where the inset is still available it lifts the whole Scaffold,
     // bars included; where a parent has already consumed it, it correctly adds
     // nothing — because the space is already gone.
+    // ...and the navigation bar, which the third reading missed.
+    //
+    // Found on a real OnePlus, on video, at step 12 of J38. With the keyboard
+    // OPEN this worked — which is why the first Send of the journey passed. With
+    // the keyboard CLOSED the IME inset is 0, the pinned bar sat flush to the
+    // window bottom, and Android drew back/home/recents over the lower half of
+    // the button. Send's tappable centre coincided with HOME: pressing it left
+    // the app for the launcher instead of submitting. No assertion could see it
+    // — the button existed, had its tag, reported sane bounds and was "visible".
+    //
+    // `union` keeps the count at ONE, which is the whole lesson of the three
+    // readings above: it takes the larger inset per side, so the navigation bar
+    // applies when the keyboard is down and the keyboard applies when it is up
+    // (already spanning the navigation bar's region). Padding the bar separately
+    // would float Send a navigation bar's height above the keyboard.
     Scaffold(
-        modifier = Modifier.imePadding(),
+        modifier = Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.support_form_title), fontWeight = FontWeight.Bold) },

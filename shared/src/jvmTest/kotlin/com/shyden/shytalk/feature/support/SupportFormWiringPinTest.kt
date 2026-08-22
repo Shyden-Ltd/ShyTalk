@@ -333,14 +333,64 @@ class SupportFormWiringPinTest {
         // inset is already consumed upstream, that removed it twice and
         // collapsed the form to a 28 pt strip while Send still looked correct.
         assertTrue(
-            code.contains("Modifier.imePadding()"),
-            "$page does not lift the Scaffold above the keyboard, so a pinned Send sits under it",
+            code.contains("WindowInsets.ime.union(WindowInsets.navigationBars)"),
+            "$page does not lift the Scaffold above BOTH the keyboard and the navigation bar, " +
+                "so a pinned Send sits under one of them",
         )
         assertTrue(
             !bottomBar.contains("imeBottom"),
             "$page lifts the Send bar by hand as well as via the Scaffold. That double-counts " +
                 "the keyboard against the content — the form collapses while Send looks fine. " +
                 "Found: `$bottomBar`",
+        )
+    }
+
+    /**
+     * Send must clear the SYSTEM NAVIGATION BAR too, not only the keyboard.
+     *
+     * Found on a real OnePlus, on video, at step 12 of J38. With the keyboard
+     * OPEN, `imePadding()` lifted the Scaffold and Send was reachable — which is
+     * why the first Send in the journey passed. With the keyboard CLOSED the IME
+     * inset is 0, the bar sat flush to the window bottom, and Android painted
+     * the back/home/recents icons over the lower half of the button. The
+     * button's tappable centre coincided with HOME, so pressing Send went to the
+     * launcher instead of submitting.
+     *
+     * Nothing in an assertion could see it: the button existed, carried the
+     * right tag, reported sane bounds and was "visible". Only the pixels showed
+     * the nav bar on top of it. That is precisely why the walks are recorded.
+     *
+     * `union` rather than a second padding call, because this screen's whole
+     * inset history is about counting an inset EXACTLY ONCE (SHY-0419, three
+     * readings). `union` takes the larger per side: the nav bar when the
+     * keyboard is down, the keyboard when it is up — which already spans the
+     * nav bar region. Adding `navigationBarsPadding()` to the bar as well would
+     * float Send a nav-bar's height above the keyboard whenever it is open.
+     *
+     * MainScreen is unaffected: its bottomBar is a Material3 `NavigationBar`,
+     * which consumes system-bar insets itself. This screen hand-rolls a
+     * `Surface`, which does not.
+     */
+    @Test
+    fun `Send clears the navigation bar, not just the keyboard`() {
+        val code = codeOf(page)
+        assertTrue(
+            code.contains("WindowInsets.navigationBars"),
+            "$page never mentions the navigation bar. With the keyboard closed the pinned Send " +
+                "bar sits flush to the window bottom and Android draws back/home/recents over " +
+                "it — tapping Send's centre hits HOME and leaves the app.",
+        )
+        // ONCE, at the Scaffold. A second application on the bar itself is the
+        // double-count that collapsed this form before.
+        val bottomBar =
+            code
+                .substringAfter("bottomBar = {", "")
+                .substringBefore(") { padding ->", "")
+        assertTrue(
+            !bottomBar.contains("navigationBarsPadding") &&
+                !bottomBar.contains("WindowInsets.navigationBars"),
+            "$page pads the Send bar for the navigation bar as well as the Scaffold. That " +
+                "double-counts it, floating Send above the keyboard. Found: `$bottomBar`",
         )
     }
 
