@@ -78,7 +78,14 @@ fi
 echo "========================================================"
 
 # ---- Allure report prompt ----
-if [ -d "allure-results" ] && [ "$(ls -A allure-results 2>/dev/null)" ]; then
+#
+# Only when a human is actually there. With stdin not a TTY -- any wrapper, any
+# CI step, any `bash local/test-playwright.sh > log` -- `read` fails, and under
+# `set -e` that aborts the script BEFORE `exit "$TEST_EXIT"`. So the run printed
+# "Status: PASSED" and then exited 1, which every caller reads as a failed
+# suite. A green run reported as red is worse than a red one: it trains people
+# to ignore the exit code.
+if [ -t 0 ] && [ -d "allure-results" ] && [ "$(ls -A allure-results 2>/dev/null)" ]; then
   echo ""
   read -r -p "View Allure report? (y/n): " yn
   if [ "$yn" = "y" ] || [ "$yn" = "Y" ]; then

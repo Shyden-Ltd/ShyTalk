@@ -51,7 +51,11 @@ fi
 echo "========================================================"
 
 # ---- Allure report prompt ----
-if [ -d "allure-results" ] && [ "$(ls -A allure-results 2>/dev/null)" ]; then
+# `[ -t 0 ]` first: with stdin not a TTY -- any wrapper, any CI step, any
+# redirect to a log -- `read` fails, and under `set -e` that aborts the
+# script before it can exit with the suite's real result. A green run
+# reported as red trains people to ignore the exit code.
+if [ -t 0 ] && [ -d "allure-results" ] && [ "$(ls -A allure-results 2>/dev/null)" ]; then
   echo ""
   read -r -p "View Allure report? (y/n): " yn
   if [ "$yn" = "y" ] || [ "$yn" = "Y" ]; then

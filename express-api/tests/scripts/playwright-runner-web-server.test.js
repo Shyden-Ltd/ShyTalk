@@ -74,6 +74,31 @@ describe('local stack scripts — the web tier', () => {
     },
   );
 
+  /**
+   * The runner printed "Status: PASSED" and then exited 1 on every
+   * non-interactive invocation: `read -r -p` fails when stdin is not a TTY, and
+   * under `set -e` that aborts the script before `exit "$TEST_EXIT"`.
+   *
+   * A green run reported as red is worse than a red one. It trains people to
+   * ignore the exit code, which is the only thing a wrapper can read.
+   */
+  test.each(SCRIPTS.map((f) => [path.basename(f), f]))(
+    '%s never prompts for input without checking for a terminal',
+    (name, file) => {
+      // `test.sh` is a MENU. Prompting is its entire purpose -- it asks which
+      // suite to run and dispatches -- so a TTY guard there would make it
+      // useless rather than safer. Exempted by name and by reason, which is
+      // honest; broadening the rule until it stopped firing would not be.
+      if (name === 'test.sh') return;
+      const code = codeOf(file);
+      const prompts = code.split('\n').filter((l) => /\bread\b[^|]*\s-p\b/.test(l));
+      // Reported as the offending lines, not a boolean: a failure has to name
+      // the prompt, or somebody has to go and find it before they can fix it.
+      const unguarded = /\[\s*-t\s+0\s*\]/.test(code) ? [] : prompts.map((l) => l.trim());
+      expect({ script: name, unguarded }).toEqual({ script: name, unguarded: [] });
+    },
+  );
+
   test('the Playwright runner points at the stack web server, not one of its own', () => {
     const runner = path.join(LOCAL_DIR, 'test-playwright.sh');
     const code = codeOf(runner);

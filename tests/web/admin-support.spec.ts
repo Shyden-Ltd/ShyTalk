@@ -1,8 +1,10 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { adminLogin, navigateToTab } from "./helpers/admin-auth";
+import { AdminApi } from "./helpers/api";
 
 /**
- * The admin Support tab, in a real browser — SHY-0387 / SHY-0396.
+ * The admin Support tab, in a real browser, against the real stack — SHY-0387 /
+ * SHY-0396.
  *
  * ## Why this file exists
  *
@@ -13,72 +15,67 @@ import { adminLogin, navigateToTab } from "./helpers/admin-auth";
  *
  * A 404 on an ES module import aborts the whole module, so `init()` never ran.
  * Every unit test stayed green throughout, because they read `support.js` as
- * TEXT — `support-follow-up-reaches-the-admin.test.js` greps the file and
- * asserts it renders follow-ups, which was perfectly true of the source and
- * completely irrelevant to a module the browser refuses to execute.
+ * TEXT — a source-scanning guard can only prove what the source SAYS, never
+ * that a browser will execute it.
  *
  * `grep tests/web -e "navigateToTab(page, 'Support')"` returned ZERO hits, so
  * nothing in CI ever opened this tab. It would have merged dead.
  *
- * The first test below is therefore the important one, and it is deliberately
- * boring: the tab loads and shows something. `navigateToTab` waits on
- * `data-module-ready`, which a dead module never sets — so that alone would
- * have caught it.
+ * ## No mocks
  *
- * Everything is asserted against the REAL module and the REAL API. The one
- * mocked case is the XSS payload, and it says why in place.
+ * Every ticket below is raised through the REAL API and read back from the REAL
+ * admin queue. An earlier draft used `page.route` to stub the list, and the
+ * no-new-stubs ratchet refused it — correctly. A stubbed list would have proved
+ * that the renderer can render a fixture, which is not the thing that broke.
+ * The bug was in the seam between a real response and a real module, and only
+ * real data crosses it.
  *
- * See [[feedback-assert-the-seam-not-the-sides]].
+ * See [[feedback-assert-the-seam-not-the-sides]] and
+ * [[feedback-no-stubs-mocks-fakes-real-only]].
  */
 
-const OPEN_TICKETS = "**/api/support-tickets?status=open**";
+/** Unique per run, so parallel projects cannot read each other's tickets. */
+const marker = () =>
+  `SPEC-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-/** Two tickets from one person, one of them carrying follow-ups. */
-const FIXTURE = {
-  tickets: [
-    {
-      id: "spec-alpha",
-      userId: 100000002,
-      uniqueId: 100000002,
-      category: "payment",
-      message: "SPEC ALPHA: my coins never arrived after paying",
-      status: "open",
-      createdAt: 1755000000000,
-      attachments: [],
-      messages: [
-        {
-          message: "SPEC FOLLOWUP: it happened again today",
-          addedAt: 1755000600000,
-          addedBy: 100000002,
-        },
-      ],
-    },
-    {
-      id: "spec-bravo",
-      userId: 100000002,
-      uniqueId: 100000002,
-      category: "bug",
-      message: "SPEC BRAVO: nobody can hear me in rooms",
-      status: "open",
-      createdAt: 1755000900000,
-      attachments: [],
-      messages: [],
-    },
-  ],
-};
-
-const cardFor = (page, needle: string) =>
+const cardFor = (page: Page, needle: string) =>
   page.locator("#support-list > *").filter({ hasText: needle });
 
+/** Raise a ticket as the signed-in admin, and optionally add a follow-up. */
+async function seedTicket(
+  api: AdminApi,
+  message: string,
+  opts: { category?: string; followUp?: string } = {},
+): Promise<string> {
+  const raised = await api.post("/api/support-tickets", {
+    message,
+    category: opts.category ?? "bug",
+  });
+  const id = raised.ticketId;
+  expect(id, "the API did not return a ticket id").toBeTruthy();
+  if (opts.followUp) {
+    await api.post(`/api/support-tickets/${id}/messages`, {
+      message: opts.followUp,
+    });
+  }
+  return id;
+}
+
 test.describe("Admin Support tab", () => {
+  let api: AdminApi;
+
   test.beforeEach(async ({ page }) => {
+    // Constructed BEFORE the login navigation: it captures the bearer token off
+    // the first authenticated request, and the panel fires those on load.
+    api = new AdminApi(page);
     await adminLogin(page);
+    await api.waitForToken();
   });
 
   /**
    * The blocker guard. Deliberately makes no claim about CONTENT — a tab that
-   * loads and lists nothing is a different (and much smaller) problem than a
-   * tab whose JavaScript never ran at all.
+   * loads and lists nothing is a different, much smaller problem than a tab
+   * whose JavaScript never ran at all.
    */
   test("the tab actually loads — its module runs and nothing 404s", async ({
     page,
@@ -89,18 +86,18 @@ test.describe("Admin Support tab", () => {
       if (r.status() >= 400 && /\/(admin\/)?js\//.test(u))
         notFound.push(`${r.status()} ${u}`);
     });
-    const consoleErrors: string[] = [];
-    page.on("pageerror", (e) => consoleErrors.push(e.message));
+    const pageErrors: string[] = [];
+    page.on("pageerror", (e) => pageErrors.push(e.message));
 
-    // Throws if `data-module-ready` is never set — which is exactly what a
-    // module aborted by a failed import looks like.
+    // Throws if `data-module-ready` is never set — exactly what a module
+    // aborted by a failed import looks like.
     await navigateToTab(page, "Support");
 
     expect(
       notFound,
       "an admin module failed to load; a 404 import kills the whole tab",
     ).toEqual([]);
-    expect(consoleErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
     await expect(page.locator("#support-panel")).toHaveAttribute(
       "data-module-ready",
       "true",
@@ -110,21 +107,19 @@ test.describe("Admin Support tab", () => {
   test("two requests from one person are shown as two separate tickets", async ({
     page,
   }) => {
-    await page.route(OPEN_TICKETS, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(FIXTURE),
-      }),
-    );
+    const alpha = `${marker()} ALPHA my coins never arrived`;
+    const bravo = `${marker()} BRAVO nobody can hear me in rooms`;
+    await seedTicket(api, alpha, { category: "payment" });
+    await seedTicket(api, bravo, { category: "bug" });
+
     await navigateToTab(page, "Support");
 
     // SHY-0396 allows a second request, so an admin has to be able to tell them
-    // apart. One card containing both would mean the two problems are triaged
-    // as one, which is the outcome the refusal used to cause by another route.
-    await expect(cardFor(page, "SPEC ALPHA")).toHaveCount(1);
-    await expect(cardFor(page, "SPEC BRAVO")).toHaveCount(1);
-    await expect(cardFor(page, "SPEC ALPHA")).not.toContainText("SPEC BRAVO");
+    // apart. One card holding both would mean two problems triaged as one —
+    // the outcome the refusal used to cause by another route.
+    await expect(cardFor(page, alpha)).toHaveCount(1);
+    await expect(cardFor(page, bravo)).toHaveCount(1);
+    await expect(cardFor(page, alpha)).not.toContainText(bravo);
   });
 
   /**
@@ -134,24 +129,24 @@ test.describe("Admin Support tab", () => {
    * where no human would ever read them.
    */
   test("a follow-up is shown under the original message", async ({ page }) => {
-    await page.route(OPEN_TICKETS, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(FIXTURE),
-      }),
-    );
-    await navigateToTab(page, "Support");
+    const original = `${marker()} original message`;
+    const followUp = `${marker()} it happened again today`;
+    await seedTicket(api, original, { followUp });
 
-    const card = cardFor(page, "SPEC ALPHA");
-    await expect(card).toContainText("SPEC FOLLOWUP: it happened again today");
+    await navigateToTab(page, "Support");
+    const card = cardFor(page, original);
+    await expect(card).toContainText(followUp);
 
     // Asserted on POSITION, not merely presence: a follow-up rendered above the
     // message it follows reads as a separate report.
-    const original = card.locator("div", { hasText: "SPEC ALPHA" }).last();
-    const followUp = card.locator("div", { hasText: "SPEC FOLLOWUP" }).last();
-    const oy = (await original.boundingBox())!.y;
-    const fy = (await followUp.boundingBox())!.y;
+    const oy = (await card
+      .locator("div", { hasText: original })
+      .last()
+      .boundingBox())!.y;
+    const fy = (await card
+      .locator("div", { hasText: followUp })
+      .last()
+      .boundingBox())!.y;
     expect(
       fy,
       "the follow-up must render BELOW the original message",
@@ -161,72 +156,53 @@ test.describe("Admin Support tab", () => {
   /**
    * The element is `white-space: pre-wrap`, so the template literal's own SOURCE
    * indentation renders as leading spaces. It shipped once: follow-ups were
-   * pushed ~90px right with blank gaps between them, while the original message
-   * — a single source line — was unaffected.
+   * pushed ~90px right with blank gaps, while the original message — a single
+   * source line — was unaffected, which is why it was easy to miss.
    */
   test("a follow-up carries no leading whitespace from the source", async ({
     page,
   }) => {
-    await page.route(OPEN_TICKETS, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(FIXTURE),
-      }),
-    );
-    await navigateToTab(page, "Support");
+    const original = `${marker()} original for whitespace`;
+    const followUp = `${marker()} follow-up for whitespace`;
+    await seedTicket(api, original, { followUp });
 
-    const text = await cardFor(page, "SPEC ALPHA")
-      .locator("div", { hasText: "SPEC FOLLOWUP" })
+    await navigateToTab(page, "Support");
+    const text = await cardFor(page, original)
+      .locator("div", { hasText: followUp })
       .last()
       .textContent();
-    expect(text).toBe("SPEC FOLLOWUP: it happened again today");
+    expect(text).toBe(followUp);
   });
 
   /**
    * A follow-up is untrusted text typed by the same person into the same queue
-   * as the original message, which was already escaped. Mocked because the API
-   * would store the payload verbatim and this must not depend on seeding one.
+   * as the original message, which was already escaped. Stored through the real
+   * API, which keeps it verbatim — so this proves the RENDERER escapes it, not
+   * that a fixture happened to contain entities.
    */
   test("HTML inside a follow-up renders as text, never as markup", async ({
     page,
   }) => {
+    const original = `${marker()} original for xss`;
+    const payload = `${marker()} <img src=x onerror=window.__xss_executed=true> <b>notbold</b>`;
+    await seedTicket(api, original, { followUp: payload });
+
     await page.addInitScript(() => {
       (window as any).__xss_executed = false;
     });
-    await page.route(OPEN_TICKETS, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          tickets: [
-            {
-              ...FIXTURE.tickets[0],
-              messages: [
-                {
-                  message:
-                    "SPEC XSS <img src=x onerror=window.__xss_executed=true> <b>notbold</b>",
-                  addedAt: 1755000600000,
-                  addedBy: 100000002,
-                },
-              ],
-            },
-          ],
-        }),
-      }),
-    );
     await navigateToTab(page, "Support");
 
-    const card = cardFor(page, "SPEC ALPHA");
+    const card = cardFor(page, original);
     await expect(card).toContainText(
       "<img src=x onerror=window.__xss_executed=true>",
     );
     expect(await card.locator("img").count()).toBe(0);
     expect(await card.locator("b").count()).toBe(0);
-    // Asserted as "did not become true", not as "is false". `addInitScript`
-    // only runs on NAVIGATION, and reaching this tab is a click -- so the
-    // sentinel is legitimately `undefined` here. Comparing to `false` would
-    // fail on the safe outcome and tempt somebody to weaken the check.
+    // "Did not become true", not "is false": `addInitScript` runs only on
+    // NAVIGATION and reaching this tab is a click, so the sentinel is
+    // legitimately undefined. Comparing to `false` would fail on the SAFE
+    // outcome, which is the kind of assertion that gets weakened rather than
+    // fixed.
     expect(
       await page.evaluate(() => (window as any).__xss_executed === true),
     ).toBe(false);
@@ -241,40 +217,25 @@ test.describe("Admin Support tab", () => {
   test("a ticket with no attachments shows no attachment error", async ({
     page,
   }) => {
-    await page.route(OPEN_TICKETS, (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(FIXTURE),
-      }),
-    );
-    // The fixture tickets do not exist in the database, so the REAL endpoint
-    // answers 404 and the card would show its error legitimately. Stubbed to a
-    // normal empty response so the assertion is about the CALL being well
-    // formed, which is what the arity defect broke.
-    await page.route("**/api/support-tickets/*/attachments", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ attachments: [] }),
-      }),
-    );
-    const attachmentCalls: string[] = [];
+    const message = `${marker()} ticket with no attachments`;
+    const id = await seedTicket(api, message);
+
+    const calls: string[] = [];
     page.on("request", (r) => {
-      if (/\/api\/support-tickets\/[^/]+\/attachments/.test(r.url()))
-        attachmentCalls.push(r.url());
+      if (r.url().includes(`/api/support-tickets/${id}/attachments`))
+        calls.push(r.url());
     });
 
     await navigateToTab(page, "Support");
-    await expect(cardFor(page, "SPEC ALPHA")).toBeVisible();
+    await expect(cardFor(page, message)).toBeVisible();
 
     await expect(page.locator("#support-list")).not.toContainText(
       "Attachments could not be loaded",
     );
-    // The request has to be MADE, or "no error shown" would also be satisfied by
-    // never asking — which is what the broken arity actually did.
+    // The request has to be MADE. "No error shown" is also satisfied by never
+    // asking — which is precisely what the broken arity did.
     expect(
-      attachmentCalls.length,
+      calls.length,
       "the attachments endpoint was never called",
     ).toBeGreaterThan(0);
   });
