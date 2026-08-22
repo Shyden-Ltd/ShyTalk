@@ -160,7 +160,11 @@ describe('attachment limits — a video is actually measured', () => {
     const code = codeOf(ANDROID_PICKER);
     expect(code).toContain('MediaMetadataRetriever');
     expect(code).toContain('METADATA_KEY_DURATION');
-    expect(code).toMatch(/durationMs\s*=/);
+    // Bound to the READER, not merely to the field name. `durationMs =` alone
+    // is satisfied by `durationMs = null`, so the first version of this
+    // assertion SURVIVED a mutation that stopped reading the duration
+    // altogether — which is precisely the defect that shipped.
+    expect(code).toMatch(/durationMs\s*=\s*[^,]{0,140}videoDurationMs\(/);
     // A native handle per pick, ten on a ten-file selection.
     expect(code).toContain('.release()');
   });
@@ -169,7 +173,8 @@ describe('attachment limits — a video is actually measured', () => {
     const code = codeOf(IOS_PICKER);
     expect(code).toContain('AVURLAsset');
     expect(code).toContain('CMTimeGetSeconds');
-    expect(code).toMatch(/durationMs\s*=/);
+    // Same trap as Android: bound to the reader, not the field name.
+    expect(code).toMatch(/durationMs\s*=\s*[^,]{0,140}videoDurationMs\(/);
     // The measurement writes a temp file; leaving it behind means one copy of
     // every video picked, in the app container.
     expect(code).toContain('removeItemAtPath');
