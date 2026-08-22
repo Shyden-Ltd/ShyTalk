@@ -41,6 +41,26 @@ interface SupportRepository {
     ): Boolean
 
     /**
+     * Delete an upload the person has taken off their form — SHY-0434.
+     *
+     * The bytes go up the moment a file is PICKED, before Send is pressed, so a
+     * removed file is already in storage. Once the form drops the key nothing
+     * references it: no ticket carries it, so no retention rule and no erasure
+     * request will ever reach it.
+     *
+     * That matters here more than storage cost. People attach screenshots of
+     * private conversations and video of other people to safety reports, and
+     * taking a file off the form is the moment somebody most reasonably
+     * believes it is gone.
+     *
+     * `false` means the server did not delete it. The caller still removes it
+     * from the form — refusing to let go of a file somebody has decided against
+     * would leave them unable to send at all — but the failure is logged rather
+     * than treated as success.
+     */
+    suspend fun deleteAttachment(r2Key: String): Boolean
+
+    /**
      * The caller's own requests that are still open — SHY-0396.
      *
      * `null` means the lookup FAILED and is deliberately distinct from an empty

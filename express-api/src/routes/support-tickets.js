@@ -27,7 +27,7 @@ const { db, FieldValue } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
-const { getSignedPutUrl, getSignedGetUrl } = require('../utils/r2');
+const { deleteObject, getSignedGetUrl, getSignedPutUrl } = require('../utils/r2');
 const { writeLimiter } = require('../middleware/rateLimit');
 const log = require('../utils/log');
 
@@ -232,6 +232,49 @@ router.post('/support-tickets/upload-url', writeLimiter, async (req, res) => {
       error: err.message,
     });
     return res.status(500).json({ error: 'Failed to issue upload URL' });
+  }
+});
+
+// ─── Remove an attachment before sending ────────────────────────
+
+/**
+ * Delete an upload the person has taken off their form.
+ *
+ * The bytes go up the moment a file is PICKED, before Send is pressed. So a
+ * file removed from the form is already in the object store, and once the form
+ * drops the key nothing references it: no ticket carries it, so no retention
+ * rule and no erasure request will ever reach it.
+ *
+ * That is a data-protection problem rather than housekeeping. People attach
+ * screenshots of private conversations and video of other people to safety
+ * reports, and removing a file before sending is the moment somebody most
+ * reasonably believes it is gone. Keeping an orphaned copy indefinitely, for no
+ * purpose, is exactly what data minimisation forbids.
+ *
+ * The key comes from the CLIENT, so it gets the same three defences as the
+ * upload path: it must sit under the caller's own prefix, and must contain
+ * neither `..` nor `//`. Without that this endpoint would delete anything whose
+ * key a caller could guess.
+ */
+router.delete('/support-tickets/attachments', writeLimiter, async (req, res) => {
+  try {
+    if (requireIdentity(req, res)) return;
+    const r2Key = (req.body ?? {}).r2Key;
+    const check = validateAttachments([r2Key], req.auth.uniqueId);
+    if (!check.ok) return res.status(400).json({ error: check.error });
+
+    await deleteObject(r2Key);
+    log.info('support-tickets', 'attachment removed before sending', {
+      uniqueId: req.auth.uniqueId,
+    });
+    return res.json({ deleted: true });
+  } catch (err) {
+    // Reported, never swallowed. Answering 200 on a failed delete would tell
+    // somebody their file is gone while it is still there.
+    log.error('support-tickets', 'DELETE /api/support-tickets/attachments failed', {
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Failed to delete attachment' });
   }
 });
 

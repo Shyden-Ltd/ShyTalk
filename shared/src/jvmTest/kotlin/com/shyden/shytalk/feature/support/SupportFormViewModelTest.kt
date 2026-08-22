@@ -276,6 +276,138 @@ class SupportFormViewModelTest {
         }
 
     /**
+     * Removing has to change the COUNT, not just the picture.
+     *
+     * The existing test proved the surviving SET was right, which is a
+     * different claim: a form that showed two rows while still counting three
+     * would satisfy it. What somebody actually relies on is the number — "3 of
+     * 10 used" has to become 2, or the tenth slot is silently gone.
+     */
+    @Test
+    fun `removing an attachment decreases how many are attached`() =
+        runTest {
+            repeat(3) { i ->
+                viewModel.attach("file$i.png", AttachmentType.Png, ByteArray(8))
+                advanceUntilIdle()
+            }
+            assertEquals(3, viewModel.uiState.value.attachments.size)
+
+            val removed =
+                viewModel.uiState.value.attachments[1]
+                    .r2Key
+            viewModel.removeAttachment(removed)
+
+            val left = viewModel.uiState.value.attachments
+            assertEquals(2, left.size, "removing one of three must leave two")
+            assertFalse(left.any { it.r2Key == removed }, "the removed file is still attached")
+        }
+
+    /**
+     * And the freed slot must be usable again.
+     *
+     * `attach` refuses at `size >= MAX_ATTACHMENTS`. If removal had been
+     * written against a counter that only ever went up — an easy thing to do —
+     * the count would look right on screen and the eleventh slot would stay
+     * shut for ever. That is the functional half of "3 of 10 becomes 2 of 10".
+     */
+    @Test
+    fun `removing an attachment frees the slot it was using`() =
+        runTest {
+            repeat(MAX_ATTACHMENTS) { i ->
+                viewModel.attach("file$i.png", AttachmentType.Png, ByteArray(8))
+                advanceUntilIdle()
+            }
+            assertEquals(MAX_ATTACHMENTS, viewModel.uiState.value.attachments.size)
+
+            // Full: the next one is refused.
+            viewModel.attach("overflow.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            assertEquals(MAX_ATTACHMENTS, viewModel.uiState.value.attachments.size)
+            assertNotNull(viewModel.uiState.value.error, "a full form must say why")
+
+            viewModel.removeAttachment(
+                viewModel.uiState.value.attachments
+                    .first()
+                    .r2Key,
+            )
+            assertEquals(MAX_ATTACHMENTS - 1, viewModel.uiState.value.attachments.size)
+
+            // The freed slot is genuinely usable.
+            viewModel.attach("replacement.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            assertEquals(
+                MAX_ATTACHMENTS,
+                viewModel.uiState.value.attachments.size,
+                "the slot freed by removing a file was never reusable",
+            )
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .any { it.displayName == "replacement.png" },
+                "the replacement did not attach",
+            )
+        }
+
+    /**
+     * Removing must delete the file from the server, not just from this screen.
+     *
+     * The bytes are uploaded the MOMENT a file is picked, before anybody
+     * presses Send. So a file removed from the form is already sitting in
+     * object storage, and nothing references it: no ticket carries the key, so
+     * no retention rule and no erasure request will ever find it.
+     *
+     * For this screen that is not housekeeping. People attach screenshots of
+     * private conversations and video of other people to safety reports. An
+     * orphaned copy of that, kept for ever with no purpose, is exactly what
+     * data-minimisation forbids — and "I removed it before sending" is the
+     * moment somebody most reasonably believes it is gone.
+     */
+    @Test
+    fun `removing an attachment deletes the uploaded file`() =
+        runTest {
+            viewModel.attach("private.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            val key =
+                viewModel.uiState.value.attachments
+                    .single()
+                    .r2Key
+
+            viewModel.removeAttachment(key)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(key),
+                repo.deleteCalls,
+                "removing an attachment left the uploaded file on the server",
+            )
+        }
+
+    /**
+     * Deleting is best-effort as far as the PERSON is concerned. A server that
+     * refuses must not strand a file on their form that they have decided to
+     * remove — they would be unable to send at all.
+     */
+    @Test
+    fun `a file is removed from the form even if the server refuses to delete it`() =
+        runTest {
+            repo.deleteSucceeds = false
+            viewModel.attach("stuck.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+            val key =
+                viewModel.uiState.value.attachments
+                    .single()
+                    .r2Key
+
+            viewModel.removeAttachment(key)
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+                "a failed server delete must not keep the file on the form",
+            )
+        }
+
+    /**
      * Superseded 2026-08-22. This asserted one flat 25 MB cap over a VIDEO,
      * which is the shape the operator corrected: video is bounded by DURATION
      * now, and 25 MB was never a limit anybody chose. The behaviour it was
@@ -1054,8 +1186,16 @@ private class FakeSupportRepository : SupportRepository {
     var addSucceeds = true
 
     /** Keys handed out in order, so a test can name the one it expects. */
-    var nextKeys = ArrayDeque(listOf("support-tickets/1/a.png", "support-tickets/1/b.png"))
+    var nextKeys =
+        ArrayDeque(
+            listOf("support-tickets/1/a.png", "support-tickets/1/b.png") +
+                (2..20).map { "support-tickets/1/k$it.png" },
+        )
     var handleOrNull: (() -> UploadHandle?)? = null
+
+    /** Keys the form asked the server to DELETE. */
+    val deleteCalls = mutableListOf<String>()
+    var deleteSucceeds = true
 
     /** Upload SLOTS requested. A refusal must not even ask for one. */
     var urlRequests = 0
@@ -1087,6 +1227,11 @@ private class FakeSupportRepository : SupportRepository {
     ): Boolean {
         addCalls.add(ticketId to message)
         return addSucceeds
+    }
+
+    override suspend fun deleteAttachment(r2Key: String): Boolean {
+        deleteCalls.add(r2Key)
+        return deleteSucceeds
     }
 
     override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? {

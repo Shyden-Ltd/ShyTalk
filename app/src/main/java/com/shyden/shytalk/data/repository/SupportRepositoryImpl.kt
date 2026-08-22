@@ -89,6 +89,24 @@ class SupportRepositoryImpl(
         }
 
     /**
+     * SHY-0434 — a removed attachment must leave the object store.
+     *
+     * Best-effort by contract: `false` tells the caller it is still there, and
+     * the caller still takes it off the form. Refusing to let go of a file
+     * somebody has decided against would leave them unable to send at all.
+     */
+    override suspend fun deleteAttachment(r2Key: String): Boolean =
+        try {
+            api.delete(DELETE_ATTACHMENT_PATH, JSONObject().put("r2Key", r2Key))
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Attachment delete failed for $r2Key", e)
+            false
+        }
+
+    /**
      * SHY-0396 — what this person still has open, for the duplicate warning.
      *
      * Null on ANY failure, and deliberately not an empty list: the caller has to
@@ -185,5 +203,6 @@ class SupportRepositoryImpl(
         const val PATH = "/api/support-tickets"
         const val UPLOAD_URL_PATH = "/api/support-tickets/upload-url"
         const val OPEN_TICKETS_PATH = "/api/support-tickets/mine/open"
+        const val DELETE_ATTACHMENT_PATH = "/api/support-tickets/attachments"
     }
 }

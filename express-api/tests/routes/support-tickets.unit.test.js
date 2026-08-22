@@ -95,9 +95,11 @@ jest.mock('../../src/middleware/rateLimit', () => ({
 
 const mockGetSignedPutUrl = jest.fn();
 const mockGetSignedGetUrl = jest.fn();
+const mockDeleteObject = jest.fn();
 jest.mock('../../src/utils/r2', () => ({
   getSignedPutUrl: (...args) => mockGetSignedPutUrl(...args),
   getSignedGetUrl: (...args) => mockGetSignedGetUrl(...args),
+  deleteObject: (...args) => mockDeleteObject(...args),
 }));
 
 jest.mock('../../src/utils/log', () => ({
@@ -114,6 +116,7 @@ beforeEach(() => {
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
   mockGetSignedPutUrl.mockResolvedValue('https://r2.example/signed-put');
   mockGetSignedGetUrl.mockImplementation(async (key) => `https://r2.example/get/${key}`);
+  mockDeleteObject.mockResolvedValue(undefined);
 });
 
 // ─── App setup ──────────────────────────────────────────────────
@@ -828,5 +831,100 @@ describe('PATCH /api/support-tickets/:id', () => {
       .patch('/api/support-tickets/nope')
       .send({ status: 'resolved' });
     expect(mockCollectionAdd).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Removing an attachment ─────────────────────────────────────
+
+/**
+ * SHY-0434 — a removed attachment must leave the object store.
+ *
+ * The bytes go up the moment a file is PICKED, before anybody presses Send. So
+ * a file removed from the form is already in storage, and once the form drops
+ * the key nothing references it: no ticket carries it, so no retention rule and
+ * no erasure request will ever reach it.
+ *
+ * For this queue that is a data-protection problem, not housekeeping. People
+ * attach screenshots of private conversations and video of other people to
+ * safety reports. Keeping an orphaned copy for ever, with no purpose, is what
+ * data minimisation exists to prevent — and removing a file before sending is
+ * the moment somebody most reasonably believes it is gone.
+ */
+describe('DELETE /api/support-tickets/attachments', () => {
+  const own = (uniqueId, name = 'abc.png') => `support-tickets/${uniqueId}/${name}`;
+
+  test('deletes the object the caller uploaded', async () => {
+    const key = own(10000042);
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: key });
+
+    expect(res.status).toBe(200);
+    expect(mockDeleteObject).toHaveBeenCalledWith(key);
+  });
+
+  test("refuses a key under somebody ELSE'S prefix, and deletes nothing", async () => {
+    // The key comes from the client, so every one is a candidate route into
+    // another person's folder — the same defence the upload path applies.
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: own(99999999) });
+
+    expect(res.status).toBe(400);
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  test('refuses a traversal key, and deletes nothing', async () => {
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: `support-tickets/10000042/../../secrets.png` });
+
+    expect(res.status).toBe(400);
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  test('refuses a missing or non-string key', async () => {
+    for (const bad of [undefined, 42, null, '']) {
+      mockDeleteObject.mockClear();
+      const res = await request(createApp({ uniqueId: 10000042 }))
+        .delete('/api/support-tickets/attachments')
+        .send(bad === undefined ? {} : { r2Key: bad });
+      expect({ bad, status: res.status }).toEqual({ bad, status: 400 });
+      expect(mockDeleteObject).not.toHaveBeenCalled();
+    }
+  });
+
+  test('requires an identity', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'x' }; // no uniqueId
+      next();
+    });
+    app.use('/api', require('../../src/routes/support-tickets'));
+
+    const res = await request(app)
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: own(10000042) });
+
+    // 403, not 401: the caller IS authenticated, but no account could be
+    // resolved for them (SHY-0426). Deleting on behalf of "nobody" would let a
+    // caller with no identity reach a prefix that belongs to someone.
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('no_identity');
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  test('a storage failure is reported, not swallowed', async () => {
+    // The caller decides what to do about it. Answering 200 on a failed delete
+    // would tell somebody their file is gone when it is still there — the one
+    // lie this endpoint must never tell.
+    mockDeleteObject.mockRejectedValueOnce(new Error('r2 down'));
+
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: own(10000042) });
+
+    expect(res.status).toBe(500);
   });
 });

@@ -664,6 +664,24 @@ class IosSupportRepositoryImpl(
             false
         }
 
+    /**
+     * SHY-0434 — a removed attachment must leave the object store.
+     *
+     * Best-effort by contract: `false` tells the caller it is still there, and
+     * the caller still takes it off the form. Refusing to let go of a file
+     * somebody has decided against would leave them unable to send at all.
+     */
+    override suspend fun deleteAttachment(r2Key: String): Boolean =
+        try {
+            api.delete("/api/support-tickets/attachments", JsonObject(mapOf("r2Key" to JsonPrimitive(r2Key))))
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Attachment delete failed: ${e.message}")
+            false
+        }
+
     override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? =
         try {
             val body = JsonObject(mapOf("contentType" to JsonPrimitive(contentType.wireValue)))

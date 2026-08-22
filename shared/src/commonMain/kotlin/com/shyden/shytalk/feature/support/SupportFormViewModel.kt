@@ -316,14 +316,33 @@ class SupportFormViewModel(
     }
 
     /**
-     * Take one back off the ticket.
+     * Take a file off the form, and off the SERVER — SHY-0434.
      *
-     * The object stays in R2 unreferenced; nothing here deletes it, because a
-     * delete that races the send would strip an attachment off a ticket already
-     * on its way. Unreferenced objects are the storage lifecycle's problem.
+     * This replaces a comment that documented the leak as deliberate: "the
+     * object stays in R2 unreferenced... unreferenced objects are the storage
+     * lifecycle's problem". No lifecycle ever collected them, and the race it
+     * worried about — a delete stripping an attachment off a ticket already on
+     * its way — cannot happen here, because removing the key from the form is
+     * what stops any later send from referencing it.
+     *
+     * The bytes went up the moment the file was picked, before Send. So this is
+     * not only a screen change: once the form drops the key nothing references
+     * that object, no ticket carries it, and no retention rule or erasure
+     * request will ever reach it.
+     *
+     * The form lets go FIRST and unconditionally. Somebody who has decided
+     * against a file must not be stuck with it because the server is having a
+     * bad day — and this screen exists for people already having one. A delete
+     * that fails is logged, not surfaced: there is nothing they could do about
+     * it, and it does not change what gets sent.
      */
     fun removeAttachment(r2Key: String) {
         _uiState.update { it.copy(attachments = it.attachments.filterNot { a -> a.r2Key == r2Key }) }
+        viewModelScope.launch {
+            if (!supportRepository.deleteAttachment(r2Key)) {
+                logW(TAG, "Removed attachment was not deleted from storage: $r2Key")
+            }
+        }
     }
 
     fun reset() {
