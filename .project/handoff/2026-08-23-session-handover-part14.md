@@ -176,6 +176,110 @@ moment they met hardware.
 
 ---
 
+## Round two: both phones green, and what it took
+
+Written after the device runs part 14 was waiting on.
+
+### Result
+
+| Device | Result | Reachability failures |
+| --- | --- | --- |
+| OnePlus CPH2653 | **PASS 14/14**, 243.0s | **zero** |
+| iPhone Air | **PASS 14/14**, 91.2s | **zero** |
+
+### The reachability gate was wrong, on both phones, on the first screen
+
+Three tree shapes defeated one geometric rule:
+
+1. **Compose semantics sibling** (Android) — `Role.Button` beside the label,
+   `clickable="false"`, **larger** than it. The only exemption was "wholly
+   INSIDE the target"; Compose emits the inverse.
+2. **A child overhanging its parent by ONE point** (iOS) — `main_profileTab`
+   `[285,798][420,878]` vs caption `[328,830][377,879]`; containment needs
+   `879 <= 878`. **Every bottom-nav tab became untappable.**
+3. **A full-screen transparent layer** (iOS) — empty, unnamed,
+   `accessible="false"`, and `visible="true"`.
+
+Thirteen controls flagged on one settled iOS Home screen; none absorbed a touch.
+
+Narrowed to a specific question — **is a SYSTEM OVERLAY on top of it?** (class or
+id containing keyboard / inputmethod / navigationbar / statusbar / systemui).
+Accepted cost, in the code: a product modal covering a control is not caught. A
+check that reddens healthy walks gets disabled and then catches nothing.
+
+Rejected routes and why: "ignore non-clickable" would disable SHY-0428 and
+SHY-0419 detection, because the navigation bar and soft-input window are both
+non-clickable in a dump. "Ignore a candidate that contains the target" would
+break SHY-0419, because the keyboard fully contains Send.
+
+### `visible` does not mean visible
+
+Removed. On a plain Home screen the captions `Rooms`, `Messages`, `Profile` all
+report `visible="false"` while rendered. The Appium log gives the mechanism:
+WDA is **erroring**, not reporting — `Cannot determine visiblity … 
+kAXErrorInvalidUIElement … Defaulting to: 0`. It names real controls
+(`main_settingsButton`, `settings_subPageBackButton`). Trusting it would have
+reddened walks at random.
+
+### A claim I made that was wrong
+
+I cited a 184.2s run passing 14/14 as reassurance for the `tapLowestText` fix.
+Its step 2 took **2.2s** — the app was already at SignIn, so the confirm dialog
+never appeared and the fix's path was never entered. That run was never evidence
+either way. The real proof is the 243.0s run: dialog on screen at t≈71s, SignIn
+reached at t≈78s, impossible if re-resolution had returned the identically-worded
+title. Recorded as
+[[feedback-a-green-run-only-proves-the-paths-it-walked]].
+
+### Sessions and recordings
+
+- **Nothing ever closed the Appium session.** `IosDevice.quit()` existed, called
+  from nowhere. Now in the `finally`, best-effort.
+- **And a replaced session was orphaned.** WDA dies with the app, the dump-retry
+  opens a REPLACEMENT, and `quit()` closed only `_sessionId` — 14 created, 13
+  removed. Now closes every id ever opened.
+- **The recording covered 21s of a 91s walk**, ending where the app relaunched.
+  ffmpeg held the dead MJPEG socket and never reconnected, so steps 3–14 had no
+  footage. Fixed with bounded `-reconnect` / `-reconnect_on_network_error`.
+  **Any iOS walk that restarted the app had been losing its video since the
+  recorder was built.**
+
+### Not settled
+
+**The Send-behind-keyboard moment (~step 8) has never been watched with the gate
+live.** The gate did not fire, which is real positive evidence — `typeText`
+clicks the field before setting its value so the keyboard was up,
+`tapIdScrolling` taps as soon as the id is findable, and `XCUIElementTypeKeyboard`
+matches the overlay hints — but that is inference, not a frame. The recording
+defect is what denied one. With reconnect in place the next iOS run should cover
+the whole walk.
+
+---
+
+## THE ISSUES TO FIX NEXT
+
+Operator, 2026-08-23: *"fix the issues, then run the tests again"*. In priority
+order, all found by the device runs and none yet fixed:
+
+1. **SHY-0430 — the debug overlay covers product copy.** On iOS it obscures most
+   of the "goes to the back of the queue" paragraph — **the exact sentence step
+   10 asserts**. A human reading that screen could not check it.
+2. **SHY-0432 — test data grows unbounded.** The iOS persona reached 5–8 open
+   requests including duplicates from earlier runs, against a display cap of
+   `MAX_OPEN_TICKETS_LISTED = 5`. Nothing asserts a count, so it passes while
+   progressively hiding the screen under test.
+3. **SHY-0442 — "Unable to Connect" on cold start.** Cause confirmed:
+   `handleBackendError` sends every non-auth failure to `isBackendUnreachable`
+   with no retry. Needs an `AuthViewModelTest` harness, which does not exist.
+4. **The white cold-start splash flash** on a dark-themed app.
+5. **`api unknown` beside a GREEN health dot** in the debug overlay — the label
+   and the indicator contradict each other on a demonstrably healthy run.
+6. **Gift Wall artwork renders as broken-image fallbacks** (Android); a
+   **"600 × 200" placeholder banner** dominates Rooms. Neither triaged — may be
+   local seed data rather than product.
+
+Then re-run both device journeys and the full suites.
+
 ## Where to pick up
 
 1. **Read the two device reports.** The question is whether the reachability
