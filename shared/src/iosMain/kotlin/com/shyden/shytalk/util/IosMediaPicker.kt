@@ -38,6 +38,27 @@ private const val JPEG_QUALITY = 0.8
  * the first place.
  */
 object IosMediaPicker {
+    /**
+     * The delegate, held where the GC can actually SEE it.
+     *
+     * `PHPickerViewController.delegate` is a WEAK property, so the picker does
+     * not keep its delegate alive. The delegate used to try to solve that by
+     * holding an instance property pointing at its own object. That is a
+     * self-referential CYCLE with no external root, and Kotlin/Native's GC is a
+     * tracing collector: an unreachable cycle is exactly what it reclaims.
+     *
+     * So the delegate could be collected between presenting the picker and the
+     * person choosing a file. `delegate` then read nil and
+     * `picker(_:didFinishPicking:)` never fired: the sheet stayed open, nothing
+     * was added, and every further attempt stacked another picker until the app
+     * had to be force-quit. It depended on GC timing, which is why it presented
+     * as flakiness rather than as a feature that does not work at all.
+     *
+     * A Kotlin `object` IS a GC root, so a property on it genuinely holds the
+     * delegate. One at a time is correct — only one picker can be on screen.
+     */
+    private var activeDelegate: MediaDelegate? = null
+
     fun pickMedia(
         maxCount: Int,
         onResult: (List<PickedMedia>) -> Unit,
@@ -52,6 +73,7 @@ object IosMediaPicker {
 
         val picker = PHPickerViewController(configuration = config)
         val delegate = MediaDelegate(maxCount, onResult)
+        activeDelegate = delegate
         picker.delegate = delegate
         IosImagePicker.presentPicker(picker)
     }
@@ -62,10 +84,6 @@ object IosMediaPicker {
         private val onResult: (List<PickedMedia>) -> Unit,
     ) : NSObject(),
         PHPickerViewControllerDelegateProtocol {
-        // Strong self-reference: without it this is collected before the
-        // asynchronous loads call back, and the picker silently returns nothing.
-        private var selfRef: MediaDelegate? = this
-
         override fun picker(
             picker: PHPickerViewController,
             didFinishPicking: List<*>,
@@ -75,7 +93,7 @@ object IosMediaPicker {
             val results = didFinishPicking.filterIsInstance<PHPickerResult>()
             if (results.isEmpty()) {
                 onResult(emptyList())
-                selfRef = null
+                activeDelegate = null
                 return
             }
 
@@ -86,7 +104,7 @@ object IosMediaPicker {
                 remaining--
                 if (remaining == 0) {
                     onResult(picked.take(maxCount))
-                    selfRef = null
+                    activeDelegate = null
                 }
             }
 

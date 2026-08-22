@@ -103,12 +103,35 @@ rm -rf "$REPO_ROOT/iosApp/build/dd/Build/Products/$CONFIG-iphoneos/iosApp.app/Fr
 # then does the real embed + sign with the environment it alone has.
 SDK_NAME="iphoneos$(xcrun --sdk iphoneos --show-sdk-version 2>/dev/null)"
 STAGE="$REPO_ROOT/shared/build/xcode-frameworks/$CONFIG/$SDK_NAME"
-if [ ! -d "$STAGE/shared.framework" ]; then
-  echo "==> Staging the Kotlin framework ($CONFIG / $SDK_NAME)"
-  (cd "$REPO_ROOT" && ./gradlew :shared:linkDebugFrameworkIosArm64 --max-workers=1)
-  mkdir -p "$STAGE"
-  cp -R "$REPO_ROOT/shared/build/bin/iosArm64/debugFramework/shared.framework" "$STAGE/"
-fi
+# ALWAYS relink and re-stage. This used to be `if [ ! -d "$STAGE/shared.framework" ]`,
+# which staged once and never again — and the comment above assumed Xcode's
+# in-project "Compile Kotlin Framework" phase would refresh it on a Kotlin
+# change. It does not: `grep -c "Compile Kotlin Framework"` over a full build log
+# returns ZERO. That phase never runs.
+#
+# So every install after the first rebuilt the Swift app around a FROZEN Kotlin
+# framework, printed `** BUILD SUCCEEDED **` and `Verified: bundle carries
+# ShyTalkLocalHost=...`, and shipped whatever Kotlin happened to be compiled when
+# the directory was first created. On 2026-08-22 that silently put an 08:11
+# framework on the phone for the rest of the day: the 08:48 notice cap and the
+# 13:59 attachment limits were never on the device, while every signal said the
+# build was current. A device test against stale code is worse than no device
+# test, because it is reported as proof.
+#
+# Gradle's link task is incremental, so this costs seconds when nothing changed
+# and is the only thing that makes an iOS device result mean anything.
+echo "==> Relinking the Kotlin framework ($CONFIG / $SDK_NAME)"
+(cd "$REPO_ROOT" && ./gradlew :shared:linkDebugFrameworkIosArm64 --max-workers=1)
+LINKED="$REPO_ROOT/shared/build/bin/iosArm64/debugFramework/shared.framework"
+[ -d "$LINKED" ] || { echo "ERROR: Gradle produced no framework at $LINKED" >&2; exit 1; }
+mkdir -p "$STAGE"
+rm -rf "$STAGE/shared.framework"
+cp -R "$LINKED" "$STAGE/"
+
+# Xcode caches the Swift module against the OLD framework, so a refreshed
+# framework alone is not enough — the intermediates have to go or the app is
+# built against the module it already parsed.
+rm -rf "$REPO_ROOT/iosApp/build/dd/Build/Intermediates.noindex/iosApp.build"
 
 echo "==> Building $CONFIG (LOCAL_HOST=$LOCAL_HOST)"
 cd "$REPO_ROOT/iosApp"
@@ -134,6 +157,28 @@ if [ "$BAKED" != "$LOCAL_HOST" ]; then
   exit 1
 fi
 echo "  Verified: bundle carries ShyTalkLocalHost=$BAKED"
+
+# Same principle, applied to the KOTLIN half: never trust exit 0.
+#
+# The bundle's framework must not be older than the newest Kotlin source that
+# went into it. This is the check that would have caught the frozen 08:11
+# framework on 2026-08-22 — every other signal that day said the build was
+# current while the phone ran code from hours earlier.
+BUNDLED_FW="$APP/Frameworks/shared.framework/shared"
+if [ -f "$BUNDLED_FW" ]; then
+  NEWEST_KT=$(find "$REPO_ROOT/shared/src/commonMain/kotlin" "$REPO_ROOT/shared/src/iosMain/kotlin" \
+    -name '*.kt' -newer "$BUNDLED_FW" -print -quit 2>/dev/null)
+  if [ -n "$NEWEST_KT" ]; then
+    echo "ERROR: the bundled Kotlin framework is OLDER than $NEWEST_KT" >&2
+    echo "       The app on the phone would not contain that change." >&2
+    echo "       Do NOT trust a device result from this build." >&2
+    exit 1
+  fi
+  echo "  Verified: bundled Kotlin framework is newer than every Kotlin source"
+else
+  echo "ERROR: no shared.framework inside $APP — the app has no Kotlin in it." >&2
+  exit 1
+fi
 
 if [ -n "${SKIP_INSTALL:-}" ]; then
   echo "==> SKIP_INSTALL set — built at $APP"

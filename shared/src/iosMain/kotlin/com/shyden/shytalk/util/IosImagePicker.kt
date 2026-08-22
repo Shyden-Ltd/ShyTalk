@@ -25,6 +25,21 @@ import platform.posix.memcpy
  * Automatically compresses images to JPEG at 0.8 quality.
  */
 object IosImagePicker {
+    /**
+     * The delegate, held where the GC can actually SEE it.
+     *
+     * `PHPickerViewController.delegate` is WEAK, and this delegate used to keep
+     * itself alive with an instance property pointing at its own object — a
+     * self-referential CYCLE with no external root, which is precisely what
+     * Kotlin/Native's tracing GC reclaims. Collected before the person chose a
+     * photo, `delegate` read nil and the callback never fired: the sheet stayed
+     * open and choosing an avatar did nothing.
+     *
+     * A Kotlin `object` IS a GC root. Same fix as `IosMediaPicker`, and the same
+     * bug — this one has been on `develop`, so it has shipped.
+     */
+    private var activeDelegate: PickerDelegate? = null
+
     private const val JPEG_QUALITY = 0.8
 
     fun pickImages(
@@ -37,6 +52,7 @@ object IosImagePicker {
 
         val picker = PHPickerViewController(configuration = config)
         val delegate = PickerDelegate(maxCount, onResult)
+        activeDelegate = delegate
         picker.delegate = delegate
 
         presentPicker(picker)
@@ -78,9 +94,6 @@ object IosImagePicker {
         private val onResult: (List<ByteArray>) -> Unit,
     ) : NSObject(),
         PHPickerViewControllerDelegateProtocol {
-        // Strong reference to self to prevent GC before callback
-        private var selfRef: PickerDelegate? = this
-
         override fun picker(
             picker: PHPickerViewController,
             didFinishPicking: List<*>,
@@ -90,7 +103,7 @@ object IosImagePicker {
             val results = didFinishPicking.filterIsInstance<PHPickerResult>()
             if (results.isEmpty()) {
                 onResult(emptyList())
-                selfRef = null
+                activeDelegate = null
                 return
             }
 
@@ -121,7 +134,7 @@ object IosImagePicker {
                         remaining--
                         if (remaining == 0) {
                             onResult(images.take(maxCount))
-                            selfRef = null
+                            activeDelegate = null
                         }
                     }
                 }
