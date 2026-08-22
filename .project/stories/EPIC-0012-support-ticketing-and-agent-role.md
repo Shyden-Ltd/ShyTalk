@@ -5,7 +5,7 @@ owner: unassigned
 created: 2026-08-20
 priority: P2
 title: Support ticketing — a dedicated agent role working tickets from the website portal
-child_shys: [SHY-0384, SHY-0380, SHY-0385]
+child_shys: [SHY-0384, SHY-0380, SHY-0385, SHY-0437, SHY-0438, SHY-0439]
 ---
 
 # EPIC-0012: Support ticketing and the support-agent role

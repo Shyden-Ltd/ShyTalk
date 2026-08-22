@@ -40,6 +40,22 @@ referenced by nothing — the same orphan class as SHY-0434 and SHY-0435, arrive
 at by a third route. The ticket's keys are the ONLY record of which objects
 belong to it, so they must be collected **before** the document goes.
 
+## The safety conflict is being resolved elsewhere
+
+Since this was written, the operator has decided that **"Safety & another user"
+should not produce a support ticket at all** (SHY-0437): people are shown how to
+report properly, and anyone who still cannot is helped by an admin who converts
+their ticket into a real **report** (SHY-0438).
+
+That changes this ticket materially. Once a safety matter becomes a report, the
+REPORT carries the moderation record and follows report retention. The support
+ticket is then correspondence about a report, not the safety record itself — so
+deleting it seven days after closure loses nothing moderation needs.
+
+The concern below therefore narrows to safety tickets raised BEFORE SHY-0437
+ships, and to any that an admin closes without converting. Worth confirming that
+narrower case, but it is no longer the blocking question it was.
+
 ## ⚠️ Operator decision needed before this is built
 
 **This may conflict with Online Safety Act record-keeping.** A support ticket in
