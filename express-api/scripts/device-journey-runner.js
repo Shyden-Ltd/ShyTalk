@@ -462,6 +462,22 @@ async function tapLowestText(device, text) {
   await sleep(900);
 }
 
+/**
+ * Type into a field, addressed by testTag.
+ *
+ * `input text` treats a space as an argument separator, so spaces become `%s`
+ * and the whole thing is quoted. A message typed without this arrives as only
+ * its first word, which looks like a truncation bug in the product.
+ */
+async function typeInto(device, id, text) {
+  await tapId(device, id);
+  device.shell(`input text ${JSON.stringify(text.replace(/ /g, '%s'))}`);
+  await sleep(500);
+}
+
+/** The first node whose testTag STARTS WITH `prefix` — tags that embed an id. */
+const byIdPrefix = (nodes, prefix) => nodes.find((n) => n.id.startsWith(prefix) && n.center);
+
 async function waitForId(device, id, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last = [];
@@ -1242,6 +1258,185 @@ const J12 = {
   },
 };
 
+/**
+ * j38 — asking for help when you have already asked once (SHY-0396).
+ *
+ * The behaviour under test is the difference between a WARNING and a WALL. The
+ * app used to REFUSE a second support request: the server answered 409 and the
+ * form disabled Send, saying "You already have a request open. We will reply to
+ * that one." So somebody with a payment problem open, whose account was then
+ * broken into, could not tell us -- the new problem reached nobody.
+ *
+ * Every assertion below is therefore about the second request GETTING THROUGH,
+ * and about the person being told enough to choose well rather than being
+ * stopped. A test that cannot tell a warning from a wall is the test that let
+ * this ship.
+ *
+ * Scripted rather than driven by hand: a walk decided tap-by-tap costs 10-30s
+ * per step in thinking time with the phone sitting idle, and is not repeatable.
+ */
+const J38 = {
+  id: 'J38',
+  title: 'j38 — a second support request is warned about, never refused (SHY-0396)',
+  async run(device, reporter, ctx) {
+    const pkg = ctx.pkg;
+    let token;
+    let openBefore = 0;
+
+    await reporter.step(device, 'Alice already has a request open', async () => {
+      token = await getIdToken('adult-power@shytalk.dev');
+      // Seeded through the API rather than assumed: the warning cannot be
+      // asserted against a person who has nothing open, and leaving that to
+      // whatever the device happened to do earlier makes the run flaky.
+      const raised = await apiCall('POST', '/api/support-tickets', {
+        token,
+        body: { message: `J38 seed: my coins never arrived (${Date.now()})`, category: 'payment' },
+      });
+      if (raised.status !== 200) throw new Error(`seed failed: ${raised.status}`);
+      const open = await apiCall('GET', '/api/support-tickets/mine/open', { token });
+      openBefore = open.body?.tickets?.length ?? 0;
+      if (openBefore < 1) throw new Error('seeded a ticket but nothing is open');
+      return `${openBefore} open before the walk`;
+    });
+
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    if (!ctx.db) return;
+
+    await reporter.step(device, 'Open Settings, then Contact support', async () => {
+      await waitForId(device, 'main_settingsButton', 20000);
+      await tapId(device, 'main_settingsButton');
+      await waitForId(device, 'settings_contactUsLink', 12000);
+      await tapId(device, 'settings_contactUsLink');
+      await waitForId(device, 'support_input', 12000);
+      return 'support form is open';
+    });
+
+    await reporter.step(
+      device,
+      'She is told what is already open BEFORE she types anything',
+      async () => {
+        const nodes = await waitForId(device, 'support_openNotice', 12000);
+        const notice = byId(nodes, 'support_openNotice');
+        if (!notice) throw new Error('the open-requests notice is not on the form');
+        // SHY-0396's UX clause: the warning has to arrive before somebody types
+        // their whole problem out again, not after they press Send.
+        const input = byId(nodes, 'support_input');
+        if (input && notice.center.y > input.center.y) {
+          throw new Error('the notice renders BELOW the message field, so it is read too late');
+        }
+        return 'open-requests notice shown above the message field';
+      },
+    );
+
+    const typed = 'J38: nobody can hear me in voice rooms since this morning';
+
+    await reporter.step(device, 'Pressing Send ASKS instead of sending', async () => {
+      await typeInto(device, 'support_input', typed);
+      await tapId(device, 'support_send');
+      await waitForId(device, 'support_duplicate', 12000);
+      return 'the choice screen replaced the form; nothing was sent yet';
+    });
+
+    await reporter.step(device, 'She is offered exactly three ways forward', async () => {
+      const nodes = await dump(device);
+      const addToOpen = byIdPrefix(nodes, 'support_addToOpen');
+      if (!addToOpen) throw new Error('no open request is offered to add to');
+      if (!byId(nodes, 'support_newProblem')) throw new Error('"It is a new problem" is missing');
+      if (!byId(nodes, 'support_duplicateBack')) throw new Error('"Go back" is missing');
+      return `three choices present (add-to: ${addToOpen.id})`;
+    });
+
+    await reporter.step(
+      device,
+      'She is told a duplicate goes to the back of the queue',
+      async () => {
+        const nodes = await dump(device);
+        if (!byTextContains(nodes, 'back of the queue')) {
+          throw new Error('the back-of-the-queue reminder is not on the choice screen');
+        }
+        return 'reminder shown';
+      },
+    );
+
+    await reporter.step(device, 'Going back costs her nothing she typed', async () => {
+      await tapId(device, 'support_duplicateBack');
+      const nodes = await waitForId(device, 'support_input', 8000);
+      const field = byId(nodes, 'support_input');
+      // Compared on the FULL string. A `contains` check passes on a field that
+      // kept only the first word, which is exactly what a bad `input text`
+      // escaping bug looks like.
+      if (field.text !== typed) {
+        throw new Error(`the field says "${field.text}" but she typed "${typed}"`);
+      }
+      return 'every character survived';
+    });
+
+    await reporter.step(
+      device,
+      'Sending again ASKS again rather than slipping through',
+      async () => {
+        await tapId(device, 'support_send');
+        await waitForId(device, 'support_duplicate', 12000);
+        return 'go back is not a way to skip the question';
+      },
+    );
+
+    await reporter.step(device, 'A genuinely new problem gets through', async () => {
+      await tapId(device, 'support_newProblem');
+      await waitForText(device, 'we have your message', 15000).catch(async () => {
+        // The confirmation wording is localised; fall back to the API, which is
+        // the fact that actually matters -- a second ticket now exists.
+        return null;
+      });
+      const open = await apiCall('GET', '/api/support-tickets/mine/open', { token });
+      const after = open.body?.tickets?.length ?? 0;
+      if (after <= openBefore) {
+        throw new Error(
+          `open tickets went ${openBefore} -> ${after}; the second request was refused`,
+        );
+      }
+      return `open tickets ${openBefore} -> ${after}: the second request was raised, not refused`;
+    });
+
+    await reporter.step(
+      device,
+      'The same problem is added to the request already open',
+      async () => {
+        // Back to a fresh form the way somebody would: leave, and come in again.
+        await device.forceStop(pkg);
+        device.launch(pkg);
+        await waitForId(device, 'main_settingsButton', 30000);
+        await tapId(device, 'main_settingsButton');
+        await waitForId(device, 'settings_contactUsLink', 12000);
+        await tapId(device, 'settings_contactUsLink');
+        await waitForId(device, 'support_input', 12000);
+
+        const followUp = 'J38: it happened again just now';
+        await typeInto(device, 'support_input', followUp);
+        await tapId(device, 'support_send');
+        const nodes = await waitForId(device, 'support_duplicate', 12000);
+        const card = byIdPrefix(nodes, 'support_addToOpen');
+        if (!card) throw new Error('no open request offered on the second visit');
+        const ticketId = card.id.slice('support_addToOpen'.length);
+        device.tap(card.center.x, card.center.y);
+        await sleep(1500);
+
+        // Asserted in the DATABASE, not on screen. The confirmation is one
+        // sentence and could be shown while the words went nowhere -- which is
+        // precisely the failure this journey exists to catch.
+        const doc = await dbGet(ctx.db, `supportTickets/${ticketId}`);
+        const added = (doc?.messages ?? []).map((m) => m.message);
+        if (!added.includes(followUp)) {
+          throw new Error(
+            `ticket ${ticketId} carries ${JSON.stringify(added)}; her follow-up is not among them`,
+          );
+        }
+        return `follow-up landed on ticket ${ticketId}`;
+      },
+    );
+  },
+};
+
 // j05 — monetization (IAP). In non-prod the /economy/purchase endpoint SKIPS
 // real store verification (only NODE_ENV=production hits Google/Apple), so a
 // test purchaseToken credits coins — the real IAP code path, no money. Alice
@@ -1396,6 +1591,7 @@ function buildJourneys(ctx) {
     J12,
     J05,
     J06,
+    J38,
   ];
   return all;
 }
