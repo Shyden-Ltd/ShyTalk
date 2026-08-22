@@ -38,6 +38,50 @@ const IOS_DEVICE = path.resolve(__dirname, '../../scripts/drivers/ios-journey-de
 const runnerSrc = fs.readFileSync(RUNNER, 'utf8');
 const iosSrc = fs.readFileSync(IOS_DEVICE, 'utf8');
 
+/**
+ * Every method that is async on ONE backend must be awaited at every call site.
+ *
+ * The `forceStop` guard below was written first, and it was too narrow. It
+ * pinned the one method that had been caught, and the identical bug was sitting
+ * in `screencap`, `tap` and `swipe` — thirteen unawaited call sites in total.
+ * The consequence was already realised in the artefacts: every iOS run lost its
+ * LAST step's screenshot, because after the final step the process reaches
+ * `process.exit()` before the WebDriverAgent round trip completes, while the
+ * report links the file regardless. On a FAILING run that is the screenshot of
+ * the failing step — the single most valuable frame, guaranteed missing.
+ *
+ * So this guard is written for the CLASS rather than the instance: it derives
+ * the method list from the iOS driver's own `async` declarations, so a method
+ * made async in future is covered without anyone remembering to add it here.
+ *
+ * Android hides the problem, because its equivalents are synchronous shell
+ * calls that have finished by the time they return. Shared journey code reads
+ * identically on both platforms and is correct on only one.
+ */
+describe('async device methods are awaited everywhere', () => {
+  /** Public async methods on the iOS backend, read from the source itself. */
+  const asyncMethods = [...iosSrc.matchAll(/^ {2}async ([a-zA-Z_][a-zA-Z0-9_]*)\(/gm)]
+    .map((m) => m[1])
+    .filter((n) => !n.startsWith('_'));
+
+  test('the list is derived, not hardcoded', () => {
+    // If this ever comes back empty the guard silently passes for everything.
+    expect({ found: asyncMethods.length > 3 }).toEqual({ found: true });
+  });
+
+  test.each(asyncMethods)('device.%s() is awaited at every call site', (method) => {
+    const code = runnerSrc
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n');
+    const calls = code.match(new RegExp(`^[^\\n]*\\bdevice\\.${method}\\(`, 'gm')) || [];
+    const unawaited = calls
+      .map((line) => line.trim())
+      .filter((line) => !new RegExp(`\\bawait\\s+(?:ctx\\.)?device\\.${method}\\(`).test(line));
+    expect({ method, unawaited }).toEqual({ method, unawaited: [] });
+  });
+});
+
 describe('forceStop must complete before launch', () => {
   test('every forceStop call in the runner is awaited', () => {
     // Anchored on the CALL, not on the word. `forceStop` also appears in

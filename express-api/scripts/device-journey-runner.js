@@ -453,12 +453,27 @@ class Reporter {
     }
     rec.durationMs = Date.now() - rec.startedAt;
     // Screenshot every step (cheap and invaluable for "see the results").
+    //
+    // The link is recorded only once the file EXISTS. Previously `screencap`
+    // was called without awaiting it — async on iOS, synchronous on Android —
+    // and `rec.screenshot` was set regardless, so every iOS run linked a final
+    // screenshot that `process.exit()` had cut short. On a FAILING run that is
+    // the frame of the failing step: the most valuable one, guaranteed missing.
+    // A report that cites evidence which is not there is worse than one that
+    // admits it has none.
     try {
       const shot = `${String(++this.shotCounter).padStart(2, '0')}-${this.current.id}-${rec.status}.png`;
-      device.screencap(path.join(this.runDir, shot));
-      rec.screenshot = `runs/${this.runId}/${shot}`;
-    } catch (_e) {
-      /* non-fatal */
+      const abs = path.join(this.runDir, shot);
+      await device.screencap(abs);
+      if (fs.existsSync(abs) && fs.statSync(abs).size > 0) {
+        rec.screenshot = `runs/${this.runId}/${shot}`;
+      } else {
+        console.log(`  (warn) screenshot for "${rec.name}" was not written — not linking it`);
+      }
+    } catch (e) {
+      // Named, not swallowed. A silent screenshot failure is how a report ends
+      // up quietly thinner than the run it describes.
+      console.log(`  (warn) screenshot for "${rec.name}" failed: ${e.message.split('\n')[0]}`);
     }
     this.current.steps.push(rec);
     if (rec.status === 'pass') {
@@ -553,7 +568,7 @@ async function tapId(device, id) {
   const nodes = await dump(device);
   const n = byId(nodes, id);
   if (!n) throw new Error(`tap target #${id} not found on screen`);
-  device.tap(n.center.x, n.center.y);
+  await device.tap(n.center.x, n.center.y);
   await sleep(700);
 }
 
@@ -565,7 +580,7 @@ async function tapLowestText(device, text) {
   const matches = (await dump(device)).filter((n) => n.center && n.text === text);
   if (matches.length === 0) throw new Error(`no "${text}" node to tap`);
   const target = matches.reduce((a, b) => (b.center.y > a.center.y ? b : a));
-  device.tap(target.center.x, target.center.y);
+  await device.tap(target.center.x, target.center.y);
   await sleep(900);
 }
 
@@ -615,7 +630,12 @@ async function tapIdScrolling(device, id, maxSwipes = 6) {
     // low lands on the on-screen keyboard, which swallows it -- so the page
     // never moves and the button below the fold stays unreachable. That is
     // indistinguishable, in a log, from a page that cannot scroll at all.
-    device.swipe(Math.round(w / 2), Math.round(h * 0.45), Math.round(w / 2), Math.round(h * 0.1));
+    await device.swipe(
+      Math.round(w / 2),
+      Math.round(h * 0.45),
+      Math.round(w / 2),
+      Math.round(h * 0.1),
+    );
     await sleep(700);
   }
   throw new Error(`#${id} never came on screen after ${maxSwipes} swipes`);
@@ -658,11 +678,11 @@ async function selectPersonaByText(device, needle) {
     const nodes = await dump(device);
     const n = byTextContains(nodes, needle);
     if (n) {
-      device.tap(n.center.x, n.center.y);
+      await device.tap(n.center.x, n.center.y);
       await sleep(1000);
       return;
     }
-    device.swipe(
+    await device.swipe(
       Math.floor(w / 2),
       Math.floor(h * 0.62),
       Math.floor(w / 2),
@@ -697,13 +717,13 @@ async function handleLegalGate(device, nodes) {
   for (const box of LEGAL_BOXES) {
     const n = byId(nodes, box);
     if (n && !n.checked) {
-      device.tap(n.center.x, n.center.y);
+      await device.tap(n.center.x, n.center.y);
       await sleep(350);
     }
   }
   const cont = byId(await dump(device), 'legal_continueButton');
   if (cont && cont.enabled) {
-    device.tap(cont.center.x, cont.center.y);
+    await device.tap(cont.center.x, cont.center.y);
     await sleep(1200);
   }
   return true;
@@ -718,11 +738,13 @@ const PERMISSION_ALLOW = [
   'com.android.permissioncontroller:id/permission_allow_button',
   'com.android.permissioncontroller:id/permission_allow_one_time_button',
 ];
-function handlePermissionDialog(device, nodes) {
+// `async` because it AWAITS the tap. Its one caller awaits it in turn — an
+// unawaited tap is fire-and-forget on iOS, where tap is an HTTP round trip.
+async function handlePermissionDialog(device, nodes) {
   for (const id of PERMISSION_ALLOW) {
     const n = byId(nodes, id);
     if (n) {
-      device.tap(n.center.x, n.center.y);
+      await device.tap(n.center.x, n.center.y);
       return true;
     }
   }
@@ -735,7 +757,7 @@ function handlePermissionDialog(device, nodes) {
 async function handleRewardCalendar(device, nodes) {
   const btn = byText(nodes, 'Later') || byTextContains(nodes, 'Claim Today');
   if (!btn) return false;
-  device.tap(btn.center.x, btn.center.y);
+  await device.tap(btn.center.x, btn.center.y);
   await sleep(900);
   return true;
 }
@@ -752,7 +774,7 @@ async function handleOverlayBubbleDialog(device, nodes) {
   }
   const n = byTextContains(nodes, 'Not now');
   if (!n) return false;
-  device.tap(n.center.x, n.center.y);
+  await device.tap(n.center.x, n.center.y);
   await sleep(800);
   return true;
 }
@@ -766,7 +788,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
   while (Date.now() < deadline) {
     const nodes = await dump(device);
     if (isDone(nodes)) return nodes;
-    if (handlePermissionDialog(device, nodes)) {
+    if (await handlePermissionDialog(device, nodes)) {
       await sleep(700);
       continue;
     }
@@ -782,7 +804,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
     for (const cont of ['splash_continueButton', 'startingScreen_dismissButton']) {
       const n = byId(nodes, cont);
       if (n && n.enabled) {
-        device.tap(n.center.x, n.center.y);
+        await device.tap(n.center.x, n.center.y);
         break;
       }
     }
@@ -1629,7 +1651,7 @@ const J38 = {
         const card = byIdPrefix(nodes, 'support_addToOpen');
         if (!card) throw new Error('no open request offered on the second visit');
         const ticketId = card.id.slice('support_addToOpen'.length);
-        device.tap(card.center.x, card.center.y);
+        await device.tap(card.center.x, card.center.y);
         await sleep(1500);
 
         // Asserted in the DATABASE, not on screen. The confirmation is one
