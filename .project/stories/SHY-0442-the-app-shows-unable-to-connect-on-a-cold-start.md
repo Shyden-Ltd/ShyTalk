@@ -60,20 +60,38 @@ is showing — which was this.
   "works on my machine" and never investigated.
 - We have no idea how often it happens in the wild, because nothing measures it.
 
-## What is not yet known
+## Cause, confirmed in the code
 
-This ticket records a symptom, not a diagnosis. Worth checking, in order:
+`AuthViewModel.handleBackendError(errorMessage)` classifies the failure. If the
+message looks like an auth problem — "Not authenticated", "Token refresh",
+`INVALID_REFRESH_TOKEN`, `UNAUTHENTICATED`, or a 401 — it clears the session and
+routes to sign-in. **Otherwise:**
 
-1. Whether the first request is made before auth or connectivity is ready, and
-   whether a failure at that moment is treated as terminal rather than retried.
-2. Whether "Unable to Connect" is shown on ANY first-call failure, including
-   ones that would succeed a second later.
-3. Whether Retry actually retries, or whether the state is already stuck.
-4. Whether the local build's LAN host makes it worse, and therefore whether dev
-   sees it more than production would.
+```kotlin
+} else {
+    _uiState.update { it.copy(isLoading = false, isBackendUnreachable = true) }
+}
+```
 
-Point 2 is the one I would look at first: a screen that appears on a single
-failed call, with no retry behind it, would produce exactly this.
+`SignInScreen` renders the full-screen "Unable to Connect" whenever
+`isBackendUnreachable` is set.
+
+So **any single non-auth failure puts the app into the error state**. There is no
+retry before it: `retryConnection()` exists, but only behind the Retry button a
+person has to press. One transient failure on the very first call — a connection
+reset before the network is fully up after launch — produces exactly what was
+filmed: a full-screen error, for as long as nobody presses Retry, on a stack that
+is up and answering.
+
+That also explains why a relaunch fixes it. The second launch's first call
+succeeds, so the state is never entered.
+
+### What is still open
+
+- Whether the first call is made before connectivity is ready, or whether it
+  simply lost a race. Either way the handling is the same.
+- Whether Retry recovers reliably, or leaves other state stale.
+- How often real people hit this. Nothing measures it.
 
 ## Acceptance Criteria
 
@@ -81,8 +99,9 @@ failed call, with no retry behind it, would produce exactly this.
 
 - [ ] A cold start against a reachable server reaches sign-in or home without
       showing an error.
-- [ ] A transient first-call failure is retried before anything is shown to the
-      person.
+- [ ] A transient first-call failure is retried, bounded, before anything is
+      shown to the person.
+- [ ] Only a failure that survives those retries reaches the error screen.
 
 ### Error paths
 
