@@ -207,7 +207,7 @@ fun SupportPage(
         // up is the exact geometry that made Send unreachable on iOS (SHY-0419).
         if (state.awaitingDuplicateChoice) {
             DuplicateChoice(
-                modifier = Modifier.padding(padding).padding(bottom = imeBottom),
+                modifier = Modifier.padding(padding),
                 openTickets = state.openTickets,
                 busy = state.isSubmitting,
                 error = state.error?.resolve(),
@@ -222,9 +222,15 @@ fun SupportPage(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    // `padding` ALREADY reserves the bottom bar, and that bar
+                    // measures itself including the keyboard lift. Adding
+                    // `imeBottom` here too counted the keyboard TWICE and pushed
+                    // the entire form off the screen — the page rendered as a
+                    // blank area above a pinned Send button. Every test still
+                    // passed, because a form that is laid out off-screen still
+                    // exists in the tree.
                     .padding(padding)
                     .padding(16.dp)
-                    .padding(bottom = imeBottom)
                     .verticalScroll(rememberScrollState()),
         ) {
             Text(stringResource(Res.string.support_form_hint), style = MaterialTheme.typography.bodyMedium)
