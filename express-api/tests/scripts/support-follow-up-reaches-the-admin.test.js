@@ -81,11 +81,14 @@ describe('SHY-0396 — a follow-up message reaches the admin', () => {
    */
   test('a follow-up is escaped exactly like the original message', () => {
     const tab = codeOf(ADMIN_TAB);
-    // Anchored to the follow-up block itself. Splitting on `ticket.messages`
-    // does NOT work: the name appears twice on the guard line
+    // Anchored to the whole follow-up region -- from where the list is read to
+    // where the next section begins -- NOT to `const followUpsHtml`. The
+    // escaping lives in a helper declared above the assembly, so a window that
+    // started at the assembly missed it entirely. Splitting on `ticket.messages`
+    // does not work either: the name appears twice on the guard line
     // (`Array.isArray(ticket.messages) ? ticket.messages : []`), so the window
     // between them is four characters and the assertion could only ever fail.
-    const followUpBlock = tab.split('const followUpsHtml')[1]?.split('const resolvedHtml')[0];
+    const followUpBlock = tab.split('const followUps =')[1]?.split('const resolvedHtml')[0];
     expect(followUpBlock).toBeDefined();
 
     // Bound to the MESSAGE, not to the block. `expect(block).toContain(

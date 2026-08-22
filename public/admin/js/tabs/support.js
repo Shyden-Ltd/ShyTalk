@@ -22,7 +22,13 @@ import { showToast, escapeHtml } from "/js/core/ui.js";
 // Reused, never re-implemented: this already renders BOTH an image and a video
 // with a lightbox. SHY-0400 exists because a second, images-only path was built
 // beside it and the video branch became unreachable.
-import { renderEvidence } from "/js/tabs/users.js";
+// `/admin/js/...`, NOT `/js/...`. The served roots are not the same: `/js/`
+// maps to public/js (core only) and the tabs live under public/admin/js. A
+// 404 on an ES module import aborts the ENTIRE module, so this one wrong
+// prefix left the Support tab rendering nothing at all -- no tickets, no
+// empty state -- in every browser, while every source-scanning test stayed
+// green. `main.js` had it right all along.
+import { renderEvidence } from "/admin/js/tabs/users.js";
 
 // ── State ──────────────────────────────────────────────────────────
 
@@ -116,7 +122,13 @@ async function loadAttachments(ticketId, card) {
   if (!slot) return;
 
   try {
+    // `apiCall(method, path, body)`. Passing the path alone put it in the
+    // METHOD slot and left `path` undefined, so this fetched
+    // `<baseUrl>undefined` and threw before any request left the page -- which
+    // surfaced as a red "Attachments could not be loaded" on EVERY ticket,
+    // including ones with no attachments, with no request on the wire at all.
     const res = await apiCall(
+      "GET",
       `/api/support-tickets/${encodeURIComponent(ticketId)}/attachments`,
     );
     const urls = Array.isArray(res?.attachments) ? res.attachments : [];
@@ -159,23 +171,24 @@ function renderCard(ticket, status) {
   // Escaped with the same function as the original message: a follow-up is the
   // same untrusted text, typed by the same person, into the same queue.
   const followUps = Array.isArray(ticket.messages) ? ticket.messages : [];
+  // Each follow-up is assembled on ONE source line, because the element it goes
+  // in is `white-space: pre-wrap` -- which renders the template literal's own
+  // indentation as leading spaces on every line. A prettily-indented template
+  // pushed follow-ups ~90px to the right with blank gaps between them. The
+  // original message div has always been a single line, which is why it was
+  // never affected and the difference was easy to miss.
+  const followUpHtml = (m) => {
+    const body = escapeHtml(String(m?.message ?? ""));
+    const when = m?.addedAt
+      ? ` ${escapeHtml(new Date(m.addedAt).toLocaleString())}`
+      : "";
+    return (
+      `<div style="margin-top:6px;font-size:13px;white-space:pre-wrap;">${body}</div>` +
+      `<div style="font-size:11px;color:var(--text2);">Added${when}</div>`
+    );
+  };
   const followUpsHtml = followUps.length
-    ? `<div style="margin-top:8px;border-left:2px solid var(--text2);padding-left:8px;">
-         ${followUps
-           .map(
-             (
-               m,
-             ) => `<div style="margin-top:6px;font-size:13px;white-space:pre-wrap;">
-                       ${escapeHtml(String(m?.message ?? ""))}
-                       <div style="font-size:11px;color:var(--text2);">Added${
-                         m?.addedAt
-                           ? ` ${escapeHtml(new Date(m.addedAt).toLocaleString())}`
-                           : ""
-                       }</div>
-                     </div>`,
-           )
-           .join("")}
-       </div>`
+    ? `<div style="margin-top:8px;border-left:2px solid var(--text2);padding-left:8px;">${followUps.map(followUpHtml).join("")}</div>`
     : "";
 
   const resolvedHtml =
