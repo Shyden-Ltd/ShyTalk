@@ -6,17 +6,6 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_ROOT"
 
-SERVE_PID=""
-
-cleanup() {
-  if [ -n "$SERVE_PID" ] && kill -0 "$SERVE_PID" 2>/dev/null; then
-    kill "$SERVE_PID" 2>/dev/null || true
-    wait "$SERVE_PID" 2>/dev/null || true
-  fi
-}
-
-trap cleanup EXIT INT TERM
-
 echo "========================================================"
 echo "  ShyTalk Playwright Web Tests"
 echo "========================================================"
@@ -25,26 +14,49 @@ echo ""
 # ---- Check local env is running ----
 echo "==> Checking local environment..."
 if ! curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
-  echo "ERROR: Local environment is not running." >&2
-  echo "  Start it first: bash local/start.sh" >&2
+  echo "ERROR: The local API is not running." >&2
+  echo "  Start the stack first: bash local/start.sh" >&2
   exit 1
 fi
-echo "  Local environment is running."
+echo "  API is up."
 
-# ---- Start serve for admin panel ----
-echo "==> Starting admin panel server (port 8080)..."
-npx serve public -l 8080 &
-SERVE_PID=$!
-
-# Wait briefly for serve to start
-sleep 2
+# ---- Use the stack's OWN web server ----
+#
+# This script used to start a SECOND static server of its own:
+#
+#     npx serve public -l 8080
+#
+# Both halves of that line were wrong.
+#
+#   * `npx serve` was RETIRED by SHY-0180. It dies ~15 minutes into a heavy
+#     Chromium suite -- the npm-exec wrapper takes a SIGINT/SIGTERM and its
+#     shutdown path crashes on an EBADF from an in-flight read, turning the
+#     tail of the run into mass ERR_CONNECTION_REFUSED phantom failures. It
+#     blocked a push three times and killed ~5 runs. `local/serve-web.js`
+#     replaced it everywhere -- except here, because the sweep missed one file.
+#
+#   * Port 8080 is the FIRESTORE EMULATOR. Every other reference to
+#     localhost:8080 in this repo is Firestore. So `serve` could not bind and
+#     every admin spec ran against the emulator's 404 page, failing in
+#     adminLogin looking for a Sign In button on a page that was never the
+#     admin panel -- a harness failure that reads exactly like a broken login.
+#
+# The stack already serves `public/` on 8888 via serve-web.js. Using it means
+# one web server, one port, and no question about which one Playwright reached.
+echo "==> Checking the web server (port 8888)..."
+if ! curl -s -o /dev/null http://localhost:8888/admin/ 2>/dev/null; then
+  echo "ERROR: The web server is not running on port 8888." >&2
+  echo "  Start the stack first: bash local/start.sh" >&2
+  exit 1
+fi
+echo "  Web server is up."
 
 # ---- Run Playwright tests ----
 echo "==> Running Playwright tests..."
 echo ""
 
 TEST_EXIT=0
-WEB_BASE_URL=http://localhost:8080 \
+WEB_BASE_URL=http://localhost:8888 \
 API_BASE_URL=http://localhost:3000 \
 TEST_API_KEY=local-test-key \
 ADMIN_EMAIL=claude-test@shytalk.dev \
@@ -52,10 +64,6 @@ ADMIN_PASSWORD=localdev123 \
 ALLURE_ENABLED=true \
 ALLURE_PROJECT=local \
 npx playwright test "$@" || TEST_EXIT=$?
-
-# ---- Kill serve ----
-cleanup
-SERVE_PID=""
 
 # ---- Results ----
 echo ""

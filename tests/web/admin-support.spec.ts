@@ -223,9 +223,13 @@ test.describe("Admin Support tab", () => {
     );
     expect(await card.locator("img").count()).toBe(0);
     expect(await card.locator("b").count()).toBe(0);
-    expect(await page.evaluate(() => (window as any).__xss_executed)).toBe(
-      false,
-    );
+    // Asserted as "did not become true", not as "is false". `addInitScript`
+    // only runs on NAVIGATION, and reaching this tab is a click -- so the
+    // sentinel is legitimately `undefined` here. Comparing to `false` would
+    // fail on the safe outcome and tempt somebody to weaken the check.
+    expect(
+      await page.evaluate(() => (window as any).__xss_executed === true),
+    ).toBe(false);
   });
 
   /**
@@ -242,6 +246,17 @@ test.describe("Admin Support tab", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(FIXTURE),
+      }),
+    );
+    // The fixture tickets do not exist in the database, so the REAL endpoint
+    // answers 404 and the card would show its error legitimately. Stubbed to a
+    // normal empty response so the assertion is about the CALL being well
+    // formed, which is what the arity defect broke.
+    await page.route("**/api/support-tickets/*/attachments", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ attachments: [] }),
       }),
     );
     const attachmentCalls: string[] = [];
