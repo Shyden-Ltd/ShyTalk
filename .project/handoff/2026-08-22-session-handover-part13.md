@@ -23,7 +23,7 @@ iOS run.
 | Device | Journey | Result | Video |
 | --- | --- | --- | --- |
 | OnePlus CPH2653 | J38 | **PASS 14/14** | 215.3s · 1440×3168 · h264 · 3294 frames · 21.0 MB |
-| iPhone Air | J38 | re-running with fixes at time of writing | previous run 96.5s · 1260×2736 · 1447 frames |
+| iPhone Air | J38 | **PASS 14/14** | 86.8s · 1260×2736 · h264 · 1302 frames · 5.5 MB |
 
 The Android run **failed 12/14 first**, on the defect below, and passes only
 after the fix.
@@ -163,6 +163,8 @@ progress bar reaching 100%. Currently **8/8**.
 | SHY-0428 | P1 | In Review | Send drawn under the Android navigation bar. Fixed. |
 | SHY-0429 | P1 | Draft | `PmSyncService` killed for outstaying its foreground budget. Seen twice in nine minutes; the `.dev` package was terminated outright. Still reproducible after the fix run. |
 | SHY-0430 | P3 | Draft | The debug overlay covers copy that SHY-0396 asserts on. |
+| SHY-0431 | P3 | Draft | The SHY-0428 fix leaves a black 34 pt gutter under the Support bar on iOS. Introduced by us. |
+| SHY-0432 | P2 | Draft | A journey step can pass on a previous run's data — it matches a constant message and takes `docs[0]`. |
 
 ---
 
@@ -179,15 +181,30 @@ progress bar reaching 100%. Currently **8/8**.
 
 ---
 
+## What the iOS re-run added
+
+It passed 14/14, from the built-in recorder, starting in **0.73s on a dead-static
+screen** — the exact condition that used to hang it. It also produced three
+findings:
+
+- **The `union` fix was NOT iOS-neutral — it was a fix there too.** Measured
+  across the pre- and post-change walks: Send's bottom edge sat at **20.0 pt**
+  inside iOS's **34 pt** bottom safe area, so the home indicator covered its
+  lower ~14 pt. After, it ends 54.0 pt up. SHY-0428 is corrected to say so.
+- **A sweep failure of mine.** Fixing `forceStop`'s three call sites missed
+  `screencap`, `tap` and `swipe` — thirteen more. `screencap` had already done
+  damage: every iOS run lost its LAST step's screenshot to `process.exit()` while
+  the report linked it. On a FAILING run that is the frame of the failing step.
+  The guard is now written for the CLASS, deriving the method list from the
+  driver's own `async` declarations.
+- **SHY-0431 / SHY-0432** filed — see the ticket table above.
+
 ## Where to pick up
 
-1. **The iOS re-run** was in flight when this was written. Confirm 14/14 and a
-   video from the BUILT-IN recorder (not a workaround).
-2. **Regenerate the evidence page** so it carries the passing iOS walk, and
-   re-run `verify-evidence.js`.
-3. **Operator sign-off** on the evidence page. That is the merge gate.
-4. **Then** push, merge `main`→`develop`, `develop`→branch, merge, deploy dev.
-5. Open questions unchanged from part 12: whether to split this four-story
+1. **Operator sign-off** on the evidence page. That is the merge gate.
+   Artifact: `https://claude.ai/code/artifact/7a12acb2-5ee0-4d9b-b4f2-f7d3374600c7`
+2. **Then** push, merge `main`→`develop`, `develop`→branch, merge, deploy dev.
+3. Open questions unchanged from part 12: whether to split this four-story
    branch, and the 19 dependabot vulnerabilities (2 critical, 12 high).
 
 ### Known, not chased
