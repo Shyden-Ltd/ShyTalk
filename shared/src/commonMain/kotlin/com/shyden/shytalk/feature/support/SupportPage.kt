@@ -4,11 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -38,7 +37,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -120,13 +118,22 @@ fun SupportPage(
         onBack()
     }
 
-    // SHY-0419, read a second time. `imePadding()` is a no-op on this screen —
-    // something above consumes the IME inset — so the raw value is read and
-    // applied by hand. Hoisted out of the body because the pinned Send bar needs
-    // it too.
-    val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
-
+    // SHY-0419, third reading — and the last hand-rolled inset arithmetic on
+    // this screen.
+    //
+    // Padding the Send button by the raw IME inset put the keyboard into the
+    // bottomBar's MEASURED HEIGHT, which Scaffold then subtracts from the
+    // content. On iOS the content region has already had the keyboard removed
+    // further up, so it lost the keyboard TWICE and the whole form collapsed to
+    // a 28 pt strip: 320 pt of inset taken off a 380 pt slot. Send looked right
+    // the entire time, because the bar is not subject to the content inset.
+    //
+    // `imePadding()` on the Scaffold accounts for it exactly once on both
+    // platforms. Where the inset is still available it lifts the whole Scaffold,
+    // bars included; where a parent has already consumed it, it correctly adds
+    // nothing — because the space is already gone.
     Scaffold(
+        modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.support_form_title), fontWeight = FontWeight.Bold) },
@@ -166,7 +173,6 @@ fun SupportPage(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp)
-                                .padding(bottom = imeBottom)
                                 .testTag(TAG_SUPPORT_SEND),
                     ) {
                         if (state.isSubmitting) {

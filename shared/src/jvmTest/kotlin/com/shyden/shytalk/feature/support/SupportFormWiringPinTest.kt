@@ -277,12 +277,20 @@ class SupportFormWiringPinTest {
             bottomBar.contains("TAG_SUPPORT_SEND"),
             "$page does not put Send in the bottomBar. Found there: `$bottomBar`",
         )
-        // The raw inset, because `imePadding()` is a no-op on this screen —
-        // something above it consumes the IME inset, which is the whole reason
-        // SHY-0419 existed.
+        // The keyboard is accounted for ONCE, by the Scaffold. Padding the
+        // button itself put the keyboard into the bar's measured height, which
+        // Scaffold then subtracts from the content — and on iOS, where the
+        // inset is already consumed upstream, that removed it twice and
+        // collapsed the form to a 28 pt strip while Send still looked correct.
         assertTrue(
-            bottomBar.contains("imeBottom"),
-            "$page pins Send but does not lift it above the keyboard",
+            code.contains("Modifier.imePadding()"),
+            "$page does not lift the Scaffold above the keyboard, so a pinned Send sits under it",
+        )
+        assertTrue(
+            !bottomBar.contains("imeBottom"),
+            "$page lifts the Send bar by hand as well as via the Scaffold. That double-counts " +
+                "the keyboard against the content — the form collapses while Send looks fine. " +
+                "Found: `$bottomBar`",
         )
     }
 
