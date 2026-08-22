@@ -164,21 +164,37 @@ echo "  Verified: bundle carries ShyTalkLocalHost=$BAKED"
 # went into it. This is the check that would have caught the frozen 08:11
 # framework on 2026-08-22 — every other signal that day said the build was
 # current while the phone ran code from hours earlier.
-BUNDLED_FW="$APP/Frameworks/shared.framework/shared"
-if [ -f "$BUNDLED_FW" ]; then
-  NEWEST_KT=$(find "$REPO_ROOT/shared/src/commonMain/kotlin" "$REPO_ROOT/shared/src/iosMain/kotlin" \
-    -name '*.kt' -newer "$BUNDLED_FW" -print -quit 2>/dev/null)
-  if [ -n "$NEWEST_KT" ]; then
-    echo "ERROR: the bundled Kotlin framework is OLDER than $NEWEST_KT" >&2
-    echo "       The app on the phone would not contain that change." >&2
-    echo "       Do NOT trust a device result from this build." >&2
-    exit 1
-  fi
-  echo "  Verified: bundled Kotlin framework is newer than every Kotlin source"
-else
-  echo "ERROR: no shared.framework inside $APP — the app has no Kotlin in it." >&2
+# Xcode 26 links the app into `iosApp.debug.dylib` and leaves `iosApp` as a
+# ~90 KB launcher stub, so the Kotlin lives in the dylib — NOT in
+# `Frameworks/shared.framework`, which is absent from the bundle entirely. The
+# first version of this check looked there and refused a perfectly good build.
+BUNDLED_KOTLIN="$APP/iosApp.debug.dylib"
+[ -f "$BUNDLED_KOTLIN" ] || BUNDLED_KOTLIN="$APP/$(plutil -extract CFBundleExecutable raw "$APP/Info.plist")"
+if [ ! -f "$BUNDLED_KOTLIN" ]; then
+  echo "ERROR: cannot find the binary inside $APP to check." >&2
   exit 1
 fi
+# `grep -c`, not `grep -q`, and the `|| true` matters.
+#
+# `grep -q` exits on the FIRST match, which kills `nm` mid-stream with SIGPIPE —
+# and under `set -o pipefail` that makes the whole pipeline fail. The check then
+# reported "the app has no Kotlin in it" about a dylib holding 176,704 Kotlin
+# symbols. `grep -c` drains the stream, so nothing is signalled.
+KOTLIN_SYMS=$(nm -a "$BUNDLED_KOTLIN" 2>/dev/null | grep -c "kfun:" || true)
+if [ "${KOTLIN_SYMS:-0}" -lt 1000 ]; then
+  echo "ERROR: $BUNDLED_KOTLIN holds only ${KOTLIN_SYMS:-0} Kotlin symbols." >&2
+  echo "       The app has no Kotlin in it — do NOT trust a device result." >&2
+  exit 1
+fi
+NEWEST_KT=$(find "$REPO_ROOT/shared/src/commonMain/kotlin" "$REPO_ROOT/shared/src/iosMain/kotlin" \
+  -name '*.kt' -newer "$BUNDLED_KOTLIN" -print -quit 2>/dev/null)
+if [ -n "$NEWEST_KT" ]; then
+  echo "ERROR: the bundled Kotlin is OLDER than $NEWEST_KT" >&2
+  echo "       The app on the phone would not contain that change." >&2
+  echo "       Do NOT trust a device result from this build." >&2
+  exit 1
+fi
+echo "  Verified: bundled Kotlin is newer than every Kotlin source"
 
 if [ -n "${SKIP_INSTALL:-}" ]; then
   echo "==> SKIP_INSTALL set — built at $APP"

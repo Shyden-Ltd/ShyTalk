@@ -50,9 +50,29 @@ describe('ios-local-install.sh', () => {
    * trust exit 0 for the host address; the Kotlin half needs the same treatment,
    * because that is the half a device test is actually exercising.
    */
-  test('refuses to hand over a bundle whose framework is older than the sources', () => {
-    expect(code).toContain('BUNDLED_FW');
-    expect(code).toMatch(/-newer\s+"\$BUNDLED_FW"/);
+  test('refuses to hand over a bundle whose Kotlin is older than the sources', () => {
+    expect(code).toContain('BUNDLED_KOTLIN');
+    expect(code).toMatch(/-newer\s+"\$BUNDLED_KOTLIN"/);
     expect(code).toMatch(/Do NOT trust a device result/);
+  });
+
+  /**
+   * Xcode 26 links the app into `iosApp.debug.dylib` and leaves `iosApp` a
+   * ~90 KB launcher stub, and there is no `Frameworks/shared.framework` in the
+   * bundle at all. A check pointed at the framework refused a perfectly good
+   * build; a check pointed at the stub found no Kotlin in a working app.
+   */
+  test('looks for the Kotlin where Xcode actually puts it', () => {
+    expect(code).toContain('iosApp.debug.dylib');
+  });
+
+  /**
+   * `grep -q` exits on the FIRST match, killing `nm` with SIGPIPE — and under
+   * `set -o pipefail` that fails the pipeline. The check then reported "no
+   * Kotlin in it" about a dylib holding 176,704 Kotlin symbols.
+   */
+  test('counts Kotlin symbols without killing nm mid-stream', () => {
+    expect(code).toMatch(/grep\s+-c\s+"kfun:"/);
+    expect(code).not.toMatch(/grep\s+-q\s+"kfun:"/);
   });
 });
