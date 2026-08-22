@@ -1,6 +1,6 @@
 ---
 id: SHY-0441
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-23
 priority: P1
@@ -163,6 +163,31 @@ way.
 - [ ] Merged to `develop`, all checks green.
 - [ ] Mutation-proven: removing the check lets an SHY-0419-shaped fixture pass.
 - [ ] A full journey run on both real devices, green, with the check live.
+
+## How it was built
+
+`occluderOf(nodes, target)` — document order is paint order in both dumps, so
+only a node drawn LATER can be on top. It occludes when its box contains the
+target's tappable **centre**; the centre and not the whole box, because a
+control covered only in part is exactly what SHY-0428 was. A node wholly inside
+the target's box is its own child and ignored, otherwise every button looks
+covered by its own label.
+
+`assertReachable` adds XCUITest's `visible` — which was already parsed, with a
+comment naming SHY-0419, and read by nothing. One assignment, zero uses.
+
+Both parsers now keep the element type and the full box, which the check needs.
+
+**The element-click shortcuts had to go.** `tapId` and `tapResolved` both jumped
+straight to `device.tapElement(id)` when the backend had one, skipping the dump —
+and therefore skipping this check — on iOS, which is the platform the defect came
+from. They now read the tree, check, and then click.
+
+**Mutation-verified, and the first attempt failed it.** Deleting the
+`assertReachable` call left all twelve helper tests green: they exercised
+`occluderOf` and `assertReachable` directly and never drove a caller. The suite
+now enters through `tapId` with real uiautomator XML and asserts NO tap happens;
+the same mutation reddens three of them.
 
 ## Notes
 
