@@ -567,29 +567,49 @@ async function dump(device) {
 /**
  * Tap a node, re-resolving it IMMEDIATELY before the tap.
  *
- * adb offers `input tap x y` and nothing else — there is no element click to
- * reach for on the Android backend. So the mitigation for a stale coordinate is
- * to look the element up again with nothing in between, and tap where it is NOW
- * rather than where it was when the screen was last dumped.
- *
  * Everything between a dump and a tap is a window in which the UI can move: a
  * keyboard opening, a list settling, a dialog arriving. Tapping the old point
  * then hits whatever occupies those pixels, the walk sees a plausible next
  * screen, and the step passes for the wrong reason.
  *
- * An element that has VANISHED is a failure, not something to tap at anyway.
+ * ## `relocate` is not optional decoration
+ *
+ * A first version re-resolved with `byText(fresh, node.text)`, which is
+ * `.find()` — the FIRST match in document order. That silently threw away the
+ * caller's disambiguation. `tapLowestText` deliberately picks the LOWEST node
+ * with a given text, because in a confirmation dialog the title and the confirm
+ * button carry the same words; re-resolving by first-match handed back the
+ * title. Proven on the device: tapping the title left the dialog open and
+ * sign-out hung, while the button the caller had chosen dismissed it.
+ *
+ * That is the inverse of the staleness bug and just as bad — a confident
+ * re-resolution to the WRONG element of the same name. So a caller that picked
+ * among look-alikes must pass the rule it used.
  *
  * @param {object} device
- * @param {object} node  a node from an earlier dump
- * @param {string} [label] what to call it if it is gone
+ * @param {object} node    a node from an earlier dump
+ * @param {object} [o]
+ * @param {(nodes: object[]) => object|null} [o.relocate] the caller's own
+ *   predicate, re-applied to a fresh dump. Required whenever the node was
+ *   chosen from several that match equally.
+ * @param {string} [o.label] what to call it if it is gone
  */
-async function tapResolved(device, node, label) {
+async function tapResolved(device, node, { relocate, label } = {}) {
+  // An identifier is unambiguous, so the element route is safe: the backend
+  // resolves and clicks in one operation with no window at all.
+  if (node.id && typeof device.tapElement === 'function') {
+    await device.tapElement(node.id);
+    return;
+  }
+
   const fresh = await dump(device);
-  const again =
-    (node.id && byId(fresh, node.id)) ||
-    (node.text && byText(fresh, node.text)) ||
-    (node.desc && byText(fresh, node.desc)) ||
-    null;
+  const again = relocate
+    ? relocate(fresh)
+    : (node.id && byId(fresh, node.id)) ||
+      (node.text && byText(fresh, node.text)) ||
+      (node.desc && byText(fresh, node.desc)) ||
+      null;
+
   if (!again) {
     throw new Error(
       `tap target ${label || node.id || node.text || node.desc || '(unnamed)'} vanished between ` +
@@ -597,6 +617,28 @@ async function tapResolved(device, node, label) {
         'hit whatever is there now',
     );
   }
+
+  // Label-based element click ONLY when the label is unique on screen. Appium's
+  // `/element` returns the first match, so using it on an ambiguous label would
+  // reintroduce exactly the bug above by another route.
+  const labelText = again.text || again.desc;
+  if (
+    !again.id &&
+    labelText &&
+    typeof device.tapElementByLabel === 'function' &&
+    fresh.filter((n) => n.text === labelText || n.desc === labelText).length === 1
+  ) {
+    await device.tapElementByLabel(labelText);
+    return;
+  }
+  if (again.id && typeof device.tapElement === 'function') {
+    await device.tapElement(again.id);
+    return;
+  }
+
+  // No identifier and an ambiguous label: a coordinate from the dump taken on
+  // the line above is the tightest window available, and the caller's own rule
+  // chose which of the look-alikes it belongs to.
   await device.tap(again.center.x, again.center.y);
 }
 
@@ -625,11 +667,22 @@ async function tapId(device, id) {
 // buttons whose label also appears as the dialog heading (e.g. the "Sign
 // Out" button sits below the "Sign Out" title) and which carry no testTag
 // because they live in a Compose dialog.
+/** The lowest node with this exact text — in a dialog, the button under the title. */
+const lowestWithText = (nodes, text) => {
+  const matches = nodes.filter((n) => n.center && n.text === text);
+  if (matches.length === 0) return null;
+  return matches.reduce((a, b) => (b.center.y > a.center.y ? b : a));
+};
+
 async function tapLowestText(device, text) {
-  const matches = (await dump(device)).filter((n) => n.center && n.text === text);
-  if (matches.length === 0) throw new Error(`no "${text}" node to tap`);
-  const target = matches.reduce((a, b) => (b.center.y > a.center.y ? b : a));
-  await tapResolved(device, target);
+  const target = lowestWithText(await dump(device), text);
+  if (!target) throw new Error(`no "${text}" node to tap`);
+  // The rule travels with the node. Without it the re-resolve takes the FIRST
+  // match, which in a confirmation dialog is the title rather than the button.
+  await tapResolved(device, target, {
+    relocate: (fresh) => lowestWithText(fresh, text),
+    label: `lowest "${text}"`,
+  });
   await sleep(900);
 }
 
@@ -2077,6 +2130,9 @@ if (require.main === module) {
 // the on-device integration runs). Requiring this file does NOT run main().
 module.exports = {
   parseArgs,
+  tapResolved,
+  tapLowestText,
+  lowestWithText,
   SUPPORT_PERSONA_BY_PLATFORM,
   parseNodes,
   byId,

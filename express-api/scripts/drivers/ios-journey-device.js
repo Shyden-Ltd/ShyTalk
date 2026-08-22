@@ -279,6 +279,35 @@ class IosDevice {
   }
 
   /**
+   * Click an element by its visible LABEL.
+   *
+   * Not every control carries an accessibility identifier — the daily-reward
+   * dialog's "Later" is matched by its text, and it has no id to ask for. A
+   * predicate is Appium's answer to that, and it is still an ELEMENT click:
+   * Appium resolves and clicks server-side, so nothing can move in between.
+   *
+   * Without this the dialog handlers fell back to coordinates on iOS even
+   * though the backend can locate properly — which is how a reward calendar
+   * survived a tap meant to dismiss it, and the walk then sat waiting for a
+   * tab the dialog was covering.
+   *
+   * `name` is checked as well as `label` because XCUITest surfaces the
+   * identifier under `name`, and a control may carry either.
+   *
+   * @param {string} label
+   */
+  async tapElementByLabel(label) {
+    const quoted = JSON.stringify(String(label));
+    const el = await this._post('/element', {
+      using: '-ios predicate string',
+      value: `label == ${quoted} OR name == ${quoted} OR value == ${quoted}`,
+    });
+    const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+    if (!id) throw new Error(`no element labelled ${quoted} to tap`);
+    await this._post(`/element/${id}/click`, {});
+  }
+
+  /**
    * Tap a POINT. Reserved for gestures with no element behind them — dismissing
    * by tapping empty space, or a coordinate derived from a swipe. Anything with
    * an identifier should go through `tapElement`.
@@ -422,6 +451,7 @@ const IOS_JOURNEY_METHOD_NAMES = [
   'typeText',
   'launch',
   'tapElement',
+  'tapElementByLabel',
   'forceStop',
   'screencap',
   'size',

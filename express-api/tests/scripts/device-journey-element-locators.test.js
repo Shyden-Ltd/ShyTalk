@@ -111,6 +111,32 @@ describe('taps locate elements rather than remembered pixels', () => {
     expect({ rawNodeTaps: raw.length }).toEqual({ rawNodeTaps: 1 });
   });
 
+  test('the iOS backend can locate a control by its label, not just its id', () => {
+    // Not every control has an accessibility identifier — the daily-reward
+    // dialog's "Later" is matched by text alone. A predicate locates it as an
+    // ELEMENT; a coordinate cannot. Leaving that case on coordinates is how a
+    // reward calendar survived the tap meant to dismiss it, and the walk then
+    // sat waiting for a tab the dialog was covering.
+    const method = iosSrc.match(/^ {2}async tapElementByLabel\([\s\S]*?^ {2}\}/m)?.[0] ?? '';
+    expect({ exists: method !== '' }).toEqual({ exists: true });
+    expect({
+      usesPredicate: /-ios predicate string/.test(method),
+      clicksElement: /\/element\/\$\{[^}]+\}\/click/.test(method),
+    }).toEqual({ usesPredicate: true, clicksElement: true });
+  });
+
+  test('tapResolved takes the element route before any coordinate', () => {
+    // Every dialog handler comes through tapResolved. Giving tapId the element
+    // path and leaving this one on coordinates was an incomplete fix.
+    const fn = codeOf(runnerSrc).match(/^async function tapResolved\([\s\S]*?^\}/m)?.[0] ?? '';
+    const elementUse = fn.indexOf('tapElement');
+    const coordinateUse = fn.indexOf('device.tap(');
+    expect({ hasElementRoute: elementUse !== -1 }).toEqual({ hasElementRoute: true });
+    expect({ elementBeforeCoordinate: elementUse < coordinateUse }).toEqual({
+      elementBeforeCoordinate: true,
+    });
+  });
+
   test('the Android coordinate tap re-checks the element has not moved', () => {
     // adb offers `input tap x y` and nothing else — there is no element click
     // to reach for. So the mitigation is to confirm the node is still where it
