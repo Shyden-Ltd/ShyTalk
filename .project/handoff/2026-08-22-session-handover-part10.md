@@ -247,3 +247,82 @@ and a guard — worth writing only once the mechanism is settled, since
 2. Then #1940 on his sign-off.
 3. SHY-0417 (banned user gets a bare 401 on strict routes).
 4. The 16 journey-gap tickets SHY-0400–0415, none started.
+
+---
+
+# Later the same session — three more rules, and SHY-0396 half-built
+
+## Rules added (all in memory, all HARD)
+
+1. **Evidence page + sign-off** before any product ticket progresses (above).
+2. **DEV testing only from `develop`, after merge and deploy.** Everything before
+   that is LOCAL. I got this wrong: `scripts/ios/build-debug-dev.sh` points at the
+   PUBLIC dev backend and I used it to walk a FEATURE branch against dev.
+   Pre-merge device work must use the local configuration against the local stack.
+   → `feedback-dev-testing-only-after-merge-to-develop`
+3. **Push rarely.** Every push runs the full chromium suite: 20-25 minutes. I
+   pushed seven times in one session — about two and a half hours. Commit locally
+   often; push once, when the ticket is ready for dev. → same file as (2).
+4. **Tests come first, always, and journeys count as tests.** Said twice in one
+   session because my behaviour was inconsistent. →
+   `feedback-exhaustive-tests-first-no-gaps` (reinforced section at the end).
+
+## SHY-0396 — server DONE, client NOT started
+
+**The defect:** the support form BLOCKED a second ticket. Never what was asked
+for — multiple tickets are ALLOWED, with a warning.
+
+**Done and green locally (52/52 in `support-tickets.unit.test.js`), committed, NOT pushed:**
+
+| Change | Detail |
+| --- | --- |
+| 409 refusal **removed** | `support-tickets.js` no longer queries for an open ticket before creating |
+| `GET /support-tickets/mine/open` | returns `{ ticketId, category, summary, createdAt }` per open ticket; summary is a 120-char shortening of their OWN message; ownership re-checked after the query |
+| `POST /support-tickets/:id/messages` | appends via `FieldValue.arrayUnion`; somebody else's ticket answers **404**, not 403 — whether it exists is not their business |
+
+Tests written FIRST. The old `refuses a second ticket while one is still open`
+assertion pinned the defect and was **inverted**, not deleted, plus a
+`no request is ever answered with 409` guard so the block cannot be reinstated
+on one path only.
+
+Two traps met, both now commented in place:
+- the test harness signs requests as `uniqueId = 10000001`; fixtures using
+  another id are silently filtered out by the ownership check and look like a
+  route bug;
+- the firebase mock had no `FieldValue`, so `arrayUnion` threw a 500 that also
+  looks like a route bug.
+
+**Still to build:** the client. Three choices — *"It's the problem I already
+reported"* / *"It's a new problem"* / *"Go back"* (which must keep their typed
+text). Blast radius: `SupportRepository.kt`, `SupportFormViewModel.kt`,
+`SupportPage.kt`, `IosSmallRepositories.kt`, `SupportRepositoryImpl.kt`, and the
+tests `SupportFormViewModelTest.kt`, `SupportFormWiringPinTest.kt`,
+`SupportRepositoryImplTest.kt`. `RaiseTicketOutcome.AlreadyOpen` and
+`alreadyHasOpenTicket` both encode the refusal and must go.
+
+## SHY-0420 filed — attachments (P1, MVP)
+
+Up to 10 files on **support tickets, reports AND appeals**; images ≤ 10 MB;
+video ≤ **30 seconds, bounded by duration not bytes**; **virus scanning** with a
+fail-closed gate; and **admins must not be able to download** — read-only
+sandboxed viewing only. Today `GET /support-tickets/:id/attachments` mints signed
+GET URLs, which is exactly the downloadable path to remove. Reports and appeals
+have not been surveyed for attachment support at all — that is the first job.
+
+## Journeys written (tests first)
+
+- `journey-tests/j38-asking-for-help-twice.feature` — 10 scenarios for SHY-0396.
+  The one that matters: *"Going back does not cost her what she wrote."*
+- `journey-tests/j39-the-files-people-send-us.feature` — 12 scenarios for
+  SHY-0420. The one that matters: *"A bad attachment never costs somebody their
+  report"* — losing a report because its attachment failed a scan would punish
+  the person raising the alarm.
+
+Neither has step bindings yet; `journey-tests/INDEX.md` has not been updated.
+
+## Where to pick up
+
+1. Finish the SHY-0396 **client** (tests first), locally.
+2. Bind j38's steps and run it locally on both devices.
+3. Build the evidence page for #1940 + SHY-0396, publish it, get sign-off.
+4. Only then push, merge, deploy.

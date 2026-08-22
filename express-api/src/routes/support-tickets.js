@@ -23,7 +23,7 @@
  */
 
 const router = require('express').Router();
-const { db } = require('../utils/firebase');
+const { db, FieldValue } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
@@ -107,6 +107,17 @@ function validateAttachments(raw, uniqueId) {
 }
 
 const STATUS_OPEN = 'open';
+/** How many open tickets the choice screen will ever show. More is unreadable. */
+const MAX_OPEN_TICKETS_LISTED = 5;
+/** Long enough to recognise the problem, short enough to scan. */
+const SUMMARY_MAX_LENGTH = 120;
+
+/** A shortened copy of the person's OWN message — never anybody else's. */
+function summarise(message) {
+  const text = typeof message === 'string' ? message.trim() : '';
+  if (text.length <= SUMMARY_MAX_LENGTH) return text;
+  return text.slice(0, SUMMARY_MAX_LENGTH) + '\u2026';
+}
 const STATUS_RESOLVED = 'resolved';
 
 /**
@@ -191,17 +202,13 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
       return res.status(400).json({ error: attachments.error });
     }
 
-    const existing = await queryDocs(
-      db
-        .collection(COLLECTION)
-        .where('userId', '==', uniqueId)
-        .where('status', '==', STATUS_OPEN)
-        .limit(1),
-    );
-    if (existing.length > 0) {
-      return res.status(409).json({ error: 'You already have an open support request' });
-    }
-
+    // SHY-0396: a second request is NEVER refused. Somebody with an open ticket
+    // may have a genuinely different problem, and refusing them means the new
+    // problem reaches nobody. The warning belongs in the client, which shows
+    // what is already open (GET /support-tickets/mine/open) and offers to add to
+    // it instead -- with the reminder that a duplicate for the SAME problem only
+    // goes to the back of the queue. This route used to answer 409 here, which
+    // blocked it outright.
     const ticketId = generateId();
     await db.doc(`${COLLECTION}/${ticketId}`).set(
       {
@@ -265,6 +272,94 @@ const UPLOAD_SLOT_TTL_SEC = 300;
 // Rate-limited despite being a GET: each call mints up to MAX_ATTACHMENTS signed
 // URLs, which makes it the cheapest signature-generation endpoint an
 // authenticated token can loop on. Every other signing route here is limited.
+/**
+ * The caller's own OPEN tickets, with a short summary of each — SHY-0396.
+ *
+ * Mounted BEFORE `/support-tickets/:id/...` so `mine` is never taken for an id.
+ *
+ * This exists so the client can warn instead of refuse. Somebody with a request
+ * already open is shown what it was about, reminded that a duplicate for the
+ * SAME problem only goes to the back of the queue, and then given the choice:
+ * add to that ticket, raise a new one, or go back. Without a summary there is
+ * nothing to recognise the problem by, and the choice is unanswerable.
+ *
+ * The summary is a shortened copy of their OWN words, so no new stored field is
+ * needed and nothing is revealed that they did not write.
+ */
+router.get('/support-tickets/mine/open', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const docs = await queryDocs(
+      db
+        .collection(COLLECTION)
+        .where('userId', '==', uniqueId)
+        .where('status', '==', STATUS_OPEN)
+        .limit(MAX_OPEN_TICKETS_LISTED),
+    );
+
+    // Belt and braces on top of the query: a support queue holds other people's
+    // words, so ownership is re-checked here rather than trusted from the
+    // filter alone.
+    const tickets = docs
+      .filter((d) => d.userId === uniqueId)
+      .map((d) => ({
+        ticketId: d.id,
+        category: d.category ?? 'other',
+        summary: summarise(d.message),
+        createdAt: d.createdAt ?? null,
+      }));
+
+    res.json({ tickets });
+  } catch (err) {
+    log.error('support-tickets', 'Listing open tickets failed', { error: err.message });
+    res.status(500).json({ error: 'Could not load your open requests' });
+  }
+});
+
+/**
+ * Add to a ticket the caller already has — SHY-0396, "it's the problem I
+ * already reported".
+ *
+ * Without this the text has nowhere to go and would simply be dropped, which is
+ * the worst outcome for somebody who has already had to ask twice.
+ */
+router.post('/support-tickets/:id/messages', writeLimiter, async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return res
+        .status(400)
+        .json({ error: `message must be ${MAX_MESSAGE_LENGTH} characters or fewer` });
+    }
+
+    const snap = await db.doc(`${COLLECTION}/${req.params.id}`).get();
+    // A ticket belonging to somebody else answers 404, not 403: whether their
+    // ticket exists is not this caller's business.
+    if (!snap.exists || snap.data().userId !== uniqueId) {
+      return res.status(404).json({ error: 'Support request not found' });
+    }
+
+    await db.doc(`${COLLECTION}/${req.params.id}`).update({
+      messages: FieldValue.arrayUnion({ message, addedAt: now(), addedBy: uniqueId }),
+      updatedAt: now(),
+    });
+
+    log.info('support-tickets', 'Message added to an existing ticket', {
+      ticketId: req.params.id,
+      uniqueId,
+    });
+
+    res.json({ success: true, ticketId: req.params.id });
+  } catch (err) {
+    log.error('support-tickets', 'Adding to a ticket failed', { error: err.message });
+    res.status(500).json({ error: 'Could not add to your request' });
+  }
+});
+
 router.get('/support-tickets/:id/attachments', writeLimiter, async (req, res) => {
   try {
     if (await requireAdmin(req, res)) return;

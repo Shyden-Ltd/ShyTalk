@@ -34,6 +34,10 @@ const mockCollectionAdd = jest.fn().mockResolvedValue({ id: 'audit-id' });
 const mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
 
 jest.mock('../../src/utils/firebase', () => ({
+  // SHY-0396: adding to an existing ticket appends with FieldValue.arrayUnion.
+  // Without this the real module's export is absent and the route throws a 500,
+  // which looks like a route bug and is not one.
+  FieldValue: { arrayUnion: (...items) => ({ __arrayUnion: items }) },
   db: {
     doc: jest.fn((path) => ({
       _path: path,
@@ -228,15 +232,36 @@ describe('POST /api/support-tickets', () => {
     expect(writtenTicket().category).toBe('age');
   });
 
-  test('refuses a second ticket while one is still open', async () => {
+  // SHY-0396. This used to assert a 409 and that nothing was written -- it
+  // pinned the defect. A second request is ALLOWED: somebody with an open
+  // ticket may have a genuinely different problem, and refusing them means
+  // their new problem never reaches anyone. The warning belongs in the client,
+  // which shows what is already open and offers to add to it instead.
+  test('raises a SECOND ticket while one is still open — never refuses it', async () => {
     mockQueryDocs.mockResolvedValue([{ id: 'existing', status: 'open' }]);
 
     const res = await request(createApp())
       .post('/api/support-tickets')
-      .send({ message: 'Another one' });
+      .send({ message: 'A different problem entirely' });
 
-    expect(res.status).toBe(409);
-    expect(mockDocSet).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.ticketId).toBeTruthy();
+    expect(writtenTicket().message).toBe('A different problem entirely');
+  });
+
+  test('no request is ever answered with 409', async () => {
+    // The refusal is gone, not merely bypassed on one path. If a 409 comes back
+    // from anywhere here, somebody has reinstated the block.
+    mockQueryDocs.mockResolvedValue([
+      { id: 'a', status: 'open' },
+      { id: 'b', status: 'open' },
+    ]);
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Third one' });
+
+    expect(res.status).not.toBe(409);
   });
 
   test('stores the originating context so an admin need not ask', async () => {
@@ -462,6 +487,125 @@ describe('GET /api/support-tickets/:id/attachments', () => {
 
     expect(res.status).toBe(403);
     expect(mockGetSignedGetUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/support-tickets/mine/open — SHY-0396', () => {
+  // The client cannot offer "it's the problem I already reported" without
+  // something to show. A summary of their own words is enough to recognise the
+  // problem, and needs no new stored field.
+  test('returns a brief summary of each open ticket', async () => {
+    mockQueryDocs.mockResolvedValue([
+      {
+        id: 't1',
+        userId: 10000001,
+        status: 'open',
+        category: 'payment',
+        message: 'My coins never arrived after I paid',
+        createdAt: 1709913600000,
+      },
+    ]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toHaveLength(1);
+    expect(res.body.tickets[0]).toEqual({
+      ticketId: 't1',
+      category: 'payment',
+      summary: 'My coins never arrived after I paid',
+      createdAt: 1709913600000,
+    });
+  });
+
+  test('a long message is shortened, so the choice stays readable', async () => {
+    mockQueryDocs.mockResolvedValue([
+      { id: 't1', userId: 10000001, status: 'open', category: 'bug', message: 'x'.repeat(400) },
+    ]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.body.tickets[0].summary.length).toBeLessThanOrEqual(121);
+    expect(res.body.tickets[0].summary.endsWith('…')).toBe(true);
+  });
+
+  test('nothing open answers an empty list, not an error', async () => {
+    mockQueryDocs.mockResolvedValue([]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toEqual([]);
+  });
+
+  test("never leaks another person's ticket", async () => {
+    // The query is scoped by the TOKEN's uniqueId. If a ticket belonging to
+    // somebody else reaches the mapper, it must not be returned -- a support
+    // queue holds other people's words.
+    mockQueryDocs.mockResolvedValue([
+      { id: 'mine', userId: 10000001, status: 'open', category: 'bug', message: 'mine' },
+      { id: 'theirs', userId: 10000002, status: 'open', category: 'bug', message: 'theirs' },
+    ]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.body.tickets.map((t) => t.ticketId)).toEqual(['mine']);
+  });
+});
+
+describe('POST /api/support-tickets/:id/messages — SHY-0396', () => {
+  // "It's the problem I already reported" needs somewhere to put the text.
+  // Without this the message is simply dropped.
+  test('adds the message to the existing ticket', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 10000001, status: 'open', message: 'first' }),
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/t1/messages')
+      .send({ message: 'Here is more detail' });
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalled();
+  });
+
+  test("refuses to write to somebody else's ticket", async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 10000002, status: 'open', message: 'not yours' }),
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/t1/messages')
+      .send({ message: 'let me in' });
+
+    expect(res.status).toBe(404);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('an empty message is refused', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 10000001, status: 'open', message: 'first' }),
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/t1/messages')
+      .send({ message: '   ' });
+
+    expect(res.status).toBe(400);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('a ticket that does not exist is refused', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/nope/messages')
+      .send({ message: 'hello' });
+
+    expect(res.status).toBe(404);
   });
 });
 
