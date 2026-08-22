@@ -258,12 +258,28 @@ class WatermarkFormatTest {
         // The runner's report can read git in the WORKTREE, but that
         // says what was BUILT, not what is INSTALLED. This line on the
         // frame is the only evidence of the binary actually running.
-        assertEquals(listOf("abc1234 · 07-18 11:40"), compactContent().detailLines)
+        assertEquals("abc1234 · 07-18 11:40", compactContent().detailLines.first())
+    }
+
+    @Test
+    fun `compact keeps the account, which the device journeys parse`() {
+        // Not decoration: `signInAs` and J38's "the phone is signed in as
+        // the account we seeded" step both read `UID: <digits>` out of
+        // this badge. Dropping it reddens ten journeys on hardware.
+        assertEquals("UID: 10000005 · adult", compactContent().detailLines.last())
+    }
+
+    @Test
+    fun `compact renders an account line even when signed out`() {
+        // The runner's regex looks for UID followed by digits; a signed-out
+        // phone must still produce a line rather than nothing, so "no
+        // account" and "the badge failed to render" stay distinguishable.
+        assertEquals("UID: -", compactContent(uniqueId = null, cohort = null).detailLines.last())
     }
 
     @Test
     fun `compact still marks a dirty build`() {
-        assertEquals(listOf("abc1234* · 07-18 11:40"), compactContent(gitDirty = true).detailLines)
+        assertEquals("abc1234* · 07-18 11:40", compactContent(gitDirty = true).detailLines.first())
     }
 
     @Test
@@ -274,22 +290,23 @@ class WatermarkFormatTest {
 
     @Test
     fun `compact drops the lines the run report already carries`() {
-        // env, device and the signed-in account are in report.md — on the
-        // header and on every step line. Repeating them on each frame buys
-        // nothing and costs the copy underneath.
+        // The device is in report.md's header, and the branch is a moving
+        // label for something the sha already identifies exactly.
         val lines = compactContent().detailLines
         assertFalse(lines.any { it.contains("OnePlus") }, "device: $lines")
-        assertFalse(lines.any { it.startsWith("UID:") }, "uid: $lines")
+        assertFalse(lines.any { it.contains("story/") }, "branch: $lines")
+        assertFalse(lines.any { it.contains("main") }, "route: $lines")
     }
 
     @Test
     fun `compact never burns a display name into a recording`() {
-        // Every frame of every walk carried `Name: <persona>` and a
-        // numeric account id. On a non-seed device that is a real person's
-        // name and account, published into whatever the video is shared
-        // with. COMPACT removes it from the artefact entirely.
+        // The longest line in the badge, and the only genuinely personal
+        // one. On a non-seed device it is a real person's display name,
+        // published into whatever the video is shared with. The account id
+        // identifies them for support without doing that.
         val lines = compactContent().detailLines
         assertFalse(lines.any { it.startsWith("Name:") }, "name: $lines")
+        assertFalse(lines.any { it.contains("Riko") }, "name: $lines")
     }
 
     @Test
@@ -305,7 +322,8 @@ class WatermarkFormatTest {
 
     @Test
     fun `compact renders a placeholder rather than a blank when git identity is unknown`() {
-        assertEquals(listOf("?"), compactContent(gitSha = "?", builtAt = "?").detailLines)
+        assertEquals("?", compactContent(gitSha = "?", builtAt = "?").detailLines.first())
+        assertTrue(compactContent(gitSha = "?", builtAt = "?").detailLines.none { it.isBlank() })
     }
 
     @Test
@@ -318,12 +336,16 @@ class WatermarkFormatTest {
         gitDirty: Boolean = false,
         builtAt: String = "07-18 11:40",
         serverSha: String? = "abc1234",
+        uniqueId: String? = "10000005",
+        cohort: String? = "adult",
     ): WatermarkContent =
         fullContent(
             gitSha = gitSha,
             gitDirty = gitDirty,
             builtAt = builtAt,
             serverSha = serverSha,
+            uniqueId = uniqueId,
+            cohort = cohort,
             verbosity = WatermarkVerbosity.COMPACT,
         )
 

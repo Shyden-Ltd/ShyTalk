@@ -1210,14 +1210,60 @@ async function apiCall(method, pathStr, { token, body } = {}) {
 // first-launch interstitials to Home, and confirm identity in the debug
 // overlay. Switching personas mid-journey is just signOutFlow + signInAs.
 /**
- * @param {string|null} nameToken text the debug overlay must show to confirm
- *   WHO is signed in. Pass `null` when the persona has no seeded display name
- *   AND the journey makes its own, stronger identity assertion — see J38, which
- *   compares the on-device account id against the account the API bound its
- *   seeded ticket to. Skipping the check with nothing in its place would let a
- *   journey assert on one account's screen while seeding another's data.
+ * Every seeded persona's account id, keyed by the email the journeys sign in
+ * with — taken from the provisioning script itself, which is the one place
+ * that decides them. A local copy of this table would be a second place for
+ * an id to live, and the journeys would keep passing while asserting on an
+ * account that no longer exists.
+ *
+ * Requiring that module is side-effect free: it only builds the table at load
+ * and reaches for firebase inside its functions.
  */
-async function signInAs(device, reporter, ctx, email, nameToken) {
+const PERSONA_UNIQUE_ID_BY_EMAIL = new Map(
+  require('./provision-test-personas').personas.map((p) => [p.email, p.uniqueId]),
+);
+
+/**
+ * The account id a persona must be signed in as.
+ *
+ * Throws on an unknown email rather than returning undefined: an identity
+ * check that quietly compares against `undefined` is worse than no check,
+ * because the report still says the step passed.
+ */
+function personaUniqueId(email) {
+  const uid = PERSONA_UNIQUE_ID_BY_EMAIL.get(email);
+  if (uid === undefined) {
+    throw new Error(
+      `no seeded persona for ${JSON.stringify(email)} — ` +
+        `known: ${[...PERSONA_UNIQUE_ID_BY_EMAIL.keys()].join(', ')}`,
+    );
+  }
+  return uid;
+}
+
+/**
+ * Read the account the DEVICE believes it is signed in as, out of the debug
+ * badge (SHY-0205's watermark, WatermarkVerbosity.COMPACT).
+ *
+ * The badge is a test interface, not decoration — this parse and J38's are
+ * its two consumers, which is why the account line survives compaction.
+ * Returns null when no such line is on screen, so callers can tell "signed in
+ * as somebody else" from "the overlay is not there at all".
+ */
+function accountOnDevice(nodes) {
+  const node = nodes.find((n) => /^UID:\s*\d+/.test(n.text));
+  return node ? Number(/UID:\s*(\d+)/.exec(node.text)[1]) : null;
+}
+
+/**
+ * @param {string} email seeded persona to sign in as. WHO ends up signed in
+ *   is then confirmed against that persona's account id — see
+ *   [accountOnDevice]. It used to be confirmed against a prefix of the
+ *   display name ("Alice (P-02"), which two personas could share and which
+ *   said nothing about the account underneath; a journey that asserts on one
+ *   account's screen while seeding another's data proves nothing at all.
+ */
+async function signInAs(device, reporter, ctx, email) {
   await reporter.step(device, `Reach SignIn (for ${email})`, async () => {
     await ensureAtSignIn(device, ctx.pkg);
     return 'at SignIn (persona picker available)';
@@ -1242,20 +1288,35 @@ async function signInAs(device, reporter, ctx, email, nameToken) {
     await advanceToMain(device);
     return 'home reached — interstitials cleared';
   });
-  if (nameToken === null) return;
-  await reporter.step(device, `Confirm identity ${nameToken}`, async () => {
-    await waitForText(device, nameToken, 6000);
-    return `debug overlay shows "${nameToken}"`;
+  const expected = personaUniqueId(email);
+  await reporter.step(device, `Confirm the phone is signed in as ${expected}`, async () => {
+    const deadline = Date.now() + 8000;
+    let seen = null;
+    // The badge samples its inputs on a 2s tick, so the account can lag the
+    // sign-in by a frame or two. Polled rather than slept on: a fixed wait is
+    // either too short on a cold device or dead time on a warm one.
+    while (Date.now() < deadline) {
+      seen = accountOnDevice(await dump(device));
+      if (seen === expected) return `debug overlay shows account ${seen}`;
+      await sleep(500);
+    }
+    throw new Error(
+      seen === null
+        ? `the debug overlay is not showing an account id, so who is signed in ` +
+            `cannot be confirmed (expected ${expected} for ${email})`
+        : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
+            `every assertion after this would be about the wrong person`,
+    );
   });
 }
 
 // Auth-smoke journey: sign in as a persona + assert their Firestore doc.
-function personaJourney(id, title, email, nameToken, uid, cohort) {
+function personaJourney(id, title, email, uid, cohort) {
   return {
     id,
     title,
     async run(device, reporter, ctx) {
-      await signInAs(device, reporter, ctx, email, nameToken);
+      await signInAs(device, reporter, ctx, email);
       if (ctx.db && uid) {
         await reporter.step(device, `DB users/${uid} cohort=${cohort}`, async () => {
           const got = await dbWaitField(
@@ -1285,7 +1346,7 @@ const J02 = {
   id: 'J02',
   title: 'j02 — minor (Marcus P-04): UI renders + server-enforced cross-cohort gate',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'minor-power@shytalk.dev', 'Marcus (P-04');
+    await signInAs(device, reporter, ctx, 'minor-power@shytalk.dev');
     if (ctx.db) {
       await reporter.step(device, 'DB users/60000010 cohort=minor', async () => {
         const v = await dbWaitField(ctx.db, 'users/60000010', 'cohort', (x) => x === 'minor', 6000);
@@ -1349,7 +1410,7 @@ const J08 = {
   id: 'J08',
   title: 'j08 — cross-cohort wall: adult (Vexa P-07) blocked from minor (Marcus)',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'adult-prober@shytalk.dev', 'Vexa (P-07');
+    await signInAs(device, reporter, ctx, 'adult-prober@shytalk.dev');
     if (!ctx.db) return;
     const vexa = 50000040;
     const marcus = 60000010;
@@ -1407,7 +1468,7 @@ const J04 = {
   title:
     'j04 — cohort-override is staff-only: regular member rejected (422), staff allowed + audited',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'admin@shytalk.dev', 'Greta (P-12');
+    await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
     if (!ctx.db) return;
     const hayato = 50000030;
     let gToken;
@@ -1478,7 +1539,7 @@ const J11 = {
   id: 'J11',
   title: 'j11 — moderation cycle: report → admin suspend (+audit) → appeal → unsuspend',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'victim@shytalk.dev', 'Nora (P-09');
+    await signInAs(device, reporter, ctx, 'victim@shytalk.dev');
     if (!ctx.db) return;
     const raul = 50000050;
     let noraToken;
@@ -1585,7 +1646,7 @@ const J07 = {
   id: 'J07',
   title: 'j07 — social: follow + same-cohort PM round-trip (Alice ↔ Lena)',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
     if (!ctx.db) return;
     const alice = 50000010;
     const lena = 50000020;
@@ -1666,7 +1727,7 @@ const J12 = {
   id: 'J12',
   title: 'j12 — admin routine: admin reaches moderation queues; non-admin rejected',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'admin@shytalk.dev', 'Greta (P-12');
+    await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
     if (!ctx.db) return;
     let gretaToken;
     let aliceToken;
@@ -1717,6 +1778,130 @@ const J12 = {
  * Scripted rather than driven by hand: a walk decided tap-by-tap costs 10-30s
  * per step in thinking time with the phone sitting idle, and is not repeatable.
  */
+/**
+ * Everything J38 raises starts with this, so the sweep below can tell its
+ * own leftovers from a seeded fixture or a ticket a person filed.
+ */
+const JOURNEY_TICKET_PREFIX = 'J38';
+
+/** How much of the run id ends up in every message this journey types. */
+const RUN_TAG_CHARS = 12;
+
+/**
+ * A per-run marker, from the reporter's run id (SHY-0432).
+ *
+ * Letters and digits ONLY. This string is typed into the device, and
+ * `input text` is a round trip through two shells; spaces and colons are
+ * the only punctuation that path has ever been proven with, and the
+ * sentence around the tag supplies those. A quoting failure here would
+ * arrive looking like the product truncating somebody's message.
+ *
+ * Refuses an empty result rather than returning one. Without a tag every
+ * message collapses back to the constant it used to be, the journey
+ * silently loses its isolation, and nothing says so.
+ */
+function runTagFrom(runId) {
+  const cleaned = String(runId ?? '').replace(/[^0-9a-zA-Z]/g, '');
+  if (!cleaned) {
+    throw new Error(`a per-run marker needs a run id; got ${JSON.stringify(runId)}`);
+  }
+  return cleaned.slice(-RUN_TAG_CHARS);
+}
+
+/**
+ * The three strings J38 raises and then asserts on.
+ *
+ * They used to be constants, which is what let the final step pass on a
+ * previous run's document: the query matched leftovers, `snap.empty`
+ * could never fire, and `snap.docs[0]` returned whichever the index
+ * happened to hand back.
+ */
+function j38Messages(runTag) {
+  if (!/^[0-9a-zA-Z]+$/.test(String(runTag))) {
+    throw new Error(
+      `run tag must be alphanumeric to survive the shell; got ${JSON.stringify(runTag)}`,
+    );
+  }
+  return {
+    seed: `${JOURNEY_TICKET_PREFIX} seed ${runTag}: my coins never arrived`,
+    typed: `${JOURNEY_TICKET_PREFIX} run ${runTag}: nobody can hear me in voice rooms since this morning`,
+    followUp: `${JOURNEY_TICKET_PREFIX} run ${runTag}: it happened again just now`,
+  };
+}
+
+/**
+ * The display cap the support API applies to `mine/open`.
+ *
+ * Kept in step with the server by `device-journey-run-isolation.test.js`,
+ * which reads the constant out of the route and fails if the two disagree —
+ * a number duplicated with nothing watching it is a number that drifts.
+ */
+const MAX_OPEN_TICKETS_LISTED = 5;
+
+/** The seeded persona with the isAdmin claim; the only one that may resolve. */
+const ADMIN_PERSONA = 'admin@shytalk.dev';
+
+/**
+ * Which open tickets are this journey's own leftovers, safe to resolve.
+ *
+ * Scoped three ways, and every one of them matters:
+ * - OWNER, because Android and iOS walk at the same time on different
+ *   personas and must not resolve each other's tickets mid-run;
+ * - PREFIX, because seeded fixtures and anything a person filed are not
+ *   ours to close ("cleanup touches only tickets this journey created");
+ * - the ticket this run just seeded, which the walk is about to need.
+ *
+ * `userId` arrives as a number from Firestore and as a string from the
+ * API, so ownership is compared as text — a strict `===` across that
+ * boundary sweeps nothing and says nothing.
+ */
+function staleJourneyTickets(tickets, { ownerId, keepTicketId }) {
+  return (tickets ?? []).filter((t) => {
+    if (!t || typeof t !== 'object') return false;
+    const id = t.id ?? t.ticketId; // admin list returns `id`; mine/open maps it to `ticketId`
+    if (!id || id === keepTicketId) return false;
+    if (String(t.userId) !== String(ownerId)) return false;
+    return typeof t.message === 'string' && t.message.startsWith(JOURNEY_TICKET_PREFIX);
+  });
+}
+
+/**
+ * Resolve the tickets earlier runs of this journey left open (SHY-0432).
+ *
+ * Through the ADMIN endpoint, never by writing to Firestore: a harness that
+ * reaches around the API stops exercising the API, and `PATCH
+ * /api/support-tickets/:id` is the same call a real admin makes. Reads stay
+ * direct, because an assertion wants ground truth.
+ *
+ * Enumerated from the admin list rather than `mine/open` — the latter is
+ * capped at [MAX_OPEN_TICKETS_LISTED], which is the very cap the residue was
+ * pushing the journey into, so it cannot see far enough to clear it.
+ *
+ * A failure here throws. Cleanup that silently does nothing brings the
+ * accumulation straight back, with a green report over it.
+ */
+async function resolveStaleJourneyTickets(ctx, { ownerId, keepTicketId }) {
+  const adminToken = await getIdToken(ADMIN_PERSONA);
+  const listed = await apiCall('GET', '/api/support-tickets?status=open', { token: adminToken });
+  if (listed.status !== 200) {
+    throw new Error(`could not list open tickets to clean up: ${listed.status}`);
+  }
+  const stale = staleJourneyTickets(listed.body?.tickets, { ownerId, keepTicketId });
+  const resolved = [];
+  for (const t of stale) {
+    const id = t.id ?? t.ticketId;
+    const r = await apiCall('PATCH', `/api/support-tickets/${id}`, {
+      token: adminToken,
+      body: { status: 'resolved' },
+    });
+    if (r.status !== 200) {
+      throw new Error(`could not resolve leftover ticket ${id}: ${r.status}`);
+    }
+    resolved.push(id);
+  }
+  return resolved;
+}
+
 const J38 = {
   id: 'J38',
   title: 'j38 — a second support request is warned about, never refused (SHY-0396)',
@@ -1726,6 +1911,9 @@ const J38 = {
     let openBefore = 0;
     let seededTicketId = null;
     let seededUserId = null;
+    // Every string this walk types and then looks for carries it (SHY-0432).
+    const runTag = runTagFrom(reporter.runId);
+    const messages = j38Messages(runTag);
 
     await reporter.step(device, 'Alice already has a request open', async () => {
       token = await getIdToken(ctx.supportPersona);
@@ -1734,33 +1922,66 @@ const J38 = {
       // whatever the device happened to do earlier makes the run flaky.
       const raised = await apiCall('POST', '/api/support-tickets', {
         token,
-        body: { message: `J38 seed: my coins never arrived (${Date.now()})`, category: 'payment' },
+        body: { message: messages.seed, category: 'payment' },
       });
       if (raised.status !== 200) throw new Error(`seed failed: ${raised.status}`);
       seededTicketId = raised.body?.ticketId;
-      const open = await apiCall('GET', '/api/support-tickets/mine/open', { token });
-      openBefore = open.body?.tickets?.length ?? 0;
-      if (openBefore < 1) throw new Error('seeded a ticket but nothing is open');
       // Which account the server bound it to. The device is checked against
       // this below -- a walk that asserts on one account's screen while seeding
       // another account's data proves nothing at all.
       const doc = await dbGet(ctx.db, `supportTickets/${seededTicketId}`);
       seededUserId = doc?.userId;
-      return `${openBefore} open before the walk, owned by ${seededUserId}`;
+
+      // Clear what earlier runs left behind, now that the owner is known.
+      //
+      // This journey used to leave two open tickets per walk and never
+      // collect them. `mine/open` is capped at MAX_OPEN_TICKETS_LISTED = 5,
+      // so within a few runs the cap was reached and the screen under test
+      // was being hidden by the journey's own residue -- the duplicate
+      // screen in the 20:33 run showed five cards, three of them leftovers.
+      //
+      // Resolved through the ADMIN endpoint, not written to Firestore: a
+      // test that reaches around the API stops testing the API. Reads stay
+      // direct, because ground truth is what an assertion wants.
+      const swept = await resolveStaleJourneyTickets(ctx, {
+        ownerId: seededUserId,
+        keepTicketId: seededTicketId,
+      });
+
+      const open = await apiCall('GET', '/api/support-tickets/mine/open', { token });
+      openBefore = open.body?.tickets?.length ?? 0;
+      if (openBefore < 1) throw new Error('seeded a ticket but nothing is open');
+      // The cap is the point: if the walk still starts at it, the screen it
+      // is about is still partly hidden and the sweep did not do its job.
+      if (openBefore >= MAX_OPEN_TICKETS_LISTED) {
+        throw new Error(
+          `${openBefore} requests open before the walk, at or over the display cap of ` +
+            `${MAX_OPEN_TICKETS_LISTED} -- the duplicate screen cannot show them all. ` +
+            `${swept.length} of this journey's leftovers were resolved; the rest belong ` +
+            `to somebody or something else and were left alone.`,
+        );
+      }
+      return (
+        `${openBefore} open before the walk, owned by ${seededUserId}` +
+        (swept.length ? `; resolved ${swept.length} leftover(s) from earlier runs` : '') +
+        `; run tag ${runTag}`
+      );
     });
 
     // `null`: this persona has no seeded display name, so the overlay cannot
     // confirm WHO is signed in by name. The step below is a stronger check
     // anyway -- it compares the account on the device against the account the
     // server bound the seeded ticket to.
-    await signInAs(device, reporter, ctx, ctx.supportPersona, null);
+    await signInAs(device, reporter, ctx, ctx.supportPersona);
     if (!ctx.db) return;
 
     await reporter.step(device, 'The phone is signed in as the account we seeded', async () => {
-      const nodes = await dump(device);
-      const uidNode = nodes.find((n) => /^UID:\s*\d+/.test(n.text));
-      if (!uidNode) throw new Error('the debug overlay is not showing an account id');
-      const onDevice = Number(/UID:\s*(\d+)/.exec(uidNode.text)[1]);
+      // Distinct from signInAs's check, which compares the device against the
+      // PERSONA TABLE. This compares it against the account the SERVER bound
+      // the seeded ticket to -- so a persona whose table entry drifted from
+      // its provisioned data is caught here rather than asserted around.
+      const onDevice = accountOnDevice(await dump(device));
+      if (onDevice === null) throw new Error('the debug overlay is not showing an account id');
       if (onDevice !== seededUserId) {
         throw new Error(
           `the phone is signed in as ${onDevice} but the ticket was seeded for ` +
@@ -1814,7 +2035,7 @@ const J38 = {
       },
     );
 
-    const typed = 'J38: nobody can hear me in voice rooms since this morning';
+    const typed = messages.typed;
 
     await reporter.step(device, 'Pressing Send ASKS instead of sending', async () => {
       await typeInto(device, 'support_input', typed);
@@ -1901,7 +2122,7 @@ const J38 = {
         device.launch(pkg);
         await openSupport();
 
-        const followUp = 'J38: it happened again just now';
+        const followUp = messages.followUp;
         await typeInto(device, 'support_input', followUp);
         await tapIdScrolling(device, 'support_send');
         const nodes = await waitForId(device, 'support_duplicate', 12000);
@@ -1936,7 +2157,7 @@ const J05 = {
   id: 'J05',
   title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
     if (!ctx.db) return;
     const alice = 50000010;
     let token;
@@ -1982,7 +2203,7 @@ const J06 = {
   id: 'J06',
   title: 'j06 — IAP failure handling: unknown product (404) + receipt replay (409)',
   async run(device, reporter, ctx) {
-    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
     if (!ctx.db) return;
     let token;
     await reporter.step(device, 'Mint Alice token', async () => {
@@ -2053,7 +2274,6 @@ function buildJourneys(ctx) {
       'J-ALICE',
       'Adult persona (P-02 Alice) signs in',
       'adult-power@shytalk.dev',
-      'Alice (P-02',
       '50000010',
       'adult',
     ),
@@ -2061,7 +2281,6 @@ function buildJourneys(ctx) {
       'J-MARCUS',
       'Minor persona (P-04 Marcus) signs in',
       'minor-power@shytalk.dev',
-      'Marcus (P-04',
       '60000010',
       'minor',
     ),
@@ -2069,7 +2288,6 @@ function buildJourneys(ctx) {
       'J-ADMIN',
       'Admin persona (P-12 Greta) signs in',
       'admin@shytalk.dev',
-      'Greta (P-12',
       '90000001',
       'adult',
     ),
@@ -2311,4 +2529,11 @@ module.exports = {
   byTextContains,
   summarizeScreen,
   arrayContains,
+  runTagFrom,
+  j38Messages,
+  staleJourneyTickets,
+  personaUniqueId,
+  accountOnDevice,
+  JOURNEY_TICKET_PREFIX,
+  MAX_OPEN_TICKETS_LISTED,
 };
