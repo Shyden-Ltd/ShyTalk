@@ -40,6 +40,7 @@ const {
   desiredStayOn,
   STAY_ON_USB,
   waitForGrowth,
+  waitForFfmpegFrames,
   createRecorder,
   RECORDING_STOP_SIGNAL,
 } = require('../../../scripts/drivers/journey-screen-recorder');
@@ -353,6 +354,161 @@ describe('waitForGrowth', () => {
         pollMs: 100,
       }),
     ).rejects.toThrow(/exited with 4/);
+  });
+});
+
+describe('waitForFfmpegFrames', () => {
+  const FFMPEG = '/opt/homebrew/bin/ffmpeg';
+  const haveFfmpeg = fs.existsSync(FFMPEG);
+  const itFfmpeg = haveFfmpeg ? test : test.skip;
+
+  /**
+   * A REAL ffmpeg on a source that reproduces the actual failure: REAL-TIME
+   * (`-re`) and slow (1fps). Both matter.
+   *
+   * Without `-re`, lavfi generates frames as fast as it can and the first
+   * progress block already reads `frame=19898` — which hides the defect
+   * completely. That over-generous fixture is what let two separate bugs
+   * through: the encoder lookahead, and a matcher that only ever read the
+   * FIRST `frame=` in a growing buffer (always `frame=0`).
+   *
+   * With `-re` at 1fps, x264's ~40-frame lookahead cannot fill, so default
+   * tuning emits nothing at all: measured, the first frame never arrived
+   * within 8 seconds and the file held 36 bytes. That is a phone sitting on a
+   * settled screen.
+   */
+  function spawnStillFfmpeg(outFile, { tune = true } = {}) {
+    return spawn(
+      FFMPEG,
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-re',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=c=black:s=64x64:r=1',
+        '-vcodec',
+        'h264',
+        ...(tune ? ['-tune', 'zerolatency'] : []),
+        '-pix_fmt',
+        'yuv420p',
+        '-crf',
+        '51',
+        '-movflags',
+        '+frag_keyframe+empty_moov',
+        '-progress',
+        'pipe:1',
+        outFile,
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  }
+
+  itFfmpeg(
+    'reports readiness on a STILL, real-time source',
+    async () => {
+      const child = spawnStillFfmpeg(path.join(tmp, 'still.mp4'));
+      await expect(
+        waitForFfmpegFrames(child, () => '', { timeoutMs: 15_000 }),
+      ).resolves.toBeUndefined();
+      await stopGracefully(child, { graceMs: 2000 });
+    },
+    30_000,
+  );
+
+  itFfmpeg(
+    'WITHOUT zerolatency the same source reports nothing — the defect',
+    async () => {
+      // The mutation, run as a test rather than done by hand: drop the one flag
+      // and readiness must fail. Without this the test above passes whether or
+      // not the fix is present, which is how the original bug survived.
+      const child = spawnStillFfmpeg(path.join(tmp, 'laggy.mp4'), { tune: false });
+      await expect(waitForFfmpegFrames(child, () => '', { timeoutMs: 6000 })).rejects.toThrow(
+        /no frames/i,
+      );
+      await stopGracefully(child, { graceMs: 2000 });
+    },
+    30_000,
+  );
+
+  itFfmpeg(
+    'reads the LATEST frame count, not the first',
+    async () => {
+      // ffmpeg's opening progress block is always `frame=0`. A matcher that
+      // reads the first occurrence in a growing buffer keeps returning that zero
+      // for ever, so readiness never fires however many frames arrive.
+      const child = spawnStillFfmpeg(path.join(tmp, 'latest.mp4'));
+      await expect(
+        waitForFfmpegFrames(child, () => '', { timeoutMs: 15_000 }),
+      ).resolves.toBeUndefined();
+      await stopGracefully(child, { graceMs: 2000 });
+    },
+    30_000,
+  );
+
+  itFfmpeg(
+    'a dead ffmpeg is reported as a death, not a timeout',
+    async () => {
+      // The distinction matters to whoever reads the failure: "exited with 1"
+      // points at the command, "reported no frames" points at the device.
+      const child = spawn(
+        FFMPEG,
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-i',
+          'http://127.0.0.1:1/nope',
+          path.join(tmp, 'dead.mp4'),
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      await expect(waitForFfmpegFrames(child, () => 'boom', { timeoutMs: 15_000 })).rejects.toThrow(
+        /exited with/,
+      );
+    },
+    30_000,
+  );
+
+  test('a recorder that died before we listened is still a death', async () => {
+    const child = spawn(process.execPath, ['-e', 'process.exit(7)'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    await new Promise((r) => child.once('exit', r));
+    await expect(waitForFfmpegFrames(child, () => 'boom', { timeoutMs: 3000 })).rejects.toThrow(
+      /exited with 7/,
+    );
+  });
+});
+
+describe('ffmpeg output buffering', () => {
+  test('the mp4 is fragmented, so a truncated recording still plays', () => {
+    // +empty_moov writes a playable header up front and +frag_keyframe closes a
+    // fragment per keyframe. Without them the index is written only at
+    // finalize, so a recorder killed mid-walk leaves an unplayable file --
+    // which is the one moment the footage matters most.
+    expect(ffmpegMjpegArgs({ file: '/tmp/x.mp4' })).toEqual(
+      expect.arrayContaining(['-movflags', '+frag_keyframe+empty_moov']),
+    );
+  });
+
+  test('encoding is low-latency, so a still screen still produces frames', () => {
+    // x264's ~40-frame lookahead means a settled screen emits nothing for up
+    // to a minute. Measured on a real-time 1fps source: default tuning never
+    // produced a frame within 8s; zerolatency produced one in 555ms.
+    expect(ffmpegMjpegArgs({ file: '/tmp/x.mp4' })).toEqual(
+      expect.arrayContaining(['-tune', 'zerolatency']),
+    );
+  });
+
+  test('the progress channel is enabled, because readiness depends on it', () => {
+    expect(ffmpegMjpegArgs({ file: '/tmp/x.mp4' })).toEqual(
+      expect.arrayContaining(['-progress', 'pipe:1']),
+    );
   });
 });
 

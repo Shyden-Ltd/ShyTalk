@@ -220,8 +220,44 @@ function ffmpegMjpegArgs({ file, port = DEFAULT_MJPEG_PORT, fps = DEFAULT_RECORD
     `http://localhost:${port}`,
     '-vcodec',
     'h264',
+    // Low-latency encoding, and the ROOT CAUSE of the recorder appearing to
+    // hang on a settled screen.
+    //
+    // x264 buffers roughly 40 frames of lookahead before it emits anything. A
+    // phone sitting still sends very few frames, so those 40 can take a
+    // MINUTE to accumulate — during which ffmpeg is alive and correct, the
+    // file holds only its 48-byte header, and `frame=` reports 0. Measured on
+    // a real-time 1fps source: with default tuning the first frame never
+    // arrived within 8s; with `zerolatency` it arrived in 555ms.
+    //
+    // That is why recording looked healthy in every probe and failed the
+    // moment the app started working — a busy home screen filled the lookahead,
+    // a settled sign-in screen did not. A recorder that only works while
+    // something is happening cannot record a screen that hangs, which is
+    // exactly the failure worth filming.
+    '-tune',
+    'zerolatency',
     '-pix_fmt',
     'yuv420p',
+    // Fragmented output, so bytes reach the disk CONTINUOUSLY.
+    //
+    // A plain mp4 muxer buffers samples and writes the index at finalize, so
+    // the file can sit at 48 bytes for 50 SECONDS while ffmpeg is alive and
+    // decoding happily -- measured on a static iOS sign-in screen. Readiness
+    // polls the file, so recording appeared to work only when the screen had
+    // enough motion to force an early flush. It therefore started failing at
+    // the exact moment the app started WORKING: a busy home screen flushed, a
+    // settled sign-in screen did not.
+    //
+    // `+empty_moov` writes a playable header immediately and `+frag_keyframe`
+    // closes a fragment on every keyframe. The happy side effect is that the
+    // file stays playable even if the recorder dies without finalising.
+    '-movflags',
+    '+frag_keyframe+empty_moov',
+    // ffmpeg's own progress channel, machine-readable and flushed per update.
+    // This is what readiness reads, rather than the file: see waitForFfmpegFrames.
+    '-progress',
+    'pipe:1',
     // Constant frame rate, stated explicitly. Measured on this setup over a
     // 10.22s capture: with `-fps_mode cfr` the file came out 10.00s; left to
     // ffmpeg's default mode it dropped to 9.93s, and an earlier run lost a
@@ -475,11 +511,9 @@ function iosRecorder({ device, file, port, fps }) {
         stderr += d.toString();
       });
 
-      // ffmpeg writes the container header once the first frames arrive.
-      // Waiting for the file to gain bytes proves the STREAM is flowing --
-      // an ffmpeg that started and immediately failed to connect exits with
-      // an empty file, and starting the walk anyway would waste the run.
-      await waitForGrowth(file, child, () => stderr);
+      // Frames, reported by ffmpeg itself. NOT the file -- on a still screen
+      // the mp4 stays at 48 bytes for a minute while ffmpeg encodes happily.
+      await waitForFfmpegFrames(child, () => stderr);
     },
     async stop() {
       if (!child) return null;
@@ -491,6 +525,80 @@ function iosRecorder({ device, file, port, fps }) {
       return file;
     },
   };
+}
+
+/**
+ * Resolve once ffmpeg reports it has actually encoded a frame.
+ *
+ * The file is the WRONG thing to watch here. On a still screen the recording
+ * sat at 48 bytes — just the `ftyp` box — for FIFTY SECONDS while ffmpeg was
+ * alive and decoding, then jumped to 234KB the instant it was signalled: at a
+ * near-zero bitrate nothing fills ffmpeg's IO buffer, so nothing reaches the
+ * disk. Readiness that polls the file therefore succeeds only when the screen
+ * MOVES, which is why this looked healthy in every probe and then failed the
+ * moment the app started working: a busy home screen flushed, a settled
+ * sign-in screen did not. A recorder that works only while something is
+ * happening is precisely useless for recording a screen that hangs.
+ *
+ * `-progress pipe:1` is ffmpeg's own machine-readable channel, flushed on each
+ * update — measured here reporting its first frame in 621ms on a deliberately
+ * minimal source. It answers the actual question, "has the encoder received
+ * anything", without depending on buffering at all.
+ *
+ * scrcpy has no equivalent channel, so it keeps `waitForGrowth`. The RULE is
+ * the same for both — wait for evidence frames are arriving — but the best
+ * available evidence differs by tool, and forcing one mechanism onto both is
+ * what produced this bug.
+ *
+ * @param {import('node:child_process').ChildProcess} child
+ * @param {() => string} readStderr
+ * @param {{timeoutMs?: number}} [o]
+ * @returns {Promise<void>}
+ */
+function waitForFfmpegFrames(child, readStderr, { timeoutMs = 30_000 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return reject(
+        new Error(
+          `ffmpeg exited with ${child.exitCode ?? child.signalCode} before recording:\n` +
+            readStderr(),
+        ),
+      );
+    }
+    let seen = '';
+    const finish = (settle, arg) => {
+      clearTimeout(timer);
+      child.stdout.off('data', onData);
+      child.off('exit', onExit);
+      settle(arg);
+    };
+    const onData = (d) => {
+      seen += d.toString();
+      // The LAST report, not the first. ffmpeg's opening progress block says
+      // `frame=0`, and a plain `.match()` against an ever-growing buffer keeps
+      // returning that first zero however many frames arrive after it -- so
+      // readiness never fires on a slow stream. It only appeared to work
+      // against a source fast enough to report a large count in its very first
+      // block, which is the same "too generous a fixture" mistake that hid the
+      // buffering problem this function exists to solve.
+      const counts = [...seen.matchAll(/frame=\s*(\d+)/g)];
+      const latest = counts.length ? Number(counts[counts.length - 1][1]) : 0;
+      if (latest > 0) finish(resolve);
+    };
+    const onExit = (code) =>
+      finish(reject, new Error(`ffmpeg exited with ${code} before recording:\n${readStderr()}`));
+    const timer = setTimeout(
+      () =>
+        finish(
+          reject,
+          new Error(`ffmpeg reported no frames within ${timeoutMs}ms:\n${readStderr()}`),
+        ),
+      timeoutMs,
+    );
+    if (typeof timer.unref === 'function') timer.unref();
+    child.stdout.on('data', onData);
+    child.once('exit', onExit);
+  });
 }
 
 /**
@@ -570,6 +678,7 @@ module.exports = {
   desiredStayOn,
   STAY_ON_USB,
   waitForGrowth,
+  waitForFfmpegFrames,
   BINARY_SEARCH_PATHS,
   RECORDING_STOP_SIGNAL,
   DEFAULT_GRACE_MS,

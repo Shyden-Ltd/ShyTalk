@@ -328,11 +328,30 @@ class IosDevice {
     ]);
   }
 
-  forceStop() {
-    // Best-effort: devicectl has no "force stop", so the session terminates the
-    // app instead. A failure here must not end the run — the next launch brings
-    // it to the front either way.
-    this._post('/appium/device/terminate_app', { bundleId: this.bundleId }).catch(() => {});
+  /**
+   * Stop the app, and WAIT for it to be stopped.
+   *
+   * devicectl has no "force stop", so the Appium session terminates the app
+   * instead — and that is an HTTP round trip, where Android's
+   * `adb shell am force-stop` is synchronous. Firing it without awaiting made
+   * the terminate land AFTER the `launch()` on the next line, killing the app
+   * that had just been brought up and leaving the phone on the iOS Home
+   * screen. A/B tested on the device, 2/2: no gap → home screen, 2s gap → app
+   * in front.
+   *
+   * The journey then reported "SignIn or Home not reached" — a product that
+   * would not load — when the driver had shot it in the back.
+   *
+   * Still best-effort: a terminate that fails (the app was not running) must
+   * not end a run, because the next launch brings it to the front either way.
+   * What changed is that the failure is now awaited rather than raced.
+   */
+  async forceStop() {
+    try {
+      await this._post('/appium/device/terminate_app', { bundleId: this.bundleId });
+    } catch (_e) {
+      /* already stopped, or no session — the next launch fixes it either way */
+    }
   }
 
   async screencap(absPath) {

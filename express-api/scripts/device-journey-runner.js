@@ -232,7 +232,11 @@ class Device {
     }
   }
 
-  forceStop(pkg) {
+  // `async` even though `am force-stop` is synchronous, so that ONE method name
+  // means one thing on both backends. While only iOS was awaitable, `await
+  // device.forceStop()` was load-bearing on one platform and decoration on the
+  // other — and shared journey code cannot tell which it is looking at.
+  async forceStop(pkg) {
     try {
       this.shell(`am force-stop ${pkg}`);
     } catch (_e) {
@@ -820,7 +824,7 @@ async function ensureAtSignIn(device, pkg) {
     await signOutFlow(device);
     return;
   }
-  device.forceStop(pkg);
+  await device.forceStop(pkg);
   device.launch(pkg);
   await sleep(1500);
   nodes = await settle(device, 45000);
@@ -1614,7 +1618,7 @@ const J38 = {
       'The same problem is added to the request already open',
       async () => {
         // Back to a fresh form the way somebody would: leave, and come in again.
-        device.forceStop(pkg);
+        await device.forceStop(pkg);
         device.launch(pkg);
         await openSupport();
 
@@ -1749,7 +1753,7 @@ function buildJourneys(ctx) {
         });
       }
       await reporter.step(device, `Launch app`, async () => {
-        device.forceStop(ctx.pkg);
+        await device.forceStop(ctx.pkg);
         device.launch(ctx.pkg);
         await sleep(2500);
         return 'launcher intent sent';
