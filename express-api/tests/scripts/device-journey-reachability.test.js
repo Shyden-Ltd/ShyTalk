@@ -170,6 +170,48 @@ describe('Compose semantics siblings are not occluders', () => {
   }, 15000);
 });
 
+/**
+ * The iOS false positives, from the real device tree.
+ *
+ * The broad rule blocked EVERY bottom-nav tab, so no iOS journey could navigate
+ * past Home. Thirteen id-bearing controls on a settled Home screen were flagged,
+ * in two classes — and neither coverer absorbs a touch.
+ */
+describe('iOS layout layers are not occluders', () => {
+  /**
+   * Class A — a child that overhangs its parent by ONE point.
+   *
+   * `main_profileTab` is [285,798][420,878]; its caption container is
+   * [328,830][377,879]. A containment test needs `879 <= 878`, which is false
+   * by a single point, so the child was not recognised as a child and was then
+   * found to hold the parent's centre.
+   */
+  test('a tab is not occluded by its own caption container', () => {
+    const tab = boxed({ id: 'main_profileTab', cls: 'XCUIElementTypeButton' }, 285, 798, 420, 878);
+    const caption = boxed({ cls: 'XCUIElementTypeOther' }, 328, 830, 377, 879);
+    expect(occluderOf([tab, caption], tab)).toBeNull();
+  });
+
+  /**
+   * Class B — a full-screen transparent layer. Empty, unnamed,
+   * `accessible="false"`, and `visible="true"` — so filtering occluders on
+   * `visible` would not have cleared it either.
+   */
+  test('a full-screen transparent layer does not occlude what is under it', () => {
+    const title = boxed({ id: 'rooms_title', cls: 'XCUIElementTypeStaticText' }, 20, 60, 200, 100);
+    const layer = boxed({ cls: 'XCUIElementTypeOther' }, 0, 0, 420, 912);
+    expect(occluderOf([title, layer], title)).toBeNull();
+  });
+
+  test('but a real keyboard over the same control still counts', () => {
+    // The narrowing must not cost the detection it exists for.
+    const send = boxed({ id: 'support_send' }, 40, 620, 380, 700);
+    const layer = boxed({ cls: 'XCUIElementTypeOther' }, 0, 0, 420, 912);
+    const keyboard = boxed({ cls: 'XCUIElementTypeKeyboard' }, 0, 609, 420, 854);
+    expect(occluderOf([send, layer, keyboard], send)?.cls).toBe('XCUIElementTypeKeyboard');
+  });
+});
+
 describe('looksLikeSystemOverlay', () => {
   test.each([
     ['XCUIElementTypeKeyboard', ''],
@@ -199,10 +241,18 @@ describe('assertReachable', () => {
     expect(() => assertReachable(nodes, send, '#support_send')).toThrow(/#support_send/);
   });
 
-  test('throws for a control XCUITest itself reports as not visible', () => {
-    // Parsed all along, read by nothing.
-    const hidden = boxed({ id: 'support_send', visible: false }, 40, 300, 380, 380);
-    expect(() => assertReachable([hidden], hidden, '#support_send')).toThrow(/not visible/i);
+  test("does NOT judge a control on XCUITest's `visible` flag", () => {
+    // A reversal, forced by the device. This guard did throw on
+    // `visible === false`, on the strength of the attribute's name. But on a
+    // plain, settled Home screen the tab captions `Rooms`, `Messages` and
+    // `Profile` all report `visible="false"` while rendered in front of you —
+    // ShyTalk draws through Compose, so the accessibility snapshot's idea of
+    // visible does not track what is painted.
+    //
+    // A guard that fires on plainly-visible controls reddens healthy walks,
+    // gets disabled, and then catches nothing at all.
+    const flagged = boxed({ id: 'main_roomsTab', visible: false }, 40, 300, 380, 380);
+    expect(() => assertReachable([flagged], flagged, '#main_roomsTab')).not.toThrow();
   });
 
   test('passes for an ordinary, reachable control', () => {

@@ -22,6 +22,8 @@
  */
 
 const { advanceUntil, byId } = require('../../scripts/device-journey-runner');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const nodeXml = (attrs) =>
   `<node ${Object.entries(attrs)
@@ -115,4 +117,49 @@ describe('advanceUntil clears overlays before declaring arrival', () => {
       taps: 0,
     });
   }, 20000);
+});
+
+/**
+ * The runner must hand the device session back.
+ *
+ * Nothing ever did. `IosDevice.quit()` existed and was called from nowhere, so
+ * every run abandoned its Appium session to die of `newCommandTimeout` five
+ * minutes later. Two runs inside that window collide — which is how a
+ * WebDriverAgent "failed to initialize" took out a run that had nothing wrong
+ * with it, and cost a whole diagnostic cycle to attribute correctly.
+ *
+ * A source guard because the teardown lives in `main()`, past device and
+ * Firestore setup that cannot be entered from a test.
+ */
+describe('the run closes the device session', () => {
+  const src = fs.readFileSync(
+    path.resolve(__dirname, '../../scripts/device-journey-runner.js'),
+    'utf8',
+  );
+  const code = src
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+    .join('\n');
+
+  test('quit is called, and awaited', () => {
+    expect({ quits: /await device\.quit\(\)/.test(code) }).toEqual({ quits: true });
+  });
+
+  test('it happens in the finally, so a failed walk still hands the session back', () => {
+    // A run that throws is exactly the one that leaves a session behind, and
+    // exactly the one somebody re-runs immediately.
+    const tail = code.slice(code.lastIndexOf('} finally {'));
+    expect({ inFinally: /await device\.quit\(\)/.test(tail) }).toEqual({ inFinally: true });
+  });
+
+  test('a teardown failure cannot change the verdict', () => {
+    // The walk has already finished. Throwing here would turn a green run red
+    // for something that happened after the last assertion.
+    const tail = code.slice(code.lastIndexOf('} finally {'));
+    const at = tail.indexOf('await device.quit()');
+    const around = tail.slice(Math.max(0, at - 200), at + 200);
+    expect({ guarded: /try\s*\{/.test(around) && /catch\s*\(/.test(around) }).toEqual({
+      guarded: true,
+    });
+  });
 });

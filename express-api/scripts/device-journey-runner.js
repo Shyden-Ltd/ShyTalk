@@ -669,11 +669,17 @@ function occluderOf(nodes, target) {
  * @param {string} label
  */
 function assertReachable(nodes, target, label) {
-  // XCUITest's own word for on-screen. Parsed since the driver was written and
-  // read by nothing until now.
-  if (target?.visible === false) {
-    throw new Error(`${label} is present but not visible — nothing could have tapped it`);
-  }
+  // XCUITest's `visible` is NOT consulted, and that is a deliberate reversal.
+  //
+  // It was added here on the strength of its own name and a docstring that
+  // called it "XCUITest's own word for on-screen". The device disagrees: on a
+  // plain, settled Home screen the tab captions `Rooms`, `Messages` and
+  // `Profile` all report `visible="false"` while rendered in front of you.
+  // ShyTalk draws through Compose, so the accessibility snapshot's idea of
+  // visible does not track what is painted.
+  //
+  // A guard that fires on plainly-visible controls is worse than no guard: it
+  // reddens healthy walks, gets disabled, and then catches nothing at all.
   const over = occluderOf(nodes, target);
   if (over) {
     const name = over.cls || over.id || over.text || over.desc || '(unnamed)';
@@ -2251,6 +2257,24 @@ async function main() {
         }
       } catch (e) {
         console.log(`  (warn) screen recording could not be saved: ${e.message}`);
+      }
+    }
+
+    // Hand the device session back.
+    //
+    // Nothing ever did. `IosDevice.quit()` existed and was called from nowhere,
+    // so every run abandoned its Appium session to die of `newCommandTimeout`
+    // five minutes later — and two runs inside that window collide, which is
+    // how a WebDriverAgent "failed to initialize" took out a run that had
+    // nothing wrong with it.
+    //
+    // Best-effort and last: a teardown failure must not change the verdict of a
+    // walk that has already finished.
+    if (typeof device.quit === 'function') {
+      try {
+        await device.quit();
+      } catch (e) {
+        console.log(`  (warn) could not close the device session: ${e.message}`);
       }
     }
   }
