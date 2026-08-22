@@ -977,7 +977,9 @@
     <string name="support_form_error_too_long">Your message is too long. Please shorten it and try again.</string>
     <string name="support_form_error_generic">We could not send your message. Please check your connection and try again.</string>
     <string name="support_form_error_attachment_failed">We could not upload that file. You can send your message without it.</string>
-    <string name="support_form_error_attachment_too_large">That file is too large. Please choose one under 25 MB.</string>
+    <string name="support_form_error_image_too_large">That image is too large. Please choose one under 5 MB.</string>
+    <string name="support_form_error_video_too_long">That video is too long. Please choose one under 30 seconds.</string>
+    <string name="support_form_error_video_unreadable">We could not check how long that video is. Please try a different one.</string>
     <string name="support_form_error_attachment_too_many">You can attach up to 10 files.</string>
     <string name="support_form_error_attachment_type">That kind of file cannot be attached. Please choose an image or a video.</string>
     <string name="support_category_label">What is this about?</string>
@@ -987,6 +989,7 @@
     <string name="support_category_safety">Safety &amp; another user</string>
     <string name="support_category_bug">Something is broken</string>
     <string name="support_category_other">Something else</string>
+    <string name="support_attachment_limits">Up to 10 files. Images up to 5 MB, videos up to 30 seconds.</string>
     <string name="support_attachments_label">Add a screenshot or video</string>
     <string name="support_attachment_add">Add file</string>
     <string name="support_attachment_remove">Remove</string>

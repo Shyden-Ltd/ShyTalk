@@ -1667,7 +1667,6 @@
     <string name="support_form_error_too_long">ข้อความของคุณยาวเกินไป กรุณาย่อแล้วลองใหม่</string>
     <string name="support_form_error_generic">เราไม่สามารถส่งข้อความของคุณได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่</string>
     <string name="support_form_error_attachment_failed">เราไม่สามารถอัปโหลดไฟล์นั้นได้ คุณสามารถส่งข้อความโดยไม่มีไฟล์ได้</string>
-    <string name="support_form_error_attachment_too_large">ไฟล์นี้ใหญ่เกินไป กรุณาเลือกไฟล์ที่เล็กกว่า 25 MB</string>
     <string name="support_form_error_attachment_too_many">คุณแนบไฟล์ได้สูงสุด 10 ไฟล์</string>
     <string name="support_form_error_attachment_type">ไม่สามารถแนบไฟล์ประเภทนี้ได้ กรุณาเลือกรูปภาพหรือวิดีโอ</string>
     <string name="support_category_label">เรื่องนี้เกี่ยวกับอะไร</string>
@@ -1777,4 +1776,12 @@
     <string name="support_open_requests_many">คุณมีคำขอที่เปิดอยู่ %1$d รายการแล้ว</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">และอีก %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">รูปภาพนั้นใหญ่เกินไป โปรดเลือกหนึ่งรายการที่มีขนาดต่ำกว่า 5 MB</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">วิดีโอนั้นยาวเกินไป โปรดเลือกหนึ่งอันที่ยาวน้อยกว่า 30 วินาที</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">เราไม่สามารถตรวจสอบได้ว่าวิดีโอนั้นยาวแค่ไหน โปรดลองอันอื่น</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">มากถึง 10 ไฟล์ รูปภาพสูงสุด 5 MB วิดีโอสูงสุด 30 วินาที</string>
 </resources>

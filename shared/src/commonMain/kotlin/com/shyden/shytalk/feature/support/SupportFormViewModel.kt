@@ -12,12 +12,14 @@ import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.support_form_error_attachment_failed
-import com.shyden.shytalk.resources.support_form_error_attachment_too_large
 import com.shyden.shytalk.resources.support_form_error_attachment_too_many
 import com.shyden.shytalk.resources.support_form_error_attachment_type
 import com.shyden.shytalk.resources.support_form_error_empty
 import com.shyden.shytalk.resources.support_form_error_generic
+import com.shyden.shytalk.resources.support_form_error_image_too_large
 import com.shyden.shytalk.resources.support_form_error_too_long
+import com.shyden.shytalk.resources.support_form_error_video_too_long
+import com.shyden.shytalk.resources.support_form_error_video_unreadable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,13 +35,25 @@ const val SUPPORT_MESSAGE_MAX_LENGTH = 2000
 const val MAX_ATTACHMENTS = 10
 
 /**
- * Checked BEFORE the bytes leave the device — SHY-0387.
+ * How large a still image may be — SHY-0387, corrected by the operator on
+ * 2026-08-22 (was one flat 25 MB cap over images AND video).
  *
- * The alternative is a video that uploads for two minutes on a phone connection
- * and then fails, which costs the person their data allowance and tells them
- * nothing they could have acted on.
+ * Checked BEFORE the bytes leave the device. The alternative is a file that
+ * uploads for two minutes on a phone connection and then fails, which costs the
+ * person their data allowance and tells them nothing they could have acted on.
  */
-const val MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+const val MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+/**
+ * How LONG a video may be. Duration, deliberately — not bytes.
+ *
+ * A 30-second clip from a modern phone camera can be 100 MB; a three-minute
+ * screen recording can be 4 MB. Bounding video by size therefore refuses
+ * exactly the wrong files: it turns away the short, useful clip and waves
+ * through the long one nobody will watch. The operator asked for 30 seconds,
+ * which is a statement about the ADMIN's time, not about storage.
+ */
+const val MAX_VIDEO_DURATION_MS = 30_000L
 
 /**
  * How many open requests the FORM lists before it stops naming them.
@@ -189,14 +203,19 @@ class SupportFormViewModel(
         displayName: String,
         contentType: AttachmentType,
         bytes: ByteArray,
+        durationMs: Long? = null,
     ) {
         val state = _uiState.value
-        if (bytes.size > MAX_ATTACHMENT_BYTES) {
-            _uiState.update { it.copy(error = UiText.res(Res.string.support_form_error_attachment_too_large)) }
-            return
-        }
+        // The count is checked FIRST: with ten already attached nothing can be
+        // added, whatever is wrong with the eleventh file, and "you can attach
+        // up to 10 files" is the only message they can act on.
         if (state.attachments.size >= MAX_ATTACHMENTS) {
             _uiState.update { it.copy(error = UiText.res(Res.string.support_form_error_attachment_too_many)) }
+            return
+        }
+        refusalFor(contentType, bytes, durationMs)?.let { reason ->
+            logW(TAG, "Attachment refused: ${contentType.wireValue}, ${bytes.size}B, ${durationMs}ms")
+            _uiState.update { it.copy(error = reason) }
             return
         }
 
@@ -228,6 +247,37 @@ class SupportFormViewModel(
             }
         }
     }
+
+    /**
+     * Why this file cannot be attached, or null if it can — SHY-0387.
+     *
+     * Images are bounded by SIZE, video by DURATION. Every refusal names the
+     * actual limit, because "that file cannot be attached" leaves somebody
+     * guessing which of several rules they broke.
+     */
+    private fun refusalFor(
+        contentType: AttachmentType,
+        bytes: ByteArray,
+        durationMs: Long?,
+    ): UiText? =
+        when {
+            !contentType.isVideo ->
+                if (bytes.size > MAX_IMAGE_BYTES) {
+                    UiText.res(Res.string.support_form_error_image_too_large)
+                } else {
+                    null
+                }
+
+            // Unknown duration means the rule CANNOT be honoured. Refused with
+            // its own sentence rather than borrowing the too-long one: telling
+            // somebody a video is too long when it was never measured is a lie
+            // they cannot act on.
+            durationMs == null -> UiText.res(Res.string.support_form_error_video_unreadable)
+
+            durationMs > MAX_VIDEO_DURATION_MS -> UiText.res(Res.string.support_form_error_video_too_long)
+
+            else -> null
+        }
 
     /**
      * The person picked a file the server will not accept.

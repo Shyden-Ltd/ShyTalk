@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">Twoja wiadomość jest za długa. Skróć ją i spróbuj ponownie.</string>
     <string name="support_form_error_generic">Nie udało się wysłać wiadomości. Sprawdź połączenie i spróbuj ponownie.</string>
     <string name="support_form_error_attachment_failed">Nie udało się przesłać tego pliku. Możesz wysłać wiadomość bez niego.</string>
-    <string name="support_form_error_attachment_too_large">Ten plik jest za duży. Wybierz plik mniejszy niż 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Możesz dołączyć maksymalnie 10 plików.</string>
     <string name="support_form_error_attachment_type">Tego rodzaju pliku nie można dołączyć. Wybierz obraz lub film.</string>
     <string name="support_category_label">Czego dotyczy sprawa?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">Masz już otwarte %1$d żądań.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">i %1$d więcej</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Ten obraz jest za duży. Wybierz plik poniżej 5 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Ten film jest za długi. Wybierz jeden poniżej 30 sekund.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Nie mogliśmy sprawdzić, jak długi jest ten film. Spróbuj innego.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Do 10 plików. Obrazy do 5 MB, filmy do 30 sekund.</string>
 </resources>

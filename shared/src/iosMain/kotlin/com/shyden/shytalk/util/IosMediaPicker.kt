@@ -5,6 +5,14 @@ package com.shyden.shytalk.util
 import com.shyden.shytalk.core.platform.PickedMedia
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logW
+import platform.AVFoundation.AVURLAsset
+import platform.AVFoundation.duration
+import platform.CoreMedia.CMTimeGetSeconds
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSTemporaryDirectory
+import platform.Foundation.NSURL
+import platform.Foundation.NSUUID
+import platform.Foundation.writeToFile
 import platform.PhotosUI.PHPickerConfiguration
 import platform.PhotosUI.PHPickerFilter
 import platform.PhotosUI.PHPickerResult
@@ -98,6 +106,7 @@ object IosMediaPicker {
                                 data != null ->
                                     picked.add(
                                         PickedMedia(
+                                            durationMs = videoDurationMs(data),
                                             bytes = nsDataToByteArray(data),
                                             // QuickTime is what the camera roll usually holds;
                                             // both are in the server's allowlist.
@@ -153,5 +162,44 @@ object IosMediaPicker {
                 }
             }
         }
+    }
+}
+
+/**
+ * How long a video runs, in milliseconds, or null if it cannot be measured.
+ *
+ * `PHPickerResult` hands back DATA, not a file, and `AVURLAsset` needs a URL —
+ * so the bytes are written to a temporary file just long enough to be measured,
+ * then removed. Reading the container by hand to recover a number AVFoundation
+ * already knows would be absurd, and getting it wrong would let an over-long
+ * video through.
+ *
+ * Null is a real answer the caller acts on, not a failure swallowed: the
+ * 30-second rule cannot be honoured on a guess, so an unmeasurable video is
+ * refused and the person is told why.
+ */
+private fun videoDurationMs(data: platform.Foundation.NSData): Long? {
+    val path = NSTemporaryDirectory() + "shytalk-duration-" + NSUUID().UUIDString + ".mov"
+    return try {
+        if (!data.writeToFile(path, true)) {
+            logW(TAG, "Could not write the video out to measure it")
+            return null
+        }
+        val seconds = CMTimeGetSeconds(AVURLAsset(NSURL.fileURLWithPath(path), null).duration)
+        // NaN is what AVFoundation answers for a file it could not parse, and
+        // zero for one with no track worth playing. Neither is a duration.
+        if (seconds.isNaN() || seconds <= 0.0) {
+            logW(TAG, "AVFoundation gave no usable duration")
+            null
+        } else {
+            (seconds * 1000.0).toLong()
+        }
+    } catch (e: Exception) {
+        logW(TAG, "Could not measure the video: ${e.message}")
+        null
+    } finally {
+        // The temp file outlives the measurement otherwise, and a ten-video
+        // pick would leave ten copies in the container.
+        NSFileManager.defaultManager.removeItemAtPath(path, null)
     }
 }

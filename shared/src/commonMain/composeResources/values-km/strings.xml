@@ -1753,7 +1753,6 @@
     <string name="support_form_error_too_long">សាររបស់អ្នកវែងពេក។ សូមកាត់បន្ថយ ហើយព្យាយាមម្តងទៀត។</string>
     <string name="support_form_error_generic">យើងមិនអាចផ្ញើសាររបស់អ្នកបានទេ។ សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្តងទៀត។</string>
     <string name="support_form_error_attachment_failed">យើងមិនអាចផ្ទុកឯកសារនោះបានទេ។ អ្នកអាចផ្ញើសាររបស់អ្នកដោយគ្មានវា។</string>
-    <string name="support_form_error_attachment_too_large">ឯកសារនេះធំពេក។ សូមជ្រើសរើសឯកសារតិចជាង 25 MB។</string>
     <string name="support_form_error_attachment_too_many">អ្នកអាចភ្ជាប់ឯកសារបានច្រើនបំផុត 10។</string>
     <string name="support_form_error_attachment_type">ប្រភេទឯកសារនេះមិនអាចភ្ជាប់បានទេ។ សូមជ្រើសរើសរូបភាព ឬវីដេអូ។</string>
     <string name="support_category_label">នេះអំពីអ្វី?</string>
@@ -1864,4 +1863,12 @@
     <string name="support_open_requests_many">អ្នកបានបើកសំណើ %1$d រួចហើយ។</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">និង %1$d ទៀត។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">រូបភាពនោះធំពេក។ សូមជ្រើសរើសមួយក្រោម 5 MB។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">វីដេអូនោះវែងពេក។ សូមជ្រើសរើសមួយក្រោម 30 វិនាទី។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">យើងមិនអាចពិនិត្យមើលថាតើវីដេអូនោះមានរយៈពេលប៉ុន្មាននោះទេ។ សូមសាកល្បងមួយផ្សេងទៀត។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">ឯកសាររហូតដល់ 10 ។ រូបភាពរហូតដល់ 5 MB វីដេអូរហូតដល់ 30 វិនាទី។</string>
 </resources>

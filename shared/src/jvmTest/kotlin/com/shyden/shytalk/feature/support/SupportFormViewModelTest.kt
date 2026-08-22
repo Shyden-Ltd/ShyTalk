@@ -275,19 +275,13 @@ class SupportFormViewModelTest {
             assertEquals(listOf("support-tickets/1/b.png"), repo.raiseCalls[0].attachments)
         }
 
-    @Test
-    fun `a file too large to send is refused before any upload starts`() =
-        runTest {
-            viewModel.attach("huge.mp4", AttachmentType.Mp4, ByteArray(MAX_ATTACHMENT_BYTES + 1))
-            advanceUntilIdle()
-
-            assertTrue(repo.uploadedBytes.isEmpty(), "the bytes must never leave the device")
-            assertNotNull(viewModel.uiState.value.error)
-            assertTrue(
-                viewModel.uiState.value.attachments
-                    .isEmpty(),
-            )
-        }
+    /**
+     * Superseded 2026-08-22. This asserted one flat 25 MB cap over a VIDEO,
+     * which is the shape the operator corrected: video is bounded by DURATION
+     * now, and 25 MB was never a limit anybody chose. The behaviour it was
+     * really protecting — nothing leaves the device before a refusal — is
+     * asserted per-kind in the limit tests above.
+     */
 
     @Test
     fun `a sent ticket's attachments do not follow them back`() =
@@ -411,6 +405,133 @@ class SupportFormViewModelTest {
             assertEquals(2, repo.raiseCalls.size)
             assertEquals("Retry me", repo.raiseCalls[1].message)
             assertTrue(viewModel.uiState.value.submitted)
+        }
+
+    // ─── SHY-0387 attachment limits, corrected by the operator 2026-08-22 ───
+
+    /**
+     * The limits this page shipped with were wrong, and one did not exist:
+     * a single flat 25 MB byte cap covered images AND video, and nothing
+     * checked how LONG a video was.
+     *
+     * The operator's numbers: 10 files, images to 5 MB, video to 30 SECONDS.
+     * Duration, not bytes, because a 30-second clip from a good camera can be
+     * 100 MB while a three-minute screen recording can be 4 MB — bounding video
+     * by size refuses exactly the wrong files. The limit is a statement about
+     * the ADMIN's time, not about storage.
+     */
+    @Test
+    fun `an image at the size limit is accepted`() =
+        runTest {
+            viewModel.attach("shot.png", AttachmentType.Png, ByteArray(MAX_IMAGE_BYTES))
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.attachments.size)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `an image over the size limit is refused before any bytes leave the device`() =
+        runTest {
+            viewModel.attach("huge.png", AttachmentType.Png, ByteArray(MAX_IMAGE_BYTES + 1))
+            advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+            assertEquals(0, repo.urlRequests, "a refused file must not even ask for an upload slot")
+            assertTrue(repo.uploadedBytes.isEmpty())
+        }
+
+    @Test
+    fun `a video at the length limit is accepted`() =
+        runTest {
+            viewModel.attach("clip.mp4", AttachmentType.Mp4, ByteArray(64), MAX_VIDEO_DURATION_MS)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.attachments.size)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `a video over the length limit is refused before any bytes leave the device`() =
+        runTest {
+            viewModel.attach("long.mp4", AttachmentType.Mp4, ByteArray(64), MAX_VIDEO_DURATION_MS + 1)
+            advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+            assertEquals(0, repo.urlRequests)
+        }
+
+    /**
+     * The whole reason the video limit is a DURATION. A short clip from a good
+     * camera is large; refusing it for its size would turn away exactly the
+     * evidence an admin most wants.
+     */
+    @Test
+    fun `a big but short video is accepted, because video is bounded by length`() =
+        runTest {
+            val hefty = ByteArray(MAX_IMAGE_BYTES * 4)
+            viewModel.attach("4k.mov", AttachmentType.QuickTime, hefty, 5_000)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.attachments.size, "size must not refuse a short video")
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    /**
+     * Unknown duration means the rule CANNOT be honoured. Refused honestly with
+     * its own sentence rather than borrowed wording: telling somebody a video is
+     * too long when we never measured it is a lie they cannot act on.
+     */
+    @Test
+    fun `a video whose length cannot be read is refused honestly`() =
+        runTest {
+            viewModel.attach("broken.mp4", AttachmentType.Mp4, ByteArray(64), null)
+            advanceUntilIdle()
+
+            assertNotNull(viewModel.uiState.value.error)
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+            assertEquals(0, repo.urlRequests)
+        }
+
+    /** An image needs no duration, and must not be refused for lacking one. */
+    @Test
+    fun `an image with no duration is fine`() =
+        runTest {
+            viewModel.attach("shot.png", AttachmentType.Png, ByteArray(16), null)
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.attachments.size)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `the eleventh file is refused`() =
+        runTest {
+            repeat(MAX_ATTACHMENTS) { i ->
+                repo.nextKeys.addLast("support-tickets/1/f$i.png")
+                viewModel.attach("f$i.png", AttachmentType.Png, ByteArray(8))
+                advanceUntilIdle()
+            }
+            assertEquals(MAX_ATTACHMENTS, viewModel.uiState.value.attachments.size)
+            val slotsUsed = repo.urlRequests
+
+            viewModel.attach("one-too-many.png", AttachmentType.Png, ByteArray(8))
+            advanceUntilIdle()
+
+            assertEquals(MAX_ATTACHMENTS, viewModel.uiState.value.attachments.size)
+            assertNotNull(viewModel.uiState.value.error)
+            assertEquals(slotsUsed, repo.urlRequests, "the refused file must not ask for a slot")
         }
 
     // ─── SHY-0396: a second request is a CHOICE, never a refusal ───
@@ -800,6 +921,9 @@ private class FakeSupportRepository : SupportRepository {
     /** Keys handed out in order, so a test can name the one it expects. */
     var nextKeys = ArrayDeque(listOf("support-tickets/1/a.png", "support-tickets/1/b.png"))
     var handleOrNull: (() -> UploadHandle?)? = null
+
+    /** Upload SLOTS requested. A refusal must not even ask for one. */
+    var urlRequests = 0
     var uploadSucceeds = true
     val uploadedBytes = mutableListOf<Int>()
 
@@ -831,6 +955,7 @@ private class FakeSupportRepository : SupportRepository {
     }
 
     override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? {
+        urlRequests++
         handleOrNull?.let { return it() }
         return UploadHandle("https://r2.example/put", nextKeys.removeFirst(), 300)
     }

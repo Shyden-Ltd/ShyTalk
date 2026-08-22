@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">Ваше сообщение слишком длинное. Сократите его и попробуйте снова.</string>
     <string name="support_form_error_generic">Не удалось отправить сообщение. Проверьте соединение и попробуйте снова.</string>
     <string name="support_form_error_attachment_failed">Не удалось загрузить этот файл. Вы можете отправить сообщение без него.</string>
-    <string name="support_form_error_attachment_too_large">Файл слишком большой. Выберите файл меньше 25 МБ.</string>
     <string name="support_form_error_attachment_too_many">Можно прикрепить не более 10 файлов.</string>
     <string name="support_form_error_attachment_type">Такой файл нельзя прикрепить. Выберите изображение или видео.</string>
     <string name="support_category_label">О чём ваш вопрос?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">У вас уже открыто %1$d запросов.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">и еще %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Это изображение слишком велико. Пожалуйста, выберите один размером менее 5 МБ.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Это видео слишком длинное. Пожалуйста, выберите один до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Мы не смогли проверить длину этого видео. Пожалуйста, попробуйте другой.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">До 10 файлов. Изображения до 5 МБ, видео до 30 секунд.</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.platform
 
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
@@ -55,16 +56,45 @@ private fun android.content.Context.readPicked(uri: Uri): PickedMedia? =
             Log.w(TAG, "Could not open $uri")
             null
         } else {
+            val contentType = contentResolver.getType(uri) ?: UNKNOWN_TYPE
             PickedMedia(
                 bytes = bytes,
-                contentType = contentResolver.getType(uri) ?: UNKNOWN_TYPE,
+                contentType = contentType,
                 displayName = displayNameOf(uri),
+                // Only asked for video. Running the retriever over a JPEG costs
+                // a file open and returns nothing useful.
+                durationMs = if (contentType.startsWith("video/")) videoDurationMs(uri) else null,
             )
         }
     } catch (e: Exception) {
         Log.w(TAG, "Could not read $uri", e)
         null
     }
+
+/**
+ * How long a video runs, in milliseconds, or null if it cannot be determined.
+ *
+ * Null is a real answer, not a failure to handle: the caller refuses a video it
+ * cannot measure, because the 30-second rule cannot be honoured on a guess.
+ * `MediaMetadataRetriever` must be released or it leaks a native handle per
+ * pick, which on a ten-file selection is ten.
+ */
+private fun android.content.Context.videoDurationMs(uri: Uri): Long? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(this, uri)
+        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not read duration of $uri", e)
+        null
+    } finally {
+        try {
+            retriever.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "MediaMetadataRetriever would not release", e)
+        }
+    }
+}
 
 /** The name the person recognises, falling back to the last path segment. */
 private fun android.content.Context.displayNameOf(uri: Uri): String =

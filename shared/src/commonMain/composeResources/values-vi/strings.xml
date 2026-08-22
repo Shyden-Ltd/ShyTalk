@@ -1669,7 +1669,6 @@
     <string name="support_form_error_too_long">Nội dung của bạn quá dài. Vui lòng rút ngắn rồi thử lại.</string>
     <string name="support_form_error_generic">Chúng tôi không thể gửi nội dung của bạn. Vui lòng kiểm tra kết nối và thử lại.</string>
     <string name="support_form_error_attachment_failed">Chúng tôi không thể tải tệp đó lên. Bạn vẫn có thể gửi nội dung mà không cần tệp.</string>
-    <string name="support_form_error_attachment_too_large">Tệp này quá lớn. Vui lòng chọn tệp dưới 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Bạn có thể đính kèm tối đa 10 tệp.</string>
     <string name="support_form_error_attachment_type">Không thể đính kèm loại tệp này. Vui lòng chọn ảnh hoặc video.</string>
     <string name="support_category_label">Vấn đề của bạn là gì?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">Bạn đã mở %1$d yêu cầu.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">và %1$d nữa</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Hình ảnh đó quá lớn. Vui lòng chọn một cái có dung lượng dưới 5 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Video đó quá dài. Vui lòng chọn một dưới 30 giây.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Chúng tôi không thể kiểm tra thời lượng của video đó. Vui lòng thử một cái khác.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Tối đa 10 tập tin. Hình ảnh lên tới 5 MB, video lên tới 30 giây.</string>
 </resources>

@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">رسالتك طويلة جدًا. يرجى اختصارها والمحاولة مرة أخرى.</string>
     <string name="support_form_error_generic">تعذر إرسال رسالتك. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</string>
     <string name="support_form_error_attachment_failed">تعذّر رفع هذا الملف. يمكنك إرسال رسالتك بدونه.</string>
-    <string name="support_form_error_attachment_too_large">هذا الملف كبير جدًا. يرجى اختيار ملف أصغر من 25 ميجابايت.</string>
     <string name="support_form_error_attachment_too_many">يمكنك إرفاق 10 ملفات كحد أقصى.</string>
     <string name="support_form_error_attachment_type">لا يمكن إرفاق هذا النوع من الملفات. يرجى اختيار صورة أو فيديو.</string>
     <string name="support_category_label">ما موضوع طلبك؟</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">لديك بالفعل %1$d طلب مفتوح.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">و%1$d أخرى</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">هذه الصورة كبيرة جدًا. الرجاء اختيار واحد أقل من 5 ميغابايت.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">هذا الفيديو طويل جدًا. يرجى اختيار واحد أقل من 30 ثانية.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">لم نتمكن من التحقق من مدة هذا الفيديو. يرجى تجربة واحدة مختلفة.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">ما يصل إلى 10 ملفات. صور يصل حجمها إلى 5 ميغابايت، ومقاطع فيديو تصل مدتها إلى 30 ثانية.</string>
 </resources>

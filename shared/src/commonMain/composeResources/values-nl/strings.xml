@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">Je bericht is te lang. Maak het korter en probeer het opnieuw.</string>
     <string name="support_form_error_generic">We konden je bericht niet verzenden. Controleer je verbinding en probeer het opnieuw.</string>
     <string name="support_form_error_attachment_failed">We konden dat bestand niet uploaden. Je kunt je bericht ook zonder versturen.</string>
-    <string name="support_form_error_attachment_too_large">Dat bestand is te groot. Kies er een van minder dan 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Je kunt maximaal 10 bestanden toevoegen.</string>
     <string name="support_form_error_attachment_type">Dit soort bestand kan niet worden toegevoegd. Kies een afbeelding of video.</string>
     <string name="support_category_label">Waar gaat het over?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">Je hebt al %1$d verzoeken openstaan.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">en %1$d meer</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Dat beeld is te groot. Kies er een van minder dan 5 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Dat filmpje is te lang. Kies er een van minder dan 30 seconden.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">We konden niet controleren hoe lang die video is. Probeer een andere.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Maximaal 10 bestanden. Afbeeldingen tot 5 MB, video's tot 30 seconden.</string>
 </resources>

@@ -95,7 +95,13 @@ describe('locale strings render as written', () => {
     // three choices, and singular/plural/overflow forms of how many are open.
     // Net 860 - 2 + 9 = 867, and every one of the 21 files agrees on it, which
     // is what proves the removals did not silently take a neighbour with them.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([867]);
+    // 867 -> 870 on 2026-08-22: SHY-0387's attachment limits, corrected by the
+    // operator. OUT: `support_form_error_attachment_too_large` ("under 25 MB"),
+    // a single flat cap over images AND video that nobody had chosen. IN: the
+    // image refusal (5 MB), the video refusal (30 seconds), the honest refusal
+    // for a video whose length could not be READ, and the limits stated up
+    // front before anybody picks a file. Net 867 - 1 + 4 = 870.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([870]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

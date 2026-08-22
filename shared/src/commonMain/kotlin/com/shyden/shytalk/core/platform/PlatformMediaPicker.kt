@@ -19,6 +19,19 @@ class PickedMedia(
     val bytes: ByteArray,
     val contentType: String,
     val displayName: String,
+    /**
+     * How long a video runs, or null for a still image AND for a video whose
+     * duration could not be read — SHY-0387's corrected limits.
+     *
+     * The platform that produced the file reports this, because only it still
+     * holds the source the duration can be read from. By the time the bytes
+     * reach the ViewModel the container is all that is left, and parsing MP4
+     * atoms by hand to recover a number the OS already knows would be absurd.
+     *
+     * Null for a video is NOT treated as "fine": the 30-second rule cannot be
+     * honoured without it, so the ViewModel refuses and says so.
+     */
+    val durationMs: Long? = null,
 )
 
 /**

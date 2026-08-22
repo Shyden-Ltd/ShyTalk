@@ -1669,7 +1669,6 @@
     <string name="support_form_error_too_long">您的信息太长，请缩短后再试。</string>
     <string name="support_form_error_generic">无法发送您的信息，请检查网络连接后重试。</string>
     <string name="support_form_error_attachment_failed">无法上传该文件。您可以不带文件发送信息。</string>
-    <string name="support_form_error_attachment_too_large">该文件太大。请选择小于 25 MB 的文件。</string>
     <string name="support_form_error_attachment_too_many">最多可附加 10 个文件。</string>
     <string name="support_form_error_attachment_type">无法附加此类文件。请选择图片或视频。</string>
     <string name="support_category_label">您想咨询什么？</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">您已打开 %1$d 个请求。</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">还有%1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">那个图片太大了。请选择一个小于 5 MB 的。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">那个视频太长了。请选择 30 秒以内的一项。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">我们无法检查该视频的长度。请尝试另一种。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">最多 10 个文件。图片最大 5 MB，视频最大 30 秒。</string>
 </resources>

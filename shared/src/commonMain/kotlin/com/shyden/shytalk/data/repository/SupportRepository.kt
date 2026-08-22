@@ -84,12 +84,21 @@ data class OpenTicketSummary(
  */
 enum class AttachmentType(
     val wireValue: String,
+    /**
+     * Whether this is moving pictures — SHY-0387's corrected limits.
+     *
+     * A property rather than a `startsWith("video/")` at each call site: an
+     * image is bounded by SIZE and a video by DURATION, so every caller has to
+     * make this distinction, and a string test repeated in three places is
+     * three chances to get it wrong.
+     */
+    val isVideo: Boolean,
 ) {
-    Jpeg("image/jpeg"),
-    Png("image/png"),
-    Webp("image/webp"),
-    Mp4("video/mp4"),
-    QuickTime("video/quicktime"),
+    Jpeg("image/jpeg", isVideo = false),
+    Png("image/png", isVideo = false),
+    Webp("image/webp", isVideo = false),
+    Mp4("video/mp4", isVideo = true),
+    QuickTime("video/quicktime", isVideo = true),
     ;
 
     companion object {

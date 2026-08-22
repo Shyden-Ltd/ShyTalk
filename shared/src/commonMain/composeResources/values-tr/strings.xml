@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">Mesajınız çok uzun. Lütfen kısaltıp tekrar deneyin.</string>
     <string name="support_form_error_generic">Mesajınızı gönderemedik. Bağlantınızı kontrol edip tekrar deneyin.</string>
     <string name="support_form_error_attachment_failed">Bu dosyayı yükleyemedik. Mesajınızı dosya olmadan gönderebilirsiniz.</string>
-    <string name="support_form_error_attachment_too_large">Bu dosya çok büyük. Lütfen 25 MB'tan küçük bir dosya seçin.</string>
     <string name="support_form_error_attachment_too_many">En fazla 10 dosya ekleyebilirsiniz.</string>
     <string name="support_form_error_attachment_type">Bu tür bir dosya eklenemez. Lütfen bir görsel veya video seçin.</string>
     <string name="support_category_label">Konu nedir?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">Zaten açık %1$d isteğiniz var.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">ve %1$d tane daha</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Bu resim çok büyük. Lütfen 5 MB'ın altındaki birini seçin.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Bu video çok uzun. Lütfen 30 saniyenin altındaki birini seçin.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Bu videonun ne kadar uzun olduğunu kontrol edemedik. Lütfen farklı bir tane deneyin.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">En fazla 10 dosya. 5 MB'a kadar resimler, 30 saniyeye kadar videolar.</string>
 </resources>

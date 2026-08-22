@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">Tu mensaje es demasiado largo. Acórtalo e inténtalo de nuevo.</string>
     <string name="support_form_error_generic">No pudimos enviar tu mensaje. Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="support_form_error_attachment_failed">No pudimos subir ese archivo. Puedes enviar tu mensaje sin él.</string>
-    <string name="support_form_error_attachment_too_large">Ese archivo es demasiado grande. Elige uno de menos de 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Puedes adjuntar hasta 10 archivos.</string>
     <string name="support_form_error_attachment_type">Ese tipo de archivo no se puede adjuntar. Elige una imagen o un vídeo.</string>
     <string name="support_category_label">¿De qué se trata?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">Ya tienes %1$d solicitudes abiertas.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">y %1$d más</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Esa imagen es demasiado grande. Elija uno de menos de 5 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Ese vídeo es demasiado largo. Elija uno de menos de 30 segundos.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">No pudimos comprobar cuánto dura ese vídeo. Pruebe con uno diferente.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Hasta 10 archivos. Imágenes de hasta 5 MB, vídeos de hasta 30 segundos.</string>
 </resources>

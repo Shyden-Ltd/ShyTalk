@@ -1668,7 +1668,6 @@
     <string name="support_form_error_too_long">आपका संदेश बहुत लंबा है। कृपया इसे छोटा करके फिर से प्रयास करें।</string>
     <string name="support_form_error_generic">हम आपका संदेश नहीं भेज सके। कृपया अपना कनेक्शन जांचें और फिर से प्रयास करें।</string>
     <string name="support_form_error_attachment_failed">हम वह फ़ाइल अपलोड नहीं कर सके। आप उसके बिना अपना संदेश भेज सकते हैं।</string>
-    <string name="support_form_error_attachment_too_large">यह फ़ाइल बहुत बड़ी है। कृपया 25 MB से छोटी फ़ाइल चुनें।</string>
     <string name="support_form_error_attachment_too_many">आप अधिकतम 10 फ़ाइलें जोड़ सकते हैं।</string>
     <string name="support_form_error_attachment_type">इस प्रकार की फ़ाइल नहीं जोड़ी जा सकती। कृपया कोई चित्र या वीडियो चुनें।</string>
     <string name="support_category_label">यह किस बारे में है?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">आपके पास पहले से ही %1$d अनुरोध खुले हैं।</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">और %1$d अधिक</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">वह छवि बहुत बड़ी है. कृपया 5 एमबी से कम का एक चुनें।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">वह वीडियो बहुत लंबा है. कृपया 30 सेकंड से कम का एक चुनें।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">हम यह जांच नहीं कर सके कि वह वीडियो कितना लंबा है। कृपया कोई दूसरा प्रयास करें.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">10 फ़ाइलों तक. 5 एमबी तक की छवियाँ, 30 सेकंड तक के वीडियो।</string>
 </resources>

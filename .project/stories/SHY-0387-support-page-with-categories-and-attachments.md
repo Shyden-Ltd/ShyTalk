@@ -243,3 +243,51 @@ successfully. It cannot be walked from here:
 
 - Supersedes SHY-0385's dialog. The plumbing beneath it — repository, typed 409
   outcome, guard, "never lose what you typed" — is unchanged.
+
+## Attachment limits — corrected 2026-08-22 (operator)
+
+The limits this story shipped were **wrong**, and one of them did not exist.
+`MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024` applied one flat byte cap to images
+AND video, and nothing anywhere checked how LONG a video was. Operator's
+numbers, given 2026-08-22:
+
+| Limit | Was | Is |
+| --- | --- | --- |
+| Files per ticket | 10 | 10 — unchanged |
+| Image size | 25 MB | **5 MB** |
+| Video length | *(not checked)* | **30 seconds**, by DURATION |
+| File types offered | photos + video | photos + video — unchanged |
+
+Note for whoever picks up [[SHY-0420]]: it records **10 MB** for images, which
+is now stale — the operator revised it to 5 MB. It is a Draft, and the
+pre-merge gate refuses edits to an existing Draft story, so it is corrected
+here rather than there.
+
+### Acceptance criteria
+
+- [ ] An image of 5 MB or less is accepted; one larger is refused.
+- [ ] A video of 30 seconds or less is accepted; a longer one is refused **by
+      duration**, so a short high-bitrate clip is not refused for its size.
+- [ ] An 11th file is refused.
+- [ ] The picker offers photos and video ONLY — no other file type is reachable.
+- [ ] Every refusal is a plain, friendly sentence naming the actual limit, in
+      the reader's language, and happens BEFORE any bytes leave the device.
+- [ ] The limits are stated on the form before anybody chooses a file.
+- [ ] A real screenshot and a real video both upload and reach the ticket.
+- [ ] An admin can view an attached image, and **play an attached video with
+      sound**.
+
+### Why duration and not bytes, for video
+
+A 30-second clip from a modern phone can be 100 MB; a 3-minute screen recording
+can be 4 MB. Bounding video by size therefore refuses exactly the wrong files —
+it turns away a short, useful clip from a good camera and waves through a long
+one that nobody will watch. The operator asked for 30 seconds, which is a
+statement about the ADMIN's time, not about storage.
+
+### Note for [[SHY-0399]]
+
+The operator asked on 2026-08-22 that reopening a closed ticket **notify the
+admin again**. SHY-0399 covers the reopen itself but says nothing about the
+notification. Recorded here because SHY-0399 is a Draft and the gate refuses
+edits to those; add the AC when it is picked up.

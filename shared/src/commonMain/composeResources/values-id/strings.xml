@@ -1669,7 +1669,6 @@
     <string name="support_form_error_too_long">Pesan Anda terlalu panjang. Persingkat lalu coba lagi.</string>
     <string name="support_form_error_generic">Kami tidak dapat mengirim pesan Anda. Periksa koneksi Anda lalu coba lagi.</string>
     <string name="support_form_error_attachment_failed">Kami tidak dapat mengunggah file itu. Anda tetap bisa mengirim pesan tanpa file tersebut.</string>
-    <string name="support_form_error_attachment_too_large">File itu terlalu besar. Pilih file di bawah 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Anda dapat melampirkan maksimal 10 file.</string>
     <string name="support_form_error_attachment_type">Jenis file itu tidak dapat dilampirkan. Pilih gambar atau video.</string>
     <string name="support_category_label">Ini tentang apa?</string>
@@ -1779,4 +1778,12 @@
     <string name="support_open_requests_many">Anda sudah membuka %1$d permintaan.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">dan %1$d lainnya</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Gambar itu terlalu besar. Silakan pilih satu di bawah 5 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Video itu terlalu panjang. Silakan pilih salah satu yang berdurasi kurang dari 30 detik.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Kami tidak dapat memeriksa berapa durasi video tersebut. Silakan coba yang lain.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Hingga 10 file. Gambar hingga 5 MB, video hingga 30 detik.</string>
 </resources>

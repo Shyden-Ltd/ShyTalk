@@ -1667,7 +1667,6 @@
     <string name="support_form_error_too_long">Ditt meddelande är för långt. Korta ner det och försök igen.</string>
     <string name="support_form_error_generic">Vi kunde inte skicka ditt meddelande. Kontrollera din anslutning och försök igen.</string>
     <string name="support_form_error_attachment_failed">Vi kunde inte ladda upp filen. Du kan skicka ditt meddelande ändå.</string>
-    <string name="support_form_error_attachment_too_large">Filen är för stor. Välj en som är under 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Du kan bifoga upp till 10 filer.</string>
     <string name="support_form_error_attachment_type">Den filtypen kan inte bifogas. Välj en bild eller en video.</string>
     <string name="support_category_label">Vad gäller det?</string>
@@ -1778,4 +1777,12 @@
     <string name="support_open_requests_many">Du har redan %1$d förfrågningar öppna.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">och %1$d till</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Den bilden är för stor. Välj en under 5 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Den videon är för lång. Vänligen välj en under 30 sekunder.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Vi kunde inte kontrollera hur lång den videon är. Vänligen prova en annan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Upp till 10 filer. Bilder upp till 5 MB, videor upp till 30 sekunder.</string>
 </resources>

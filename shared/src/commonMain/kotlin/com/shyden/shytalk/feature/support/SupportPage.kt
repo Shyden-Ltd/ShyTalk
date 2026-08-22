@@ -49,6 +49,7 @@ import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.close
 import com.shyden.shytalk.resources.support_attachment_add
+import com.shyden.shytalk.resources.support_attachment_limits
 import com.shyden.shytalk.resources.support_attachment_remove
 import com.shyden.shytalk.resources.support_attachments_label
 import com.shyden.shytalk.resources.support_category_account
@@ -78,6 +79,7 @@ const val TAG_SUPPORT_SEND = "support_send"
 const val TAG_SUPPORT_BACK = "support_back"
 const val TAG_SUPPORT_ADD_FILE = "support_addFile"
 const val TAG_SUPPORT_ATTACHMENT = "support_attachment"
+const val TAG_SUPPORT_LIMITS = "support_limits"
 const val TAG_SUPPORT_CATEGORY = "support_category"
 
 /** SHY-0396 — the three choices somebody gets when a request is already open. */
@@ -479,11 +481,20 @@ private fun Attachments(
     attachments: List<PendingAttachment>,
     isAttaching: Boolean,
     enabled: Boolean,
-    onPicked: (String, AttachmentType, ByteArray) -> Unit,
+    onPicked: (String, AttachmentType, ByteArray, Long?) -> Unit,
     onUnsupported: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
     Text(stringResource(Res.string.support_attachments_label), style = MaterialTheme.typography.titleSmall)
+    // Stated BEFORE anybody picks. Learning a video was too long only after
+    // choosing it — and on a phone connection, only after waiting for it —
+    // is the frustration these limits are supposed to prevent, not cause.
+    Text(
+        stringResource(Res.string.support_attachment_limits),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.testTag(TAG_SUPPORT_LIMITS),
+    )
     Spacer(Modifier.height(8.dp))
 
     for (attachment in attachments) {
@@ -506,7 +517,11 @@ private fun Attachments(
                 // Refused HERE rather than after the bytes have gone. The picker
                 // can hand back a type the server will not take.
                 val type = AttachmentType.fromContentType(media.contentType)
-                if (type == null) onUnsupported() else onPicked(media.displayName, type, media.bytes)
+                if (type == null) {
+                    onUnsupported()
+                } else {
+                    onPicked(media.displayName, type, media.bytes, media.durationMs)
+                }
             }
         },
     ) { launchPicker ->
