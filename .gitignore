@@ -25,6 +25,9 @@ worker-api/.wrangler/
 
 # Local development
 local/firebase-emulator-data/
+# Snapshots taken with `--export-on-exit` land beside it with a suffix
+# (…accumulated-<date>/). Same data, same reason to keep it out of git.
+local/firebase-emulator-data.*/
 express-api/.env.local
 
 # Config files injected at deploy time (contain Firebase API keys)
@@ -57,6 +60,9 @@ replay_pid*.log
 .playwright-mcp/
 playwright-report/
 playwright-results.xml
+# The integration project writes its own report/results alongside.
+playwright-report-integration/
+playwright-results-integration.xml
 playwright-errors.log
 
 # Migration scripts (one-time use)
@@ -142,7 +148,13 @@ database-debug.log
 
 # Deployed git SHA marker — written by deploy workflow on the server
 express-api/.deployed-sha
+# Device-journey artefacts: screenshots, UI dumps and — since 2026-08-22 —
+# SCREEN RECORDINGS, which run to tens of MB per walk. The glob covers the
+# per-platform directories the parallel runs write to
+# (journey-results-android / -ios); the bare `journey-results/` pattern
+# matched only the exact name and would have let both through.
 journey-results/
+journey-results-*/
 
 # ─── SHY-0035 (2026-06-08): prevent re-commit of Allure-pattern CI artefacts ───
 # Historical audit (`.project/audit/repo-size-audit-2026-06-08.md`) found 6
