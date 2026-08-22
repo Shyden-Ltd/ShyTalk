@@ -564,12 +564,61 @@ async function dump(device) {
   return parseNodes(await device.dumpXml());
 }
 
+/**
+ * Tap a node, re-resolving it IMMEDIATELY before the tap.
+ *
+ * adb offers `input tap x y` and nothing else — there is no element click to
+ * reach for on the Android backend. So the mitigation for a stale coordinate is
+ * to look the element up again with nothing in between, and tap where it is NOW
+ * rather than where it was when the screen was last dumped.
+ *
+ * Everything between a dump and a tap is a window in which the UI can move: a
+ * keyboard opening, a list settling, a dialog arriving. Tapping the old point
+ * then hits whatever occupies those pixels, the walk sees a plausible next
+ * screen, and the step passes for the wrong reason.
+ *
+ * An element that has VANISHED is a failure, not something to tap at anyway.
+ *
+ * @param {object} device
+ * @param {object} node  a node from an earlier dump
+ * @param {string} [label] what to call it if it is gone
+ */
+async function tapResolved(device, node, label) {
+  const fresh = await dump(device);
+  const again =
+    (node.id && byId(fresh, node.id)) ||
+    (node.text && byText(fresh, node.text)) ||
+    (node.desc && byText(fresh, node.desc)) ||
+    null;
+  if (!again) {
+    throw new Error(
+      `tap target ${label || node.id || node.text || node.desc || '(unnamed)'} vanished between ` +
+        'being found and being tapped — the screen moved, so tapping the old point would have ' +
+        'hit whatever is there now',
+    );
+  }
+  await device.tap(again.center.x, again.center.y);
+}
+
+/**
+ * Tap the element with this id.
+ *
+ * Element-based where the backend can do it. Appium resolves and clicks in one
+ * server-side operation, so nothing can move in between — the same thing
+ * Playwright does, and the reason a locator beats a coordinate.
+ *
+ * The Android backend has no such primitive, so it re-resolves instead; see
+ * `tapResolved`.
+ */
 async function tapId(device, id) {
+  if (typeof device.tapElement === 'function') {
+    await device.tapElement(id);
+    return;
+  }
   const nodes = await dump(device);
   const n = byId(nodes, id);
   if (!n) throw new Error(`tap target #${id} not found on screen`);
-  await device.tap(n.center.x, n.center.y);
-  await sleep(700);
+  await tapResolved(device, n, `#${id}`);
 }
 
 // Tap the lowest-on-screen node with an exact text. Used for dialog confirm
@@ -580,7 +629,7 @@ async function tapLowestText(device, text) {
   const matches = (await dump(device)).filter((n) => n.center && n.text === text);
   if (matches.length === 0) throw new Error(`no "${text}" node to tap`);
   const target = matches.reduce((a, b) => (b.center.y > a.center.y ? b : a));
-  await device.tap(target.center.x, target.center.y);
+  await tapResolved(device, target);
   await sleep(900);
 }
 
@@ -678,7 +727,7 @@ async function selectPersonaByText(device, needle) {
     const nodes = await dump(device);
     const n = byTextContains(nodes, needle);
     if (n) {
-      await device.tap(n.center.x, n.center.y);
+      await tapResolved(device, n);
       await sleep(1000);
       return;
     }
@@ -717,13 +766,13 @@ async function handleLegalGate(device, nodes) {
   for (const box of LEGAL_BOXES) {
     const n = byId(nodes, box);
     if (n && !n.checked) {
-      await device.tap(n.center.x, n.center.y);
+      await tapResolved(device, n);
       await sleep(350);
     }
   }
   const cont = byId(await dump(device), 'legal_continueButton');
   if (cont && cont.enabled) {
-    await device.tap(cont.center.x, cont.center.y);
+    await tapResolved(device, cont);
     await sleep(1200);
   }
   return true;
@@ -744,7 +793,7 @@ async function handlePermissionDialog(device, nodes) {
   for (const id of PERMISSION_ALLOW) {
     const n = byId(nodes, id);
     if (n) {
-      await device.tap(n.center.x, n.center.y);
+      await tapResolved(device, n);
       return true;
     }
   }
@@ -757,7 +806,7 @@ async function handlePermissionDialog(device, nodes) {
 async function handleRewardCalendar(device, nodes) {
   const btn = byText(nodes, 'Later') || byTextContains(nodes, 'Claim Today');
   if (!btn) return false;
-  await device.tap(btn.center.x, btn.center.y);
+  await tapResolved(device, btn);
   await sleep(900);
   return true;
 }
@@ -774,7 +823,7 @@ async function handleOverlayBubbleDialog(device, nodes) {
   }
   const n = byTextContains(nodes, 'Not now');
   if (!n) return false;
-  await device.tap(n.center.x, n.center.y);
+  await tapResolved(device, n);
   await sleep(800);
   return true;
 }
@@ -802,11 +851,18 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
     // `splash_continueButton` is retained for builds predating SHY-0144's
     // splash retirement (see android-adb-driver.js for the full reasoning).
     for (const cont of ['splash_continueButton', 'startingScreen_dismissButton']) {
-      const n = byId(nodes, cont);
-      if (n && n.enabled) {
-        await device.tap(n.center.x, n.center.y);
-        break;
-      }
+      if (!byId(nodes, cont)?.enabled) continue;
+      // Re-resolved, because `nodes` is from the TOP of this loop and the
+      // handlers above may each have dismissed a dialog and rearranged
+      // everything since. Tapping the remembered point would hit whatever now
+      // occupies it — and the loop would carry on as if the button had been
+      // pressed.
+      const current = byId(await dump(device), cont);
+      // Gone already: one of the handlers dealt with it. The next iteration
+      // re-reads the screen rather than tapping where it used to be.
+      if (!current?.enabled) break;
+      await tapResolved(device, current);
+      break;
     }
     await sleep(800);
   }
@@ -1651,7 +1707,7 @@ const J38 = {
         const card = byIdPrefix(nodes, 'support_addToOpen');
         if (!card) throw new Error('no open request offered on the second visit');
         const ticketId = card.id.slice('support_addToOpen'.length);
-        await device.tap(card.center.x, card.center.y);
+        await tapResolved(device, card);
         await sleep(1500);
 
         // Asserted in the DATABASE, not on screen. The confirmation is one

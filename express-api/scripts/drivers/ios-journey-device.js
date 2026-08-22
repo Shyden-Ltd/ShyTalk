@@ -257,6 +257,32 @@ class IosDevice {
     return result.xml;
   }
 
+  /**
+   * Click an element by its accessibility identifier.
+   *
+   * This is the tap that should be used wherever a target has an id. Appium
+   * resolves the element and clicks it in ONE server-side operation, so there
+   * is no window in which the screen can move between "where is it" and "click
+   * it" — which is the whole failure mode of tapping a remembered coordinate.
+   *
+   * `parseXcuiNodes` reads a node's id from the XCUITest `name` attribute,
+   * which is the accessibility identifier, so `accessibility id` here matches
+   * exactly what `byId` matches in the journeys.
+   *
+   * @param {string} tag accessibility identifier
+   */
+  async tapElement(tag) {
+    const el = await this._post('/element', { using: 'accessibility id', value: tag });
+    const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+    if (!id) throw new Error(`no element with accessibility id "${tag}" to tap`);
+    await this._post(`/element/${id}/click`, {});
+  }
+
+  /**
+   * Tap a POINT. Reserved for gestures with no element behind them — dismissing
+   * by tapping empty space, or a coordinate derived from a swipe. Anything with
+   * an identifier should go through `tapElement`.
+   */
   async tap(x, y) {
     await this._post('/actions', {
       actions: [
@@ -395,6 +421,7 @@ const IOS_JOURNEY_METHOD_NAMES = [
   'swipe',
   'typeText',
   'launch',
+  'tapElement',
   'forceStop',
   'screencap',
   'size',
