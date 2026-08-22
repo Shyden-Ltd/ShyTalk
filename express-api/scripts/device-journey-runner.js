@@ -564,6 +564,34 @@ async function typeInto(device, id, text) {
 /** The first node whose testTag STARTS WITH `prefix` — tags that embed an id. */
 const byIdPrefix = (nodes, prefix) => nodes.find((n) => n.id.startsWith(prefix) && n.center);
 
+/**
+ * Bring a control on screen, then tap it.
+ *
+ * A form long enough to scroll, with the keyboard up, can leave its primary
+ * action below the fold — which is what a person meets, and what SHY-0419 was
+ * filed for on iOS. Scrolling to it is the human action, so the journey does
+ * the same rather than tapping coordinates it cannot see.
+ *
+ * Bounded: if the control never appears the failure NAMES it, instead of the
+ * runner swiping forever on a screen that does not contain it.
+ */
+async function tapIdScrolling(device, id, maxSwipes = 6) {
+  const { w, h } = device.size();
+  for (let i = 0; i <= maxSwipes; i++) {
+    if (byId(await dump(device), id)) {
+      await tapId(device, id);
+      return i;
+    }
+    // The gesture stays in the UPPER half on purpose. A swipe that STARTS
+    // low lands on the on-screen keyboard, which swallows it -- so the page
+    // never moves and the button below the fold stays unreachable. That is
+    // indistinguishable, in a log, from a page that cannot scroll at all.
+    device.swipe(Math.round(w / 2), Math.round(h * 0.45), Math.round(w / 2), Math.round(h * 0.1));
+    await sleep(700);
+  }
+  throw new Error(`#${id} never came on screen after ${maxSwipes} swipes`);
+}
+
 async function waitForId(device, id, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last = [];
@@ -750,9 +778,20 @@ const settle = (device, timeoutMs = 60000) =>
 // signed-in relaunch lands on Home, so settle to a stable anchor first, then
 // sign out if we're signed in.
 async function ensureAtSignIn(device, pkg) {
-  let nodes = await settle(device, 60000);
-  if (atSignIn(nodes)) return;
-  if (anyMainTab(nodes)) {
+  // The first settle is allowed to FAIL. The app may have been left on any
+  // screen at all by a previous run -- a half-filled support form, a dialog, a
+  // detail page -- and none of those become SignIn or Home by waiting. This
+  // used to throw here, before reaching its own restart path, so the recovery
+  // could only ever recover from the states it had already expected. A journey
+  // that cannot start from an unknown screen is a journey nobody can re-run.
+  let nodes;
+  try {
+    nodes = await settle(device, 20000);
+  } catch (_e) {
+    nodes = null;
+  }
+  if (nodes && atSignIn(nodes)) return;
+  if (nodes && anyMainTab(nodes)) {
     await signOutFlow(device);
     return;
   }
@@ -862,6 +901,14 @@ async function apiCall(method, pathStr, { token, body } = {}) {
 // Reusable: sign in as a seeded persona via the dev picker, ride the
 // first-launch interstitials to Home, and confirm identity in the debug
 // overlay. Switching personas mid-journey is just signOutFlow + signInAs.
+/**
+ * @param {string|null} nameToken text the debug overlay must show to confirm
+ *   WHO is signed in. Pass `null` when the persona has no seeded display name
+ *   AND the journey makes its own, stronger identity assertion — see J38, which
+ *   compares the on-device account id against the account the API bound its
+ *   seeded ticket to. Skipping the check with nothing in its place would let a
+ *   journey assert on one account's screen while seeding another's data.
+ */
 async function signInAs(device, reporter, ctx, email, nameToken) {
   await reporter.step(device, `Reach SignIn (for ${email})`, async () => {
     await ensureAtSignIn(device, ctx.pkg);
@@ -887,6 +934,7 @@ async function signInAs(device, reporter, ctx, email, nameToken) {
     await advanceToMain(device);
     return 'home reached — interstitials cleared';
   });
+  if (nameToken === null) return;
   await reporter.step(device, `Confirm identity ${nameToken}`, async () => {
     await waitForText(device, nameToken, 6000);
     return `debug overlay shows "${nameToken}"`;
@@ -1368,6 +1416,8 @@ const J38 = {
     const pkg = ctx.pkg;
     let token;
     let openBefore = 0;
+    let seededTicketId = null;
+    let seededUserId = null;
 
     await reporter.step(device, 'Alice already has a request open', async () => {
       token = await getIdToken('adult-power@shytalk.dev');
@@ -1379,21 +1429,63 @@ const J38 = {
         body: { message: `J38 seed: my coins never arrived (${Date.now()})`, category: 'payment' },
       });
       if (raised.status !== 200) throw new Error(`seed failed: ${raised.status}`);
+      seededTicketId = raised.body?.ticketId;
       const open = await apiCall('GET', '/api/support-tickets/mine/open', { token });
       openBefore = open.body?.tickets?.length ?? 0;
       if (openBefore < 1) throw new Error('seeded a ticket but nothing is open');
-      return `${openBefore} open before the walk`;
+      // Which account the server bound it to. The device is checked against
+      // this below -- a walk that asserts on one account's screen while seeding
+      // another account's data proves nothing at all.
+      const doc = await dbGet(ctx.db, `supportTickets/${seededTicketId}`);
+      seededUserId = doc?.userId;
+      return `${openBefore} open before the walk, owned by ${seededUserId}`;
     });
 
-    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    // `null`: this persona has no seeded display name, so the overlay cannot
+    // confirm WHO is signed in by name. The step below is a stronger check
+    // anyway -- it compares the account on the device against the account the
+    // server bound the seeded ticket to.
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', null);
     if (!ctx.db) return;
 
-    await reporter.step(device, 'Open Settings, then Contact support', async () => {
-      await waitForId(device, 'main_settingsButton', 20000);
+    await reporter.step(device, 'The phone is signed in as the account we seeded', async () => {
+      const nodes = await dump(device);
+      const uidNode = nodes.find((n) => /^UID:\s*\d+/.test(n.text));
+      if (!uidNode) throw new Error('the debug overlay is not showing an account id');
+      const onDevice = Number(/UID:\s*(\d+)/.exec(uidNode.text)[1]);
+      if (onDevice !== seededUserId) {
+        throw new Error(
+          `the phone is signed in as ${onDevice} but the ticket was seeded for ` +
+            `${seededUserId} -- every assertion after this would be about the wrong person`,
+        );
+      }
+      return `device and seed agree: account ${onDevice}`;
+    });
+
+    // The route a person actually takes: Profile -> Settings -> Contact us.
+    // The settings button lives on the PROFILE tab, not on Rooms, which is
+    // where signing in lands.
+    const openSupport = async () => {
+      // `settle`, not a bare wait for a tab. This helper is also used after a
+      // force-stop, and a cold start can land on the daily-reward calendar or a
+      // permission dialog before Home -- overlays `settle` already knows how to
+      // clear. Waiting for the tab alone times out staring at a modal, which
+      // reads like the journey broke rather than like the app asked a question.
+      await settle(device, 60000);
+      await waitForId(device, 'main_profileTab', 20000);
+      await tapId(device, 'main_profileTab');
+      await waitForId(device, 'main_settingsButton', 12000);
       await tapId(device, 'main_settingsButton');
+      // "Contact us" lives inside About, not on the settings root.
+      await waitForId(device, 'settings_aboutItem', 12000);
+      await tapId(device, 'settings_aboutItem');
       await waitForId(device, 'settings_contactUsLink', 12000);
       await tapId(device, 'settings_contactUsLink');
       await waitForId(device, 'support_input', 12000);
+    };
+
+    await reporter.step(device, 'Open Settings, then Contact support', async () => {
+      await openSupport();
       return 'support form is open';
     });
 
@@ -1418,7 +1510,7 @@ const J38 = {
 
     await reporter.step(device, 'Pressing Send ASKS instead of sending', async () => {
       await typeInto(device, 'support_input', typed);
-      await tapId(device, 'support_send');
+      await tapIdScrolling(device, 'support_send');
       await waitForId(device, 'support_duplicate', 12000);
       return 'the choice screen replaced the form; nothing was sent yet';
     });
@@ -1461,7 +1553,7 @@ const J38 = {
       device,
       'Sending again ASKS again rather than slipping through',
       async () => {
-        await tapId(device, 'support_send');
+        await tapIdScrolling(device, 'support_send');
         await waitForId(device, 'support_duplicate', 12000);
         return 'go back is not a way to skip the question';
       },
@@ -1469,19 +1561,27 @@ const J38 = {
 
     await reporter.step(device, 'A genuinely new problem gets through', async () => {
       await tapId(device, 'support_newProblem');
-      await waitForText(device, 'we have your message', 15000).catch(async () => {
-        // The confirmation wording is localised; fall back to the API, which is
-        // the fact that actually matters -- a second ticket now exists.
-        return null;
-      });
-      const open = await apiCall('GET', '/api/support-tickets/mine/open', { token });
-      const after = open.body?.tickets?.length ?? 0;
-      if (after <= openBefore) {
-        throw new Error(
-          `open tickets went ${openBefore} -> ${after}; the second request was refused`,
-        );
+      await waitForId(device, 'support_back', 15000);
+
+      // Asserted by finding the TICKET, not by watching a count.
+      //
+      // `mine/open` is capped at MAX_OPEN_TICKETS_LISTED for display, so once
+      // somebody has that many open the length cannot grow -- and an assertion
+      // on it reports "the second request was refused" for a request that was
+      // raised perfectly. A display cap is not a fact about how many exist.
+      const snap = await ctx.db
+        .collection('supportTickets')
+        .where('userId', '==', seededUserId)
+        .where('message', '==', typed)
+        .get();
+      if (snap.empty) {
+        throw new Error('no ticket carries the words she typed; the request never arrived');
       }
-      return `open tickets ${openBefore} -> ${after}: the second request was raised, not refused`;
+      const raisedId = snap.docs[0].id;
+      if (raisedId === seededTicketId) {
+        throw new Error('her words landed on the ticket she already had, not a new one');
+      }
+      return `raised as its own ticket ${raisedId}, separate from ${seededTicketId}`;
     });
 
     await reporter.step(
@@ -1489,17 +1589,13 @@ const J38 = {
       'The same problem is added to the request already open',
       async () => {
         // Back to a fresh form the way somebody would: leave, and come in again.
-        await device.forceStop(pkg);
+        device.forceStop(pkg);
         device.launch(pkg);
-        await waitForId(device, 'main_settingsButton', 30000);
-        await tapId(device, 'main_settingsButton');
-        await waitForId(device, 'settings_contactUsLink', 12000);
-        await tapId(device, 'settings_contactUsLink');
-        await waitForId(device, 'support_input', 12000);
+        await openSupport();
 
         const followUp = 'J38: it happened again just now';
         await typeInto(device, 'support_input', followUp);
-        await tapId(device, 'support_send');
+        await tapIdScrolling(device, 'support_send');
         const nodes = await waitForId(device, 'support_duplicate', 12000);
         const card = byIdPrefix(nodes, 'support_addToOpen');
         if (!card) throw new Error('no open request offered on the second visit');
