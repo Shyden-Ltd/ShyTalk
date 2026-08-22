@@ -889,18 +889,34 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const nodes = await dump(device);
-    if (isDone(nodes)) return nodes;
+
+    // Overlays are cleared BEFORE deciding we have arrived.
+    //
+    // The other order races a modal's presentation animation. For exactly one
+    // dump the tree holds BOTH the screen behind and the modal, so a check for
+    // "is Home showing" matched while the daily-reward sheet was mid-present.
+    // `settle` returned "Home reached", nothing dismissed the sheet, and one
+    // dump later iOS marked the covered subtree inaccessible — so the tab ids
+    // vanished for as long as it stayed up. The next `waitForId` then stared
+    // for twenty seconds at a screen that could never satisfy it: seventeen
+    // identical source polls and not one tap.
+    //
+    // Checking the overlays first costs a pass of cheap lookups on a screen
+    // that has none, and removes the window entirely.
     if (await handlePermissionDialog(device, nodes)) {
       await sleep(700);
       continue;
     }
     if (await handleRewardCalendar(device, nodes)) continue;
     if (await handleOverlayBubbleDialog(device, nodes)) continue;
+    if (await handleLegalGate(device, nodes)) continue;
+
+    if (isDone(nodes)) return nodes;
+
     if (byId(nodes, 'profileSetup_continueButton'))
       throw new Error('stuck on ProfileSetup — persona has no profile (seed incomplete?)');
     if (byId(nodes, 'requiredDob_continueButton'))
       throw new Error('stuck on RequiredDOB — persona has no date of birth (seed incomplete?)');
-    if (await handleLegalGate(device, nodes)) continue;
     // `splash_continueButton` is retained for builds predating SHY-0144's
     // splash retirement (see android-adb-driver.js for the full reasoning).
     for (const cont of ['splash_continueButton', 'startingScreen_dismissButton']) {
@@ -2133,6 +2149,7 @@ module.exports = {
   tapResolved,
   tapLowestText,
   lowestWithText,
+  advanceUntil,
   SUPPORT_PERSONA_BY_PLATFORM,
   parseNodes,
   byId,
