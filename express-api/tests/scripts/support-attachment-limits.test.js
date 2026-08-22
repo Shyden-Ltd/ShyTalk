@@ -215,7 +215,13 @@ describe('the admin can actually PLAY what somebody attached', () => {
     // bug returns the next time an origin is added to one and not the other.
     const imgSrc = /img-src([^;]*)/.exec(csp)?.[1] ?? '';
     const mediaSrc = /media-src([^;]*)/.exec(csp)?.[1] ?? '';
-    for (const origin of ['https:', 'blob:', 'http://localhost:*']) {
+    // `http:` is needed because attachments come from MinIO on this machine's
+    // LAN address locally — a phone cannot reach `localhost`, so pinning the
+    // CSP to `http://localhost:*` blocked every local image and video the
+    // moment device testing started working. It costs nothing in production,
+    // where the page is https and the browser blocks http subresources as
+    // mixed content whatever the CSP permits.
+    for (const origin of ['https:', 'http:', 'blob:']) {
       expect({
         origin,
         inImgSrc: imgSrc.includes(origin),

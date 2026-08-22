@@ -6,7 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="../favicon.svg">
     <meta name="robots" content="noindex, nofollow">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob: http://localhost:*; media-src 'self' https: blob: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
+    <!--
+      img-src / media-src carry a bare `http:` on purpose.
+
+      Attachments are served from the object store, and locally that is MinIO on
+      this machine's LAN address (a phone cannot reach `localhost` — see
+      express-api/.env.local.example). Pinning the CSP to `http://localhost:*`
+      therefore blocked every local image and video the moment device testing
+      started working.
+
+      It is not a production weakening: this page is served over https there,
+      and a browser blocks http subresources on an https page as mixed content
+      whatever the CSP says. So `http:` only ever widens the LOCAL http page.
+
+      Keep img-src and media-src in step. They were not once, and video evidence
+      — on reports and appeals as well as support — was unplayable for as long
+      as that lasted, failing as "This video could not be played".
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data: blob:; media-src 'self' https: http: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>

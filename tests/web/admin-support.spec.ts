@@ -53,7 +53,9 @@ async function uploadFixture(
   // The real signed-URL path, with real bytes — the same three steps the app
   // takes. A stub here would prove the renderer can render a fixture, which is
   // not the thing that breaks.
-  const slot = await api.post("/api/support-tickets/upload-url", { contentType });
+  const slot = await api.post("/api/support-tickets/upload-url", {
+    contentType,
+  });
   const put = await page.request.put(slot.uploadUrl, {
     headers: { "Content-Type": contentType },
     data: readFileSync(resolve(file)),
@@ -250,7 +252,12 @@ test.describe("Admin Support tab", () => {
    */
   test("an attached video plays with sound, not muted", async ({ page }) => {
     const message = `${marker()} ticket with a video`;
-    const key = await uploadFixture(api, page, "assets/Duck Warning.mp4", "video/mp4");
+    const key = await uploadFixture(
+      api,
+      page,
+      "assets/Duck Warning.mp4",
+      "video/mp4",
+    );
     await seedTicket(api, message, { attachments: [key] });
 
     await navigateToTab(page, "Support");
@@ -260,7 +267,9 @@ test.describe("Admin Support tab", () => {
     const thumb = card.locator('[data-evidence-type="video"]').first();
     await expect(thumb).toBeVisible();
     // The thumbnail SHOULD be muted — that is the grid behaving well.
-    expect(await thumb.locator("video").evaluate((v: HTMLVideoElement) => v.muted)).toBe(true);
+    expect(
+      await thumb.locator("video").evaluate((v: HTMLVideoElement) => v.muted),
+    ).toBe(true);
 
     await thumb.click();
     const player = page.locator(".evidence-lightbox video");
@@ -286,11 +295,15 @@ test.describe("Admin Support tab", () => {
     await seedTicket(api, message, { attachments: [key] });
 
     await navigateToTab(page, "Support");
-    const img = cardFor(page, message).locator('[data-evidence-type="image"] img').first();
+    const img = cardFor(page, message)
+      .locator('[data-evidence-type="image"] img')
+      .first();
     await expect(img).toBeVisible();
     // A broken <img> is still "visible" to Playwright; naturalWidth separates a
     // rendered picture from a broken-link icon.
-    expect(await img.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+    expect(
+      await img.evaluate((i: HTMLImageElement) => i.naturalWidth),
+    ).toBeGreaterThan(0);
   });
 
   test("a ticket with no attachments shows no attachment error", async ({
@@ -308,7 +321,11 @@ test.describe("Admin Support tab", () => {
     await navigateToTab(page, "Support");
     await expect(cardFor(page, message)).toBeVisible();
 
-    await expect(page.locator("#support-list")).not.toContainText(
+    // Scoped to THIS card, not the whole list. The queue accumulates tickets
+    // across runs, and an older one whose stored object has since gone will
+    // show the error legitimately — asserting over the list made this test fail
+    // for somebody else's ticket, on whichever browser happened to render it.
+    await expect(cardFor(page, message)).not.toContainText(
       "Attachments could not be loaded",
     );
     // The request has to be MADE. "No error shown" is also satisfied by never
