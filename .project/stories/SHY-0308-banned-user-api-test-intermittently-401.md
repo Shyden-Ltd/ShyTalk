@@ -1,6 +1,6 @@
 ---
 id: SHY-0308
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-17
 priority: P1
@@ -225,3 +225,213 @@ the fix, then the loop again.
   completely broken iOS build, the failure is unrelated to its diff by three
   independent lines of evidence, and blocking it would have kept iOS broken for
   the sake of a defect in another suite.
+
+- **2026-08-21 — reproduced LOCALLY on chromium, and the layer is now pinned.**
+  Hit during the pre-push hook on `bug/SHY-0416-ios-dev-cannot-sign-in` (a
+  one-line story edit — again unrelated to the diff). Suite result:
+  1416 passed, 1 failed, 1 flaky, 20.1m. It failed on the initial attempt AND
+  on retry #1, both `Expected: 403, Received: 401`.
+
+  **New evidence, from the saved trace rather than inference.**
+  `test-results/…-returns-403-chromium/trace.zip` carries the actual response
+  body for the POST:
+
+  ```
+  POST http://localhost:3000/api/suggestions -> 401 Unauthorized
+  {"error":"Authentication failed"}
+  ```
+
+  That string appears in exactly one place: the `catch` at the bottom of
+  `authMiddleware` (`express-api/src/middleware/auth.js`). It is **not**
+  `'Missing or invalid Authorization header'` (the header guard) and **not**
+  `'Authentication required'` (`suggestions.js`'s local `requireAuth`). So the
+  Authorization header WAS well-formed and the request DID enter the `try` —
+  something inside it threw.
+
+  Inside that `try`, in order: `auth.verifyIdToken(idToken)`,
+  `resolveUniqueId(uid)`, `checkSuspension(uniqueId)`, `checkUserBans(uniqueId,
+  req.ip)`. `checkUserBans` has no `catch` — it is fail-closed BY PROPAGATION,
+  and `auth.js` documents that exact consequence in situ: *"a lookup FAILURE
+  (fail-closed, rejects into the catch → 401)"*. `syncBannedClaim` is excluded:
+  it swallows its own errors by design.
+
+  **Hypothesis 3 (shared-persona contention) is eliminated.** The persona is
+  unique per test — the failure snapshot shows `banned-1787319326808-824901`,
+  a timestamped id minted by `signInWithStanding`. No other spec can be writing
+  to it.
+
+  **Load, not logic.** Reproduction attempts, all against the same live local
+  stack (API :3000 and web :8888 both verified serving THIS worktree):
+
+  | Scope | Runs | Result |
+  | --- | --- | --- |
+  | The single test alone | 1 | passed (1.7s) |
+  | The whole spec file (33 tests) | 3 | passed, passed, passed (~60s each) |
+  | The full chromium suite (~1450) | 1 | **FAILED, twice (initial + retry)** |
+
+  So it needs full-suite load to appear, which fits a transient error from the
+  Firestore/Auth emulators under contention far better than it fits anything in
+  the ban logic. That also explains the CI pattern: webkit, under a loaded
+  runner, then green on a plain re-run.
+
+### The product defect this exposes, which outranks the flaky test
+
+The `catch` collapses *every* failure in that block into
+`401 {"error":"Authentication failed"}`. Two very different conditions are
+being given the same answer:
+
+- **the credential is bad** — 401 is right, and the client should re-authenticate;
+- **a ban/suspension LOOKUP failed** — the credential was fine and was never
+  judged. This is a server-side fault, and answering 401 tells the client the
+  session is invalid.
+
+Clients treat 401 as "signed out". So a transient Firestore blip in production
+does not merely refuse one request — it tells every affected client their
+session died. Fail-CLOSED is correct (never wave a possibly-banned caller
+through); fail-closed *labelled as a credential failure* is not.
+
+This is the same silent-failure shape as
+[[feedback-silent-guards-and-stringly-typed-contracts]]: one catch, one string,
+several causes.
+
+**Direction (not yet implemented):** separate the two in both `authMiddleware`
+and `authMiddlewareStrict` — token-verification errors stay 401; a
+standing-lookup failure answers a distinct retryable status with its own code
+and log line. That makes the next occurrence self-diagnosing (the Observability
+AC above) instead of needing a trace dig like this one, and it stops a
+Firestore blip from reading as a mass sign-out. Whether the lookup should also
+get a bounded retry is a separate decision to take with the operator, because
+it trades a slower refusal against a spurious one.
+
+**Scope note.** Left unfixed in this session's merge queue on purpose: the fix
+changes authenticated-request behaviour for every route, so it belongs in its
+own PR with its own tests, not folded into an iOS-signing bug branch.
+
+### What shipped in this PR, and what deliberately did not
+
+**Shipped — the refusal now names itself.** `authMiddleware` and
+`authMiddlewareStrict` each had ONE `try` wrapping the credential check *and*
+every standing lookup, and ONE `catch` answering
+`401 {"error":"Authentication failed"}` for all of it. The credential check is
+now separated from what follows it, and the body carries a `code`:
+
+| Condition | Status | `code` |
+| --- | --- | --- |
+| `verifyIdToken` rejected the token (expired, malformed, revoked under strict) | 401 | `token_rejected` |
+| Token accepted; identity/suspension/ban lookup could not complete | 401 | `standing_unavailable` |
+
+The log lines diverge too — `token rejected` vs `standing lookup failed`, the
+latter carrying `req.path`.
+
+**The status code is UNCHANGED, on purpose.** 401 for a failed lookup is not an
+accident: `tests/unit/auth-ban-gate-posture.unit.test.js` pins it, simulating
+`firestore unavailable` and asserting `401 Authentication failed`. It is a
+decision someone took. This PR does not overturn it, because doing so silently
+would change what every client concludes when a request is refused.
+
+**The decision left for the operator.** A 401 tells a client *"your credential
+is bad"*, and clients respond by signing the user out or forcing a refresh. But
+in the `standing_unavailable` case the credential was fine and was never
+judged — the server simply could not reach Firestore. So a transient Firestore
+blip does not merely refuse requests; it can read to every affected client as a
+mass sign-out. A retryable status (503) would say what actually happened and
+let clients back off instead of dropping the session. Against that: it changes a
+pinned security posture, every client's handling, and the shape of a control
+that is currently, correctly, fail-closed. Fail-closed must survive either way —
+only the label is in question. Raised rather than taken.
+
+### Root cause — CONFIRMED, not inferred
+
+The instrument answered on its first reproduction. The refusal came back
+`code: "token_rejected"`, and a temporary probe on the rejection path named it
+exactly:
+
+```
+[SHY-0308-PROBE] token rejected: auth/id-token-revoked
+                 | The Firebase ID token has been revoked.
+```
+
+No lookup ever failed. The chain:
+
+1. Banning revokes the account's refresh tokens — `syncBannedClaim` calls
+   `auth.revokeRefreshTokens(firebaseUid)` deliberately, so "the session cannot
+   outlive the current ID token".
+2. `authMiddleware` calls `verifyIdToken(idToken)` with no `checkRevoked`, so in
+   PRODUCTION that revocation is not consulted and the request reaches the ban
+   gate and gets its 403.
+3. Against the **Auth emulator** it is consulted anyway. `firebase-admin`'s
+   `base-auth.js` reads:
+
+   ```js
+   verifyIdToken(idToken, checkRevoked = false) {
+     const isEmulator = this.emulatorMode;
+     ...
+     if (checkRevoked || isEmulator) {   // ← revocation forced on
+   ```
+
+   So under emulators — local AND CI — a banned user's pre-ban token is refused
+   as revoked *before* the ban gate runs. The test was asserting production
+   behaviour in an environment that is strictly harsher.
+4. `iat` and `validSince` are second-granular, so even a forced refresh can mint
+   a token inside the same second as the revoke and be refused too.
+5. Worse, the revoke kills the REFRESH token, so `getIdToken(true)` can have
+   nothing to refresh with and keeps returning the same dead token — retrying
+   alone never converges.
+
+Which is why it looked random: the outcome hung on whether the SDK happened to
+hold a token minted after `validSince`. Nothing about the ban logic was ever
+involved. **Hypotheses 1 and 2 above were both partly right and neither was
+complete; hypothesis 3 is eliminated.**
+
+### The fix, and why it is not a weakening
+
+`suggestions-security.spec.ts` now signs in again when — and only when — the
+server reports `token_rejected`, then retries until the deadline. A fresh
+sign-in mints a refresh token issued after `validSince`, which is the only route
+back to a live session, and is exactly what a banned person does in life: they
+sign in again and are told they are banned.
+
+Every other outcome is taken on the FIRST response. A 2xx is never retried, so
+the loop cannot paper over a ban that is not being enforced — proven below, not
+asserted.
+
+| Check | Result |
+| --- | --- |
+| webkit, `--retries=0`, 20 consecutive runs | **20/20** (was 17/20 with a forced refresh alone, and 15/20 with a capped retry) |
+| chromium, `--retries=0`, 10 consecutive runs | **10/10** |
+| whole spec file, chromium + webkit | 66/66 |
+| Mutation: `/suggestions` added to `isBanExemptPath` | **caught on the first response** — `Got 201 {"title":"Ban bypass attempt"...}`, the suggestion actually created |
+
+The mutation matters more than the green. An earlier, blunter mutant (disabling
+the ban gate outright) also reddened the test — but at the *standing-banner*
+assertion, never reaching the 403 check. That would have "proven" a mutation
+score while leaving the assertion under test unexercised. The targeted mutant
+keeps the banner working and lets only the POST through, so it is the 403
+assertion itself that catches it.
+
+### A production gap this uncovered — separate from the test
+
+`authMiddlewareStrict` DOES pass `checkRevoked = true`, in production as well as
+under emulators. So on portal and admin routes a banned user whose token predates
+the ban is refused `401 token_rejected` — the revocation check runs first and the
+ban gate never does. The middleware's own docblock says `/portal/me` is
+deliberately NOT ban-exempt precisely so that the gate's 403 (`code: 'banned'` +
+reason + expiresAt) reaches them as the ban notice. Revocation defeats that
+intent: they get an unexplained 401 and look merely signed out.
+
+Not fixed here — it is a real behaviour change on authenticated routes and wants
+its own story and its own decision. Filed as a finding, not folded in silently.
+
+### Test coverage added
+
+| Test | Proves | Doubles? |
+| --- | --- | --- |
+| `auth-ban-gate-posture.unit.test.js` — `a rejected TOKEN is named token_rejected` (both middlewares) | A bad credential is named, and NO standing lookup is attempted after it | unit-exception doubles |
+| same file — `a failed standing LOOKUP is named standing_unavailable` (both middlewares) | An accepted credential whose lookup failed is named differently | unit-exception doubles |
+| `auth-ban-gate.test.js` — bindings beyond the scannable window | The same `standing_unavailable` from a **real** Firestore read that cannot complete | none — real emulator |
+| `suggestions-security.spec.ts:218` | On 401 the failure states that the ban check never ran, and which class of refusal occurred | none — real stack |
+
+Both middlewares are covered for both codes: the two `catch` blocks were byte
+identical, which is precisely how one of them would have been left behind.
+
+Reviewed-up-to: e15ceb1754efe4d484c373a417bbb9b873bc706d
