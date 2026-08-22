@@ -44,6 +44,11 @@ const HELPER_FILES = new Set([
   // SHY-0328: shared webSignIn sequence, wired into all 7 web drivers. It owns
   // the auth steps, never page acquisition, so it is a helper and not a driver.
   'web-sign-in.js',
+  // SHY-0387: records the SCREEN during a walk (scrcpy on Android, XCUITest on
+  // iOS). It drives no device surface of its own — it observes one — so it has
+  // start/stop, not tap/dump/screencap, and a listMethods() here would claim a
+  // parity it does not have.
+  'journey-screen-recorder.js',
 ]);
 
 function discoverDrivers() {

@@ -60,7 +60,8 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
-const { IosDevice, selectCoreDeviceUuid } = require('./drivers/ios-journey-device');
+const { createIosJourneyDevice, selectCoreDeviceUuid } = require('./drivers/ios-journey-device');
+const { createRecorder } = require('./drivers/journey-screen-recorder');
 
 // --------------------------------------------------------------------------
 // Repo / target configuration
@@ -106,6 +107,7 @@ function parseArgs(argv) {
   const a = {
     target: 'local',
     platform: 'android',
+    record: true,
     serial: process.env.ANDROID_SERIAL || null,
     journeys: null,
     rebuild: false,
@@ -124,6 +126,7 @@ function parseArgs(argv) {
     const v = argv[i];
     if (v === '--target') a.target = next('--target');
     else if (v === '--platform') a.platform = next('--platform');
+    else if (v === '--no-record') a.record = false;
     else if (v === '--serial') a.serial = next('--serial');
     else if (v === '--journeys')
       a.journeys = next('--journeys')
@@ -475,6 +478,7 @@ class Reporter {
       `- **Target:** ${json.target}  |  **Device:** \`${json.serial}\` (${json.device || '?'})`,
     );
     L.push(`- **Started:** ${json.startedAt}  |  **Finished:** ${json.finishedAt}`);
+    if (json.video) L.push(`- **Recording:** \`${json.video}\``);
     const s = json.summary;
     const verdict =
       s.failed === 0 ? `✅ ALL ${s.total} PASSED` : `❌ ${s.failed} of ${s.total} FAILED`;
@@ -1815,6 +1819,7 @@ Usage: node express-api/scripts/device-journey-runner.js [options]
   --journeys <ids>     comma list e.g. J-SMOKE,J-ALICE (default all)
   --rebuild            rebuild the APK first
   --no-reset           skip clean reinstall in J-SMOKE
+  --no-record          skip the screen recording (default: record)
   --out <dir>          results dir (default <repo>/journey-results)
   --list               list journeys and exit
   --help               this help`;
@@ -1849,7 +1854,13 @@ async function main() {
     }
     serial = udid;
     deviceModel = 'iPhone';
-    device = new IosDevice({ udid, bundleId: cfg.iosBundleId || 'com.shyden.shytalk' });
+    // Through the factory: it resolves BOTH iPhone identifiers (CoreDevice
+    // uuid for devicectl, hardware udid for Appium). Constructing directly
+    // here is what let one value be spent on both.
+    device = createIosJourneyDevice({
+      udid,
+      bundleId: cfg.iosBundleId || 'com.shyden.shytalk',
+    });
     await device.measure();
   } else {
     serial = selectSerial(opts.serial);
@@ -1890,13 +1901,53 @@ async function main() {
   if (opts.journeys) journeys = journeys.filter((j) => opts.journeys.includes(j.id));
   if (journeys.length === 0) throw new Error('No journeys selected.');
 
-  for (const j of journeys) {
-    reporter.startJourney(j.id, j.title);
+  // Video, not just stills. A PNG per step cannot show a TRANSITION, and this
+  // project's device defects live in transitions -- SHY-0419's Send button was
+  // drawn UNDER the keyboard for the frames between the IME opening and the
+  // layout settling, and passed every assertion. The operator asked for
+  // recordings on 2026-08-22 for that reason.
+  let recorder = null;
+  if (opts.record) {
+    recorder = createRecorder({
+      platform: opts.platform,
+      serial,
+      outDir: reporter.runDir,
+      device,
+    });
     try {
-      await j.run(device, reporter, ctx);
-      reporter.endJourney('pass');
+      await recorder.start();
+      console.log(`Recording -> ${recorder.file}`);
     } catch (e) {
-      reporter.endJourney('fail', e.message);
+      // A recorder that cannot start must SAY SO and stop the run. Carrying on
+      // produces a green report with no video, which is the exact hole being
+      // closed -- and the operator would find out only after the walk.
+      throw new Error(`Screen recording failed to start: ${e.message}`, { cause: e });
+    }
+  }
+
+  try {
+    for (const j of journeys) {
+      reporter.startJourney(j.id, j.title);
+      try {
+        await j.run(device, reporter, ctx);
+        reporter.endJourney('pass');
+      } catch (e) {
+        reporter.endJourney('fail', e.message);
+      }
+    }
+  } finally {
+    // `finally`, so a walk that throws still yields its video -- a FAILED run
+    // is when the footage is worth the most.
+    if (recorder) {
+      try {
+        const file = await recorder.stop();
+        if (file) {
+          reporter.meta.video = path.relative(reporter.outDir, file);
+          console.log(`Recording saved -> ${file}`);
+        }
+      } catch (e) {
+        console.log(`  (warn) screen recording could not be saved: ${e.message}`);
+      }
     }
   }
 

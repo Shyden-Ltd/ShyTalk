@@ -52,6 +52,7 @@ const run = (bin, args) => execFileSync(bin, args, { encoding: 'utf8' });
 // dumps use, it is unit-tested with an injected delay, and reusing it keeps
 // ONE retry policy across both platforms instead of two that can drift.
 const { dumpWithRetry } = require('./ui-dump-retry');
+const { selectUdid } = require('./ios-appium-driver');
 
 const DEFAULT_APPIUM_BASE_URL = process.env.APPIUM_BASE_URL || 'http://localhost:4723';
 
@@ -81,20 +82,87 @@ function selectCoreDeviceUuid(preferred) {
   return null;
 }
 
+/**
+ * WebDriverAgent's MJPEG screen stream. Shared with
+ * `journey-screen-recorder`, which records from it.
+ */
+const MJPEG_SERVER_PORT = 9100;
+
 class IosDevice {
   /**
+   * An iPhone answers to TWO identifiers, and they are not interchangeable:
+   *
+   *   CoreDevice UUID  CEB70A3C-894C-471F-A1BA-6DBCB874CFB4  -> xcrun devicectl
+   *   hardware UDID    00008150-000954D90A20401C             -> appium:udid
+   *
+   * Both are dash-separated hex, so a single `udid` field looks sufficient
+   * and is not: Appium rejects the CoreDevice UUID outright with
+   * `Unknown device or simulator UDID`, and devicectl rejects the hardware
+   * one. This class therefore holds both, named for the tool that consumes
+   * each, and refuses to be built with either missing.
+   *
    * @param {object} o
-   * @param {string} o.udid        CoreDevice UUID (devicectl)
-   * @param {string} o.bundleId    the app under test
+   * @param {string} o.coreDeviceUuid  for `xcrun devicectl --device`
+   * @param {string} o.hardwareUdid    for `appium:udid` (ECID-based)
+   * @param {string} o.bundleId        the app under test
    * @param {string} [o.appiumBaseUrl]
    */
-  constructor({ udid, bundleId, appiumBaseUrl = DEFAULT_APPIUM_BASE_URL }) {
+  constructor({ coreDeviceUuid, hardwareUdid, bundleId, appiumBaseUrl = DEFAULT_APPIUM_BASE_URL }) {
+    // Validated at construction, not at first use. Appium's answer to
+    // `appium:udid: undefined` is "Unknown device or simulator UDID:
+    // 'undefined'", which reads as a hardware fault and sends you to the
+    // cable rather than to this line.
+    if (!coreDeviceUuid) {
+      throw new Error('IosDevice needs a CoreDevice uuid (xcrun devicectl list devices)');
+    }
+    if (!hardwareUdid) {
+      throw new Error('IosDevice needs a hardware udid (xcrun xctrace list devices / idevice_id)');
+    }
+    if (coreDeviceUuid === hardwareUdid) {
+      throw new Error(
+        `CoreDevice uuid and hardware udid are the same value ("${hardwareUdid}") — one ` +
+          'detector has been used for both, which restores the bug where Appium was ' +
+          'handed a CoreDevice UUID and refused every session.',
+      );
+    }
     this.kind = 'ios';
-    this.serial = udid;
+    this.coreDeviceUuid = coreDeviceUuid;
+    this.hardwareUdid = hardwareUdid;
+    // `serial` is the runner-wide name for "the thing that identifies this
+    // device to its control tool". For iOS that tool is devicectl.
+    this.serial = coreDeviceUuid;
     this.bundleId = bundleId;
     this.appiumBaseUrl = appiumBaseUrl;
     this._sessionId = null;
     this._size = null;
+  }
+
+  /**
+   * The W3C capabilities for a session.
+   *
+   * Split out from `_session()` so the identifier routing can be asserted
+   * without a phone, an Appium server, or a mock of either.
+   *
+   * @returns {Record<string, unknown>}
+   */
+  capabilities() {
+    return {
+      platformName: 'iOS',
+      'appium:automationName': 'XCUITest',
+      'appium:udid': this.hardwareUdid,
+      'appium:bundleId': this.bundleId,
+      // The app is already installed by scripts/dev/ios-local-install.sh and
+      // pointed at this Mac's LAN address. Reinstalling here would silently
+      // replace it with one built for a different host.
+      'appium:noReset': true,
+      'appium:newCommandTimeout': 300,
+      'appium:wdaLaunchTimeout': 180000,
+      // WebDriverAgent publishes the screen as MJPEG on this port while a
+      // session is open; journey-screen-recorder reads it to record the iOS
+      // walk. Stated explicitly so the recorder and the session agree on ONE
+      // number instead of both falling back to a default that could drift.
+      'appium:mjpegServerPort': MJPEG_SERVER_PORT,
+    };
   }
 
   async _session() {
@@ -104,18 +172,9 @@ class IosDevice {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         capabilities: {
-          alwaysMatch: {
-            platformName: 'iOS',
-            'appium:automationName': 'XCUITest',
-            'appium:udid': this.serial,
-            'appium:bundleId': this.bundleId,
-            // The app is already installed by scripts/dev/ios-local-install.sh
-            // and pointed at this Mac's LAN address. Reinstalling here would
-            // silently replace it with one built for a different host.
-            'appium:noReset': true,
-            'appium:newCommandTimeout': 300,
-            'appium:wdaLaunchTimeout': 180000,
-          },
+          // Built by capabilities(), so the identifier routing has exactly
+          // one definition and can be asserted without a phone.
+          alwaysMatch: this.capabilities(),
         },
       }),
     });
@@ -128,6 +187,19 @@ class IosDevice {
     }
     this._sessionId = sid;
     return sid;
+  }
+
+  /**
+   * Open the Appium session if it is not already open.
+   *
+   * Public because the session has a SIDE EFFECT other code depends on:
+   * WebDriverAgent only serves its MJPEG screen stream while a session
+   * exists, and the recorder must connect after that, not before.
+   *
+   * @returns {Promise<string>} the session id
+   */
+  async ensureSession() {
+    return this._session();
   }
 
   async _get(path) {
@@ -309,6 +381,7 @@ const IOS_JOURNEY_METHOD_NAMES = [
   'size',
   'measure',
   'quit',
+  'ensureSession',
 ];
 
 function listMethods() {
@@ -319,16 +392,29 @@ function listMethods() {
  * Factory, matching the shape every other driver in this directory exports —
  * `create*` plus `listMethods` — so `--check-drivers` can discover it.
  */
-function createIosJourneyDevice({ udid, bundleId, appiumBaseUrl } = {}) {
-  const resolved = selectCoreDeviceUuid(udid);
-  if (!resolved) {
+function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl } = {}) {
+  const coreDeviceUuid = selectCoreDeviceUuid(udid);
+  if (!coreDeviceUuid) {
     throw new Error(
       'No connected iPhone found (xcrun devicectl list devices). A SIMULATOR is not a ' +
         'substitute — SHY-0419 was invisible to everything except the real device.',
     );
   }
+  // The SECOND identifier, from a different tool. `selectUdid` already owns
+  // this detection for ios-appium-driver.js — including dropping the
+  // simulator section and the Mac host line — so it is reused rather than
+  // reimplemented; two detectors would be two things to keep correct.
+  const resolvedHardware = selectUdid(hardwareUdid);
+  if (!resolvedHardware) {
+    throw new Error(
+      'No hardware UDID found (xcrun xctrace list devices). Appium needs the ECID-based ' +
+        'UDID; the CoreDevice UUID that devicectl reports is a DIFFERENT identifier and ' +
+        'Appium rejects it with "Unknown device or simulator UDID".',
+    );
+  }
   return new IosDevice({
-    udid: resolved,
+    coreDeviceUuid,
+    hardwareUdid: resolvedHardware,
     bundleId: bundleId || 'com.shyden.shytalk',
     ...(appiumBaseUrl ? { appiumBaseUrl } : {}),
   });
