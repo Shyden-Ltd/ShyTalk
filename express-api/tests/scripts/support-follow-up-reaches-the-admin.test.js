@@ -87,6 +87,21 @@ describe('SHY-0396 — a follow-up message reaches the admin', () => {
     // between them is four characters and the assertion could only ever fail.
     const followUpBlock = tab.split('const followUpsHtml')[1]?.split('const resolvedHtml')[0];
     expect(followUpBlock).toBeDefined();
-    expect(followUpBlock).toContain('escapeHtml');
+
+    // Bound to the MESSAGE, not to the block. `expect(block).toContain(
+    // 'escapeHtml')` was the first version of this assertion and it SURVIVED
+    // mutation: the timestamp beside each follow-up is escaped too, so the
+    // block still contained the word with the person's own text rendered raw.
+    // A guard that cannot fail for the case it names is worse than no guard,
+    // because it is counted as coverage.
+    const flat = followUpBlock.replace(/\s+/g, '');
+    const uses = [...flat.matchAll(/m\?\.message/g)];
+    expect(uses.length).toBeGreaterThan(0);
+    for (const use of uses) {
+      const governing = flat.slice(Math.max(0, use.index - 40), use.index);
+      expect({ context: governing }).toEqual({
+        context: expect.stringContaining('escapeHtml('),
+      });
+    }
   });
 });
