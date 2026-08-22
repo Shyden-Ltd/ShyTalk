@@ -58,12 +58,28 @@ duplicate is told why not to, at the moment it matters.
 
 ### Happy path
 
-- [ ] Somebody with an open ticket can raise another one.
-- [ ] Before they do, they are told plainly that a second request is **slower**
-      than adding to the one they have.
-- [ ] They are pointed at updating the existing ticket instead — or reopening it
-      if it was closed.
-- [ ] Somebody with no open ticket sees none of this.
+- [ ] Somebody with an open ticket **can** raise another one. The second request
+      is never refused.
+- [ ] Before they do, they are told a request is already open, and shown a
+      **very brief summary of it** — enough to recognise whether this is the same
+      problem. More than one open ticket means a summary of each.
+- [ ] They are reminded that opening another ticket for the **same** problem only
+      slows things down and puts them to the **back of the queue**.
+- [ ] They are given exactly **three** choices, in this order:
+      1. **"It's the problem I already reported"** — their message is added to the
+         existing ticket.
+      2. **"It's a new problem"** — a new ticket is raised.
+      3. **"Go back"** — nothing is sent and their message is still there.
+- [ ] Somebody with no open ticket sees none of this and sends as normal.
+
+### The behaviour being REPLACED
+
+- [ ] The server's **409 refusal is gone**. `RaiseTicketOutcome.AlreadyOpen`
+      currently disables Send and shows "You already have a request open. We will
+      reply to that one.", which blocks a second ticket outright — the opposite of
+      what is wanted (operator, 2026-08-21 and again 2026-08-22 on seeing it on a
+      device).
+- [ ] Nothing anywhere still treats a second request as an error condition.
 
 ### Error paths
 
@@ -169,3 +185,35 @@ duplicate is told why not to, at the moment it matters.
 - Related: [[SHY-0385]] shipped the client-side handling of the 409 as
   `RaiseTicketOutcome.AlreadyOpen`. That case does not disappear here; it stops
   being terminal.
+
+## Implementation direction (worked out 2026-08-22, not yet built)
+
+**What exists today.** `express-api/src/routes/support-tickets.js:194-203` queries
+for one open ticket by `userId` and answers **409** if it finds one. The Android
+client maps that 409 to `RaiseTicketOutcome.AlreadyOpen`, and `SupportPage`
+disables Send and shows *"You already have a request open. We will reply to that
+one."* The refusal is the whole mechanism — there is no append path at all.
+
+**Shape proposed.** Three pieces, none of which exist yet:
+
+| Piece | Why |
+| --- | --- |
+| `GET /api/support-tickets/mine/open` → `[{ ticketId, category, summary, createdAt }]` | The choice cannot be offered without a summary to show. `summary` is a short prefix of their own message — no new stored data needed. |
+| `POST /api/support-tickets` — **409 removed** | "It's a new problem" must succeed. A second ticket is not an error condition. |
+| `POST /api/support-tickets/{id}/messages` | "It's the problem I already reported" needs somewhere to put the text. Today it would be dropped. |
+
+**Client flow.** On Send, if the person has open tickets, do not send yet:
+show the warning, the summary of each open ticket, the reminder that a duplicate
+goes to the back of the queue, and the three choices. "Go back" must leave their
+typed message intact — losing it here is the worst thing this screen can do, and
+`SupportFormViewModel.reset()` already takes that position deliberately.
+
+**Watch for:** the 409 is currently load-bearing in tests. Anything asserting a
+second request is refused is asserting the defect and must be inverted, not
+deleted. Grep `AlreadyOpen`, `alreadyHasOpenTicket`, `409` under
+`express-api/tests/`, `shared/src/jvmTest/`, and `tests/web/`.
+
+**Already proven on a device, so it is real:** on 2026-08-22 a ticket raised from
+the iPhone caused the Android send to answer *"You already have a request open.
+We will reply to that one."* as the same persona. Duplicate prevention works
+across devices — it is simply the wrong behaviour.

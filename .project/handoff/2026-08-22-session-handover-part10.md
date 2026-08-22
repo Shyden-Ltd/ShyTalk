@@ -27,6 +27,42 @@ Four points he settled when setting it:
 Full rule: `feedback-tickets-need-an-evidence-page-and-operator-signoff` in
 memory. **#1940 is the first ticket that must go through it.**
 
+## Second rule, same day — DEV testing is post-merge only
+
+**Dev testing happens only from `develop`, after the merge has landed and been
+deployed. Everything before that is LOCAL only.**
+
+I got this wrong in this session: `scripts/ios/build-debug-dev.sh` points the app
+at the PUBLIC dev backend, and I used it to walk a FEATURE branch against dev.
+Pre-merge device work must use the local configuration against the local stack
+(Android `local` flavour; iOS local configs via
+`scripts/ios/add-local-configurations.rb`). The evidence-page run is therefore a
+LOCAL run. Rule: `feedback-dev-testing-only-after-merge-to-develop`.
+
+## A correction that matters more than either — SHY-0396
+
+**The support form BLOCKS a second ticket. It was never supposed to.** He asked
+for multiple tickets to be ALLOWED with a warning, on 2026-08-21, and said so
+again on 2026-08-22 after seeing the block on a device. What ships today:
+`support-tickets.js:194-203` answers **409**, and the client disables Send and
+says *"You already have a request open. We will reply to that one."*
+
+Required instead — warn, never refuse:
+
+- say a request is already open, and show a **very brief summary of each** so
+  they can tell if it is the same problem;
+- remind them a duplicate for the SAME problem only slows things down and puts
+  them to the **back of the queue**;
+- offer exactly three choices: **"It's the problem I already reported"** /
+  **"It's a new problem"** / **"Go back"** (which keeps their typed message).
+
+**SHY-0396** carries the sharpened ACs and a worked implementation direction
+(new `GET /mine/open`, the 409 removed, a new append endpoint, and the client
+flow). Not built. It is P1/MVP and it is the next code to write.
+
+Note the trap recorded there: the 409 is load-bearing in existing tests. Those
+assertions pin the defect and must be INVERTED, not deleted.
+
 ## Then this
 
 **#1940 (SHY-0387) is no longer blocked by a defect** — SHY-0419 is fixed and
