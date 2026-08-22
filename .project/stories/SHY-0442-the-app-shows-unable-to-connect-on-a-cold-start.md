@@ -86,6 +86,26 @@ is up and answering.
 That also explains why a relaunch fixes it. The second launch's first call
 succeeds, so the state is never entered.
 
+### The three doors into it
+
+`handleBackendError` is called from three places, all `Resource.Error` branches
+and all on the cold-start path:
+
+| line | what failed |
+| --- | --- |
+| 366 | identity resolution — the FIRST call the app makes |
+| 624 | loading the user document |
+| 643 | the same, on the other branch |
+
+Line 366 is the one that was filmed: identity resolution is the first request
+after launch, so a connection reset before the network settles lands exactly
+there. All three route the same way, so a retry belongs inside
+`handleBackendError` rather than at any one call site.
+
+**There is no `AuthViewModelTest`.** The most sensitive path in the app has no
+unit tests at all, so the fix needs a harness built alongside it — which is part
+of why this is M rather than S.
+
 ### What is still open
 
 - Whether the first call is made before connectivity is ready, or whether it
@@ -175,7 +195,14 @@ succeeds, so the state is never entered.
 
 ## Dependencies
 
-- None known until the cause is established.
+- None. The cause is established; this is ready to build.
+
+**Deliberately not implemented yet.** Both phones were mid-run when the cause
+was confirmed, and shipping a change to sign-in that has never been executed on
+a device would repeat the exact mistake this session has been correcting — a
+recorder, a scrcpy flag set and a locator fix all shipped on green unit tests
+and failed the moment they met hardware. The fix is small and the diagnosis is
+complete; it wants a device, not more reading.
 
 ## Risks & Mitigations
 
