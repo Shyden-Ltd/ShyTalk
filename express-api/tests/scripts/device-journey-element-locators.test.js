@@ -60,12 +60,29 @@ describe('taps locate elements rather than remembered pixels', () => {
     }).toEqual({ resolves: true, clicks: true });
   });
 
-  test('tapId prefers the element tap when the backend has one', () => {
-    // The shared journeys call tapId on both backends. It must take the
-    // element route where one exists and fall back only where it does not.
+  test('tapId routes through tapResolved rather than clicking directly', () => {
+    // tapId used to short-circuit to device.tapElement(id) when the backend
+    // had one. That skipped the reachability check for exactly the platform
+    // whose defect motivated it — iOS, and SHY-0419. Everything now goes
+    // through tapResolved, which reads the tree, checks the control is not
+    // covered, and THEN takes the element route.
     const fn = codeOf(runnerSrc).match(/^async function tapId\([\s\S]*?^\}/m)?.[0] ?? '';
     expect({ found: fn !== '' }).toEqual({ found: true });
-    expect({ prefersElement: /tapElement/.test(fn) }).toEqual({ prefersElement: true });
+    expect({ delegates: /await tapResolved\(/.test(fn) }).toEqual({ delegates: true });
+    expect({ shortCircuits: /device\.tapElement\(/.test(fn) }).toEqual({
+      shortCircuits: false,
+    });
+  });
+
+  test('the element route is taken only AFTER reachability is checked', () => {
+    const fn = codeOf(runnerSrc).match(/^async function tapResolved\([\s\S]*?^\}/m)?.[0] ?? '';
+    const check = fn.indexOf('assertReachable(');
+    const click = fn.indexOf('device.tapElement(');
+    expect({ checks: check !== -1, clicks: click !== -1 }).toEqual({
+      checks: true,
+      clicks: true,
+    });
+    expect({ checkedFirst: check < click }).toEqual({ checkedFirst: true });
   });
 
   test('no tap uses a coordinate captured before an await', () => {

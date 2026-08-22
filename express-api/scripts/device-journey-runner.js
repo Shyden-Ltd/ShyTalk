@@ -333,6 +333,12 @@ function parseXcuiNodes(xml) {
     const h = Number(attrs.height);
     const hasBox = [x, y, w, h].every(Number.isFinite) && w > 0 && h > 0;
     nodes.push({
+      // The element TYPE, e.g. XCUIElementTypeKeyboard. Needed to tell an
+      // overlay that swallows taps from ordinary content sitting behind it.
+      cls: m[0].match(/<(XCUIElementType[A-Za-z]+)/)?.[1] ?? '',
+      // The full box, not only its centre. Occlusion is a question about
+      // rectangles: does something drawn later cover this point.
+      bounds: hasBox ? { x1: x, y1: y, x2: x + w, y2: y + h } : null,
       id: attrs.name || '',
       // A text field's typed contents live in `value`; a button's caption lives
       // in `label`. Preferring value means an assertion on what somebody typed
@@ -367,6 +373,8 @@ function parseUiautomatorNodes(xml) {
       ? { x: Math.round((+b[1] + +b[3]) / 2), y: Math.round((+b[2] + +b[4]) / 2) }
       : null;
     nodes.push({
+      cls: attrs.class || '',
+      bounds: b ? { x1: +b[1], y1: +b[2], x2: +b[3], y2: +b[4] } : null,
       id: attrs['resource-id'] || '',
       text: attrs.text || '',
       desc: attrs['content-desc'] || '',
@@ -564,6 +572,87 @@ async function dump(device) {
   return parseNodes(await device.dumpXml());
 }
 
+/** Does `box` contain `point`? */
+const boxHolds = (box, point) =>
+  Boolean(box && point) &&
+  point.x >= box.x1 &&
+  point.x <= box.x2 &&
+  point.y >= box.y1 &&
+  point.y <= box.y2;
+
+/** Is `inner` entirely inside `outer`? Used to spot a control's own children. */
+const boxInside = (inner, outer) =>
+  Boolean(inner && outer) &&
+  inner.x1 >= outer.x1 &&
+  inner.y1 >= outer.y1 &&
+  inner.x2 <= outer.x2 &&
+  inner.y2 <= outer.y2;
+
+/**
+ * What is covering `target`, if anything.
+ *
+ * Document order is paint order in both dumps, so only a node drawn LATER can
+ * be on top. It occludes when its box contains the target's tappable CENTRE —
+ * the centre and not the whole box, because a control covered only in part is
+ * still what SHY-0428 was: Send's lower half under the navigation bar, its
+ * centre landing on HOME.
+ *
+ * A control's own children come later and sit inside it, so anything wholly
+ * within the target's box is excluded. Without that every button would look
+ * covered by its own label.
+ *
+ * @returns {object|null} the covering node, or null
+ */
+function occluderOf(nodes, target) {
+  if (!target?.bounds || !target?.center) return null;
+  const from = nodes.indexOf(target);
+  if (from === -1) return null;
+  for (let i = from + 1; i < nodes.length; i += 1) {
+    const other = nodes[i];
+    if (!other?.bounds) continue;
+    if (boxInside(other.bounds, target.bounds)) continue;
+    if (boxHolds(other.bounds, target.center)) return other;
+  }
+  return null;
+}
+
+/**
+ * Refuse to tap something a person could not have tapped.
+ *
+ * Findable is not reachable. `tapIdScrolling` asks whether the node is in the
+ * tree; an occluded button is still in the tree, with an id, sane bounds and
+ * `enabled=true`, so the walk clicked it and the step went green. Seen on the
+ * real iPhone: the Send button entirely behind the keyboard at t≈67s of the
+ * J38 recording.
+ *
+ * SHY-0419 WAS that defect. The journey written to prove it stays fixed could
+ * not detect it, and would have gone green if it regressed. SHY-0428 is the
+ * same class from the other side.
+ *
+ * The failure names what was in the way, because "not found" would send the
+ * reader hunting for a missing element instead of looking at the overlay.
+ *
+ * @param {object[]} nodes
+ * @param {object} target
+ * @param {string} label
+ */
+function assertReachable(nodes, target, label) {
+  // XCUITest's own word for on-screen. Parsed since the driver was written and
+  // read by nothing until now.
+  if (target?.visible === false) {
+    throw new Error(`${label} is present but not visible — nothing could have tapped it`);
+  }
+  const over = occluderOf(nodes, target);
+  if (over) {
+    const name = over.cls || over.id || over.text || over.desc || '(unnamed)';
+    const b = over.bounds;
+    throw new Error(
+      `${label} is covered by ${name} [${b.x1},${b.y1}][${b.x2},${b.y2}] — a tap at its ` +
+        'centre would have hit that instead. Findable is not reachable (SHY-0419, SHY-0428).',
+    );
+  }
+}
+
 /**
  * Tap a node, re-resolving it IMMEDIATELY before the tap.
  *
@@ -594,14 +683,16 @@ async function dump(device) {
  *   chosen from several that match equally.
  * @param {string} [o.label] what to call it if it is gone
  */
-async function tapResolved(device, node, { relocate, label } = {}) {
-  // An identifier is unambiguous, so the element route is safe: the backend
-  // resolves and clicks in one operation with no window at all.
-  if (node.id && typeof device.tapElement === 'function') {
-    await device.tapElement(node.id);
-    return;
-  }
-
+async function tapResolved(device, node, labelOrOpts, extra) {
+  const opts =
+    typeof labelOrOpts === 'string'
+      ? { label: labelOrOpts, ...extra }
+      : { ...labelOrOpts, ...extra };
+  const { relocate, label } = opts;
+  // The tree is read FIRST, even when an element click is available, because
+  // reachability is a question about the tree. Skipping the dump for an id'd
+  // control is what let the element route bypass the check entirely — on iOS,
+  // which is where SHY-0419 happened.
   const fresh = await dump(device);
   const again = relocate
     ? relocate(fresh)
@@ -618,12 +709,20 @@ async function tapResolved(device, node, { relocate, label } = {}) {
     );
   }
 
+  // Checked BEFORE any of the click routes, so an occluded control fails the
+  // same way whichever backend is driving.
+  assertReachable(fresh, again, label || again.id || again.text || '(unnamed)');
+
+  if (again.id && typeof device.tapElement === 'function') {
+    await device.tapElement(again.id);
+    return;
+  }
+
   // Label-based element click ONLY when the label is unique on screen. Appium's
   // `/element` returns the first match, so using it on an ambiguous label would
-  // reintroduce exactly the bug above by another route.
+  // reintroduce the wrong-element bug by another route.
   const labelText = again.text || again.desc;
   if (
-    !again.id &&
     labelText &&
     typeof device.tapElementByLabel === 'function' &&
     fresh.filter((n) => n.text === labelText || n.desc === labelText).length === 1
@@ -631,13 +730,9 @@ async function tapResolved(device, node, { relocate, label } = {}) {
     await device.tapElementByLabel(labelText);
     return;
   }
-  if (again.id && typeof device.tapElement === 'function') {
-    await device.tapElement(again.id);
-    return;
-  }
 
-  // No identifier and an ambiguous label: a coordinate from the dump taken on
-  // the line above is the tightest window available, and the caller's own rule
+  // No identifier and an ambiguous label: a coordinate from the dump taken
+  // moments ago is the tightest window available, and the caller's own rule
   // chose which of the look-alikes it belongs to.
   await device.tap(again.center.x, again.center.y);
 }
@@ -653,10 +748,9 @@ async function tapResolved(device, node, { relocate, label } = {}) {
  * `tapResolved`.
  */
 async function tapId(device, id) {
-  if (typeof device.tapElement === 'function') {
-    await device.tapElement(id);
-    return;
-  }
+  // Everything goes through tapResolved, including backends that can click an
+  // element directly. Short-circuiting here skipped the reachability check for
+  // exactly the platform whose defect motivated it.
   const nodes = await dump(device);
   const n = byId(nodes, id);
   if (!n) throw new Error(`tap target #${id} not found on screen`);
@@ -2146,7 +2240,10 @@ if (require.main === module) {
 // the on-device integration runs). Requiring this file does NOT run main().
 module.exports = {
   parseArgs,
+  occluderOf,
+  assertReachable,
   tapResolved,
+  tapId,
   tapLowestText,
   lowestWithText,
   advanceUntil,

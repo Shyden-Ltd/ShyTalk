@@ -157,23 +157,37 @@ describe('tapResolved keeps the caller’s choice', () => {
     expect(device.taps).toEqual([{ x: 1009, y: 1739 }]);
   });
 
-  test('an id goes straight to an element click, with no coordinate at all', async () => {
+  test('an id is clicked as an ELEMENT, never as a coordinate', async () => {
+    // It no longer short-circuits straight to the element click: the tree is
+    // read first, because reachability is a question about the tree and
+    // skipping the dump let the element route bypass that check entirely — on
+    // iOS, which is where SHY-0419 happened. What must still hold is that the
+    // tap is an element click and no coordinate is used.
+    const xml =
+      '<hierarchy><node resource-id="support_send" class="android.widget.Button" ' +
+      'text="Send" bounds="[40,300][380,380]" enabled="true" /></hierarchy>';
     const device = {
-      ...recordingDevice(signOutDialog()),
+      kind: 'android',
+      taps: [],
       elementTaps: [],
+      async dumpXml() {
+        return xml;
+      },
+      async tap(x, y) {
+        this.taps.push({ x, y });
+      },
       async tapElement(id) {
         this.elementTaps.push(id);
       },
     };
-    device.taps = [];
 
-    await tapResolved(device, node({ id: 'support_send', center: { x: 5, y: 5 } }));
+    await tapResolved(device, node({ id: 'support_send', center: { x: 210, y: 340 } }));
 
     expect({ elements: device.elementTaps, coordinates: device.taps }).toEqual({
       elements: ['support_send'],
       coordinates: [],
     });
-  });
+  }, 15000);
 
   test('a target that has gone is a failure, not a tap at its last position', async () => {
     const device = recordingDevice([]);
