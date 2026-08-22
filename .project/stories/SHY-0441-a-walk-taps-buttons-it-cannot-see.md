@@ -189,6 +189,39 @@ from. They now read the tree, check, and then click.
 now enters through `tapId` with real uiautomator XML and asserts NO tap happens;
 the same mutation reddens three of them.
 
+## What the devices taught it
+
+The first version asked a general question — is anything drawn later holding
+this point — and **failed on the first real screen on both phones.** Three tree
+shapes defeated it:
+
+| # | shape | why it broke the rule |
+| --- | --- | --- |
+| 1 | Compose semantics sibling (Android) | `Role.Button` node beside the label, `clickable="false"`, **larger** than it. The only exemption was "wholly INSIDE the target"; Compose emits the inverse. |
+| 2 | Child overhanging its parent by 1pt (iOS) | `main_profileTab` `[285,798][420,878]` vs caption `[328,830][377,879]`. Containment needs `879 <= 878`. **Every bottom-nav tab became untappable.** |
+| 3 | Full-screen transparent layer (iOS) | Empty, unnamed `XCUIElementTypeOther [0,0][420,912]`, `accessible="false"` — and `visible="true"`, so filtering on `visible` would not have cleared it. |
+
+Thirteen controls flagged on one settled iOS Home screen; none absorbed a touch.
+
+So the question became specific: **is a SYSTEM OVERLAY on top of it?** That is
+exactly the two defects this exists for, and no layout layer can reach it.
+Accepted cost, stated in the code: a product modal covering a control is not
+caught. A check that reddens healthy walks gets disabled, and then catches
+nothing at all.
+
+**XCUITest's `visible` was also removed.** It was gated on the strength of the
+attribute's name; on a plain Home screen the captions `Rooms`, `Messages` and
+`Profile` all report `visible="false"` while rendered in front of you.
+
+### Device evidence
+
+- **Android J38 PASS 14/14, 243.0s, ZERO reachability failures** — on a walk
+  that drives Compose buttons throughout (Send, the three-way choice, Back,
+  Settings rows), all of which have the shape that broke version one.
+- All three geometries are now fixtures, alongside a test that a real keyboard
+  over the same control still counts, so the narrowing cannot quietly cost the
+  detection it exists for.
+
 ## Notes
 
 - Found by the iOS device agent on 2026-08-22 while verifying the locator work,
