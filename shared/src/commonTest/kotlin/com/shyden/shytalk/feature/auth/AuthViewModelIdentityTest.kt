@@ -155,6 +155,18 @@ class AuthViewModelIdentityTest {
 
     private class FakeIdentityRepository : IdentityRepository {
         var resolveResult: Resource<SignInResult> = Resource.Success(SignInResult.NotFound)
+
+        /**
+         * Results served in order before falling back to [resolveResult] —
+         * how a call that fails once and then succeeds is expressed. A fake
+         * that can only answer the same way every time cannot tell a
+         * TRANSIENT failure from a sustained one, which is the whole
+         * distinction SHY-0442 turns on.
+         */
+        val queuedResolveResults: MutableList<Resource<SignInResult>> = mutableListOf()
+
+        /** How many times the ViewModel actually asked. */
+        var resolveCallCount: Int = 0
         var createResult: Resource<CreateUserResult> = Resource.Success(CreateUserResult(10000001))
         var linkResult: Resource<Unit> = Resource.Success(Unit)
         var unlinkResult: Resource<Unit> = Resource.Success(Unit)
@@ -171,7 +183,8 @@ class AuthViewModelIdentityTest {
         ): Resource<SignInResult> {
             resolvedProvider = provider
             resolvedIdentifier = identifier
-            return resolveResult
+            resolveCallCount++
+            return if (queuedResolveResults.isNotEmpty()) queuedResolveResults.removeFirst() else resolveResult
         }
 
         override suspend fun createUser(
@@ -834,6 +847,132 @@ class AuthViewModelIdentityTest {
             val state = vm.uiState.value
             assertTrue(state.isBackendUnreachable, "Network error should show 'Unable to Connect'")
             assertFalse(authRepo.signedOut, "Network errors should NOT trigger sign-out")
+        }
+
+    // ── Cold start: a blip on the first call (SHY-0442) ──────────────
+    //
+    // Filmed on a real iPhone, 2026-08-22: twenty seconds of full-screen
+    // "Unable to Connect … check your internet connection" against a stack
+    // that was up and answering, because ONE non-auth failure went straight
+    // to the error state with nothing between. It cleared only when the
+    // harness force-stopped and relaunched, which a person does not do.
+
+    private fun signedInAuthRepo() =
+        FakeAuthRepository(
+            firebaseUid = "firebase-uid",
+            isAuthenticated = true,
+            currentUserEmail = "user@test.com",
+            providerInfo = "email" to "user@test.com",
+        )
+
+    @Test
+    fun resolveIdentityFailsOnce_thenSucceeds_neverShowsUnableToConnect() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    queuedResolveResults +=
+                        listOf(
+                            Resource.Error("Software caused connection abort"),
+                            Resource.Success(SignInResult.Found(10000005)),
+                        )
+                }
+            val authRepo = signedInAuthRepo()
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.resolveAfterExternalSignIn("email", "user@test.com")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(
+                state.isBackendUnreachable,
+                "one dropped connection on the first call must not blame somebody's internet",
+            )
+            assertTrue(state.isAuthenticated, "the retry succeeded, so the app must carry on")
+            assertEquals(2, identityRepo.resolveCallCount, "the failed call must actually be retried")
+            assertFalse(authRepo.signedOut, "a network blip is not a reason to sign anybody out")
+        }
+
+    @Test
+    fun resolveIdentityFailsEveryTime_stillShowsUnableToConnect() =
+        runTest {
+            // The other half. A genuine outage must still reach the person —
+            // a retry that never gives up would replace a wrong error screen
+            // with an endless spinner, which is worse.
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("Failed to connect to /10.0.2.2:3000")
+                }
+            val authRepo = signedInAuthRepo()
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.resolveAfterExternalSignIn("email", "user@test.com")
+            advanceUntilIdle()
+
+            assertTrue(vm.uiState.value.isBackendUnreachable, "a sustained outage must still be shown")
+            assertEquals(
+                BackendFailurePolicy.TRANSIENT_RETRY_ATTEMPTS + 1,
+                identityRepo.resolveCallCount,
+                "the budget must be spent exactly once, and then stop",
+            )
+        }
+
+    @Test
+    fun resolveIdentityFailsWithAuthError_isNotRetried() =
+        runTest {
+            // Asking again with the same rejected token fails the same way and
+            // postpones the sign-in screen that is the actual answer.
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Error("INVALID_REFRESH_TOKEN")
+                }
+            val authRepo = signedInAuthRepo()
+
+            val vm =
+                AuthViewModel(authRepo, FakeUserRepository(), FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.resolveAfterExternalSignIn("email", "user@test.com")
+            advanceUntilIdle()
+
+            assertEquals(1, identityRepo.resolveCallCount, "an auth error must be acted on at once")
+            assertFalse(vm.uiState.value.isBackendUnreachable, "an auth error is not an outage")
+            assertTrue(authRepo.signedOut, "a rejected session is cleared")
+        }
+
+    @Test
+    fun aSuccessfulFirstCallCostsExactlyOneRoundTrip() =
+        runTest {
+            // "Retries are bounded and do not delay a successful start."
+            // Asserted as the call count rather than as elapsed virtual time:
+            // this suite drives the ViewModel on its own injected dispatcher,
+            // so runTest's clock is not the one the retry would sleep on and
+            // an assertion against it would prove nothing. One call means the
+            // retry loop was never entered, and the backoff lives inside it.
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val vm =
+                AuthViewModel(
+                    signedInAuthRepo(),
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    identityRepo,
+                    "device-1",
+                    bypassDeviceChecks = true,
+                )
+            advanceUntilIdle()
+
+            vm.resolveAfterExternalSignIn("email", "user@test.com")
+            advanceUntilIdle()
+
+            assertEquals(1, identityRepo.resolveCallCount, "a call that worked must not be repeated")
         }
 
     @Test

@@ -1270,8 +1270,8 @@
     <!-- Connection / Loading states -->
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">មិនអាចភ្ជាប់បានទេ។</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk កំពុងមានបញ្ហាក្នុងការចូលទៅកាន់ម៉ាស៊ីនមេរបស់យើង។ សូមពិនិត្យមើលការតភ្ជាប់អ៊ីនធឺណិតរបស់អ្នក ហើយព្យាយាមម្តងទៀត។</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">យើងមិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេ ShyTalk បានទេ។ វាអាចបណ្ដាលមកពីការតភ្ជាប់របស់អ្នក ឬអាចមកពីយើង — សូមព្យាយាមម្ដងទៀត។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_reimagined">បន្ទប់ជជែកជាសំឡេង គិតឡើងវិញ។</string>
     <!-- google-translated 2026-05-04 -->

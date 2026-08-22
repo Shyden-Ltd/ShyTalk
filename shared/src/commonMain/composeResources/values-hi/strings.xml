@@ -985,8 +985,8 @@
     <string name="closing">समापन...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">कनेक्ट हो रहा है...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk को हमारे सर्वर तक पहुंचने में परेशानी हो रही है। अपने इंटरनेट कनेक्शन की जाँच करें और पुन: प्रयास करें।</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके। यह आपके कनेक्शन की वजह से हो सकता है, या हमारी वजह से — कृपया फिर से कोशिश करें।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">यदि आपको सहायता चाहिए, तो shytalk.help@gmail.com पर संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->

@@ -985,8 +985,8 @@
     <string name="closing">Sluiten...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Verbinden...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk heeft problemen met het bereiken van onze servers. Controleer uw internetverbinding en probeer het opnieuw.</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">We konden de servers van ShyTalk niet bereiken. Dat kan aan je verbinding liggen, of aan ons — probeer het opnieuw.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">Als je hulp nodig hebt, neem dan contact op met shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->

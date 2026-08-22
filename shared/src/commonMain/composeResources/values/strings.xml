@@ -678,7 +678,7 @@
 
     <!-- Connection / Loading states -->
     <string name="unable_to_connect">Unable to Connect</string>
-    <string name="connection_trouble">ShyTalk is having trouble reaching our servers. Please check your internet connection and try again.</string>
+    <string name="connection_trouble">We could not reach ShyTalk's servers. That may be your connection, or it may be us — please try again.</string>
     <string name="voice_chat_reimagined">Voice chat rooms, reimagined.</string>
     <string name="profile_not_available">This profile is not available</string>
     <string name="blocked_by_user">You have been blocked by this user</string>

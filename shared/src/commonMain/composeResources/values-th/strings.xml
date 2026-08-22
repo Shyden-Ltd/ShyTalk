@@ -983,8 +983,8 @@
     <string name="closing">กำลังปิด...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">กำลังเชื่อมต่อ...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk กำลังประสบปัญหาในการเข้าถึงเซิร์ฟเวอร์ของเรา โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของคุณแล้วลองอีกครั้ง</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">เราไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ของ ShyTalk ได้ อาจเป็นที่การเชื่อมต่อของคุณ หรืออาจเป็นที่เรา — โปรดลองอีกครั้ง</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">หากคุณต้องการความช่วยเหลือ โปรดติดต่อ shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->

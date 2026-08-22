@@ -985,8 +985,8 @@
     <string name="closing">閉会中...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">接続中...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk がサーバーにアクセスできません。インターネット接続を確認して、もう一度試してください。</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">ShyTalk のサーバーに接続できませんでした。お客様の通信環境が原因の場合もあれば、当方が原因の場合もあります。もう一度お試しください。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">サポートが必要な場合は、shytalk.help@gmail.com までご連絡ください。</string>
     <!-- google-translated 2026-05-04 -->

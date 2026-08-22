@@ -985,8 +985,8 @@
     <string name="closing">폐쇄...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">연결 중...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk가 서버에 연결하는 데 문제가 있습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">ShyTalk 서버에 연결하지 못했습니다. 연결 환경 때문일 수도 있고, 저희 쪽 문제일 수도 있습니다. 다시 시도해 주세요.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">도움이 필요하시면 Shytalk.help@gmail.com으로 연락주세요.</string>
     <!-- google-translated 2026-05-04 -->

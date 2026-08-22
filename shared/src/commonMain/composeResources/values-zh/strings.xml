@@ -985,8 +985,8 @@
     <string name="closing">关闭...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">正在连接...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk 无法访问我们的服务器。请检查您的互联网连接，然后重试。</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">我们无法连接到 ShyTalk 的服务器。可能是你的网络，也可能是我们这边的问题 — 请再试一次。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">如果您需要帮助，请联系 shytalk.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->

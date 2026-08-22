@@ -985,8 +985,8 @@
     <string name="closing">Đang đóng...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Đang kết nối...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk đang gặp sự cố khi truy cập máy chủ của chúng tôi. Vui lòng kiểm tra kết nối internet của bạn và thử lại.</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Chúng tôi không thể kết nối tới máy chủ của ShyTalk. Có thể do kết nối của bạn, cũng có thể do chúng tôi — vui lòng thử lại.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_support_help">Nếu bạn cần trợ giúp, hãy liên hệ với nhút nhát.help@gmail.com</string>
     <!-- google-translated 2026-05-04 -->
