@@ -28,7 +28,7 @@ import { showToast, escapeHtml } from "/js/core/ui.js";
 // prefix left the Support tab rendering nothing at all -- no tickets, no
 // empty state -- in every browser, while every source-scanning test stayed
 // green. `main.js` had it right all along.
-import { renderEvidence } from "/admin/js/tabs/users.js";
+import { renderEvidence, openEvidenceLightbox } from "/admin/js/tabs/users.js";
 
 // ── State ──────────────────────────────────────────────────────────
 
@@ -134,6 +134,26 @@ async function loadAttachments(ticketId, card) {
     const urls = Array.isArray(res?.attachments) ? res.attachments : [];
     if (urls.length === 0) return;
     slot.innerHTML = `<div style="margin-top:8px;">${renderEvidence(urls)}</div>`;
+
+    // Wire the thumbnails, the way `appeals.js` does.
+    //
+    // Without this the attachments RENDER and do nothing: an admin sees a video
+    // with a play badge on it, clicks, and gets no lightbox and no sound. The
+    // markup came free with `renderEvidence`; the behaviour did not, and the
+    // difference is invisible in a screenshot — which is how it survived a
+    // source-scanning guard and a rendering test that only asked whether the
+    // thumbnail appeared.
+    for (const thumb of slot.querySelectorAll(
+      ".evidence-thumb:not([data-wired])",
+    )) {
+      thumb.dataset.wired = "1";
+      thumb.addEventListener("click", () => {
+        openEvidenceLightbox(
+          thumb.dataset.evidenceUrl,
+          thumb.dataset.evidenceType,
+        );
+      });
+    }
   } catch (err) {
     slot.innerHTML =
       '<div style="font-size:11px;color:var(--danger);margin-top:6px;">' +

@@ -1,6 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import { adminLogin, navigateToTab } from "./helpers/admin-auth";
 import { AdminApi } from "./helpers/api";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * The admin Support tab, in a real browser, against the real stack — SHY-0387 /
@@ -42,14 +44,33 @@ const cardFor = (page: Page, needle: string) =>
   page.locator("#support-list > *").filter({ hasText: needle });
 
 /** Raise a ticket as the signed-in admin, and optionally add a follow-up. */
+async function uploadFixture(
+  api: AdminApi,
+  page: Page,
+  file: string,
+  contentType: string,
+): Promise<string> {
+  // The real signed-URL path, with real bytes — the same three steps the app
+  // takes. A stub here would prove the renderer can render a fixture, which is
+  // not the thing that breaks.
+  const slot = await api.post("/api/support-tickets/upload-url", { contentType });
+  const put = await page.request.put(slot.uploadUrl, {
+    headers: { "Content-Type": contentType },
+    data: readFileSync(resolve(file)),
+  });
+  expect(put.ok(), `uploading ${file} failed with ${put.status()}`).toBe(true);
+  return slot.r2Key;
+}
+
 async function seedTicket(
   api: AdminApi,
   message: string,
-  opts: { category?: string; followUp?: string } = {},
+  opts: { category?: string; followUp?: string; attachments?: string[] } = {},
 ): Promise<string> {
   const raised = await api.post("/api/support-tickets", {
     message,
     category: opts.category ?? "bug",
+    ...(opts.attachments?.length ? { attachments: opts.attachments } : {}),
   });
   const id = raised.ticketId;
   expect(id, "the API did not return a ticket id").toBeTruthy();
@@ -214,6 +235,64 @@ test.describe("Admin Support tab", () => {
    * could not be loaded", INCLUDING tickets with no attachments, and no request
    * ever reached the wire.
    */
+  /**
+   * The admin has to be able to WATCH what somebody sent, with sound.
+   *
+   * The grid thumbnail is deliberately `muted` — a wall of tickets all talking
+   * at once is unusable. The LIGHTBOX is the one that plays, and it must not
+   * inherit that mute, or an admin judging a harassment report hears nothing
+   * and never learns the audio was there.
+   *
+   * Whether a given FILE carries audio is a property of the file, not of the
+   * panel, and is proven at the storage layer instead: a clip recorded on the
+   * real phone reached the admin byte-identical with its audio track intact.
+   * What this test owns is that the player lets you hear it.
+   */
+  test("an attached video plays with sound, not muted", async ({ page }) => {
+    const message = `${marker()} ticket with a video`;
+    const key = await uploadFixture(api, page, "assets/Duck Warning.mp4", "video/mp4");
+    await seedTicket(api, message, { attachments: [key] });
+
+    await navigateToTab(page, "Support");
+    const card = cardFor(page, message);
+    await expect(card).toBeVisible();
+
+    const thumb = card.locator('[data-evidence-type="video"]').first();
+    await expect(thumb).toBeVisible();
+    // The thumbnail SHOULD be muted — that is the grid behaving well.
+    expect(await thumb.locator("video").evaluate((v: HTMLVideoElement) => v.muted)).toBe(true);
+
+    await thumb.click();
+    const player = page.locator(".evidence-lightbox video");
+    await expect(player).toBeVisible();
+
+    expect(
+      await player.evaluate((v: HTMLVideoElement) => ({
+        muted: v.muted,
+        controls: v.controls,
+        volume: v.volume,
+      })),
+    ).toEqual({ muted: false, controls: true, volume: 1 });
+  });
+
+  test("an attached image is shown to the admin", async ({ page }) => {
+    const message = `${marker()} ticket with a screenshot`;
+    const key = await uploadFixture(
+      api,
+      page,
+      "public/emulator-blocked-screenshot.png",
+      "image/png",
+    );
+    await seedTicket(api, message, { attachments: [key] });
+
+    await navigateToTab(page, "Support");
+    const img = cardFor(page, message).locator('[data-evidence-type="image"] img').first();
+    await expect(img).toBeVisible();
+    // A broken <img> is still "visible" to Playwright; naturalWidth separates a
+    // rendered picture from a broken-link icon.
+    expect(await img.evaluate((i: HTMLImageElement) => i.naturalWidth)).toBeGreaterThan(0);
+  });
+
   test("a ticket with no attachments shows no attachment error", async ({
     page,
   }) => {

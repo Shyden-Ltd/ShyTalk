@@ -187,3 +187,55 @@ describe('attachment limits — a video is actually measured', () => {
     );
   });
 });
+
+describe('the admin can actually PLAY what somebody attached', () => {
+  const ADMIN_HTML = 'public/admin/index.html';
+  const SUPPORT_TAB = 'public/admin/js/tabs/support.js';
+
+  /**
+   * Video evidence was unplayable on EVERY admin tab, and had been all along.
+   *
+   * The page's CSP names `img-src 'self' https: data: blob: http://localhost:*`
+   * but had no `media-src` at all — so media fell back to `default-src 'self'`
+   * and every `<video>` was blocked before a request was made. Images loaded,
+   * video did not, and the failure looked like a broken file: the lightbox's
+   * own error handler swapped in "This video could not be played."
+   *
+   * That covers harassment-report evidence too, not just support attachments.
+   */
+  test('the CSP allows media, not only images', () => {
+    const html = read(ADMIN_HTML);
+    const csp = /content="([^"]*default-src[^"]*)"/.exec(html)?.[1] ?? '';
+    // Reported as an object so a failure NAMES what was missing. Jest's
+    // `expect` takes ONE argument — a second is a Vitest habit and throws.
+    expect({ found: csp !== '' }).toEqual({ found: true });
+    expect(csp).toMatch(/media-src[^;]+/);
+
+    // Media has to be at least as reachable as images, or the same class of
+    // bug returns the next time an origin is added to one and not the other.
+    const imgSrc = /img-src([^;]*)/.exec(csp)?.[1] ?? '';
+    const mediaSrc = /media-src([^;]*)/.exec(csp)?.[1] ?? '';
+    for (const origin of ['https:', 'blob:', 'http://localhost:*']) {
+      expect({
+        origin,
+        inImgSrc: imgSrc.includes(origin),
+        inMediaSrc: mediaSrc.includes(origin),
+      }).toEqual({ origin, inImgSrc: true, inMediaSrc: true });
+    }
+  });
+
+  /**
+   * `renderEvidence` produces the markup; the CLICK is separate, and the
+   * Support tab never wired it. An admin saw a video thumbnail with a play
+   * badge on it, clicked, and nothing happened — invisible in a screenshot,
+   * and invisible to a test that only asks whether the thumbnail appeared.
+   */
+  test('support thumbnails open the lightbox, like appeals', () => {
+    const tab = codeOf(SUPPORT_TAB);
+    expect(tab).toContain('openEvidenceLightbox');
+    expect(tab).toMatch(/evidence-thumb:not\(\[data-wired\]\)/);
+    // Bound to the CALL, not the import: an import declares availability, not
+    // use, and this file has already been caught by that distinction once.
+    expect(tab).toMatch(/openEvidenceLightbox\(\s*thumb\.dataset\.evidenceUrl/);
+  });
+});
