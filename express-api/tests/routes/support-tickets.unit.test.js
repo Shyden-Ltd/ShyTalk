@@ -290,6 +290,57 @@ describe('POST /api/support-tickets', () => {
 
 // ─── SHY-0387: categories and attachments ───────────────────────
 
+describe('POST /api/support-tickets — measuring the warning — SHY-0396', () => {
+  // The story's observability clause: "a ticket raised despite the warning is
+  // distinguishable in the data, so the warning's effect can actually be judged
+  // rather than assumed". Without this, removing the 409 is a change nobody can
+  // evaluate afterwards.
+  test('records how many requests were already open', async () => {
+    mockQueryDocs.mockResolvedValue([
+      { id: 't1', userId: 10000001, status: 'open', message: 'first' },
+      { id: 't2', userId: 10000001, status: 'open', message: 'second' },
+    ]);
+
+    await request(createApp()).post('/api/support-tickets').send({ message: 'A third thing' });
+
+    expect(writtenTicket().openTicketsAtCreation).toBe(2);
+  });
+
+  test('a first-ever request records zero, not an absent field', async () => {
+    mockQueryDocs.mockResolvedValue([]);
+
+    await request(createApp()).post('/api/support-tickets').send({ message: 'First time' });
+
+    // Zero rather than undefined: "raised with none open" and "raised before we
+    // started counting" are different facts and must not look identical.
+    expect(writtenTicket().openTicketsAtCreation).toBe(0);
+  });
+
+  /**
+   * The count is measurement, and measurement must never cost somebody their
+   * ticket. This is the same rule the client follows for its own lookup.
+   */
+  test('a failed count still raises the ticket', async () => {
+    mockQueryDocs.mockRejectedValue(new Error('firestore unavailable'));
+
+    const res = await request(createApp()).post('/api/support-tickets').send({ message: 'Help' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ticketId).toBe('ticket-id');
+    expect(writtenTicket().openTicketsAtCreation).toBeNull();
+  });
+
+  test('the count is taken from the CALLER, never from the body', async () => {
+    mockQueryDocs.mockResolvedValue([{ id: 't1', userId: 10000001, status: 'open', message: 'a' }]);
+
+    await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Help', openTicketsAtCreation: 99 });
+
+    expect(writtenTicket().openTicketsAtCreation).toBe(1);
+  });
+});
+
 describe('POST /api/support-tickets — the sixth approved category', () => {
   test('accepts "bug", the wire value for "Something is broken"', async () => {
     const res = await request(createApp())

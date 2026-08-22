@@ -158,6 +158,11 @@ not a feature.
 
 ## Notes
 
-- The app string `support_form_error_already_open` says "We will reply to that
-  one." That sentence becomes true when this ships. Until then it is a promise
-  the product cannot keep — noted deliberately rather than reworded twice.
+- That string is gone. `support_form_error_already_open` said "We will reply to
+  that one", which was the wording of a refusal — SHY-0396 deleted both the
+  refusal and the sentence on 2026-08-22. So this story no longer inherits a
+  promise the product cannot keep; it is free to write its own copy.
+- What SHY-0396 leaves behind for this story is `support_duplicate_reminder`,
+  which tells somebody a duplicate goes to the back of the queue. If this story
+  starts emailing people about their ticket, check that sentence still reads
+  true alongside whatever the email says.

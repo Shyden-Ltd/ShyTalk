@@ -1666,7 +1666,6 @@
     <string name="support_form_error_empty">กรุณาเขียนข้อความก่อนส่ง</string>
     <string name="support_form_error_too_long">ข้อความของคุณยาวเกินไป กรุณาย่อแล้วลองใหม่</string>
     <string name="support_form_error_generic">เราไม่สามารถส่งข้อความของคุณได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่</string>
-    <string name="support_form_error_already_open">คุณมีคำขอที่เปิดอยู่แล้ว เราจะตอบกลับในคำขอนั้น</string>
     <string name="support_form_error_attachment_failed">เราไม่สามารถอัปโหลดไฟล์นั้นได้ คุณสามารถส่งข้อความโดยไม่มีไฟล์ได้</string>
     <string name="support_form_error_attachment_too_large">ไฟล์นี้ใหญ่เกินไป กรุณาเลือกไฟล์ที่เล็กกว่า 25 MB</string>
     <string name="support_form_error_attachment_too_many">คุณแนบไฟล์ได้สูงสุด 10 ไฟล์</string>
@@ -1762,4 +1761,18 @@
     <string name="age_seg_age_up_welcome_pm">ยินดีต้อนรับ — บัญชีของคุณได้ย้ายเข้าสู่แวดวง ShyTalk ที่กว้างขึ้นแล้ว\n\nคุณจะเริ่มเห็นผู้คนมากขึ้นในการค้นพบและรายการนับจากนี้เป็นต้นไป การเชื่อมต่อก่อนหน้านี้ที่จัดระเบียบในขณะที่บัญชีของคุณอยู่ในวงกลมเล็ก ๆ จะไม่สามารถเรียกคืนได้โดยอัตโนมัติ แต่คุณสามารถเพิ่มใครก็ได้ที่คุณต้องการติดตามอีกครั้ง</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">รายละเอียดบัญชีของคุณได้รับการอัปเดตโดยเจ้าหน้าที่ของ ShyTalk ด้วยเหตุนี้ ผู้คนและห้องที่คุณมองเห็นจึงถูกจำกัดให้เหลือวงกลมเล็กลง\n\nหากคุณคิดว่านี่เป็นข้อผิดพลาด โปรดติดต่อฝ่ายสนับสนุนแล้วเราจะตรวจสอบ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">ขอบคุณ. เราได้เพิ่มสิ่งนี้ลงในคำขอที่คุณได้เปิดไว้แล้ว</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">การส่งปัญหาเดิมอีกครั้งไม่ได้ทำให้เร็วขึ้น คำขอครั้งที่สองสำหรับสิ่งที่คุณบอกเราไปแล้วจะต้องไปที่หลังคิว ตามหลังคนอื่นๆ ที่รออยู่</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">มันเป็นปัญหาที่ฉันรายงานไปแล้ว</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">มันเป็นปัญหาใหม่</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">กลับไป</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">คุณมีคำขอที่เปิดอยู่แล้ว 1 รายการ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">คุณมีคำขอที่เปิดอยู่ %1$d รายการแล้ว</string>
 </resources>

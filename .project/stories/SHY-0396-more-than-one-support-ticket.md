@@ -1,7 +1,7 @@
 ---
 id: SHY-0396
-status: Draft
-owner: unassigned
+status: In Review
+owner: claude
 created: 2026-08-21
 priority: P1
 effort: S
@@ -90,8 +90,9 @@ duplicate is told why not to, at the moment it matters.
 
 ### Edge cases
 
-- [ ] Somebody whose only ticket is **resolved** is offered reopening, not a
-      duplicate warning.
+- [ ] Somebody whose only ticket is **resolved** sees no warning and raises a
+      new request as normal. Reopening a resolved ticket is [[SHY-0399]] — this
+      story must not promise a route that does not exist yet.
 - [ ] Somebody with several open tickets is warned once, not once per ticket.
 - [ ] The warning names how many are open, so it reads as a fact rather than a
       scold.
@@ -136,11 +137,11 @@ duplicate is told why not to, at the moment it matters.
 - **When** they send it
 - **Then** it is raised like any other
 
-**Scenario: A closed request offers reopening instead**
+**Scenario: A closed request is not treated as an open one**
 
 - **Given** somebody whose only request was closed
 - **When** they start a new one
-- **Then** they are offered to reopen the closed one
+- **Then** it is raised with no warning
 
 ## Test Plan
 
@@ -153,10 +154,14 @@ duplicate is told why not to, at the moment it matters.
 
 ## Out of Scope
 
-- **Updating** an existing ticket, and **reopening** a closed one. This story
-  makes the warning honest by pointing at them; [[SHY-0399]] builds them. Until
-  it does, the warning must not promise a route that is not there — say what is
-  true today.
+- **Reopening** a closed one — [[SHY-0399]]. The warning must not promise a
+  route that is not there, so somebody whose only ticket is resolved simply
+  raises a new one.
+- Adding to an OPEN ticket is **in** scope, not out. The operator's instruction
+  on 2026-08-21 named it explicitly — "they can update their existing ticket if
+  it's the same open issue" — so `POST /support-tickets/{id}/messages` belongs
+  here. An earlier draft of this line said otherwise and contradicted the
+  implementation direction below; the instruction wins.
 - The reply channel — [[SHY-0397]], [[SHY-0398]].
 
 ## Dependencies
@@ -217,3 +222,42 @@ deleted. Grep `AlreadyOpen`, `alreadyHasOpenTicket`, `409` under
 the iPhone caused the Android send to answer *"You already have a request open.
 We will reply to that one."* as the same persona. Duplicate prevention works
 across devices — it is simply the wrong behaviour.
+
+
+## What was built (2026-08-22)
+
+**Server** — `express-api/src/routes/support-tickets.js`
+
+| Change | Why |
+| --- | --- |
+| the 409 is gone from `POST /support-tickets` | a second request is never refused |
+| `GET /support-tickets/mine/open` | the summaries the choice is answered against; mounted before `/:id` so `mine` is never read as an id |
+| `POST /support-tickets/{id}/messages` | where the words go for "it is the problem I already reported"; 404 for somebody else's ticket, because whether it exists is not their business |
+| `openTicketsAtCreation` on every new ticket | the observability clause — counted server-side, so a client cannot claim it saw a warning it never showed |
+
+**Client** — `SupportRepository`, `SupportFormViewModel`, `SupportPage`, both
+platform repositories.
+
+`RaiseTicketOutcome.AlreadyOpen` and `alreadyHasOpenTicket` are deleted. What
+replaces them is `openTickets` + `awaitingDuplicateChoice`: having a request open
+is a QUESTION asked before sending, not an outcome of having sent. The list is
+fetched when the form OPENS, so the warning is on screen before anybody starts
+typing, and the choice screen appears instantly at Send.
+
+A lookup that fails is treated as "nothing open" on purpose. The worst case is a
+duplicate ticket; the alternative costs somebody their report.
+
+**Tests**
+
+| Suite | Count |
+| --- | --- |
+| `support-tickets.unit.test.js` | 56 |
+| `SupportFormViewModelTest` | 39 |
+| `SupportFormWiringPinTest` | 13 |
+| `SupportRepositoryImplTest` (Android) | 24 |
+| `support-duplicate-copy.test.js` (21 locales) | 231 |
+
+**Journey** — `journey-tests/j38-asking-for-help-twice.feature`, 10 scenarios.
+
+**Still to do before this can move:** the local device walk on Android and
+iPhone, then the evidence page and operator sign-off.

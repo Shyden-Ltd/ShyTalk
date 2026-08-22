@@ -29,6 +29,24 @@ This directory is the source of truth for the `/manual-qa` skill. The primary ax
 | `j19-osa-migration-regression.feature` | OSA #17 migration steady-state guards — followingIds, mixed rooms, frozen convos, idempotency |
 | `j20-signin-environment-matrix.feature` | Sign-in across every environment/flavour combination — persona picker, email OTP, provider fallbacks |
 | `j21-age-gate-cta.feature` | Adam — every 18+ wall (gacha, DM, in-room PM sheet) routes its "Verify now" CTA to the submit screen, on both platforms |
+| `j22-translation-across-languages.feature` | Bao + Yuki — a Mandarin lesson understood in Japanese, and back |
+| `j23-my-data-and-my-account.feature` | Lena — exports her data, then deletes her account, and both rights actually work |
+| `j24-app-lock-and-sign-in-routes.feature` | Nora — app lock, every sign-in route back in, and the phone staying hers |
+| `j25-showing-somebody-what-happened.feature` | Nora — evidence attached to a report reaches the admin who has to judge it |
+| `j26-paying-and-being-paid-up.feature` | Alice — subscription, renewal, lapse and refund, all accounted for |
+| `j27-what-was-said-and-who-can-say-it.feature` | Raul — an edited message, the record that holds, and rules that follow the person |
+| `j28-groups-and-second-chances.feature` | Alice + Theo + Selma — a conversation with more than two people in it |
+| `j29-the-second-factor.feature` | Greta — admin 2FA that actually stands up to being attacked |
+| `j30-what-i-own-and-what-you-show-me.feature` | Selma + Theo — owned gifts, published notices, and what reaches whom |
+| `j31-the-way-back.feature` | Two admins — every decision made about somebody can be undone and seen |
+| `j32-deleting-things-on-purpose.feature` | Greta — a cleanup removes exactly what it names and nothing else |
+| `j33-the-shop-the-notice-and-the-fingerprint.feature` | Alice — buying, being told, unsubscribing, and getting back in |
+| `j34-the-safety-net.feature` | Greta — restore, resolve, correct: the net that catches a wrong call |
+| `j35-using-the-app-without-seeing-it.feature` | Alice — the whole app driven by a screen reader, on both platforms |
+| `j36-the-screens-you-hope-nobody-needs.feature` | Alice — account-error screens, their codes, and the gate in front of the locks |
+| `j37-the-last-levers.feature` | Greta + Raul — device suspension and the last admin levers |
+| `j38-asking-for-help-twice.feature` | Alice — a second support request is warned about, never refused (SHY-0396) |
+| `j39-the-files-people-send-us.feature` | Nora — attachments bounded, scanned, and never downloadable by an admin (SHY-0420) |
 | `_osa17-coverage-matrix.md` | OSA #17 prod-readiness coverage matrix — PR × behavior × covering scenario × status |
 | `manual-verification-ledger.json` | Human sign-off ledger for `@manual` scenarios (file-hash + commit-SHA + 30-day expiry) |
 | `manual-verification-ledger.schema.json` | JSON Schema for the ledger |

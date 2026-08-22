@@ -18,11 +18,15 @@ import kotlin.coroutines.cancellation.CancellationException
 /**
  * SHY-0385 — the Android side of raising a support ticket.
  *
- * The 409 mapping is the whole point of these tests. "You already have an open
- * request" is not a retryable failure and must not be shown as one, and it has
- * to be recognised by STATUS CODE — recognising it by the server's English
- * message would break on a rewording and never worked for a non-English reader
- * in the first place.
+ * The 409 mapping used to be the whole point of these tests. SHY-0396 removed
+ * it: the operator's correction on 2026-08-21 was that a second request must
+ * never be refused, because somebody with an open ticket may have a completely
+ * different problem and refusing them means the new problem reaches nobody.
+ *
+ * What replaces it is `openTickets` — how the form finds out there is something
+ * to warn about — and `addToTicket`, which is where the words go when the answer
+ * is "it is the problem I already reported". The tests below cover both, and pin
+ * that a conflict is now nothing special.
  */
 class SupportRepositoryImplTest {
     private val api = mockk<WorkerApiClient>()
@@ -40,14 +44,110 @@ class SupportRepositoryImplTest {
             assertEquals("t-1", (outcome as RaiseTicketOutcome.Raised).ticketId)
         }
 
+    /**
+     * The inversion, kept as a test rather than deleted.
+     *
+     * A conflict is now an ordinary failure — the person's words stay on screen
+     * and they can retry. Nothing may special-case it back into a refusal.
+     */
     @Test
-    fun `a 409 is an already-open request, not a failure`() =
+    fun `a conflict is now an ordinary failure, not a refusal`() =
         runTest {
-            coEvery { api.post(any(), any()) } throws ApiException(409, "You already have an open support request")
+            coEvery { api.post(any(), any()) } throws ApiException(409, "conflict")
 
             val outcome = repo.raiseTicket("help", null, emptyMap())
 
-            assertEquals(RaiseTicketOutcome.AlreadyOpen, outcome)
+            assertTrue(
+                "SHY-0396: a 409 must not be mapped back into a refusal to raise",
+                outcome is RaiseTicketOutcome.Failed,
+            )
+        }
+
+    // ─── SHY-0396: finding out what is open, and adding to it ───
+
+    @Test
+    fun `open tickets come back with the words that make them recognisable`() =
+        runTest {
+            coEvery { api.get("/api/support-tickets/mine/open") } returns
+                JSONObject(
+                    """{"tickets":[{"ticketId":"t-9","category":"payment","summary":"Charged twice"}]}""",
+                )
+
+            val open = repo.openTickets()
+
+            assertEquals(1, open?.size)
+            assertEquals("t-9", open?.get(0)?.ticketId)
+            assertEquals(SupportCategory.Payment, open?.get(0)?.category)
+            assertEquals("Charged twice", open?.get(0)?.summary)
+        }
+
+    /**
+     * Null, not empty. The caller has to tell "you have nothing open" from "we
+     * could not find out" — only one of those is worth a log line, and neither
+     * may cost somebody their ticket.
+     */
+    @Test
+    fun `a failed lookup is null rather than an empty list`() =
+        runTest {
+            coEvery { api.get(any()) } throws IOException("unreachable")
+
+            assertEquals(null, repo.openTickets())
+        }
+
+    @Test
+    fun `nothing open is an empty list, not null`() =
+        runTest {
+            coEvery { api.get(any()) } returns JSONObject("""{"tickets":[]}""")
+
+            assertEquals(emptyList<OpenTicketSummary>(), repo.openTickets())
+        }
+
+    /**
+     * A category this build does not know still has to be offerable. It arrives
+     * from the server, so a newer build's category must not crash the only route
+     * somebody has to support.
+     */
+    @Test
+    fun `a category this build does not know falls back rather than failing`() =
+        runTest {
+            coEvery { api.get(any()) } returns
+                JSONObject("""{"tickets":[{"ticketId":"t-1","category":"quantum","summary":"?"}]}""")
+
+            assertEquals(SupportCategory.Other, repo.openTickets()?.get(0)?.category)
+        }
+
+    /** A row with no id is a row nothing can be added to, so it is not offered. */
+    @Test
+    fun `a ticket with no id is dropped rather than offered as an unusable choice`() =
+        runTest {
+            coEvery { api.get(any()) } returns
+                JSONObject("""{"tickets":[{"category":"bug","summary":"no id"},{"ticketId":"t-2","summary":"ok"}]}""")
+
+            val open = repo.openTickets()
+
+            assertEquals(1, open?.size)
+            assertEquals("t-2", open?.get(0)?.ticketId)
+        }
+
+    @Test
+    fun `adding to a ticket posts the words to that ticket`() =
+        runTest {
+            val path = slot<String>()
+            val body = slot<JSONObject>()
+            coEvery { api.post(capture(path), capture(body)) } returns JSONObject().put("success", true)
+
+            assertTrue(repo.addToTicket("t-9", "It happened again"))
+
+            assertEquals("/api/support-tickets/t-9/messages", path.captured)
+            assertEquals("It happened again", body.captured.getString("message"))
+        }
+
+    @Test
+    fun `a failed addition is false, so the person keeps their words and can retry`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws IOException("unreachable")
+
+            assertTrue(!repo.addToTicket("t-9", "It happened again"))
         }
 
     @Test

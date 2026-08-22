@@ -1663,7 +1663,6 @@
     <string name="support_form_error_empty">Veuillez écrire un message avant d'envoyer.</string>
     <string name="support_form_error_too_long">Votre message est trop long. Veuillez le raccourcir et réessayer.</string>
     <string name="support_form_error_generic">Nous n'avons pas pu envoyer votre message. Vérifiez votre connexion et réessayez.</string>
-    <string name="support_form_error_already_open">Vous avez déjà une demande en cours. Nous y répondrons.</string>
     <string name="support_form_error_attachment_failed">Nous n'avons pas pu envoyer ce fichier. Vous pouvez envoyer votre message sans lui.</string>
     <string name="support_form_error_attachment_too_large">Ce fichier est trop volumineux. Choisissez-en un de moins de 25 Mo.</string>
     <string name="support_form_error_attachment_too_many">Vous pouvez joindre jusqu'à 10 fichiers.</string>
@@ -1760,4 +1759,18 @@
     <string name="age_seg_age_up_welcome_pm">Bienvenue — votre compte a rejoint le cercle ShyTalk plus large.\n\nVous commencerez à voir plus de personnes dans les découvertes et les listes à partir de maintenant. Les connexions précédentes qui ont été rétablies alors que votre compte se trouvait dans le cercle plus petit ne peuvent pas être restaurées automatiquement, mais vous pouvez rajouter toute personne que vous souhaitez suivre.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Les détails de votre compte ont été mis à jour par le personnel de ShyTalk. Par conséquent, les personnes et les salles visibles ont été réduites à un cercle plus petit.\n\nSi vous pensez qu'il s'agit d'une erreur, contactez l'assistance et nous l'examinerons.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Merci. Nous l'avons ajouté à la demande que vous aviez déjà ouverte.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Envoyer à nouveau le même problème ne le rend pas plus rapide. Une deuxième demande concernant quelque chose que vous nous avez déjà dit est envoyée au fond de la file d'attente, derrière tous les autres qui attendent.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">C'est le problème que j'ai déjà signalé</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">C'est un nouveau problème</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Retourner</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Vous avez déjà 1 demande ouverte.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Vous avez déjà %1$d demandes ouvertes.</string>
 </resources>

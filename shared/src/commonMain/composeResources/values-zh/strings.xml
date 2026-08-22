@@ -1668,7 +1668,6 @@
     <string name="support_form_error_empty">请先输入信息再发送。</string>
     <string name="support_form_error_too_long">您的信息太长，请缩短后再试。</string>
     <string name="support_form_error_generic">无法发送您的信息，请检查网络连接后重试。</string>
-    <string name="support_form_error_already_open">您已有一个待处理的请求，我们会在该请求中回复您。</string>
     <string name="support_form_error_attachment_failed">无法上传该文件。您可以不带文件发送信息。</string>
     <string name="support_form_error_attachment_too_large">该文件太大。请选择小于 25 MB 的文件。</string>
     <string name="support_form_error_attachment_too_many">最多可附加 10 个文件。</string>
@@ -1764,4 +1763,18 @@
     <string name="age_seg_age_up_welcome_pm">欢迎 — 您的帐户已进入更广泛的 ShyTalk 圈子。\n\n从现在开始，您将开始在发现和列表中看到更多的人。当您的帐户处于较小圈子时，之前清理的联系人无法自动恢复，但您可以重新添加您想要关注的任何人。</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">ShyTalk 工作人员已更新您的帐户详细信息。因此，您可见的人员和房间已缩小到较小的圈子。\n\n如果您认为这是一个错误，请联系支持人员，我们将进行审核。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">谢谢。我们已将此添加到您已提出的请求中。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">再次发送相同的问题并不会使速度更快。对您已经告诉我们的事情的第二个请求将排在队列的后面，排在其他等待的人后面。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">这是我已经报告的问题</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">这是一个新问题</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">回去</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">您已有 1 个未决请求。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">您已打开 %1$d 个请求。</string>
 </resources>

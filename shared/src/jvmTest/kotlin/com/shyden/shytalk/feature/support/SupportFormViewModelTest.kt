@@ -1,6 +1,7 @@
 package com.shyden.shytalk.feature.support
 
 import com.shyden.shytalk.data.repository.AttachmentType
+import com.shyden.shytalk.data.repository.OpenTicketSummary
 import com.shyden.shytalk.data.repository.RaiseTicketOutcome
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
@@ -48,6 +49,19 @@ class SupportFormViewModelTest {
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    /** A form belonging to somebody who already has these requests open. */
+    private fun formWith(vararg tickets: OpenTicketSummary): SupportFormViewModel {
+        repo.open = tickets.toList()
+        return SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
+    }
+
+    private companion object {
+        val BILLING =
+            OpenTicketSummary("ticket-77", SupportCategory.Payment, "I was charged twice for coins")
+        val ACCOUNT =
+            OpenTicketSummary("ticket-88", SupportCategory.Account, "I cannot change my name")
     }
 
     // ─── Sending ────────────────────────────────────────────────
@@ -138,7 +152,7 @@ class SupportFormViewModelTest {
             assertFalse(state.submitted, "a second visit must start at a form, not a confirmation")
             assertEquals("", state.message)
             assertNull(state.error)
-            assertFalse(state.alreadyHasOpenTicket)
+            assertFalse(state.awaitingDuplicateChoice)
             assertEquals(SupportCategory.Age, state.category, "the entry point still knows why they are here")
         }
 
@@ -395,21 +409,281 @@ class SupportFormViewModelTest {
             assertTrue(viewModel.uiState.value.submitted)
         }
 
+    // ─── SHY-0396: a second request is a CHOICE, never a refusal ───
+
+    /**
+     * Operator correction, 2026-08-21. SHY-0385 refused a second request while
+     * one was still open — server 409, Send disabled, "We will reply to that
+     * one." That is wrong: somebody with an open ticket may have a completely
+     * different problem, and refusing them means the new problem reaches NOBODY.
+     *
+     * What replaces the refusal is a warning and three choices, so the person
+     * decides, having been shown what they already reported:
+     *
+     *   - it is the problem I already reported  → added to that ticket
+     *   - it is a new problem                   → a separate ticket is raised
+     *   - go back                               → nothing is sent, nothing lost
+     *
+     * The tests below are the contract for all three, plus the two things that
+     * must never happen: a blocked report, and a lost message.
+     */
     @Test
-    fun `an existing open ticket is explained, not silently duplicated`() =
+    fun `what is already open is loaded as soon as the form opens`() =
         runTest {
-            // Typed, not string-matched. Resource.Error carries only a message,
-            // so recognising a duplicate by its English text would break the
-            // moment the server reworded it -- or for anyone not reading English.
-            repo.result = RaiseTicketOutcome.AlreadyOpen
-            viewModel.updateMessage("Another one")
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+
+            assertEquals(listOf(BILLING), viewModel.uiState.value.openTickets)
+            assertFalse(
+                viewModel.uiState.value.awaitingDuplicateChoice,
+                "having an open request is not, by itself, a question — it becomes one at Send",
+            )
+        }
+
+    @Test
+    fun `sending while a request is open asks first rather than sending`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("I was charged again today")
             viewModel.submit()
             advanceUntilIdle()
 
+            val state = viewModel.uiState.value
+            assertTrue(state.awaitingDuplicateChoice, "the person must be given the choice")
+            assertTrue(repo.raiseCalls.isEmpty(), "nothing may be sent until they have chosen")
+            assertTrue(repo.addCalls.isEmpty())
+            assertFalse(state.submitted)
+            assertEquals("I was charged again today", state.message, "their words are still theirs")
+            assertNull(state.error, "being asked a question is not an error they made")
+        }
+
+    @Test
+    fun `the same problem is added to the request that is already open`() =
+        runTest {
+            viewModel = formWith(BILLING, ACCOUNT)
+            advanceUntilIdle()
+            viewModel.updateMessage("  It happened again today  ")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.addToOpenTicket(BILLING.ticketId)
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(BILLING.ticketId to "It happened again today"),
+                repo.addCalls,
+                "the words go to the ticket they chose, trimmed exactly as a new one would be",
+            )
+            assertTrue(repo.raiseCalls.isEmpty(), "adding to a ticket must not also raise one")
+            val state = viewModel.uiState.value
+            assertTrue(state.submitted)
+            assertTrue(state.addedToExisting, "the confirmation has to say which of the two happened")
+            assertFalse(state.awaitingDuplicateChoice)
+        }
+
+    @Test
+    fun `a new problem raises a separate request even though one is open`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("Different thing: nobody can hear me in rooms")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.sendAsNewProblem()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.raiseCalls.size, "a genuinely new problem must never be blocked")
+            assertEquals("Different thing: nobody can hear me in rooms", repo.raiseCalls[0].message)
+            assertTrue(repo.addCalls.isEmpty())
+            val state = viewModel.uiState.value
+            assertTrue(state.submitted)
+            assertFalse(state.addedToExisting)
+            assertFalse(state.awaitingDuplicateChoice)
+        }
+
+    @Test
+    fun `going back keeps every word they typed and sends nothing`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("Let me re-read what I wrote")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.dismissDuplicateChoice()
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.awaitingDuplicateChoice)
+            assertEquals("Let me re-read what I wrote", state.message)
+            assertTrue(repo.raiseCalls.isEmpty())
+            assertTrue(repo.addCalls.isEmpty())
+            assertFalse(state.submitted)
+        }
+
+    /**
+     * "Go back" must not become a way to skip the question. Somebody who has
+     * more to say edits their message and taps Send again — and is asked again,
+     * because the request they have open has not gone anywhere.
+     */
+    @Test
+    fun `going back and sending again asks again rather than slipping through`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("First attempt")
+            viewModel.submit()
+            advanceUntilIdle()
+            viewModel.dismissDuplicateChoice()
+
+            viewModel.updateMessage("First attempt, with more detail")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.uiState.value.awaitingDuplicateChoice)
+            assertTrue(repo.raiseCalls.isEmpty())
+        }
+
+    @Test
+    fun `with nothing open the message goes straight out, unasked`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.updateMessage("First time asking")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.raiseCalls.size)
+            assertFalse(
+                viewModel.uiState.value.awaitingDuplicateChoice,
+                "somebody with nothing open must never see the duplicate question",
+            )
+            assertTrue(viewModel.uiState.value.submitted)
+        }
+
+    /**
+     * The whole point of SHY-0396 is that nothing blocks a report. A lookup that
+     * fails is the app's problem, not the person's — so it costs them the
+     * warning, never the ticket.
+     */
+    @Test
+    fun `a lookup that fails never blocks somebody from reporting a problem`() =
+        runTest {
+            repo.openLookupFails = true
+            viewModel = SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
+            advanceUntilIdle()
+            viewModel.updateMessage("Something is broken")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.raiseCalls.size, "a failed warning lookup must not cost a ticket")
+            assertTrue(viewModel.uiState.value.submitted)
+            assertTrue(
+                viewModel.uiState.value.openTickets
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `adding to an open request keeps the words when it fails`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("Please look again")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            repo.addSucceeds = false
+            viewModel.addToOpenTicket(BILLING.ticketId)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertNotNull(state.error, "a failure they can retry has to be visible")
+            assertFalse(state.submitted)
+            assertEquals("Please look again", state.message, "a dropped connection must never eat their words")
+            assertTrue(state.awaitingDuplicateChoice, "they are still at the choice, so it stays on screen")
+            assertFalse(state.isSubmitting)
+        }
+
+    @Test
+    fun `after sending, the next visit knows a request is now open`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.updateMessage("My first problem")
+            viewModel.submit()
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.submitted)
+
+            viewModel.reset()
+            advanceUntilIdle()
+
+            assertEquals(
+                1,
+                viewModel.uiState.value.openTickets.size,
+                "the ticket they just raised is open now — the next Send must ask about it",
+            )
+        }
+
+    @Test
+    fun `a blank message is refused on the new-problem path too`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("Something")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.updateMessage("   ")
+            viewModel.sendAsNewProblem()
+            advanceUntilIdle()
+
+            assertTrue(repo.raiseCalls.isEmpty(), "an empty message must not reach the server by any route")
             assertNotNull(viewModel.uiState.value.error)
-            assertTrue(viewModel.uiState.value.alreadyHasOpenTicket)
-            assertFalse(viewModel.uiState.value.submitted)
-            assertEquals("Another one", viewModel.uiState.value.message)
+        }
+
+    @Test
+    fun `an over-long message is refused on the add-to-existing path too`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("Something")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.updateMessage("x".repeat(SUPPORT_MESSAGE_MAX_LENGTH + 1))
+            viewModel.addToOpenTicket(BILLING.ticketId)
+            advanceUntilIdle()
+
+            assertTrue(repo.addCalls.isEmpty(), "the server's bound applies to both routes in")
+            assertNotNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `tapping add twice quickly adds once`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("Only once please")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.addToOpenTicket(BILLING.ticketId)
+            viewModel.addToOpenTicket(BILLING.ticketId)
+            advanceUntilIdle()
+
+            assertEquals(1, repo.addCalls.size)
+        }
+
+    @Test
+    fun `every open request is offered, in the order the server gave them`() =
+        runTest {
+            viewModel = formWith(BILLING, ACCOUNT)
+            advanceUntilIdle()
+
+            assertEquals(listOf(BILLING, ACCOUNT), viewModel.uiState.value.openTickets)
         }
 
     // ─── Double-submit ──────────────────────────────────────────
@@ -462,6 +736,12 @@ private class FakeSupportRepository : SupportRepository {
     val raiseCalls = mutableListOf<Call>()
     var result: RaiseTicketOutcome = RaiseTicketOutcome.Raised("ticket-1")
 
+    /** What the server would say is open. Deliberately mutable — see `raiseTicket`. */
+    var open: List<OpenTicketSummary> = emptyList()
+    var openLookupFails = false
+    val addCalls = mutableListOf<Pair<String, String>>()
+    var addSucceeds = true
+
     /** Keys handed out in order, so a test can name the one it expects. */
     var nextKeys = ArrayDeque(listOf("support-tickets/1/a.png", "support-tickets/1/b.png"))
     var handleOrNull: (() -> UploadHandle?)? = null
@@ -475,7 +755,24 @@ private class FakeSupportRepository : SupportRepository {
         attachments: List<String>,
     ): RaiseTicketOutcome {
         raiseCalls.add(Call(message, category, context, attachments))
-        return result
+        val outcome = result
+        // A raised ticket is OPEN from that moment. The fake mirrors the server
+        // here rather than staying inert, because "the next visit knows a
+        // request is now open" is otherwise unprovable without one.
+        if (outcome is RaiseTicketOutcome.Raised) {
+            open = open + OpenTicketSummary(outcome.ticketId, category ?: SupportCategory.Other, message)
+        }
+        return outcome
+    }
+
+    override suspend fun openTickets(): List<OpenTicketSummary>? = if (openLookupFails) null else open
+
+    override suspend fun addToTicket(
+        ticketId: String,
+        message: String,
+    ): Boolean {
+        addCalls.add(ticketId to message)
+        return addSucceeds
     }
 
     override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? {

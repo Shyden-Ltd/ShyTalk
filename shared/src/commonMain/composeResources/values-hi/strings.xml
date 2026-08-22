@@ -1667,7 +1667,6 @@
     <string name="support_form_error_empty">भेजने से पहले कृपया एक संदेश लिखें।</string>
     <string name="support_form_error_too_long">आपका संदेश बहुत लंबा है। कृपया इसे छोटा करके फिर से प्रयास करें।</string>
     <string name="support_form_error_generic">हम आपका संदेश नहीं भेज सके। कृपया अपना कनेक्शन जांचें और फिर से प्रयास करें।</string>
-    <string name="support_form_error_already_open">आपका पहले से एक अनुरोध खुला है। हम उसी पर उत्तर देंगे।</string>
     <string name="support_form_error_attachment_failed">हम वह फ़ाइल अपलोड नहीं कर सके। आप उसके बिना अपना संदेश भेज सकते हैं।</string>
     <string name="support_form_error_attachment_too_large">यह फ़ाइल बहुत बड़ी है। कृपया 25 MB से छोटी फ़ाइल चुनें।</string>
     <string name="support_form_error_attachment_too_many">आप अधिकतम 10 फ़ाइलें जोड़ सकते हैं।</string>
@@ -1764,4 +1763,18 @@
     <string name="age_seg_age_up_welcome_pm">स्वागत है - आपका खाता व्यापक ShyTalk सर्कल में चला गया है।\n\nअब से आप खोज और सूचियों में अधिक लोगों को देखना शुरू कर देंगे। पिछले कनेक्शन जो आपके खाते के छोटे सर्कल में होने के दौरान साफ-सुथरे हो गए थे, उन्हें स्वचालित रूप से बहाल नहीं किया जा सकता है, लेकिन आप जिसे भी फॉलो करना चाहें उसे दोबारा जोड़ सकते हैं।</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">आपके खाते का विवरण ShyTalk स्टाफ द्वारा अपडेट कर दिया गया है। परिणामस्वरूप, आपको दिखाई देने वाले लोगों और कमरों को एक छोटे दायरे में सीमित कर दिया गया है।\n\nयदि आपको लगता है कि यह एक गलती है, तो सहायता से संपर्क करें और हम इसकी समीक्षा करेंगे।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">धन्यवाद। हमने इसे आपके पहले से खुले अनुरोध में जोड़ दिया है।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">उसी समस्या को दोबारा भेजने से इसमें तेजी नहीं आएगी। किसी चीज़ के लिए दूसरा अनुरोध जो आप हमें पहले ही बता चुके हैं, कतार में सबसे पीछे, प्रतीक्षा कर रहे सभी लोगों के पीछे जाता है।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">यह वह समस्या है जिसके बारे में मैं पहले ही रिपोर्ट कर चुका हूँ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">यह एक नई समस्या है</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">वापस जाओ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">आपके पास पहले से ही 1 अनुरोध खुला है.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">आपके पास पहले से ही %1$d अनुरोध खुले हैं।</string>
 </resources>

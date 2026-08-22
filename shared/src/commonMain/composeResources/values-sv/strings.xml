@@ -1666,7 +1666,6 @@
     <string name="support_form_error_empty">Skriv ett meddelande innan du skickar.</string>
     <string name="support_form_error_too_long">Ditt meddelande är för långt. Korta ner det och försök igen.</string>
     <string name="support_form_error_generic">Vi kunde inte skicka ditt meddelande. Kontrollera din anslutning och försök igen.</string>
-    <string name="support_form_error_already_open">Du har redan en öppen förfrågan. Vi svarar på den.</string>
     <string name="support_form_error_attachment_failed">Vi kunde inte ladda upp filen. Du kan skicka ditt meddelande ändå.</string>
     <string name="support_form_error_attachment_too_large">Filen är för stor. Välj en som är under 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Du kan bifoga upp till 10 filer.</string>
@@ -1763,4 +1762,18 @@
     <string name="age_seg_age_up_welcome_pm">Välkommen – ditt konto har flyttat in i den bredare ShyTalk-cirkeln.\n\nDu kommer att börja se fler personer i upptäckter och listor från och med nu. Tidigare anslutningar som städats medan ditt konto var i den mindre cirkeln kan inte återställas automatiskt, men du kan lägga till vem du vill följa igen.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Dina kontouppgifter har uppdaterats av ShyTalks personal. Som ett resultat har de personer och rum som är synliga för dig begränsats till en mindre cirkel.\n\nOm du tror att detta är ett misstag, kontakta supporten så granskar vi det.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Tack. Vi har lagt till detta i förfrågan som du redan hade öppen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Att skicka samma problem igen gör det inte snabbare. En andra begäran om något du redan har berättat för oss går längst bak i kön, bakom alla andra som väntar.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Det är problemet jag redan rapporterat</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Det är ett nytt problem</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Gå tillbaka</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Du har redan 1 förfrågan öppen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Du har redan %1$d förfrågningar öppna.</string>
 </resources>

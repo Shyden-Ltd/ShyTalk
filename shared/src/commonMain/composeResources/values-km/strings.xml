@@ -1752,7 +1752,6 @@
     <string name="support_form_error_empty">សូមសរសេរសារមុនពេលផ្ញើ។</string>
     <string name="support_form_error_too_long">សាររបស់អ្នកវែងពេក។ សូមកាត់បន្ថយ ហើយព្យាយាមម្តងទៀត។</string>
     <string name="support_form_error_generic">យើងមិនអាចផ្ញើសាររបស់អ្នកបានទេ។ សូមពិនិត្យការតភ្ជាប់ ហើយព្យាយាមម្តងទៀត។</string>
-    <string name="support_form_error_already_open">អ្នកមានសំណើបើកចំហរួចហើយ។ យើងនឹងឆ្លើយតបនៅទីនោះ។</string>
     <string name="support_form_error_attachment_failed">យើងមិនអាចផ្ទុកឯកសារនោះបានទេ។ អ្នកអាចផ្ញើសាររបស់អ្នកដោយគ្មានវា។</string>
     <string name="support_form_error_attachment_too_large">ឯកសារនេះធំពេក។ សូមជ្រើសរើសឯកសារតិចជាង 25 MB។</string>
     <string name="support_form_error_attachment_too_many">អ្នកអាចភ្ជាប់ឯកសារបានច្រើនបំផុត 10។</string>
@@ -1849,4 +1848,18 @@
     <string name="age_seg_age_up_welcome_pm">សូមស្វាគមន៍ — គណនីរបស់អ្នកបានផ្លាស់ទីទៅក្នុងរង្វង់ ShyTalk កាន់តែទូលំទូលាយ។\n\nអ្នកនឹងចាប់ផ្តើមឃើញមនុស្សកាន់តែច្រើននៅក្នុងការរកឃើញ និងបញ្ជីចាប់ពីពេលនេះតទៅ។ ការតភ្ជាប់ពីមុនដែលត្រូវបានរៀបចំឡើង ខណៈពេលដែលគណនីរបស់អ្នកស្ថិតនៅក្នុងរង្វង់តូចជាងនេះ មិនអាចស្ដារឡើងវិញដោយស្វ័យប្រវត្តិបានទេ ប៉ុន្តែអ្នកអាចបញ្ចូលនរណាម្នាក់ដែលអ្នកចង់តាមដានឡើងវិញបាន។</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">ព័ត៌មានលម្អិតគណនីរបស់អ្នកត្រូវបានធ្វើបច្ចុប្បន្នភាពដោយបុគ្គលិក ShyTalk ។ ជាលទ្ធផល មនុស្ស និងបន្ទប់ដែលអាចមើលឃើញដោយអ្នកត្រូវបានបង្រួមទៅជារង្វង់តូចជាង។\n\nប្រសិនបើអ្នកគិតថានេះជាកំហុស សូមទាក់ទងផ្នែកជំនួយ ហើយយើងនឹងពិនិត្យមើលវា។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">សូមអរគុណ។ យើងបានបន្ថែមវាទៅក្នុងសំណើដែលអ្នកបានបើករួចហើយ។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">ការ​ផ្ញើ​បញ្ហា​ដដែល​ម្តង​ទៀត​មិន​ធ្វើ​ឱ្យ​វា​លឿន​ជាង​មុន​ទេ។ សំណើទីពីរសម្រាប់អ្វីមួយដែលអ្នកបានប្រាប់យើងរួចហើយទៅខាងក្រោយជួរ នៅពីក្រោយអ្នកផ្សេងទៀតកំពុងរង់ចាំ។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">វាជាបញ្ហាដែលខ្ញុំបានរាយការណ៍រួចហើយ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">វាជាបញ្ហាថ្មីមួយ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">ត្រឡប់ទៅវិញ។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">អ្នកមានសំណើ 1 រួចហើយដែលបើក។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">អ្នកបានបើកសំណើ %1$d រួចហើយ។</string>
 </resources>

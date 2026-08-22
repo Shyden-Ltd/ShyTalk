@@ -546,10 +546,11 @@ class IosAgeVerificationRepositoryImpl(
 /**
  * iOS side of raising a support ticket.
  *
- * The 409 mapping is the only interesting part: the server refuses a second
- * ticket while one is still open, and that is not a failure a retry can fix.
- * Matched on `statusCode` rather than on the server's English message, so it
- * survives a rewording and works for somebody reading the app in any language.
+ * SHY-0396 removed the 409 mapping that used to live here, in step with Android
+ * and with the server. A second request is never refused now — refusing one
+ * meant a genuinely DIFFERENT problem reached nobody. The form asks first, using
+ * [openTickets], and [addToTicket] is the answer to "it is the problem I already
+ * reported".
  */
 class IosSupportRepositoryImpl(
     private val api: IosApiClient,
@@ -601,12 +602,8 @@ class IosSupportRepositoryImpl(
             // It must stay ABOVE the broad catch below.
             throw e
         } catch (e: ApiException) {
-            if (e.statusCode == HTTP_CONFLICT_SUPPORT) {
-                RaiseTicketOutcome.AlreadyOpen
-            } else {
-                // ApiException.message is non-nullable on iOS, so no elvis here.
-                RaiseTicketOutcome.Failed(e.message)
-            }
+            // ApiException.message is non-nullable on iOS, so no elvis here.
+            RaiseTicketOutcome.Failed(e.message)
         } catch (e: Exception) {
             // A Ktor transport failure is not an ApiException, so a dropped
             // connection used to escape this repository entirely and take the app
@@ -614,6 +611,57 @@ class IosSupportRepositoryImpl(
             // and iOS caught nothing -- the same hole, one platform wide.
             logW(TAG_SUPPORT, "Support ticket failed unexpectedly: ${e.message}")
             RaiseTicketOutcome.Failed(e.message ?: "Support request failed")
+        }
+
+    /**
+     * SHY-0396 — what this person still has open, for the duplicate warning.
+     *
+     * Null on ANY failure, deliberately distinct from an empty list: the caller
+     * has to tell "you have nothing open" from "we could not find out".
+     */
+    override suspend fun openTickets(): List<OpenTicketSummary>? =
+        try {
+            val resp = api.get("/api/support-tickets/mine/open")
+            val rows = resp["tickets"] as? JsonArray ?: JsonArray(emptyList())
+            rows.mapNotNull { row ->
+                val obj = row as? JsonObject ?: return@mapNotNull null
+                val id = obj["ticketId"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                // A row with no id is a row nothing can be added to, so it is
+                // dropped rather than offered as an unusable choice.
+                if (id.isBlank()) {
+                    null
+                } else {
+                    OpenTicketSummary(
+                        ticketId = id,
+                        category = SupportCategory.fromWire(obj["category"]?.jsonPrimitive?.contentOrNull),
+                        summary = obj["summary"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                    )
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Could not list open support tickets: ${e.message}")
+            null
+        }
+
+    override suspend fun addToTicket(
+        ticketId: String,
+        message: String,
+    ): Boolean =
+        try {
+            api.post(
+                "/api/support-tickets/$ticketId/messages",
+                JsonObject(mapOf("message" to JsonPrimitive(message))),
+            )
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // False rather than a throw: the caller keeps the person's text on
+            // screen and lets them try again, which is the only useful response.
+            logW(TAG_SUPPORT, "Could not add to support ticket $ticketId: ${e.message}")
+            false
         }
 
     override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? =
@@ -667,5 +715,4 @@ class IosSupportRepositoryImpl(
     }
 }
 
-private const val HTTP_CONFLICT_SUPPORT = 409
 private const val TAG_SUPPORT = "SupportRepository"

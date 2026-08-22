@@ -6,11 +6,11 @@ import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.AttachmentType
+import com.shyden.shytalk.data.repository.OpenTicketSummary
 import com.shyden.shytalk.data.repository.RaiseTicketOutcome
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.resources.Res
-import com.shyden.shytalk.resources.support_form_error_already_open
 import com.shyden.shytalk.resources.support_form_error_attachment_failed
 import com.shyden.shytalk.resources.support_form_error_attachment_too_large
 import com.shyden.shytalk.resources.support_form_error_attachment_too_many
@@ -64,11 +64,29 @@ data class SupportFormUiState(
     val isSubmitting: Boolean = false,
     val submitted: Boolean = false,
     /**
-     * Distinct from [error] because it is not a failure the person can fix by
-     * retrying — they already have a request open, and telling them so is the
-     * whole point.
+     * True when [submitted] was reached by adding to a request that was already
+     * open rather than by raising a new one — SHY-0396. The confirmation has to
+     * say which of the two happened, or somebody who chose "it is the problem I
+     * already reported" is told we have a new message and cannot tell where it
+     * went.
      */
-    val alreadyHasOpenTicket: Boolean = false,
+    val addedToExisting: Boolean = false,
+    /**
+     * The person's own requests that are still open, newest lookup wins.
+     *
+     * Empty is the ordinary case AND the case where the lookup failed — see
+     * [SupportFormViewModel.refreshOpenTickets] for why that collapse is
+     * deliberate rather than sloppy.
+     */
+    val openTickets: List<OpenTicketSummary> = emptyList(),
+    /**
+     * The three-choice screen is up: they pressed Send, they have something
+     * open, and nothing has been sent yet.
+     *
+     * NOT an [error]. Being asked a question is not a mistake they made, and the
+     * distinction is what lets "Go back" leave every word intact.
+     */
+    val awaitingDuplicateChoice: Boolean = false,
     /** Uploaded and ready to travel with the ticket, in the order they were added. */
     val attachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
@@ -90,6 +108,33 @@ class SupportFormViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(SupportFormUiState(category = initialCategory))
     val uiState: StateFlow<SupportFormUiState> = _uiState.asStateFlow()
+
+    init {
+        // Fetched on OPEN rather than on Send, so the round trip happens while
+        // the person is still typing and the choice screen appears instantly.
+        refreshOpenTickets()
+    }
+
+    /**
+     * Ask what this person still has open — SHY-0396.
+     *
+     * A lookup that FAILS is treated as "nothing open", which is the safe
+     * collapse: the worst case is a duplicate ticket, and the alternative —
+     * blocking, or asking a question with no summaries to answer it against —
+     * costs somebody their report. It is logged, so "the warning never appears"
+     * is a question the logs can answer.
+     */
+    private fun refreshOpenTickets() {
+        viewModelScope.launch {
+            val open = supportRepository.openTickets()
+            if (open == null) {
+                logW(TAG, "Could not look up open tickets; sending without the duplicate warning")
+                _uiState.update { it.copy(openTickets = emptyList()) }
+            } else {
+                _uiState.update { it.copy(openTickets = open) }
+            }
+        }
+    }
 
     /**
      * Back to a blank form, keeping the entry point's category.
@@ -184,6 +229,8 @@ class SupportFormViewModel(
     }
 
     fun reset() {
+        // Read before the update, because the update erases it.
+        val hadJustSent = _uiState.value.submitted
         _uiState.update {
             when {
                 // A send in flight keeps its state. The page cannot be left while
@@ -192,6 +239,10 @@ class SupportFormViewModel(
 
                 // Already sent: start clean. Keeping the text would show somebody
                 // their own sent message as though it were an unsent draft.
+                //
+                // `openTickets` is dropped with the rest and re-fetched below,
+                // because the request they just raised is open NOW -- a stale
+                // empty list would let the very next Send skip the warning.
                 it.submitted -> SupportFormUiState(category = it.category)
 
                 // Left WITHOUT sending: the words are still theirs. A back-press
@@ -199,25 +250,37 @@ class SupportFormViewModel(
                 // who are already having a bad time -- SHY-0385's rule about never
                 // losing what somebody typed applies here too, not only to a
                 // failed send. Only the transient states clear.
-                else -> it.copy(error = null, alreadyHasOpenTicket = false)
+                else -> it.copy(error = null, awaitingDuplicateChoice = false)
             }
         }
+        // Only after a send. The request they just raised is open NOW, and this
+        // ViewModel outlives the page -- a stale empty list would let the very
+        // next Send skip the warning entirely.
+        if (hadJustSent) refreshOpenTickets()
     }
 
     fun updateMessage(value: String) {
         // Typing clears a previous complaint: the person is already acting on it,
         // and leaving the error up reads as though it applies to the new text.
-        _uiState.update { it.copy(message = value, error = null, alreadyHasOpenTicket = false) }
+        _uiState.update { it.copy(message = value, error = null) }
     }
 
-    fun submit() {
+    /**
+     * What both routes out of this form have to agree on, in one place.
+     *
+     * Returns the message that would be SENT, or null having already put the
+     * reason on screen. Shared rather than duplicated because SHY-0396 added a
+     * second and a third way to send: bounds enforced on only one of them is a
+     * message the server refuses after the person thought it had gone.
+     */
+    private fun validatedMessage(): String? {
         val state = _uiState.value
-        if (state.isSubmitting) return // Double-tap sends once.
+        if (state.isSubmitting) return null // Double-tap sends once.
 
         val trimmed = state.message.trim()
         if (trimmed.isEmpty()) {
             _uiState.update { it.copy(error = UiText.res(Res.string.support_form_error_empty)) }
-            return
+            return null
         }
         if (trimmed.length > SUPPORT_MESSAGE_MAX_LENGTH) {
             // Bounded, never silently truncated -- cutting somebody's message in
@@ -227,10 +290,80 @@ class SupportFormViewModel(
             // the server bounds. Measuring the raw field instead refused a message
             // that would have been accepted, purely for trailing whitespace.
             _uiState.update { it.copy(error = UiText.res(Res.string.support_form_error_too_long)) }
+            return null
+        }
+        return trimmed
+    }
+
+    /**
+     * Send — or, if they already have a request open, ASK first.
+     *
+     * SHY-0396: this used to send unconditionally and let the server answer 409.
+     * That refusal meant a genuinely different problem reached nobody. The
+     * question is asked here instead, before anything is sent, and it is asked
+     * every time Send is pressed while something is open — "go back" is a way to
+     * re-read what you wrote, never a way to skip the question.
+     */
+    fun submit() {
+        val trimmed = validatedMessage() ?: return
+        if (_uiState.value.openTickets.isNotEmpty()) {
+            _uiState.update { it.copy(awaitingDuplicateChoice = true, error = null) }
             return
         }
+        raise(trimmed)
+    }
 
-        _uiState.update { it.copy(isSubmitting = true, error = null, alreadyHasOpenTicket = false) }
+    /** "It is a new problem" — they have seen what is open and this is not it. */
+    fun sendAsNewProblem() {
+        val trimmed = validatedMessage() ?: return
+        _uiState.update { it.copy(awaitingDuplicateChoice = false) }
+        raise(trimmed)
+    }
+
+    /**
+     * "It is the problem I already reported" — their words join that ticket.
+     *
+     * The alternative considered and rejected was raising a linked duplicate.
+     * That is what the operator asked us to stop: a duplicate for the same
+     * problem only moves them to the back of the queue.
+     */
+    fun addToOpenTicket(ticketId: String) {
+        val trimmed = validatedMessage() ?: return
+
+        _uiState.update { it.copy(isSubmitting = true, error = null) }
+        viewModelScope.launch {
+            if (supportRepository.addToTicket(ticketId, trimmed)) {
+                logI(TAG, "Added to an open support ticket: $ticketId")
+                _uiState.update {
+                    it.copy(
+                        isSubmitting = false,
+                        submitted = true,
+                        addedToExisting = true,
+                        awaitingDuplicateChoice = false,
+                    )
+                }
+            } else {
+                logW(TAG, "Could not add to open support ticket: $ticketId")
+                // The choice stays up and the text stays in the field, so the
+                // retry is one tap and costs them nothing.
+                _uiState.update {
+                    it.copy(
+                        isSubmitting = false,
+                        error = UiText.res(Res.string.support_form_error_generic),
+                    )
+                }
+            }
+        }
+    }
+
+    /** "Go back" — nothing is sent and nothing is lost. */
+    fun dismissDuplicateChoice() {
+        _uiState.update { it.copy(awaitingDuplicateChoice = false) }
+    }
+
+    private fun raise(trimmed: String) {
+        val state = _uiState.value
+        _uiState.update { it.copy(isSubmitting = true, error = null) }
 
         viewModelScope.launch {
             val outcome =
@@ -244,20 +377,6 @@ class SupportFormViewModel(
                 is RaiseTicketOutcome.Raised -> {
                     logI(TAG, "Support ticket raised: ${outcome.ticketId}")
                     _uiState.update { it.copy(isSubmitting = false, submitted = true) }
-                }
-
-                RaiseTicketOutcome.AlreadyOpen -> {
-                    // Logged like the other two outcomes. Without this, "my
-                    // ticket never sent" and "I already had one open" look
-                    // identical in the logs — and they need different answers.
-                    logI(TAG, "Support ticket refused: one is already open")
-                    _uiState.update {
-                        it.copy(
-                            isSubmitting = false,
-                            alreadyHasOpenTicket = true,
-                            error = UiText.res(Res.string.support_form_error_already_open),
-                        )
-                    }
                 }
 
                 is RaiseTicketOutcome.Failed -> {

@@ -1666,7 +1666,6 @@
     <string name="support_form_error_empty">Напишіть повідомлення перед надсиланням.</string>
     <string name="support_form_error_too_long">Ваше повідомлення задовге. Скоротіть його та спробуйте ще раз.</string>
     <string name="support_form_error_generic">Не вдалося надіслати повідомлення. Перевірте зʼєднання та спробуйте ще раз.</string>
-    <string name="support_form_error_already_open">У вас уже є відкритий запит. Ми відповімо на нього.</string>
     <string name="support_form_error_attachment_failed">Не вдалося завантажити цей файл. Ви можете надіслати повідомлення без нього.</string>
     <string name="support_form_error_attachment_too_large">Файл завеликий. Оберіть файл до 25 МБ.</string>
     <string name="support_form_error_attachment_too_many">Можна долучити не більше 10 файлів.</string>
@@ -1763,4 +1762,18 @@
     <string name="age_seg_age_up_welcome_pm">Ласкаво просимо — ваш обліковий запис перейшов у ширше коло ShyTalk.\n\nВідтепер ви почнете бачити більше людей у ​​Discovery та списках. Попередні зв’язки, які були впорядковані, коли ваш обліковий запис був у меншому колі, не можна відновити автоматично, але ви можете повторно додати будь-кого, за ким хочете стежити.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Персонал ShyTalk оновив дані вашого облікового запису. У результаті видимі вам люди та кімнати було звужено до меншого кола.\n\nЯкщо ви вважаєте, що це помилка, зверніться до служби підтримки, і ми її розглянемо.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">дякую Ми додали це до вашого вже відкритого запиту.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Повторне надсилання тієї самої проблеми не пришвидшує її. Другий запит на щось, про що ви вже нам сказали, йде в кінці черги, позаду всіх, хто очікує.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Це проблема, про яку я вже повідомляв</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Це нова проблема</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Ідіть назад</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">У вас уже відкритий 1 запит.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">У вас уже є %1$d відкритих запитів.</string>
 </resources>

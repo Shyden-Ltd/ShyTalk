@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -42,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.platform.PlatformMediaPicker
 import com.shyden.shytalk.data.repository.AttachmentType
+import com.shyden.shytalk.data.repository.OpenTicketSummary
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.close
@@ -55,10 +58,17 @@ import com.shyden.shytalk.resources.support_category_label
 import com.shyden.shytalk.resources.support_category_other
 import com.shyden.shytalk.resources.support_category_payment
 import com.shyden.shytalk.resources.support_category_safety
+import com.shyden.shytalk.resources.support_duplicate_back
+import com.shyden.shytalk.resources.support_duplicate_new
+import com.shyden.shytalk.resources.support_duplicate_reminder
+import com.shyden.shytalk.resources.support_duplicate_same
+import com.shyden.shytalk.resources.support_form_added
 import com.shyden.shytalk.resources.support_form_hint
 import com.shyden.shytalk.resources.support_form_send
 import com.shyden.shytalk.resources.support_form_sent
 import com.shyden.shytalk.resources.support_form_title
+import com.shyden.shytalk.resources.support_open_requests_many
+import com.shyden.shytalk.resources.support_open_requests_one
 import org.jetbrains.compose.resources.stringResource
 
 /** Test tags — the journey suite addresses these rather than the label text. */
@@ -68,6 +78,13 @@ const val TAG_SUPPORT_BACK = "support_back"
 const val TAG_SUPPORT_ADD_FILE = "support_addFile"
 const val TAG_SUPPORT_ATTACHMENT = "support_attachment"
 const val TAG_SUPPORT_CATEGORY = "support_category"
+
+/** SHY-0396 — the three choices somebody gets when a request is already open. */
+const val TAG_SUPPORT_DUPLICATE = "support_duplicate"
+const val TAG_SUPPORT_ADD_TO_OPEN = "support_addToOpen"
+const val TAG_SUPPORT_NEW_PROBLEM = "support_newProblem"
+const val TAG_SUPPORT_DUPLICATE_BACK = "support_duplicateBack"
+const val TAG_SUPPORT_OPEN_NOTICE = "support_openNotice"
 
 /**
  * Contacting support — SHY-0387.
@@ -115,7 +132,11 @@ fun SupportPage(
         },
     ) { padding ->
         if (state.submitted) {
-            SentConfirmation(modifier = Modifier.padding(padding), onClose = leave)
+            SentConfirmation(
+                modifier = Modifier.padding(padding),
+                addedToExisting = state.addedToExisting,
+                onClose = leave,
+            )
             return@Scaffold
         }
 
@@ -135,6 +156,22 @@ fun SupportPage(
         // it.
         val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
 
+        // SHY-0396. Asked BEFORE anything is sent, and it replaces the form
+        // rather than floating over it: a dialog above a form with the keyboard
+        // up is the exact geometry that made Send unreachable on iOS (SHY-0419).
+        if (state.awaitingDuplicateChoice) {
+            DuplicateChoice(
+                modifier = Modifier.padding(padding).padding(bottom = imeBottom),
+                openTickets = state.openTickets,
+                busy = state.isSubmitting,
+                error = state.error?.resolve(),
+                onAddToOpen = viewModel::addToOpenTicket,
+                onNewProblem = viewModel::sendAsNewProblem,
+                onGoBack = viewModel::dismissDuplicateChoice,
+            )
+            return@Scaffold
+        }
+
         Column(
             modifier =
                 Modifier
@@ -147,6 +184,16 @@ fun SupportPage(
             Text(stringResource(Res.string.support_form_hint), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(20.dp))
 
+            // SHY-0396's UX clause: the warning has to arrive BEFORE somebody
+            // types the whole thing again, not after they press Send. So what
+            // they already have open is stated here, on sight. The three choices
+            // still wait for Send -- "it is the problem I already reported" needs
+            // the words it is going to add.
+            if (state.openTickets.isNotEmpty()) {
+                OpenRequestsNotice(state.openTickets)
+                Spacer(Modifier.height(20.dp))
+            }
+
             CategoryPicker(
                 selected = state.category,
                 enabled = !state.isSubmitting,
@@ -158,9 +205,7 @@ fun SupportPage(
                 value = state.message,
                 onValueChange = viewModel::updateMessage,
                 enabled = !state.isSubmitting,
-                // An open request is not a mistake they made, so the field is not
-                // marked wrong for it.
-                isError = state.error != null && !state.alreadyHasOpenTicket,
+                isError = state.error != null,
                 minLines = 5,
                 modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_INPUT),
             )
@@ -179,12 +224,7 @@ fun SupportPage(
                 Spacer(Modifier.height(12.dp))
                 Text(
                     error.resolve(),
-                    color =
-                        if (state.alreadyHasOpenTicket) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.error
-                        },
+                    color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -192,9 +232,10 @@ fun SupportPage(
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = viewModel::submit,
-                // Sending again while a request is already open can only earn the
-                // same refusal; editing the message clears the flag.
-                enabled = !state.isSubmitting && !state.alreadyHasOpenTicket,
+                // SHY-0396: never disabled for an already-open request. Send is
+                // how somebody reaches the choice, so disabling it here is what
+                // blocked a genuinely different problem from ever being reported.
+                enabled = !state.isSubmitting,
                 modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_SEND),
             ) {
                 if (state.isSubmitting) {
@@ -211,6 +252,7 @@ fun SupportPage(
 @Composable
 private fun SentConfirmation(
     modifier: Modifier,
+    addedToExisting: Boolean,
     onClose: () -> Unit,
 ) {
     Column(
@@ -218,11 +260,164 @@ private fun SentConfirmation(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(stringResource(Res.string.support_form_sent), style = MaterialTheme.typography.bodyLarge)
+        // Two different things happened and they need two different sentences.
+        // Somebody who chose "it is the problem I already reported" and is then
+        // told "we have your message" cannot tell where their words went.
+        Text(
+            stringResource(
+                if (addedToExisting) Res.string.support_form_added else Res.string.support_form_sent,
+            ),
+            style = MaterialTheme.typography.bodyLarge,
+        )
         Spacer(Modifier.height(24.dp))
         Button(onClick = onClose, modifier = Modifier.testTag(TAG_SUPPORT_BACK)) {
             Text(stringResource(Res.string.close))
         }
+    }
+}
+
+/**
+ * How many requests are open, as a sentence — SHY-0396.
+ *
+ * Two strings rather than one with a number in it for the singular: "You already
+ * have 1 request open" reads as a machine talking. The project has no plural
+ * resources, so this is the honest way to get a natural singular in 21
+ * languages.
+ */
+@Composable
+private fun openRequestsHeading(count: Int): String =
+    if (count == 1) {
+        stringResource(Res.string.support_open_requests_one)
+    } else {
+        stringResource(Res.string.support_open_requests_many, count)
+    }
+
+/**
+ * What you already told us, shown before you start typing — SHY-0396.
+ *
+ * Information, not an obstacle: nothing here is a button and nothing here stops
+ * a send. Somebody who reads it and still means to raise a separate problem
+ * carries straight on, which is the whole point of the story.
+ */
+@Composable
+private fun OpenRequestsNotice(openTickets: List<OpenTicketSummary>) {
+    Card(modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_OPEN_NOTICE)) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                openRequestsHeading(openTickets.size),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            for (ticket in openTickets) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    supportCategoryLabel(ticket.category),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(ticket.summary, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+/**
+ * "You already have a request open" — SHY-0396.
+ *
+ * The operator's correction, 2026-08-21: never refuse a second request. Somebody
+ * with an open ticket may have a completely different problem, and refusing them
+ * means the new problem reaches nobody.
+ *
+ * So this warns and then hands the decision back, with the three answers they
+ * asked for — add it to the one that is open, raise a separate one, or go back —
+ * and the reminder about why a duplicate is the slow option. The summaries are
+ * the person's OWN words, which is what makes "is this the same problem?"
+ * answerable at all.
+ */
+@Composable
+private fun DuplicateChoice(
+    modifier: Modifier,
+    openTickets: List<OpenTicketSummary>,
+    busy: Boolean,
+    error: String?,
+    onAddToOpen: (String) -> Unit,
+    onNewProblem: () -> Unit,
+    onGoBack: () -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+                .testTag(TAG_SUPPORT_DUPLICATE),
+    ) {
+        Text(
+            openRequestsHeading(openTickets.size),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            stringResource(Res.string.support_duplicate_reminder),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(24.dp))
+
+        Text(
+            stringResource(Res.string.support_duplicate_same),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        Spacer(Modifier.height(8.dp))
+        for (ticket in openTickets) {
+            Card(
+                onClick = { onAddToOpen(ticket.ticketId) },
+                enabled = !busy,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .testTag("$TAG_SUPPORT_ADD_TO_OPEN${ticket.ticketId}"),
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        supportCategoryLabel(ticket.category),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(ticket.summary, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+
+        error?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = onNewProblem,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_NEW_PROBLEM),
+        ) {
+            if (busy) {
+                CircularProgressIndicator(modifier = Modifier.height(18.dp))
+            } else {
+                Text(stringResource(Res.string.support_duplicate_new))
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        TextButton(
+            onClick = onGoBack,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_DUPLICATE_BACK),
+        ) {
+            Text(stringResource(Res.string.support_duplicate_back))
+        }
+        Spacer(Modifier.height(24.dp))
     }
 }
 

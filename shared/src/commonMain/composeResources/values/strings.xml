@@ -965,10 +965,16 @@
     <string name="support_form_hint">Tell us what is wrong and we will look into it.</string>
     <string name="support_form_send">Send</string>
     <string name="support_form_sent">Thanks. We have your message and will look into it.</string>
+    <string name="support_form_added">Thanks. We have added this to the request you already had open.</string>
+    <string name="support_open_requests_one">You already have 1 request open.</string>
+    <string name="support_open_requests_many">You already have %1$d requests open.</string>
+    <string name="support_duplicate_reminder">Sending the same problem again does not make it faster. A second request for something you have already told us goes to the back of the queue, behind everyone else waiting.</string>
+    <string name="support_duplicate_same">It is the problem I already reported</string>
+    <string name="support_duplicate_new">It is a new problem</string>
+    <string name="support_duplicate_back">Go back</string>
     <string name="support_form_error_empty">Please write a message before sending.</string>
     <string name="support_form_error_too_long">Your message is too long. Please shorten it and try again.</string>
     <string name="support_form_error_generic">We could not send your message. Please check your connection and try again.</string>
-    <string name="support_form_error_already_open">You already have a request open. We will reply to that one.</string>
     <string name="support_form_error_attachment_failed">We could not upload that file. You can send your message without it.</string>
     <string name="support_form_error_attachment_too_large">That file is too large. Please choose one under 25 MB.</string>
     <string name="support_form_error_attachment_too_many">You can attach up to 10 files.</string>

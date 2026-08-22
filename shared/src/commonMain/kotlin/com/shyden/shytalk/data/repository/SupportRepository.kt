@@ -39,7 +39,43 @@ interface SupportRepository {
         contentType: AttachmentType,
         bytes: ByteArray,
     ): Boolean
+
+    /**
+     * The caller's own requests that are still open — SHY-0396.
+     *
+     * `null` means the lookup FAILED and is deliberately distinct from an empty
+     * list. The two lead to the same screen but not to the same reasoning: empty
+     * means "you have nothing open", failed means "we could not find out". A
+     * failed lookup must never cost somebody their ticket, so the caller sends
+     * anyway — but it says so in the log rather than pretending it knew.
+     */
+    suspend fun openTickets(): List<OpenTicketSummary>?
+
+    /**
+     * Add to a request the caller already has — SHY-0396, the "it is the problem
+     * I already reported" choice.
+     *
+     * Without this the typed message has nowhere to go, and dropping it is the
+     * worst possible outcome for somebody who has had to ask twice.
+     */
+    suspend fun addToTicket(
+        ticketId: String,
+        message: String,
+    ): Boolean
 }
+
+/**
+ * One of the caller's own open requests, as offered by the choice screen.
+ *
+ * [summary] is a shortened copy of their OWN words, produced by the server. It
+ * is what makes the question answerable: "is this the same problem?" cannot be
+ * answered against a ticket id.
+ */
+data class OpenTicketSummary(
+    val ticketId: String,
+    val category: SupportCategory,
+    val summary: String,
+)
 
 /**
  * What somebody may attach. Mirrors `ATTACHMENT_CONTENT_TYPES` in
@@ -96,24 +132,39 @@ enum class SupportCategory(
     Safety("safety"),
     Bug("bug"),
     Other("other"),
+    ;
+
+    companion object {
+        /**
+         * A category coming BACK from the server — SHY-0396.
+         *
+         * Falls back to [Other] rather than throwing: a ticket raised by a newer
+         * build under a category this one does not know is still a ticket the
+         * person needs to recognise, and a crash on the choice screen would take
+         * away the only route to support.
+         */
+        fun fromWire(raw: String?): SupportCategory = entries.firstOrNull { it.wireValue == raw } ?: Other
+    }
 }
 
 /**
  * A TYPED outcome rather than `Resource<String>`.
  *
- * `Resource.Error` carries only a message, so telling "you already have an open
- * request" apart from "the network failed" would mean matching the server's
- * English text. That breaks the moment the server rewords it, and it was never
- * going to work for somebody reading the app in another language. The one case
- * the UI must treat differently gets its own case.
+ * `Resource.Error` carries only a message, so distinguishing one failure from
+ * another would mean matching the server's English text — which breaks the
+ * moment the server rewords it, and was never going to work for somebody
+ * reading the app in another language.
+ *
+ * There was a third case, `AlreadyOpen`, mapped from the server's 409. SHY-0396
+ * deleted it along with the 409: a second request is never refused now, so the
+ * case was unreachable, and an unreachable branch in a sealed interface is a
+ * trap for whoever reads it next. Having a request open is a QUESTION the form
+ * asks before sending, not an outcome of having sent.
  */
 sealed interface RaiseTicketOutcome {
     data class Raised(
         val ticketId: String,
     ) : RaiseTicketOutcome
-
-    /** The person already has an open request; a second would be a duplicate. */
-    data object AlreadyOpen : RaiseTicketOutcome
 
     data class Failed(
         val message: String,

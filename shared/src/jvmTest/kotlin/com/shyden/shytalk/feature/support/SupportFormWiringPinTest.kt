@@ -2,6 +2,7 @@ package com.shyden.shytalk.feature.support
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -139,29 +140,46 @@ class SupportFormWiringPinTest {
                 "leaves it holding submitted = true and the next visit shows the confirmation " +
                 "instead of a form.",
         )
-        // Four ways out: the confirmation's button and dismiss-request, and the
-        // form's button and dismiss-request. Any one of them still calling
-        // `onDismiss` directly skips the reset.
-        for (leak in listOf("onClick = onBack", "IconButton(onClick = onBack")) {
-            assertTrue(
-                !code.contains(leak),
-                "$page still has `$leak`, which leaves the page without resetting it",
-            )
-        }
+        // An ALLOWLIST, not a denylist. This used to blacklist the one spelling
+        // `onClick = onBack`, which caught only the leak somebody had already
+        // thought of -- and then false-fired the moment an unrelated composable
+        // on this page took a parameter of the same name (SHY-0396).
+        //
+        // The real invariant is narrower and checkable: `onBack` is the page's
+        // only way out, so it may be DECLARED once and CALLED once, inside
+        // `leave`. Any third use is an exit that skips the reset.
+        val uses = Regex("\\bonBack\\b").findAll(code).count()
+        assertEquals(
+            2,
+            uses,
+            "$page uses `onBack` $uses times. It may appear exactly twice -- the parameter, and " +
+                "the single call inside `leave` -- because every other exit has to reset first. " +
+                "A third use is a way off this page that leaves the ViewModel holding " +
+                "submitted = true, so the next visit opens on the old confirmation.",
+        )
     }
 
+    /**
+     * SHY-0396, and the reason this pin was INVERTED rather than deleted.
+     *
+     * SHY-0385 disabled Send while a request was open, and this pin used to
+     * demand exactly that. The operator's correction on 2026-08-21: a second
+     * request must never be blocked, because somebody with an open ticket may
+     * have a completely different problem and refusing them means the new
+     * problem reaches nobody.
+     *
+     * So the assertion now runs the other way. A disabled Send is the defect,
+     * and this is what stops it coming back — including under a renamed flag,
+     * which is why the check is on the button's own `enabled` expression rather
+     * than on any particular field name.
+     */
     @Test
-    fun `an already-open request is shown as information, not as the person's mistake`() {
+    fun `Send is never disabled by having a request already open`() {
         val code = codeOf(page)
-        assertTrue(
-            code.contains("state.alreadyHasOpenTicket"),
-            "$page ignores alreadyHasOpenTicket entirely, so the flag is dead state and the " +
-                "person is told they made an error when they did not",
-        )
         // Anchored to the Send button's own `enabled` expression. A whole-file
-        // `contains` passed this assertion with the guard deleted, because the
-        // same substring also appears on the field's `isError` line — the exact
-        // defect class this file exists to catch, found by mutating the dialog.
+        // `contains` passed the previous version of this assertion with the
+        // guard deleted, because the same substring also appeared on the field's
+        // `isError` line — the exact defect class this file exists to catch.
         val sendButton =
             code
                 .substringAfter("onClick = viewModel::submit,", "")
@@ -171,10 +189,116 @@ class SupportFormWiringPinTest {
             "$page: could not isolate the Send button's attributes — the pin cannot see what " +
                 "it is meant to check",
         )
+        assertEquals(
+            "enabled = !state.isSubmitting,",
+            sendButton.substringAfter("enabled = ", "").let { "enabled = " + it.substringBefore(",") + "," },
+            "$page gates Send on something other than a send already being in flight. SHY-0396: " +
+                "Send is HOW somebody reaches the duplicate choice, so anything else in that " +
+                "expression blocks a genuinely different problem from ever being reported. " +
+                "Found: `$sendButton`",
+        )
         assertTrue(
-            sendButton.contains("!state.alreadyHasOpenTicket"),
-            "$page leaves Send enabled while a request is already open, so the only thing the " +
-                "button can do is earn the same refusal again. Found: `$sendButton`",
+            !code.contains("alreadyHasOpenTicket"),
+            "$page still refers to alreadyHasOpenTicket. SHY-0396 removed that flag along with " +
+                "the server's 409; a surviving reference means the refusal is still wired.",
+        )
+    }
+
+    /**
+     * The three answers the operator asked for, and the summaries that make the
+     * question answerable.
+     *
+     * "Is this the same problem?" cannot be answered against a ticket id, so the
+     * choice screen showing the person's OWN words is not decoration — it is the
+     * whole basis of the decision.
+     */
+    @Test
+    fun `somebody with a request already open gets all three choices`() {
+        val code = codeOf(page)
+        val required =
+            mapOf(
+                "the warning itself, with how many are open" to "support_open_requests_one",
+                "the plural form of that count" to "support_open_requests_many",
+                "the back-of-the-queue reminder" to "support_duplicate_reminder",
+                "it is the problem I already reported" to "support_duplicate_same",
+                "it is a new problem" to "support_duplicate_new",
+                "go back" to "support_duplicate_back",
+                "their own words, to recognise it by" to "ticket.summary",
+            )
+        for ((why, needle) in required) {
+            assertTrue(
+                code.contains(needle),
+                "$page never renders `$needle` — $why is missing from the duplicate choice, " +
+                    "so the person cannot answer the question they are being asked",
+            )
+        }
+        for (
+        (why, call) in
+        mapOf(
+            "adding to the open one" to "viewModel::addToOpenTicket",
+            "raising a separate one" to "viewModel::sendAsNewProblem",
+            "going back" to "viewModel::dismissDuplicateChoice",
+        )
+        ) {
+            assertTrue(
+                code.contains(call),
+                "$page never calls `$call`, so $why is a button that does nothing — the exact " +
+                    "shape of the dead Contact-support button SHY-0384 was filed for",
+            )
+        }
+    }
+
+    /**
+     * SHY-0396's UX clause: "it appears before they have typed the whole thing
+     * again, not after they press send".
+     *
+     * A warning that only arrives at Send costs somebody the effort of writing
+     * out a problem they had already reported. This pins that the form itself
+     * says what is open, on sight.
+     */
+    @Test
+    fun `what is already open is stated before anybody starts typing`() {
+        val code = codeOf(page)
+        val beforeTheField =
+            code
+                .substringAfter("support_form_hint", "")
+                .substringBefore("OutlinedTextField", "")
+        assertTrue(
+            beforeTheField.isNotEmpty(),
+            "$page: could not isolate what renders above the message field — the pin cannot see " +
+                "what it is meant to check",
+        )
+        assertTrue(
+            beforeTheField.contains("OpenRequestsNotice"),
+            "$page only warns about an open request once Send is pressed, so somebody types " +
+                "their whole problem out again before being told they had already reported it. " +
+                "Found above the field: `$beforeTheField`",
+        )
+        assertTrue(
+            code.contains("state.openTickets.isNotEmpty()"),
+            "$page shows the notice unconditionally, so somebody with nothing open is warned " +
+                "about a request they do not have",
+        )
+    }
+
+    /**
+     * The confirmation has to say WHICH of the two things happened.
+     *
+     * Somebody who chose "it is the problem I already reported" and is then told
+     * "we have your message" cannot tell whether their words reached the ticket
+     * they picked or started a new one.
+     */
+    @Test
+    fun `the confirmation distinguishes a new request from an addition`() {
+        val code = codeOf(page)
+        assertTrue(
+            code.contains("support_form_added") && code.contains("support_form_sent"),
+            "$page shows one confirmation for both routes, so adding to an open request is " +
+                "indistinguishable from raising a new one",
+        )
+        assertTrue(
+            code.contains("addedToExisting"),
+            "$page never reads addedToExisting, so the two confirmations cannot differ",
         )
     }
 
@@ -197,6 +321,40 @@ class SupportFormWiringPinTest {
             "IosSupportRepositoryImpl is gone from IosSmallRepositories.kt — this pin would pass vacuously",
         )
         return mapOf("android" to android, "ios" to iosFile.substring(iosStart))
+    }
+
+    /**
+     * SHY-0396 removed the 409 from the server. A client still mapping it would
+     * be dead code today and a re-armed refusal the moment anybody reinstated
+     * the status on any route — so it is pinned out on BOTH platforms at once,
+     * which is how the original 409 handling drifted apart in the first place.
+     */
+    @Test
+    fun `neither platform still treats a conflict as a refusal to raise`() {
+        for ((platform, body) in raiseTicketBodies()) {
+            assertTrue(
+                !body.contains("409") && !body.contains("AlreadyOpen"),
+                "$platform still maps a conflict to a refusal. SHY-0396: a second request is " +
+                    "never refused, and the client must not resurrect the block the operator " +
+                    "asked us to remove.",
+            )
+        }
+    }
+
+    @Test
+    fun `both platforms can find out what is already open, and add to it`() {
+        for ((platform, body) in raiseTicketBodies()) {
+            assertTrue(
+                body.contains("/api/support-tickets/mine/open"),
+                "$platform cannot list open requests, so the duplicate warning never appears " +
+                    "there and that platform silently keeps SHY-0385's behaviour",
+            )
+            assertTrue(
+                body.contains("/messages"),
+                "$platform cannot add to an open request, so \"it is the problem I already " +
+                    "reported\" drops the person's message on that platform",
+            )
+        }
     }
 
     @Test

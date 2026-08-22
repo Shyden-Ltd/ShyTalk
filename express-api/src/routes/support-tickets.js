@@ -112,6 +112,32 @@ const MAX_OPEN_TICKETS_LISTED = 5;
 /** Long enough to recognise the problem, short enough to scan. */
 const SUMMARY_MAX_LENGTH = 120;
 
+/**
+ * How many requests this person already has open — SHY-0396.
+ *
+ * Bounded by the same limit the choice screen uses, because the number is only
+ * ever read as "none / one / a few". An unbounded count would let somebody with
+ * a large history make ticket creation expensive.
+ *
+ * Never throws: this is observability, and losing the number must not cost
+ * somebody their ticket. `null` records honestly that it was not known.
+ */
+async function countOpenTickets(uniqueId) {
+  try {
+    const docs = await queryDocs(
+      db
+        .collection(COLLECTION)
+        .where('userId', '==', uniqueId)
+        .where('status', '==', STATUS_OPEN)
+        .limit(MAX_OPEN_TICKETS_LISTED),
+    );
+    return docs.length;
+  } catch (err) {
+    log.error('support-tickets', 'Counting open tickets failed', { error: err.message });
+    return null;
+  }
+}
+
 /** A shortened copy of the person's OWN message — never anybody else's. */
 function summarise(message) {
   const text = typeof message === 'string' ? message.trim() : '';
@@ -209,6 +235,15 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
     // it instead -- with the reminder that a duplicate for the SAME problem only
     // goes to the back of the queue. This route used to answer 409 here, which
     // blocked it outright.
+    //
+    // The same query the 409 used to run now RECORDS instead of refusing, so the
+    // warning's effect can be measured rather than assumed: a ticket with
+    // `openTicketsAtCreation > 0` was raised by somebody who had already been
+    // shown one. Counted SERVER-side deliberately -- a client-sent "I saw the
+    // warning" flag can be stale or simply untrue, and this costs nothing that
+    // the refusal did not already cost.
+    const openAtCreation = await countOpenTickets(uniqueId);
+
     const ticketId = generateId();
     await db.doc(`${COLLECTION}/${ticketId}`).set(
       {
@@ -217,6 +252,7 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
         category: category ?? 'other',
         context: sanitiseContext(body.context),
         attachments: attachments.keys,
+        openTicketsAtCreation: openAtCreation,
         status: STATUS_OPEN,
         resolvedBy: null,
         resolvedAt: null,

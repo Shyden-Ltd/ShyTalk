@@ -1665,7 +1665,6 @@
     <string name="support_form_error_empty">Bitte schreiben Sie eine Nachricht, bevor Sie senden.</string>
     <string name="support_form_error_too_long">Ihre Nachricht ist zu lang. Bitte kürzen Sie sie und versuchen Sie es erneut.</string>
     <string name="support_form_error_generic">Ihre Nachricht konnte nicht gesendet werden. Bitte prüfen Sie Ihre Verbindung und versuchen Sie es erneut.</string>
-    <string name="support_form_error_already_open">Sie haben bereits eine offene Anfrage. Wir antworten darauf.</string>
     <string name="support_form_error_attachment_failed">Diese Datei konnte nicht hochgeladen werden. Du kannst deine Nachricht auch ohne sie senden.</string>
     <string name="support_form_error_attachment_too_large">Diese Datei ist zu groß. Bitte wähle eine unter 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Du kannst bis zu 10 Dateien anhängen.</string>
@@ -1762,4 +1761,18 @@
     <string name="age_seg_age_up_welcome_pm">Willkommen – Ihr Konto wurde in den größeren ShyTalk-Kreis verschoben.\n\nVon nun an werden Ihnen mehr Personen in Discovery und Listen angezeigt. Frühere Verbindungen, die aufgeräumt wurden, während Ihr Konto im kleineren Kreis war, können nicht automatisch wiederhergestellt werden. Sie können jedoch jeden, dem Sie folgen möchten, erneut hinzufügen.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Ihre Kontodaten wurden von ShyTalk-Mitarbeitern aktualisiert. Dadurch wurden die für Sie sichtbaren Personen und Räume auf einen kleineren Kreis eingegrenzt.\n\nWenn Sie der Meinung sind, dass dies ein Fehler ist, kontaktieren Sie den Support und wir werden ihn überprüfen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Danke. Wir haben dies zu der Anfrage hinzugefügt, die Sie bereits geöffnet hatten.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Das erneute Senden des gleichen Problems macht es nicht schneller. Eine zweite Anfrage nach etwas, das Sie uns bereits mitgeteilt haben, wird an das Ende der Warteschlange gestellt, hinter allen anderen Wartenden.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Es ist das Problem, über das ich bereits berichtet habe</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Es ist ein neues Problem</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Geh zurück</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Sie haben bereits 1 Anfrage offen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Sie haben bereits %1$d Anfragen offen.</string>
 </resources>

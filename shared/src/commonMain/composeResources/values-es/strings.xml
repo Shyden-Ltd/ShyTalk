@@ -1667,7 +1667,6 @@
     <string name="support_form_error_empty">Escribe un mensaje antes de enviar.</string>
     <string name="support_form_error_too_long">Tu mensaje es demasiado largo. Acórtalo e inténtalo de nuevo.</string>
     <string name="support_form_error_generic">No pudimos enviar tu mensaje. Comprueba tu conexión e inténtalo de nuevo.</string>
-    <string name="support_form_error_already_open">Ya tienes una solicitud abierta. Te responderemos ahí.</string>
     <string name="support_form_error_attachment_failed">No pudimos subir ese archivo. Puedes enviar tu mensaje sin él.</string>
     <string name="support_form_error_attachment_too_large">Ese archivo es demasiado grande. Elige uno de menos de 25 MB.</string>
     <string name="support_form_error_attachment_too_many">Puedes adjuntar hasta 10 archivos.</string>
@@ -1764,4 +1763,18 @@
     <string name="age_seg_age_up_welcome_pm">Bienvenido: tu cuenta se ha movido al círculo más amplio de ShyTalk.\n\nComenzarás a ver más personas en descubrimientos y listas a partir de ahora. Las conexiones anteriores que se arreglaron mientras tu cuenta estaba en el círculo más pequeño no se pueden restaurar automáticamente, pero puedes volver a agregar a cualquier persona que quieras seguir.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Los detalles de su cuenta han sido actualizados por el personal de ShyTalk. Como resultado, las personas y salas visibles para usted se han reducido a un círculo más pequeño.\n\nSi cree que se trata de un error, comuníquese con el soporte técnico y lo revisaremos.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Gracias. Hemos añadido esto a la solicitud que ya tenías abierta.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Enviar el mismo problema nuevamente no lo hace más rápido. Una segunda solicitud de algo que ya nos ha dicho se coloca al final de la cola, detrás de todos los demás que esperan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Es el problema que ya informé.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">es un problema nuevo</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Volver</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Ya tienes 1 solicitud abierta.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Ya tienes %1$d solicitudes abiertas.</string>
 </resources>
