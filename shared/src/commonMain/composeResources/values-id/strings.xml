@@ -1786,4 +1786,6 @@
     <string name="support_form_error_video_unreadable">Kami tidak dapat memeriksa berapa durasi video tersebut. Silakan coba yang lain.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">Hingga 10 file. Gambar hingga 5 MB, video hingga 30 detik.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

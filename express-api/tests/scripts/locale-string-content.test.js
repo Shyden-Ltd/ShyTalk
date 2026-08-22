@@ -101,7 +101,11 @@ describe('locale strings render as written', () => {
     // image refusal (5 MB), the video refusal (30 seconds), the honest refusal
     // for a video whose length could not be READ, and the limits stated up
     // front before anybody picks a file. Net 867 - 1 + 4 = 870.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([870]);
+    // 870 -> 871 on 2026-08-22: the live character counter. The message bound
+    // moved from 2,000 to 1,000 (operator), and a bound somebody only discovers
+    // when they press Send costs them what they wrote — so the field shows the
+    // count as they type.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([871]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

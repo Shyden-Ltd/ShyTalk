@@ -28,8 +28,17 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "SupportForm"
 
-/** Mirrors the server's bound in `routes/support-tickets.js`. */
-const val SUPPORT_MESSAGE_MAX_LENGTH = 2000
+/**
+ * How long a support message may be — operator 2026-08-22, was 2,000.
+ *
+ * Mirrors `MAX_MESSAGE_LENGTH` in `routes/support-tickets.js`; the two must
+ * agree or somebody is refused by a server bound the app never warned them
+ * about, after they have written the whole thing.
+ *
+ * Shown as a LIVE count on the form. A bound somebody only discovers when they
+ * press Send is a bound that costs them the message they just wrote.
+ */
+const val SUPPORT_MESSAGE_MAX_LENGTH = 1000
 
 /** Mirrors `MAX_ATTACHMENTS` in `routes/support-tickets.js`. */
 const val MAX_ATTACHMENTS = 10
@@ -119,6 +128,20 @@ data class SupportFormUiState(
     val isAttaching: Boolean = false,
     val error: UiText? = null,
 ) {
+    /**
+     * How many characters are in the field right now.
+     *
+     * Counted on the RAW value, not the trimmed one: somebody typing spaces has
+     * used those characters and the field is holding them, so a count that
+     * disagreed with what is on screen would be worse than no count at all.
+     */
+    val characterCount: Int
+        get() = message.length
+
+    /** True once the field holds more than the server will take. */
+    val isOverCharacterLimit: Boolean
+        get() = characterCount > SUPPORT_MESSAGE_MAX_LENGTH
+
     /** What the FORM names, at most [SUPPORT_NOTICE_PREVIEW_LIMIT] of them. */
     val openTicketsPreview: List<OpenTicketSummary>
         get() = openTickets.take(SUPPORT_NOTICE_PREVIEW_LIMIT)

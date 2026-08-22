@@ -1786,4 +1786,6 @@
     <string name="support_form_error_video_unreadable">해당 영상의 길이를 확인할 수 없습니다. 다른 것을 시도해 보세요.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">최대 10개 파일. 이미지는 최대 5MB, 비디오는 최대 30초입니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

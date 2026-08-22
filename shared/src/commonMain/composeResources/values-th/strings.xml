@@ -1784,4 +1784,6 @@
     <string name="support_form_error_video_unreadable">เราไม่สามารถตรวจสอบได้ว่าวิดีโอนั้นยาวแค่ไหน โปรดลองอันอื่น</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">มากถึง 10 ไฟล์ รูปภาพสูงสุด 5 MB วิดีโอสูงสุด 30 วินาที</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

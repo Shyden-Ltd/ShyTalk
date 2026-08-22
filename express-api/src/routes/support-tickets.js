@@ -37,7 +37,7 @@ const COLLECTION = 'supportTickets';
  * Bounded explicitly rather than truncated. Silently cutting somebody's message
  * in half loses the part they cared about and tells them nothing.
  */
-const MAX_MESSAGE_LENGTH = 2000;
+const MAX_MESSAGE_LENGTH = 1000;
 const MAX_ADMIN_NOTE_LENGTH = 2000;
 
 /**

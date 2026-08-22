@@ -63,6 +63,7 @@ import com.shyden.shytalk.resources.support_duplicate_new
 import com.shyden.shytalk.resources.support_duplicate_reminder
 import com.shyden.shytalk.resources.support_duplicate_same
 import com.shyden.shytalk.resources.support_form_added
+import com.shyden.shytalk.resources.support_form_character_count
 import com.shyden.shytalk.resources.support_form_hint
 import com.shyden.shytalk.resources.support_form_send
 import com.shyden.shytalk.resources.support_form_sent
@@ -79,6 +80,7 @@ const val TAG_SUPPORT_BACK = "support_back"
 const val TAG_SUPPORT_ADD_FILE = "support_addFile"
 const val TAG_SUPPORT_ATTACHMENT = "support_attachment"
 const val TAG_SUPPORT_LIMITS = "support_limits"
+const val TAG_SUPPORT_CHAR_COUNT = "support_charCount"
 const val TAG_SUPPORT_CATEGORY = "support_category"
 
 /** SHY-0396 — the three choices somebody gets when a request is already open. */
@@ -267,8 +269,27 @@ fun SupportPage(
                 value = state.message,
                 onValueChange = viewModel::updateMessage,
                 enabled = !state.isSubmitting,
-                isError = state.error != null,
+                isError = state.error != null || state.isOverCharacterLimit,
                 minLines = 5,
+                supportingText = {
+                    // Live, and on the field itself. A bound somebody only
+                    // discovers when they press Send is a bound that costs them
+                    // the message they just wrote.
+                    Text(
+                        stringResource(
+                            Res.string.support_form_character_count,
+                            state.characterCount,
+                            SUPPORT_MESSAGE_MAX_LENGTH,
+                        ),
+                        color =
+                            if (state.isOverCharacterLimit) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        modifier = Modifier.testTag(TAG_SUPPORT_CHAR_COUNT),
+                    )
+                },
                 modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_INPUT),
             )
             Spacer(Modifier.height(20.dp))

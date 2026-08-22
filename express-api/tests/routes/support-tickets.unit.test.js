@@ -202,17 +202,17 @@ describe('POST /api/support-tickets', () => {
   test('bounds the message length explicitly rather than truncating', async () => {
     const res = await request(createApp())
       .post('/api/support-tickets')
-      .send({ message: 'x'.repeat(2001) });
+      .send({ message: 'x'.repeat(1001) });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/2000/);
+    expect(res.body.error).toMatch(/1000/);
     expect(mockDocSet).not.toHaveBeenCalled();
   });
 
   test('accepts a message at exactly the limit', async () => {
     const res = await request(createApp())
       .post('/api/support-tickets')
-      .send({ message: 'x'.repeat(2000) });
+      .send({ message: 'x'.repeat(1000) });
     expect(res.status).toBe(200);
   });
 

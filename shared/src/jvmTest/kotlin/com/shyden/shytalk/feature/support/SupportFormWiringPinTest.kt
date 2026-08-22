@@ -249,6 +249,56 @@ class SupportFormWiringPinTest {
     }
 
     /**
+     * The ten-file cap, at the surface a person actually meets.
+     *
+     * The bound is enforced in three places — the ViewModel refuses an eleventh,
+     * the route refuses an eleventh key, and the picker button stops offering.
+     * The first two have tests; this pins the third, which is the only one
+     * anybody SEES. Without it the control keeps inviting a file it will then
+     * refuse, which is a worse experience than saying no in advance.
+     */
+    @Test
+    fun `the add-file control stops offering once ten are attached`() {
+        val code = codeOf(page)
+        val addFile =
+            code
+                .substringAfter("onClick = launchPicker,", "")
+                .substringBefore("testTag(TAG_SUPPORT_ADD_FILE)", "")
+        assertTrue(
+            addFile.isNotEmpty(),
+            "$page: could not isolate the add-file button — the pin cannot see what it checks",
+        )
+        assertTrue(
+            addFile.contains("attachments.size < MAX_ATTACHMENTS"),
+            "$page keeps offering to add files past the cap. Found: `$addFile`",
+        )
+    }
+
+    /**
+     * The message bound is shown as it is used, not discovered at Send.
+     *
+     * Operator, 2026-08-22: 1,000 characters, counted live. A bound somebody
+     * only meets when they press Send is a bound that costs them the message
+     * they just wrote.
+     */
+    @Test
+    fun `the character count is on the field and updates as they type`() {
+        val code = codeOf(page)
+        assertTrue(
+            code.contains("TAG_SUPPORT_CHAR_COUNT"),
+            "$page shows no character count, so the 1,000 bound is invisible until Send",
+        )
+        assertTrue(
+            code.contains("state.characterCount") && code.contains("SUPPORT_MESSAGE_MAX_LENGTH"),
+            "$page's count is not driven by the field's own state, so it cannot be live",
+        )
+        assertTrue(
+            code.contains("state.isOverCharacterLimit"),
+            "$page does not mark the field when the bound is passed",
+        )
+    }
+
+    /**
      * SHY-0419, pinned so it cannot come back a third time.
      *
      * The first fix extended the scroll range so Send could be REACHED. It was

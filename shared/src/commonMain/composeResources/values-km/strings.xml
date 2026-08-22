@@ -1871,4 +1871,6 @@
     <string name="support_form_error_video_unreadable">យើងមិនអាចពិនិត្យមើលថាតើវីដេអូនោះមានរយៈពេលប៉ុន្មាននោះទេ។ សូមសាកល្បងមួយផ្សេងទៀត។</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">ឯកសាររហូតដល់ 10 ។ រូបភាពរហូតដល់ 5 MB វីដេអូរហូតដល់ 30 វិនាទី។</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

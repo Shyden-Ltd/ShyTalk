@@ -1782,4 +1782,6 @@
     <string name="support_form_error_video_unreadable">Nous n'avons pas pu vérifier la durée de cette vidéo. Veuillez en essayer un autre.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">Jusqu'à 10 fichiers. Images jusqu'à 5 Mo, vidéos jusqu'à 30 secondes.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

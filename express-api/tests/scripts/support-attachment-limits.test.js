@@ -66,6 +66,22 @@ describe('attachment limits — the numbers', () => {
     expect(vm).toMatch(/MAX_VIDEO_DURATION_MS\s*=\s*30_000/);
   });
 
+  /**
+   * 1,000 characters — operator 2026-08-22, down from 2,000. Pinned on BOTH
+   * sides: if they drift, somebody is refused by a server bound the app never
+   * warned them about, after writing the whole thing.
+   */
+  test('the message bound is 1,000, agreed by client and server', () => {
+    expect(vm).toMatch(/SUPPORT_MESSAGE_MAX_LENGTH\s*=\s*1000\b/);
+    expect(codeOf(SERVER)).toMatch(/MAX_MESSAGE_LENGTH\s*=\s*1000\b/);
+  });
+
+  test('the count is live, and reads from the field rather than the trimmed text', () => {
+    // A count that disagreed with what is on screen would be worse than none.
+    expect(vm).toMatch(/characterCount[\s\S]{0,80}message\.length/);
+    expect(vm).toMatch(/isOverCharacterLimit/);
+  });
+
   test('ten files per ticket, agreed by client and server', () => {
     expect(vm).toMatch(/MAX_ATTACHMENTS\s*=\s*10\b/);
     expect(codeOf(SERVER)).toMatch(/MAX_ATTACHMENTS\s*=\s*10\b/);

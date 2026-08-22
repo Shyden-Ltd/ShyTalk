@@ -1786,4 +1786,6 @@
     <string name="support_form_error_video_unreadable">لم نتمكن من التحقق من مدة هذا الفيديو. يرجى تجربة واحدة مختلفة.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">ما يصل إلى 10 ملفات. صور يصل حجمها إلى 5 ميغابايت، ومقاطع فيديو تصل مدتها إلى 30 ثانية.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

@@ -964,6 +964,7 @@
     <string name="support_form_title">Contact support</string>
     <string name="support_form_hint">Tell us what is wrong and we will look into it.</string>
     <string name="support_form_send">Send</string>
+    <string name="support_form_character_count">%1$d / %2$d</string>
     <string name="support_form_sent">Thanks. We have your message and will look into it.</string>
     <string name="support_form_added">Thanks. We have added this to the request you already had open.</string>
     <string name="support_open_requests_one">You already have 1 request open.</string>

@@ -1785,4 +1785,6 @@
     <string name="support_form_error_video_unreadable">Vi kunde inte kontrollera hur lång den videon är. Vänligen prova en annan.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">Upp till 10 filer. Bilder upp till 5 MB, videor upp till 30 sekunder.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

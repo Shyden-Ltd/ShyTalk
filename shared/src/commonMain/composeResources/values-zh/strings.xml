@@ -1786,4 +1786,6 @@
     <string name="support_form_error_video_unreadable">我们无法检查该视频的长度。请尝试另一种。</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">最多 10 个文件。图片最大 5 MB，视频最大 30 秒。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

@@ -1786,4 +1786,6 @@
     <string name="support_form_error_video_unreadable">Nie mogliśmy sprawdzić, jak długi jest ten film. Spróbuj innego.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_attachment_limits">Do 10 plików. Obrazy do 5 MB, filmy do 30 sekund.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

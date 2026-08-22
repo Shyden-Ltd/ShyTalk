@@ -407,6 +407,141 @@ class SupportFormViewModelTest {
             assertTrue(viewModel.uiState.value.submitted)
         }
 
+    // ─── The message itself: bounded, counted live, never blank ───
+
+    /**
+     * 1,000 characters, operator 2026-08-22 (was 2,000).
+     *
+     * The count has to be live, because a bound somebody only discovers when
+     * they press Send is a bound that costs them the message they just wrote.
+     */
+    @Test
+    fun `a message at the limit is accepted`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.updateMessage("x".repeat(SUPPORT_MESSAGE_MAX_LENGTH))
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertEquals(1, repo.raiseCalls.size)
+            assertNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `a message one character over the limit is refused`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.updateMessage("x".repeat(SUPPORT_MESSAGE_MAX_LENGTH + 1))
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertTrue(repo.raiseCalls.isEmpty())
+            assertNotNull(viewModel.uiState.value.error)
+        }
+
+    @Test
+    fun `the limit is one thousand characters`() {
+        // Pinned as a NUMBER, not just as a symbol: the operator named it, and
+        // the copy on screen and the server's own bound both have to match it.
+        assertEquals(1000, SUPPORT_MESSAGE_MAX_LENGTH)
+    }
+
+    /** Live, so somebody sees the room they have left as they use it. */
+    @Test
+    fun `the character count follows what has been typed`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            assertEquals(0, viewModel.uiState.value.characterCount)
+
+            viewModel.updateMessage("hello")
+            assertEquals(5, viewModel.uiState.value.characterCount)
+
+            viewModel.updateMessage("hello there")
+            assertEquals(11, viewModel.uiState.value.characterCount)
+
+            viewModel.updateMessage("")
+            assertEquals(0, viewModel.uiState.value.characterCount)
+        }
+
+    /**
+     * Counted on the RAW field, not the trimmed message. Somebody typing spaces
+     * has used those characters and the field is holding them; showing a count
+     * that disagrees with what is on screen is worse than no count.
+     */
+    @Test
+    fun `the count reflects the field, including spaces`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.updateMessage("  hi  ")
+            assertEquals(6, viewModel.uiState.value.characterCount)
+        }
+
+    @Test
+    fun `the count knows when the limit is passed`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.updateMessage("x".repeat(SUPPORT_MESSAGE_MAX_LENGTH))
+            assertFalse(viewModel.uiState.value.isOverCharacterLimit)
+
+            viewModel.updateMessage("x".repeat(SUPPORT_MESSAGE_MAX_LENGTH + 1))
+            assertTrue(viewModel.uiState.value.isOverCharacterLimit)
+        }
+
+    // ─── Nothing blank ever reaches the queue ───
+
+    @Test
+    fun `an empty message is refused`() =
+        runTest {
+            viewModel = formWith()
+            advanceUntilIdle()
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertTrue(repo.raiseCalls.isEmpty())
+            assertNotNull(viewModel.uiState.value.error)
+        }
+
+    /**
+     * Whitespace is not a message. A ticket that says nothing costs an admin the
+     * same triage as a real one and tells them nothing.
+     */
+    @Test
+    fun `a message of only spaces, tabs and newlines is refused`() =
+        runTest {
+            for (blank in listOf(" ", "   ", "\t", "\n", " \t\n  ")) {
+                viewModel = formWith()
+                advanceUntilIdle()
+                viewModel.updateMessage(blank)
+                viewModel.submit()
+                advanceUntilIdle()
+
+                assertTrue(repo.raiseCalls.isEmpty(), "\"$blank\" reached the server")
+                assertNotNull(viewModel.uiState.value.error, "\"$blank\" was accepted silently")
+            }
+        }
+
+    @Test
+    fun `a blank message is refused on the add-to-existing path too`() =
+        runTest {
+            viewModel = formWith(BILLING)
+            advanceUntilIdle()
+            viewModel.updateMessage("something")
+            viewModel.submit()
+            advanceUntilIdle()
+
+            viewModel.updateMessage("  \n ")
+            viewModel.addToOpenTicket(BILLING.ticketId)
+            advanceUntilIdle()
+
+            assertTrue(repo.addCalls.isEmpty())
+            assertNotNull(viewModel.uiState.value.error)
+        }
+
     // ─── SHY-0387 attachment limits, corrected by the operator 2026-08-22 ───
 
     /**
