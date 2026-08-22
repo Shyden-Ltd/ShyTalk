@@ -68,6 +68,27 @@ const { createRecorder } = require('./drivers/journey-screen-recorder');
 // --------------------------------------------------------------------------
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
+/**
+ * The account each platform raises support tickets as.
+ *
+ * The operator runs Android and iOS AT THE SAME TIME against ONE emulator, so
+ * a journey that asserts on "how many requests this person has open" cannot
+ * share an account between them: the other phone's ticket lands in the count
+ * and the warning names a number neither run expects. Nothing fails cleanly —
+ * the walks just disagree with each other, intermittently, and the obvious
+ * reading is that the feature is flaky.
+ *
+ * Both are adult MEMBER personas with `ageVerified: true` and `locale: 'en'`,
+ * so the two walks exercise the same code path and read the same English UI
+ * strings. `host@shytalk.dev` is deliberately an account NO other journey
+ * signs in as, so an iOS support run cannot collide with an Android voice run
+ * either.
+ */
+const SUPPORT_PERSONA_BY_PLATFORM = {
+  android: 'adult-power@shytalk.dev',
+  ios: 'host@shytalk.dev',
+};
+
 const TARGETS = {
   local: {
     pkg: 'com.shyden.shytalk.local',
@@ -1424,7 +1445,7 @@ const J38 = {
     let seededUserId = null;
 
     await reporter.step(device, 'Alice already has a request open', async () => {
-      token = await getIdToken('adult-power@shytalk.dev');
+      token = await getIdToken(ctx.supportPersona);
       // Seeded through the API rather than assumed: the warning cannot be
       // asserted against a person who has nothing open, and leaving that to
       // whatever the device happened to do earlier makes the run flaky.
@@ -1449,7 +1470,7 @@ const J38 = {
     // confirm WHO is signed in by name. The step below is a stronger check
     // anyway -- it compares the account on the device against the account the
     // server bound the seeded ticket to.
-    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', null);
+    await signInAs(device, reporter, ctx, ctx.supportPersona, null);
     if (!ctx.db) return;
 
     await reporter.step(device, 'The phone is signed in as the account we seeded', async () => {
@@ -1896,7 +1917,13 @@ async function main() {
 
   const db = initDb(opts.target);
   if (db) console.log('Firestore assertions: ON (local emulator)');
-  const ctx = { ...cfg, apkAbs, reset: opts.reset, db };
+  const ctx = {
+    ...cfg,
+    apkAbs,
+    reset: opts.reset,
+    db,
+    supportPersona: SUPPORT_PERSONA_BY_PLATFORM[opts.platform],
+  };
   let journeys = buildJourneys(ctx);
   if (opts.journeys) journeys = journeys.filter((j) => opts.journeys.includes(j.id));
   if (journeys.length === 0) throw new Error('No journeys selected.');
@@ -1968,6 +1995,7 @@ if (require.main === module) {
 // the on-device integration runs). Requiring this file does NOT run main().
 module.exports = {
   parseArgs,
+  SUPPORT_PERSONA_BY_PLATFORM,
   parseNodes,
   byId,
   byText,
