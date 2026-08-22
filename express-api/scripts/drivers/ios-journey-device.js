@@ -134,6 +134,7 @@ class IosDevice {
     this.bundleId = bundleId;
     this.appiumBaseUrl = appiumBaseUrl;
     this._sessionId = null;
+    this._allSessionIds = new Set();
     this._size = null;
   }
 
@@ -186,6 +187,11 @@ class IosDevice {
       );
     }
     this._sessionId = sid;
+    // Every id ever opened, not just the current one. When WebDriverAgent dies
+    // with the app, the dump-retry opens a REPLACEMENT session and the old id
+    // is forgotten — so a teardown that closes only `_sessionId` orphans it.
+    // Measured: 14 sessions created, 13 removed.
+    this._allSessionIds.add(sid);
     return sid;
   }
 
@@ -427,11 +433,24 @@ class IosDevice {
     return this.size();
   }
 
+  /**
+   * Close EVERY session this device opened, not only the latest.
+   *
+   * A session is replaced, not reused, when WebDriverAgent dies with the app —
+   * the dump-retry opens a fresh one and `_sessionId` moves on. Closing only
+   * that leaves the superseded id behind to expire on `newCommandTimeout`, and
+   * two runs inside that window collide. Same leak as the one that took out a
+   * run with a "test runner failed to initialize", one level up.
+   *
+   * Best-effort per id: one refusal must not strand the rest.
+   */
   async quit() {
-    if (!this._sessionId) return;
-    await fetch(`${this.appiumBaseUrl}/session/${this._sessionId}`, { method: 'DELETE' }).catch(
-      () => {},
-    );
+    const ids = [...this._allSessionIds];
+    if (this._sessionId) ids.push(this._sessionId);
+    for (const id of new Set(ids)) {
+      await fetch(`${this.appiumBaseUrl}/session/${id}`, { method: 'DELETE' }).catch(() => {});
+    }
+    this._allSessionIds.clear();
     this._sessionId = null;
   }
 }

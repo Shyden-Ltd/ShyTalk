@@ -212,6 +212,29 @@ function ffmpegMjpegArgs({ file, port = DEFAULT_MJPEG_PORT, fps = DEFAULT_RECORD
     '-y',
     '-f',
     'mjpeg',
+    // Reconnect when the stream drops. INPUT options — after `-i` they are
+    // silently ignored, which looks exactly like the bug still being present.
+    //
+    // A 91-second walk produced 21 seconds of video and stopped precisely where
+    // the app was relaunched. WebDriverAgent dies with the app
+    // (`connect ECONNREFUSED 127.0.0.1:8100`); the runner's dump-retry opens a
+    // REPLACEMENT session which claims port 9100 again, but ffmpeg was still
+    // holding the dead socket and never came back. Steps 3-14 had no footage at
+    // all — and a green walk with no video is exactly the case where footage is
+    // worth the most, because it is the only thing that shows what an assertion
+    // could not.
+    '-reconnect',
+    '1',
+    '-reconnect_streamed',
+    '1',
+    // The socket is REFUSED, not closed politely, so the ordinary reconnect is
+    // not enough on its own.
+    '-reconnect_on_network_error',
+    '1',
+    // Bounded: a genuinely dead stream must still end the file rather than
+    // leaving the runner waiting on a recorder that will never return.
+    '-reconnect_delay_max',
+    '10',
     // Stamp each frame with the moment it actually arrived, rather than
     // assuming a rate. This is what keeps playback in step with real time.
     '-use_wallclock_as_timestamps',

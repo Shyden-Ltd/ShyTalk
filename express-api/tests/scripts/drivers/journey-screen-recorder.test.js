@@ -512,6 +512,63 @@ describe('ffmpeg output buffering', () => {
   });
 });
 
+describe('the iOS recorder survives a session restart', () => {
+  const file = '/tmp/walk-ios.mp4';
+
+  /**
+   * A 91-second walk produced 21 seconds of video, and stopped exactly where
+   * the app was relaunched.
+   *
+   * WebDriverAgent dies with the app (`connect ECONNREFUSED 127.0.0.1:8100`).
+   * The runner's dump-retry transparently opens a REPLACEMENT session, which
+   * claims port 9100 again — but ffmpeg is still holding the dead TCP stream
+   * and never reconnects, so the file ends there while the walk carries on for
+   * another seventy seconds.
+   *
+   * Any iOS journey that restarts the app therefore loses its footage from that
+   * point on. Steps 3–14 had none. A green walk with no video is exactly the
+   * case where the footage is worth the most — it is the only thing that can
+   * show what an assertion could not.
+   */
+  test('ffmpeg is told to reconnect when the stream drops', () => {
+    expect(ffmpegMjpegArgs({ file })).toEqual(
+      expect.arrayContaining(['-reconnect', '1', '-reconnect_streamed', '1']),
+    );
+  });
+
+  test('it reconnects on a network error, which is how the stream actually dies', () => {
+    // The MJPEG socket is refused, not closed politely — WDA is gone.
+    expect(ffmpegMjpegArgs({ file })).toEqual(
+      expect.arrayContaining(['-reconnect_on_network_error', '1']),
+    );
+  });
+
+  test('reconnection is bounded, so a genuinely dead stream still ends the file', () => {
+    const args = ffmpegMjpegArgs({ file });
+    const at = args.indexOf('-reconnect_delay_max');
+    expect({ bounded: at !== -1 }).toEqual({ bounded: true });
+    expect(Number(args[at + 1])).toBeLessThanOrEqual(30);
+  });
+
+  test('every reconnect option precedes the input it applies to', () => {
+    // These are INPUT options. After -i they are silently ignored, which would
+    // look exactly like the bug still being present.
+    const args = ffmpegMjpegArgs({ file });
+    const input = args.indexOf('-i');
+    for (const opt of [
+      '-reconnect',
+      '-reconnect_streamed',
+      '-reconnect_on_network_error',
+      '-reconnect_delay_max',
+    ]) {
+      expect({ opt, beforeInput: args.indexOf(opt) < input }).toEqual({
+        opt,
+        beforeInput: true,
+      });
+    }
+  });
+});
+
 describe('resolveBinary', () => {
   test('returns an ABSOLUTE path, never a bare name', () => {
     // Spawning a bare name searches $PATH, so which binary runs depends on the

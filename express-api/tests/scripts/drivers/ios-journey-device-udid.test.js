@@ -128,3 +128,75 @@ describe('source-level guard', () => {
     }).toEqual({ passesCoreDevice: true });
   });
 });
+
+/**
+ * A session is REPLACED, not reused, when WebDriverAgent dies with the app.
+ *
+ * The runner's dump-retry opens a fresh session and `_sessionId` moves on, so a
+ * teardown that closes only the current id orphans the previous one. Measured on
+ * a real run: 14 sessions created, 13 removed. The survivor then expires on
+ * `newCommandTimeout` 300 seconds later, and two runs inside that window collide
+ * — which is how a "test runner failed to initialize" took out a run that had
+ * nothing else wrong with it.
+ */
+describe('IosDevice closes every session it opened', () => {
+  const build = () =>
+    new IosDevice({
+      coreDeviceUuid: CORE_DEVICE_UUID,
+      hardwareUdid: HARDWARE_UDID,
+      bundleId: 'com.shyden.shytalk',
+    });
+
+  test('a replaced session is remembered so it can be closed', () => {
+    const d = build();
+    // Stand in for what `_session()` records as WDA dies and is replaced.
+    d._allSessionIds.add('first');
+    d._sessionId = 'second';
+    d._allSessionIds.add('second');
+    expect([...d._allSessionIds].sort()).toEqual(['first', 'second']);
+  });
+
+  test('quit deletes the superseded id as well as the current one', async () => {
+    const deleted = [];
+    const original = global.fetch;
+    global.fetch = async (url, opts) => {
+      if (opts?.method === 'DELETE') deleted.push(String(url).split('/session/')[1]);
+      return { ok: true, json: async () => ({}) };
+    };
+    try {
+      const d = build();
+      d._allSessionIds.add('superseded');
+      d._sessionId = 'current';
+      d._allSessionIds.add('current');
+      await d.quit();
+      expect(deleted.sort()).toEqual(['current', 'superseded']);
+    } finally {
+      global.fetch = original;
+    }
+  });
+
+  test('one refusal does not strand the rest', async () => {
+    // Best-effort per id. The superseded session's WDA is usually already dead,
+    // so its DELETE is the one most likely to fail — and it must not prevent
+    // the live one being released.
+    const deleted = [];
+    const original = global.fetch;
+    global.fetch = async (url, opts) => {
+      const id = String(url).split('/session/')[1];
+      if (id === 'dead') throw new Error('ECONNREFUSED');
+      if (opts?.method === 'DELETE') deleted.push(id);
+      return { ok: true, json: async () => ({}) };
+    };
+    try {
+      const d = build();
+      d._allSessionIds.add('dead');
+      d._sessionId = 'live';
+      d._allSessionIds.add('live');
+      await d.quit();
+      expect(deleted).toEqual(['live']);
+      expect(d._sessionId).toBeNull();
+    } finally {
+      global.fetch = original;
+    }
+  });
+});
