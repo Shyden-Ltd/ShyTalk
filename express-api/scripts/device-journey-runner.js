@@ -1350,6 +1350,34 @@ async function dbWaitField(db, docPath, field, predicate, timeoutMs = 8000) {
   throw new Error(`DB ${docPath}.${field} predicate unmet; last=${JSON.stringify(last)}`);
 }
 
+/**
+ * Wait for a query to return something, bounded (SHY-0447).
+ *
+ * A UI action and the server write it causes are not simultaneous. The
+ * assertions here used to query once, immediately after the tap, and got away
+ * with it only because the walk was slow: a screen read cost 2332ms, so the
+ * server had seconds of accidental grace before anyone looked.
+ *
+ * With the read at ~65ms the walk overtook the write and step 14 reported
+ * "the request never arrived" for a ticket that arrived a moment later. That
+ * is the harness racing the product, and it would have been read as a product
+ * defect.
+ *
+ * Bounded, so a request that genuinely never arrives still fails — and fails
+ * saying how long it waited.
+ */
+async function dbWaitQuery(runQuery, { timeoutMs = 8000, pollMs = 200, what = 'query' } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const snap = await runQuery();
+    if (!snap.empty) return snap;
+    if (Date.now() + pollMs >= deadline) {
+      throw new Error(`${what} found nothing within ${timeoutMs}ms`);
+    }
+    await sleep(pollMs);
+  }
+}
+
 const arrayContains = (v, needle) => Array.isArray(v) && v.includes(needle);
 
 // --------------------------------------------------------------------------
@@ -2332,12 +2360,16 @@ const J38 = {
       // somebody has that many open the length cannot grow -- and an assertion
       // on it reports "the second request was refused" for a request that was
       // raised perfectly. A display cap is not a fact about how many exist.
-      const snap = await ctx.db
-        .collection('supportTickets')
-        .where('userId', '==', seededUserId)
-        .where('message', '==', typed)
-        .get();
-      if (snap.empty) {
+      const snap = await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('supportTickets')
+            .where('userId', '==', seededUserId)
+            .where('message', '==', typed)
+            .get(),
+        { what: 'a ticket carrying the words she typed' },
+      ).catch(() => null);
+      if (!snap || snap.empty) {
         throw new Error('no ticket carries the words she typed; the request never arrived');
       }
       const raisedId = snap.docs[0].id;
@@ -2813,6 +2845,7 @@ module.exports = {
   summarizeScreen,
   arrayContains,
   openPersonaPicker,
+  dbWaitQuery,
   pollGap,
   POLL_FLOOR_MS,
   IOS_POLL_GAP_MS,
