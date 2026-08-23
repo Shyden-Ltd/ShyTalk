@@ -49,6 +49,12 @@ const HELPER_FILES = new Set([
   // start/stop, not tap/dump/screencap, and a listMethods() here would claim a
   // parity it does not have.
   'journey-screen-recorder.js',
+  // SHY-0447: owns ONE Appium session used only to READ the Android screen,
+  // because `uiautomator dump` costs ~2332ms per call against ~65ms warm and
+  // was 86% of a walk. It drives nothing — taps and swipes stay on adb — so it
+  // has dumpXml/close, not a driver surface, and a listMethods() here would
+  // claim a parity it does not have.
+  'android-source-session.js',
 ]);
 
 function discoverDrivers() {

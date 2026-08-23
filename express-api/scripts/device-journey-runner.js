@@ -61,6 +61,10 @@ const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 const { createIosJourneyDevice, selectCoreDeviceUuid } = require('./drivers/ios-journey-device');
+const {
+  createAndroidSourceSession,
+  ANDROID_SOURCE_UNAVAILABLE,
+} = require('./drivers/android-source-session');
 const { createRecorder } = require('./drivers/journey-screen-recorder');
 
 // --------------------------------------------------------------------------
@@ -214,6 +218,19 @@ class Device {
     // `device.kind === 'ios'` worked by accident of `undefined` — and any
     // check the other way round would have been silently false.
     this.kind = 'android';
+    // Set by attachSourceSession() when a warm reader is available. Absent is
+    // a supported state, not a broken one.
+    this.sourceSession = null;
+  }
+
+  /**
+   * Give this device a warm screen reader if Appium can provide one. Called
+   * once at startup, because standing the server up costs ~5s and must not be
+   * paid per read — which is the entire point.
+   */
+  async attachSourceSession() {
+    this.sourceSession = await createAndroidSourceSession({ serial: this.serial });
+    return Boolean(this.sourceSession);
   }
 
   shell(args) {
@@ -254,7 +271,29 @@ class Device {
   }
 
   // uiautomator can transiently fail while the UI is animating; retry.
+  /**
+   * Read the screen — over a WARM UiAutomator2 server when one is available,
+   * and over `uiautomator dump` when it is not (SHY-0447).
+   *
+   * Measured on the real OnePlus, 2026-08-23: 65ms against 2332ms, and reads
+   * were 86% of a whole J38 walk. `uiautomator dump` spawns a fresh
+   * instrumentation per call and costs the same on the Android launcher, so it
+   * is the tool rather than the app.
+   *
+   * The fallback is announced ONCE, loudly. A silent one would hide a 36x
+   * regression behind a run that is merely slow, and slow is exactly what
+   * nobody investigates.
+   */
   async dumpXml() {
+    if (this.sourceSession) return this.sourceSession.dumpXml();
+    if (!Device._warnedSlowSource) {
+      Device._warnedSlowSource = true;
+      console.log(`  ⚠ ${ANDROID_SOURCE_UNAVAILABLE}`);
+    }
+    return this.dumpXmlOverAdb();
+  }
+
+  async dumpXmlOverAdb() {
     let last = '';
     for (let i = 0; i < 4; i++) {
       try {
@@ -515,6 +554,14 @@ class Reporter {
     console.log(
       `  RESULT: ${passed}/${this.journeys.length} journeys passed${failed ? `, ${failed} FAILED` : ''}`,
     );
+    if (dumpCost.count > 0) {
+      const wall = Date.now() - Date.parse(this.meta.startedAt);
+      console.log(
+        `  Screen reads: ${dumpCost.count} dumps, ${(dumpCost.ms / 1000).toFixed(1)}s ` +
+          `(${Math.round(dumpCost.ms / dumpCost.count)}ms each, ` +
+          `${Math.round((dumpCost.ms / wall) * 100)}% of the run)`,
+      );
+    }
     console.log(`  Report: ${path.join(this.outDir, 'latest-report.md')}`);
     console.log(`  Artifacts: ${this.runDir}`);
     console.log('========================================');
@@ -572,8 +619,75 @@ class Reporter {
 // --------------------------------------------------------------------------
 const MAIN_TABS = ['main_roomsTab', 'main_messagesTab', 'main_profileTab'];
 
+/**
+ * Every look at the screen goes through here, and every look COSTS. Measured on
+ * 2026-08-23: an Android `uiautomator dump` is ~2240ms and an iOS `/source` is
+ * ~278ms, so on Android the walk spends most of its life reading the screen
+ * rather than driving it.
+ *
+ * Counted rather than estimated, and reported at the end of a run, because
+ * "the journeys are slow" is not actionable and "N dumps × Xms = Ys of the
+ * walk's Zs" is.
+ */
+const dumpCost = { count: 0, ms: 0 };
+
 async function dump(device) {
-  return parseNodes(await device.dumpXml());
+  const started = Date.now();
+  try {
+    const nodes = parseNodes(await device.dumpXml());
+    // Stamped so freshness is a FACT about when the phone was read, not a
+    // claim a caller can make. `tapResolved` reuses a tree only while this
+    // says it is still current.
+    nodes.takenAt = Date.now();
+    return nodes;
+  } finally {
+    dumpCost.count += 1;
+    dumpCost.ms += Date.now() - started;
+  }
+}
+
+/**
+ * How long a tree stays usable for a tap that was already being set up.
+ *
+ * NOT a cache. It covers the microseconds between finding a control and
+ * tapping it — `tapId` dumps to find the element and hands it straight to
+ * `tapResolved`, with no tap, wait or navigation in between. Re-reading there
+ * cost a second ~2280ms dump on Android for a screen that could not have
+ * moved.
+ *
+ * Far below the time any real interaction takes, so anything that has actually
+ * happened puts the tree outside the window and it is read again — which is
+ * the SHY-0441 guarantee, unchanged.
+ */
+const TREE_FRESH_MS = 400;
+
+/**
+ * The shortest gap between two looks at the screen.
+ *
+ * A FLOOR, not an addition. Every wait loop used to read the screen and then
+ * sleep 700-800ms regardless — on Android that is 800ms piled on top of a
+ * ~2280ms read, for a phone that has already had two and a half seconds to
+ * settle; on iOS, where a read is 278ms, it tripled the time to notice a
+ * control appearing.
+ */
+const POLL_FLOOR_MS = 250;
+
+/**
+ * Wait out whatever is still owed to [POLL_FLOOR_MS] since `tickStarted`, and
+ * nothing more. A read that took longer than the floor returns immediately.
+ */
+async function pollGap(tickStarted) {
+  const owed = POLL_FLOOR_MS - (Date.now() - tickStarted);
+  if (owed > 0) await sleep(owed);
+}
+
+/** Is this tree recent enough to tap from? */
+function treeIsFresh(nodes) {
+  return (
+    Array.isArray(nodes) &&
+    Number.isFinite(nodes.takenAt) &&
+    Date.now() - nodes.takenAt <= TREE_FRESH_MS
+  );
 }
 
 /** Does `box` contain `point`? */
@@ -735,7 +849,13 @@ async function tapResolved(device, node, labelOrOpts, extra) {
   // reachability is a question about the tree. Skipping the dump for an id'd
   // control is what let the element route bypass the check entirely — on iOS,
   // which is where SHY-0419 happened.
-  const fresh = await dump(device);
+  //
+  // A caller that has JUST read the screen may hand that tree over rather than
+  // pay for a second read of the same thing (SHY-0447). Judged on when the
+  // phone was actually read, not on the caller saying so, and re-read the
+  // moment it is stale — so the re-resolve still protects against a screen
+  // that moved, which is what SHY-0441 was about.
+  const fresh = treeIsFresh(opts.nodes) ? opts.nodes : await dump(device);
   const again = relocate
     ? relocate(fresh)
     : (node.id && byId(fresh, node.id)) ||
@@ -796,7 +916,8 @@ async function tapId(device, id) {
   const nodes = await dump(device);
   const n = byId(nodes, id);
   if (!n) throw new Error(`tap target #${id} not found on screen`);
-  await tapResolved(device, n, `#${id}`);
+  // The tree from a moment ago, rather than a second read of the same screen.
+  await tapResolved(device, n, { label: `#${id}`, nodes });
 }
 
 // Tap the lowest-on-screen node with an exact text. Used for dialog confirm
@@ -811,13 +932,15 @@ const lowestWithText = (nodes, text) => {
 };
 
 async function tapLowestText(device, text) {
-  const target = lowestWithText(await dump(device), text);
+  const nodes = await dump(device);
+  const target = lowestWithText(nodes, text);
   if (!target) throw new Error(`no "${text}" node to tap`);
   // The rule travels with the node. Without it the re-resolve takes the FIRST
   // match, which in a confirmation dialog is the title rather than the button.
   await tapResolved(device, target, {
     relocate: (fresh) => lowestWithText(fresh, text),
     label: `lowest "${text}"`,
+    nodes,
   });
   await sleep(900);
 }
@@ -883,10 +1006,11 @@ async function waitForId(device, id, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last = [];
   while (Date.now() < deadline) {
+    const tick = Date.now();
     const nodes = await dump(device);
     if (byId(nodes, id)) return nodes;
     last = summarizeScreen(nodes).testTags;
-    await sleep(800);
+    await pollGap(tick);
   }
   throw new Error(
     `timed out (${timeoutMs}ms) waiting for #${id}; screen showed: ${last.join(', ') || '(none)'}`,
@@ -897,10 +1021,11 @@ async function waitForText(device, sub, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last = [];
   while (Date.now() < deadline) {
+    const tick = Date.now();
     const nodes = await dump(device);
     if (byTextContains(nodes, sub)) return nodes;
     last = summarizeScreen(nodes).testTags;
-    await sleep(700);
+    await pollGap(tick);
   }
   throw new Error(
     `timed out (${timeoutMs}ms) waiting for text "${sub}"; screen showed: ${last.join(', ') || '(none)'}`,
@@ -1024,6 +1149,7 @@ async function handleOverlayBubbleDialog(device, nodes) {
 async function advanceUntil(device, isDone, timeoutMs, label) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    const tick = Date.now();
     const nodes = await dump(device);
 
     // Overlays are cleared BEFORE deciding we have arrived.
@@ -1040,7 +1166,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
     // Checking the overlays first costs a pass of cheap lookups on a screen
     // that has none, and removes the window entirely.
     if (await handlePermissionDialog(device, nodes)) {
-      await sleep(700);
+      await pollGap(tick);
       continue;
     }
     if (await handleRewardCalendar(device, nodes)) continue;
@@ -1069,7 +1195,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
       await tapResolved(device, current);
       break;
     }
-    await sleep(800);
+    await pollGap(tick);
   }
   const last = summarizeScreen(await dump(device)).testTags;
   throw new Error(
@@ -2466,6 +2592,11 @@ async function main() {
     } catch (_e) {
       /* ignore */
     }
+    // Once, at startup. Standing the server up costs ~5s and saves ~2.3s on
+    // every read after it — a J38 walk makes ~78 (SHY-0447).
+    if (await device.attachSourceSession()) {
+      console.log('Screen reads: UiAutomator2 (warm server, ~65ms per read)');
+    }
   }
 
   const reporter = new Reporter(opts.out, { target: opts.target, serial, device: deviceModel });
@@ -2561,6 +2692,12 @@ async function main() {
     //
     // Best-effort and last: a teardown failure must not change the verdict of a
     // walk that has already finished.
+    if (device?.sourceSession) {
+      // Ended deliberately rather than left to time out: a superseded session
+      // holds the device's instrumentation, and the next run then collides
+      // with it — the same leak the iOS side had.
+      await device.sourceSession.close().catch(() => {});
+    }
     if (typeof device.quit === 'function') {
       try {
         await device.quit();
@@ -2615,6 +2752,11 @@ module.exports = {
   byTextContains,
   summarizeScreen,
   arrayContains,
+  pollGap,
+  POLL_FLOOR_MS,
+  dump,
+  dumpCost,
+  TREE_FRESH_MS,
   runTagFrom,
   j38Messages,
   staleJourneyTickets,

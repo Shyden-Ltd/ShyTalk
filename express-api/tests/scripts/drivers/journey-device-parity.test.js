@@ -37,6 +37,9 @@ const PLATFORM_SPECIFIC = {
   tapElementByLabel: "ios-only; guarded by `typeof device.tapElementByLabel === 'function'`",
   quit: "ios-only; guarded by `typeof device.quit === 'function'`",
   measure: 'ios-only; called inside the ios branch of main()',
+  attachSourceSession:
+    'android-only; called inside the android branch of main(). iOS reads the screen over ' +
+    'WebDriverAgent, which is already a warm server — this is Android catching up (SHY-0447)',
 };
 
 const androidMethods = () => {
