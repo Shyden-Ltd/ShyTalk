@@ -27,6 +27,7 @@ const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
 const { createWarning } = require('./admin-users');
+const { MAX_ATTACHMENTS } = require('../utils/attachment-limits');
 const {
   REPORT_ORIGIN,
   ReportDocumentError,
@@ -52,7 +53,10 @@ const REPORTED_USER_NAME_MAX_LENGTH = 50;
 // evidenceUrls is iterated by the orphan-storage cron, which loads up to 1000 reports'
 // urls into a Set in memory. Cap entry-count + per-entry length so a malicious report
 // can't OOM the cron on the Oracle Cloud free tier (1 GB RAM).
-const EVIDENCE_URLS_MAX_COUNT = 10;
+// SHY-0420: ONE definition of "how many files per submission", shared with
+// support tickets. Two constants agreeing today is two constants that can
+// disagree tomorrow, and the surfaces are meant to have the same rules.
+const EVIDENCE_URLS_MAX_COUNT = MAX_ATTACHMENTS;
 const EVIDENCE_URL_MAX_LENGTH = 500;
 
 // Stable error tokens for the moderation partial-failure contract. Centralised

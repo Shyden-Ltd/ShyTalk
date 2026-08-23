@@ -256,8 +256,47 @@ It deliberately does not refuse everything while unconfigured; that would take
 support attachments away entirely, which is worse than the status quo it exists
 to improve. The exposure is unchanged from today and now visible.
 
-### Not yet done
+### Reports and appeals — what that turned out to mean
 
-- **Reports and appeals** get the same rules. The decision module is shared and
-  ready; wiring their two upload paths is mechanical and is the remaining work
-  on this ticket.
+The remaining work was described here as "wiring their two upload paths", which
+assumed they each had one. Neither does.
+
+**Appeals carry no files at all.** `POST /appeals` accepts `appealText` and
+nothing else. There is no upload path to wire, and inventing one is a feature,
+not this ticket. Recorded rather than quietly ticked off.
+
+**Reports do not use a signed PUT.** Support tickets and age verification mint
+signed upload URLs; report evidence goes through `POST /api/storage/upload`, a
+multipart upload where the API holds the bytes. That is a different shape, and a
+simpler one — the bytes are in hand, so nothing has to be read back out of
+storage to decide about them.
+
+So the rules were applied there instead:
+
+- Every upload on that route is now put through `scanAttachment`, not only
+  report evidence. Profile photos, room covers and message images are all files
+  a stranger uploaded that a member of staff will open.
+- A file the scanner refuses is **deleted**, not merely withheld. Storing it and
+  returning no URL leaves an object in the bucket for anybody who later obtains
+  the key.
+- `EVIDENCE_URLS_MAX_COUNT` now comes from `MAX_ATTACHMENTS` rather than being a
+  second 10 sitting next to the first.
+
+### The defect this uncovered
+
+`submitUserReport` uploads with `path = "report_evidence"`. That was **not in
+the storage route's allowlist**, so every user report with a screenshot was
+refused with `400 Invalid upload path`.
+
+It did not merely lose the picture. The client returns on the first evidence
+failure and never calls `reportUser`, so **a person reporting harassment with a
+screenshot of it filed nothing at all.**
+
+Every test of that flow mocks `StorageRepository` and asserts the path STRING
+against a double that always succeeds, so the client and the route disagreed
+indefinitely with every suite green. The admin cleanup tools have been sweeping
+a `report_evidence/` folder the whole time.
+
+The allowlist is fixed here, with a test that drives the real router. The second
+half — an evidence failure taking the whole report with it — is a product
+decision and is filed as SHY-0450, with a recommendation.
