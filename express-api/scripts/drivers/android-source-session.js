@@ -59,6 +59,32 @@ function looksLikeLostSession(error) {
   return Boolean(m) && SESSION_LOST.some((s) => m.includes(s));
 }
 
+/**
+ * Rewrite UiAutomator2's source into the shape `uiautomator dump` produces.
+ *
+ * The two readers differ in exactly ONE way — where the class name lives:
+ *
+ *   uiautomator dump   <node class="android.widget.Button" resource-id="x" …/>
+ *   UiAutomator2       <android.widget.Button class="android.widget.Button" …/>
+ *
+ * Every attribute the journeys read — resource-id, text, bounds, enabled,
+ * clickable, package — is identical and already carries the class as an
+ * attribute too. Verified on the real phone, 2026-08-23: both readers returned
+ * the SAME EIGHT ids for the same Home screen, Compose testTags included.
+ *
+ * Adapting here rather than teaching `parseNodes` two formats is deliberate.
+ * `byId`, `byText`, `occluderOf` and `assertReachable` are built on the node
+ * shape and so is every test that proves them; a second format would ripple
+ * through all of it for no gain. Downstream never learns there are two.
+ *
+ * Left alone: `<hierarchy>`, which both formats use as the root.
+ */
+function normaliseUiAutomator2Source(xml) {
+  return String(xml).replace(/<(\/?)([A-Za-z_][\w.$]*)([\s/>])/g, (whole, slash, tag, tail) =>
+    tag === 'hierarchy' ? whole : `<${slash}node${tail}`,
+  );
+}
+
 /** One JSON round trip to Appium. Injected in tests so the policy is testable. */
 async function httpRequest(baseUrl, method, path, _body) {
   const res = await fetch(baseUrl + path, {
@@ -132,7 +158,7 @@ async function createAndroidSourceSession({
           'reads to every caller as "the element is absent", which is not the same thing',
       );
     }
-    return String(xml);
+    return normaliseUiAutomator2Source(xml);
   };
 
   return {
@@ -159,6 +185,7 @@ async function createAndroidSourceSession({
 
 module.exports = {
   createAndroidSourceSession,
+  normaliseUiAutomator2Source,
   looksLikeLostSession,
   ANDROID_SOURCE_UNAVAILABLE,
   DEFAULT_APPIUM_BASE_URL,

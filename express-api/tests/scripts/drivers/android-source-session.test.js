@@ -17,10 +17,15 @@
  * where the time goes.
  */
 
+const fs = require('node:fs');
+const path = require('node:path');
+
 const {
   createAndroidSourceSession,
+  normaliseUiAutomator2Source,
   ANDROID_SOURCE_UNAVAILABLE,
 } = require('../../../scripts/drivers/android-source-session');
+const { parseNodes, byId } = require('../../../scripts/device-journey-runner');
 
 /** A stand-in Appium that records what was asked of it. */
 function fakeAppium({ sourceReplies = [], sessionFails = false } = {}) {
@@ -108,5 +113,68 @@ describe('createAndroidSourceSession', () => {
   test('the unavailable reason is a sentence somebody can act on', () => {
     // Falling back silently would hide a 36x regression behind a green run.
     expect(ANDROID_SOURCE_UNAVAILABLE).toMatch(/appium driver install uiautomator2/);
+  });
+});
+
+describe('normaliseUiAutomator2Source', () => {
+  // UiAutomator2 puts the CLASS in the tag name:
+  //
+  //   uiautomator dump   <node class="android.widget.Button" resource-id="x" .../>
+  //   UiAutomator2       <android.widget.Button class="android.widget.Button" resource-id="x" .../>
+  //
+  // Everything else — resource-id, text, bounds, enabled, clickable — is
+  // identical. Verified against the real phone on 2026-08-23: both readers
+  // returned the SAME EIGHT ids on the same Home screen, Compose testTags
+  // included.
+  //
+  // So the tag is renamed at the seam and `parseNodes` never learns there are
+  // two formats. That keeps byId, byText, occluderOf, assertReachable and
+  // every test built on them exactly as proven.
+
+  const fixture = fs.readFileSync(
+    path.join(__dirname, 'fixtures', 'uiautomator2-source-sample.xml'),
+    'utf8',
+  );
+
+  test('the fixture is real UiAutomator2 output, not a hand-made stand-in', () => {
+    // The anchor. A fixture that drifted into `<node>` shape would make every
+    // assertion below pass without testing anything.
+    expect(fixture).toMatch(/<android\.[a-z]/);
+    expect(fixture).toContain('<hierarchy');
+  });
+
+  test('parseNodes finds nothing in the raw format — which is the bug', () => {
+    // This is what a real walk hit: "screen showed: (none)" with the phone
+    // sitting on a perfectly good screen.
+    expect(parseNodes(fixture, 'android')).toHaveLength(0);
+  });
+
+  test('after normalising, the Compose testTags are all there', () => {
+    const nodes = parseNodes(normaliseUiAutomator2Source(fixture), 'android');
+    expect(nodes.length).toBeGreaterThan(0);
+    ['main_roomsTab', 'main_messagesTab', 'main_profileTab'].forEach((id) => {
+      expect({ id, found: Boolean(byId(nodes, id)) }).toEqual({ id, found: true });
+    });
+  });
+
+  test('bounds survive, so reachability and taps still work', () => {
+    const nodes = parseNodes(normaliseUiAutomator2Source(fixture), 'android');
+    const tab = byId(nodes, 'main_roomsTab');
+    expect(tab.center).toEqual({ x: expect.any(Number), y: expect.any(Number) });
+    expect(tab.bounds.x2).toBeGreaterThan(tab.bounds.x1);
+    expect(tab.bounds.y2).toBeGreaterThan(tab.bounds.y1);
+    // The class comes from the ATTRIBUTE, which both formats carry — renaming
+    // the tag must not have cost it, because occluderOf reads it.
+    expect(tab.cls).toMatch(/^android\./);
+  });
+
+  test('the hierarchy root is left alone', () => {
+    expect(normaliseUiAutomator2Source(fixture)).toContain('<hierarchy');
+  });
+
+  test('output already in node form is returned untouched', () => {
+    // The fallback path produces it, and normalising twice must be harmless.
+    const already = '<hierarchy><node resource-id="a" bounds="[0,0][10,10]" /></hierarchy>';
+    expect(normaliseUiAutomator2Source(already)).toBe(already);
   });
 });
