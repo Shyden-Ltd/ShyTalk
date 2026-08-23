@@ -26,6 +26,7 @@ const {
   TREE_FRESH_MS,
   pollGap,
   POLL_FLOOR_MS,
+  IOS_POLL_GAP_MS,
 } = require('../../scripts/device-journey-runner');
 
 const SEND_XML =
@@ -67,6 +68,14 @@ describe('a tree knows when it was read', () => {
 });
 
 describe('tapResolved reads the screen once when it can', () => {
+  test('on iOS a tree is never reused — it saves 278ms and costs correctness', async () => {
+    const device = countingDevice();
+    device.kind = 'ios';
+    const nodes = await dump(device);
+    await tapResolved(device, nodes[0], { label: '#support_send', nodes });
+    expect(device.dumps).toBe(2);
+  });
+
   test('a tree taken a moment ago is used, not re-read', async () => {
     const device = countingDevice();
     const nodes = await dump(device);
@@ -153,20 +162,32 @@ describe('the poll interval is a floor, not an addition', () => {
   // The gap is now the time still owed to reach the floor, so a slow read pays
   // nothing and a fast one still leaves the device a breath between looks.
 
+  const android = { kind: 'android' };
+
   test('a read slower than the floor waits no longer at all', async () => {
     const tickStarted = Date.now() - (POLL_FLOOR_MS + 900);
     const t = Date.now();
-    await pollGap(tickStarted);
+    await pollGap(tickStarted, android);
     expect(Date.now() - t).toBeLessThan(60);
   });
 
   test('a read faster than the floor is topped up to it', async () => {
     const tickStarted = Date.now();
     const t = Date.now();
-    await pollGap(tickStarted);
+    await pollGap(tickStarted, android);
     const waited = Date.now() - t;
     expect(waited).toBeGreaterThanOrEqual(POLL_FLOOR_MS - 25);
     expect(waited).toBeLessThan(POLL_FLOOR_MS + 250);
+  });
+
+  test('iOS keeps its old gap, because it never had the problem', async () => {
+    // Android's read was 2332ms; iOS's is 278ms. Tightening the loop on iOS
+    // bought almost nothing and cost twelve of thirteen journeys — the walk
+    // arrived ahead of the UI on the platform that was already fast. The fix
+    // is matched to the defect rather than applied everywhere.
+    const t = Date.now();
+    await pollGap(Date.now(), { kind: 'ios' });
+    expect(Date.now() - t).toBeGreaterThanOrEqual(IOS_POLL_GAP_MS - 60);
   });
 
   test('the floor is low enough to notice a screen change promptly', () => {

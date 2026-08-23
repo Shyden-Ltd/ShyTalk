@@ -60,6 +60,17 @@ describe('openPersonaPicker', () => {
     expect(device.taps).toBe(1);
   });
 
+  test('a swallowed first tap is tapped again, not waited out', async () => {
+    // Proven on the phone: the tap opens the picker in ~500ms when the screen
+    // is settled. In a run it lands while SignIn is still animating in and is
+    // simply eaten — so the answer is to press again, not to sleep before
+    // pressing and hope. Waiting the full timeout on a tap that never
+    // registered is a walk failing for something the phone never saw.
+    const device = signInScreen({ opensAfterTaps: 3 });
+    await openPersonaPicker(device, 6000);
+    expect(device.taps).toBe(3);
+  });
+
   test('a picker that never opens is a failure, not a silent carry-on', async () => {
     // THE REGRESSION. With the old text wait this resolved immediately against
     // the button's own label and the walk went on to scroll a screen with no

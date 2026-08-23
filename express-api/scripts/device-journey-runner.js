@@ -673,16 +673,35 @@ const TREE_FRESH_MS = 400;
 const POLL_FLOOR_MS = 250;
 
 /**
- * Wait out whatever is still owed to [POLL_FLOOR_MS] since `tickStarted`, and
- * nothing more. A read that took longer than the floor returns immediately.
+ * The gap iOS keeps between looks.
+ *
+ * Android's problem was a 2332ms read; iOS's was already 278ms, so tightening
+ * the loop there buys little and cost a great deal: with the floor applied to
+ * both, twelve of thirteen iPhone journeys failed where five had passed. The
+ * walk was getting ahead of the UI on a platform that never had the defect
+ * this is here to fix. Matched to the problem rather than applied uniformly.
  */
-async function pollGap(tickStarted) {
-  const owed = POLL_FLOOR_MS - (Date.now() - tickStarted);
+const IOS_POLL_GAP_MS = 700;
+
+/**
+ * Wait out whatever is still owed since `tickStarted`, and nothing more.
+ *
+ * A read slower than the floor returns immediately, which is the whole point:
+ * on Android the read alone had already given the phone 2.3 seconds to settle
+ * before the old code slept another 800ms on top.
+ */
+async function pollGap(tickStarted, device) {
+  const floor = device?.kind === 'ios' ? IOS_POLL_GAP_MS : POLL_FLOOR_MS;
+  const owed = floor - (Date.now() - tickStarted);
   if (owed > 0) await sleep(owed);
 }
 
 /** Is this tree recent enough to tap from? */
-function treeIsFresh(nodes) {
+function treeIsFresh(nodes, device) {
+  // Android only. The saving is one ~2332ms read per tap, which is why this
+  // exists; on iOS a read is 278ms, so it saves almost nothing and the walk
+  // then arrives ahead of the UI. See IOS_POLL_GAP_MS.
+  if (device?.kind === 'ios') return false;
   return (
     Array.isArray(nodes) &&
     Number.isFinite(nodes.takenAt) &&
@@ -855,7 +874,7 @@ async function tapResolved(device, node, labelOrOpts, extra) {
   // phone was actually read, not on the caller saying so, and re-read the
   // moment it is stale — so the re-resolve still protects against a screen
   // that moved, which is what SHY-0441 was about.
-  const fresh = treeIsFresh(opts.nodes) ? opts.nodes : await dump(device);
+  const fresh = treeIsFresh(opts.nodes, device) ? opts.nodes : await dump(device);
   const again = relocate
     ? relocate(fresh)
     : (node.id && byId(fresh, node.id)) ||
@@ -1010,7 +1029,7 @@ async function waitForId(device, id, timeoutMs = 8000) {
     const nodes = await dump(device);
     if (byId(nodes, id)) return nodes;
     last = summarizeScreen(nodes).testTags;
-    await pollGap(tick);
+    await pollGap(tick, device);
   }
   throw new Error(
     `timed out (${timeoutMs}ms) waiting for #${id}; screen showed: ${last.join(', ') || '(none)'}`,
@@ -1025,7 +1044,7 @@ async function waitForText(device, sub, timeoutMs = 8000) {
     const nodes = await dump(device);
     if (byTextContains(nodes, sub)) return nodes;
     last = summarizeScreen(nodes).testTags;
-    await pollGap(tick);
+    await pollGap(tick, device);
   }
   throw new Error(
     `timed out (${timeoutMs}ms) waiting for text "${sub}"; screen showed: ${last.join(', ') || '(none)'}`,
@@ -1054,8 +1073,27 @@ async function waitForText(device, sub, timeoutMs = 8000) {
  * (SignInScreen.kt), so it answers the question actually being asked.
  */
 async function openPersonaPicker(device, timeoutMs = 8000) {
-  await tapId(device, 'persona_picker_open');
-  await waitForId(device, 'persona_picker_list', timeoutMs);
+  const deadline = Date.now() + timeoutMs;
+  let last;
+  for (let attempt = 1; ; attempt++) {
+    await tapId(device, 'persona_picker_open');
+    try {
+      // Short per-attempt window. The picker opens in ~500ms when the screen is
+      // settled — measured on the iPhone — so a wait much longer than that is
+      // not patience, it is a tap nobody received.
+      await waitForId(device, 'persona_picker_list', Math.min(2500, deadline - Date.now()));
+      return;
+    } catch (e) {
+      last = e;
+      // The button is still there, so the tap was swallowed rather than the
+      // picker having opened and closed. Press it again.
+      if (Date.now() >= deadline) break;
+      if (!byId(await dump(device), 'persona_picker_open')) break;
+    }
+  }
+  throw new Error(
+    `the persona picker did not open after ${timeoutMs}ms of trying: ${last?.message ?? 'unknown'}`,
+  );
 }
 
 async function selectPersonaByText(device, needle) {
@@ -1189,7 +1227,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
     // Checking the overlays first costs a pass of cheap lookups on a screen
     // that has none, and removes the window entirely.
     if (await handlePermissionDialog(device, nodes)) {
-      await pollGap(tick);
+      await pollGap(tick, device);
       continue;
     }
     if (await handleRewardCalendar(device, nodes)) continue;
@@ -1218,7 +1256,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
       await tapResolved(device, current);
       break;
     }
-    await pollGap(tick);
+    await pollGap(tick, device);
   }
   const last = summarizeScreen(await dump(device)).testTags;
   throw new Error(
@@ -2777,6 +2815,7 @@ module.exports = {
   openPersonaPicker,
   pollGap,
   POLL_FLOOR_MS,
+  IOS_POLL_GAP_MS,
   dump,
   dumpCost,
   TREE_FRESH_MS,
