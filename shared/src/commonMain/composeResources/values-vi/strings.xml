@@ -1665,6 +1665,22 @@
     <string name="age_restriction_sub_eighteen_confirm">Liên hệ hỗ trợ</string>
     <string name="support_form_title">Liên hệ hỗ trợ</string>
     <string name="support_form_hint">Hãy cho chúng tôi biết vấn đề của bạn và chúng tôi sẽ xem xét.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Cách báo cáo một người</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Báo cáo từ trong ứng dụng sẽ đến thẳng đội kiểm duyệt, những người có thể xử lý. Yêu cầu hỗ trợ thì không.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Mở hồ sơ của họ và chạm Báo cáo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Trong phòng, chạm vào tên hoặc ảnh của họ để mở thẻ, rồi chạm Báo cáo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Nhấn giữ một tin nhắn, trong phòng hoặc trò chuyện riêng, rồi chọn Báo cáo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Đã thử mà không được?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Nếu bạn không thể báo cáo họ — họ đã chặn bạn, tin nhắn đã biến mất, hoặc có gì đó không chạy — hãy cho chúng tôi biết và chúng tôi sẽ gửi báo cáo giúp bạn.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Liên hệ hỗ trợ thay vào đó</string>
     <string name="support_form_send">Gửi</string>
     <string name="support_form_sent">Cảm ơn bạn. Chúng tôi đã nhận được tin nhắn và sẽ xem xét.</string>
     <string name="support_form_error_empty">Vui lòng viết nội dung trước khi gửi.</string>

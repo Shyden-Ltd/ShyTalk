@@ -1665,6 +1665,22 @@
     <string name="age_restriction_sub_eighteen_confirm">联系支持</string>
     <string name="support_form_title">联系支持</string>
     <string name="support_form_hint">请告诉我们遇到的问题，我们会跟进处理。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">如何举报某人</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">在应用内举报会直接送到我们的审核团队，他们可以处理。支持请求做不到这一点。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">打开对方的个人资料，点按"举报"。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">在房间里，点按对方的名字或头像打开资料卡，然后点按"举报"。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">在房间或私聊中长按一条消息，然后选择"举报"。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">试过但没成功？</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">如果你无法举报对方——对方拉黑了你、消息已经不见了，或者哪里出了问题——告诉我们，我们会替你提交举报。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">改为联系支持</string>
     <string name="support_form_send">发送</string>
     <string name="support_form_sent">谢谢，我们已收到您的信息，会尽快处理。</string>
     <string name="support_form_error_empty">请先输入信息再发送。</string>

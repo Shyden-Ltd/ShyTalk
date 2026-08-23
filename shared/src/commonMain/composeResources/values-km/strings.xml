@@ -1749,6 +1749,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">ទាក់ទងផ្នែកជំនួយ</string>
     <string name="support_form_hint">ប្រាប់យើងពីបញ្ហា ហើយយើងនឹងពិនិត្យមើល។</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">របៀបរាយការណ៍អំពីនរណាម្នាក់</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">ការរាយការណ៍ពីក្នុងកម្មវិធីទៅដល់ក្រុមគ្រប់គ្រងរបស់យើងដោយផ្ទាល់ ដែលអាចចាត់វិធានការបាន។ សំណើជំនួយមិនអាចធ្វើដូច្នេះបានទេ។</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">បើកប្រវត្តិរូបរបស់គេ រួចចុច រាយការណ៍។</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">នៅក្នុងបន្ទប់ ចុចលើឈ្មោះ ឬរូបភាពរបស់គេដើម្បីបើកកាតរបស់គេ រួចចុច រាយការណ៍។</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">ចុចសង្កត់លើសារ ក្នុងបន្ទប់ ឬការជជែកឯកជន រួចជ្រើសរើស រាយការណ៍។</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">បានព្យាយាមតែមិនបានទេ?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">ប្រសិនបើអ្នកមិនអាចរាយការណ៍អំពីគេបាន — គេបានទប់ស្កាត់អ្នក សារបានបាត់ ឬមានអ្វីមួយមិនដំណើរការ — សូមប្រាប់យើង ហើយយើងនឹងរាយការណ៍ជំនួសអ្នក។</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">ទាក់ទងជំនួយជំនួសវិញ</string>
     <string name="support_form_send">ផ្ញើ</string>
     <string name="support_form_sent">អរគុណ។ យើងបានទទួលសាររបស់អ្នក ហើយនឹងពិនិត្យមើល។</string>
     <string name="support_form_error_empty">សូមសរសេរសារមុនពេលផ្ញើ។</string>

@@ -1665,6 +1665,22 @@
     <string name="age_restriction_sub_eighteen_confirm">Hubungi dukungan</string>
     <string name="support_form_title">Hubungi dukungan</string>
     <string name="support_form_hint">Ceritakan masalahnya dan kami akan menindaklanjuti.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Cara melaporkan seseorang</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Laporan dari aplikasi langsung sampai ke tim moderasi kami, yang bisa menindaklanjutinya. Permintaan dukungan tidak bisa.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Buka profil mereka lalu ketuk Laporkan.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Di dalam room, ketuk nama atau foto mereka untuk membuka kartunya, lalu ketuk Laporkan.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Tekan dan tahan sebuah pesan, di room atau obrolan pribadi, lalu pilih Laporkan.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Sudah coba tapi tidak bisa?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Kalau kamu tidak bisa melaporkan mereka — mereka memblokirmu, pesannya sudah hilang, atau ada yang tidak berfungsi — beri tahu kami dan kami akan membuat laporannya untukmu.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Hubungi dukungan saja</string>
     <string name="support_form_send">Kirim</string>
     <string name="support_form_sent">Terima kasih. Pesan Anda sudah kami terima dan akan kami tindak lanjuti.</string>
     <string name="support_form_error_empty">Silakan tulis pesan sebelum mengirim.</string>

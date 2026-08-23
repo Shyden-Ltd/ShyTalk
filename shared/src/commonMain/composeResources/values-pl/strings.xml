@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Skontaktuj się z pomocą</string>
     <string name="support_form_hint">Napisz, co jest nie tak, a my się temu przyjrzymy.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Jak zgłosić kogoś</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Zgłoszenie z aplikacji trafia prosto do zespołu moderacji, który może zareagować. Prośba do wsparcia nie.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Otwórz ich profil i dotknij Zgłoś.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">W pokoju dotknij ich imienia lub zdjęcia, aby otworzyć kartę, a potem dotknij Zgłoś.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Przytrzymaj wiadomość — w pokoju lub na czacie prywatnym — i wybierz Zgłoś.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Próbowałeś i się nie udało?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Jeśli nie udało Ci się ich zgłosić — zablokowali Cię, wiadomość zniknęła albo coś nie zadziałało — napisz do nas, a zgłosimy to za Ciebie.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Skontaktuj się ze wsparciem</string>
     <string name="support_form_send">Wyślij</string>
     <string name="support_form_sent">Dziękujemy. Otrzymaliśmy Twoją wiadomość i sprawdzimy ją.</string>
     <string name="support_form_error_empty">Napisz wiadomość przed wysłaniem.</string>

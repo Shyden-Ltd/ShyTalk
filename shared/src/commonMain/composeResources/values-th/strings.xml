@@ -1663,6 +1663,22 @@
     <string name="age_restriction_sub_eighteen_confirm">ติดต่อฝ่ายสนับสนุน</string>
     <string name="support_form_title">ติดต่อฝ่ายสนับสนุน</string>
     <string name="support_form_hint">บอกเราว่าเกิดปัญหาอะไร แล้วเราจะตรวจสอบให้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">วิธีรายงานผู้ใช้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">การรายงานจากในแอปจะส่งตรงถึงทีมดูแลชุมชนที่สามารถดำเนินการได้ คำขอความช่วยเหลือทำแบบนั้นไม่ได้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">เปิดโปรไฟล์ของพวกเขาแล้วแตะ รายงาน</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">ในห้อง ให้แตะชื่อหรือรูปของพวกเขาเพื่อเปิดการ์ด แล้วแตะ รายงาน</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">กดค้างที่ข้อความ ไม่ว่าในห้องหรือแชทส่วนตัว แล้วเลือก รายงาน</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">ลองแล้วแต่ทำไม่ได้?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">ถ้าคุณรายงานพวกเขาไม่ได้ — พวกเขาบล็อกคุณ ข้อความหายไป หรือมีบางอย่างไม่ทำงาน — บอกเราแล้วเราจะยื่นรายงานให้คุณ</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">ติดต่อฝ่ายสนับสนุนแทน</string>
     <string name="support_form_send">ส่ง</string>
     <string name="support_form_sent">ขอบคุณ เราได้รับข้อความของคุณแล้วและจะตรวจสอบให้</string>
     <string name="support_form_error_empty">กรุณาเขียนข้อความก่อนส่ง</string>

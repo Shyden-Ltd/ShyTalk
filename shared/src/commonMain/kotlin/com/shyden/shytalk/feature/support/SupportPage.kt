@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -19,8 +20,11 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Message
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -51,6 +56,14 @@ import com.shyden.shytalk.data.repository.OpenTicketSummary
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.close
+import com.shyden.shytalk.resources.report_guide_intro
+import com.shyden.shytalk.resources.report_guide_step_message
+import com.shyden.shytalk.resources.report_guide_step_profile
+import com.shyden.shytalk.resources.report_guide_step_room_card
+import com.shyden.shytalk.resources.report_guide_stuck_action
+import com.shyden.shytalk.resources.report_guide_stuck_body
+import com.shyden.shytalk.resources.report_guide_stuck_title
+import com.shyden.shytalk.resources.report_guide_title
 import com.shyden.shytalk.resources.support_attachment_add
 import com.shyden.shytalk.resources.support_attachment_limits
 import com.shyden.shytalk.resources.support_attachment_remove
@@ -75,6 +88,7 @@ import com.shyden.shytalk.resources.support_form_title
 import com.shyden.shytalk.resources.support_open_requests_many
 import com.shyden.shytalk.resources.support_open_requests_more
 import com.shyden.shytalk.resources.support_open_requests_one
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Test tags — the journey suite addresses these rather than the label text. */
@@ -86,6 +100,10 @@ const val TAG_SUPPORT_ATTACHMENT = "support_attachment"
 const val TAG_SUPPORT_LIMITS = "support_limits"
 const val TAG_SUPPORT_CHAR_COUNT = "support_charCount"
 const val TAG_SUPPORT_CATEGORY = "support_category"
+
+/** SHY-0437 — the report guide, and its escape hatch. */
+const val TAG_SUPPORT_REPORT_GUIDE = "support_reportGuide"
+const val TAG_SUPPORT_CONTACT_ANYWAY = "support_contactAnyway"
 
 /** SHY-0396 — the three choices somebody gets when a request is already open. */
 const val TAG_SUPPORT_DUPLICATE = "support_duplicate"
@@ -197,7 +215,7 @@ fun SupportPage(
             //
             // A pinned bar is length-independent: it holds however long the form
             // grows and whatever size keyboard the person uses.
-            if (!state.submitted && !state.awaitingDuplicateChoice) {
+            if (!state.submitted && !state.awaitingDuplicateChoice && !state.showReportGuide) {
                 // The Surface takes no inset: it is the background, and it is
                 // meant to reach the bottom edge (SHY-0431).
                 Surface(tonalElevation = 3.dp) {
@@ -255,6 +273,24 @@ fun SupportPage(
         // SHY-0396. Asked BEFORE anything is sent, and it replaces the form
         // rather than floating over it: a dialog above a form with the keyboard
         // up is the exact geometry that made Send unreachable on iOS (SHY-0419).
+        // SHY-0437. "Safety & another user" is the one category that does not
+        // lead straight to the form: the support queue is not a reporting
+        // system, and somebody in genuine distress picks the option that says
+        // "Safety" and gets the least effective route we have.
+        //
+        // It REPLACES the form rather than sitting above it, for the same
+        // reason the duplicate choice does -- something floating over a form
+        // with the keyboard up is the geometry that made Send unreachable on
+        // iOS (SHY-0419).
+        if (state.showReportGuide) {
+            ReportGuide(
+                // No bottom bar on this branch either.
+                modifier = Modifier.padding(padding).windowInsetsPadding(bottomInset),
+                onContactSupportAnyway = viewModel::contactSupportAnyway,
+            )
+            return@Scaffold
+        }
+
         if (state.awaitingDuplicateChoice) {
             DuplicateChoice(
                 // No bottom bar on this branch either.
@@ -359,6 +395,122 @@ fun SupportPage(
 
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+/**
+ * How to report somebody, before offering them a ticket — SHY-0437.
+ *
+ * Operator, 2026-08-22: *"instead of allowing them to submit a ticket when they
+ * choose that option, we give them step-by-step guide... After that, they can
+ * still choose to submit a support ticket, if they're having problems trying to
+ * report."*
+ *
+ * **Only routes that exist are taught.** A room cannot be reported —
+ * `reportRoom`, `report_room`, `reportedRoom` and `roomReport` return zero
+ * matches across the app, the API and the dashboard — so no step mentions one.
+ * A guide that sends somebody looking for a control that is not there, at the
+ * end of an interaction that began with them struggling to report, is worse
+ * than no guide. If SHY-0440 builds room reporting, this gains a step.
+ *
+ * **The illustrations are the app's own icons, not screenshots.** Screenshots
+ * of four routes across 21 locales is 84 assets that go stale the first time a
+ * screen changes, and an asset that fails to load leaves a gap. These are drawn
+ * from the same `Icons` the real controls use, so they cannot drift from what
+ * the person is looking at, carry no embedded text to translate, contain no
+ * real person's name or picture by construction, and cannot fail to load. The
+ * steps read correctly with the icons ignored entirely.
+ *
+ * **The escape hatch is visible from the start**, not gated behind reaching the
+ * bottom. Somebody in distress must never feel walled off from help.
+ */
+@Composable
+private fun ReportGuide(
+    modifier: Modifier = Modifier,
+    onContactSupportAnyway: () -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+                .testTag(TAG_SUPPORT_REPORT_GUIDE),
+    ) {
+        Text(
+            stringResource(Res.string.report_guide_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            stringResource(Res.string.report_guide_intro),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(Modifier.height(20.dp))
+
+        ReportGuideStep(1, Icons.Filled.Flag, Res.string.report_guide_step_profile)
+        ReportGuideStep(2, Icons.Filled.Person, Res.string.report_guide_step_room_card)
+        ReportGuideStep(3, Icons.AutoMirrored.Filled.Message, Res.string.report_guide_step_message)
+
+        Spacer(Modifier.height(24.dp))
+
+        // Set apart, and reachable without reading a word above it.
+        Card {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(Res.string.report_guide_stuck_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    stringResource(Res.string.report_guide_stuck_body),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = onContactSupportAnyway,
+                    modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_CONTACT_ANYWAY),
+                ) {
+                    Text(stringResource(Res.string.report_guide_stuck_action))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One numbered step.
+ *
+ * The number carries real information here — these are three different places
+ * to report from, and somebody works down them until one matches where they saw
+ * it. The icon is decorative: `contentDescription` is null so a screen reader
+ * reads the instruction once rather than announcing a flag before it.
+ */
+@Composable
+private fun ReportGuideStep(
+    number: Int,
+    icon: ImageVector,
+    text: StringResource,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            "$number.",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(24.dp),
+        )
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(end = 12.dp).height(20.dp),
+        )
+        Text(stringResource(text), style = MaterialTheme.typography.bodyMedium)
     }
 }
 

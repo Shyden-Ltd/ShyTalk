@@ -1660,6 +1660,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Contacter l'assistance</string>
     <string name="support_form_hint">Dites-nous ce qui ne va pas et nous examinerons cela.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Comment signaler quelqu’un</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Un signalement depuis l’application arrive directement à notre équipe de modération, qui peut agir. Une demande d’assistance, non.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Ouvrez leur profil et appuyez sur Signaler.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Dans un salon, appuyez sur leur nom ou leur photo pour ouvrir leur fiche, puis sur Signaler.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Appuyez longuement sur un message, dans un salon ou une conversation privée, puis choisissez Signaler.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Vous avez essayé sans y arriver ?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Si vous n’avez pas pu les signaler — ils vous ont bloqué, le message a disparu, ou quelque chose n’a pas fonctionné — dites-le-nous et nous ferons le signalement pour vous.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Contacter l’assistance à la place</string>
     <string name="support_form_send">Envoyer</string>
     <string name="support_form_sent">Merci. Nous avons bien reçu votre message et nous allons l'examiner.</string>
     <string name="support_form_error_empty">Veuillez écrire un message avant d'envoyer.</string>

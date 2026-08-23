@@ -240,7 +240,19 @@ const STATUS_CONVERTED = 'converted_to_report';
  * of, and this payload is written by the client. An allowlist means a field
  * nobody anticipated is dropped rather than stored.
  */
-const CONTEXT_ALLOWED_FIELDS = ['feature', 'reason', 'screen', 'appVersion', 'platform'];
+const CONTEXT_ALLOWED_FIELDS = [
+  'feature',
+  'reason',
+  'screen',
+  'appVersion',
+  'platform',
+  // SHY-0437. Set when somebody read the report guide and chose to raise a
+  // ticket anyway. The acceptance signal for that ticket is the RATIO of people
+  // who go on to report against people who come here instead, and without this
+  // the ratio cannot be computed. An allowlist drops what it does not name, so
+  // the client can send this all it likes until it appears here.
+  'raisedAfterReportGuide',
+];
 
 /** Keep only the allowed context fields, coerced to short strings. */
 function sanitiseContext(raw) {

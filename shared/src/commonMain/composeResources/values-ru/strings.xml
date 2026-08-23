@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Связаться с поддержкой</string>
     <string name="support_form_hint">Расскажите, что не так, и мы разберёмся.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Как пожаловаться на человека</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Жалоба из приложения попадает напрямую к команде модерации, которая может принять меры. Обращение в поддержку — нет.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Откройте их профиль и нажмите «Пожаловаться».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">В комнате нажмите на имя или фото, чтобы открыть карточку, затем нажмите «Пожаловаться».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Нажмите и удерживайте сообщение — в комнате или в личном чате — и выберите «Пожаловаться».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Пробовали, но не получилось?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Если пожаловаться не получилось — вас заблокировали, сообщение исчезло или что-то не сработало — напишите нам, и мы подадим жалобу за вас.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Вместо этого написать в поддержку</string>
     <string name="support_form_send">Отправить</string>
     <string name="support_form_sent">Спасибо. Мы получили ваше сообщение и разберёмся.</string>
     <string name="support_form_error_empty">Напишите сообщение перед отправкой.</string>

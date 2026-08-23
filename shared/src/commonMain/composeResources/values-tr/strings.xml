@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Destek ile iletişime geçin</string>
     <string name="support_form_hint">Sorunun ne olduğunu bize anlatın, inceleyelim.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Birini nasıl bildirirsiniz</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Uygulamadan yapılan bildirim, işlem yapabilen moderasyon ekibimize doğrudan ulaşır. Destek talebi bunu yapamaz.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Profillerini açın ve Bildir’e dokunun.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Bir odada adına veya fotoğrafına dokunup kartını açın, ardından Bildir’e dokunun.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Bir odada veya özel sohbette bir mesaja basılı tutun, sonra Bildir’i seçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Denediniz ama olmadı mı?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Onları bildiremediyseniz — sizi engellediler, mesaj kayboldu ya da bir şey çalışmadı — bize söyleyin, bildirimi sizin adınıza biz yapalım.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Bunun yerine desteğe yazın</string>
     <string name="support_form_send">Gönder</string>
     <string name="support_form_sent">Teşekkürler. Mesajınızı aldık ve inceleyeceğiz.</string>
     <string name="support_form_error_empty">Göndermeden önce lütfen bir mesaj yazın.</string>

@@ -1663,6 +1663,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Kontakta supporten</string>
     <string name="support_form_hint">Berätta vad som är fel så tittar vi på det.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Så anmäler du någon</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">En anmälan i appen går direkt till vårt moderationsteam, som kan agera. En supportförfrågan gör det inte.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Öppna deras profil och tryck på Anmäl.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">I ett rum trycker du på namnet eller bilden för att öppna kortet och sedan på Anmäl.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Håll in ett meddelande, i ett rum eller en privat chatt, och välj Anmäl.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Försökte du utan att lyckas?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Om du inte kunde anmäla dem — de blockerade dig, meddelandet är borta, eller något strulade — berätta för oss så gör vi anmälan åt dig.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Kontakta supporten i stället</string>
     <string name="support_form_send">Skicka</string>
     <string name="support_form_sent">Tack. Vi har fått ditt meddelande och tittar på det.</string>
     <string name="support_form_error_empty">Skriv ett meddelande innan du skickar.</string>

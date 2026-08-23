@@ -964,6 +964,14 @@
     <string name="age_restriction_sub_eighteen_confirm">Contact support</string>
     <string name="support_form_title">Contact support</string>
     <string name="support_form_hint">Tell us what is wrong and we will look into it.</string>
+    <string name="report_guide_title">How to report someone</string>
+    <string name="report_guide_intro">Reporting from the app goes straight to our moderation team, who can act on it. A support request cannot.</string>
+    <string name="report_guide_step_profile">Open their profile and tap Report.</string>
+    <string name="report_guide_step_room_card">In a room, tap their name or picture to open their card, then tap Report.</string>
+    <string name="report_guide_step_message">Press and hold a message, in a room or a private chat, then choose Report.</string>
+    <string name="report_guide_stuck_title">Tried and could not?</string>
+    <string name="report_guide_stuck_body">If you could not report them — they blocked you, the message is gone, or something did not work — tell us and we will file the report for you.</string>
+    <string name="report_guide_stuck_action">Contact support instead</string>
     <string name="support_form_send">Send</string>
     <string name="support_form_character_count">%1$d / %2$d</string>
     <string name="support_form_sent">Thanks. We have your message and will look into it.</string>

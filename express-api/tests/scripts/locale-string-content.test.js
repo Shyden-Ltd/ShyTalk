@@ -111,7 +111,13 @@ describe('locale strings render as written', () => {
     // terminal screen with no route to Settings, so for them that sentence names
     // somewhere they cannot get to. Split into `suspension_support_contact`,
     // which points at the appeal box beside it and at shyden.co.uk beyond that.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([872]);
+    // 872 -> 880 on 2026-08-24: SHY-0437's report guide. Choosing "Safety &
+    // another user" now shows how to report -- profile, in-room user card, and
+    // press-and-hold on a message -- before offering a ticket. Eight strings:
+    // title, intro, three steps, and the escape hatch's heading, body and
+    // button. No step mentions reporting a ROOM, because there is no such
+    // control (SHY-0440).
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([880]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

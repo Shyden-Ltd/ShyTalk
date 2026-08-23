@@ -134,11 +134,36 @@ data class SupportFormUiState(
      * distinction is what lets "Go back" leave every word intact.
      */
     val awaitingDuplicateChoice: Boolean = false,
+    /**
+     * True once somebody on the report guide chose to raise a ticket anyway —
+     * SHY-0437.
+     *
+     * Reset whenever the category changes and whenever the page is left, so it
+     * never hides the guide from somebody who has not read it. Passing through
+     * "Safety" on the way to another option is not the same as reading a guide.
+     */
+    val reportGuideBypassed: Boolean = false,
     /** Uploaded and ready to travel with the ticket, in the order they were added. */
     val attachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
     val error: UiText? = null,
 ) {
+    /**
+     * Show the guide instead of the message form — SHY-0437.
+     *
+     * "Safety & another user" is the one category that does not lead straight to
+     * the form. The support queue is not a reporting system: a report raised
+     * there carries no reportedUserId, is not triaged by urgency, cannot be
+     * counted toward a repeat pattern, and is answered by whoever picks up
+     * support rather than by moderation. Somebody in genuine distress picks the
+     * option that says "Safety" and gets the least effective route we have.
+     *
+     * Derived rather than stored, so there is one answer and no second copy of
+     * it to fall out of step.
+     */
+    val showReportGuide: Boolean
+        get() = category == SupportCategory.Safety && !reportGuideBypassed
+
     /**
      * How many characters are in the field right now.
      *
@@ -236,7 +261,23 @@ class SupportFormViewModel(
      * recomposition, so nobody sees a blank form flash over the confirmation.
      */
     fun selectCategory(category: SupportCategory) {
-        _uiState.update { it.copy(category = category) }
+        // The bypass belongs to one visit to the guide, not to the session.
+        _uiState.update { it.copy(category = category, reportGuideBypassed = false) }
+    }
+
+    /**
+     * "I read it and I still could not report" — SHY-0437.
+     *
+     * The escape hatch, and it is not optional. Somebody who cannot make the
+     * report — the person blocked them, the message is gone, the interface
+     * defeated them — must not be left with nowhere to go. They raise a ticket
+     * and an admin files the report for them (SHY-0438).
+     *
+     * The category stays Safety: what they are telling us about has not changed
+     * because the guide did not work for them.
+     */
+    fun contactSupportAnyway() {
+        _uiState.update { it.copy(reportGuideBypassed = true) }
     }
 
     /**
@@ -392,7 +433,16 @@ class SupportFormViewModel(
                 // who are already having a bad time -- SHY-0385's rule about never
                 // losing what somebody typed applies here too, not only to a
                 // failed send. Only the transient states clear.
-                else -> it.copy(error = null, awaitingDuplicateChoice = false)
+                // SHY-0437: the guide bypass is transient too. It belongs to one
+                // visit -- the ViewModel outlives this page, and a bypass that
+                // survived would silently skip the guide on the next visit for
+                // somebody who has not read it.
+                else ->
+                    it.copy(
+                        error = null,
+                        awaitingDuplicateChoice = false,
+                        reportGuideBypassed = false,
+                    )
             }
         }
         // Only after a send. The request they just raised is open NOW, and this
@@ -512,7 +562,15 @@ class SupportFormViewModel(
                 supportRepository.raiseTicket(
                     trimmed,
                     state.category,
-                    context,
+                    // SHY-0437's acceptance signal is the RATIO of people who go
+                    // on to report against people who raise a ticket anyway.
+                    // Without this the ratio cannot be computed at all, and
+                    // "does the guide work" stays an opinion.
+                    if (state.reportGuideBypassed) {
+                        context + ("raisedAfterReportGuide" to "true")
+                    } else {
+                        context
+                    },
                     state.attachments.map { it.r2Key },
                 )
             when (outcome) {

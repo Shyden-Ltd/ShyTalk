@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Contatta il supporto</string>
     <string name="support_form_hint">Dicci cosa non va e ce ne occuperemo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Come segnalare qualcuno</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Una segnalazione dall’app arriva direttamente al nostro team di moderazione, che può intervenire. Una richiesta di assistenza no.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Apri il loro profilo e tocca Segnala.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">In una stanza, tocca il loro nome o la foto per aprire la scheda, poi tocca Segnala.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Tieni premuto un messaggio, in una stanza o in una chat privata, poi scegli Segnala.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Hai provato e non ci sei riuscito?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Se non sei riuscito a segnalarli — ti hanno bloccato, il messaggio non c’è più, o qualcosa non ha funzionato — diccelo e faremo la segnalazione per te.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Contatta invece l’assistenza</string>
     <string name="support_form_send">Invia</string>
     <string name="support_form_sent">Grazie. Abbiamo ricevuto il tuo messaggio e lo esamineremo.</string>
     <string name="support_form_error_empty">Scrivi un messaggio prima di inviare.</string>

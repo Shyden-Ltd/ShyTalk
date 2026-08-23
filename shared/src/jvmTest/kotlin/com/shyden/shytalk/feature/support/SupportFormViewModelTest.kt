@@ -52,6 +52,110 @@ class SupportFormViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // ─── SHY-0437: the report guide ─────────────────────────────
+
+    /**
+     * "Safety & another user" is the one category that does not lead straight
+     * to the form.
+     *
+     * The support queue is not a reporting system: a report raised there carries
+     * no reportedUserId, is not triaged by urgency, cannot be counted toward a
+     * repeat pattern, and is answered by whoever picks up support. Somebody in
+     * genuine distress picks the option that says "Safety" and gets the least
+     * effective route we have.
+     */
+    @Test
+    fun `choosing safety shows the guide instead of the form`() =
+        runTest(testDispatcher) {
+            viewModel.selectCategory(SupportCategory.Safety)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.showReportGuide)
+        }
+
+    @Test
+    fun `every other category goes straight to the form`() =
+        runTest(testDispatcher) {
+            for (category in SupportCategory.entries.filter { it != SupportCategory.Safety }) {
+                viewModel.selectCategory(category)
+                advanceUntilIdle()
+                assertFalse(
+                    viewModel.uiState.value.showReportGuide,
+                    "$category should not show the guide",
+                )
+            }
+        }
+
+    @Test
+    fun `arriving already in the safety category shows the guide`() =
+        runTest(testDispatcher) {
+            // A deep link from the age gate, or a previous session. Nobody chose
+            // the category on screen, and the guide is just as relevant.
+            val arriving = SupportFormViewModel(repo, SupportCategory.Safety, emptyMap())
+            advanceUntilIdle()
+            assertTrue(arriving.uiState.value.showReportGuide)
+        }
+
+    @Test
+    fun `choosing to contact support anyway reaches the form, still in safety`() =
+        runTest(testDispatcher) {
+            viewModel.selectCategory(SupportCategory.Safety)
+            viewModel.contactSupportAnyway()
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.showReportGuide)
+            assertEquals(SupportCategory.Safety, viewModel.uiState.value.category)
+        }
+
+    @Test
+    fun `switching away and back shows the guide again`() =
+        runTest(testDispatcher) {
+            // Somebody who has not read it has not read it. A remembered
+            // "dismissed" would hide the guide from a person who never saw it,
+            // because they passed through safety on their way to another option.
+            viewModel.selectCategory(SupportCategory.Safety)
+            viewModel.contactSupportAnyway()
+            viewModel.selectCategory(SupportCategory.Bug)
+            viewModel.selectCategory(SupportCategory.Safety)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.showReportGuide)
+        }
+
+    @Test
+    fun `leaving the page and returning shows the guide again`() =
+        runTest(testDispatcher) {
+            // The ViewModel outlives the page, so a bypass that survived reset
+            // would silently skip the guide on the next visit.
+            viewModel.selectCategory(SupportCategory.Safety)
+            viewModel.contactSupportAnyway()
+            viewModel.reset()
+            viewModel.selectCategory(SupportCategory.Safety)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.showReportGuide)
+        }
+
+    @Test
+    fun `a ticket raised after the guide says so, so the guide can be measured`() =
+        runTest(testDispatcher) {
+            // The acceptance signal for this whole ticket is the RATIO of people
+            // who go on to report against people who raise a ticket anyway.
+            // Without this flag that ratio cannot be computed at all.
+            viewModel.selectCategory(SupportCategory.Safety)
+            viewModel.contactSupportAnyway()
+            viewModel.updateMessage("I could not find the report button anywhere")
+            viewModel.submit()
+            advanceUntilIdle()
+            assertEquals("true", repo.lastContext["raisedAfterReportGuide"])
+        }
+
+    @Test
+    fun `a ticket raised without the guide does not claim it`() =
+        runTest(testDispatcher) {
+            viewModel.selectCategory(SupportCategory.Bug)
+            viewModel.updateMessage("The room list will not load for me")
+            viewModel.submit()
+            advanceUntilIdle()
+            assertNull(repo.lastContext["raisedAfterReportGuide"])
+        }
+
     /** A form belonging to somebody who already has these requests open. */
     private fun formWith(vararg tickets: OpenTicketSummary): SupportFormViewModel {
         repo.open = tickets.toList()
@@ -1227,6 +1331,10 @@ private class FakeSupportRepository : SupportRepository {
     )
 
     val raiseCalls = mutableListOf<Call>()
+
+    /** The context bag of the most recent raise, empty if nothing was raised. */
+    val lastContext: Map<String, String>
+        get() = raiseCalls.lastOrNull()?.context ?: emptyMap()
     var result: RaiseTicketOutcome = RaiseTicketOutcome.Raised("ticket-1")
 
     /** What the server would say is open. Deliberately mutable — see `raiseTicket`. */

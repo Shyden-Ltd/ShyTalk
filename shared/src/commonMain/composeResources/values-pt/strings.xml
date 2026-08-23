@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Contactar o suporte</string>
     <string name="support_form_hint">Diga-nos o que se passa e iremos analisar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Como denunciar alguém</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Uma denúncia feita na aplicação chega diretamente à nossa equipa de moderação, que pode agir. Um pedido de apoio não.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Abra o perfil da pessoa e toque em Denunciar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Numa sala, toque no nome ou na foto para abrir o cartão e depois toque em Denunciar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Mantenha premida uma mensagem, numa sala ou num chat privado, e escolha Denunciar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Tentou e não conseguiu?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Se não conseguiu denunciar — bloquearam-no, a mensagem desapareceu, ou algo não funcionou — diga-nos e apresentamos a denúncia por si.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Contactar o apoio</string>
     <string name="support_form_send">Enviar</string>
     <string name="support_form_sent">Obrigado. Recebemos a sua mensagem e iremos analisá-la.</string>
     <string name="support_form_error_empty">Escreva uma mensagem antes de enviar.</string>

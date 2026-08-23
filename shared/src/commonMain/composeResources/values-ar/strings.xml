@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">اتصل بالدعم</string>
     <string name="support_form_hint">أخبرنا بما حدث وسنقوم بمراجعته.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">كيفية الإبلاغ عن شخص</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">الإبلاغ من داخل التطبيق يصل مباشرة إلى فريق الإشراف الذي يمكنه التصرف بشأنه. طلب الدعم لا يفعل ذلك.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">افتح ملفهم الشخصي واضغط على "إبلاغ".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">داخل الغرفة، اضغط على اسمهم أو صورتهم لفتح بطاقتهم، ثم اضغط على "إبلاغ".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">اضغط مطولاً على رسالة، في غرفة أو محادثة خاصة، ثم اختر "إبلاغ".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">حاولت ولم تستطع؟</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">إذا لم تتمكن من الإبلاغ عنهم — حظروك، أو اختفت الرسالة، أو لم ينجح شيء ما — أخبرنا وسنقدّم البلاغ نيابةً عنك.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">تواصل مع الدعم بدلاً من ذلك</string>
     <string name="support_form_send">إرسال</string>
     <string name="support_form_sent">شكرًا لك. لقد استلمنا رسالتك وسنقوم بمراجعتها.</string>
     <string name="support_form_error_empty">يرجى كتابة رسالة قبل الإرسال.</string>

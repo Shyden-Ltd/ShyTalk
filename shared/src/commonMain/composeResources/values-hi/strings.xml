@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">सहायता से संपर्क करें</string>
     <string name="support_form_hint">हमें बताएं कि क्या गलत है, हम इसे देखेंगे।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">किसी की रिपोर्ट कैसे करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">ऐप से की गई रिपोर्ट सीधे हमारी मॉडरेशन टीम तक जाती है, जो कार्रवाई कर सकती है। सहायता अनुरोध ऐसा नहीं कर सकता।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">उनकी प्रोफ़ाइल खोलें और रिपोर्ट पर टैप करें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">किसी रूम में, उनका नाम या फ़ोटो टैप करके उनका कार्ड खोलें, फिर रिपोर्ट पर टैप करें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">रूम या निजी चैट में किसी संदेश को दबाकर रखें, फिर रिपोर्ट चुनें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">कोशिश की और नहीं कर पाए?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">अगर आप उनकी रिपोर्ट नहीं कर पाए — उन्होंने आपको ब्लॉक कर दिया, संदेश हट गया, या कुछ काम नहीं किया — तो हमें बताइए और हम आपकी ओर से रिपोर्ट दर्ज कर देंगे।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">इसके बजाय सहायता से संपर्क करें</string>
     <string name="support_form_send">भेजें</string>
     <string name="support_form_sent">धन्यवाद। हमें आपका संदेश मिल गया है और हम इसे देखेंगे।</string>
     <string name="support_form_error_empty">भेजने से पहले कृपया एक संदेश लिखें।</string>

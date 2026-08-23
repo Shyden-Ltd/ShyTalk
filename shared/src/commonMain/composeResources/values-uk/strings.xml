@@ -1663,6 +1663,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Звʼязатися з підтримкою</string>
     <string name="support_form_hint">Розкажіть, що сталося, і ми розберемося.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Як поскаржитися на людину</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Скарга з застосунку одразу потрапляє до команди модерації, яка може вжити заходів. Звернення до підтримки — ні.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Відкрийте їхній профіль і натисніть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">У кімнаті натисніть їхнє ім’я або фото, щоб відкрити картку, потім натисніть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Натисніть і утримуйте повідомлення — у кімнаті чи в приватному чаті — і виберіть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Спробували, і не вийшло?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Якщо поскаржитися не вдалося — вас заблокували, повідомлення зникло або щось не спрацювало — напишіть нам, і ми подамо скаргу за вас.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Натомість звернутися до підтримки</string>
     <string name="support_form_send">Надіслати</string>
     <string name="support_form_sent">Дякуємо. Ми отримали ваше повідомлення та розберемося.</string>
     <string name="support_form_error_empty">Напишіть повідомлення перед надсиланням.</string>

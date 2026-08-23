@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Contact opnemen met support</string>
     <string name="support_form_hint">Vertel ons wat er mis is, dan kijken we ernaar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Iemand melden</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Een melding vanuit de app komt rechtstreeks bij ons moderatieteam terecht, dat kan optreden. Een supportverzoek niet.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Open hun profiel en tik op Melden.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Tik in een room op hun naam of foto om hun kaart te openen en tik dan op Melden.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Houd een bericht ingedrukt, in een room of een privéchat, en kies Melden.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Geprobeerd en het lukte niet?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Kon je ze niet melden — ze hebben je geblokkeerd, het bericht is weg, of er ging iets mis — laat het ons weten en wij dienen de melding voor je in.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Neem in plaats daarvan contact op met support</string>
     <string name="support_form_send">Verzenden</string>
     <string name="support_form_sent">Bedankt. We hebben je bericht ontvangen en kijken ernaar.</string>
     <string name="support_form_error_empty">Schrijf een bericht voordat je verzendt.</string>

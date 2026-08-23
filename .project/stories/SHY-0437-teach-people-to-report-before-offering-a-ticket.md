@@ -1,6 +1,6 @@
 ---
 id: SHY-0437
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P1
@@ -191,6 +191,74 @@ routes that exist.**
 - [ ] Proven on both real devices: guide shown, a real report filed by following
       it, and the escape hatch reaching a ticket.
 - [ ] Every locale checked.
+
+## How it was built
+
+### The dependency on SHY-0440 was resolved by the story's own rule
+
+SHY-0440 asks whether room reporting should be built. The guide did not wait for
+it, because this story already answers the question it depends on: **the guide
+must only teach routes that exist.** A room cannot be reported, so no step
+mentions one. If SHY-0440 builds it, the guide gains a step — registered in
+`ReportGuideTeachesRealRoutesTest`, which fails the day `reportRoom` appears in
+the codebase, so the guide cannot silently fall behind the app.
+
+### Three steps, not four
+
+The four routes reduce to three distinct things a person does, because reporting
+a message in a room and in a private chat is the same gesture:
+
+| Step | Where | What makes it true |
+| --- | --- | --- |
+| 1 | Their profile | `ProfileScreen` → `onReportUser` (a Report button with a flag) |
+| 2 | Their card in a room | `UserCardPopup` → a Report row |
+| 3 | Press and hold a message | `RoomScreen` and `PrivateChatScreen` → `ReportMessageDialog` |
+
+Each step is paired in the test with the file that has to contain a report
+dialog for it to be honest. Delete the control and the step fails.
+
+### The illustrations are the app's own icons, not screenshots
+
+The AC asked for "an image or a short video of the real screen", and per-locale
+assets where they carry text. Screenshots of four routes across 21 locales is 84
+assets that go stale the first time a screen changes, and an asset that fails to
+load leaves a hole in an instruction.
+
+The steps are drawn with the same `Icons` the real controls use — the flag from
+the profile's Report button, a person for the user card, a message bubble for
+the long-press. They cannot drift from what the person is looking at, carry no
+embedded text to translate, contain no real person's name or picture by
+construction, and cannot fail to load. `contentDescription` is null on all
+three, so a screen reader reads the instruction once rather than announcing a
+flag before it: the AC's "the text alone is sufficient" is met by the text being
+the only thing announced.
+
+**Flagged for Shyden**: this is a deliberate departure from "screenshots or a
+video". If real screen recordings are wanted, that is a follow-up with an asset
+pipeline behind it.
+
+### The escape hatch
+
+`contactSupportAnyway()` sets a bypass that is cleared whenever the category
+changes and whenever the page is left. Somebody who passes through "Safety" on
+their way to another option has not read the guide, and the ViewModel outlives
+the page — a bypass that survived either would hide the guide from somebody who
+never saw it.
+
+The button sits in a card at the end of the steps and the guide scrolls, so it
+is reachable without reading a word; the back arrow is present throughout.
+
+### How the guide gets measured
+
+There is no analytics pipeline in the client, and this ticket is not the place
+to build one. Instead the ticket itself records how it was raised:
+`raisedAfterReportGuide` travels in the context bag and is stored on the
+document. The acceptance signal — reports filed against tickets raised anyway —
+is then a query over data we already keep.
+
+The context bag is an allowlist, so the field had to be added server-side too;
+without that the client could send it forever and every ticket would look like
+nobody saw the guide.
 
 ## Notes
 

@@ -1664,6 +1664,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">サポートに問い合わせる</string>
     <string name="support_form_hint">どうされましたか。内容を確認いたします。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">相手を報告する方法</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">アプリからの報告は、対応できるモデレーションチームに直接届きます。サポートへの問い合わせでは届きません。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">相手のプロフィールを開き、「報告」をタップします。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">ルームでは、名前か写真をタップしてカードを開き、「報告」をタップします。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">ルームまたは個別チャットでメッセージを長押しし、「報告」を選びます。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">試してもできませんでしたか？</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">報告できなかった場合 — ブロックされた、メッセージが消えた、うまく動かなかった — 教えてください。私たちが代わりに報告します。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">代わりにサポートに問い合わせる</string>
     <string name="support_form_send">送信</string>
     <string name="support_form_sent">ありがとうございます。メッセージを受け取りました。確認いたします。</string>
     <string name="support_form_error_empty">送信する前にメッセージを入力してください。</string>

@@ -1662,6 +1662,22 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Support kontaktieren</string>
     <string name="support_form_hint">Sagen Sie uns, was nicht stimmt, und wir kümmern uns darum.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">So meldest du jemanden</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Eine Meldung aus der App geht direkt an unser Moderationsteam, das handeln kann. Eine Support-Anfrage nicht.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Öffne ihr Profil und tippe auf „Melden“.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Tippe in einem Raum auf ihren Namen oder ihr Bild, um die Karte zu öffnen, und dann auf „Melden“.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Halte eine Nachricht gedrückt – in einem Raum oder im privaten Chat – und wähle „Melden“.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Versucht und es ging nicht?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Wenn du sie nicht melden konntest – sie haben dich blockiert, die Nachricht ist weg, oder etwas hat nicht funktioniert – sag uns Bescheid und wir erstatten die Meldung für dich.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Stattdessen den Support kontaktieren</string>
     <string name="support_form_send">Senden</string>
     <string name="support_form_sent">Danke. Wir haben Ihre Nachricht erhalten und schauen sie uns an.</string>
     <string name="support_form_error_empty">Bitte schreiben Sie eine Nachricht, bevor Sie senden.</string>

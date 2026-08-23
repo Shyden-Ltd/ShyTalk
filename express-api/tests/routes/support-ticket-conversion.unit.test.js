@@ -473,3 +473,52 @@ describe('listing tickets by the terminal state', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ─── The guide's measurement reaching the server — SHY-0437 ─────
+
+describe('a ticket raised after the report guide records that it was', () => {
+  /**
+   * The context bag is an ALLOWLIST, which is right — it is written by a client
+   * — but it means a field the server does not name is silently dropped. A
+   * client sending this flag against a server that does not know it produces
+   * tickets that all look like nobody saw the guide, and the ratio the ticket is
+   * judged on comes out wrong rather than absent.
+   */
+  test('the flag survives sanitisation and is stored', async () => {
+    await request(createApp())
+      .post('/api/support-tickets')
+      .send({
+        message: 'I read the guide and still could not report them',
+        category: 'safety',
+        context: { raisedAfterReportGuide: 'true', screen: 'support' },
+      });
+
+    const written = mockDocSet.mock.calls.find(([path]) => path.startsWith('supportTickets/'));
+    expect(written).toBeDefined();
+    expect(written[1].context).toEqual({
+      screen: 'support',
+      raisedAfterReportGuide: 'true',
+    });
+  });
+
+  test('a ticket raised without it carries no such claim', async () => {
+    await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'The room list will not load', category: 'bug' });
+
+    const written = mockDocSet.mock.calls.find(([path]) => path.startsWith('supportTickets/'));
+    expect(written[1].context.raisedAfterReportGuide).toBeUndefined();
+  });
+
+  test('a field nobody allowlisted is still dropped', async () => {
+    await request(createApp())
+      .post('/api/support-tickets')
+      .send({
+        message: 'Hello',
+        context: { raisedAfterReportGuide: 'true', somethingNobodyAdded: 'x' },
+      });
+
+    const written = mockDocSet.mock.calls.find(([path]) => path.startsWith('supportTickets/'));
+    expect(written[1].context.somethingNobodyAdded).toBeUndefined();
+  });
+});
