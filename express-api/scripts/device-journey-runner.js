@@ -210,6 +210,10 @@ class Device {
   constructor(serial) {
     this.serial = serial;
     this.adb = `adb -s ${serial}`;
+    // Declared on BOTH backends. It used to be set only on the iOS one, so
+    // `device.kind === 'ios'` worked by accident of `undefined` — and any
+    // check the other way round would have been silently false.
+    this.kind = 'android';
   }
 
   shell(args) {
@@ -2290,9 +2294,34 @@ function buildJourneys(ctx) {
     title: 'Clean install launches and reaches SignIn',
     async run(device, reporter) {
       if (ctx.reset) {
-        await reporter.step(device, `Clean reinstall (${ctx.pkg})`, async () => {
-          device.uninstall(ctx.pkg);
-          const out = device.install(ctx.apkAbs);
+        // Named for what it ACTUALLY does on this platform. A step reading
+        // "Clean reinstall ✓" on a phone that was not reinstalled is a report
+        // that lies, and this one used to fail outright with
+        // "device.uninstall is not a function" (SHY-0446).
+        const isIos = device.kind === 'ios';
+        const label = isIos
+          ? `Skip reinstall (${ctx.pkg}) — managed by ios-local-install.sh`
+          : `Clean reinstall (${ctx.pkg})`;
+        await reporter.step(device, label, async () => {
+          if (isIos) {
+            // Not performed, and the report says so. The iOS app is built
+            // with THIS Mac's LAN address baked in, because an iPhone has no
+            // `adb reverse`; reinstalling from here would leave the phone
+            // talking to a host it cannot reach. The next step launches the
+            // app, so a missing install still fails the journey — loudly, and
+            // one step later.
+            return (
+              'reinstall NOT performed on iOS: the app is installed and pointed at this ' +
+              "Mac's LAN address by scripts/dev/ios-local-install.sh. The launch step below " +
+              'is what proves it is there.'
+            );
+          }
+          // Awaited: the iOS backend's versions are async (they refuse with a
+          // reason), and an unawaited rejection is an unhandled one. Android's
+          // are synchronous, so awaiting costs nothing there. Pinned by
+          // "device methods are awaited everywhere".
+          await device.uninstall(ctx.pkg);
+          const out = await device.install(ctx.apkAbs);
           return out.trim().split('\n').pop();
         });
       }
@@ -2565,6 +2594,11 @@ if (require.main === module) {
 // housekeeping script that authenticates differently from the runs it exists
 // to unblock.
 module.exports = {
+  // The Android backend, exported so the two journey backends can be compared
+  // against each other without a phone (SHY-0446).
+  AndroidJourneyDevice: Device,
+  // Exported so J-SMOKE's platform branch can be exercised without a phone.
+  buildJourneys,
   parseArgs,
   occluderOf,
   looksLikeSystemOverlay,
