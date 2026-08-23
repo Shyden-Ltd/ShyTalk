@@ -527,3 +527,90 @@ instrumented — run J-ALICE twice in a row on iOS (the first leaves the app
 signed in, the second must sign out) and capture what is on screen after each
 of the four taps. The first run FAILS and the second PASSES, reliably, which is
 the alternating signature.
+
+---
+
+# PART 17 — SHY-0447: the journeys were 87% screen-reading
+
+Operator: *"almost 4 minutes in 1 journey? a real test framework wouldn't take
+this long. fix it."*
+
+## What it actually was
+
+Measured, not guessed. The runner now counts its own reads:
+
+```
+Screen reads: 96 dumps, 244.2s (2544ms each, 87% of the run)
+```
+
+**Not the sleeps.** `adb exec-out uiautomator dump` spawns a fresh
+instrumentation per call: the `cat` is ~80ms, the dump is ~2.2s. `/dev/tty` and
+`--compressed` make no difference, and it costs the same on the **Android
+launcher** — so it is the tool, not the app, and not the debug badge's repaint.
+iOS was never slow this way: WebDriverAgent is a server that stays up, 278ms.
+
+## The fix
+
+Android reads over a **warm UiAutomator2 session**: **2332ms → 65ms**. Only the
+READ moves; taps and swipes stay on adb. Session stood up once, closed
+deliberately. Missing driver ⇒ falls back and says so loudly.
+
+Its `/source` puts the class in the **tag name**; everything else is identical
+(proven on the phone — both readers gave the **same eight ids** on the same
+screen, Compose testTags included). Renamed at the seam so `parseNodes` never
+learns there are two formats.
+
+Plus two Android-only wins: reuse a tree taken microseconds ago instead of
+re-reading, and make the poll interval a **floor** rather than an addition.
+Both gated to Android — iOS was already at 278ms, so they bought it nothing and
+cost correctness when applied there.
+
+## RESULT
+
+| | Before | After |
+| --- | --- | --- |
+| J38 step time | 269.6s | **47.4s** |
+| Full Android set | ~1020s | **271s**, recorded |
+| Reads as a share of the run | 87% | 35% |
+| Android journeys | 13/13 | **13/13** |
+
+## Four latent defects the speed EXPOSED
+
+All pre-existing, all padded by the slowness. Each fixed at the cause:
+
+1. **The persona-picker wait never waited** — it waited for the text "Sign in
+   as test persona", which is the label of the BUTTON that opens the picker.
+   Now waits for `persona_picker_list` and retries a swallowed tap.
+2. **The ticket assertion raced the server** — queried Firestore the instant it
+   tapped, reporting "the request never arrived" for a ticket that arrived a
+   moment later. Bounded wait.
+3. **The cold-start wait stared at an empty screen** — after a force-stop the
+   dump returns to `android:id/content` alone. It settles again.
+4. **A self-dismissing overlay failed the walk** — SHY-0441 refuses to tap a
+   vanished control, which is right for a target and inverted for an obstacle.
+
+## Prerequisites for the next machine
+
+- `appium driver install uiautomator2`
+- **The Appium server must be started with `ANDROID_HOME` set** or the Android
+  driver refuses every session with "Neither ANDROID_HOME nor ANDROID_SDK_ROOT
+  was exported". Started here as:
+  `ANDROID_HOME=~/Library/Android/sdk appium server -p 4723`
+- Two uiautomator clients cannot share the accessibility connection: while the
+  UiAutomator2 server holds it, `adb exec-out uiautomator dump` returns ZERO
+  nodes. That cost an hour of a false conclusion — do not compare the two
+  readers simultaneously.
+
+## iPhone: still SHY-0446, and NOT caused by this work
+
+Checked properly rather than assumed: checked out the pre-performance commit
+and ran J38 on iOS from it — **it fails there too**, same persona-row symptom.
+
+The instrumented run shows the picker DOES open on the first tap
+(`persona_picker_list`, `persona_row_P-02`, "Alice (P-02 adult power)" all in
+the dump). What fails is the tap on the persona **row** afterwards, which
+bounces back to SignIn. That is where SHY-0446 should pick up.
+
+Also ruled out by measurement earlier, so nobody repeats it: the
+`forceStop`/`launch` race the driver's own comment blames does not reproduce —
+6/6 land in the app whether the gap is 0ms or 2000ms.
