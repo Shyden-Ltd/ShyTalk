@@ -2480,6 +2480,103 @@ const J38 = {
   },
 };
 
+/**
+ * j39 — choosing "Safety & another user" teaches reporting before offering a
+ * ticket (SHY-0437).
+ *
+ * The support queue is not a reporting system: a report raised there carries no
+ * reportedUserId, is not triaged by urgency, and is answered by whoever picks
+ * up support. Somebody in genuine distress picks the option that says "Safety"
+ * and gets the least effective route we have.
+ *
+ * Walked rather than asserted because the whole ticket is about what somebody
+ * SEES at that moment, and because two of its clauses — the escape hatch being
+ * reachable, and the guide returning for somebody who has not read it — are
+ * behaviour no unit test observes.
+ */
+const J39 = {
+  id: 'J39',
+  title: 'j39 — safety shows the report guide, and the way out of it (SHY-0437)',
+  async run(device, reporter, ctx) {
+    await signInAs(device, reporter, ctx, ctx.supportPersona);
+
+    // The route a person actually takes: Profile -> Settings -> About ->
+    // Contact us. Same path J38 walks; a shortcut here would prove the guide
+    // renders somewhere nobody arrives from.
+    await reporter.step(device, 'Open Settings, then Contact support', async () => {
+      for (let attempt = 1; ; attempt++) {
+        await settle(device, 60000);
+        try {
+          await waitForId(device, 'main_profileTab', attempt === 1 ? 8000 : 20000);
+          break;
+        } catch (e) {
+          if (attempt >= 2) throw e;
+        }
+      }
+      await tapId(device, 'main_profileTab');
+      await waitForId(device, 'main_settingsButton', 12000);
+      await tapId(device, 'main_settingsButton');
+      await waitForId(device, 'settings_aboutItem', 12000);
+      await tapId(device, 'settings_aboutItem');
+      await waitForId(device, 'settings_contactUsLink', 12000);
+      await tapId(device, 'settings_contactUsLink');
+      await waitForId(device, 'support_input', 12000);
+      return 'support form is open, showing the message field';
+    });
+
+    await reporter.step(device, 'Choosing Safety shows the guide instead of the form', async () => {
+      await tapIdScrolling(device, 'support_categorysafety');
+      const nodes = await waitForId(device, 'support_reportGuide', 12000);
+      // The form is REPLACED, not covered. A message field still on screen
+      // means somebody can type their report into the wrong place anyway.
+      if (byId(nodes, 'support_input')) {
+        throw new Error('the message field is still on screen, so the form was not replaced');
+      }
+      if (byId(nodes, 'support_send')) {
+        throw new Error('Send is still on screen, and there is nothing on this screen to send');
+      }
+      return 'the guide replaced the form';
+    });
+
+    await reporter.step(device, 'The way to a ticket is visible from the start', async () => {
+      // "The route to a ticket is visible from the start, not hidden behind
+      // finishing the guide — somebody in distress must never feel trapped."
+      const nodes = await dump(device);
+      if (!byId(nodes, 'support_contactAnyway')) {
+        throw new Error('there is no way to reach support from the guide');
+      }
+      return 'the escape hatch is on screen without scrolling to the end';
+    });
+
+    await reporter.step(device, 'Choosing to contact support anyway reaches the form', async () => {
+      await tapIdScrolling(device, 'support_contactAnyway');
+      const nodes = await waitForId(device, 'support_input', 12000);
+      if (byId(nodes, 'support_reportGuide')) {
+        throw new Error('the guide is still on screen after choosing to contact support');
+      }
+      return 'the message field is back';
+    });
+
+    await reporter.step(device, 'Another category goes straight to the form', async () => {
+      await tapIdScrolling(device, 'support_categorybug');
+      const nodes = await waitForId(device, 'support_input', 12000);
+      if (byId(nodes, 'support_reportGuide')) {
+        throw new Error('the guide is showing for a category that is not about another person');
+      }
+      return 'no guide for "Something is broken"';
+    });
+
+    await reporter.step(device, 'Coming back to Safety shows the guide again', async () => {
+      // Somebody who has not read it has not read it. Passing through Safety on
+      // the way to another option is not reading a guide, and a remembered
+      // "dismissed" would hide it from them for the rest of the session.
+      await tapIdScrolling(device, 'support_categorysafety');
+      await waitForId(device, 'support_reportGuide', 12000);
+      return 'the guide is shown again rather than remembered as dismissed';
+    });
+  },
+};
+
 // j05 — monetization (IAP). In non-prod the /economy/purchase endpoint SKIPS
 // real store verification (only NODE_ENV=production hits Google/Apple), so a
 // test purchaseToken credits coins — the real IAP code path, no money. Alice
@@ -2657,6 +2754,7 @@ function buildJourneys(ctx) {
     J05,
     J06,
     J38,
+    J39,
   ];
   return all;
 }
