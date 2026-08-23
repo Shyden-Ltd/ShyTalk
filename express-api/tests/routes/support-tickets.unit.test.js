@@ -96,10 +96,20 @@ jest.mock('../../src/middleware/rateLimit', () => ({
 const mockGetSignedPutUrl = jest.fn();
 const mockGetSignedGetUrl = jest.fn();
 const mockDeleteObject = jest.fn();
+const mockHeadObject = jest.fn(async () => ({ contentType: 'image/png', size: 1024 }));
+const mockGetObject = jest.fn(async () => ({
+  ContentType: 'image/png',
+  Body: { pipe: (res) => res.end() },
+}));
 jest.mock('../../src/utils/r2', () => ({
   getSignedPutUrl: (...args) => mockGetSignedPutUrl(...args),
   getSignedGetUrl: (...args) => mockGetSignedGetUrl(...args),
   deleteObject: (...args) => mockDeleteObject(...args),
+  // SHY-0420: the limits are checked against what was actually STORED, so the
+  // create path asks R2 what each object is. An ordinary small image by
+  // default; individual tests override it.
+  headObject: (...args) => mockHeadObject(...args),
+  getObject: (...args) => mockGetObject(...args),
 }));
 
 jest.mock('../../src/utils/log', () => ({
@@ -471,7 +481,11 @@ describe('GET /api/support-tickets/:id/attachments', () => {
     data: () => ({ userId: 10000001, attachments }),
   });
 
-  test('an admin gets a short-lived link for each attachment', async () => {
+  test('an admin gets a VIEW route per attachment, never a download link', async () => {
+    // SHY-0420. This used to mint a signed GET URL per key, which is a
+    // download link: a moderator could pull an arbitrary stranger's file —
+    // often a photograph of a real person, sometimes of abuse — onto their own
+    // machine, and once it is there we have no further say in it.
     mockDocGet.mockResolvedValue(
       ticketWith(['support-tickets/10000001/a.png', 'support-tickets/10000001/b.mp4']),
     );
@@ -482,21 +496,32 @@ describe('GET /api/support-tickets/:id/attachments', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.attachments).toEqual([
-      'https://r2.example/get/support-tickets/10000001/a.png',
-      'https://r2.example/get/support-tickets/10000001/b.mp4',
+      { index: 0, viewUrl: '/api/support-tickets/t-1/attachments/0', contentType: null },
+      { index: 1, viewUrl: '/api/support-tickets/t-1/attachments/1', contentType: null },
     ]);
   });
 
-  test('the links expire', async () => {
+  test('no signed URL is minted at all', async () => {
+    // The stronger statement. Not "the link expires quickly" — there is no
+    // link, so there is nothing to hand to a download manager or paste
+    // elsewhere.
     mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
 
     await request(createApp({ admin: true })).get('/api/support-tickets/t-1/attachments');
 
-    // A link that never expires is a permanent public URL to somebody's
-    // support attachment, handed out by a bearer-token endpoint.
-    const [, expiry] = mockGetSignedGetUrl.mock.calls[0];
-    expect(typeof expiry).toBe('number');
-    expect(expiry).toBeGreaterThan(0);
+    expect(mockGetSignedGetUrl).not.toHaveBeenCalled();
+  });
+
+  test('an attachment is addressed by INDEX, so no arbitrary key can be asked for', async () => {
+    // The ticket decides which objects exist. An admin naming a key would be a
+    // route to any object in the bucket.
+    mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments/7',
+    );
+
+    expect(res.status).toBe(404);
   });
 
   test('a ticket with nothing attached returns an empty list, not an error', async () => {
@@ -926,5 +951,66 @@ describe('DELETE /api/support-tickets/attachments', () => {
       .send({ r2Key: own(10000042) });
 
     expect(res.status).toBe(500);
+  });
+});
+
+describe('POST /api/support-tickets — the limits are enforced on the SERVER', () => {
+  /** A key under the caller's own folder, which is what the route requires. */
+  const own = (name) => `support-tickets/10000001/${name}`;
+
+  // The client bounds these too, refused before any upload starts so nobody
+  // spends a video's worth of mobile data to be told no. That is a courtesy to
+  // honest callers; it is not a bound. These files are opened by staff, and a
+  // minor cohort is present, so the rule has to hold for a caller who never
+  // ran our client at all (SHY-0420).
+
+  test('an oversized image is refused even though the client would have caught it', async () => {
+    mockHeadObject.mockResolvedValueOnce({ contentType: 'image/png', size: 11 * 1024 * 1024 });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('big.png')] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/10 MB/);
+  });
+
+  test('a file that is neither an image nor a video is refused', async () => {
+    // Files uploaded by strangers are opened by staff. An executable reaching
+    // a moderator's machine is the delivery path this closes.
+    mockHeadObject.mockResolvedValueOnce({
+      contentType: 'application/x-msdownload',
+      size: 2048,
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('payload.exe')] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/image or a video/i);
+  });
+
+  test('a high-bitrate video is accepted — video is bounded by DURATION', async () => {
+    mockHeadObject.mockResolvedValueOnce({ contentType: 'video/mp4', size: 60 * 1024 * 1024 });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('clip.mp4')] });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('an object we cannot measure is refused, not waved through', async () => {
+    // Fails closed. "We could not check" must never mean "it is fine" for a
+    // file a stranger uploaded and a member of staff will open.
+    mockHeadObject.mockRejectedValueOnce(new Error('R2 unreachable'));
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('mystery.png')] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/could not be checked/i);
   });
 });

@@ -1779,13 +1779,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">और %1$d अधिक</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">वह छवि बहुत बड़ी है. कृपया 5 एमबी से कम का एक चुनें।</string>
+    <string name="support_form_error_image_too_large">वह छवि बहुत बड़ी है. कृपया 10 एमबी से कम का एक चुनें।</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">वह वीडियो बहुत लंबा है. कृपया 30 सेकंड से कम का एक चुनें।</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">हम यह जांच नहीं कर सके कि वह वीडियो कितना लंबा है। कृपया कोई दूसरा प्रयास करें.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">10 फ़ाइलों तक. 5 एमबी तक की छवियाँ, 30 सेकंड तक के वीडियो।</string>
+    <string name="support_attachment_limits">10 फ़ाइलों तक. 10 एमबी तक की छवियाँ, 30 सेकंड तक के वीडियो।</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

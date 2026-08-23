@@ -1779,13 +1779,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">và %1$d nữa</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">Hình ảnh đó quá lớn. Vui lòng chọn một cái có dung lượng dưới 5 MB.</string>
+    <string name="support_form_error_image_too_large">Hình ảnh đó quá lớn. Vui lòng chọn một cái có dung lượng dưới 10 MB.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">Video đó quá dài. Vui lòng chọn một dưới 30 giây.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">Chúng tôi không thể kiểm tra thời lượng của video đó. Vui lòng thử một cái khác.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">Tối đa 10 tập tin. Hình ảnh lên tới 5 MB, video lên tới 30 giây.</string>
+    <string name="support_attachment_limits">Tối đa 10 tập tin. Hình ảnh lên tới 10 MB, video lên tới 30 giây.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

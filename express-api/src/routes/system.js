@@ -25,7 +25,6 @@ const router = require('express').Router();
 const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
-const { sweepSupportRetention } = require('../cron/supportRetention');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 const { getDefaultMissQueue } = require('../utils/translation-miss-queue');
@@ -154,9 +153,13 @@ const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', acco
 // SHY-0435). Both delete personal data — screenshots of private conversations,
 // photographs of other people — so both belong on a schedule rather than
 // waiting for somebody to remember.
-const sweepSupportRetentionHandler = createSweepHandler(
-  'sweep-support-retention',
-  sweepSupportRetention,
+const sweepSupportRetentionHandler = createSweepHandler('sweep-support-retention', () =>
+  // Required HERE, not at module load. `cron/supportRetention` pulls in
+  // utils/firebase, which exits the process when the environment is not set
+  // up — so a top-level import makes this whole route file unloadable in every
+  // suite that does not happen to mock firebase, including ones that have
+  // nothing to do with support.
+  require('../cron/supportRetention').sweepSupportRetention(),
 );
 
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);

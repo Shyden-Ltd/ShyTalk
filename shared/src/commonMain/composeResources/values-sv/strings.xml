@@ -1778,13 +1778,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">och %1$d till</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">Den bilden är för stor. Välj en under 5 MB.</string>
+    <string name="support_form_error_image_too_large">Den bilden är för stor. Välj en under 10 MB.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">Den videon är för lång. Vänligen välj en under 30 sekunder.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">Vi kunde inte kontrollera hur lång den videon är. Vänligen prova en annan.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">Upp till 10 filer. Bilder upp till 5 MB, videor upp till 30 sekunder.</string>
+    <string name="support_attachment_limits">Upp till 10 filer. Bilder upp till 10 MB, videor upp till 30 sekunder.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

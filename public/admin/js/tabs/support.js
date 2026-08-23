@@ -109,7 +109,14 @@ async function load(status) {
 }
 
 /**
- * Fill in a card's attachments once their short-lived links come back.
+ * Fill in a card's attachments.
+ *
+ * VIEW routes, not download links (SHY-0420). The API used to hand back a
+ * signed GET URL per attachment, which a moderator could paste anywhere or
+ * save — for a stranger's file that is often a photograph of a real person and
+ * sometimes of abuse. It now returns a path this panel fetches, rendered
+ * inline; there is nothing to hand to a download manager and nothing that
+ * outlives the session.
  *
  * A failure is shown rather than swallowed. An attachment that silently does not
  * appear looks exactly like a ticket that never had one, and the moderator would
@@ -131,7 +138,11 @@ async function loadAttachments(ticketId, card) {
       "GET",
       `/api/support-tickets/${encodeURIComponent(ticketId)}/attachments`,
     );
-    const urls = Array.isArray(res?.attachments) ? res.attachments : [];
+    const rows = Array.isArray(res?.attachments) ? res.attachments : [];
+    if (rows.length === 0) return;
+    // Each row is `{ index, viewUrl, contentType }`. The renderer wants URLs,
+    // and a view path is a URL — it simply is not a downloadable one.
+    const urls = rows.map((a) => (typeof a === "string" ? a : a.viewUrl)).filter(Boolean);
     if (urls.length === 0) return;
     slot.innerHTML = `<div style="margin-top:8px;">${renderEvidence(urls)}</div>`;
 

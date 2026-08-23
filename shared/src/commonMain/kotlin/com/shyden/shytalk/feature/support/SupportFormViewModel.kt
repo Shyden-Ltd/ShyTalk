@@ -50,8 +50,13 @@ const val MAX_ATTACHMENTS = 10
  * Checked BEFORE the bytes leave the device. The alternative is a file that
  * uploads for two minutes on a phone connection and then fails, which costs the
  * person their data allowance and tells them nothing they could have acted on.
+ *
+ * SHY-0420 set the number at 10 MB. It mirrors `MAX_IMAGE_BYTES` in
+ * `express-api/src/utils/attachment-limits.js`, which is where it is ENFORCED —
+ * this copy exists so somebody is told early, not so the limit depends on the
+ * client honouring it.
  */
-const val MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const val MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 /**
  * How LONG a video may be. Duration, deliberately — not bytes.

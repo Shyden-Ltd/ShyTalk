@@ -47,22 +47,29 @@ const ROUTE = 'express-api/src/routes/support-tickets.js';
 const ADMIN_TAB = 'public/admin/js/tabs/support.js';
 const ADMIN_RENDERER = 'public/admin/js/tabs/users.js';
 
-describe('support attachments: stored key → signed link → rendered', () => {
-  test('the API can turn a stored key into a link', () => {
+describe('support attachments: stored key → viewed, never downloaded', () => {
+  test('the API serves attachments through a view route', () => {
     const route = codeOf(ROUTE);
 
     expect(route).toContain('attachments');
-    expect(route).toMatch(/getSignedGetUrl/);
+    expect(route).toMatch(/attachments\/:index/);
   });
 
-  test('those links expire', () => {
+  test('no signed download URL is minted for an attachment', () => {
+    // SHY-0420. A signed GET URL is a download link, and this route hands it
+    // to a moderator for an arbitrary stranger's file — often a photograph of
+    // a real person, sometimes of abuse. Once it is on their machine we have
+    // no further say in it. It should be viewable and not retrievable.
     const route = codeOf(ROUTE);
 
-    // A link that never expires is a permanent public URL to somebody's
-    // support attachment, handed out by a token-guarded endpoint.
-    expect(route).toMatch(
-      /getSignedGetUrl\([^)]*,\s*[A-Z_]*TTL[A-Z_]*\)|getSignedGetUrl\([^)]*,\s*\d+\)/,
-    );
+    expect(route).not.toMatch(/getSignedGetUrl/);
+  });
+
+  test('the view route serves inline, and says not to sniff it', () => {
+    const route = codeOf(ROUTE);
+
+    expect(route).toMatch(/Content-Disposition['"`],\s*['"`]inline/);
+    expect(route).toMatch(/X-Content-Type-Options/);
   });
 
   test('the admin panel asks for them', () => {

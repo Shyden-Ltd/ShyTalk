@@ -13,6 +13,7 @@ const {
   DeleteObjectCommand,
   DeleteObjectsCommand,
   ListObjectsV2Command,
+  HeadObjectCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
@@ -73,6 +74,20 @@ async function putObject(key, body, contentType, metadata = {}, options = {}) {
 async function getObject(key) {
   const resp = await s3.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
   return resp;
+}
+
+/**
+ * What a stored object IS, without pulling its bytes (SHY-0420).
+ *
+ * The limits are checked against what was actually stored rather than what the
+ * request claims, and a HEAD answers "what type, how big" for the cost of one
+ * round trip instead of a download of somebody's video.
+ *
+ * @returns {Promise<{contentType: string|undefined, size: number|undefined}>}
+ */
+async function headObject(key) {
+  const resp = await s3.send(new HeadObjectCommand({ Bucket: bucketName, Key: key }));
+  return { contentType: resp.ContentType, size: resp.ContentLength };
 }
 
 async function deleteObject(key) {
@@ -196,6 +211,7 @@ module.exports = {
   bucketName,
   putObject,
   getObject,
+  headObject,
   deleteObject,
   deleteObjects,
   listObjects,

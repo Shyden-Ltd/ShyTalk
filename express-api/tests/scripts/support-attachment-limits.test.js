@@ -5,14 +5,14 @@
  * | Limit | Value |
  * | --- | --- |
  * | files per ticket | 10 |
- * | image size | 5 MB |
+ * | image size | 10 MB |
  * | video length | 30 seconds, by DURATION |
  * | file types offered | photos and video only |
  *
  * Three things can each break these independently, and a unit test on the
  * ViewModel sees none of them:
  *
- *   1. the COPY can drift from the code, so somebody is told "under 5 MB" while
+ *   1. the COPY can drift from the code, so somebody is told "under 10 MB" while
  *      the check allows 25
  *   2. the PICKER can be widened to any file, so the type rule stops being a
  *      rule at all
@@ -58,8 +58,12 @@ const SERVER = 'express-api/src/routes/support-tickets.js';
 describe('attachment limits — the numbers', () => {
   const vm = codeOf(VIEW_MODEL);
 
-  test('an image is bounded at 5 MB', () => {
-    expect(vm).toMatch(/MAX_IMAGE_BYTES\s*=\s*5\s*\*\s*1024\s*\*\s*1024/);
+  test('an image is bounded at 10 MB', () => {
+    // SHY-0420 set the number. It is ENFORCED server-side in
+    // utils/attachment-limits.js; this constant exists so somebody is told
+    // before their data allowance is spent, not so the limit depends on the
+    // client honouring it.
+    expect(vm).toMatch(/MAX_IMAGE_BYTES\s*=\s*10\s*\*\s*1024\s*\*\s*1024/);
   });
 
   test('a video is bounded at 30 seconds', () => {
@@ -107,8 +111,8 @@ describe('attachment limits — the copy says what the code does', () => {
 
   // Somebody told "under 25 MB" by a check that allows 5 has been given a
   // number they cannot act on. The copy and the constant must agree.
-  test('the image refusal names 5 MB', () => {
-    expect(en.get('support_form_error_image_too_large')).toMatch(/\b5\s*MB\b/);
+  test('the image refusal names 10 MB', () => {
+    expect(en.get('support_form_error_image_too_large')).toMatch(/\b10\s*MB\b/);
   });
 
   test('the video refusal names 30 seconds', () => {
@@ -121,8 +125,8 @@ describe('attachment limits — the copy says what the code does', () => {
 
   test('the limits are stated up front, with all three numbers', () => {
     const hint = en.get('support_attachment_limits') ?? '';
-    expect(hint).toMatch(/\b10\b/);
-    expect(hint).toMatch(/\b5\s*MB\b/);
+    expect(hint).toMatch(/\b10\s*files?\b/);
+    expect(hint).toMatch(/\b10\s*MB\b/);
     expect(hint).toMatch(/\b30\s*seconds?\b/);
   });
 

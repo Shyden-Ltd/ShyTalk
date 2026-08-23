@@ -1775,13 +1775,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">et %1$d de plus</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">Cette image est trop grande. Veuillez en choisir un de moins de 5 Mo.</string>
+    <string name="support_form_error_image_too_large">Cette image est trop grande. Veuillez en choisir un de moins de 10 Mo.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">Cette vidéo est trop longue. Veuillez en choisir un de moins de 30 secondes.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">Nous n'avons pas pu vérifier la durée de cette vidéo. Veuillez en essayer un autre.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">Jusqu'à 10 fichiers. Images jusqu'à 5 Mo, vidéos jusqu'à 30 secondes.</string>
+    <string name="support_attachment_limits">Jusqu'à 10 fichiers. Images jusqu'à 10 Mo, vidéos jusqu'à 30 secondes.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

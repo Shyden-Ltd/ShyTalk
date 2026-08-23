@@ -1,6 +1,6 @@
 ---
 id: SHY-0420
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-22
 priority: P1
@@ -190,3 +190,74 @@ exposure — not a feature gap.
   which is exactly the downloadable path this story removes. Reports and appeals
   have not been checked for attachment support at all yet — that survey is the
   first job.
+
+## How it was built
+
+### 1. The limits — now enforced where it counts
+
+The client already bounded them correctly from SHY-0387: images by SIZE, video
+by DURATION, refused before any upload starts so nobody spends a video's worth
+of mobile data to be told no. What was missing is that the **server checked
+neither** — only that the key belonged to the caller. A client-side limit is a
+courtesy to honest callers; it is not a bound, and these files are opened by
+staff.
+
+`utils/attachment-limits.js` decides, and the create path enforces it by
+reading each object's type and size back **from storage** — the request is the
+thing being checked, so it cannot also be the evidence. It **fails closed**: an
+object that cannot be measured is refused, because "we could not check" must
+never mean "it is fine" for a file a stranger uploaded.
+
+The image cap moved 5 MB → **10 MB** per the AC, in the constant, the up-front
+hint and the refusal copy, across all 21 locales.
+
+Video keeps a byte **backstop** of 200 MB, deliberately far above any honest
+30-second clip: the AC is explicit that a short high-bitrate video must not be
+refused for its size, so duration stays the rule and this only stops something
+absurd being stored.
+
+### 2. Admin viewing — viewable, not retrievable
+
+The admin route minted a signed GET URL per attachment. That is a download
+link: a moderator could pull an arbitrary stranger's file — often a photograph
+of a real person, sometimes of abuse — onto their own machine, and once it is
+there we have no further say in it.
+
+It now returns a **view path** per attachment, served by a route that streams
+the object back `inline`, with `nosniff` and `no-store`. No URL to hand to a
+download manager, nothing that outlives the session, and every view goes
+through a route that knows who is asking. Addressed by **index**, so an admin
+cannot ask for an arbitrary object by naming a key — the ticket decides which
+objects exist.
+
+### 3. Scanning — the seam is built; the ENGINE is your call
+
+This is the one part not finished, and deliberately so.
+
+| Option | Cost | Latency | Where the file goes |
+| --- | --- | --- | --- |
+| Self-hosted ClamAV | a box and its upkeep; free software | a second or two, ours to tune | **never leaves our infrastructure** |
+| Hosted scanning API | per-scan fee | a network round trip | **the file leaves our infrastructure** |
+
+The last column is the whole decision. These files can include images of real
+people, of minors, and of abuse. Sending those to a third party is a
+data-protection and safeguarding judgement that belongs to you, not to me.
+**Recommendation on record: self-hosted ClamAV**, precisely because the files
+never leave.
+
+`utils/attachment-scan.js` is the seam, so wiring an engine is setting
+`ATTACHMENT_SCANNER_URL` rather than a refactor. It is **loud** about being
+unconfigured — a warning at the first attachment in every environment that
+handles a file — because a silent unconfigured scanner is exactly how somebody
+comes to believe they have scanning. Once configured it **fails closed**: having
+chosen to scan, a scanner that cannot answer must not become a way past it.
+
+It deliberately does not refuse everything while unconfigured; that would take
+support attachments away entirely, which is worse than the status quo it exists
+to improve. The exposure is unchanged from today and now visible.
+
+### Not yet done
+
+- **Reports and appeals** get the same rules. The decision module is shared and
+  ready; wiring their two upload paths is mechanical and is the remaining work
+  on this ticket.

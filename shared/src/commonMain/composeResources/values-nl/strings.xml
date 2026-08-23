@@ -1779,13 +1779,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">en %1$d meer</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">Dat beeld is te groot. Kies er een van minder dan 5 MB.</string>
+    <string name="support_form_error_image_too_large">Dat beeld is te groot. Kies er een van minder dan 10 MB.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">Dat filmpje is te lang. Kies er een van minder dan 30 seconden.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">We konden niet controleren hoe lang die video is. Probeer een andere.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">Maximaal 10 bestanden. Afbeeldingen tot 5 MB, video's tot 30 seconden.</string>
+    <string name="support_attachment_limits">Maximaal 10 bestanden. Afbeeldingen tot 10 MB, video's tot 30 seconden.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

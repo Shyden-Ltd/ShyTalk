@@ -1779,13 +1779,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">ve %1$d tane daha</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">Bu resim çok büyük. Lütfen 5 MB'ın altındaki birini seçin.</string>
+    <string name="support_form_error_image_too_large">Bu resim çok büyük. Lütfen 10 MB'ın altındaki birini seçin.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">Bu video çok uzun. Lütfen 30 saniyenin altındaki birini seçin.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">Bu videonun ne kadar uzun olduğunu kontrol edemedik. Lütfen farklı bir tane deneyin.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">En fazla 10 dosya. 5 MB'a kadar resimler, 30 saniyeye kadar videolar.</string>
+    <string name="support_attachment_limits">En fazla 10 dosya. 10 MB'a kadar resimler, 30 saniyeye kadar videolar.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

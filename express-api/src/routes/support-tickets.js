@@ -27,7 +27,9 @@ const { db, FieldValue } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
-const { deleteObject, getSignedGetUrl, getSignedPutUrl } = require('../utils/r2');
+const { deleteObject, getObject, getSignedPutUrl, headObject } = require('../utils/r2');
+const { refusalForStoredObject } = require('../utils/attachment-limits');
+const { scanAttachment } = require('../utils/attachment-scan');
 const { writeLimiter } = require('../middleware/rateLimit');
 const log = require('../utils/log');
 const { openTicketsPayload } = require('../utils/support-open-tickets');
@@ -141,6 +143,39 @@ function validateAttachments(raw, uniqueId) {
     }
   }
   return { ok: true, keys: raw };
+}
+
+/**
+ * Check every attached object against the limits, from what is actually in
+ * storage (SHY-0420).
+ *
+ * Reads each object's type and size back from R2 rather than trusting the
+ * request: the request is the thing being checked, and a client that skipped
+ * the client-side rules would otherwise face nothing at all.
+ *
+ * Fails CLOSED. An object we cannot measure is refused — "we could not check"
+ * must never mean "it is fine" for a file a stranger uploaded and a member of
+ * staff will open.
+ *
+ * @returns {Promise<string|null>} a sentence for the caller, or null to accept
+ */
+async function refusalForAttachedObjects(keys) {
+  for (const key of keys) {
+    let head = null;
+    try {
+      head = await headObject(key);
+    } catch (err) {
+      log.warn('support-tickets', 'Could not measure an attachment', { key, error: err.message });
+    }
+    const refusal = refusalForStoredObject(head);
+    if (refusal) return refusal;
+
+    const scan = await scanAttachment(key);
+    if (!scan.clean) {
+      return `That file could not be accepted (${scan.reason ?? 'it did not pass a check'}).`;
+    }
+  }
+  return null;
 }
 
 const STATUS_OPEN = 'open';
@@ -310,6 +345,21 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
       return res.status(400).json({ error: attachments.error });
     }
 
+    // The limits, enforced HERE (SHY-0420).
+    //
+    // The client bounds these too — images by size, video by duration, refused
+    // before any upload starts so nobody spends a video's worth of mobile data
+    // to be told no. That is a courtesy to honest callers; it is not a bound.
+    // These files are opened by staff, and a minor cohort is present, so the
+    // rule has to hold for a caller who never ran our client at all.
+    //
+    // Measured from what was actually STORED rather than from what the request
+    // claims, because the request is the thing being checked.
+    const refusal = await refusalForAttachedObjects(attachments.keys);
+    if (refusal) {
+      return res.status(400).json({ error: refusal });
+    }
+
     // SHY-0396: a second request is NEVER refused. Somebody with an open ticket
     // may have a genuinely different problem, and refusing them means the new
     // problem reaches nobody. The warning belongs in the client, which shows
@@ -375,7 +425,6 @@ router.post('/support-tickets', writeLimiter, async (req, res) => {
  * support attachment, handed out by an endpoint that is behind a bearer token
  * precisely because the object should not be public.
  */
-const ATTACHMENT_LINK_TTL_SEC = 300;
 
 /**
  * Same lifetime for the upload slot.
@@ -519,15 +568,74 @@ router.get('/support-tickets/:id/attachments', writeLimiter, async (req, res) =>
     // Tickets raised before SHY-0387 have no `attachments` field at all, so an
     // absent one is an empty list rather than a crash.
     const keys = doc.data().attachments ?? [];
-    const attachments = await Promise.all(
-      keys.map((key) => getSignedGetUrl(key, ATTACHMENT_LINK_TTL_SEC)),
-    );
 
-    return res.json({ attachments });
+    // VIEWABLE, not retrievable (SHY-0420).
+    //
+    // This used to mint a signed GET URL per key, which is a download link: a
+    // moderator could pull an arbitrary stranger's file — often a photograph
+    // of a real person, sometimes of abuse — onto their own machine, and once
+    // it is there we have no further say in it.
+    //
+    // The admin UI now asks for each attachment through
+    // `/support-tickets/:id/attachments/:index`, which streams it back
+    // inline. No URL the browser can hand to a download manager, no link that
+    // outlives the session, and every view goes through a route that knows who
+    // is asking.
+    return res.json({
+      attachments: keys.map((key, index) => ({
+        index,
+        viewUrl: `/api/support-tickets/${req.params.id}/attachments/${index}`,
+        contentType: null,
+      })),
+    });
   } catch (err) {
     log.error('support-tickets', 'GET /api/support-tickets/:id/attachments failed', {
       error: err.message,
     });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Stream ONE attachment back for viewing (SHY-0420).
+ *
+ * `Content-Disposition: inline` and no signed URL anywhere: the file is shown,
+ * not handed over. A moderator needs to SEE what somebody attached in order to
+ * act on it; they do not need a copy of it on their laptop, and the difference
+ * matters most for exactly the files this route carries.
+ *
+ * Addressed by INDEX rather than by key, so an admin cannot ask for an
+ * arbitrary object by naming it — the ticket decides which objects exist.
+ */
+router.get('/support-tickets/:id/attachments/:index', writeLimiter, async (req, res) => {
+  try {
+    if (await requireAdmin(req, res)) return;
+
+    const doc = await db.doc(`${COLLECTION}/${req.params.id}`).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Ticket not found' });
+
+    const keys = doc.data().attachments ?? [];
+    const index = Number(req.params.index);
+    if (!Number.isInteger(index) || index < 0 || index >= keys.length) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    const object = await getObject(keys[index]);
+    if (!object || !object.Body) return res.status(404).json({ error: 'Attachment not found' });
+
+    // Inline, and never as an attachment download. `nosniff` stops a browser
+    // deciding a file is something more interesting than we said it was, and
+    // `no-store` keeps it out of a shared cache on the way.
+    res.setHeader('Content-Type', object.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'no-store');
+
+    // Streamed rather than buffered: these are photographs and video, and
+    // holding one in memory per moderator view is a needless cost.
+    return object.Body.pipe(res);
+  } catch (err) {
+    log.error('support-tickets', 'GET attachment stream failed', { error: err.message });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

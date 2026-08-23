@@ -1779,13 +1779,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">и еще %1$d</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">Это изображение слишком велико. Пожалуйста, выберите один размером менее 5 МБ.</string>
+    <string name="support_form_error_image_too_large">Это изображение слишком велико. Пожалуйста, выберите один размером менее 10 МБ.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">Это видео слишком длинное. Пожалуйста, выберите один до 30 секунд.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">Мы не смогли проверить длину этого видео. Пожалуйста, попробуйте другой.</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">До 10 файлов. Изображения до 5 МБ, видео до 30 секунд.</string>
+    <string name="support_attachment_limits">До 10 файлов. Изображения до 10 МБ, видео до 30 секунд.</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

@@ -1864,13 +1864,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">និង %1$d ទៀត។</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">រូបភាពនោះធំពេក។ សូមជ្រើសរើសមួយក្រោម 5 MB។</string>
+    <string name="support_form_error_image_too_large">រូបភាពនោះធំពេក។ សូមជ្រើសរើសមួយក្រោម 10 MB។</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">វីដេអូនោះវែងពេក។ សូមជ្រើសរើសមួយក្រោម 30 វិនាទី។</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">យើងមិនអាចពិនិត្យមើលថាតើវីដេអូនោះមានរយៈពេលប៉ុន្មាននោះទេ។ សូមសាកល្បងមួយផ្សេងទៀត។</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">ឯកសាររហូតដល់ 10 ។ រូបភាពរហូតដល់ 5 MB វីដេអូរហូតដល់ 30 វិនាទី។</string>
+    <string name="support_attachment_limits">ឯកសាររហូតដល់ 10 ។ រូបភាពរហូតដល់ 10 MB វីដេអូរហូតដល់ 30 វិនាទី។</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

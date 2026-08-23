@@ -1779,13 +1779,13 @@
     <!-- google-translated 2026-08-22 -->
     <string name="support_open_requests_more">还有%1$d</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_form_error_image_too_large">那个图片太大了。请选择一个小于 5 MB 的。</string>
+    <string name="support_form_error_image_too_large">那个图片太大了。请选择一个小于 10 MB 的。</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_too_long">那个视频太长了。请选择 30 秒以内的一项。</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_error_video_unreadable">我们无法检查该视频的长度。请尝试另一种。</string>
     <!-- google-translated 2026-08-22 -->
-    <string name="support_attachment_limits">最多 10 个文件。图片最大 5 MB，视频最大 30 秒。</string>
+    <string name="support_attachment_limits">最多 10 个文件。图片最大 10 MB，视频最大 30 秒。</string>
     <!-- google-translated 2026-08-22 -->
     <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>
