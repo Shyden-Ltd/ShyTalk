@@ -1842,14 +1842,6 @@ const MAX_OPEN_TICKETS_LISTED = 5;
 const ADMIN_PERSONA = 'admin@shytalk.dev';
 
 /**
- * How many times the sweep will re-read the open list before deciding
- * something is wrong. Each pass reaches 200 tickets further back, so this
- * covers four thousand; beyond that the honest answer is that the sweep is
- * losing a race, not that it needs more passes.
- */
-const MAX_SWEEP_PASSES = 20;
-
-/**
  * Which open tickets are this journey's own leftovers, safe to resolve.
  *
  * Scoped three ways, and every one of them matters:
@@ -1888,51 +1880,49 @@ function staleJourneyTickets(tickets, { ownerId, keepTicketId }) {
  * A failure here throws. Cleanup that silently does nothing brings the
  * accumulation straight back, with a green report over it.
  */
-async function resolveStaleJourneyTickets({ ownerId, keepTicketId }) {
+async function resolveStaleJourneyTickets(ctx, { ownerId, keepTicketId }) {
+  // Listed straight from Firestore, resolved through the API.
+  //
+  // That split is deliberate. The API is the authorization layer and every
+  // MUTATION goes through it -- these tickets are closed by the same admin
+  // PATCH a real admin uses. The LIST is a read, and this runner already
+  // reads Firestore directly for every one of its assertions, because a test
+  // wants ground truth rather than the view of the thing it is testing.
+  //
+  // It has to be read this way, not from `GET /api/support-tickets`. That
+  // endpoint returns the 200 NEWEST open tickets across EVERYBODY and offers
+  // no per-user filter. Measured against the real database: 320 open, 117 of
+  // them belonging to one other account, so Alice's older leftovers sat
+  // outside the window entirely. One pass resolved 1 of 8 and the next found
+  // none -- because resolving one ticket advances a 200-wide window by one.
+  // Looping cannot fix an endpoint that cannot express the question.
+  //
+  // `mine/open` cannot either: capped at five, no ordering, so Firestore
+  // returns the same five ids for ever. Five hand-raised tickets at the front
+  // would stall the sweep on them permanently.
+  const snap = await ctx.db
+    .collection('supportTickets')
+    .where('userId', '==', ownerId)
+    .where('status', '==', 'open')
+    .get();
+
+  const stale = staleJourneyTickets(
+    snap.docs.map((d) => ({ ...d.data(), id: d.id })),
+    { ownerId, keepTicketId },
+  );
+
   const adminToken = await getIdToken(ADMIN_PERSONA);
   const resolved = [];
-
-  // LOOPED, because one pass cannot see far enough.
-  //
-  // `GET /api/support-tickets?status=open` returns the 200 NEWEST open
-  // tickets across everybody. This emulator holds 320 open ones, so a
-  // persona's older leftovers start outside that window: a single pass
-  // resolved 9 of Alice's and left 8 of its own behind, invisible to it.
-  //
-  // Looping drains them because the window is filtered by status. Every
-  // ticket this pass resolves stops being open, so the next pass's 200
-  // reaches that much further back. It terminates when a pass finds nothing
-  // of ours left.
-  //
-  // `mine/open` is NOT the right endpoint for this despite being per-user:
-  // it is capped at five and applies no ordering, so Firestore returns the
-  // same five document ids every time. If those five happen to be tickets
-  // raised by hand, the sweep stalls on them for ever and never reaches its
-  // own. Ownership is enforced here by staleJourneyTickets instead.
-  for (let pass = 1; pass <= MAX_SWEEP_PASSES; pass++) {
-    const listed = await apiCall('GET', '/api/support-tickets?status=open', { token: adminToken });
-    if (listed.status !== 200) {
-      throw new Error(`could not list open tickets to clean up: ${listed.status}`);
-    }
-    const stale = staleJourneyTickets(listed.body?.tickets, { ownerId, keepTicketId });
-    if (stale.length === 0) return resolved;
-
-    for (const t of stale) {
-      const id = t.id ?? t.ticketId;
-      const r = await apiCall('PATCH', `/api/support-tickets/${id}`, {
-        token: adminToken,
-        body: { status: 'resolved' },
-      });
-      if (r.status !== 200) throw new Error(`could not resolve leftover ticket ${id}: ${r.status}`);
-      resolved.push(id);
-    }
+  for (const t of stale) {
+    const id = t.id ?? t.ticketId;
+    const r = await apiCall('PATCH', `/api/support-tickets/${id}`, {
+      token: adminToken,
+      body: { status: 'resolved' },
+    });
+    if (r.status !== 200) throw new Error(`could not resolve leftover ticket ${id}: ${r.status}`);
+    resolved.push(id);
   }
-
-  throw new Error(
-    `still finding this journey's leftovers after ${MAX_SWEEP_PASSES} passes ` +
-      `(${resolved.length} resolved) -- the sweep is not keeping up, which means ` +
-      `something is creating them faster than it clears them`,
-  );
+  return resolved;
 }
 
 const J38 = {
@@ -1976,7 +1966,7 @@ const J38 = {
       // Resolved through the ADMIN endpoint, not written to Firestore: a
       // test that reaches around the API stops testing the API. Reads stay
       // direct, because ground truth is what an assertion wants.
-      const swept = await resolveStaleJourneyTickets({
+      const swept = await resolveStaleJourneyTickets(ctx, {
         ownerId: seededUserId,
         keepTicketId: seededTicketId,
       });
