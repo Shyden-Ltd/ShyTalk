@@ -444,3 +444,78 @@ points at state carried between journeys rather than at any one journey.
 - Two operator decisions still outstanding: SHY-0440 (room reporting) and
   SHY-0436 (seven-day deletion vs safety history).
 - **Nothing pushed.** 86 commits on `feature/SHY-0387-support-page`.
+
+---
+
+# PART 16 — support-work evidence, and SHY-0446 half-done
+
+## Evidence page (operator asked for it, 2026-08-23)
+
+**https://claude.ai/code/artifact/ca600866-0571-422e-a07b-db6a7f649013**
+
+Built from the 08:30 run. Every screenshot on it was OPENED and read before the
+claim under it was written — the previous evidence page paired claims to
+filenames without looking and got one wrong, which is why it was rejected.
+
+J38 clips cut from the full recordings and sent to the operator: Android 225s,
+iPhone 125s.
+
+### What it says
+
+- **Built and device-proven, 8 stories**: SHY-0387, 0396, 0419, 0427, 0428,
+  0430, 0432, 0434. J38 is **14/14 on BOTH phones** (Android 209.1s, iPhone
+  108.3s).
+- **Not built, 12 stories** — including all three the operator asked for on
+  22 August: SHY-0433 (thumbnails), SHY-0436 (seven-day deletion), SHY-0437/
+  0438/0439 (report-first flow + admin conversion). "Safety & another user" is
+  still an ordinary category on the form in both screenshots, which is
+  SHY-0437 not being built, visible in the evidence.
+- **561 support unit tests** green (474 Express + 87 shared).
+- Three things I would NOT sign off on the operator's behalf: the iPhone build
+  stamps no git identity (its badge reads `? · 08-23 07:25` where Android
+  reads `2ad6081`, so the iOS frames cannot prove WHICH commit made them);
+  attachments are proven at API/unit level but not walked on a device in this
+  run; and "support is done" would be false with twelve stories Draft.
+
+## SHY-0446 — part fixed, iPhone still 5/13
+
+**Fixed and committed:**
+
+1. **J-SMOKE's `device.uninstall is not a function`.** Both backends now have
+   `install`/`uninstall`; iOS REFUSES with the reason (the app is built with
+   this Mac's LAN address baked in by `ios-local-install.sh`, so the runner
+   must not replace it). An unguarded call is now a sentence, not a TypeError.
+   J-SMOKE's step is named for what it actually does per platform. It now runs
+   81.7s instead of dying at 0.7s.
+2. **WDA session recovery on every command.** Instrumenting a run gave the real
+   error behind "SignIn not reached": `POST /element/.../click -> 500: Could
+   not proxy command to the remote server. Original error: socket hang up`.
+   WDA had died; the dump at that instant shows the app happily on Home.
+   `dumpXml` already recovered from this and nothing else did — and the dead
+   session id stayed on the object, so every LATER command failed too. Now
+   wrapped as a CLASS, with the command list derived from the prototype so a
+   new one fails until it is wrapped or exempted with a reason.
+3. **A parity guard** derives every `device.X(` call from the runner source and
+   requires both backends to have it, or an allowlist entry naming the guard.
+
+**What did NOT change: the iPhone is still 5/13.**
+
+Six journeys still fail at "Reach SignIn within 12000ms". That timeout belongs
+to `signOutFlow`'s final `reachSignIn`, so the app is being lost DURING
+sign-out, and the click hang-up fixed above was a different moment (it was in
+"Land on Home"). The session recovery was necessary and is proven by mutation,
+but it was not sufficient.
+
+**Ruled OUT by measurement, so nobody repeats it:**
+
+- `forceStop` racing `launch`. The code's own comment blames this and cites an
+  A/B. Re-run today, 6/6 land in ShyTalk whether the gap is 0ms or 2000ms.
+  `app_state` reports `1` (not running) the instant `forceStop` returns; the
+  ~350-400ms I first measured was devicectl's process list lagging, not a
+  pending kill.
+
+**Where to pick up:** instrument `signOutFlow` the way the J-ALICE run was
+instrumented — run J-ALICE twice in a row on iOS (the first leaves the app
+signed in, the second must sign out) and capture what is on screen after each
+of the four taps. The first run FAILS and the second PASSES, reliably, which is
+the alternating signature.
