@@ -85,6 +85,42 @@ function normaliseUiAutomator2Source(xml) {
   );
 }
 
+/**
+ * Escape a value for embedding in a UiSelector expression.
+ *
+ * The selector is a Java expression the device evaluates, so a stray quote
+ * either fails to parse or — worse — selects something else. Backslashes are
+ * escaped BEFORE quotes, or the backslash the quote-pass inserts gets escaped
+ * a second time.
+ */
+function escapeUiSelectorArg(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * Match a control by the resource-id a Compose testTag surfaces as.
+ *
+ * NOT Appium's `id` strategy, which wants a fully-qualified
+ * `package:id/name`. A testTag surfaces as a bare `resource-id` such as
+ * `support_back`, and both `id` and `accessibility id` answer "An element
+ * could not be located" for it — measured on the real OnePlus. UiSelector
+ * matches the raw string, which is what `byId` matches in the journeys.
+ */
+function androidResourceIdSelector(tag) {
+  if (!tag || typeof tag !== 'string') {
+    throw new Error(`an element tag is required to build a selector; got ${JSON.stringify(tag)}`);
+  }
+  return `new UiSelector().resourceId("${escapeUiSelectorArg(tag)}")`;
+}
+
+/** Match a control by its exact visible text, the way `byText` does. */
+function androidTextSelector(text) {
+  if (!text || typeof text !== 'string') {
+    throw new Error(`element text is required to build a selector; got ${JSON.stringify(text)}`);
+  }
+  return `new UiSelector().text("${escapeUiSelectorArg(text)}")`;
+}
+
 /** One JSON round trip to Appium. Injected in tests so the policy is testable. */
 async function httpRequest(baseUrl, method, path, _body) {
   const res = await fetch(baseUrl + path, {
@@ -161,7 +197,35 @@ async function createAndroidSourceSession({
     return normaliseUiAutomator2Source(xml);
   };
 
+  /** Resolve one element, returning Appium's handle for it. */
+  const findElement = async (selector) => {
+    const el = await call('POST', `/session/${sessionId}/element`, {
+      using: '-android uiautomator',
+      value: selector,
+    });
+    const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+    if (!id) throw new Error(`no element matched ${selector}`);
+    return id;
+  };
+
   return {
+    /**
+     * Click a control as an ELEMENT — Appium resolves it and clicks it
+     * server-side, so there is no window between deciding where a control is
+     * and touching that point (SHY-0448).
+     */
+    async tapElement(tag) {
+      const selector = androidResourceIdSelector(tag);
+      const id = await findElement(selector);
+      await call('POST', `/session/${sessionId}/element/${id}/click`, {});
+    },
+
+    /** The same, by exact visible text, for controls with no testTag. */
+    async tapElementByLabel(label) {
+      const id = await findElement(androidTextSelector(label));
+      await call('POST', `/session/${sessionId}/element/${id}/click`, {});
+    },
+
     async dumpXml() {
       try {
         return await readOnce();
@@ -185,6 +249,9 @@ async function createAndroidSourceSession({
 
 module.exports = {
   createAndroidSourceSession,
+  androidResourceIdSelector,
+  androidTextSelector,
+  escapeUiSelectorArg,
   normaliseUiAutomator2Source,
   looksLikeLostSession,
   ANDROID_SOURCE_UNAVAILABLE,

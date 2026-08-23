@@ -230,6 +230,15 @@ class Device {
    */
   async attachSourceSession() {
     this.sourceSession = await createAndroidSourceSession({ serial: this.serial });
+    if (this.sourceSession) {
+      // Assigned on the INSTANCE, and only when a session exists, because
+      // `tapResolved` routes on `typeof device.tapElement === 'function'`.
+      // Defining these on the class would make the coordinate fallback
+      // unreachable on a machine without the driver — the walk would fail
+      // rather than tap (SHY-0448).
+      this.tapElement = (tag) => this.sourceSession.tapElement(tag);
+      this.tapElementByLabel = (label) => this.sourceSession.tapElementByLabel(label);
+    }
     return Boolean(this.sourceSession);
   }
 
