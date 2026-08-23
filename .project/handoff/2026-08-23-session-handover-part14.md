@@ -302,3 +302,145 @@ Then re-run both device journeys and the full suites.
   display cap of 5. That is SHY-0432.
 - Gift Wall artwork renders as broken-image fallbacks on Android; a "600 × 200"
   placeholder banner dominates the Rooms screen. Neither triaged.
+
+---
+
+# PART 15 — the six issues, fixed, and what the device runs then found
+
+Operator, 2026-08-23: *"fix the issues, then run the tests again."*
+
+## The six, in the order they were given
+
+| # | Issue | State |
+| --- | --- | --- |
+| 1 | SHY-0430 — the debug overlay covers the copy step 10 asserts | **Fixed**, device-proven |
+| 2 | SHY-0432 — test data grows unbounded | **Fixed** (three attempts; see below) |
+| 3 | SHY-0442 — "Unable to Connect" on cold start | **Fixed**, copy in 21 locales |
+| 4 | The white cold-start splash flash | **Fixed** — SHY-0443 |
+| 5 | `api unknown` beside a GREEN health dot | **Fixed**, both surfaces |
+| 6 | Gift Wall broken images; "600 × 200" banner | **Triaged** — SHY-0444 filed, not fixed |
+
+## What each turned out to be
+
+**1 — the overlay.** Eight lines deep, covering the "goes to the back of the
+queue" paragraph. Now COMPACT: title, status, build identity, account. The
+badge turned out to be a **test interface** — `signInAs` and J38's identity
+step both parse `UID: <digits>` out of it — so compacting it without reading
+its consumers would have reddened ten journeys on hardware. Caught before the
+run, not by it. `signInAs` now asserts the ACCOUNT ID instead of a display-name
+prefix, from `provision-test-personas.js` so there is no second table.
+
+**5 — `api unknown`.** Never a contradiction. Express answers `sha:"unknown"`
+when it has no `DEPLOYED_SHA` and no `.deployed-sha` file, which is every local
+stack. That word is **exactly seven characters**, the same budget a short sha
+gets, so it survived truncation and rendered where a build id belongs. The dot
+was always right. Two tests had PINNED it — a Kotlin one calling it "the honest
+local answer", and a web regex spelling out `/api (unknown|…)/` as acceptable.
+Both inverted. The web mirror had the identical defect, where a truthy sentinel
+beat a falsy check.
+
+**3 — Unable to Connect.** `handleBackendError` sent every non-auth failure
+straight to `isBackendUnreachable` with nothing between. Now two retries with a
+short backoff, wrapping the CALL rather than the handler (by the time the
+handler runs there is nothing left to retry), and all three cold-start callers
+go through it. The ticket's claim that no `AuthViewModelTest` existed was
+**wrong twice**: an 867-line mockk harness in `app/src/test` and a 1,581-line
+`AuthViewModelIdentityTest` in `commonTest` already pinning this state. One
+source set was looked in. Corrected in the ticket.
+
+**4 — the splash.** `Theme.AppCompat.Light.NoActionBar`, whose windowBackground
+is white, under an app that follows the system theme. The dark value is
+**measured** — sampled from a device screenshot at four empty points, all
+`#141218`.
+
+**6 — the images.** The "600 × 200" banner was transient local data. The Gift
+Wall is **not**: `GiftWallScreen` degrades beautifully when `iconUrl` is BLANK
+(a tinted circle with the gift's initials) and not at all when the load FAILS,
+because the `AsyncImage` call passes no `error` slot. It is **66 call sites in
+`commonMain`, none of which passes `error`, `fallback` or `placeholder`**. Filed
+as SHY-0444 rather than fixed beside five unrelated changes.
+
+## SHY-0432 took three attempts, and only the real database showed why
+
+1. **Admin list, one pass.** `GET /api/support-tickets?status=open` returns the
+   200 NEWEST across everybody. The emulator holds **320 open, 117 of them one
+   dead test account** — so Alice's older leftovers sat outside the window. It
+   resolved 1 of 8 and stopped.
+2. **Admin list, looped.** Resolving a ticket advances a 200-wide window by
+   one. Looping cannot fix an endpoint that cannot ask the question.
+3. **Firestore for the list, admin API for the write.** Complete, per-user, and
+   it keeps the rule that matters: every MUTATION goes through the
+   authorization layer, while a test reads ground truth directly — which this
+   runner already does for every assertion.
+
+`mine/open` looked like the answer (per-user, so ownership is structural) and
+is the wrong endpoint: capped at five with no ordering, so Firestore returns
+the same five ids for ever and five hand-raised tickets at the front stall it
+permanently.
+
+**The count assertion was also wrong.** It failed on Alice's five hand-raised
+tickets, which the journey may not close and must tolerate. Replaced with the
+honest claim: *the ticket THIS run seeded is among the ones the app will show*.
+Its failure names the foreign tickets.
+
+## What the device runs then found
+
+**SHY-0445 — a still screen read as a broken recorder.** The Android walk
+aborted with "no growing video". Android's encoder emits frames only when the
+display CHANGES: on a settled screen the mp4 sat at **48 bytes for ten
+seconds**. The gate now proves the CONTAINER opened, and the frames claim moved
+to `assertPlayable` (ffprobe: a video stream and a positive duration) at stop,
+which also catches the truncated-`moov` file a SIGKILL leaves. **This exact
+mechanism was diagnosed for iOS earlier in the session and the comment said, in
+writing, "scrcpy has no equivalent channel, so it keeps `waitForGrowth`".**
+
+**Environment debris was failing two journeys for the wrong reason.** Lena
+carried a suspension from a hand-driven session days ago (J07 → 403 "Account
+suspended"). Alice carried TEN open tickets from this branch's own device
+testing. Cleared by `scripts/dev/reset-local-journey-debris.sh`, which lives
+OUTSIDE the journeys on purpose — a harness that deletes data it did not create
+can hide a real defect.
+
+## Where the tests stand
+
+| Suite | Result |
+| --- | --- |
+| shared jvmTest | **1,677** green |
+| app unit (local flavour) | **2,278** green |
+| Express (`npm test`) | **15,246** green, 482 suites |
+| Playwright web watermark | **39** green, headed |
+| **Android device, full set** | **13 / 13**, recorded 1019.2s / 70.8MB |
+| **iPhone device, full set** | **5 / 13**, recorded 713.5s / 20.8MB |
+
+Mutation-proven this session: 2 (badge/sentinel), 7 (run isolation), 4 (cold
+start), 2 (splash), 1 (web sentinel).
+
+## SHY-0446 — and the honest headline
+
+**The full thirteen-journey set had never been run on the iPhone.** Every
+previous iOS run under `journey-results-ios/runs` holds exactly one journey.
+Run three times today, it gives the same answer each time: **Android 13/13,
+iPhone 5/13**.
+
+They are revealed, not caused — J38, the journey this session's work is about,
+passes on both. But it means that for as long as this has existed, *"the
+journeys pass"* has meant **Android**, and a defect reaching only iPhone users
+had eight journeys' worth of places to hide.
+
+Two shapes: `device.uninstall is not a function` (a driver method the iOS
+backend does not have), and six failures where the dump shows the **iOS home
+screen** — the app is not running. The near-alternating pass/fail sequence
+points at state carried between journeys rather than at any one journey.
+
+## Open
+
+- **SHY-0446** is the biggest thing on the board now.
+- **SHY-0444** — 66 `AsyncImage` sites with no failure state.
+- **SHY-0442's own bar** — twenty cold starts per device — needs the devices.
+- **SHY-INDEX.md is 91 stories behind**, back to SHY-0226.
+  `scripts/reconcile-story-index.sh` reports and, with `--apply`, inserts.
+  Deliberately NOT applied: that is a large change to an operator-curated
+  table. The public roadmap is unaffected — its sync reads the story directory.
+- Two operator decisions still outstanding: SHY-0440 (room reporting) and
+  SHY-0436 (seven-day deletion vs safety history).
+- **Nothing pushed.** 86 commits on `feature/SHY-0387-support-page`.
