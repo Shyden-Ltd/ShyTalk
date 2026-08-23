@@ -153,8 +153,24 @@ fun SupportPage(
     // applies when the keyboard is down and the keyboard applies when it is up
     // (already spanning the navigation bar's region). Padding the bar separately
     // would float Send a navigation bar's height above the keyboard.
+    //
+    // SHY-0431. The inset above used to sit on the Scaffold's own modifier, which
+    // shrinks the whole Scaffold -- BACKGROUND included. Android hides that,
+    // because the system navigation bar paints the band itself; iOS paints
+    // nothing below it, so the bottom 34pt of the Support screen was pure black
+    // (luma 2, against the bar's own 35) while every other screen ran edge to
+    // edge. The iOS convention is the opposite: background to the edge, CONTENT
+    // inset. So the same union now pads the bar's content and the two bar-less
+    // branches, and the Surface behind it reaches the bottom of the screen.
+    val bottomInset = WindowInsets.ime.union(WindowInsets.navigationBars)
+
     Scaffold(
-        modifier = Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
+        // Explicitly zero, so the body's bottom padding is the bottom bar's
+        // height and nothing else. Scaffold otherwise reports EITHER the bar's
+        // height OR this value depending on which layout branch it takes, and a
+        // screen should not depend on which one that is. The branches with no
+        // bottom bar apply `bottomInset` themselves, below.
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.support_form_title), fontWeight = FontWeight.Bold) },
@@ -182,6 +198,8 @@ fun SupportPage(
             // A pinned bar is length-independent: it holds however long the form
             // grows and whatever size keyboard the person uses.
             if (!state.submitted && !state.awaitingDuplicateChoice) {
+                // The Surface takes no inset: it is the background, and it is
+                // meant to reach the bottom edge (SHY-0431).
                 Surface(tonalElevation = 3.dp) {
                     Button(
                         onClick = viewModel::submit,
@@ -193,6 +211,10 @@ fun SupportPage(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
+                                // Send itself stays clear of the home indicator
+                                // and the navigation bar -- SHY-0428, which this
+                                // must not undo.
+                                .windowInsetsPadding(bottomInset)
                                 .padding(16.dp)
                                 .testTag(TAG_SUPPORT_SEND),
                     ) {
@@ -208,7 +230,8 @@ fun SupportPage(
     ) { padding ->
         if (state.submitted) {
             SentConfirmation(
-                modifier = Modifier.padding(padding),
+                // No bottom bar on this branch, so the inset is applied here.
+                modifier = Modifier.padding(padding).windowInsetsPadding(bottomInset),
                 addedToExisting = state.addedToExisting,
                 onClose = leave,
             )
@@ -234,7 +257,8 @@ fun SupportPage(
         // up is the exact geometry that made Send unreachable on iOS (SHY-0419).
         if (state.awaitingDuplicateChoice) {
             DuplicateChoice(
-                modifier = Modifier.padding(padding),
+                // No bottom bar on this branch either.
+                modifier = Modifier.padding(padding).windowInsetsPadding(bottomInset),
                 openTickets = state.openTickets,
                 // The COUNT, not the length of the capped list (SHY-0424).
                 openRequestsTotal = state.openRequestsTotal,

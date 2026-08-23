@@ -1,6 +1,6 @@
 ---
 id: SHY-0431
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P3
@@ -126,6 +126,32 @@ something has already gone wrong for them.
 - [ ] An iOS device frame shows the bar painted to the bottom row with Send still
       clear of the home indicator.
 - [ ] The Android walk still passes.
+
+## How it was built
+
+The inset moved off the Scaffold's own modifier and onto the things that need
+it. `windowInsetsPadding` on the Scaffold shrinks the Scaffold — background
+included — which is invisible on Android, where the system paints that band
+itself, and is the black strip on iOS, where nothing does.
+
+Now: the bar's `Surface` takes no inset and reaches the bottom edge, and the
+Send button inside it carries `windowInsetsPadding(bottomInset)` so SHY-0428
+still holds. `bottomInset` is `WindowInsets.ime.union(WindowInsets.navigationBars)`,
+defined once — the union is what keeps the keyboard and the navigation bar
+counted once rather than stacked.
+
+**`contentWindowInsets = WindowInsets(0)` is deliberate.** Scaffold reports the
+body's bottom padding as EITHER the bottom bar's height OR its content insets,
+depending on which layout branch runs, and that is an internal this screen should
+not depend on. Zeroing it collapses both branches to the same answer: the bar's
+height, which now includes the inset. The two branches that REPLACE the form and
+hide the bar — the sent confirmation and the duplicate choice — apply the inset
+themselves, stated at each call site.
+
+`SupportPageInsetWiringPinTest` pins both directions: insetting the Scaffold or
+the Surface again brings the strip back, and dropping it from Send brings
+SHY-0428 back. The pin is structural because the assertion is about layout on a
+device the test does not run on — the device screenshots are the other half.
 
 ## Notes
 
