@@ -46,6 +46,20 @@ const ENTRY_POINT_SOURCES = [
 
 /** Fields the PLATFORM owns; each platform must supply them independently. */
 const PLATFORM_OWNED = ['platform', 'appVersion'];
+
+/**
+ * Fields the FORM owns — set from what somebody did on the screen, not from
+ * where they came in or what device they are holding.
+ *
+ * A third kind of owner, added by SHY-0437. `raisedAfterReportGuide` cannot come
+ * from an entry point: whether somebody read the report guide and chose to raise
+ * a ticket anyway is only known once they are on the form. It still has to have
+ * a producer — the point of this file is that nothing sits in the allowlist
+ * unclaimed — so it is checked against the ViewModel below rather than exempted.
+ */
+const FORM_OWNED = ['raisedAfterReportGuide'];
+const FORM_SOURCE =
+  'shared/src/commonMain/kotlin/com/shyden/shytalk/feature/support/SupportFormViewModel.kt';
 const PLATFORM_SOURCES = {
   android: 'app/src/main/java/com/shyden/shytalk/data/repository/SupportRepositoryImpl.kt',
   ios: 'shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosSmallRepositories.kt',
@@ -79,11 +93,25 @@ describe('support ticket context: allowlist vs what any client can send', () => 
   test('every allowed field is owned by either an entry point or a platform', () => {
     // Nothing may sit in the allowlist unclaimed — an unclaimed field is one
     // nobody has decided how to populate, which is how the two dead ones arose.
-    const entryOwned = allowed.filter((f) => !PLATFORM_OWNED.includes(f));
+    const entryOwned = allowed.filter(
+      (f) => !PLATFORM_OWNED.includes(f) && !FORM_OWNED.includes(f),
+    );
     expect(entryOwned.sort()).toEqual(['feature', 'reason', 'screen']);
   });
 
-  test.each(allowed.filter((f) => !PLATFORM_OWNED.includes(f)))(
+  test.each(FORM_OWNED)('the form emits context field "%s"', (field) => {
+    // Same standard as every other owner: named in CODE, not in a comment.
+    expect(new RegExp(`"${field}"\\s*to\\b`).test(codeOf(FORM_SOURCE))).toBe(true);
+  });
+
+  test('every form-owned field is actually in the allowlist', () => {
+    // The other direction. A field the form sends that the server does not keep
+    // is sanitised away in silence, which is how the guide's measurement would
+    // have come out reading "nobody saw it" rather than absent.
+    expect(FORM_OWNED.filter((f) => !allowed.includes(f))).toEqual([]);
+  });
+
+  test.each(allowed.filter((f) => !PLATFORM_OWNED.includes(f) && !FORM_OWNED.includes(f)))(
     'an entry point sends context field "%s"',
     (field) => {
       // Either Kotlin map form — `"feature" to x` or `put("feature", x)`. The

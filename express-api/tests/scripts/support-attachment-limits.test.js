@@ -192,12 +192,35 @@ describe('attachment limits — a video is actually measured', () => {
   test('iOS reads it from the file it just picked', () => {
     const code = codeOf(IOS_PICKER);
     expect(code).toContain('AVURLAsset');
-    expect(code).toContain('CMTimeGetSeconds');
-    // Same trap as Android: bound to the reader, not the field name.
-    expect(code).toMatch(/durationMs\s*=\s*[^,]{0,140}videoDurationMs\(/);
-    // The measurement writes a temp file; leaving it behind means one copy of
-    // every video picked, in the app container.
-    expect(code).toContain('removeItemAtPath');
+    // Same trap as Android: bound to the READER, not the field name.
+    // `durationMs =` alone is satisfied by `durationMs = null`.
+    //
+    // SHY-0433 changed the shape here: one write of the video now serves the
+    // duration, the poster frame AND playback, so the field is filled from that
+    // result rather than from a call named after itself. Both halves are still
+    // pinned — the field is wired to the result, and the result is read with
+    // AVFoundation rather than guessed.
+    expect(code).toMatch(/durationMs\s*=\s*details\?\.durationMs/);
+    expect(code).toMatch(/durationMs\s*=\s*durationMsOf\(/);
+    expect(code).toMatch(/fun durationMsOf\([\s\S]{0,400}CMTimeGetSeconds\(/);
+  });
+
+  test('iOS keeps the picked video where the system will clear it', () => {
+    // This used to assert `removeItemAtPath`: the file was written only to be
+    // measured, so leaving it behind meant one copy of every video picked.
+    //
+    // SHY-0433 needs it kept — a video cannot be played from a poster frame,
+    // and the picker hands over bytes rather than a photo-library URL. The
+    // concern is unchanged, so the answer moved rather than disappearing: it
+    // goes in the TEMPORARY directory, which iOS purges on its own schedule.
+    // Anywhere else and the copies are permanent.
+    const code = codeOf(IOS_PICKER);
+    expect(code).toContain('NSTemporaryDirectory()');
+    const writes = code.match(/writeToFile\(([^,]+),/g) || [];
+    expect(writes.length).toBeGreaterThan(0);
+    // Every path written to is built from the temporary directory.
+    const pathsFromTemp = (code.match(/val path = NSTemporaryDirectory\(\)/g) || []).length;
+    expect(pathsFromTemp).toBe(writes.length);
   });
 
   test('the ViewModel refuses a video it could not measure', () => {
