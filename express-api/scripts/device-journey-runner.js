@@ -2556,6 +2556,14 @@ if (require.main === module) {
 
 // Exported for unit tests (pure logic only; device/DB/API I/O is covered by
 // the on-device integration runs). Requiring this file does NOT run main().
+//
+// `getIdToken` is the one exception, and deliberately so. It mints persona
+// tokens against the Auth emulator, and a second consumer exists:
+// scripts/dev/reset-local-journey-debris.js, which clears the environment
+// state that breaks these very journeys. A second implementation of token
+// minting would drift from this one, and the drift would show up as a
+// housekeeping script that authenticates differently from the runs it exists
+// to unblock.
 module.exports = {
   parseArgs,
   occluderOf,
@@ -2580,4 +2588,5 @@ module.exports = {
   accountOnDevice,
   JOURNEY_TICKET_PREFIX,
   MAX_OPEN_TICKETS_LISTED,
+  getIdToken,
 };
