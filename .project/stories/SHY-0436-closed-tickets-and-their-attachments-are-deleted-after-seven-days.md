@@ -1,6 +1,6 @@
 ---
 id: SHY-0436
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P1
@@ -202,3 +202,28 @@ is a decision, not a default, and nothing should be built until it is made.
   after 7 days, including all attachments."*
 - Third route to the same orphan class as SHY-0434 and SHY-0435. Worth doing all
   three as one lifecycle rather than three separate deletes.
+
+## How it was built
+
+**Scheduled, not remembered.** `POST /api/system/sweep-support-retention`,
+driven by `cron-support-retention.yml` at 03:30 UTC — half an hour after the
+account-deletion sweep so the two do not contend for Firestore and a slow one
+cannot 409 the other.
+
+**The keys are collected BEFORE the document goes.** The ticket is the ONLY
+record of which objects belong to it, so deleting the document first strands
+them permanently — the same orphan class as SHY-0434 and SHY-0435, arrived at
+by a third route.
+
+**It fails closed everywhere it can.** A resolved ticket with no `resolvedAt`
+is KEPT: treating a missing timestamp as "closed long ago" would delete
+somebody's data because a field was absent. An OPEN ticket is never due however
+old — age is not the trigger, and a request somebody is still waiting on is not
+rubbish no matter how long we have taken over it. The boundary is exclusive at
+exactly seven days.
+
+The decisions live in `utils/support-retention.js`, pure and pinned without
+firebase or R2, because a bug in them deletes somebody's evidence. The endpoint
+contract — auth, in-flight isolation, timeout, and a 500 rather than a silent
+success — is pinned separately: a retention sweep that reports "ok" while doing
+nothing is exactly how data outlives its window.

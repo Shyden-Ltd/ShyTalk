@@ -25,6 +25,7 @@ const router = require('express').Router();
 const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
+const { sweepSupportRetention } = require('../cron/supportRetention');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 const { getDefaultMissQueue } = require('../utils/translation-miss-queue');
@@ -148,7 +149,18 @@ function createSweepHandler(name, sweepFn) {
 
 const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', accountDeletion);
 
+// Support-ticket retention: closed tickets seven days after closure, taking
+// their attachments with them, and uploads nobody ever sent (SHY-0436,
+// SHY-0435). Both delete personal data — screenshots of private conversations,
+// photographs of other people — so both belong on a schedule rather than
+// waiting for somebody to remember.
+const sweepSupportRetentionHandler = createSweepHandler(
+  'sweep-support-retention',
+  sweepSupportRetention,
+);
+
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
+router.post('/system/sweep-support-retention', requireSystemAuth, sweepSupportRetentionHandler);
 
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
 // code can't accidentally clobber the in-flight flags. Calls each
@@ -156,6 +168,7 @@ router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDe
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
     sweepAccountDeletions._reset();
+    sweepSupportRetentionHandler._reset();
   };
 }
 

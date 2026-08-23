@@ -1,6 +1,6 @@
 ---
 id: SHY-0435
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P1
@@ -147,3 +147,29 @@ ticket. This needs a one-off sweep as well as a standing rule.
 - The retention window is a decision for the operator, not a default to pick
   quietly. It trades "somebody comes back to a half-written request" against
   "how long we hold something nobody sent us".
+
+## How it was built
+
+Shares the sweep with SHY-0436 — same schedule, same module — because they are
+two routes to one outcome: an object in storage that no ticket references.
+
+**Referenced keys are read FRESH on every run**, and anything in that set is
+never touched. That is the whole safety of this sweep: a referenced key belongs
+to somebody's live request, and deleting it destroys their evidence.
+
+**The grace window is three days**, comfortably longer than an interruption and
+far short of forever. Returning to a half-written request inside it still finds
+the attachments — the form keeps them deliberately, and that behaviour is right;
+this must not undo it.
+
+**Fails closed**: an object with no timestamp is KEPT, because no age means no
+evidence it is abandoned. And the filter re-checks the `support-tickets/`
+prefix itself rather than trusting the caller's listing, so a bug there cannot
+let the sweep reach avatars or room covers.
+
+**The backlog clears itself.** Every attachment ever picked and not sent, from
+before either ticket existed, is unreferenced and older than the window — so
+the first run collects them all. No separate one-off script.
+
+The sweep runs AFTER the closed-ticket pass, so the objects that pass has just
+orphaned are already gone and the reference set is re-read in between.
