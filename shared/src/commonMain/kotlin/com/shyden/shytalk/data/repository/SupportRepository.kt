@@ -69,7 +69,7 @@ interface SupportRepository {
      * failed lookup must never cost somebody their ticket, so the caller sends
      * anyway — but it says so in the log rather than pretending it knew.
      */
-    suspend fun openTickets(): List<OpenTicketSummary>?
+    suspend fun openTickets(): OpenTicketsView?
 
     /**
      * Add to a request the caller already has — SHY-0396, the "it is the problem
@@ -83,6 +83,24 @@ interface SupportRepository {
         message: String,
     ): Boolean
 }
+
+/**
+ * What the caller has open: the summaries the screen will SHOW, and how many
+ * actually exist (SHY-0424).
+ *
+ * They are different numbers, and conflating them is the defect. The API caps
+ * the summaries at MAX_OPEN_TICKETS_LISTED so a choice screen listing twenty
+ * is not unreadable; the client was then deriving "You already have N requests
+ * open" from that list's LENGTH, so somebody with eight was told they had five.
+ *
+ * [openCount] is null when the server could not determine it. Null, rather than
+ * falling back to `summaries.size` — that fallback IS the defect, and a caller
+ * that cannot tell "five" from "at least five" will state the wrong one.
+ */
+data class OpenTicketsView(
+    val summaries: List<OpenTicketSummary>,
+    val openCount: Int?,
+)
 
 /**
  * One of the caller's own open requests, as offered by the choice screen.

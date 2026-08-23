@@ -236,6 +236,8 @@ fun SupportPage(
             DuplicateChoice(
                 modifier = Modifier.padding(padding),
                 openTickets = state.openTickets,
+                // The COUNT, not the length of the capped list (SHY-0424).
+                openRequestsTotal = state.openRequestsTotal,
                 busy = state.isSubmitting,
                 error = state.error?.resolve(),
                 onAddToOpen = viewModel::addToOpenTicket,
@@ -441,6 +443,7 @@ private fun OpenRequestsNotice(
 private fun DuplicateChoice(
     modifier: Modifier,
     openTickets: List<OpenTicketSummary>,
+    openRequestsTotal: Int,
     busy: Boolean,
     error: String?,
     onAddToOpen: (String) -> Unit,
@@ -456,7 +459,7 @@ private fun DuplicateChoice(
                 .testTag(TAG_SUPPORT_DUPLICATE),
     ) {
         Text(
-            openRequestsHeading(openTickets.size),
+            openRequestsHeading(openRequestsTotal),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
         )

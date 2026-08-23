@@ -22,6 +22,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -619,25 +620,31 @@ class IosSupportRepositoryImpl(
      * Null on ANY failure, deliberately distinct from an empty list: the caller
      * has to tell "you have nothing open" from "we could not find out".
      */
-    override suspend fun openTickets(): List<OpenTicketSummary>? =
+    override suspend fun openTickets(): OpenTicketsView? =
         try {
             val resp = api.get("/api/support-tickets/mine/open")
             val rows = resp["tickets"] as? JsonArray ?: JsonArray(emptyList())
-            rows.mapNotNull { row ->
-                val obj = row as? JsonObject ?: return@mapNotNull null
-                val id = obj["ticketId"]?.jsonPrimitive?.contentOrNull.orEmpty()
-                // A row with no id is a row nothing can be added to, so it is
-                // dropped rather than offered as an unusable choice.
-                if (id.isBlank()) {
-                    null
-                } else {
-                    OpenTicketSummary(
-                        ticketId = id,
-                        category = SupportCategory.fromWire(obj["category"]?.jsonPrimitive?.contentOrNull),
-                        summary = obj["summary"]?.jsonPrimitive?.contentOrNull.orEmpty(),
-                    )
+            // Absent rather than guessed: the server omits the count when it
+            // could not determine one, and falling back to the list length is
+            // the very defect SHY-0424 is about.
+            val count = resp["openCount"]?.jsonPrimitive?.intOrNull
+            val summaries =
+                rows.mapNotNull { row ->
+                    val obj = row as? JsonObject ?: return@mapNotNull null
+                    val id = obj["ticketId"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    // A row with no id is a row nothing can be added to, so it is
+                    // dropped rather than offered as an unusable choice.
+                    if (id.isBlank()) {
+                        null
+                    } else {
+                        OpenTicketSummary(
+                            ticketId = id,
+                            category = SupportCategory.fromWire(obj["category"]?.jsonPrimitive?.contentOrNull),
+                            summary = obj["summary"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                        )
+                    }
                 }
-            }
+            OpenTicketsView(summaries = summaries, openCount = count)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

@@ -116,6 +116,12 @@ data class SupportFormUiState(
      */
     val openTickets: List<OpenTicketSummary> = emptyList(),
     /**
+     * How many requests are actually open, which is NOT [openTickets].size —
+     * that list is capped for readability (SHY-0424). Null when the server
+     * could not determine it; see [openRequestsTotal].
+     */
+    val openTicketCount: Int? = null,
+    /**
      * The three-choice screen is up: they pressed Send, they have something
      * open, and nothing has been sent yet.
      *
@@ -153,6 +159,18 @@ data class SupportFormUiState(
      */
     val openTicketsBeyondPreview: Int
         get() = (openTickets.size - SUPPORT_NOTICE_PREVIEW_LIMIT).coerceAtLeast(0)
+
+    /**
+     * The number to put in "You already have N requests open".
+     *
+     * The server's count when it has one; otherwise what we can actually see.
+     * The fallback is imperfect and deliberately narrow: it is reached only
+     * when the count aggregation itself failed, and saying nothing at all
+     * would need copy in 21 locales for a case that requires a Firestore
+     * aggregate to break. Recorded in SHY-0424 rather than left silent.
+     */
+    val openRequestsTotal: Int
+        get() = openTicketCount ?: openTickets.size
 }
 
 /**
@@ -191,9 +209,11 @@ class SupportFormViewModel(
             val open = supportRepository.openTickets()
             if (open == null) {
                 logW(TAG, "Could not look up open tickets; sending without the duplicate warning")
-                _uiState.update { it.copy(openTickets = emptyList()) }
+                _uiState.update { it.copy(openTickets = emptyList(), openTicketCount = null) }
             } else {
-                _uiState.update { it.copy(openTickets = open) }
+                _uiState.update {
+                    it.copy(openTickets = open.summaries, openTicketCount = open.openCount)
+                }
             }
         }
     }

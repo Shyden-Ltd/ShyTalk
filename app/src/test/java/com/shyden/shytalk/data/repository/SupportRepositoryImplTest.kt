@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import org.json.JSONException
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
@@ -75,10 +76,42 @@ class SupportRepositoryImplTest {
 
             val open = repo.openTickets()
 
-            assertEquals(1, open?.size)
-            assertEquals("t-9", open?.get(0)?.ticketId)
-            assertEquals(SupportCategory.Payment, open?.get(0)?.category)
-            assertEquals("Charged twice", open?.get(0)?.summary)
+            assertEquals(1, open?.summaries?.size)
+            assertEquals("t-9", open?.summaries?.get(0)?.ticketId)
+            assertEquals(SupportCategory.Payment, open?.summaries?.get(0)?.category)
+            assertEquals("Charged twice", open?.summaries?.get(0)?.summary)
+        }
+
+    /**
+     * The COUNT the server reports, which is NOT how many summaries came back
+     * (SHY-0424). The list is capped for readability; deriving "you have N
+     * open" from its length told somebody with eight that they had five.
+     */
+    @Test
+    fun `the open COUNT is read from the server, not from the list length`() =
+        runTest {
+            coEvery { api.get("/api/support-tickets/mine/open") } returns
+                JSONObject(
+                    """{"tickets":[{"ticketId":"t-1","category":"other","summary":"a"}],"openCount":8}""",
+                )
+
+            val open = repo.openTickets()
+
+            assertEquals(8, open?.openCount)
+            assertEquals(1, open?.summaries?.size)
+        }
+
+    /**
+     * Absent, never guessed. The server omits the count when it could not
+     * determine one, and falling back to the list length is the defect itself.
+     */
+    @Test
+    fun `a missing count is null rather than the number of rows`() =
+        runTest {
+            coEvery { api.get("/api/support-tickets/mine/open") } returns
+                JSONObject("""{"tickets":[{"ticketId":"t-1","category":"other","summary":"a"}]}""")
+
+            assertNull(repo.openTickets()?.openCount)
         }
 
     /**
@@ -99,7 +132,10 @@ class SupportRepositoryImplTest {
         runTest {
             coEvery { api.get(any()) } returns JSONObject("""{"tickets":[]}""")
 
-            assertEquals(emptyList<OpenTicketSummary>(), repo.openTickets())
+            // Still a VIEW rather than null: the caller must tell "you have
+            // nothing open" from "we could not find out", and only the second
+            // is worth a log line.
+            assertEquals(emptyList<OpenTicketSummary>(), repo.openTickets()?.summaries)
         }
 
     /**
@@ -113,7 +149,14 @@ class SupportRepositoryImplTest {
             coEvery { api.get(any()) } returns
                 JSONObject("""{"tickets":[{"ticketId":"t-1","category":"quantum","summary":"?"}]}""")
 
-            assertEquals(SupportCategory.Other, repo.openTickets()?.get(0)?.category)
+            assertEquals(
+                SupportCategory.Other,
+                repo
+                    .openTickets()
+                    ?.summaries
+                    ?.get(0)
+                    ?.category,
+            )
         }
 
     /** A row with no id is a row nothing can be added to, so it is not offered. */
@@ -125,8 +168,8 @@ class SupportRepositoryImplTest {
 
             val open = repo.openTickets()
 
-            assertEquals(1, open?.size)
-            assertEquals("t-2", open?.get(0)?.ticketId)
+            assertEquals(1, open?.summaries?.size)
+            assertEquals("t-2", open?.summaries?.get(0)?.ticketId)
         }
 
     @Test

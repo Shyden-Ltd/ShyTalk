@@ -1,6 +1,6 @@
 ---
 id: SHY-0424
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-22
 priority: P3
@@ -138,3 +138,37 @@ with an honest warning, and a warning that undercounts is quietly dishonest.
 - The general lesson: a limit applied for READABILITY must never be read back as
   a fact about the world. The same shape appears anywhere a `.limit()` result
   is counted.
+
+## How it was built
+
+**Counted server-side.** `GET /support-tickets/mine/open` now returns
+`{ tickets, openCount, shownCount }`. The count comes from Firestore's
+`count()` aggregation — exact, one round trip, and no second unbounded read
+over somebody's whole support history. Verified against the emulator before
+building on it.
+
+**The cap is untouched.** The summaries are still capped at
+`MAX_OPEN_TICKETS_LISTED`; this story changed the COUNT, not what is shown.
+
+**A count that fails does not fail the listing.** The summaries are the useful
+part. `openTicketsPayload` — pure, and tested without standing firebase up —
+states the absence as `null` rather than falling back to the list length, which
+is the defect itself. It also refuses a count LOWER than what is on screen,
+reachable if a ticket resolves between the count and the list: telling somebody
+they have fewer requests than they can currently see is worse than saying
+nothing.
+
+The client carries `OpenTicketsView(summaries, openCount)` rather than a bare
+list, so the two numbers cannot be confused again by accident.
+
+### One AC met imperfectly, stated rather than hidden
+
+> If the count cannot be determined, the copy falls back to wording that makes
+> no numeric claim rather than guessing.
+
+`openRequestsTotal` falls back to **what is visible** rather than to no claim
+at all. Wording with no number would need a new string in 21 locales for a case
+that requires the Firestore aggregation itself to break. The fallback can only
+ever UNDERSTATE, never invent, and the path is documented at the property. If
+that trade is wrong, the fix is one string and a translation pass.
+

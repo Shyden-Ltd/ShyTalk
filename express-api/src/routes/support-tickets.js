@@ -30,6 +30,7 @@ const { requireAdmin } = require('../middleware/auth');
 const { deleteObject, getSignedGetUrl, getSignedPutUrl } = require('../utils/r2');
 const { writeLimiter } = require('../middleware/rateLimit');
 const log = require('../utils/log');
+const { openTicketsPayload } = require('../utils/support-open-tickets');
 
 const COLLECTION = 'supportTickets';
 
@@ -427,7 +428,34 @@ router.get('/support-tickets/mine/open', async (req, res) => {
         createdAt: d.createdAt ?? null,
       }));
 
-    res.json({ tickets });
+    // How many are actually open, which is NOT how many are shown (SHY-0424).
+    // The list above is capped at MAX_OPEN_TICKETS_LISTED for readability, and
+    // the client was deriving "You already have N requests open" from its
+    // length — so somebody with eight was told they had five.
+    //
+    // Counted server-side rather than by reading them all back: one
+    // aggregation, exact, and no second unbounded query over somebody's whole
+    // support history.
+    //
+    // A count that FAILS does not fail the listing. The summaries are the
+    // useful part, and `openTicketsPayload` states the absence rather than
+    // guessing from the list length, which is the defect itself.
+    let openCount = null;
+    try {
+      const counted = await db
+        .collection(COLLECTION)
+        .where('userId', '==', uniqueId)
+        .where('status', '==', STATUS_OPEN)
+        .count()
+        .get();
+      openCount = counted.data().count;
+    } catch (err) {
+      log.warn('support-tickets', 'Could not count open tickets; omitting the count', {
+        error: err.message,
+      });
+    }
+
+    res.json(openTicketsPayload(tickets, openCount));
   } catch (err) {
     log.error('support-tickets', 'Listing open tickets failed', { error: err.message });
     res.status(500).json({ error: 'Could not load your open requests' });

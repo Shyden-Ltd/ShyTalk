@@ -113,25 +113,31 @@ class SupportRepositoryImpl(
      * be able to tell "you have nothing open" from "we could not find out", and
      * only one of those is worth logging.
      */
-    override suspend fun openTickets(): List<OpenTicketSummary>? =
+    override suspend fun openTickets(): OpenTicketsView? =
         try {
             val resp = api.get(OPEN_TICKETS_PATH)
             val array = resp.optJSONArray("tickets") ?: JSONArray()
-            (0 until array.length()).mapNotNull { i ->
-                val obj = array.optJSONObject(i) ?: return@mapNotNull null
-                val id = obj.optString("ticketId")
-                // A row with no id is a row nothing can be added to, so it is
-                // dropped rather than offered as an unusable choice.
-                if (id.isBlank()) {
-                    null
-                } else {
-                    OpenTicketSummary(
-                        ticketId = id,
-                        category = SupportCategory.fromWire(obj.optString("category")),
-                        summary = obj.optString("summary"),
-                    )
+            // Absent rather than guessed: the server omits the count when it
+            // could not determine one, and falling back to the list length is
+            // the very defect SHY-0424 is about.
+            val count = if (resp.has("openCount") && !resp.isNull("openCount")) resp.optInt("openCount") else null
+            val summaries =
+                (0 until array.length()).mapNotNull { i ->
+                    val obj = array.optJSONObject(i) ?: return@mapNotNull null
+                    val id = obj.optString("ticketId")
+                    // A row with no id is a row nothing can be added to, so it is
+                    // dropped rather than offered as an unusable choice.
+                    if (id.isBlank()) {
+                        null
+                    } else {
+                        OpenTicketSummary(
+                            ticketId = id,
+                            category = SupportCategory.fromWire(obj.optString("category")),
+                            summary = obj.optString("summary"),
+                        )
+                    }
                 }
-            }
+            OpenTicketsView(summaries = summaries, openCount = count)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

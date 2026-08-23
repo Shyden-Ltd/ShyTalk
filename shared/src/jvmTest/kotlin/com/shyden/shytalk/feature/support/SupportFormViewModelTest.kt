@@ -2,6 +2,7 @@ package com.shyden.shytalk.feature.support
 
 import com.shyden.shytalk.data.repository.AttachmentType
 import com.shyden.shytalk.data.repository.OpenTicketSummary
+import com.shyden.shytalk.data.repository.OpenTicketsView
 import com.shyden.shytalk.data.repository.RaiseTicketOutcome
 import com.shyden.shytalk.data.repository.SupportCategory
 import com.shyden.shytalk.data.repository.SupportRepository
@@ -1162,6 +1163,55 @@ class SupportFormViewModelTest {
             viewModel.updateMessage("Now I have typed something")
             assertNull(viewModel.uiState.value.error)
         }
+    // ── SHY-0424: the heading is a COUNT, not a display cap ──
+
+    @Test
+    fun `the heading states how many are OPEN, not how many are shown`() =
+        runTest {
+            // The defect: `mine/open` caps its summaries at five for
+            // readability, and the heading was derived from that list's
+            // LENGTH — so somebody with eight open requests was told five.
+            val repo =
+                FakeSupportRepository().apply {
+                    open = (1..5).map { OpenTicketSummary("t$it", SupportCategory.Other, "s$it") }
+                    serverOpenCount = 8
+                }
+            val vm = SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
+            advanceUntilIdle()
+
+            assertEquals(8, vm.uiState.value.openRequestsTotal)
+            assertEquals(5, vm.uiState.value.openTickets.size)
+        }
+
+    @Test
+    fun `count and list agree when nobody is over the cap`() =
+        runTest {
+            val repo =
+                FakeSupportRepository().apply {
+                    open = listOf(OpenTicketSummary("t1", SupportCategory.Other, "s"))
+                    serverOpenCount = 1
+                }
+            val vm = SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
+            advanceUntilIdle()
+            assertEquals(1, vm.uiState.value.openRequestsTotal)
+        }
+
+    @Test
+    fun `a count the server could not determine falls back to what is visible`() =
+        runTest {
+            // Narrow and deliberate: reached only when the count aggregation
+            // itself failed. Saying nothing would need copy in 21 locales for
+            // a case that needs a Firestore aggregate to break, so the
+            // fallback is what we can actually see — never a larger guess.
+            val repo =
+                FakeSupportRepository().apply {
+                    open = listOf(OpenTicketSummary("t1", SupportCategory.Other, "s"))
+                    serverOpenCount = null
+                }
+            val vm = SupportFormViewModel(repo, SupportCategory.Other, emptyMap())
+            advanceUntilIdle()
+            assertEquals(1, vm.uiState.value.openRequestsTotal)
+        }
 }
 
 /**
@@ -1219,7 +1269,19 @@ private class FakeSupportRepository : SupportRepository {
         return outcome
     }
 
-    override suspend fun openTickets(): List<OpenTicketSummary>? = if (openLookupFails) null else open
+    /**
+     * How many the SERVER says are open, independent of how many this fake
+     * lists (SHY-0424). Defaults to agreeing with the list; a test that wants
+     * the over-the-cap case sets it higher.
+     */
+    var serverOpenCount: Int? = null
+
+    override suspend fun openTickets(): OpenTicketsView? =
+        if (openLookupFails) {
+            null
+        } else {
+            OpenTicketsView(summaries = open, openCount = serverOpenCount ?: open.size)
+        }
 
     override suspend fun addToTicket(
         ticketId: String,
