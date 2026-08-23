@@ -987,10 +987,10 @@
     <string name="connecting">Menghubungkan...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Kami tidak dapat menghubungi server ShyTalk. Ini bisa jadi karena koneksi Anda, atau karena kami — silakan coba lagi.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Jika Anda memerlukan bantuan, hubungi Shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Jika masalah terus berlanjut, hubungi Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Ini masalah kami, bukan Anda. Silakan coba lagi sebentar lagi.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Jika terus terjadi, itu dari pihak kami. Silakan coba lagi sebentar lagi.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Hubungi kami</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Ditolak</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Keterangan</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Perangkat ini sudah tertaut ke akun lain.\nHanya satu akun yang diperbolehkan per perangkat.\n\nUntuk dukungan, hubungi Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Perangkat ini sudah tertaut ke akun lain.\nHanya satu akun yang diperbolehkan per perangkat.\n\nUntuk dukungan, kunjungi shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Perangkat Tidak Didukung</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Sangat Pemalu ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Sangat Pemalu ✦ Seumur Hidup</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Untuk dukungan, hubungi Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Untuk bantuan, buka Pengaturan lalu pilih Hubungi kami.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Jika kamu tidak bisa mengajukan banding di sini, hubungi kami lewat shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Berakhir: %1$s</string>
     <!-- google-translated 2026-05-04 -->

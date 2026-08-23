@@ -987,10 +987,10 @@
     <string name="connecting">Verbinden...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">We konden de servers van ShyTalk niet bereiken. Dat kan aan je verbinding liggen, of aan ons — probeer het opnieuw.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Als je hulp nodig hebt, neem dan contact op met shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Als het probleem zich blijft voordoen, neem dan contact op met shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Dit ligt aan ons, niet aan jou. Probeer het zo meteen opnieuw.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Als het blijft gebeuren, ligt het aan ons. Probeer het zo meteen opnieuw.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Neem contact met ons op</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Geweigerd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Beschrijving</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Dit apparaat is al aan een ander account gekoppeld.\nEr is slechts één account per apparaat toegestaan.\n\nNeem voor ondersteuning contact op met verlegentalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Dit apparaat is al aan een ander account gekoppeld.\nEr is slechts één account per apparaat toegestaan.\n\nGa voor ondersteuning naar shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Apparaat niet ondersteund</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Superverlegen ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super verlegen ✦ Levenslang</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Neem voor ondersteuning contact op met shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Ga voor hulp naar Instellingen en kies Contact.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Kun je hier geen bezwaar maken? Neem contact op via shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Eindigt: %1$s</string>
     <!-- google-translated 2026-05-04 -->

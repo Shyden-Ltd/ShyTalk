@@ -987,10 +987,10 @@
     <string name="connecting">Ansluter...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Vi kunde inte nå ShyTalks servrar. Det kan bero på din anslutning, eller på oss – försök igen.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Om du behöver hjälp, kontakta shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Om problemet kvarstår, kontakta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Det här är vårt fel, inte ditt. Försök igen om en stund.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Om det fortsätter är det vårt fel. Försök igen om en stund.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Kontakta oss</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Nekad</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Beskrivning</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Den här enheten är redan länkad till ett annat konto.\nEndast ett konto är tillåtet per enhet.\n\nFör support, kontakta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Den här enheten är redan länkad till ett annat konto.\nEndast ett konto är tillåtet per enhet.\n\nBesök shyden.co.uk för support</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Enheten stöds inte</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Superblyg ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super Blyg ✦ Livstid</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">För support, kontakta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Gå till Inställningar och välj Kontakta oss för hjälp.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Om du inte kan överklaga här, kontakta oss via shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Slutar: %1$s</string>
     <!-- google-translated 2026-05-04 -->

@@ -987,10 +987,10 @@
     <string name="connecting">جارٍ الاتصال...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">تعذّر الوصول إلى خوادم ShyTalk. قد يكون السبب اتصالك، وقد يكون منّا — يُرجى المحاولة مرة أخرى.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">إذا كنت بحاجة إلى مساعدة، تواصل مع shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">إذا استمرت المشكلة، فاتصل بـ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">هذه مشكلتنا، وليست مشكلتك. يُرجى المحاولة مرة أخرى بعد قليل.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">إذا استمر الأمر، فالمشكلة لدينا. يُرجى المحاولة مرة أخرى بعد قليل.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">اتصل بنا</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">رفض</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">وصف</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">هذا الجهاز مرتبط بالفعل بحساب آخر.\nيُسمح بحساب واحد فقط لكل جهاز.\n\nللحصول على الدعم، اتصل بـ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">هذا الجهاز مرتبط بالفعل بحساب آخر.\nيُسمح بحساب واحد فقط لكل جهاز.\n\nللحصول على الدعم، تفضل بزيارة shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">الجهاز غير مدعوم</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">خجول للغاية ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">سوبر خجولة ✦ مدى الحياة</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">للحصول على الدعم، اتصل بـ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">للحصول على المساعدة، انتقل إلى الإعدادات واختر "اتصل بنا".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">إذا لم تتمكن من تقديم استئناف هنا، تواصل معنا عبر shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">ينتهي: %1$s</string>
     <!-- google-translated 2026-05-04 -->

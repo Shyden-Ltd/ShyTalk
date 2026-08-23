@@ -986,10 +986,10 @@
     <string name="connecting">De liaison...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Nous n'avons pas pu joindre les serveurs de ShyTalk. Cela peut venir de votre connexion, ou de nous — veuillez réessayer.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Si vous avez besoin d'aide, contactez shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Si le problème persiste, contactez shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Le problème vient de nous, pas de vous. Réessayez dans un instant.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Si cela persiste, cela vient de nous. Réessayez dans un instant.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contactez-nous</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1016,8 @@
     <string name="denied">Refusé</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Description</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Cet appareil est déjà associé à un autre compte.\nUn seul compte est autorisé par appareil.\n\nPour obtenir de l'aide, contactez shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Cet appareil est déjà associé à un autre compte.\nUn seul compte est autorisé par appareil.\n\nPour obtenir de l’aide, rendez-vous sur shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Appareil non pris en charge</string>
     <!-- google-translated 2026-05-04 -->
@@ -1257,8 +1257,10 @@
     <string name="super_shy_days">Super timide ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super timide ✦ À vie</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Pour obtenir de l'aide, contactez shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Pour obtenir de l’aide, allez dans Réglages et choisissez Nous contacter.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Si vous ne pouvez pas faire appel ici, contactez-nous via shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Fin : %1$s</string>
     <!-- google-translated 2026-05-04 -->

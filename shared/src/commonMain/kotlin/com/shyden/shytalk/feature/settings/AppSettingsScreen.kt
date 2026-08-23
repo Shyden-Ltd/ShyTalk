@@ -1744,6 +1744,8 @@ private fun AboutPage(
                             // a ticket an admin actions. It used to open a mail
                             // composer to an address that is not monitored --
                             // operator, 2026-08-20: there is no support mailbox.
+                            // SHY-0422 removed the address that was still printed
+                            // beside this row, which read as a mailto link.
                             onNavigateToSupport(SupportSource.Settings)
                         }.padding(vertical = 12.dp)
                         .testTag("settings_contactUsLink"),
@@ -1752,12 +1754,6 @@ private fun AboutPage(
                 Text(
                     text = stringResource(Res.string.contact_us),
                     style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "shytalk.help@gmail.com",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
                 )
             }
 

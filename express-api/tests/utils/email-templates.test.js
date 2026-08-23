@@ -1,10 +1,12 @@
+const emailTemplates = require('../../src/utils/email-templates');
+
 const {
   buildOtpEmail,
   buildLockoutEmail,
   buildResetEmail,
   buildDeletionScheduledEmail,
   buildDeletionCompleteEmail,
-} = require('../../src/utils/email-templates');
+} = emailTemplates;
 
 describe('Email Templates', () => {
   describe('buildOtpEmail', () => {
@@ -130,9 +132,12 @@ describe('Email Templates', () => {
       expect(result.html).toContain('#1a1a2e');
     });
 
-    it('should include support email', () => {
+    // SHY-0422: this person can still sign in -- the email itself tells them to,
+    // in order to cancel -- so the in-app queue is a route that works for them.
+    it('points to the in-app support form, which this person can still reach', () => {
       const result = buildDeletionScheduledEmail('2026-04-28');
-      expect(result.html).toContain('shytalk.help@gmail.com');
+      expect(result.html).toMatch(/Settings/);
+      expect(result.html).toMatch(/Contact us/i);
     });
   });
 
@@ -157,9 +162,57 @@ describe('Email Templates', () => {
       expect(result.html).toContain('#1a1a2e');
     });
 
-    it('should include support email for mistakes', () => {
+    // SHY-0422: the account is GONE. They cannot sign in, so they cannot open the
+    // in-app form -- the website is the only route left that anybody answers.
+    it('points to the website, the only route left once the account is gone', () => {
       const result = buildDeletionCompleteEmail();
-      expect(result.html).toContain('shytalk.help@gmail.com');
+      expect(result.html).toContain('shyden.co.uk');
+      expect(result.html).not.toMatch(/Settings/);
+    });
+  });
+
+  // SHY-0422: nobody reads shytalk.help@gmail.com. An email that names it sends
+  // somebody who needs help to a mailbox with no answer in it. The list of
+  // builders is DERIVED from the module, so a template added later is covered
+  // here the day it is written rather than the day somebody remembers.
+  describe('no template names an unmonitored mailbox', () => {
+    const SAMPLE_ARGS = {
+      buildOtpEmail: ['482715'],
+      buildLockoutEmail: [30],
+      buildResetEmail: ['482715'],
+      buildDeletionScheduledEmail: ['2026-04-28'],
+      buildDeletionCompleteEmail: [],
+      buildDataExportReadyEmail: ['https://example.invalid/export.zip', '2026-04-28'],
+    };
+
+    const exported = Object.entries(emailTemplates).filter(([, fn]) => typeof fn === 'function');
+
+    it('has sample arguments for every exported builder', () => {
+      const missing = exported.map(([name]) => name).filter((name) => !SAMPLE_ARGS[name]);
+      expect({ buildersWithoutSampleArgs: missing }).toEqual({ buildersWithoutSampleArgs: [] });
+    });
+
+    it('covers more than one builder, so an empty export list cannot pass this quietly', () => {
+      expect(exported.length).toBeGreaterThan(1);
+    });
+
+    exported.forEach(([name, fn]) => {
+      it(`${name} does not print the unmonitored address`, () => {
+        const { html, subject } = fn(...(SAMPLE_ARGS[name] || []));
+        expect({ template: name, html }).toEqual({
+          template: name,
+          html: expect.not.stringContaining('shytalk.help@gmail.com'),
+        });
+        expect(subject).not.toContain('shytalk.help@gmail.com');
+      });
+
+      it(`${name} does not offer a mailto link at all`, () => {
+        const { html } = fn(...(SAMPLE_ARGS[name] || []));
+        expect({ template: name, html }).toEqual({
+          template: name,
+          html: expect.not.stringContaining('mailto:'),
+        });
+      });
     });
   });
 

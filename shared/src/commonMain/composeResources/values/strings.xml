@@ -629,8 +629,8 @@
     <!-- Auth / Google Sign-In -->
     <string name="retrying">Retrying…</string>
     <string name="account_restricted">Account Restricted</string>
-    <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, contact shytalk.help@gmail.com</string>
-    <string name="contact_support_hint">If the problem persists, contact shytalk.help@gmail.com</string>
+    <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, visit shyden.co.uk</string>
+    <string name="contact_support_hint">If it keeps happening, it is our end. Please try again shortly.</string>
     <string name="sign_in_with_google">Sign in with Google</string>
     <string name="sign_in_with_apple">Sign in with Apple</string>
     <string name="sign_in_with_email">Sign in with Email</string>
@@ -657,7 +657,7 @@
     <!-- Degraded Mode -->
     <string name="technical_difficulties">Technical Difficulties</string>
     <string name="technical_difficulties_description">ShyTalk is currently experiencing technical difficulties. Some features may not work correctly. Services will be restored automatically.</string>
-    <string name="contact_support_help">If you need help, contact shytalk.help@gmail.com</string>
+    <string name="contact_support_help">This is our problem, not yours. Please try again shortly.</string>
 
     <!-- Force Update -->
     <string name="update_required">Update Required</string>
@@ -723,7 +723,8 @@
     <string name="suspension_also_device_and_network_banned">Your device and network have also been banned.</string>
 
     <!-- Support -->
-    <string name="support_contact">For support, contact shytalk.help@gmail.com</string>
+    <string name="support_contact">For help, go to Settings and choose Contact us.</string>
+    <string name="suspension_support_contact">If you cannot appeal here, get in touch through shyden.co.uk</string>
 
     <!-- ViewModel error messages (localized via UiText) -->
     <string name="error_submit_appeal">Failed to submit appeal</string>

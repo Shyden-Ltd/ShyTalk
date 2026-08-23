@@ -987,10 +987,10 @@
     <string name="connecting">Conectando...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Não conseguimos aceder aos servidores do ShyTalk. Pode ser a sua ligação, ou podemos ser nós — tente novamente.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Se precisar de ajuda, entre em contato com shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Se o problema persistir, entre em contato com shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">O problema é nosso, não seu. Tente novamente daqui a pouco.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Se continuar a acontecer, o problema é nosso. Tente novamente daqui a pouco.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contate-nos</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Negado</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Descrição</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Este dispositivo já está vinculado a outra conta.\nApenas uma conta é permitida por dispositivo.\n\nPara suporte, entre em contato com Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Este dispositivo já está vinculado a outra conta.\nApenas uma conta é permitida por dispositivo.\n\nPara obter apoio, visite shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Dispositivo não compatível</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Super Tímido ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super tímido ✦ para toda a vida</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Para suporte, entre em contato com shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Para obter ajuda, vá a Definições e escolha Contacte-nos.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Se não puder recorrer aqui, fale connosco através de shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Termina: %1$s</string>
     <!-- google-translated 2026-05-04 -->

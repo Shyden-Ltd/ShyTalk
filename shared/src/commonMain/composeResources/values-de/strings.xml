@@ -985,10 +985,10 @@
     <string name="connecting">Verbinden...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Wir konnten die Server von ShyTalk nicht erreichen. Das kann an deiner Verbindung liegen oder an uns – bitte versuche es erneut.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Wenn Sie Hilfe benötigen, wenden Sie sich an shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Wenn das Problem weiterhin besteht, wenden Sie sich an shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Das liegt an uns, nicht an dir. Bitte versuche es gleich noch einmal.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Wenn es weiter passiert, liegt es an uns. Bitte versuche es gleich noch einmal.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Kontaktieren Sie uns</string>
     <!-- google-translated 2026-05-04 -->
@@ -1015,8 +1015,8 @@
     <string name="denied">Bestritten</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Beschreibung</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Dieses Gerät ist bereits mit einem anderen Konto verknüpft.\nPro Gerät ist nur ein Konto zulässig.\n\nFür Support wenden Sie sich an shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Dieses Gerät ist bereits mit einem anderen Konto verknüpft.\nPro Gerät ist nur ein Konto zulässig.\n\nSupport findest du auf shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Gerät nicht unterstützt</string>
     <!-- google-translated 2026-05-04 -->
@@ -1258,8 +1258,10 @@
     <string name="super_shy_days">Superschüchtern ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super schüchtern ✦ Lebenslang</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Für Unterstützung wenden Sie sich an shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Hilfe findest du in den Einstellungen unter „Kontakt“.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Wenn du hier keinen Einspruch einlegen kannst, melde dich über shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Endet: %1$s</string>
     <!-- google-translated 2026-05-04 -->

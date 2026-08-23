@@ -987,10 +987,10 @@
     <string name="connecting">接続中...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">ShyTalk のサーバーに接続できませんでした。お客様の通信環境が原因の場合もあれば、当方が原因の場合もあります。もう一度お試しください。</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">サポートが必要な場合は、shytalk.help@gmail.com までご連絡ください。</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">問題が解決しない場合は、shytalk.help@gmail.com までご連絡ください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">これは当方の問題で、お客様の問題ではありません。しばらくしてからもう一度お試しください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">繰り返し発生する場合は当方の問題です。しばらくしてからもう一度お試しください。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">お問い合わせ</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">拒否されました</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">説明</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">このデバイスはすでに別のアカウントにリンクされています。\nデバイスごとに許可されるアカウントは 1 つだけです。\n\nサポートについては、shytalk.help@gmail.com にお問い合わせください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">このデバイスはすでに別のアカウントにリンクされています。\nデバイスごとに許可されるアカウントは 1 つだけです。\n\nサポートについては shyden.co.uk をご覧ください</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">サポートされていないデバイス</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">超シャイ ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">超シャイ ✦ 一生</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">サポートが必要な場合は、shytalk.help@gmail.com までお問い合わせください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">サポートが必要な場合は、設定から「お問い合わせ」を選択してください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">ここで異議を申し立てられない場合は、shyden.co.uk からご連絡ください</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">終了: %1$s</string>
     <!-- google-translated 2026-05-04 -->

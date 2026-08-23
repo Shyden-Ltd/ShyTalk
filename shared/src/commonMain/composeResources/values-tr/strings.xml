@@ -987,10 +987,10 @@
     <string name="connecting">Bağlanıyor...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">ShyTalk sunucularına ulaşamadık. Bunun nedeni bağlantınız olabilir ya da biz olabiliriz — lütfen tekrar deneyin.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Yardıma ihtiyacınız olursa, utangaçtalk.help@gmail.com ile iletişime geçin.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Sorun devam ederse, utangaçtalk.help@gmail.com ile iletişime geçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Bu bizim sorunumuz, sizin değil. Lütfen birazdan tekrar deneyin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Devam ederse sorun bizde demektir. Lütfen birazdan tekrar deneyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Bize Ulaşın</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Reddedildi</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Tanım</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Bu cihaz zaten başka bir hesaba bağlı.\nCihaz başına yalnızca bir hesaba izin verilir.\n\nDestek için utangaçtalk.help@gmail.com ile iletişime geçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Bu cihaz zaten başka bir hesaba bağlı.\nCihaz başına yalnızca bir hesaba izin verilir.\n\nDestek için shyden.co.uk adresini ziyaret edin</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Cihaz Desteklenmiyor</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Aşırı Utangaç ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Süper Utangaç ✦ Ömür Boyu</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Destek için utangaçtalk.help@gmail.com ile iletişime geçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Yardım için Ayarlar’a gidin ve Bize ulaşın’ı seçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Buradan itiraz edemiyorsanız shyden.co.uk üzerinden bize ulaşın</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Bitiş: %1$s</string>
     <!-- google-translated 2026-05-04 -->

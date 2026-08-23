@@ -1,7 +1,7 @@
 ---
 id: SHY-0422
-status: Draft
-owner: unassigned
+status: In Review
+owner: claude
 created: 2026-08-22
 priority: P1
 effort: M
@@ -155,6 +155,57 @@ help at all.
       screens.
 - [ ] Operator has confirmed what the signed-out and offline surfaces should
       offer.
+
+## What each surface offers now
+
+The AC asked for every surface that genuinely cannot reach the ticket queue to be
+listed here with the alternative it offers. The sweep found more surfaces than the
+four the story opened with — three emails and a second screen sharing one string —
+so this is the full list.
+
+| Surface | Can it reach the in-app form? | What it says now |
+| --- | --- | --- |
+| Settings row | Yes — it IS the form | The address printed beside it is gone; the row is a plain navigation row like Privacy Policy |
+| `support_contact` — WarningScreen | Yes, after acknowledging | "For help, go to Settings and choose Contact us." |
+| `suspension_support_contact` — SuspensionScreen | **No** — terminal screen | The appeal box on the same screen is the route; below it, shyden.co.uk for when appealing is refused or spent |
+| `contact_support_help` — DegradedModeScreen | **No** — the API is down | Names no contact route at all: "This is our problem, not yours. Please try again shortly." |
+| `contact_support_hint` — SignInScreen | **No** — the API is down | Same: "If it keeps happening, it is our end. Please try again shortly." |
+| `device_locked_description` — SignInScreen | **No** — cannot sign in | shyden.co.uk |
+| Deletion-scheduled email | Yes — the email itself says to sign in | Settings → Contact us |
+| Data-export-ready email | Yes | Settings → Contact us |
+| Deletion-complete email | **No** — the account is gone | shyden.co.uk, saying plainly that sign-in is no longer possible |
+
+**Nothing offers the mailbox.** The two outage screens deliberately name no route:
+the outage is ours and transient, and sending somebody to a contact channel during
+it invites a message about a problem that has already fixed itself. SHY-0344, a
+support page on the web, is still Draft; when it ships, the shyden.co.uk mentions
+above should point at it directly.
+
+## What the sweep found that the story did not
+
+- **Three transactional emails** printed the same address as a `mailto:` link, one
+  of them (`buildDataExportReadyEmail`) with no test coverage at all. The two tests
+  that did cover it asserted `toContain('shytalk.help@gmail.com')` — they pinned the
+  defect, so the fix could not land without replacing them.
+- **`support_contact` was shared by two screens with opposite reachability.**
+  Rewording it in place would have introduced a fresh dead end on SuspensionScreen,
+  which has no route to Settings. It was split into a second string across all 21
+  locales, and a pin keeps it split.
+- **`Constants.CONTACT_EMAIL`** had no production caller left — only a test
+  asserting the address was correct. Both are gone.
+
+## How it is kept out
+
+`SupportContactRouteWiringPinTest` (10 tests) and a class-level guard over every
+exported email template. Both derive their subject list from the source rather than
+naming files: the locale scan asserts it reached ≥21 files and found the base
+locale, and the email guard iterates `module.exports`, failing if a builder is
+added without sample arguments. Fixtures prove each scan can see what it looks for
+— an address in copy, an address quoted in KDoc, a seeded `@shytalk.dev` persona
+account, and a real address sitting beside an exempt one.
+
+Mutation-proven: re-adding `CONTACT_EMAIL` reddens two Kotlin tests; the address in
+any template reddens the JS guard.
 
 ## Notes
 

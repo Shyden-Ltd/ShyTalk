@@ -987,10 +987,10 @@
     <string name="connecting">Đang kết nối...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Chúng tôi không thể kết nối tới máy chủ của ShyTalk. Có thể do kết nối của bạn, cũng có thể do chúng tôi — vui lòng thử lại.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Nếu bạn cần trợ giúp, hãy liên hệ với nhút nhát.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Nếu sự cố vẫn tiếp diễn, hãy liên hệ với nhút nhát.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Đây là vấn đề của chúng tôi, không phải của bạn. Vui lòng thử lại sau giây lát.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Nếu vẫn tiếp diễn thì đó là do phía chúng tôi. Vui lòng thử lại sau giây lát.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Liên hệ với chúng tôi</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Từ chối</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Sự miêu tả</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Thiết bị này đã được liên kết với một tài khoản khác.\nMỗi thiết bị chỉ được phép có một tài khoản.\n\nĐể được hỗ trợ, hãy liên hệ nhút nhát.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Thiết bị này đã được liên kết với một tài khoản khác.\nMỗi thiết bị chỉ được phép có một tài khoản.\n\nĐể được hỗ trợ, hãy truy cập shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Thiết bị không được hỗ trợ</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Siêu nhút nhát ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Siêu Nhút Nhát ✦ Trọn Đời</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Để được hỗ trợ, hãy liên hệ với nhút nhát.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Để được trợ giúp, vào Cài đặt và chọn Liên hệ với chúng tôi.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Nếu bạn không thể kháng nghị ở đây, hãy liên hệ qua shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Kết thúc: %1$s</string>
     <!-- google-translated 2026-05-04 -->

@@ -987,10 +987,10 @@
     <string name="connecting">Подключение...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Не удалось связаться с серверами ShyTalk. Дело может быть в вашем подключении, а может быть в нас — попробуйте ещё раз.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Если вам нужна помощь, свяжитесь с shytalk.help@gmail.com.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Если проблема не устранена, свяжитесь с shytalk.help@gmail.com.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Это наша проблема, а не ваша. Повторите попытку чуть позже.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Если это повторяется, проблема на нашей стороне. Повторите попытку чуть позже.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Связаться с нами</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Отклонен</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Описание</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Это устройство уже связано с другой учетной записью.\nДля каждого устройства разрешена только одна учетная запись.\n\nДля поддержки обращайтесь по адресу shytalk.help@gmail.com.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Это устройство уже связано с другой учетной записью.\nДля каждого устройства разрешена только одна учетная запись.\n\nЗа поддержкой перейдите на shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Устройство не поддерживается</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Супер застенчивый ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Супер застенчивый ✦ На всю жизнь</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Для поддержки свяжитесь с shytalk.help@gmail.com.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">За помощью перейдите в Настройки и выберите «Связаться с нами».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Если подать апелляцию здесь нельзя, свяжитесь с нами через shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Окончание: %1$s</string>
     <!-- google-translated 2026-05-04 -->

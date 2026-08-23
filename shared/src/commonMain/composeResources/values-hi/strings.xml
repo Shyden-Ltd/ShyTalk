@@ -987,10 +987,10 @@
     <string name="connecting">कनेक्ट हो रहा है...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके। यह आपके कनेक्शन की वजह से हो सकता है, या हमारी वजह से — कृपया फिर से कोशिश करें।</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">यदि आपको सहायता चाहिए, तो shytalk.help@gmail.com पर संपर्क करें</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">यदि समस्या बनी रहती है, तो shytalk.help@gmail.com पर संपर्क करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">यह हमारी समस्या है, आपकी नहीं। कृपया थोड़ी देर बाद फिर कोशिश करें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">अगर ऐसा होता रहे, तो समस्या हमारी ओर से है। कृपया थोड़ी देर बाद फिर कोशिश करें।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">हमसे संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">अस्वीकृत</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">विवरण</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">यह डिवाइस पहले से ही किसी अन्य खाते से लिंक है।\nप्रति डिवाइस केवल एक खाते की अनुमति है।\n\nसहायता के लिए, Shytalk.help@gmail.com से संपर्क करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">यह डिवाइस पहले से ही किसी अन्य खाते से लिंक है।\nप्रति डिवाइस केवल एक खाते की अनुमति है।\n\nसहायता के लिए shyden.co.uk पर जाएँ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">उपकरण समर्थित नहीं</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">बहुत शर्मीला ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">सुपर शर्मीले ✦ लाइफटाइम</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">सहायता के लिए, shytalk.help@gmail.com पर संपर्क करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">सहायता के लिए, सेटिंग्स में जाएँ और "संपर्क करें" चुनें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">यदि आप यहाँ अपील नहीं कर सकते, तो shyden.co.uk के ज़रिए संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">समाप्त: %1$s</string>
     <!-- google-translated 2026-05-04 -->

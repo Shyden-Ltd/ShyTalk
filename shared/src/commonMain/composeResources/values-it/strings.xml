@@ -987,10 +987,10 @@
     <string name="connecting">Connessione...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">Non siamo riusciti a raggiungere i server di ShyTalk. Potrebbe essere la tua connessione, o potremmo essere noi: riprova.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Se hai bisogno di aiuto, contatta shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Se il problema persiste, contatta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">È un problema nostro, non tuo. Riprova tra poco.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Se continua a succedere, dipende da noi. Riprova tra poco.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contattaci</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Negato</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Descrizione</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Questo dispositivo è già collegato a un altro account.\nÈ consentito un solo account per dispositivo.\n\nPer supporto, contattare shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Questo dispositivo è già collegato a un altro account.\nÈ consentito un solo account per dispositivo.\n\nPer assistenza, visita shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Dispositivo non supportato</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Super timido ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super timido ✦ A vita</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Per supporto, contattare shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Per assistenza, vai in Impostazioni e scegli Contattaci.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Se non puoi fare ricorso qui, contattaci tramite shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Termina: %1$s</string>
     <!-- google-translated 2026-05-04 -->

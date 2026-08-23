@@ -105,7 +105,13 @@ describe('locale strings render as written', () => {
     // moved from 2,000 to 1,000 (operator), and a bound somebody only discovers
     // when they press Send costs them what they wrote — so the field shows the
     // count as they type.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([871]);
+    // 871 -> 872 on 2026-08-24: SHY-0422. `support_contact` -- "go to Settings
+    // and choose Contact us" -- was shared by WarningScreen and SuspensionScreen.
+    // The warned person lands back in the app; the suspended person is on a
+    // terminal screen with no route to Settings, so for them that sentence names
+    // somewhere they cannot get to. Split into `suspension_support_contact`,
+    // which points at the appeal box beside it and at shyden.co.uk beyond that.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([872]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

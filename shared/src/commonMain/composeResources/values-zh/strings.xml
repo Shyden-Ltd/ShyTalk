@@ -987,10 +987,10 @@
     <string name="connecting">正在连接...</string>
     <!-- claude-translated 2026-08-22 -->
     <string name="connection_trouble">我们无法连接到 ShyTalk 的服务器。可能是你的网络，也可能是我们这边的问题 — 请再试一次。</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">如果您需要帮助，请联系 shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">如果问题仍然存在，请联系 shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">这是我们的问题，不是你的。请稍后再试。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">如果一直发生，那是我们这边的问题。请稍后再试。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">联系我们</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">被拒绝</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">描述</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">此设备已链接到另一帐户。\n每台设备只允许使用一个帐户。\n\n如需支持，请联系 shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">此设备已链接到另一帐户。\n每台设备只允许使用一个帐户。\n\n如需支持，请访问 shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">不支持的设备</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">超级害羞 ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">超级害羞 ✦ 一生</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">如需支持，请联系 shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">如需帮助，请前往"设置"并选择"联系我们"。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">如果无法在此提出申诉，请通过 shyden.co.uk 与我们联系</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">结束：%1$s</string>
     <!-- google-translated 2026-05-04 -->
