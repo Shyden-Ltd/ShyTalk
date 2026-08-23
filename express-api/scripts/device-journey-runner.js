@@ -1164,13 +1164,33 @@ const PERMISSION_ALLOW = [
 ];
 // `async` because it AWAITS the tap. Its one caller awaits it in turn — an
 // unawaited tap is fire-and-forget on iOS, where tap is an HTTP round trip.
+/**
+ * Dismiss an overlay, treating "it went away by itself" as success (SHY-0447).
+ *
+ * `tapResolved` refuses to tap a control that vanished between being found and
+ * being tapped — SHY-0441, and right: on a screen that moved, the old point
+ * now holds something else. For an OVERLAY that reasoning inverts. The goal is
+ * "nothing is in the way", and a permission dialog that auto-answered or a
+ * reward sheet that dismissed itself has delivered exactly that. Failing the
+ * walk because the obstacle removed itself is failing for the outcome we
+ * wanted.
+ *
+ * Any other failure still propagates: a dialog that is present and cannot be
+ * dismissed is a real problem.
+ */
+async function dismissOverlay(device, node) {
+  try {
+    await tapResolved(device, node);
+  } catch (e) {
+    if (!/vanished between being found and being tapped/.test(e.message || '')) throw e;
+  }
+  return true;
+}
+
 async function handlePermissionDialog(device, nodes) {
   for (const id of PERMISSION_ALLOW) {
     const n = byId(nodes, id);
-    if (n) {
-      await tapResolved(device, n);
-      return true;
-    }
+    if (n) return dismissOverlay(device, n);
   }
   return false;
 }
@@ -1181,7 +1201,7 @@ async function handlePermissionDialog(device, nodes) {
 async function handleRewardCalendar(device, nodes) {
   const btn = byText(nodes, 'Later') || byTextContains(nodes, 'Claim Today');
   if (!btn) return false;
-  await tapResolved(device, btn);
+  await dismissOverlay(device, btn);
   await sleep(900);
   return true;
 }
@@ -1198,7 +1218,7 @@ async function handleOverlayBubbleDialog(device, nodes) {
   }
   const n = byTextContains(nodes, 'Not now');
   if (!n) return false;
-  await tapResolved(device, n);
+  await dismissOverlay(device, n);
   await sleep(800);
   return true;
 }
@@ -2862,6 +2882,7 @@ module.exports = {
   arrayContains,
   openPersonaPicker,
   dbWaitQuery,
+  dismissOverlay,
   pollGap,
   POLL_FLOOR_MS,
   IOS_POLL_GAP_MS,
