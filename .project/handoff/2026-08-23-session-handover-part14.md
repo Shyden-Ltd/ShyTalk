@@ -457,8 +457,16 @@ Built from the 08:30 run. Every screenshot on it was OPENED and read before the
 claim under it was written — the previous evidence page paired claims to
 filenames without looking and got one wrong, which is why it was rejected.
 
-J38 clips cut from the full recordings and sent to the operator: Android 225s,
-iPhone 125s.
+Both walks PLAY ON THE PAGE (operator asked, 2026-08-23): Android 225s, iPhone
+125s, cut to J38 from the full runs. Inlined as data URIs, not linked — the
+`assets` capability is not available to this account (only `artifact`,
+`downloads`, `mcp`, `self`), so an artifact asset store was not an option.
+
+Re-encoded to fit: 720px wide (half the 1440 source, so the support copy stays
+readable), CRF 20, 20fps, audio dropped. 3.6MB + 3.2MB, so ~9.2MB of base64
+against a 16MB page budget; the page is 9.7MB. The originals are untouched on
+disk. Both encodes were verified with `assertPlayable` before embedding — the
+same check the recorder now uses at stop.
 
 ### What it says
 
