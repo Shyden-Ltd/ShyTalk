@@ -1,6 +1,10 @@
 package com.shyden.shytalk.feature.support
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,12 +15,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,6 +31,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,14 +50,24 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.shyden.shytalk.core.platform.PickedMedia
 import com.shyden.shytalk.core.platform.PlatformMediaPicker
+import com.shyden.shytalk.core.ui.PlatformVideoPlayer
 import com.shyden.shytalk.data.repository.AttachmentType
 import com.shyden.shytalk.data.repository.OpenTicketSummary
 import com.shyden.shytalk.data.repository.SupportCategory
@@ -66,6 +83,9 @@ import com.shyden.shytalk.resources.report_guide_stuck_title
 import com.shyden.shytalk.resources.report_guide_title
 import com.shyden.shytalk.resources.support_attachment_add
 import com.shyden.shytalk.resources.support_attachment_limits
+import com.shyden.shytalk.resources.support_attachment_no_preview
+import com.shyden.shytalk.resources.support_attachment_preview_close
+import com.shyden.shytalk.resources.support_attachment_preview_open
 import com.shyden.shytalk.resources.support_attachment_remove
 import com.shyden.shytalk.resources.support_attachments_label
 import com.shyden.shytalk.resources.support_category_account
@@ -89,6 +109,7 @@ import com.shyden.shytalk.resources.support_open_requests_many
 import com.shyden.shytalk.resources.support_open_requests_more
 import com.shyden.shytalk.resources.support_open_requests_one
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.compose.resources.stringResource
 
 /** Test tags — the journey suite addresses these rather than the label text. */
@@ -97,6 +118,12 @@ const val TAG_SUPPORT_SEND = "support_send"
 const val TAG_SUPPORT_BACK = "support_back"
 const val TAG_SUPPORT_ADD_FILE = "support_addFile"
 const val TAG_SUPPORT_ATTACHMENT = "support_attachment"
+
+/** SHY-0433 — seeing what you attached before you send it. */
+const val TAG_SUPPORT_ATTACHMENT_THUMBNAIL = "support_attachmentThumbnail"
+const val TAG_SUPPORT_ATTACHMENT_DURATION = "support_attachmentDuration"
+const val TAG_SUPPORT_ATTACHMENT_PREVIEW = "support_attachmentPreview"
+const val TAG_SUPPORT_ATTACHMENT_PREVIEW_CLOSE = "support_attachmentPreviewClose"
 const val TAG_SUPPORT_LIMITS = "support_limits"
 const val TAG_SUPPORT_CHAR_COUNT = "support_charCount"
 const val TAG_SUPPORT_CATEGORY = "support_category"
@@ -246,6 +273,17 @@ fun SupportPage(
             }
         },
     ) { padding ->
+        // SHY-0433. Above every branch: a preview opened from the form must
+        // survive whatever the form does underneath it, and it is a Dialog, so
+        // it does not disturb the layout it sits over -- which matters on a
+        // screen whose geometry has already cost three readings (SHY-0419).
+        state.previewing?.let { previewing ->
+            AttachmentPreview(
+                attachment = previewing,
+                onDismiss = viewModel::dismissAttachmentPreview,
+            )
+        }
+
         if (state.submitted) {
             SentConfirmation(
                 // No bottom bar on this branch, so the inset is applied here.
@@ -376,10 +414,24 @@ fun SupportPage(
             Spacer(Modifier.height(20.dp))
 
             Attachments(
+                onPreview = viewModel::previewAttachment,
                 attachments = state.attachments,
                 isAttaching = state.isAttaching,
                 enabled = !state.isSubmitting,
-                onPicked = viewModel::attach,
+                // Everything the platform learned about the file travels
+                // together: the bytes to upload, the downscaled copy to SHOW,
+                // how long a video runs, and where it still is so it can be
+                // played (SHY-0433).
+                onPicked = { media, type ->
+                    viewModel.attach(
+                        displayName = media.displayName,
+                        contentType = type,
+                        bytes = media.bytes,
+                        durationMs = media.durationMs,
+                        previewBytes = media.previewBytes,
+                        localUri = media.localUri,
+                    )
+                },
                 onUnsupported = viewModel::refuseAttachmentType,
                 onRemove = viewModel::removeAttachment,
             )
@@ -740,9 +792,10 @@ private fun Attachments(
     attachments: List<PendingAttachment>,
     isAttaching: Boolean,
     enabled: Boolean,
-    onPicked: (String, AttachmentType, ByteArray, Long?) -> Unit,
+    onPicked: (PickedMedia, AttachmentType) -> Unit,
     onUnsupported: () -> Unit,
     onRemove: (String) -> Unit,
+    onPreview: (String) -> Unit,
 ) {
     Text(stringResource(Res.string.support_attachments_label), style = MaterialTheme.typography.titleSmall)
     // Stated BEFORE anybody picks. Learning a video was too long only after
@@ -760,9 +813,22 @@ private fun Attachments(
         Row(
             modifier = Modifier.fillMaxWidth().testTag(TAG_SUPPORT_ATTACHMENT),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(attachment.displayName, style = MaterialTheme.typography.bodySmall)
+            AttachmentThumbnail(
+                attachment = attachment,
+                onClick = { onPreview(attachment.r2Key) },
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                attachment.displayName,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            // Its own control, with its own hit area. SHY-0433 asks that
+            // removing cannot be triggered by the tap that opens the preview,
+            // and two separate targets is the only way to be sure of that.
             IconButton(onClick = { onRemove(attachment.r2Key) }, enabled = enabled) {
                 Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.support_attachment_remove))
             }
@@ -779,7 +845,7 @@ private fun Attachments(
                 if (type == null) {
                     onUnsupported()
                 } else {
-                    onPicked(media.displayName, type, media.bytes, media.durationMs)
+                    onPicked(media, type)
                 }
             }
         },
@@ -794,6 +860,181 @@ private fun Attachments(
             } else {
                 Icon(Icons.Filled.Add, contentDescription = null)
                 Text(stringResource(Res.string.support_attachment_add))
+            }
+        }
+    }
+}
+
+/**
+ * One attachment, shown rather than named — SHY-0433.
+ *
+ * A camera-roll filename is an opaque string the device chose, not something a
+ * person recognises. Picking the shot next to the one they meant is easy, and
+ * on this screen the cost of that is high: a support request that shows an
+ * admin the wrong screen looks answered when it is not, and a safety report
+ * carrying the wrong image sends something private to a stranger and cannot be
+ * recalled.
+ *
+ * A file with no preview still appears, still names itself, and can still be
+ * removed. It never blocks a send.
+ */
+@Composable
+private fun AttachmentThumbnail(
+    attachment: PendingAttachment,
+    onClick: () -> Unit,
+) {
+    val bitmap =
+        remember(attachment.r2Key) {
+            // Decoding can fail on a file the platform produced but this build
+            // cannot read. That is a missing thumbnail, not a lost attachment.
+            attachment.previewBytes?.let {
+                runCatching { it.decodeToImageBitmap() }.getOrNull()
+            }
+        }
+
+    Box(
+        modifier =
+            Modifier
+                .size(THUMBNAIL_SIZE)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onClick)
+                .testTag(TAG_SUPPORT_ATTACHMENT_THUMBNAIL),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = stringResource(Res.string.support_attachment_preview_open),
+                // Crop, so a very tall or very wide picture fills the square
+                // without being squashed into it.
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                stringResource(Res.string.support_attachment_no_preview),
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // A video has to be distinguishable from a still AT A GLANCE, so it
+        // carries both marks: the play badge says what it is, the duration says
+        // which one it is. Two clips recorded seconds apart differ by nothing
+        // else a person can see.
+        if (attachment.type.isVideo) {
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(28.dp),
+            )
+            attachment.durationMs?.let { duration ->
+                Text(
+                    formatDuration(duration),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier =
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp)
+                            .testTag(TAG_SUPPORT_ATTACHMENT_DURATION),
+                )
+            }
+        }
+    }
+}
+
+/** 56dp square. Big enough to recognise a screenshot, small enough for ten. */
+private val THUMBNAIL_SIZE = 56.dp
+
+/**
+ * `m:ss`, which reads the same in every locale we ship.
+ *
+ * Deliberately not a localised duration format: at these lengths — the cap is
+ * 30 seconds — "0:12" is what a person expects to see on a video, and a spelled
+ * out "12 seconds" is longer than the badge it has to fit in.
+ */
+internal fun formatDuration(durationMs: Long): String {
+    val totalSeconds = (durationMs / 1000).coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
+/**
+ * One attachment, full screen — SHY-0433.
+ *
+ * Reads only what is already on the device. Nothing is fetched and nothing is
+ * uploaded again: opening a preview and closing it must leave the form exactly
+ * as it was, including the half-written message.
+ */
+@Composable
+private fun AttachmentPreview(
+    attachment: PendingAttachment,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        // Full-bleed. A screenshot shown inside a dialog's default width is
+        // barely larger than the thumbnail it was opened from.
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .testTag(TAG_SUPPORT_ATTACHMENT_PREVIEW),
+            contentAlignment = Alignment.Center,
+        ) {
+            val localUri = attachment.localUri
+            if (attachment.type.isVideo && localUri != null) {
+                PlatformVideoPlayer(localUri = localUri, modifier = Modifier.fillMaxSize())
+            } else {
+                val bitmap =
+                    remember(attachment.r2Key) {
+                        attachment.previewBytes?.let {
+                            runCatching { it.decodeToImageBitmap() }.getOrNull()
+                        }
+                    }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = attachment.displayName,
+                        // FIT here, not Crop: this is the view somebody uses to
+                        // decide whether it is the right file, and cropping it
+                        // could hide the very corner that answers that.
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(
+                        stringResource(Res.string.support_attachment_no_preview),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+
+            // Both ways out: the platform back gesture that `Dialog` already
+            // honours, and a visible control for anybody who does not use it.
+            IconButton(
+                onClick = onDismiss,
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .testTag(TAG_SUPPORT_ATTACHMENT_PREVIEW_CLOSE),
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(Res.string.support_attachment_preview_close),
+                    tint = Color.White,
+                )
             }
         }
     }

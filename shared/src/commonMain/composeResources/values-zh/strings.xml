@@ -1699,6 +1699,12 @@
     <string name="support_attachments_label">添加截图或视频</string>
     <string name="support_attachment_add">添加文件</string>
     <string name="support_attachment_remove">移除</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">关闭预览</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">打开此文件</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">无预览</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">取消</string>
 

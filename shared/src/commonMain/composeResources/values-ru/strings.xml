@@ -1698,6 +1698,12 @@
     <string name="support_attachments_label">Добавьте скриншот или видео</string>
     <string name="support_attachment_add">Добавить файл</string>
     <string name="support_attachment_remove">Удалить</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Закрыть просмотр</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Открыть этот файл</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Без превью</string>
     <string name="age_restriction_sub_eighteen_confirm">Связаться с поддержкой</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Отмена</string>

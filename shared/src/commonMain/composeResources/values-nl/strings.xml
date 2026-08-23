@@ -1698,6 +1698,12 @@
     <string name="support_attachments_label">Voeg een screenshot of video toe</string>
     <string name="support_attachment_add">Bestand toevoegen</string>
     <string name="support_attachment_remove">Verwijderen</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Voorbeeld sluiten</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Dit bestand openen</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Geen voorbeeld</string>
     <string name="age_restriction_sub_eighteen_confirm">Contact opnemen met support</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Annuleren</string>

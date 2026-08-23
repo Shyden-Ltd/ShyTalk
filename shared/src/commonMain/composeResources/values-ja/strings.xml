@@ -1698,6 +1698,12 @@
     <string name="support_attachments_label">スクリーンショットまたは動画を追加</string>
     <string name="support_attachment_add">ファイルを追加</string>
     <string name="support_attachment_remove">削除</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">プレビューを閉じる</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">このファイルを開く</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">プレビューなし</string>
     <string name="age_restriction_sub_eighteen_confirm">サポートに問い合わせる</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">キャンセル</string>

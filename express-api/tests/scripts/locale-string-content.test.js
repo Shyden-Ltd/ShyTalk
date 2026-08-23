@@ -117,7 +117,10 @@ describe('locale strings render as written', () => {
     // title, intro, three steps, and the escape hatch's heading, body and
     // button. No step mentions reporting a ROOM, because there is no such
     // control (SHY-0440).
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([880]);
+    // 880 -> 883 on 2026-08-24: SHY-0433. An attachment was a filename and
+    // nothing else; it now shows a thumbnail and opens full screen. Three
+    // strings: open, close, and what a file with no thumbnail says instead.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([883]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

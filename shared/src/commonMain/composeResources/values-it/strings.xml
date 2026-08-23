@@ -1698,6 +1698,12 @@
     <string name="support_attachments_label">Aggiungi uno screenshot o un video</string>
     <string name="support_attachment_add">Aggiungi file</string>
     <string name="support_attachment_remove">Rimuovi</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Chiudi anteprima</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Apri questo file</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Nessuna anteprima</string>
     <string name="age_restriction_sub_eighteen_confirm">Contatta l'assistenza</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Annulla</string>

@@ -1697,6 +1697,12 @@
     <string name="support_attachments_label">Додайте знімок екрана або відео</string>
     <string name="support_attachment_add">Додати файл</string>
     <string name="support_attachment_remove">Видалити</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Закрити перегляд</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Відкрити цей файл</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Без попереднього перегляду</string>
     <string name="age_restriction_sub_eighteen_confirm">Звернутися до підтримки</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Скасувати</string>

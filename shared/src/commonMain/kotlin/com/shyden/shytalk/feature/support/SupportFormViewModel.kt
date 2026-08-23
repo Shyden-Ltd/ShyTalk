@@ -88,11 +88,42 @@ const val SUPPORT_NOTICE_PREVIEW_LIMIT = 2
  * [displayName] is theirs — the file they picked — so the list reads as the
  * things they chose. [r2Key] is the server's, and is what travels with the
  * ticket; it is never shown.
+ *
+ * SHY-0433 added everything below [r2Key]. Before it an attachment was a
+ * FILENAME and nothing else — `b93089b9-76dc-4369-b53f-387a7f177824-1_all_81669.jpg`
+ * — which nobody can read. On this screen that costs more than elsewhere: a
+ * support request showing an admin the wrong screenshot looks answered when it
+ * is not, and a safety report carrying the wrong image sends something private
+ * to a stranger and cannot be recalled.
  */
 data class PendingAttachment(
     val displayName: String,
     val r2Key: String,
-)
+    val type: AttachmentType,
+    /**
+     * A DOWNSCALED copy, made by the platform that still had the original —
+     * a thumbnail for an image, a poster frame for a video.
+     *
+     * Null when one could not be made, which is not a failure worth blocking a
+     * send for: the file still appears, still names itself and can still be
+     * removed. Never the original bytes: ten 5 MB images held for a screen that
+     * shows them 80 pixels wide is 50 MB for nothing.
+     */
+    val previewBytes: ByteArray? = null,
+    /** How long a video runs. Null for a still image. */
+    val durationMs: Long? = null,
+    /**
+     * Where the file still lives on the device, for playing a video full
+     * screen. Null for an image, which is drawn from [previewBytes].
+     */
+    val localUri: String? = null,
+) {
+    // ByteArray uses identity equality, which would make two attachments with
+    // the same preview unequal and every state comparison unreliable.
+    override fun equals(other: Any?): Boolean = other is PendingAttachment && other.r2Key == r2Key
+
+    override fun hashCode(): Int = r2Key.hashCode()
+}
 
 data class SupportFormUiState(
     val message: String = "",
@@ -146,6 +177,13 @@ data class SupportFormUiState(
     /** Uploaded and ready to travel with the ticket, in the order they were added. */
     val attachments: List<PendingAttachment> = emptyList(),
     val isAttaching: Boolean = false,
+    /**
+     * The attachment shown full screen right now — SHY-0433.
+     *
+     * Held as the attachment rather than its key so the preview cannot outlive
+     * the thing it shows: removing a file clears this in the same update.
+     */
+    val previewing: PendingAttachment? = null,
     val error: UiText? = null,
 ) {
     /**
@@ -293,6 +331,8 @@ class SupportFormViewModel(
         contentType: AttachmentType,
         bytes: ByteArray,
         durationMs: Long? = null,
+        previewBytes: ByteArray? = null,
+        localUri: String? = null,
     ) {
         val state = _uiState.value
         // The count is checked FIRST: with ten already attached nothing can be
@@ -325,7 +365,16 @@ class SupportFormViewModel(
                 _uiState.update {
                     it.copy(
                         isAttaching = false,
-                        attachments = it.attachments + PendingAttachment(displayName, handle.r2Key),
+                        attachments =
+                            it.attachments +
+                                PendingAttachment(
+                                    displayName = displayName,
+                                    r2Key = handle.r2Key,
+                                    type = contentType,
+                                    previewBytes = previewBytes,
+                                    durationMs = durationMs,
+                                    localUri = localUri,
+                                ),
                     )
                 }
             } else {
@@ -403,12 +452,36 @@ class SupportFormViewModel(
      * it, and it does not change what gets sent.
      */
     fun removeAttachment(r2Key: String) {
-        _uiState.update { it.copy(attachments = it.attachments.filterNot { a -> a.r2Key == r2Key }) }
+        _uiState.update {
+            it.copy(
+                attachments = it.attachments.filterNot { a -> a.r2Key == r2Key },
+                // A preview of a file that is no longer attached is a window
+                // onto something that does not exist.
+                previewing = it.previewing?.takeIf { p -> p.r2Key != r2Key },
+            )
+        }
         viewModelScope.launch {
             if (!supportRepository.deleteAttachment(r2Key)) {
                 logW(TAG, "Removed attachment was not deleted from storage: $r2Key")
             }
         }
+    }
+
+    /**
+     * Show one attachment full screen — SHY-0433.
+     *
+     * Reads only what is already on the device: nothing is fetched, and nothing
+     * is uploaded again. Silently does nothing for a key that is no longer
+     * attached, because the only way to ask for one is to have raced a removal.
+     */
+    fun previewAttachment(r2Key: String) {
+        _uiState.update { state ->
+            state.copy(previewing = state.attachments.firstOrNull { it.r2Key == r2Key })
+        }
+    }
+
+    fun dismissAttachmentPreview() {
+        _uiState.update { it.copy(previewing = null) }
     }
 
     fun reset() {
@@ -442,6 +515,7 @@ class SupportFormViewModel(
                         error = null,
                         awaitingDuplicateChoice = false,
                         reportGuideBypassed = false,
+                        previewing = null,
                     )
             }
         }

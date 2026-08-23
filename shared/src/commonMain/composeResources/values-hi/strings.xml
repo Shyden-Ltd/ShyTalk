@@ -1698,6 +1698,12 @@
     <string name="support_attachments_label">स्क्रीनशॉट या वीडियो जोड़ें</string>
     <string name="support_attachment_add">फ़ाइल जोड़ें</string>
     <string name="support_attachment_remove">हटाएँ</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">पूर्वावलोकन बंद करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">यह फ़ाइल खोलें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">कोई पूर्वावलोकन नहीं</string>
     <string name="age_restriction_sub_eighteen_confirm">सहायता से संपर्क करें</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">रद्द करें</string>

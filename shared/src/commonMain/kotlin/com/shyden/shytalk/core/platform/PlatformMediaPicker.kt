@@ -32,6 +32,26 @@ class PickedMedia(
      * honoured without it, so the ViewModel refuses and says so.
      */
     val durationMs: Long? = null,
+    /**
+     * A downscaled copy for showing this file on screen — SHY-0433.
+     *
+     * Made by the platform, because only it still holds the original in a form
+     * it can decode cheaply. A thumbnail for an image, a poster frame for a
+     * video. Null when one could not be produced, which is not fatal: the file
+     * is still attached, still named, and still removable.
+     *
+     * Never the original bytes. Ten 5 MB images kept for a row 80 pixels tall
+     * is 50 MB held for nothing, and the performance clause of SHY-0433 says
+     * the decode must not happen at full size in the first place.
+     */
+    val previewBytes: ByteArray? = null,
+    /**
+     * Where the file still is on the device, for playing a video full screen.
+     *
+     * A video cannot be played from a poster frame, and re-downloading what the
+     * person has locally would be absurd. Null for an image.
+     */
+    val localUri: String? = null,
 )
 
 /**

@@ -1698,6 +1698,12 @@
     <string name="support_attachments_label">스크린샷 또는 동영상 추가</string>
     <string name="support_attachment_add">파일 추가</string>
     <string name="support_attachment_remove">제거</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">미리보기 닫기</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">이 파일 열기</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">미리보기 없음</string>
     <string name="age_restriction_sub_eighteen_confirm">고객 지원 문의</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">취소</string>

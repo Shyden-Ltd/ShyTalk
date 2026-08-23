@@ -1,6 +1,6 @@
 ---
 id: SHY-0433
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P2
@@ -170,6 +170,77 @@ works. The gap is purely that the attachment is never SHOWN.
 - [ ] Proven on the real OnePlus and the real iPhone: thumbnails visible, image
       opens, video plays with sound, form intact on return.
 - [ ] Screenshots in the evidence page show thumbnails rather than filenames.
+
+## How it was built
+
+### No new dependency
+
+Neither half needed one. Thumbnails decode through `decodeToImageBitmap()`,
+which Compose Multiplatform already provides in `commonMain`. Playback is
+`VideoView` on Android and `AVPlayerViewController` on iOS — both framework
+classes — behind an `expect`/`actual` `PlatformVideoPlayer`, following the
+`PlatformWebView` pattern this repo already uses. ExoPlayer would be the reach
+for a streaming product; this plays one local file once, to confirm it is the
+right one, and a media library for that is paid for in every build and every
+APK.
+
+### The preview is made by the platform, and it is small
+
+`PickedMedia` gained `previewBytes` and `localUri`, because only the platform
+still holds the original in a form it can decode cheaply. By the time bytes
+reach the ViewModel the container is all that is left.
+
+Android decodes through `inSampleSize`, which is the performance clause of this
+ticket made literal: `decodeByteArray` without it allocates the FULL bitmap
+first — a 5 MB JPEG is roughly 50 MB of ARGB_8888 — and doing that ten times is
+how a list of thumbnails becomes an out-of-memory crash. The bounds pass reads
+only the header. iOS renders through `UIGraphicsImageRenderer` at the same
+1280px bound.
+
+Video poster frames come from `MediaMetadataRetriever.getFrameAtTime(0)` and
+`AVAssetImageGenerator` at time zero — the moment they pressed record, not a
+"representative" frame that can land inside a fade-in.
+`appliesPreferredTrackTransform` is set, or a clip shot in portrait comes back
+on its side and looks like our bug.
+
+### iOS keeps the file it used to delete
+
+Measuring a video's duration already wrote it to the temporary directory and
+then removed it. A video cannot be played from a poster frame, and the picker
+hands over bytes rather than a photo-library URL, so there is nowhere else to
+play it from — the file is now written once and kept, and duration, poster
+frame and playback all come from that one write.
+
+It lives in `NSTemporaryDirectory()`, which exists for precisely this and which
+iOS purges on its own schedule. The alternative — deleting it when the
+attachment is removed — means owning a lifetime across a ViewModel, a screen and
+a picker to save a file the OS will clear anyway.
+
+### The two taps cannot be confused
+
+The thumbnail and the remove control are separate targets with separate hit
+areas. "Removing an attachment cannot be triggered by the tap that opens the
+preview" is not something a stopPropagation can be trusted with.
+
+### What a missing thumbnail costs
+
+Nothing. `previewBytes` is null, the row shows "No preview" and the filename,
+and the file is still attached, still removable and still sent. Decoding is
+wrapped in `runCatching` for the same reason: a file the platform produced but
+this build cannot decode is a missing picture, not a lost attachment.
+
+### Duration
+
+`m:ss`, deliberately not a localised duration format. The cap is 30 seconds, so
+every value is `0:xx`; "12 seconds" spelled out is longer than the badge it has
+to fit inside, and reads worse on a video than the form everybody already knows.
+
+## What is left for the device run
+
+Everything above is unit-proven and compiles for all four targets, but this is a
+UI ticket: the thumbnails, the play badge, the duration and the full-screen
+preview all need eyes on a real phone, and the video has to be *heard*. That is
+part of the journey evidence run, not something assertions can close.
 
 ## Notes
 

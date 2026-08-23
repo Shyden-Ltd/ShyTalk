@@ -156,6 +156,147 @@ class SupportFormViewModelTest {
             assertNull(repo.lastContext["raisedAfterReportGuide"])
         }
 
+    // ─── SHY-0433: seeing what you attached ─────────────────────
+
+    /**
+     * An attachment is a FILENAME today:
+     *
+     *     b93089b9-76dc-4369-b53f-387a7f177824-1_all_81669.jpg
+     *
+     * Nobody can tell what that is. It matters more here than on most screens:
+     * a support request shows an admin the wrong screenshot and looks answered
+     * when it is not, and a safety report attaching the wrong image sends
+     * something private to a stranger and cannot be recalled.
+     */
+    @Test
+    fun `an attachment keeps what it needs to be SHOWN`() =
+        runTest(testDispatcher) {
+            val preview = byteArrayOf(1, 2, 3)
+            viewModel.attach(
+                displayName = "screenshot.jpg",
+                contentType = AttachmentType.Jpeg,
+                bytes = ByteArray(1024),
+                previewBytes = preview,
+            )
+            advanceUntilIdle()
+            val attached =
+                viewModel.uiState.value.attachments
+                    .single()
+            assertEquals(AttachmentType.Jpeg, attached.type)
+            assertEquals(preview.toList(), attached.previewBytes?.toList())
+        }
+
+    @Test
+    fun `a video keeps its duration, so it can be told apart at a glance`() =
+        runTest(testDispatcher) {
+            viewModel.attach(
+                displayName = "clip.mp4",
+                contentType = AttachmentType.Mp4,
+                bytes = ByteArray(1024),
+                durationMs = 12_000,
+                previewBytes = byteArrayOf(9),
+            )
+            advanceUntilIdle()
+            val attached =
+                viewModel.uiState.value.attachments
+                    .single()
+            assertEquals(AttachmentType.Mp4, attached.type)
+            assertEquals(12_000, attached.durationMs)
+        }
+
+    @Test
+    fun `a file whose thumbnail could not be made is still attached and still named`() =
+        runTest(testDispatcher) {
+            // "still appears, still names itself, and can still be removed -- it
+            // never blocks sending."
+            viewModel.attach(
+                displayName = "odd.jpg",
+                contentType = AttachmentType.Jpeg,
+                bytes = ByteArray(1024),
+                previewBytes = null,
+            )
+            advanceUntilIdle()
+            val attached =
+                viewModel.uiState.value.attachments
+                    .single()
+            assertEquals("odd.jpg", attached.displayName)
+            assertNull(attached.previewBytes)
+        }
+
+    @Test
+    fun `removing an attachment still works when it has a preview`() =
+        runTest(testDispatcher) {
+            viewModel.attach("a.jpg", AttachmentType.Jpeg, ByteArray(16), previewBytes = byteArrayOf(1))
+            advanceUntilIdle()
+            val key =
+                viewModel.uiState.value.attachments
+                    .single()
+                    .r2Key
+            viewModel.removeAttachment(key)
+            advanceUntilIdle()
+            assertTrue(
+                viewModel.uiState.value.attachments
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `opening a preview does not re-upload or duplicate anything`() =
+        runTest(testDispatcher) {
+            viewModel.attach("a.jpg", AttachmentType.Jpeg, ByteArray(16), previewBytes = byteArrayOf(1))
+            advanceUntilIdle()
+            val uploadsBefore = repo.urlRequests
+            viewModel.previewAttachment(
+                viewModel.uiState.value.attachments
+                    .single()
+                    .r2Key,
+            )
+            viewModel.dismissAttachmentPreview()
+            advanceUntilIdle()
+            assertEquals(uploadsBefore, repo.urlRequests)
+            assertEquals(1, viewModel.uiState.value.attachments.size)
+        }
+
+    @Test
+    fun `closing the preview leaves the message and the attachments alone`() =
+        runTest(testDispatcher) {
+            viewModel.updateMessage("half a sentence I have not finished")
+            viewModel.attach("a.jpg", AttachmentType.Jpeg, ByteArray(16), previewBytes = byteArrayOf(1))
+            advanceUntilIdle()
+            viewModel.previewAttachment(
+                viewModel.uiState.value.attachments
+                    .single()
+                    .r2Key,
+            )
+            viewModel.dismissAttachmentPreview()
+            advanceUntilIdle()
+            assertEquals("half a sentence I have not finished", viewModel.uiState.value.message)
+            assertEquals(1, viewModel.uiState.value.attachments.size)
+        }
+
+    @Test
+    fun `previewing a file that is no longer attached opens nothing`() =
+        runTest(testDispatcher) {
+            viewModel.previewAttachment("a-key-that-was-removed")
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.previewing)
+        }
+
+    @Test
+    fun `removing the file being previewed closes the preview`() =
+        runTest(testDispatcher) {
+            viewModel.attach("a.jpg", AttachmentType.Jpeg, ByteArray(16), previewBytes = byteArrayOf(1))
+            advanceUntilIdle()
+            val key =
+                viewModel.uiState.value.attachments
+                    .single()
+                    .r2Key
+            viewModel.previewAttachment(key)
+            viewModel.removeAttachment(key)
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.previewing)
+        }
+
     /** A form belonging to somebody who already has these requests open. */
     private fun formWith(vararg tickets: OpenTicketSummary): SupportFormViewModel {
         repo.open = tickets.toList()

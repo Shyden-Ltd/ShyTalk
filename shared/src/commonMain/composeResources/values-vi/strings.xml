@@ -1699,6 +1699,12 @@
     <string name="support_attachments_label">Thêm ảnh chụp màn hình hoặc video</string>
     <string name="support_attachment_add">Thêm tệp</string>
     <string name="support_attachment_remove">Xóa</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Đóng xem trước</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Mở tệp này</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Không có xem trước</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Hủy</string>
 
