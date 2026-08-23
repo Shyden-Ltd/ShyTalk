@@ -1,6 +1,6 @@
 ---
 id: SHY-0421
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-22
 priority: P1
@@ -159,3 +159,33 @@ inspection — the export looks complete.
 - The general lesson worth carrying: when a new user-writable field or
   collection appears, the question is not only "who writes it" but "who is
   supposed to READ it" — the admin queue, and the person's own export.
+
+## How it was built
+
+One bounded query beside `reports` and `appeals`, filtered on `userId` —
+ownership is the whole safety of this section, because a support queue holds
+other people's words. The section is written even when EMPTY, so "nothing to
+show" and "we did not look" are distinguishable in the export itself.
+
+A failure is recorded through the same `recordFailure` path the neighbouring
+queues use, so a short export is visible rather than silent. That is the point
+of the story: an export that quietly omits a category is a wrong answer given
+with confidence.
+
+**Redactions, decided deliberately:**
+
+| Field | Why it is not exported |
+| --- | --- |
+| `adminNote` | Written by staff ABOUT the case, not by the person. The other queues already draw this line, and a note can name or characterise somebody else. |
+| `resolvedBy` | Another person's identifier is their data, not the requester's. |
+| `userId` | The requester knows who they are; echoing an internal id into a file that leaves our control adds nothing. |
+
+Follow-ups (`messages`) ARE included — SHY-0396 added them to the same
+documents and they are equally the person's own writing. Attachments are
+**referenced, never embedded**: the bytes are as often photographs of other
+people as of the requester, and an export is a file that leaves our control, so
+a key and a content type say what was attached without shipping it.
+
+The mapper is pure and pinned separately, including that a legacy ticket from
+before this shipped still exports and that one malformed document cannot take
+somebody's whole subject access response down with it.
