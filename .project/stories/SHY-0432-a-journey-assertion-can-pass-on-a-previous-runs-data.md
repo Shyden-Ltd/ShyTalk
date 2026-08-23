@@ -1,6 +1,6 @@
 ---
 id: SHY-0432
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P2
@@ -131,3 +131,39 @@ makes the SEED unique but not the typed message that step 13 matches on.
   passing; what is wrong is that it would also pass if the feature were broken.
 - Related in kind to the per-platform persona split already made for these runs:
   both are about parallel, repeated runs sharing one emulator.
+
+## How it was built
+
+**Three constants, not one.** The seed message, `typed` and `followUp` were all
+fixed strings; only the seed carried `Date.now()`, and the seed is the one
+string the final assertion does not query by. Every one of them now carries a
+tag derived from the run id.
+
+Letters and digits only: the string goes through two shells on the way to the
+device, and spaces and colons are the only punctuation that path has been
+proven with. An empty tag THROWS — without that, every message collapses back
+to the constant it used to be and the journey loses its isolation with nothing
+to say so.
+
+**The assertion got stronger, not just narrower.** `snap.docs[0]` was the real
+trap: with leftovers present the query was non-empty by construction, so
+`snap.empty` could never fire and the `!== seededTicketId` check passed against
+a stranger's document.
+
+**Cleanup goes through the ADMIN endpoint**, never a Firestore write — a
+harness that reaches around the API stops exercising it. Enumerated from the
+admin list rather than `mine/open`, because the latter is capped at
+`MAX_OPEN_TICKETS_LISTED`, which is the very cap the residue was pushing the
+journey into: it cannot see far enough to clear it. Scoped three ways — this
+persona, this journey's prefix, and never the ticket just seeded. Step 1 now
+FAILS if the walk still starts at the cap.
+
+The cap is duplicated in the runner because requiring the route module would
+pull in firebase. A test reads the constant out of the route source and fails
+if the two disagree, anchored so a rename fails loudly rather than passing on
+a null.
+
+**Seven mutations, all caught:** an empty tag returning `''`, a message losing
+its tag, the sweep ignoring ownership, the sweep ignoring the prefix, the
+account regex losing its line anchor, an unknown persona returning `undefined`,
+and the cap drifting from the server's.

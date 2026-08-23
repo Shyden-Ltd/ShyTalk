@@ -1,6 +1,6 @@
 ---
 id: SHY-0442
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-23
 priority: P1
@@ -227,3 +227,53 @@ complete; it wants a device, not more reading.
   showed "Unable to Connect". The screenshot belonged to an API-only step and
   was not evidence of it — but the error screen it caught was real, and this is
   it.
+
+## Correction to this ticket
+
+**"There is no `AuthViewModelTest`. The most sensitive path in the app has no
+unit tests at all" was wrong, twice.** There is an 867-line mockk harness at
+`app/src/test/java/com/shyden/shytalk/feature/auth/AuthViewModelTest.kt`, and a
+1,581-line `AuthViewModelIdentityTest` in `commonTest` with hand-written fakes
+which was ALREADY pinning `isBackendUnreachable` for this exact path.
+
+I had looked in one source set. That is the same mistake this project has
+already written down once — an exhaustiveness claim needs EVERY source set,
+and `app/` is a source set. The effort was M largely because of a harness that
+already existed.
+
+## How it was built
+
+`BackendFailurePolicy`: two pure decisions — is the SESSION bad or the NETWORK,
+and is it worth asking again — kept out of the ViewModel so both can be pinned
+without standing five repositories up.
+
+The retry wraps the CALL, not `handleBackendError`: by the time that runs the
+operation is over and there is nothing left to retry. All three of its callers
+are cold-start calls and all three go through the wrapper, because a retry at
+one site would leave the other two able to produce the same wrong screen.
+
+Bounded on purpose — two extra attempts, linear backoff, under a second and a
+half in total. Retrying for ever would trade a wrong error screen for an
+endless spinner, which is worse: an error screen at least says something.
+
+An auth error is never retried. The classification MOVED out of
+`handleBackendError` rather than being copied, so the handler and the retry
+cannot disagree about the same message — two lists would drift, and the drift
+would look like a session cleared for a network blip.
+
+**The copy stops blaming the reader.** Twenty locales, hand-written and tagged
+`claude-translated` because Google's free quota was spent, applied through the
+project's own `upsertTranslation` so provenance and escaping stay its job.
+
+**Four mutations, all caught by the right tests:** a zero retry budget, auth
+errors becoming retryable, the wrapper not retrying, and the 401 regex losing
+its word boundaries (which would sign somebody out over an IPv6 address).
+
+### Still open
+
+- Twenty cold starts per device against a healthy stack, which is this
+  ticket's own acceptance bar, needs the devices.
+- Whether the first call is made before connectivity is ready or simply lost a
+  race. The handling is the same either way.
+- The Observability AC — nothing counts how often real people reach this
+  screen.

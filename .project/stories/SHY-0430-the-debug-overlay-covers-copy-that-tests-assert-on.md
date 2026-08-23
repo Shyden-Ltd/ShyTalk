@@ -1,6 +1,6 @@
 ---
 id: SHY-0430
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P3
@@ -118,3 +118,50 @@ to be read on that screen.
 
 - Found while re-running the SHY-0396 device journeys with screen recording, in
   the same walk that surfaced SHY-0428 and SHY-0429.
+
+## How it was built
+
+`WatermarkVerbosity`, an explicit parameter with **no default anywhere**. The
+phone renders `COMPACT`; the web badge stays `FULL`. A default is how two
+surfaces that were deliberately separated drift back together.
+
+`COMPACT` is title, status, build identity, account — four lines against
+eight. On the reported screen that clears the heading and the body paragraph
+entirely.
+
+**What stayed, and why it had to.** The badge is a TEST INTERFACE, not
+decoration. `signInAs` and J38's "the phone is signed in as the account we
+seeded" step both parse `UID: <digits>` straight out of it. Shrinking it
+without reading its consumers would have reddened ten journeys on hardware —
+which is exactly what nearly happened; the regression was caught before the
+device run, not by it.
+
+**What went.** Branch (the sha identifies the build authoritatively; a branch
+name moves and does not), device (the run report's header names it), locale
+and route, a journey marker no producer sets — and the display NAME, which was
+the badge's longest line, the one that forced its width, and the only
+genuinely personal field on it. On a non-seed device that is a real person's
+name burned into every frame of whatever the recording is shared with.
+
+**`signInAs` was rewritten rather than patched around.** It confirmed identity
+by finding a display-name PREFIX ("Alice (P-02") in the badge. It now asserts
+the ACCOUNT ID, which is what that check was always reaching for — a name
+prefix says nothing about the account underneath and two personas could share
+one. The id comes from `provision-test-personas.js`, the single place that
+decides them, so there is no second table to drift; an unknown persona throws
+rather than comparing the device against `undefined`, because a check against
+`undefined` still reports a pass.
+
+**Mutation-proven, and it caught a real hole.** `WatermarkFormatTest` proves
+the FORMATTER honours COMPACT and stays green when the caller asks for FULL —
+the badge could regrow over the app with a fully green suite. `assembleContent`
+is now `internal` so `PreviewWatermarkContentTest` pins the caller's choice;
+flipping that one argument reddens all five of its tests.
+
+### Honest scope
+
+"The overlay never covers a screen's own text" is not achievable for any
+overlay without reserving a band, and a reserved band would change the app's
+viewport — which would mask exactly the inset defects (SHY-0428, SHY-0419)
+this badge exists to help find. What is delivered is half the height, clear of
+the reported copy, with the personal field gone.
