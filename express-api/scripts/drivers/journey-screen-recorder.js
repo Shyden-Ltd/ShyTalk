@@ -51,7 +51,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawn, execFileSync } = require('node:child_process');
+const { spawn, spawnSync, execFileSync } = require('node:child_process');
 
 /**
  * SIGINT, always. scrcpy traps it and finalises the container; SIGKILL cannot
@@ -479,7 +479,7 @@ function androidRecorder({ serial, file, watch }) {
       // Shared with the iOS recorder rather than reimplemented: both write a
       // container header before the first frame, so both need GROWTH rather
       // than the first byte, and one rule should have one implementation.
-      await waitForGrowth(file, child, () => stderr, {
+      await waitForContainerHeader(file, child, () => stderr, {
         timeoutMs: RECORDING_READY_TIMEOUT_MS,
       }).catch(async (e) => {
         // scrcpy never came up. Put the power setting back, and REAP the
@@ -502,11 +502,14 @@ function androidRecorder({ serial, file, watch }) {
       if (!child) return null;
       await stopGracefully(child);
       child = null;
-      // Existence AND size. scrcpy writes the header immediately, so a file
-      // appearing proves only that it opened one.
-      if (!fs.existsSync(file) || fs.statSync(file).size === 0) {
+      // The artefact, not a proxy for it. scrcpy writes the header
+      // immediately, so both "the file exists" and "its size is not zero" are
+      // TRUE of a recording that captured nothing at all — which is exactly
+      // what a settled screen produces.
+      if (!fs.existsSync(file)) {
         throw new Error(`scrcpy produced no video at ${file}:\n${stderr}`);
       }
+      assertPlayable(file, { readStderr: () => stderr });
       return file;
     },
   };
@@ -568,10 +571,13 @@ function iosRecorder({ device, file, port, fps }) {
  * minimal source. It answers the actual question, "has the encoder received
  * anything", without depending on buffering at all.
  *
- * scrcpy has no equivalent channel, so it keeps `waitForGrowth`. The RULE is
- * the same for both — wait for evidence frames are arriving — but the best
- * available evidence differs by tool, and forcing one mechanism onto both is
- * what produced this bug.
+ * scrcpy has no equivalent channel. It used to keep `waitForGrowth`, and that
+ * was the same bug wearing the other platform's clothes: Android's encoder
+ * emits nothing at all while the screen is still, so the wait failed on a
+ * phone sitting at sign-in. It now waits for the CONTAINER HEADER, which
+ * proves the capture session is up, and the frames claim moved to
+ * `assertPlayable` at stop where the artefact itself can answer it
+ * (SHY-0445).
  *
  * @param {import('node:child_process').ChildProcess} child
  * @param {() => string} readStderr
@@ -646,6 +652,126 @@ function waitForFfmpegFrames(child, readStderr, { timeoutMs = 30_000 } = {}) {
  * @param {{timeoutMs?: number, pollMs?: number}} [o]
  * @returns {Promise<void>}
  */
+/**
+ * Wait until the recorder has OPENED its container — the file exists and has
+ * a header — rather than until frames have arrived.
+ *
+ * This replaces `waitForGrowth` on the scrcpy path, which was the wrong
+ * question (SHY-0445).
+ *
+ * Android's screen encoder emits frames only when the display CHANGES. On a
+ * settled screen it produces nothing at all: measured on a real OnePlus, the
+ * mp4 sat at exactly 48 bytes for ten seconds and an mkv was never even
+ * created. So "did bytes arrive in the first 20 seconds" is false for a phone
+ * that is simply sitting still, which is the state every walk STARTS in. The
+ * runner failed with "no growing video" against a recorder that was working
+ * perfectly, and had passed the night before only because that run happened to
+ * begin mid-walk.
+ *
+ * The file's header is the earliest honest evidence available here. scrcpy
+ * opens the muxer only after negotiating the video stream with the device, so
+ * a header on disk proves the capture SESSION is up — which is what the wait
+ * exists for. It is not evidence of frames, and this function does not claim
+ * to be; that claim belongs to [assertPlayable] at stop, where it can be
+ * checked against the artefact instead of guessed at from a size.
+ *
+ * Its stdout is no help: scrcpy block-buffers INFO lines through a pipe and
+ * flushes the whole block at exit, 9s after recording began when measured on
+ * 4.1.
+ */
+function waitForContainerHeader(
+  file,
+  child,
+  readStderr,
+  { timeoutMs = 20_000, pollMs = 200 } = {},
+) {
+  return new Promise((resolve, reject) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return reject(
+        new Error(
+          `recorder exited with ${child.exitCode ?? child.signalCode} before recording:\n` +
+            readStderr(),
+        ),
+      );
+    }
+    const deadline = Date.now() + timeoutMs;
+    let died = false;
+    child.once('exit', (code) => {
+      died = true;
+      reject(new Error(`recorder exited with ${code} before recording:\n${readStderr()}`));
+    });
+    const tick = () => {
+      if (died) return;
+      let size = 0;
+      try {
+        size = fs.statSync(file).size;
+      } catch (_e) {
+        /* not created yet */
+      }
+      if (size > 0) return resolve();
+      if (Date.now() > deadline) {
+        return reject(
+          new Error(
+            `recorder opened no container at ${file} within ${timeoutMs}ms:\n${readStderr()}`,
+          ),
+        );
+      }
+      setTimeout(tick, pollMs).unref?.();
+    };
+    tick();
+  });
+}
+
+/**
+ * Refuse to hand back a recording that will not play (SHY-0445).
+ *
+ * The start gate above deliberately proves only that the container was
+ * opened. THIS is where the actual claim is checked, against the actual file:
+ * ffprobe must find a video stream and a positive duration.
+ *
+ * That is strictly stronger than the size check it replaces, and it catches
+ * two failures a size cannot:
+ *
+ * - a header-only file, 48 bytes, which is what a recorder that captured
+ *   NOTHING leaves behind — `size !== 0` called that a pass;
+ * - a truncated mp4 whose `moov` atom was never written, which is what a
+ *   SIGKILLed recorder leaves. ffprobe says "moov atom not found" where a
+ *   size check sees twenty perfectly good megabytes.
+ *
+ * Both were reachable before this existed, and both produce a report that
+ * links a video nobody can open.
+ */
+function assertPlayable(file, { readStderr = () => '' } = {}) {
+  const ffprobe = resolveBinary('ffprobe', 'Install it with: brew install ffmpeg');
+  const probe = spawnSync(
+    ffprobe,
+    [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-show_entries',
+      'stream=codec_type',
+      '-of',
+      'default=noprint_wrappers=1',
+      file,
+    ],
+    { encoding: 'utf8' },
+  );
+  const out = `${probe.stdout || ''}${probe.stderr || ''}`;
+  if (probe.status !== 0) {
+    throw new Error(`recording at ${file} will not play:\n${out}\n${readStderr()}`);
+  }
+  if (!/codec_type=video/.test(out)) {
+    throw new Error(`recording at ${file} carries no video stream:\n${out}`);
+  }
+  const duration = Number((/duration=([\d.]+)/.exec(out) || [])[1]);
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new Error(`recording at ${file} has no duration — it captured nothing:\n${out}`);
+  }
+  return { duration };
+}
+
 function waitForGrowth(file, child, readStderr, { timeoutMs = 20_000, pollMs = 200 } = {}) {
   return new Promise((resolve, reject) => {
     // Already gone before we could listen. `exit` has fired and will not fire
@@ -701,6 +827,8 @@ module.exports = {
   desiredStayOn,
   STAY_ON_USB,
   waitForGrowth,
+  waitForContainerHeader,
+  assertPlayable,
   waitForFfmpegFrames,
   BINARY_SEARCH_PATHS,
   RECORDING_STOP_SIGNAL,

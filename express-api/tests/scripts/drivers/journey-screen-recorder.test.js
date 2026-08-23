@@ -40,6 +40,8 @@ const {
   desiredStayOn,
   STAY_ON_USB,
   waitForGrowth,
+  waitForContainerHeader,
+  assertPlayable,
   waitForFfmpegFrames,
   createRecorder,
   RECORDING_STOP_SIGNAL,
@@ -620,5 +622,141 @@ describe('createRecorder', () => {
       underOutDir: rec.file.startsWith(tmp),
       ext: path.extname(rec.file),
     }).toEqual({ underOutDir: true, ext: '.mp4' });
+  });
+});
+
+// ── SHY-0445: a still screen is not a broken recorder ─────────────
+//
+// Android's screen encoder emits frames only when the display CHANGES.
+// Measured on a real OnePlus: on a settled screen the mp4 sat at exactly 48
+// bytes for ten seconds, and an mkv was never created at all. So the old
+// start gate -- "did the file GROW in the first 20 seconds" -- was false for
+// a phone sitting still, which is the state every walk begins in. The runner
+// aborted with "no growing video" against a recorder that was working, and
+// had passed the previous night only because that run started mid-walk.
+//
+// The gate now proves the CONTAINER was opened, and the frames claim moved
+// to stop, where the artefact itself can answer it.
+
+describe('waitForContainerHeader', () => {
+  const liveChild = () => spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)']);
+
+  test('resolves on a file that never grows — the settled-screen case', async () => {
+    // THE regression test. Put waitForGrowth back and this hangs until it
+    // times out, which is precisely what happened on the device.
+    const child = liveChild();
+    const target = path.join(tmp, 'header-only.mp4');
+    fs.writeFileSync(target, Buffer.alloc(48));
+    try {
+      await expect(
+        waitForContainerHeader(target, child, () => '', { timeoutMs: 2000, pollMs: 50 }),
+      ).resolves.toBeUndefined();
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  test('waits for the header rather than resolving on an absent file', async () => {
+    const child = liveChild();
+    const target = path.join(tmp, 'late-header.mp4');
+    setTimeout(() => fs.writeFileSync(target, Buffer.alloc(48)), 300);
+    try {
+      await expect(
+        waitForContainerHeader(target, child, () => '', { timeoutMs: 4000, pollMs: 50 }),
+      ).resolves.toBeUndefined();
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  test('a container that never opens is a failure, not a hang', async () => {
+    const child = liveChild();
+    try {
+      await expect(
+        waitForContainerHeader(path.join(tmp, 'never-opened.mp4'), child, () => 'why it died', {
+          timeoutMs: 600,
+          pollMs: 50,
+        }),
+      ).rejects.toThrow(/opened no container/);
+    } finally {
+      child.kill('SIGKILL');
+    }
+  });
+
+  test('a recorder that dies first fails immediately, carrying its own output', async () => {
+    const child = spawn(process.execPath, ['-e', 'process.exit(3)']);
+    await expect(
+      waitForContainerHeader(path.join(tmp, 'dead.mp4'), child, () => 'scrcpy said no', {
+        timeoutMs: 5000,
+        pollMs: 50,
+      }),
+    ).rejects.toThrow(/scrcpy said no/);
+  });
+});
+
+describe('assertPlayable', () => {
+  // Real encodes, not fixtures: ffmpeg makes a genuine one-second mp4 and the
+  // corruption cases are made by damaging that real file. A hand-written byte
+  // blob would only prove ffprobe rejects a hand-written byte blob.
+  const { spawnSync } = require('node:child_process');
+  let good;
+  let ffmpegAvailable = true;
+
+  beforeAll(() => {
+    good = path.join(tmp, 'real-one-second.mp4');
+    const r = spawnSync(
+      resolveBinary('ffmpeg', 'brew install ffmpeg'),
+      [
+        '-y',
+        '-f',
+        'lavfi',
+        '-i',
+        'testsrc=size=160x120:rate=10:duration=1',
+        '-pix_fmt',
+        'yuv420p',
+        good,
+      ],
+      { encoding: 'utf8' },
+    );
+    ffmpegAvailable = r.status === 0 && fs.existsSync(good);
+  });
+
+  test('a real recording passes and reports its duration', () => {
+    expect(ffmpegAvailable).toBe(true);
+    const { duration } = assertPlayable(good);
+    expect(duration).toBeGreaterThan(0);
+  });
+
+  test('a header-only file is refused — the settled-screen artefact', () => {
+    // 48 bytes is not a hypothetical: it is exactly what scrcpy left on disk
+    // after ten seconds against a still OnePlus screen.
+    const headerOnly = path.join(tmp, 'header-only-probe.mp4');
+    fs.writeFileSync(headerOnly, fs.readFileSync(good).subarray(0, 48));
+    expect(() => assertPlayable(headerOnly)).toThrow(/will not play/);
+  });
+
+  test('a truncated recording is refused — the SIGKILL artefact', () => {
+    // An mp4 loses its moov atom when the encoder is killed instead of asked
+    // to stop. It keeps a plausible size and is completely unplayable, which
+    // is the failure `size !== 0` could never see.
+    const truncated = path.join(tmp, 'truncated.mp4');
+    const whole = fs.readFileSync(good);
+    fs.writeFileSync(truncated, whole.subarray(0, Math.floor(whole.length * 0.6)));
+    expect(() => assertPlayable(truncated)).toThrow(/will not play|no video stream|no duration/);
+  });
+
+  test('a file with no video stream is refused', () => {
+    const audioOnly = path.join(tmp, 'audio-only.m4a');
+    const r = spawnSync(
+      resolveBinary('ffmpeg', 'brew install ffmpeg'),
+      ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', audioOnly],
+      { encoding: 'utf8' },
+    );
+    expect(r.status).toBe(0);
+    expect(() => assertPlayable(audioOnly)).toThrow(/no video stream/);
+  });
+
+  test('a missing file is refused rather than treated as fine', () => {
+    expect(() => assertPlayable(path.join(tmp, 'not-here-at-all.mp4'))).toThrow();
   });
 });
