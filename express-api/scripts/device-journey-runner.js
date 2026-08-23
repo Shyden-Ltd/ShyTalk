@@ -1035,6 +1035,29 @@ async function waitForText(device, sub, timeoutMs = 8000) {
 // Persona picker rows carry NO testTag — only visible text (display name,
 // email, cohort). Match the unique email and scroll the dialog when the row
 // sits below the fold (P-10+ start off-screen).
+/**
+ * Open the dev persona picker, and wait for the picker ITSELF (SHY-0447).
+ *
+ * This used to wait for the text "Sign in as test persona", which is the label
+ * of the BUTTON that opens the picker — on screen before the tap, during it,
+ * and after. So the wait returned instantly and had never once waited for the
+ * sheet.
+ *
+ * It went unnoticed while the walk was slow: `selectPersonaByText` sleeps
+ * 700ms per scroll and has eight attempts, so the sheet always arrived during
+ * the flailing. Once the Android screen read dropped from ~2332ms to ~65ms the
+ * walk got ahead of the animation and swiped at a SignIn screen with no list
+ * on it — every persona journey failing with "persona not found in picker
+ * after scrolling" while `persona_picker_open` sat in the dump.
+ *
+ * `persona_picker_list` exists only while the sheet is open
+ * (SignInScreen.kt), so it answers the question actually being asked.
+ */
+async function openPersonaPicker(device, timeoutMs = 8000) {
+  await tapId(device, 'persona_picker_open');
+  await waitForId(device, 'persona_picker_list', timeoutMs);
+}
+
 async function selectPersonaByText(device, needle) {
   const { w, h } = device.size();
   for (let i = 0; i < 8; i++) {
@@ -1404,8 +1427,7 @@ async function signInAs(device, reporter, ctx, email) {
     // back to SignIn). Detect that — the persona_picker_open button is back on
     // screen after the tap settles — and retry the whole open+select.
     for (let attempt = 1; attempt <= 3; attempt++) {
-      await tapId(device, 'persona_picker_open');
-      await waitForText(device, 'Sign in as test persona', 8000);
+      await openPersonaPicker(device);
       await selectPersonaByText(device, email);
       await sleep(2500);
       if (!byId(await dump(device), 'persona_picker_open')) {
@@ -2752,6 +2774,7 @@ module.exports = {
   byTextContains,
   summarizeScreen,
   arrayContains,
+  openPersonaPicker,
   pollGap,
   POLL_FLOOR_MS,
   dump,
