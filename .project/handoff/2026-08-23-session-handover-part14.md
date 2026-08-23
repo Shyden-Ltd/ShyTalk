@@ -614,3 +614,68 @@ bounces back to SignIn. That is where SHY-0446 should pick up.
 Also ruled out by measurement earlier, so nobody repeats it: the
 `forceStop`/`launch` race the driver's own comment blames does not reproduce —
 6/6 land in the app whether the gap is 0ms or 2000ms.
+
+---
+
+# PART 18 — element clicks, SHY-0426/0424, and the journey report
+
+**Report: https://claude.ai/code/artifact/fdae084f-cb2c-4c68-badc-231f6e58c813**
+
+## Elements, not coordinates (operator asked)
+
+Android tapped COORDINATES read off a dump a moment earlier, because `adb`'s
+only gesture is `input tap x y`. The warm UiAutomator2 session added for
+reading also serves `/element` and `/element/{id}/click`, so Appium resolves
+and clicks server-side in one operation — the way Playwright does. **Both
+phones now click elements by tag.**
+
+Not Appium's `id` strategy: it wants a fully-qualified `package:id/name`, and a
+Compose testTag surfaces as a bare `resource-id`. `-android uiautomator` with
+`new UiSelector().resourceId("…")` matches the raw string, which is what `byId`
+matches. Find 27ms, find+click 92ms.
+
+## Reliability
+
+- **Seed precondition** — the emulator lost its personas THREE times today.
+  Cause found: **running the full `npm test` wipes them** (the cron suites clear
+  `users` wholesale — see `firebase.js`'s FIRESTORE_TEST_NAMESPACE comment). The
+  runner now checks before the first tap and stops in 12s naming the fix.
+  **`npm test` and device journeys cannot share a local emulator without a
+  re-seed in between.**
+
+## Support tickets: 2 of 12
+
+- **SHY-0426 (P1 security) — DONE.** `resolveUniqueId` answers null and the
+  middleware passed it through as an account number; `null === null` made every
+  unidentified caller the SAME account, including never being seen as banned or
+  suspended. 211 uses across 30 route files, one checked. Refused ONCE in the
+  middleware with a 4-route allowlist, guarded on PRESENCE not type (the
+  codebase is inconsistent about number vs string ids). The full suite then
+  found the rest: 77 failures, every one informative.
+- **SHY-0424 — DONE.** The open-request heading is a real `count()` now, not the
+  display cap. `OpenTicketsView(summaries, openCount)` so the two numbers cannot
+  be confused again.
+
+**Ten remain**, sized honestly: SHY-0420 needs a virus scanner; SHY-0437/38/39
+is a reporting-flow redesign across app and admin; SHY-0422 and SHY-0436 each
+need a 21-locale copy pass; SHY-0421, 0431, 0433, 0435 are medium.
+
+## Journey run, 15:15 UTC, both phones in parallel
+
+| | Android | iPhone |
+| --- | --- | --- |
+| Journeys | **13/13** | **7/13** (was 5) |
+| J38 support | ✓ 46.1s | ✓ 73.1s |
+
+The six iPhone failures are two shapes — "SignIn not reached" ×3 and "Home not
+reached" ×3 — the walk losing the app BETWEEN journeys. SHY-0446, improved this
+session (J-SMOKE and J-ALICE now pass).
+
+## Speed
+
+| Measure | Before | After |
+| --- | --- | --- |
+| One Android screen read | 2332ms | **65ms** |
+| J38 step time | 269.6s | **46.1s** |
+| Full Android set | ~1020s | **~270s** |
+| Reads as a share of a run | 87% | 27% |
