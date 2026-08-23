@@ -1407,6 +1407,27 @@ async function dbWaitQuery(runQuery, { timeoutMs = 8000, pollMs = 200, what = 'q
   }
 }
 
+/**
+ * Do the seeded personas still have what the app needs to sign them in?
+ *
+ * Twice on 2026-08-23 the local emulator lost its persona data mid-session,
+ * and the runner found out one journey at a time: twelve failures reading
+ * "stuck on RequiredDOB — persona has no date of birth (seed incomplete?)",
+ * a guess in a failure message, after minutes of walking. The first time cost
+ * an hour of looking at the wrong thing.
+ *
+ * The data is knowable before the first tap. Pure, so the check itself is
+ * pinned without a device or an emulator.
+ */
+function personasLookSeeded(docs) {
+  const list = Array.isArray(docs) ? docs : [];
+  if (list.length === 0) return { ok: false, missing: [] };
+  const missing = list
+    .filter((d) => !d || !d.dateOfBirth)
+    .map((d, i) => (d && d.uniqueId) || `#${i + 1} (document missing)`);
+  return { ok: missing.length === 0, missing };
+}
+
 const arrayContains = (v, needle) => Array.isArray(v) && v.includes(needle);
 
 // --------------------------------------------------------------------------
@@ -2766,6 +2787,28 @@ async function main() {
     db,
     supportPersona: SUPPORT_PERSONA_BY_PLATFORM[opts.platform],
   };
+  // Checked ONCE, before the first tap. Losing the seed mid-session used to
+  // surface as twelve separate "stuck on RequiredDOB" failures after minutes
+  // of walking, each one guessing at the cause (SHY-0449).
+  if (db) {
+    const emails = [...new Set(Object.values(SUPPORT_PERSONA_BY_PLATFORM))].concat([
+      'adult-power@shytalk.dev',
+      'minor-power@shytalk.dev',
+      'admin@shytalk.dev',
+    ]);
+    const docs = await Promise.all(
+      [...new Set(emails)].map((e) => dbGet(db, `users/${personaUniqueId(e)}`)),
+    );
+    const seeded = personasLookSeeded(docs);
+    if (!seeded.ok) {
+      throw new Error(
+        `the seeded personas are missing their date of birth (${seeded.missing.join(', ') || 'no user documents at all'}), ` +
+          'so every sign-in will stop at the "we need your date of birth" screen. ' +
+          'Re-seed with: cd express-api && node --env-file=.env.local scripts/seed-personas-local.js',
+      );
+    }
+  }
+
   let journeys = buildJourneys(ctx);
   if (opts.journeys) journeys = journeys.filter((j) => opts.journeys.includes(j.id));
   if (journeys.length === 0) throw new Error('No journeys selected.');
@@ -2891,6 +2934,7 @@ module.exports = {
   arrayContains,
   openPersonaPicker,
   dbWaitQuery,
+  personasLookSeeded,
   dismissOverlay,
   pollGap,
   POLL_FLOOR_MS,
