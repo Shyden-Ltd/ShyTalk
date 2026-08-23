@@ -335,4 +335,118 @@ test.describe("Admin Support tab", () => {
       "the attachments endpoint was never called",
     ).toBeGreaterThan(0);
   });
+
+  /**
+   * SHY-0438 — the escape hatch, proven in a browser.
+   *
+   * The report has to be real and has to be attributed to the person who raised
+   * the ticket, not to the admin who pressed the button. Both are read back
+   * from the real moderation queue rather than inferred from the toast.
+   *
+   * The person being reported is seeded through the test-setup endpoint, which
+   * tags the documents with a `testRunId` so the teardown collects them. A
+   * user created through the ordinary path would stay behind as an untagged
+   * "Unknown user" card at the top of the Reports tab.
+   */
+  async function seedReportableUser(): Promise<{
+    testRunId: string;
+    uid: string;
+  }> {
+    const stamp = Math.random().toString(36).slice(2, 7);
+    const result = await api.testSetup({
+      users: [{ name: `e2e-convert-${stamp}`.slice(0, 20), shyCoins: 0, shyBeans: 0 }],
+    });
+    const seeded = result.users?.[0];
+    expect(seeded?.uid, "test/setup returned no user to report").toBeTruthy();
+    return { testRunId: result.testRunId, uid: seeded.uid };
+  }
+
+  test("an admin turns a ticket into a report, and the ticket closes for good", async ({
+    page,
+  }) => {
+    const needle = marker();
+    const ticketId = await seedTicket(api, `${needle} they keep messaging me`, {
+      category: "safety",
+    });
+    const { testRunId, uid } = await seedReportableUser();
+
+    try {
+      await navigateToTab(page, "Support");
+      const card = cardFor(page, needle);
+      await expect(card).toBeVisible();
+
+      // The control is deliberately behind a disclosure and away from Resolve:
+      // it closes somebody's ticket permanently.
+      await card.getByText("Turn this into a report").click();
+      await card.locator("[data-report-user-for]").fill(uid);
+      await card.locator("[data-report-reason-for]").selectOption("Harassment");
+
+      // It confirms before acting, and the confirmation names the consequence.
+      page.once("dialog", (dialog) => {
+        expect(dialog.message()).toContain("closed permanently");
+        void dialog.accept();
+      });
+      await card.getByRole("button", { name: "File report" }).click();
+
+      // Read back from the queue, not from the toast.
+      await expect
+        .poll(
+          async () => {
+            const listed = await api.get(
+              "/api/support-tickets?status=converted_to_report",
+            );
+            return (listed.tickets ?? []).some(
+              (t: { id?: string }) => t.id === ticketId,
+            );
+          },
+          { message: "the ticket never reached the converted state" },
+        )
+        .toBe(true);
+
+      // The admin list groups reports BY REPORTED USER -- `{ users: [{ reports:
+      // [...] }] }`, not a flat array. Flattened here rather than assumed.
+      const listed = await api.get("/api/reports?status=pending");
+      const filed = (listed.users ?? [])
+        .flatMap((u: { reports?: unknown[] }) => u.reports ?? [])
+        .find(
+          (r: { sourceSupportTicketId?: string }) =>
+            r.sourceSupportTicketId === ticketId,
+        );
+      expect(filed, "no report carries this ticket id").toBeTruthy();
+      expect(filed.origin).toBe("support_ticket");
+      expect(filed.description).toContain("they keep messaging me");
+    } finally {
+      await api.testTeardown(testRunId);
+    }
+  });
+
+  test("a converted ticket shows what it became, and offers no way back", async ({
+    page,
+  }) => {
+    const needle = marker();
+    const ticketId = await seedTicket(api, `${needle} converted already`, {
+      category: "safety",
+    });
+    const { testRunId, uid } = await seedReportableUser();
+
+    try {
+      await api.post(`/api/support-tickets/${ticketId}/convert-to-report`, {
+        reportedUserId: uid,
+        reason: "Harassment",
+      });
+
+      await navigateToTab(page, "Support");
+      await page.getByRole("button", { name: "Became reports" }).click();
+
+      const card = cardFor(page, needle);
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Became report");
+      // Terminal: nothing on this card can move it anywhere.
+      await expect(card.getByRole("button", { name: "Resolve" })).toHaveCount(0);
+      await expect(card.getByText("Turn this into a report")).toHaveCount(0);
+    } finally {
+      await api.testTeardown(testRunId);
+    }
+  });
+
 });

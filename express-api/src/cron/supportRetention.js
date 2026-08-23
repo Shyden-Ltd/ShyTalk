@@ -35,12 +35,45 @@ const {
 
 const COLLECTION = 'supportTickets';
 
-/** Every key any ticket currently carries. Read fresh — never cached. */
+/**
+ * Every key any ticket currently carries. Read fresh — never cached.
+ *
+ * Also reports how many tickets LOOK like they carry something, which is what
+ * makes the guard below possible: a reader that has drifted from the stored
+ * shape returns an empty set from a corpus that is plainly not empty.
+ */
 async function referencedAttachmentKeys() {
   const snap = await db.collection(COLLECTION).get();
   const keys = new Set();
-  snap.docs.forEach((d) => attachmentKeysOf(d.data()).forEach((k) => keys.add(k)));
+  let ticketsWithAttachments = 0;
+  snap.docs.forEach((d) => {
+    const data = d.data();
+    if (Array.isArray(data.attachments) && data.attachments.length > 0) ticketsWithAttachments += 1;
+    attachmentKeysOf(data).forEach((k) => keys.add(k));
+  });
+  keys.ticketsWithAttachments = ticketsWithAttachments;
   return keys;
+}
+
+/**
+ * Refuse the sweep when the set of keys in use cannot be trusted.
+ *
+ * If tickets carry attachments and NOTHING is referenced, the reader and the
+ * stored shape have drifted apart — which is exactly what happened once, when
+ * `attachmentKeysOf` read `a.r2Key` against documents holding a bare list of
+ * keys. Every support object past the grace window then looks abandoned,
+ * including evidence on tickets that are still open.
+ *
+ * This does not need to know the cause. An unswept bucket costs storage; a
+ * swept one costs somebody the evidence they sent while asking for help.
+ */
+function assertKeysInUseAreTrustworthy(keys) {
+  if (keys.size === 0 && keys.ticketsWithAttachments > 0) {
+    throw new Error(
+      `Refusing to sweep: ${keys.ticketsWithAttachments} ticket(s) carry attachments but the ` +
+        'set of keys in use came back empty, so every object would look abandoned.',
+    );
+  }
 }
 
 /** Step 1: closed tickets past their window, and their attachments. */
@@ -68,6 +101,7 @@ async function deleteExpiredClosedTickets(now = Date.now()) {
 /** Step 2: uploads nobody ever sent, past the grace window. */
 async function deleteAbandonedUploads(now = Date.now()) {
   const referenced = await referencedAttachmentKeys();
+  assertKeysInUseAreTrustworthy(referenced);
   const listed = await r2.listObjectsWithMetadata(SUPPORT_PREFIX);
   const due = abandonedUploadsDueForDeletion(listed, referenced, now);
   if (due.length === 0) return { objects: 0 };
@@ -93,4 +127,5 @@ module.exports = {
   deleteExpiredClosedTickets,
   deleteAbandonedUploads,
   referencedAttachmentKeys,
+  assertKeysInUseAreTrustworthy,
 };

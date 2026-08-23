@@ -27,6 +27,11 @@ const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
 const { createWarning } = require('./admin-users');
+const {
+  REPORT_ORIGIN,
+  ReportDocumentError,
+  buildReportDocument,
+} = require('../utils/report-document');
 
 // See admin-users.js for rationale; same caps apply here so a long reason
 // can't sneak in through the report-resolve path and bypass the warn/suspend
@@ -181,28 +186,33 @@ router.post('/reports', async (req, res) => {
     const reportId = generateId();
     const timestamp = now();
 
-    await db.doc(`reports/${reportId}`).set(
-      {
-        reporterId: req.auth.uniqueId,
+    // SHY-0438: one definition of a report document, shared with conversion from
+    // a support ticket. Reporting yourself now throws from the builder rather
+    // than being written and found later by a moderator.
+    let reportDocument;
+    try {
+      reportDocument = buildReportDocument({
+        reporterUniqueId: req.auth.uniqueId,
         reporterName: reporter?.displayName ?? reporter?.display_name ?? null,
-        reporterUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
-        reportedUserId: reportedUserId,
+        reporterDocUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
+        reportedUserId,
         reportedUserName: reportedUserName || null,
         reportedUserUniqueId,
         conversationId: conversationId || null,
         messageId: messageId || null,
         messageText: messageText || null,
-        reason: reason,
+        reason,
         description: description || null,
         evidenceUrls: evidenceUrls || [],
-        status: 'pending',
-        actionTaken: null,
-        resolvedAt: null,
-        resolvedBy: null,
+        origin: REPORT_ORIGIN.DIRECT,
         createdAt: timestamp,
-      },
-      { merge: true },
-    );
+      });
+    } catch (err) {
+      if (!(err instanceof ReportDocumentError)) throw err;
+      return res.status(400).json({ error: err.message });
+    }
+
+    await db.doc(`reports/${reportId}`).set(reportDocument, { merge: true });
 
     // Fire-and-forget: FCM push notification to admin tokens
     (async () => {

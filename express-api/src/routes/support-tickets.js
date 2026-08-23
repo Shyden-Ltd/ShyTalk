@@ -26,7 +26,13 @@ const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, resolveUniqueId } = require('../middleware/auth');
+const {
+  REPORT_ORIGIN,
+  ReportDocumentError,
+  buildReportDocument,
+} = require('../utils/report-document');
+const { attachmentKeysOf } = require('../utils/support-retention');
 const { deleteObject, getObject, getSignedPutUrl, headObject } = require('../utils/r2');
 const { refusalForStoredObject } = require('../utils/attachment-limits');
 const { scanAttachment } = require('../utils/attachment-scan');
@@ -217,6 +223,15 @@ function summarise(message) {
   return text.slice(0, SUMMARY_MAX_LENGTH) + '\u2026';
 }
 const STATUS_RESOLVED = 'resolved';
+/**
+ * Closed BECAUSE it became a report — SHY-0439.
+ *
+ * A distinct status rather than a flag on `resolved`, because a reopen path that
+ * has to remember to check a boolean is a reopen path that will one day forget.
+ * Reopening a safety matter would put it back in a queue that is not for safety
+ * matters, which is the problem SHY-0437 exists to solve.
+ */
+const STATUS_CONVERTED = 'converted_to_report';
 
 /**
  * Context fields the client may attach, as an ALLOWLIST.
@@ -647,10 +662,11 @@ router.get('/support-tickets', async (req, res) => {
     if (await requireAdmin(req, res)) return;
 
     const status = req.query.status;
-    if (status !== undefined && ![STATUS_OPEN, STATUS_RESOLVED].includes(status)) {
-      return res
-        .status(400)
-        .json({ error: `status must be "${STATUS_OPEN}" or "${STATUS_RESOLVED}"` });
+    const LISTABLE_STATUSES = [STATUS_OPEN, STATUS_RESOLVED, STATUS_CONVERTED];
+    if (status !== undefined && !LISTABLE_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: `status must be one of: ${LISTABLE_STATUSES.map((s) => `"${s}"`).join(', ')}`,
+      });
     }
 
     let query = db.collection(COLLECTION);
@@ -687,6 +703,17 @@ router.patch('/support-tickets/:id', async (req, res) => {
     const ticket = await getDoc(`${COLLECTION}/${req.params.id}`);
     if (!ticket) return res.status(404).json({ error: 'Support ticket not found' });
 
+    // SHY-0439. Terminal means terminal: this ticket's conversation moved to
+    // moderation, and moving it back into the support queue would put a safety
+    // matter into a queue that is not for safety matters -- which is the whole
+    // problem SHY-0437 exists to solve. Refused here rather than only hidden in
+    // the admin UI, because a hidden control is a decision about one screen.
+    if (ticket.status === STATUS_CONVERTED) {
+      return res.status(409).json({
+        error: `This ticket became report ${ticket.convertedToReportId} and cannot be changed`,
+      });
+    }
+
     const timestamp = now();
     const update = {
       status: STATUS_RESOLVED,
@@ -713,6 +740,170 @@ router.patch('/support-tickets/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     log.error('support-tickets', 'PATCH /api/support-tickets/:id failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Everything the person told us, in the order they told us — SHY-0438.
+ *
+ * A ticket is the opening message plus whatever they added afterwards
+ * (`messages`, appended by `POST /support-tickets/:id/messages`). A report
+ * carrying only the opening message is a report missing the half that arrived
+ * once they had thought about it, which for a safety matter is often the half
+ * that names what actually happened.
+ */
+function conversationText(ticket) {
+  const parts = [];
+  if (typeof ticket?.message === 'string' && ticket.message.trim().length > 0) {
+    parts.push(ticket.message.trim());
+  }
+  const followUps = Array.isArray(ticket?.messages) ? ticket.messages : [];
+  for (const entry of followUps) {
+    const text = typeof entry?.message === 'string' ? entry.message.trim() : '';
+    if (text.length > 0) parts.push(text);
+  }
+  return parts.join('\n\n');
+}
+
+/**
+ * Which of a ticket's attachments are no longer in storage.
+ *
+ * Reported AFTER the report is filed, never used to refuse it: evidence that
+ * has gone is a reason to tell the admin what is missing, not a reason to leave
+ * a safety report unfiled. A storage error is treated as missing, because from
+ * the moderator's point of view an object they cannot open is absent either way.
+ */
+async function missingAttachmentKeys(keys) {
+  const missing = [];
+  for (const key of keys) {
+    try {
+      const head = await headObject(key);
+      if (!head) missing.push(key);
+    } catch {
+      missing.push(key);
+    }
+  }
+  return missing;
+}
+
+// ─── Turn a ticket into a report (admin) ────────────────────────
+
+/**
+ * The escape hatch from SHY-0437, made honest — SHY-0438.
+ *
+ * Somebody who could not manage the report flow raises a ticket instead, and an
+ * admin files the report for them. Without this the ticket is answered as
+ * correspondence: no moderation triage, no count against the reported person,
+ * nothing that catches a repeat pattern, and nothing that can be appealed.
+ *
+ * **"One click" has a limit that cannot be engineered away.** A report needs a
+ * reportedUserId and a reason; a ticket carries neither. Reading the text and
+ * deciding who it is about is the part only a person can do, so the admin
+ * supplies those two and everything else is carried across.
+ *
+ * The write order is the safety property: the report is created FIRST, and the
+ * ticket is closed only once that succeeded. A ticket closed permanently with
+ * no report filed is the worst outcome this flow has, and it is the one a
+ * convenient `Promise.all` would produce.
+ */
+router.post('/support-tickets/:id/convert-to-report', async (req, res) => {
+  try {
+    if (await requireAdmin(req, res)) return;
+
+    const body = req.body ?? {};
+    const { reportedUserId, reason, reportedUserName } = body;
+    if (typeof reportedUserId !== 'string' || reportedUserId.length === 0) {
+      return res.status(400).json({ error: 'reportedUserId is required' });
+    }
+    if (typeof reason !== 'string' || reason.length === 0) {
+      return res.status(400).json({ error: 'reason is required' });
+    }
+
+    const ticket = await getDoc(`${COLLECTION}/${req.params.id}`);
+    if (!ticket) return res.status(404).json({ error: 'Support ticket not found' });
+
+    // Refused rather than repeated. Two reports for one ticket would count the
+    // same complaint twice against the reported person.
+    if (ticket.status === STATUS_CONVERTED) {
+      return res.status(409).json({
+        error: `This ticket has already been turned into report ${ticket.convertedToReportId}`,
+      });
+    }
+
+    // Server-authoritative, exactly as POST /reports does it: the suspension
+    // cascade keys off this value, so a caller-supplied one would let whoever
+    // holds the request choose which account an admin can suspend.
+    const reportedUserUniqueId = await resolveUniqueId(reportedUserId);
+    if (!reportedUserUniqueId) {
+      return res.status(400).json({ error: 'reportedUserId does not match any known user' });
+    }
+
+    // A reporter who has since been deleted must not break conversion: their
+    // words and evidence are still what moderation needs to act on.
+    const reporter = await getDoc(`users/${ticket.userId}`);
+
+    const reportId = generateId();
+    const timestamp = now();
+
+    let reportDocument;
+    try {
+      reportDocument = buildReportDocument({
+        reporterUniqueId: ticket.userId,
+        reporterName: reporter?.displayName ?? reporter?.display_name ?? null,
+        reporterDocUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
+        reportedUserId,
+        reportedUserName: reportedUserName || null,
+        reportedUserUniqueId,
+        // Their own words, whole. A follow-up is part of what they told us, and
+        // a report carrying only the opening message is a report missing the
+        // half that arrived after they thought about it.
+        description: conversationText(ticket),
+        reason,
+        evidenceUrls: attachmentKeysOf(ticket),
+        origin: REPORT_ORIGIN.SUPPORT_TICKET,
+        sourceSupportTicketId: req.params.id,
+        createdAt: timestamp,
+      });
+    } catch (err) {
+      // Only what the builder itself refuses. Anything else is a fault in this
+      // route, and must reach the 500 handler rather than being dressed up as
+      // something the admin typed wrong.
+      if (!(err instanceof ReportDocumentError)) throw err;
+      return res.status(400).json({ error: err.message });
+    }
+
+    // FIRST. If this throws, the ticket is untouched and the person still has a
+    // ticket somebody can answer.
+    await db.doc(`reports/${reportId}`).set(reportDocument, { merge: true });
+
+    await db.doc(`${COLLECTION}/${req.params.id}`).update({
+      status: STATUS_CONVERTED,
+      convertedToReportId: reportId,
+      convertedBy: req.auth.uid,
+      convertedAt: timestamp,
+    });
+
+    await db.collection('auditLog').add({
+      adminUid: req.auth.uniqueId,
+      action: 'support_ticket_convert_to_report',
+      actionType: 'support_ticket_convert_to_report',
+      targetType: 'support_ticket',
+      targetId: req.params.id,
+      details: { reportId, reason },
+      timestamp,
+    });
+
+    // Reported after the fact rather than refused before it: evidence that has
+    // gone is a reason to tell the admin, not a reason to leave a safety report
+    // unfiled.
+    const missingAttachments = await missingAttachmentKeys(reportDocument.evidenceUrls);
+
+    res.json({ success: true, reportId, missingAttachments });
+  } catch (err) {
+    log.error('support-tickets', 'POST /api/support-tickets/:id/convert-to-report failed', {
+      error: err.message,
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });

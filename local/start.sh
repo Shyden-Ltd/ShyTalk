@@ -115,6 +115,18 @@ detect_lan_ip() {
 #     back to the TCP candidate, which the reverse tunnel can carry — `adb
 #     reverse` forwards TCP ONLY, which is why the UDP range alone never
 #     worked over USB.
+# The same address has to reach two other settings, and those live in
+# express-api/.env.local rather than in this shell: MINIO_ENDPOINT, which signed
+# upload URLs are minted against, and CDN_URL, which attachments are served
+# from. They were hand-written, and a DHCP lease is not a constant -- on
+# 2026-08-24 they still named a machine this laptop had stopped being, so every
+# signed upload hung until its caller timed out. Synced here so starting the
+# stack is enough.
+if [ -x "$(dirname "$0")/../scripts/dev/sync-local-lan-ip.sh" ]; then
+  bash "$(dirname "$0")/../scripts/dev/sync-local-lan-ip.sh" || \
+    echo "  WARNING: could not sync the LAN address into .env.local." >&2
+fi
+
 LIVEKIT_NODE_IP="${LIVEKIT_NODE_IP:-$(detect_lan_ip)}"
 if [ -n "$LIVEKIT_NODE_IP" ]; then
   export LIVEKIT_NODE_IP

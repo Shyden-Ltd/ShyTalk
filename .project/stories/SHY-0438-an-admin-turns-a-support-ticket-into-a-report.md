@@ -1,6 +1,6 @@
 ---
 id: SHY-0438
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-22
 priority: P1

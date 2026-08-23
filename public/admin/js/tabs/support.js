@@ -12,12 +12,18 @@
  * from the website portal, so this must not grow assignment, replies, or a
  * lifecycle beyond open/resolved.
  *
+ * ONE deliberate exception, SHY-0438: turning a ticket into a report. That is
+ * not support-agent workflow -- it is the escape hatch for somebody who could
+ * not manage the report flow (SHY-0437), and without it their safety report is
+ * answered as correspondence and never reaches moderation. The state it leaves
+ * behind is terminal (SHY-0439), so it adds no lifecycle to work through.
+ *
  * Everything from a ticket is escaped on the way in. The message is written by
  * a member of the public and is displayed to an admin, which is precisely the
  * shape of a stored-XSS problem if it is ever trusted.
  */
 
-import { apiCall } from "/js/core/api.js";
+import { apiCall, fetchObjectUrl } from "/js/core/api.js";
 import { showToast, escapeHtml } from "/js/core/ui.js";
 // Reused, never re-implemented: this already renders BOTH an image and a video
 // with a lightbox. SHY-0400 exists because a second, images-only path was built
@@ -33,6 +39,21 @@ import { renderEvidence, openEvidenceLightbox } from "/admin/js/tabs/users.js";
 // ── State ──────────────────────────────────────────────────────────
 
 let currentFilter = "open";
+
+/**
+ * Object URLs minted for attachment thumbnails, so they can be released.
+ *
+ * Each one pins its bytes in memory until it is revoked. An admin working
+ * through a queue of tickets with photographs and 30-second videos would
+ * otherwise accumulate every one they had scrolled past for as long as the tab
+ * stayed open.
+ */
+let attachmentObjectUrls = [];
+
+function releaseAttachmentObjectUrls() {
+  for (const url of attachmentObjectUrls) URL.revokeObjectURL(url);
+  attachmentObjectUrls = [];
+}
 
 // ── Public API ─────────────────────────────────────────────────────
 
@@ -53,11 +74,19 @@ export function activate() {
   load(currentFilter);
 }
 
-export function deactivate() {}
+export function deactivate() {
+  // Leaving the tab releases the bytes. Coming back re-fetches them, which is
+  // the correct trade: these are photographs and videos of real people.
+  releaseAttachmentObjectUrls();
+}
 
 // ── Internal ───────────────────────────────────────────────────────
 
 async function load(status) {
+  // Every reload replaces the whole list, so the previous cards' object URLs
+  // are unreachable from the moment `list.innerHTML` is cleared -- released
+  // here rather than left to the garbage collector, which does not revoke them.
+  releaseAttachmentObjectUrls();
   const list = document.getElementById("support-list");
   if (!list) return;
   list.innerHTML =
@@ -93,6 +122,66 @@ async function load(status) {
           showToast("Ticket resolved");
           load(currentFilter);
         } catch (err) {
+          showToast(err.message, "error");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
+
+    // SHY-0438 — turning a ticket into a report.
+    for (const btn of list.querySelectorAll("[data-convert-ticket]")) {
+      btn.addEventListener("click", async () => {
+        if (btn.disabled) return;
+        const ticketId = btn.dataset.convertTicket;
+        const userInput = list.querySelector(
+          `[data-report-user-for="${ticketId}"]`,
+        );
+        const reasonInput = list.querySelector(
+          `[data-report-reason-for="${ticketId}"]`,
+        );
+        const reportedUserId = userInput ? userInput.value.trim() : "";
+        const reason = reasonInput ? reasonInput.value : "";
+
+        // Asked here rather than let the server answer 400, because the server's
+        // refusal would arrive after the admin thinks they have filed it.
+        if (!reportedUserId) {
+          showToast(
+            "Who is this report about? Enter the reported user id.",
+            "error",
+          );
+          return;
+        }
+
+        // The close is permanent and the person cannot undo it, so it is
+        // confirmed once, naming what happens.
+        const confirmed = window.confirm(
+          `File a report against ${reportedUserId} for "${reason}" on this person's behalf?\n\n` +
+            "Their support ticket will be closed permanently and cannot be reopened.",
+        );
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        try {
+          const result = await apiCall(
+            "POST",
+            `/api/support-tickets/${ticketId}/convert-to-report`,
+            { reportedUserId, reason },
+          );
+          // Missing evidence is stated rather than swallowed: the moderator
+          // opening this report needs to know what they will not find.
+          const missing = Array.isArray(result?.missingAttachments)
+            ? result.missingAttachments.length
+            : 0;
+          showToast(
+            missing > 0
+              ? `Report filed. ${missing} attachment(s) were no longer in storage.`
+              : "Report filed and ticket closed",
+          );
+          load(currentFilter);
+        } catch (err) {
+          // The ticket is untouched when this fails -- the server creates the
+          // report first -- so the admin can simply try again.
           showToast(err.message, "error");
         } finally {
           btn.disabled = false;
@@ -140,11 +229,49 @@ async function loadAttachments(ticketId, card) {
     );
     const rows = Array.isArray(res?.attachments) ? res.attachments : [];
     if (rows.length === 0) return;
-    // Each row is `{ index, viewUrl, contentType }`. The renderer wants URLs,
-    // and a view path is a URL — it simply is not a downloadable one.
-    const urls = rows.map((a) => (typeof a === "string" ? a : a.viewUrl)).filter(Boolean);
-    if (urls.length === 0) return;
-    slot.innerHTML = `<div style="margin-top:8px;">${renderEvidence(urls)}</div>`;
+
+    // SHY-0449. `viewUrl` is an AUTHENTICATED path, unlike the public CDN URLs
+    // this renderer was built for on the Reports and Appeals tabs. An `<img>`
+    // cannot send a bearer token, so putting the path straight into `src`
+    // answered 401 and drew a broken image -- silently, because a failed image
+    // fires no error the page reports. Every support attachment has been
+    // invisible to moderators since SHY-0420 moved them off signed URLs.
+    //
+    // Fetched with the token and handed to the renderer as object URLs. That
+    // keeps what SHY-0420 was for: no signed URL, no address that outlives the
+    // session, and every read still passing through a route that knows who is
+    // asking.
+    const paths = rows
+      .map((a) => (typeof a === "string" ? a : a.viewUrl))
+      .filter(Boolean);
+    if (paths.length === 0) return;
+
+    const fetched = await Promise.all(
+      paths.map(async (path) => {
+        try {
+          return await fetchObjectUrl(path);
+        } catch {
+          // One unreadable attachment must not cost the others. Reported below.
+          return null;
+        }
+      }),
+    );
+    const urls = fetched.filter(Boolean).map((f) => f.url);
+    attachmentObjectUrls.push(...urls);
+    if (urls.length === 0) {
+      slot.innerHTML =
+        '<div style="font-size:11px;color:var(--danger);margin-top:6px;">' +
+        "Attachments could not be loaded</div>";
+      return;
+    }
+
+    // The renderer decides image or video from the URL, and an object URL says
+    // nothing about its type -- so the content type from the fetch is passed
+    // with it. Without this every video renders as an image with no play badge.
+    const entries = fetched
+      .filter(Boolean)
+      .map((f) => ({ url: f.url, contentType: f.contentType }));
+    slot.innerHTML = `<div style="margin-top:8px;">${renderEvidence(entries)}</div>`;
 
     // Wire the thumbnails, the way `appeals.js` does.
     //
@@ -231,8 +358,49 @@ function renderCard(ticket, status) {
          </div>`
       : "";
 
+  // SHY-0439: what became of it, and which report to look in.
+  const convertedHtml =
+    status === "converted_to_report"
+      ? `<div style="font-size:11px;color:var(--text2);margin-top:8px;">
+           Became report ${escapeHtml(String(ticket.convertedToReportId ?? "unknown"))}
+           ${ticket.convertedAt ? `on ${escapeHtml(new Date(ticket.convertedAt).toLocaleString())}` : ""}
+         </div>`
+      : "";
+
+  // SHY-0438. Offered on EVERY open ticket, not only the safety ones: an admin
+  // reading a ticket filed under "other" may be the first person to recognise
+  // what it actually is.
+  //
+  // Deliberately below the resolve row and visually separate from it. It closes
+  // somebody's ticket permanently, and a destructive control sitting beside an
+  // everyday one gets pressed by accident.
+  const convertActionHtml =
+    status === "open"
+      ? `<details style="margin-top:10px;border-top:1px solid var(--text2);padding-top:8px;">
+           <summary style="font-size:12px;cursor:pointer;">Turn this into a report</summary>
+           <div style="font-size:11px;color:var(--text2);margin:6px 0;">
+             Files a report in the moderation queue on this person's behalf, carrying
+             their message and every attachment. Their ticket is then closed
+             permanently and they cannot reopen it.
+           </div>
+           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+             <input type="text" data-report-user-for="${escapeHtml(String(ticket.id))}"
+                    placeholder="Reported user id"
+                    style="flex:1;min-width:160px;padding:6px 8px;font-size:12px;">
+             <select data-report-reason-for="${escapeHtml(String(ticket.id))}"
+                     style="padding:6px 8px;font-size:12px;">
+               <option value="Harassment">Harassment</option>
+               <option value="Spam">Spam</option>
+               <option value="Inappropriate Content">Inappropriate Content</option>
+               <option value="Other">Other</option>
+             </select>
+             <button class="btn" data-convert-ticket="${escapeHtml(String(ticket.id))}">File report</button>
+           </div>
+         </details>`
+      : "";
+
   const actionHtml =
-    status === "resolved"
+    status !== "open"
       ? ""
       : `<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
            <input type="text" data-note-for="${escapeHtml(String(ticket.id))}"
@@ -251,7 +419,9 @@ function renderCard(ticket, status) {
     ${contextHtml}
     <div data-attachments-for="${escapeHtml(String(ticket.id))}"></div>
     ${resolvedHtml}
-    ${actionHtml}`;
+    ${convertedHtml}
+    ${actionHtml}
+    ${convertActionHtml}`;
 
   // Attachments are stored as storage KEYS, so the links have to be requested.
   // Fetched per card rather than in the list, which returns up to 200 tickets:

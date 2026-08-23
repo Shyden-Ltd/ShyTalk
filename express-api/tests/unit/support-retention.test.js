@@ -101,9 +101,15 @@ describe('attachmentKeysOf', () => {
   test('collects every key a ticket carries', () => {
     // Collected BEFORE the document goes: the ticket is the only record of
     // which objects belong to it.
+    //
+    // The shape is a plain array of R2 keys, which is what
+    // `POST /support-tickets` writes. This fixture previously used
+    // `[{ r2Key }]`, a shape the product never produces, and every assertion
+    // here passed while the real sweep collected NOTHING -- see the seam test
+    // at the bottom of this file.
     expect(
       attachmentKeysOf({
-        attachments: [{ r2Key: 'support-tickets/1/a.png' }, { r2Key: 'support-tickets/1/b.mp4' }],
+        attachments: ['support-tickets/1/a.png', 'support-tickets/1/b.mp4'],
       }),
     ).toEqual(['support-tickets/1/a.png', 'support-tickets/1/b.mp4']);
   });
@@ -115,7 +121,9 @@ describe('attachmentKeysOf', () => {
   });
 
   test('rows without a key are dropped rather than deleting undefined', () => {
-    expect(attachmentKeysOf({ attachments: [{ r2Key: 'a' }, {}, { r2Key: '' }] })).toEqual(['a']);
+    // Same invented `{ r2Key }` shape as the fixture above; both passed while
+    // the sweep read nothing.
+    expect(attachmentKeysOf({ attachments: ['a', undefined, '', null] })).toEqual(['a']);
   });
 });
 
@@ -164,5 +172,56 @@ describe('abandonedUploadsDueForDeletion', () => {
   test('a Date lastModified is understood as well as a number', () => {
     const asDate = object({ lastModified: new Date(NOW - 5 * DAY) });
     expect(abandonedUploadsDueForDeletion([asDate], new Set(), NOW)).toHaveLength(1);
+  });
+});
+
+// ─── The seam ───────────────────────────────────────────────────
+
+describe('the sweep reads the shape the create route writes', () => {
+  /**
+   * The defect this exists for: `attachmentKeysOf` read `a.r2Key` while
+   * `POST /support-tickets` writes a plain array of keys. Every unit test
+   * passed, because every fixture used the invented shape.
+   *
+   * Two consequences, the second much worse than the first:
+   *   1. no attachment was ever deleted at its retention date;
+   *   2. `referencedAttachmentKeys()` returned an EMPTY set, and an empty set
+   *      of keys-in-use means every support object past the 3-day grace looks
+   *      abandoned — including evidence on tickets that are still open.
+   *
+   * So the fixture is no longer written by hand. It is read out of the route.
+   */
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const routeSource = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'src', 'routes', 'support-tickets.js'),
+    'utf-8',
+  );
+
+  test('the create route still writes attachments as a bare list of keys', () => {
+    // If this changes shape, the assertion below is measuring the wrong thing
+    // and must be revisited rather than quietly re-passing.
+    expect(routeSource).toContain('attachments: attachments.keys');
+    expect(routeSource).toMatch(/@returns \{\{ok: true, keys: string\[\]\}/);
+  });
+
+  test('a ticket built the way the route builds one yields its keys', () => {
+    const asWrittenByTheRoute = {
+      attachments: ['support/10000009/a.jpg', 'support/10000009/b.mp4'],
+    };
+    expect(attachmentKeysOf(asWrittenByTheRoute)).toEqual([
+      'support/10000009/a.jpg',
+      'support/10000009/b.mp4',
+    ]);
+  });
+
+  test('and therefore live evidence is excluded from the abandoned sweep', () => {
+    // The consequence, asserted end to end rather than inferred: an object
+    // belonging to an OPEN ticket must survive however old it is.
+    const openTicket = { attachments: ['support/10000009/live.jpg'] };
+    const referenced = new Set(attachmentKeysOf(openTicket));
+    const veryOld = [{ key: 'support/10000009/live.jpg', lastModified: 0 }];
+    expect(abandonedUploadsDueForDeletion(veryOld, referenced, NOW)).toEqual([]);
   });
 });

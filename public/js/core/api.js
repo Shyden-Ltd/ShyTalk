@@ -17,6 +17,37 @@ export function resetAbortController() {
   _abortController = new AbortController();
 }
 
+/**
+ * Fetch a binary response the browser can render, as an object URL.
+ *
+ * `apiCall` cannot carry this: it insists on a JSON body and would throw on
+ * every image. And an `<img src="/api/...">` cannot carry the bearer token, so
+ * an authenticated media route reached that way answers 401 and the browser
+ * draws a broken image with no error anybody sees.
+ *
+ * That is what happened to support-ticket attachments (SHY-0449): SHY-0420
+ * moved them from public CDN URLs to an authenticated stream, the renderer kept
+ * putting the path straight into `<img src>`, and no attachment has displayed
+ * for a moderator since.
+ *
+ * The caller MUST revoke the returned URL when it is finished with it,
+ * otherwise the bytes stay in memory for the life of the page.
+ */
+export async function fetchObjectUrl(path, { signal } = {}) {
+  const token = await _getToken();
+  const res = await fetch(`${_apiBase}${path}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+    signal: signal || _abortController.signal,
+  });
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  const blob = await res.blob();
+  return { url: URL.createObjectURL(blob), contentType: blob.type || '' };
+}
+
 export async function apiCall(method, path, body, { signal, skipTabAbort } = {}) {
   const token = await _getToken();
   const opts = {

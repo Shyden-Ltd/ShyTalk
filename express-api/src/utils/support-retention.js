@@ -85,7 +85,13 @@ function closedTicketsDueForDeletion(tickets, now, retentionMs = CLOSED_TICKET_R
  */
 function attachmentKeysOf(ticket) {
   const rows = ticket && Array.isArray(ticket.attachments) ? ticket.attachments : [];
-  return rows.map((a) => a && a.r2Key).filter((k) => typeof k === 'string' && k.length > 0);
+  // Plain R2 keys, which is what `POST /support-tickets` writes. This read
+  // `a.r2Key` until 2026-08-24 -- a shape the product has never produced. It
+  // returned [] for every real ticket, so the sweep deleted no attachment and,
+  // far worse, built an EMPTY set of keys-in-use, under which every support
+  // object older than the grace window looks abandoned. Caught by SHY-0438
+  // needing the same keys; the sweep had not yet run anywhere.
+  return rows.filter((k) => typeof k === 'string' && k.length > 0);
 }
 
 /**
