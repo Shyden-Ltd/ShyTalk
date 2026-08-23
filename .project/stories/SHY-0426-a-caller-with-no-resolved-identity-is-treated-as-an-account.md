@@ -1,6 +1,6 @@
 ---
 id: SHY-0426
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-22
 priority: P1
@@ -180,3 +180,64 @@ Answering it is part of this story, not a preamble to it.
   other route files and the central fix belongs here.
 - Found while proving attachment uploads end to end: an upload key came back as
   `support-tickets/null/…`, which is what exposed the whole shape.
+
+## How it was built
+
+**Refused ONCE, in the middleware.** 211 uses of `req.auth.uniqueId` across 30
+route files, and exactly one checked it was present. Guarding thirty files is
+thirty chances to miss one, and thirty more for every route added afterwards.
+Deny by default; the routes that legitimately run before an identity exists are
+named in a list short enough to read and argue with.
+
+**The allowlist, and why each entry is on it:**
+
+| Route | Why |
+| --- | --- |
+| `POST /users` | Creates the account. There is no identity yet, by definition. |
+| `POST /users/sign-in` | May be what creates the document for an account that authenticated first. |
+| `POST /devices/lock-check` | Device binding, in the SIGN-IN flow, before any account exists. Already carved out of the ban gate for the same reason. |
+| `POST/GET /device-info` | How the app LEARNS it is banned. Gating it replaces the ban screen with a generic error while enforcing nothing. |
+
+Matched on **method and exact path**, so `GET /users` (a listing) is not exempt
+and `/users/50000010/appeal` cannot inherit `/users`'s exemption by prefix.
+A ratchet test pins the list, so adding to it is a deliberate act.
+
+**The guard is on PRESENCE, not type.** The first attempt used
+`Number.isInteger`, which fixed the hole and also changed an unrelated
+contract: this codebase is inconsistent about whether a uniqueId is a number or
+a string — the seeded personas use numbers, several suites use strings — so a
+type gate would have locked out real callers for a reason nobody asked about.
+The defect is `null` collapsing every unidentified caller into one account
+because `null === null`. That, and only that, is refused.
+
+**A distinct 403 `no_identity`, not a 401.** The credential was fine. A client
+needs to tell "sign in again" from "your account is in a state we cannot
+resolve" — the second is a bug report, not a retry.
+
+### What the full suite then said
+
+The change was made and all 15,335 Express tests run. 77 failures across 5
+suites, every one of them informative:
+
+- **`devices/lock-check` and `device-info`** genuinely run pre-identity. Added
+  to the allowlist — the suite found them, not guesswork.
+- **Twelve admin fixtures** used `mintTokenWithoutUserDoc({ admin: true })` — an
+  admin with no `users` document, which is not a real shape. `requireAdmin`
+  writes `req.auth.uniqueId` into the audit log, so such an admin writes
+  `adminUid: null`, which is this very bug. Given real documents.
+- **Four tests PINNED the defect**: three asserting a null uniqueId passes
+  through a user-scoped route, and one asserting livekit's "User profile not
+  found" — a fair message from a route that should never have been handed a
+  null identity. All four inverted.
+
+Final: **491 suites, 15,335 tests, all passing. Lint clean.**
+
+### The open question, and where it now stands
+
+The story asked whether a real user can reach `uniqueId: null` in production.
+**That is still unanswered, and it now matters far less.** Whether or not they
+can, they are refused rather than being merged into a shared "null account"
+with every other unidentified caller — including the ban and suspension bypass,
+which was the sharpest part. The measurement is still worth taking; it is no
+longer load-bearing for safety.
+
