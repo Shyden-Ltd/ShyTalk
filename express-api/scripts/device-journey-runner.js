@@ -2262,8 +2262,24 @@ const J38 = {
       // permission dialog before Home -- overlays `settle` already knows how to
       // clear. Waiting for the tab alone times out staring at a modal, which
       // reads like the journey broke rather than like the app asked a question.
-      await settle(device, 60000);
-      await waitForId(device, 'main_profileTab', 20000);
+      // Settle, then check — and if the screen goes back to nothing, settle
+      // again (SHY-0447).
+      //
+      // A cold start after a force-stop reaches Home and can then briefly lose
+      // it: the dump goes back to `android:id/content` alone while the app is
+      // still recomposing, or the daily-reward calendar arrives a beat after
+      // Home did. `settle` handles both, but only if somebody asks it to a
+      // second time. Waiting twenty seconds at a screen with nothing on it
+      // reads like the journey broke, and it did not.
+      for (let attempt = 1; ; attempt++) {
+        await settle(device, 60000);
+        try {
+          await waitForId(device, 'main_profileTab', attempt === 1 ? 8000 : 20000);
+          break;
+        } catch (e) {
+          if (attempt >= 2) throw e;
+        }
+      }
       await tapId(device, 'main_profileTab');
       await waitForId(device, 'main_settingsButton', 12000);
       await tapId(device, 'main_settingsButton');
