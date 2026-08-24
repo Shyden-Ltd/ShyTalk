@@ -135,6 +135,7 @@ every failure and why, and the acceptance criteria checked against measurement.
 | Run wall time | ~544s, unpredictable | **386–429s** |
 | Three consecutive runs | — | 419s / 404s / 404s — **3.7% spread** |
 | Unit suite for the driver | hung 120.6s | **5.6s** |
+| Full Express suite | 8 suites red at HEAD | **501 suites, 15,541 tests, exit 0** |
 
 ## Acceptance Criteria
 
@@ -218,7 +219,8 @@ every failure and why, and the acceptance criteria checked against measurement.
 
 ## Definition of Done
 
-- [ ] Merged to `develop`, all checks green.
+- [ ] Merged to `develop`, all checks green. **Suite is green locally (501
+      suites, 15,541 tests, exit 0); nine commits unpushed pending review.**
 - [x] Three consecutive iPhone runs with no stall. **Twelve.**
 
 ## Follow-up
