@@ -140,6 +140,7 @@ function parseArgs(argv) {
     out: path.join(REPO_ROOT, 'journey-results'),
     list: false,
     help: false,
+    debug: false,
   };
   let i = 0;
   const next = (flag) => {
@@ -152,6 +153,7 @@ function parseArgs(argv) {
     if (v === '--target') a.target = next('--target');
     else if (v === '--platform') a.platform = next('--platform');
     else if (v === '--no-record') a.record = false;
+    else if (v === '--debug') a.debug = true;
     else if (v === '--serial') a.serial = next('--serial');
     else if (v === '--journeys')
       a.journeys = next('--journeys')
@@ -462,6 +464,29 @@ function summarizeScreen(nodes) {
 // --------------------------------------------------------------------------
 // Reporter — records every step, writes md + json, prints live progress
 // --------------------------------------------------------------------------
+
+/**
+ * Should this step's SCREEN be dumped?
+ *
+ * A failing step always is: the diagnostic that names what was on screen is
+ * the most valuable line in a red run, and it must never become opt-in.
+ *
+ * A passing step only under `--debug`, because the dump is not free — ~65ms on
+ * Android but ~700ms on iOS, several hundred times a matrix. Paying that on
+ * every run to answer the occasional "what did the screen actually say?" is
+ * the wrong default; asking for it when you want it is the right one.
+ *
+ * Split out as a function so the POLICY is testable without a phone, an Appium
+ * server, or a step that has to fail on purpose to be observed.
+ *
+ * @param {'pass'|'fail'} status
+ * @param {boolean} debug
+ * @returns {boolean}
+ */
+function capturesScreenFor(status, debug) {
+  return status === 'fail' || debug === true;
+}
+
 class Reporter {
   constructor(outDir, meta) {
     this.outDir = outDir;
@@ -472,6 +497,11 @@ class Reporter {
     this.journeys = [];
     this.current = null;
     this.shotCounter = 0;
+    // Read on EVERY step, so it lives on the reporter rather than being
+    // threaded through each call. Recorded in `meta` too, which means the
+    // report itself says whether the passing steps carry a screen — a reader
+    // should not have to infer that from whether the field happens to be set.
+    this.debug = meta.debug === true;
   }
 
   startJourney(id, title) {
@@ -505,6 +535,8 @@ class Reporter {
       rec.status = 'fail';
       rec.detail = e.message;
       caught = e;
+    }
+    if (capturesScreenFor(rec.status, this.debug)) {
       try {
         rec.screen = summarizeScreen(parseNodes(await device.dumpXml()));
       } catch (_e) {
@@ -538,6 +570,8 @@ class Reporter {
     this.current.steps.push(rec);
     if (rec.status === 'pass') {
       console.log(`✓ (${(rec.durationMs / 1000).toFixed(1)}s)`);
+      if (rec.screen)
+        console.log(`     on-screen testTags: ${rec.screen.testTags.join(', ') || '(none)'}`);
     } else {
       console.log(`✗ ${rec.detail}`);
       if (rec.screen)
@@ -2963,6 +2997,8 @@ Usage: node express-api/scripts/device-journey-runner.js [options]
   --rebuild            rebuild the APK first
   --no-reset           skip clean reinstall in J-SMOKE
   --no-record          skip the screen recording (default: record)
+  --debug              dump the on-screen testTags after EVERY step, not
+                       just failures (costs one screen read per step)
   --out <dir>          results dir (default <repo>/journey-results)
   --list               list journeys and exit
   --help               this help`;
@@ -3021,7 +3057,12 @@ async function main() {
     }
   }
 
-  const reporter = new Reporter(opts.out, { target: opts.target, serial, device: deviceModel });
+  const reporter = new Reporter(opts.out, {
+    target: opts.target,
+    serial,
+    device: deviceModel,
+    debug: opts.debug,
+  });
   console.log(`Target=${opts.target} pkg=${cfg.pkg} serial=${serial} (${deviceModel})`);
   console.log(`Results -> ${opts.out}`);
 
@@ -3181,6 +3222,7 @@ module.exports = {
   // Exported so J-SMOKE's platform branch can be exercised without a phone.
   buildJourneys,
   parseArgs,
+  capturesScreenFor,
   occluderOf,
   looksLikeSystemOverlay,
   assertReachable,

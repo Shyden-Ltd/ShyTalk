@@ -292,3 +292,51 @@ describe('parseNodes — XCUITest (iOS) and uiautomator (Android) agree on one s
     expect(parseNodes('<html><body>not a device dump</body></html>')).toEqual([]);
   });
 });
+
+/**
+ * `--debug`: dump the screen on EVERY step, not only the failing one.
+ *
+ * Operator, 2026-08-25: *"the passing log doesn't dump tags (only failures do)
+ * — can we run it in a 'debug mode' or something similar so that we can see
+ * these logs, even without failures."*
+ *
+ * The default stays quiet on purpose: capturing the screen costs a full dump,
+ * which is ~65ms on Android but ~700ms on iOS, and a fourteen-journey run makes
+ * a few hundred steps. Paying that on every run to serve the occasional
+ * question is the wrong default — so it is a flag, and the flag is the contract
+ * this pins. See [[feedback-consumer-first-surface-design]].
+ */
+describe('--debug dumps the screen on passing steps too', () => {
+  const { parseArgs: parse, capturesScreenFor } = require('../../scripts/device-journey-runner');
+
+  test('the flag is off unless asked for', () => {
+    expect(parse([]).debug).toBe(false);
+  });
+
+  test('--debug turns it on', () => {
+    expect(parse(['--debug']).debug).toBe(true);
+  });
+
+  test('a FAILING step is always captured, flag or not', () => {
+    // The diagnostic that already existed must not become opt-in. A failure
+    // with no screen behind it is the one case nobody can afford to lose.
+    expect(capturesScreenFor('fail', false)).toBe(true);
+    expect(capturesScreenFor('fail', true)).toBe(true);
+  });
+
+  test('a PASSING step is captured only in debug', () => {
+    expect(capturesScreenFor('pass', false)).toBe(false);
+    expect(capturesScreenFor('pass', true)).toBe(true);
+  });
+
+  test('--help names it, or nobody will find it', () => {
+    // `--platform` was parsed, typo-checked and undocumented for months. A
+    // flag that only helps whoever already knows about it is not a feature.
+    const src = require('node:fs').readFileSync(
+      require('node:path').join(__dirname, '../../scripts/device-journey-runner.js'),
+      'utf8',
+    );
+    const help = src.slice(src.indexOf('ShyTalk on-device journey runner'));
+    expect(help.slice(0, 900)).toContain('--debug');
+  });
+});
