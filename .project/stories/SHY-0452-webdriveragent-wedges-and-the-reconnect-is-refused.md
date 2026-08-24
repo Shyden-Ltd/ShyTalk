@@ -56,6 +56,9 @@ Measured across the twelve runs that closed SHY-0451:
   `Could not proxy command to the remote server. Original error: socket hang up`
   on the answer to a command that had already taken effect.
 
+**SHY-0451's evidence page** carries the twelve-run data this story rests on:
+https://claude.ai/code/artifact/7bf240a7-8cb4-4954-8767-a0d42de50c2f
+
 ## Where to look next
 
 - **Why does WebDriverAgent die at all?** The death is what starts this; the

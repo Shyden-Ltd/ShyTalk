@@ -122,6 +122,10 @@ Two further defects surfaced during verification, both in the same subsystem:
   and worse). Both are made idempotent, and every replayable command now has to
   declare how it survives running twice.
 
+**Evidence page:** https://claude.ai/code/artifact/7bf240a7-8cb4-4954-8767-a0d42de50c2f
+— the hypothesis ledger with its two corrections, the full run ledger including
+every failure and why, and the acceptance criteria checked against measurement.
+
 ### Measured, twelve consecutive iPhone runs on the real device
 
 | | Before | After |
