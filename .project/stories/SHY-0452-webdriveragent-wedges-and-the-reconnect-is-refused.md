@@ -1,6 +1,6 @@
 ---
 id: SHY-0452
-status: In Progress
+status: Draft
 owner: unassigned
 created: 2026-08-24
 priority: P1
@@ -161,6 +161,14 @@ https://claude.ai/code/artifact/7bf240a7-8cb4-4954-8767-a0d42de50c2f
 
 ## Notes
 
+- Raised to **P1** by the operator on 2026-08-24: if the iPhone matrix is meant
+  to gate merges, one run in six going red for a tooling reason makes a red
+  result uninformative, which is the whole point of having one.
+- Left at **Draft** deliberately. It is newly filed here, and the filing
+  exemption is Draft-only; marking it In Review while nothing is implemented
+  would be false, and the reviewed-up-to marker would point at a commit that
+  reviewed nothing. It gets picked up on its OWN branch after this PR merges,
+  which is also what one-story-one-PR asks for.
 - Split out of SHY-0451 on 2026-08-24 rather than absorbed into it. SHY-0451's
   own evidence shows why they are different: the stall is gone in all twelve
   runs, and this failed in two of them.
