@@ -2957,6 +2957,7 @@ function ensureApk(cfg, opts, runDir) {
 const HELP = `ShyTalk on-device journey runner
 Usage: node express-api/scripts/device-journey-runner.js [options]
   --target local|dev   environment (default local)
+  --platform android|ios  which device to drive (default android)
   --serial <serial>    adb serial (default auto-select)
   --journeys <ids>     comma list e.g. J-SMOKE,J-ALICE (default all)
   --rebuild            rebuild the APK first

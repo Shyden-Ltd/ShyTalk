@@ -328,6 +328,7 @@ class IosDevice {
     // Injectable so the bounds can be PROVEN against a real hung socket in
     // milliseconds. A test that had to wait out the production values could
     // not be run, and a bound nobody runs is a bound nobody notices losing.
+    commandTimeoutMs = COMMAND_TIMEOUT_MS,
     sessionColdTimeoutMs = SESSION_COLD_TIMEOUT_MS,
     sessionRecoveryTimeoutMs = SESSION_RECOVERY_TIMEOUT_MS,
     settingsTimeoutMs = SETTINGS_TIMEOUT_MS,
@@ -361,6 +362,7 @@ class IosDevice {
     this._sessionId = null;
     this._allSessionIds = new Set();
     this._size = null;
+    this._commandTimeoutMs = commandTimeoutMs;
     this._sessionColdTimeoutMs = sessionColdTimeoutMs;
     this._sessionRecoveryTimeoutMs = sessionRecoveryTimeoutMs;
     this._settingsTimeoutMs = settingsTimeoutMs;
@@ -512,20 +514,48 @@ class IosDevice {
 
   async _get(path) {
     const sid = await this._session();
-    const r = await fetch(`${this.appiumBaseUrl}/session/${sid}${path}`, {
-      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+    const r = await this._transport(`${this.appiumBaseUrl}/session/${sid}${path}`, {
+      signal: AbortSignal.timeout(this._commandTimeoutMs),
     });
     if (!r.ok) throw new Error(`GET ${path} -> ${r.status}`);
     return (await r.json())?.value;
   }
 
+  /**
+   * One HTTP call to WebDriverAgent, dropping the session if the TRANSPORT
+   * fails.
+   *
+   * `COMMAND_TIMEOUT_MS` has always promised this — "the driver drops the
+   * session on error, so the next attempt reconnects instead of queueing
+   * behind the same dead one" — and nothing did it. `_get`/`_post` never
+   * cleared `_sessionId`, and an abort is not one of
+   * `SESSION_LOST_SIGNATURES`, so `withSessionRecovery` did not clear it
+   * either. One wedge therefore poisoned the REST of the journey: every later
+   * command queued behind the same dead session and paid the full timeout
+   * again.
+   *
+   * The discriminator is the transport, not the verdict. A 404 means WDA is
+   * alive and said no, and throwing that session away would spend a five
+   * second reconnect on every ordinary missing element.
+   */
+  async _transport(url, init) {
+    try {
+      return await fetch(url, init);
+    } catch (e) {
+      // The socket failed, so this session is not to be trusted. The next
+      // command opens a fresh one — bounded, see SESSION_RECOVERY_TIMEOUT_MS.
+      this._sessionId = null;
+      throw e;
+    }
+  }
+
   async _post(path, body) {
     const sid = await this._session();
-    const r = await fetch(`${this.appiumBaseUrl}/session/${sid}${path}`, {
+    const r = await this._transport(`${this.appiumBaseUrl}/session/${sid}${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body ?? {}),
-      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+      signal: AbortSignal.timeout(this._commandTimeoutMs),
     });
     const parsed = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -571,9 +601,21 @@ class IosDevice {
       try {
         return await operation();
       } catch (again) {
-        throw new Error(`${label} failed twice across a WebDriverAgent restart: ${again.message}`, {
-          cause: again,
-        });
+        // BOTH errors, because they say different things and only one of them
+        // is the cause. J39, 2026-08-24, reported only the second:
+        //
+        //   tapElement(main_settingsButton) failed twice across a
+        //   WebDriverAgent restart: POST /element -> 404
+        //
+        // A 404 on the REPLAY means the first attempt had already worked and
+        // the screen moved on — it says nothing about why WDA went away, and
+        // the error that did was discarded here. A diagnostic that drops the
+        // cause sends the next session hunting the symptom.
+        throw new Error(
+          `${label} failed twice across a WebDriverAgent restart. ` +
+            `What lost the session: ${e.message} — the replay then failed with: ${again.message}`,
+          { cause: again },
+        );
       }
     }
   }

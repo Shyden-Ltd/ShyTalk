@@ -195,6 +195,64 @@ describe('IosDevice bounds every request it makes (SHY-0451)', () => {
     expect(SESSION_RECOVERY_TIMEOUT_MS).toBeLessThan(SESSION_COLD_TIMEOUT_MS);
   });
 
+  test('a command that times out DROPS the session, so the next one reconnects', async () => {
+    // `COMMAND_TIMEOUT_MS` promises this in writing — "the driver drops the
+    // session on error, so the next attempt reconnects instead of queueing
+    // behind the same dead one" — and the code did not do it. `_get`/`_post`
+    // never cleared `_sessionId`, and an abort is not in
+    // SESSION_LOST_SIGNATURES, so `withSessionRecovery` did not clear it
+    // either. After one wedge, every later command in the journey queued
+    // behind the same dead session and paid the full timeout again.
+    let sessions = 0;
+    server = await startServer((req, res) => {
+      if (req.url === '/session') return respondWithSession(res, `sess-${++sessions}`);
+      return false; // every command wedges
+    });
+    const device = buildAgainst(server.baseUrl, { commandTimeoutMs: TEST_TIMEOUT_MS });
+
+    await expect(device.tap(10, 20)).rejects.toThrow();
+    expect(device._sessionId).toBeNull();
+  });
+
+  test('a command the server ANSWERS keeps the session, even when it fails', async () => {
+    // The discriminator is the TRANSPORT, not the verdict. A 404 means WDA is
+    // alive and said no; throwing that session away would churn a healthy
+    // session on every missing element — 5s of reconnect for a normal miss.
+    server = await startServer((req, res) => {
+      if (req.url === '/session') return respondWithSession(res);
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ value: { message: 'An element could not be located' } }));
+    });
+    const device = buildAgainst(server.baseUrl, { commandTimeoutMs: TEST_TIMEOUT_MS });
+
+    await expect(device.tapElement('nope')).rejects.toThrow(/could not be located/);
+    expect(device._sessionId).toBe('sess-1');
+  });
+
+  test('a recovery failure names the error that KILLED the session, not just the second one', async () => {
+    // J39, 2026-08-24: "tapElement(main_settingsButton) failed twice across a
+    // WebDriverAgent restart: POST /element -> 404". The 404 is the REPLAY
+    // failing on a screen that had already moved on. What actually killed the
+    // session was the first error — and it was discarded, so the run could not
+    // say why WebDriverAgent went away. A diagnostic that drops the cause
+    // sends the next session hunting the symptom.
+    const device = buildAgainst('http://127.0.0.1:1');
+    device._sessionId = 'live';
+    let call = 0;
+    device._post = async () => {
+      call += 1;
+      if (call === 1) throw new Error('POST /element -> 500: socket hang up');
+      throw new Error('POST /element -> 404: An element could not be located');
+    };
+
+    const error = await device.tapElement('main_settingsButton').catch((e) => e);
+    // Both, and neither is optional: the first says WHY the session died, the
+    // second is what the operator actually sees on the failed step.
+    expect(error.message).toMatch(/socket hang up/);
+    expect(error.message).toMatch(/could not be located/);
+    expect(call).toBeGreaterThan(1);
+  });
+
   test('every budget the driver waits on is finite', () => {
     // Pins the defect itself: before SHY-0451 this budget did not exist, and
     // the value it stands in for was Infinity.

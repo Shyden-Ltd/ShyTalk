@@ -174,6 +174,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
     forceStop: 'already best-effort; a terminate that fails is fine',
     dumpXml: 'has its own retry, older and stronger (it also retries a non-hierarchy reply)',
     withSessionRecovery: 'is the mechanism',
+    _transport:
+      'raw transport — it is what _get/_post call, and it is where the session ' +
+      'is DROPPED on a socket failure so the next command reconnects. Wrapping ' +
+      'it in the retry would retry single calls, which is what the retry ' +
+      'deliberately does not do.',
     _get: 'raw transport — the retry wraps whole operations, not single calls',
     _post: 'raw transport',
     _session: 'raw transport',
