@@ -190,6 +190,54 @@ function selectCoreDeviceUuid(preferred) {
  */
 const MJPEG_SERVER_PORT = 9100;
 
+/**
+ * How long any single WebDriverAgent command may take before it is abandoned.
+ *
+ * `fetch` has no default timeout, so a wedged WDA left the request open until
+ * the OS gave up around 38 seconds -- and `dumpWithRetry` did that eight times.
+ * The result was a ~313 SECOND stall that struck roughly once per matrix and
+ * landed on a different journey each run: J06, then J38, then J02. It looked
+ * like a slow journey; it was one hung socket.
+ *
+ * Generous against reality: a read is 300ms on a sparse screen and ~2.3s on the
+ * busiest one measured. Ten seconds is four times the worst healthy case, so
+ * anything reaching it is stuck. Failing fast is what makes the retry
+ * worth having -- the driver drops the session on error, so the next attempt
+ * reconnects instead of queueing behind the same dead one.
+ *
+ * NOT applied to session creation, which legitimately takes minutes while
+ * WebDriverAgent builds and installs (`appium:wdaLaunchTimeout`).
+ */
+const COMMAND_TIMEOUT_MS = 10000;
+
+/**
+ * How long ONE screen read may spend retrying before it gives up.
+ *
+ * The retry's attempt count was sized for Android, where a failed dump exits
+ * immediately -- eight attempts there is about five seconds. On iOS a failed
+ * attempt is a command that ran out of time, so eight of them is 166 seconds
+ * for a single read.
+ *
+ * That is what a ~312 SECOND stall inside `signOutFlow` turned out to be. It
+ * struck roughly once per matrix and landed on a different journey each run --
+ * J-ADMIN, J02, J06, J38 -- which is why it read as a slow journey rather than
+ * as one wedged read.
+ *
+ * The budget has to be SMALL, because the multiplier is not the retry -- it is
+ * the number of reads in the path. When WebDriverAgent wedges, every dump costs
+ * the whole budget, and `signOutFlow` does about seven of them:
+ *
+ *     45s budget  ->  7 x 45s  =  315s   (measured: 312,193ms)
+ *     10s budget  ->  7 x 10s  =   70s
+ *
+ * Clearing the session between attempts does not help: a fresh session hits the
+ * same wedged WDA. The only lever is to stop paying for it.
+ *
+ * Failing here is not the end of anything: `ensureAtSignIn` catches it and
+ * restarts the app, which costs about 45 seconds and works.
+ */
+const DUMP_RETRY_BUDGET_MS = 10000;
+
 class IosDevice {
   /**
    * An iPhone answers to TWO identifiers, and they are not interchangeable:
@@ -346,7 +394,9 @@ class IosDevice {
 
   async _get(path) {
     const sid = await this._session();
-    const r = await fetch(`${this.appiumBaseUrl}/session/${sid}${path}`);
+    const r = await fetch(`${this.appiumBaseUrl}/session/${sid}${path}`, {
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
+    });
     if (!r.ok) throw new Error(`GET ${path} -> ${r.status}`);
     return (await r.json())?.value;
   }
@@ -357,6 +407,7 @@ class IosDevice {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(COMMAND_TIMEOUT_MS),
     });
     const parsed = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -418,21 +469,24 @@ class IosDevice {
    * node list, and the caller cannot tell that from "the element is absent".
    */
   async dumpXml() {
-    const result = await dumpWithRetry(async () => {
-      try {
-        const xml = await this._get('/source');
-        if (!xml || !String(xml).includes('XCUIElementType')) {
-          throw new Error(`not an XCUITest hierarchy: ${String(xml).slice(0, 120) || '(empty)'}`);
+    const result = await dumpWithRetry(
+      async () => {
+        try {
+          const xml = await this._get('/source');
+          if (!xml || !String(xml).includes('XCUIElementType')) {
+            throw new Error(`not an XCUITest hierarchy: ${String(xml).slice(0, 120) || '(empty)'}`);
+          }
+          return xml;
+        } catch (e) {
+          // A dropped session is recoverable; a dropped phone is not. Clearing
+          // the id makes the next attempt reconnect rather than replay a dead
+          // handle.
+          this._sessionId = null;
+          throw e;
         }
-        return xml;
-      } catch (e) {
-        // A dropped session is recoverable; a dropped phone is not. Clearing
-        // the id makes the next attempt reconnect rather than replay a dead
-        // handle.
-        this._sessionId = null;
-        throw e;
-      }
-    });
+      },
+      { deadlineMs: DUMP_RETRY_BUDGET_MS },
+    );
     if (!result.ok) {
       throw new Error(
         `XCUITest source failed after ${result.attempts} attempts; last error: ${result.lastErr}`,
@@ -457,10 +511,31 @@ class IosDevice {
    */
   async tapElement(tag) {
     return this.withSessionRecovery(`tapElement(${tag})`, async () => {
-      const el = await this._post('/element', { using: 'accessibility id', value: tag });
-      const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
-      if (!id) throw new Error(`no element with accessibility id "${tag}" to tap`);
-      await this._post(`/element/${id}/click`, {});
+      // Looked up TWICE if the first look misses.
+      //
+      // `404: An element could not be located` here does not mean the control
+      // is absent -- it means it was not there in the instant WebDriverAgent
+      // looked. A screen that is still arriving, or a list finishing its
+      // scroll, produces exactly that for a control the caller has just seen in
+      // the tree. `withSessionRecovery` does not cover it, because nothing is
+      // wrong with the session.
+      //
+      // Observed twice on 2026-08-24, on different controls
+      // (`persona_row_P-02`, `main_settingsButton`), each failing a journey
+      // that was otherwise fine.
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const el = await this._post('/element', { using: 'accessibility id', value: tag });
+          const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+          if (!id) throw new Error(`no element with accessibility id "${tag}" to tap`);
+          await this._post(`/element/${id}/click`, {});
+          return;
+        } catch (e) {
+          const missed = /could not be located|no such element/i.test(e.message || '');
+          if (!missed || attempt >= 2) throw e;
+          await new Promise((r) => setTimeout(r, 600));
+        }
+      }
     });
   }
 

@@ -693,6 +693,14 @@ const POLL_FLOOR_MS = 250;
 const IOS_POLL_GAP_MS = 700;
 
 /**
+ * How far a row may drift between two reads and still count as still.
+ *
+ * Not zero: a live tree can differ by a pixel of rounding without anything
+ * having moved. Enough to tell that apart from a list carrying the row away.
+ */
+const ROW_STABLE_PX = 4;
+
+/**
  * Wait out whatever is still owed since `tickStarted`, and nothing more.
  *
  * A read slower than the floor returns immediately, which is the whole point:
@@ -705,21 +713,36 @@ async function pollGap(tickStarted, device) {
   if (owed > 0) await sleep(owed);
 }
 
+/**
+ * Wait for the persona sheet to go away, and say whether it did.
+ *
+ * Returns rather than throws: the caller has two more attempts, and "still
+ * open" is an outcome it handles, not an error.
+ */
+async function pickerClosed(device, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const tick = Date.now();
+    if (!pickerIsOpen(await dump(device))) return true;
+    if (Date.now() >= deadline) return false;
+    await pollGap(tick, device);
+  }
+}
+
 /** Is this tree recent enough to tap from? */
-function treeIsFresh(nodes, device) {
-  // Android only. The saving is one ~2332ms read per tap, which is why this
-  // exists.
+function treeIsFresh(nodes) {
+  // Both platforms now. The gate used to be "Android only", justified by "on
+  // iOS a read is 278ms, so it saves almost nothing" -- measured on the
+  // near-empty SignIn screen. A read on a real screen is ~700ms, so on iOS
+  // every tap was costing TWO of them: `tapId` reads to find the control and
+  // `tapResolved` immediately read again to re-resolve it.
   //
-  // It stays off for iOS on CORRECTNESS, not on speed. The old reason given
-  // here -- "on iOS a read is 278ms, so it saves almost nothing" -- was
-  // measured on the near-empty SignIn screen; mid-journey a read cost 1323ms,
-  // and 478ms once WDA's idle waits were disabled. So the saving would be real.
-  //
-  // The reason not to take it is the other half: those idle waits are now off,
-  // so a snapshot can already catch the UI mid-animation, and reusing that tree
-  // for a tap would compound it. Every tap re-reads before it acts -- SHY-0441
-  // exists because a control that is findable is not necessarily where it was.
-  if (device?.kind === 'ios') return false;
+  // What makes this safe is the WINDOW, not the platform. TREE_FRESH_MS covers
+  // the gap between finding a control and tapping it, with no tap, wait or
+  // navigation in between -- nothing we did can have moved the screen, and
+  // anything older than the window is re-read exactly as before. SHY-0441's
+  // protection is against a screen that moved; within 400ms of our own read,
+  // it has not.
   return (
     Array.isArray(nodes) &&
     Number.isFinite(nodes.takenAt) &&
@@ -919,7 +942,7 @@ async function tapResolved(device, node, labelOrOpts, extra) {
   // phone was actually read, not on the caller saying so, and re-read the
   // moment it is stale — so the re-resolve still protects against a screen
   // that moved, which is what SHY-0441 was about.
-  const fresh = treeIsFresh(opts.nodes, device) ? opts.nodes : await dump(device);
+  const fresh = treeIsFresh(opts.nodes) ? opts.nodes : await dump(device);
   const again = relocate
     ? relocate(fresh)
     : (node.id && byId(fresh, node.id)) ||
@@ -1167,9 +1190,20 @@ async function selectPersonaByText(device, needle) {
     const row = byId(nodes, rowTag);
     // Inside the LIST, not merely in the tree. See centreIsInside.
     if (row && centreIsInside(byId(nodes, 'persona_picker_list'), row)) {
-      await tapId(device, rowTag);
-      await sleep(1000);
-      return;
+      // And STILL THERE a moment later. A list that is finishing its scroll
+      // carries the row away between the read and the tap, and WebDriverAgent
+      // answers `404: An element could not be located` for a row that was on
+      // screen when we looked. Waiting longer is the wrong fix -- the question
+      // is whether the list has stopped, and two agreeing reads answer it.
+      const settled = byId(await dump(device), rowTag);
+      if (settled && Math.abs(settled.center.y - row.center.y) <= ROW_STABLE_PX) {
+        await tapId(device, rowTag);
+        await sleep(1000);
+        return;
+      }
+      // Still moving: fall through and look again rather than tapping at it.
+      await sleep(300);
+      continue;
     }
     // Anchored to the list's OWN box where it can be read. Fractions of the
     // screen are a guess about where the sheet is, and a swipe that starts
@@ -1377,6 +1411,11 @@ async function ensureAtSignIn(device, pkg) {
   // that cannot start from an unknown screen is a journey nobody can re-run.
   let nodes;
   try {
+    // 20s, deliberately. Shortening this to 8s was tried on 2026-08-24 and made
+    // the matrix WORSE -- 544s to 1019s -- because it gives up on a screen that
+    // was about to settle and falls through to a force-stop and relaunch, which
+    // is far more expensive than waiting. Two journeys went from 37s and 96s to
+    // 301s and 367s on that change alone.
     nodes = await settle(device, 20000);
   } catch (_e) {
     nodes = null;
@@ -1658,8 +1697,10 @@ async function signInAs(device, reporter, ctx, email) {
     for (let attempt = 1; attempt <= 3; attempt++) {
       await openPersonaPicker(device);
       await selectPersonaByText(device, email);
-      await sleep(2500);
-      if (!pickerIsOpen(await dump(device))) {
+      // Polled, not slept. A flat 2.5s was paid on EVERY journey whether the
+      // picker had already closed or never would -- 32 seconds across a matrix,
+      // spent looking at a screen that had finished changing.
+      if (await pickerClosed(device, 6000)) {
         return `selected ${email} (attempt ${attempt})`;
       }
     }
