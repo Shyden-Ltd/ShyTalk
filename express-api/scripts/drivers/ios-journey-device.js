@@ -97,22 +97,88 @@ function isSessionLost(error) {
   return SESSION_LOST_SIGNATURES.some((sig) => lower.includes(sig));
 }
 
-function selectCoreDeviceUuid(preferred) {
-  if (preferred) return preferred;
-  let out;
+const CORE_DEVICE_UUID = /([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})/i;
+
+/**
+ * Lines of `devicectl list devices` describing a REAL phone.
+ *
+ * `simulated` is dropped here rather than at each caller, because handing the
+ * runner a simulator is the single worst outcome available: it would succeed,
+ * and then prove nothing. SHY-0419 was invisible to everything except the real
+ * device.
+ */
+function physicalDeviceLines(out) {
+  return String(out || '')
+    .split('\n')
+    .filter((line) => /\bphysical\b/.test(line) && !/simulated/.test(line));
+}
+
+/** The phone with a LIVE tunnel, or null. */
+function connectedPhoneIn(out) {
+  for (const line of physicalDeviceLines(out)) {
+    if (!/\bconnected\b/.test(line)) continue;
+    const m = CORE_DEVICE_UUID.exec(line);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * The phone whose tunnel is merely DORMANT — paired, or already connected.
+ *
+ * `unavailable` is excluded: devicectl knows of that device and cannot reach
+ * it, so waking it is a timeout rather than a recovery.
+ */
+function pairedPhoneIn(out) {
+  for (const line of physicalDeviceLines(out)) {
+    if (/\bunavailable\b/.test(line)) continue;
+    if (!/\bconnected\b/.test(line) && !/\bavailable\b/.test(line)) continue;
+    const m = CORE_DEVICE_UUID.exec(line);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function listDevicesOutput() {
   try {
-    out = run('xcrun', ['devicectl', 'list', 'devices']);
+    return run('xcrun', ['devicectl', 'list', 'devices']);
   } catch {
     // No devicectl, or no phone. Null rather than a throw: the caller decides
     // whether an absent iPhone is fatal for the run it is doing.
     return null;
   }
-  for (const line of out.split('\n')) {
-    if (!/\bconnected\b/.test(line) || /simulated/.test(line)) continue;
-    const m = /([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})/i.exec(line);
-    if (m) return m[1];
+}
+
+function selectCoreDeviceUuid(preferred) {
+  if (preferred) return preferred;
+
+  const out = listDevicesOutput();
+  if (out === null) return null;
+
+  const connected = connectedPhoneIn(out);
+  if (connected) return connected;
+
+  // Paired but dormant is NOT an absent phone.
+  //
+  // `list devices` reports the tunnel state at that instant, and CoreDevice
+  // brings tunnels up on demand — so after a reboot, or simply after the phone
+  // has been idle, a passive list says `available (paired)`. Requiring the word
+  // `connected` made the runner stop with "No connected iPhone found" while the
+  // phone sat plugged in, unlocked and paired, and blocked an entire platform's
+  // evidence run on 2026-08-24.
+  //
+  // Asking devicectl for anything about the device opens the tunnel. The result
+  // is discarded; establishing it is the whole point.
+  const dormant = pairedPhoneIn(out);
+  if (!dormant) return null;
+  try {
+    run('xcrun', ['devicectl', 'device', 'info', 'details', '--device', dormant]);
+  } catch {
+    // A wake that fails is not fatal by itself — the read below is what decides.
   }
-  return null;
+
+  const after = listDevicesOutput();
+  return after === null ? null : connectedPhoneIn(after);
 }
 
 /**
@@ -641,5 +707,7 @@ module.exports = {
   listMethods,
   IosDevice,
   selectCoreDeviceUuid,
+  connectedPhoneIn,
+  pairedPhoneIn,
   IOS_JOURNEY_METHOD_NAMES,
 };

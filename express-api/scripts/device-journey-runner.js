@@ -727,6 +727,33 @@ const boxHolds = (box, point) =>
   point.y <= box.y2;
 
 /**
+ * Is a row far enough into its scrolling list to be tapped?
+ *
+ * A `LazyColumn` composes a little beyond its viewport, so a row can be in the
+ * tree — with an id, sane bounds and an enabled flag — while sitting entirely
+ * OUTSIDE the list it belongs to. Tapping its centre then misses the list
+ * completely, and on iOS a sheet's surroundings are a dismiss scrim: the picker
+ * closes, nothing is selected, and the app is back on SignIn looking exactly
+ * as though sign-in had failed.
+ *
+ * Measured on the real iPhone, 2026-08-24, reaching for the admin persona:
+ *
+ *     persona_picker_list   y 258 -> 658
+ *     persona_row_P-12      y 735 -> 788   (centre 762, 77pt below the list)
+ *
+ * Every journey needing that persona failed this way, while personas that
+ * happened to compose inside the viewport passed.
+ *
+ * This is SHY-0441's lesson — findable is not reachable — applied to scroll
+ * viewports rather than to overlays. It is deliberately a CONTAINMENT test
+ * against the specific container, not a general `visible` gate: SHY-0441
+ * removed that gate because captions on a plain Home screen report
+ * `visible="false"` while plainly rendered.
+ */
+const centreIsInside = (container, target) =>
+  Boolean(container?.bounds && target?.center) && boxHolds(container.bounds, target.center);
+
+/**
  * Things that genuinely paint over an app's controls and swallow taps.
  *
  * Deliberately a SHORT, specific list rather than a general rule. The general
@@ -1084,6 +1111,12 @@ async function waitForText(device, sub, timeoutMs = 8000) {
 async function openPersonaPicker(device, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last;
+  // Already open is already done. The retry loop in `signInAs` calls this again
+  // after a selection that did not take, and the button it presses lives on the
+  // SignIn screen BEHIND the sheet -- so a second attempt reported "tap target
+  // #persona_picker_open not found on screen" while the picker sat open in
+  // front of it, hiding the real reason the first attempt failed.
+  if (pickerIsOpen(await dump(device))) return;
   for (let attempt = 1; ; attempt++) {
     await tapId(device, 'persona_picker_open');
     try {
@@ -1105,23 +1138,44 @@ async function openPersonaPicker(device, timeoutMs = 8000) {
   );
 }
 
+/**
+ * Scroll the picker to a persona's ROW and tap the row itself.
+ *
+ * Not the email label inside it. A label is findable and not necessarily
+ * hit-testable: on iOS the tap fell straight through to the list and nothing
+ * was selected, which is why every journey needing a persona BELOW THE FOLD
+ * failed while the ones above it passed.
+ *
+ * `tapId` goes through the element API and carries SHY-0441's reachability
+ * check, so a row hidden behind the sheet header fails loudly instead of being
+ * tapped into thin air.
+ */
 async function selectPersonaByText(device, needle) {
   const { w, h } = device.size();
+  const rowTag = personaRowTag(needle);
   for (let i = 0; i < 8; i++) {
     const nodes = await dump(device);
-    const n = byTextContains(nodes, needle);
-    if (n) {
-      await tapResolved(device, n);
+    const row = byId(nodes, rowTag);
+    // Inside the LIST, not merely in the tree. See centreIsInside.
+    if (row && centreIsInside(byId(nodes, 'persona_picker_list'), row)) {
+      await tapId(device, rowTag);
       await sleep(1000);
       return;
     }
-    await device.swipe(
-      Math.floor(w / 2),
-      Math.floor(h * 0.62),
-      Math.floor(w / 2),
-      Math.floor(h * 0.32),
-      450,
-    );
+    // Anchored to the list's OWN box where it can be read. Fractions of the
+    // screen are a guess about where the sheet is, and a swipe that starts
+    // outside it scrolls the page behind instead -- or, on iOS, drags the sheet.
+    const listBox = byId(nodes, 'persona_picker_list')?.bounds;
+    const from = listBox
+      ? {
+          x: Math.floor((listBox.x1 + listBox.x2) / 2),
+          y: Math.floor(listBox.y2 - (listBox.y2 - listBox.y1) * 0.15),
+        }
+      : { x: Math.floor(w / 2), y: Math.floor(h * 0.62) };
+    const to = listBox
+      ? { x: from.x, y: Math.floor(listBox.y1 + (listBox.y2 - listBox.y1) * 0.15) }
+      : { x: Math.floor(w / 2), y: Math.floor(h * 0.32) };
+    await device.swipe(from.x, from.y, to.x, to.y, 450);
     await sleep(700);
   }
   throw new Error(`persona "${needle}" not found in picker after scrolling`);
@@ -1493,6 +1547,36 @@ const PERSONA_UNIQUE_ID_BY_EMAIL = new Map(
 );
 
 /**
+ * The testTag of the ROW a persona occupies in the picker — `persona_row_P-12`.
+ *
+ * Derived from the same table the app seeds from, so the two cannot drift.
+ */
+const PERSONA_ROW_TAG_BY_EMAIL = new Map(
+  require('./provision-test-personas').personas.map((p) => [p.email, `persona_row_${p.id}`]),
+);
+
+function personaRowTag(email) {
+  const tag = PERSONA_ROW_TAG_BY_EMAIL.get(email);
+  if (tag === undefined) {
+    throw new Error(
+      `no seeded persona for ${JSON.stringify(email)} — ` +
+        `known: ${[...PERSONA_ROW_TAG_BY_EMAIL.keys()].join(', ')}`,
+    );
+  }
+  return tag;
+}
+
+/**
+ * Is the persona picker on screen?
+ *
+ * By its LIST, which both platforms surface. This used to ask whether
+ * `persona_picker_open` was absent — but that tag belongs to the BUTTON on the
+ * SignIn screen that opens the picker, and iOS never surfaces it, so the check
+ * was vacuously true there and the selection step could not fail.
+ */
+const pickerIsOpen = (nodes) => !!byId(nodes, 'persona_picker_list');
+
+/**
  * The account id a persona must be signed in as.
  *
  * Throws on an unknown email rather than returning undefined: an identity
@@ -1546,7 +1630,7 @@ async function signInAs(device, reporter, ctx, email) {
       await openPersonaPicker(device);
       await selectPersonaByText(device, email);
       await sleep(2500);
-      if (!byId(await dump(device), 'persona_picker_open')) {
+      if (!pickerIsOpen(await dump(device))) {
         return `selected ${email} (attempt ${attempt})`;
       }
     }
@@ -3044,6 +3128,9 @@ module.exports = {
   j38Messages,
   staleJourneyTickets,
   personaUniqueId,
+  personaRowTag,
+  pickerIsOpen,
+  centreIsInside,
   accountOnDevice,
   JOURNEY_TICKET_PREFIX,
   MAX_OPEN_TICKETS_LISTED,
