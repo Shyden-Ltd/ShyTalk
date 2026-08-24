@@ -215,6 +215,21 @@ describe('every device command survives a WebDriverAgent restart', () => {
     expect({ uncovered }).toEqual({ uncovered: [] });
   });
 
+  /**
+   * What the driver said out loud during a test.
+   *
+   * The tolerance below is deliberately NOT silent, so the warning is part of
+   * the contract and is asserted like any other output.
+   */
+  let warnSpy;
+  beforeEach(() => {
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+  const warned = () => warnSpy.mock.calls.flat().join(' ');
+
   /** A device whose transport dies once with a session-lost error, then works. */
   function deviceThatLosesWdaOnce() {
     const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
@@ -250,6 +265,92 @@ describe('every device command survives a WebDriverAgent restart', () => {
       // what turned one WDA death into a whole failed journey.
       expect(d._sessionId).toBeNull();
     });
+  });
+
+  test('a click whose ANSWER was lost is not replayed onto the next screen', async () => {
+    // J39, twice in six runs on 2026-08-24:
+    //
+    //   What lost the session: POST /element/B201.../click -> 500: Could not
+    //   proxy command to the remote server. Original error: socket hang up
+    //   — the replay then failed with: POST /element -> 404
+    //
+    // The on-screen tags proved the form had OPENED. The click landed;
+    // WebDriverAgent died on the reply; the replay then hunted a control the
+    // successful click had navigated away from, and failed a journey that had
+    // actually done exactly what it was asked to do.
+    //
+    // `withSessionRecovery` documents this as accepted — "if WDA died AFTER
+    // acting on a command but before answering, the retry repeats it" — and it
+    // was, when the alternative was failing the run outright. The replay just
+    // has to ask whether the first attempt already worked. A control that has
+    // GONE after a lost click is the answer.
+    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    d._sessionId = 'live';
+    let clicked = 0;
+    d._post = async (routePath) => {
+      if (String(routePath).includes('/click')) {
+        clicked += 1;
+        // The click TAKES EFFECT, then the answer is lost.
+        throw new Error(
+          'POST /click -> 500: Could not proxy command to the remote server. ' +
+            'Original error: socket hang up',
+        );
+      }
+      // After the navigation the control no longer exists.
+      if (clicked > 0) {
+        throw new Error('POST /element -> 404: An element could not be located on the page');
+      }
+      return { 'element-6066-11e4-a52e-4f735466cecf': 'el-1' };
+    };
+
+    await expect(d.tapElement('support_contactAnyway')).resolves.toBeUndefined();
+    // Never silently: the journey's NEXT step is what really decides, and it
+    // must be possible to see this in the log when that step is the one that
+    // fails. See [[feedback-silent-guards-and-stringly-typed-contracts]].
+    expect(warned()).toMatch(/support_contactAnyway/);
+    // And the click is not repeated — replaying a landed click is the defect,
+    // not the cure.
+    expect(clicked).toBe(1);
+  });
+
+  test('the same holds for a click by LABEL, which is where dialogs live', async () => {
+    // Fixed in the same sweep rather than waiting for a journey to find it
+    // here too. A dialog's "Later" is precisely the control that STOPS
+    // EXISTING the instant it is pressed, so a lost answer leaves the replay
+    // hunting something that cannot be there.
+    // See [[feedback-guard-the-class-not-the-instance]].
+    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    d._sessionId = 'live';
+    let clicked = 0;
+    d._post = async (routePath) => {
+      if (String(routePath).includes('/click')) {
+        clicked += 1;
+        throw new Error(
+          'POST /click -> 500: Could not proxy command to the remote server. ' +
+            'Original error: socket hang up',
+        );
+      }
+      if (clicked > 0) {
+        throw new Error('POST /element -> 404: An element could not be located on the page');
+      }
+      return { 'element-6066-11e4-a52e-4f735466cecf': 'el-1' };
+    };
+
+    await expect(d.tapElementByLabel('Later')).resolves.toBeUndefined();
+    expect(warned()).toMatch(/Later/);
+    expect(clicked).toBe(1);
+  });
+
+  test('a control that was NEVER clicked still fails by label', async () => {
+    // The tolerance is scoped to "we already clicked it". A label that was
+    // never there must still be an error, or a typo'd dialog button becomes a
+    // silent no-op that passes every run.
+    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    d._sessionId = 'live';
+    d._post = async () => {
+      throw new Error('POST /element -> 404: An element could not be located on the page');
+    };
+    await expect(d.tapElementByLabel('Nope')).rejects.toThrow(/could not be located/);
   });
 
   test('an element that is absent still fails, and the look is bounded', async () => {

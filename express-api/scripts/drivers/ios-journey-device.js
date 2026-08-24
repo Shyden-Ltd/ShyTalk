@@ -670,6 +670,10 @@ class IosDevice {
    * @param {string} tag accessibility identifier
    */
   async tapElement(tag) {
+    // Declared OUTSIDE the operation, so it survives the replay:
+    // `withSessionRecovery` re-runs the operation, not this method. That is
+    // what lets the second attempt know the first one already clicked.
+    let clickIssued = false;
     return this.withSessionRecovery(`tapElement(${tag})`, async () => {
       // Looked up TWICE if the first look misses.
       //
@@ -688,10 +692,26 @@ class IosDevice {
           const el = await this._post('/element', { using: 'accessibility id', value: tag });
           const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
           if (!id) throw new Error(`no element with accessibility id "${tag}" to tap`);
+          clickIssued = true;
           await this._post(`/element/${id}/click`, {});
           return;
         } catch (e) {
           const missed = /could not be located|no such element/i.test(e.message || '');
+          if (missed && clickIssued) {
+            // The control is GONE and we had already clicked it, which is what
+            // a click that landed and then lost its answer looks like. J39
+            // failed twice in six runs on 2026-08-24 doing exactly this: the
+            // form had opened, and the replay hunted the button that opened it.
+            //
+            // Said out loud rather than swallowed. The journey's NEXT step is
+            // what really decides, and when THAT is the step that fails this
+            // line is how the log explains it.
+            console.warn(
+              `[ios] ${tag} is gone after a click whose answer was lost — treating the ` +
+                'click as landed; the next step is what confirms it',
+            );
+            return;
+          }
           if (!missed || attempt >= 2) throw e;
           await new Promise((r) => setTimeout(r, 600));
         }
@@ -719,13 +739,30 @@ class IosDevice {
    */
   async tapElementByLabel(label) {
     const quoted = JSON.stringify(String(label));
+    // Same class of defect as `tapElement`, and fixed the same way rather than
+    // waiting for a journey to find it here too. A dialog's "Later" is exactly
+    // the kind of control that STOPS EXISTING the moment it is pressed.
+    let clickIssued = false;
     return this.withSessionRecovery(`tapElementByLabel(${quoted})`, async () => {
-      const el = await this._post('/element', {
-        using: '-ios predicate string',
-        value: `label == ${quoted} OR name == ${quoted} OR value == ${quoted}`,
-      });
+      let el;
+      try {
+        el = await this._post('/element', {
+          using: '-ios predicate string',
+          value: `label == ${quoted} OR name == ${quoted} OR value == ${quoted}`,
+        });
+      } catch (e) {
+        if (clickIssued && /could not be located|no such element/i.test(e.message || '')) {
+          console.warn(
+            `[ios] ${quoted} is gone after a click whose answer was lost — treating the ` +
+              'click as landed; the next step is what confirms it',
+          );
+          return;
+        }
+        throw e;
+      }
       const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
       if (!id) throw new Error(`no element labelled ${quoted} to tap`);
+      clickIssued = true;
       await this._post(`/element/${id}/click`, {});
     });
   }
