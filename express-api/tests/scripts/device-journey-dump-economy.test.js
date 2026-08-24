@@ -18,6 +18,12 @@
  * caller may hand over the tree it just took, and `tapResolved` uses it only
  * while it is still fresh — checked against when the tree was actually read,
  * not against the caller's word for it.
+ *
+ * The reuse was originally gated to Android, on the grounds that an iOS read
+ * is only 278ms. That figure came from the near-empty SignIn screen; a real
+ * one is ~700ms, so the gate was costing iOS two reads on every tap. It now
+ * applies to both platforms, and the WINDOW is what makes it safe — which is
+ * why the staleness half of the contract is pinned on both platforms too.
  */
 
 const {
@@ -68,11 +74,36 @@ describe('a tree knows when it was read', () => {
 });
 
 describe('tapResolved reads the screen once when it can', () => {
-  test('on iOS a tree is never reused — it saves 278ms and costs correctness', async () => {
+  test('on iOS a fresh tree is reused too — the WINDOW is what makes it safe', async () => {
+    // This used to assert the opposite, and the reasoning it carried was
+    // "on iOS a read is 278ms, so it saves almost nothing". That figure was
+    // measured on the near-empty SignIn screen. A read on a real screen is
+    // ~700ms, so gating the reuse to Android meant every iOS tap paid for TWO
+    // of them: `tapId` reads to find the control, and `tapResolved` read again
+    // to re-resolve it, with nothing in between.
+    //
+    // What makes the reuse safe is the window, not the platform, and that is
+    // pinned by the sibling test below: anything older than TREE_FRESH_MS is
+    // still re-read on iOS exactly as it always was.
     const device = countingDevice();
     device.kind = 'ios';
     const nodes = await dump(device);
     await tapResolved(device, nodes[0], { label: '#support_send', nodes });
+    expect(device.dumps).toBe(1);
+    expect(device.taps).toHaveLength(1);
+  });
+
+  test('on iOS a STALE tree is still re-read — SHY-0441 is not traded away', async () => {
+    // The half of the contract that carries the risk, and nothing pinned it on
+    // iOS before. If the freshness check were ever dropped rather than
+    // widened, the test above would still pass and this one would not.
+    const device = countingDevice();
+    device.kind = 'ios';
+    const nodes = await dump(device);
+    nodes.takenAt = Date.now() - (TREE_FRESH_MS + 500);
+
+    await tapResolved(device, nodes[0], { label: '#support_send', nodes });
+
     expect(device.dumps).toBe(2);
   });
 
