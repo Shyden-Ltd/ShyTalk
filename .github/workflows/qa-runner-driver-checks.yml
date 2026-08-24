@@ -100,16 +100,7 @@ jobs:
         run: npx playwright install --with-deps chromium firefox webkit
         working-directory: express-api
 
-      - name: Install ffmpeg
-        # journey-screen-recorder's assertPlayable tests run REAL ffmpeg against
-        # REAL recordings — a header-only file, a truncated one, a file with no
-        # video stream — because the defects they guard are exactly the ones a
-        # fake would report as fine. The runner image has no ffmpeg, so those
-        # five tests failed to run at all rather than failing an assertion.
-        #
-        # apt puts it at /usr/bin/ffmpeg, which is already one of the driver's
-        # BINARY_SEARCH_PATHS, so nothing else needs to change.
-        run: sudo apt-get install -y --no-install-recommends ffmpeg
+      - uses: ./.github/actions/install-ffmpeg
 
       - name: Driver contract test
         # Bounded subset of the full express-api suite — fastest signal
