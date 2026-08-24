@@ -249,17 +249,24 @@ describe('every device command survives a WebDriverAgent restart', () => {
   /**
    * What the driver said out loud during a test.
    *
-   * The tolerance below is deliberately NOT silent, so the warning is part of
-   * the contract and is asserted like any other output.
+   * The tolerances below are deliberately NOT silent, so a warning is part of
+   * the contract and is asserted like any other output. Collected through the
+   * driver's injected `warn` — a real function, not a patched console and not
+   * a mock, which SHY-0108's stub guard rightly refuses.
    */
-  let warnSpy;
+  let warnings = [];
   beforeEach(() => {
-    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    warnings = [];
   });
-  afterEach(() => {
-    warnSpy.mockRestore();
-  });
-  const warned = () => warnSpy.mock.calls.flat().join(' ');
+  const warned = () => warnings.join(' ');
+  /** A device that reports its warnings to this test instead of the terminal. */
+  const speakingDevice = (over = {}) =>
+    createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      bundleId: 'com.example',
+      warn: (...args) => warnings.push(args.join(' ')),
+      ...over,
+    });
 
   /** A device whose transport dies once with a session-lost error, then works. */
   function deviceThatLosesWdaOnce() {
@@ -315,7 +322,7 @@ describe('every device command survives a WebDriverAgent restart', () => {
     // was, when the alternative was failing the run outright. The replay just
     // has to ask whether the first attempt already worked. A control that has
     // GONE after a lost click is the answer.
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = speakingDevice();
     d._sessionId = 'live';
     let clicked = 0;
     d._post = async (routePath) => {
@@ -350,7 +357,7 @@ describe('every device command survives a WebDriverAgent restart', () => {
     // EXISTING the instant it is pressed, so a lost answer leaves the replay
     // hunting something that cannot be there.
     // See [[feedback-guard-the-class-not-the-instance]].
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = speakingDevice();
     d._sessionId = 'live';
     let clicked = 0;
     d._post = async (routePath) => {
@@ -400,7 +407,7 @@ describe('every device command survives a WebDriverAgent restart', () => {
     // what the caller asked for whether or not the first attempt landed --
     // and clearing is scoped to the REPLAY, because journeys rely on typing
     // adding to a field that already holds something.
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = speakingDevice();
     d._sessionId = 'live';
     const routes = [];
     let values = 0;

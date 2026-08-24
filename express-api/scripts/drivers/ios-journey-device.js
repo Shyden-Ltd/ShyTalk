@@ -333,6 +333,10 @@ class IosDevice {
     sessionRecoveryTimeoutMs = SESSION_RECOVERY_TIMEOUT_MS,
     settingsTimeoutMs = SETTINGS_TIMEOUT_MS,
     quitTimeoutMs = QUIT_TIMEOUT_MS,
+    // Injected so a test can READ what the driver said without patching the
+    // console. The warnings below are part of the contract -- a tolerated
+    // lost click, a retyped field -- and a contract has to be assertable.
+    warn = console.warn,
   }) {
     // Validated at construction, not at first use. Appium's answer to
     // `appium:udid: undefined` is "Unknown device or simulator UDID:
@@ -367,6 +371,7 @@ class IosDevice {
     this._sessionRecoveryTimeoutMs = sessionRecoveryTimeoutMs;
     this._settingsTimeoutMs = settingsTimeoutMs;
     this._quitTimeoutMs = quitTimeoutMs;
+    this._warn = warn;
   }
 
   /**
@@ -454,7 +459,7 @@ class IosDevice {
     // a mean — so the OUTLIER is what gets printed.
     const tookMs = Date.now() - started;
     if (tookMs > SESSION_SLOW_WARN_MS) {
-      console.warn(
+      this._warn(
         `[ios] ${isReconnect ? 'reconnect' : 'cold'} session took ${tookMs}ms ` +
           `(healthy is ~5000ms) — WebDriverAgent is struggling`,
       );
@@ -492,10 +497,10 @@ class IosDevice {
         signal: AbortSignal.timeout(this._settingsTimeoutMs),
       });
       if (!res.ok) {
-        console.warn(`[ios] WDA settings refused (${res.status}); reads will be slower`);
+        this._warn(`[ios] WDA settings refused (${res.status}); reads will be slower`);
       }
     } catch (e) {
-      console.warn(`[ios] WDA settings could not be applied: ${e.message}`);
+      this._warn(`[ios] WDA settings could not be applied: ${e.message}`);
     }
   }
 
@@ -706,7 +711,7 @@ class IosDevice {
             // Said out loud rather than swallowed. The journey's NEXT step is
             // what really decides, and when THAT is the step that fails this
             // line is how the log explains it.
-            console.warn(
+            this._warn(
               `[ios] ${tag} is gone after a click whose answer was lost — treating the ` +
                 'click as landed; the next step is what confirms it',
             );
@@ -752,7 +757,7 @@ class IosDevice {
         });
       } catch (e) {
         if (clickIssued && /could not be located|no such element/i.test(e.message || '')) {
-          console.warn(
+          this._warn(
             `[ios] ${quoted} is gone after a click whose answer was lost — treating the ` +
               'click as landed; the next step is what confirms it',
           );
@@ -849,7 +854,7 @@ class IosDevice {
         // already holds something -- "going back costs her nothing she typed"
         // is a real J38 assertion -- so an unconditional clear would erase
         // content the caller meant to keep.
-        console.warn(
+        this._warn(
           `[ios] retyping ${tag} after a type whose answer was lost — clearing first, ` +
             'because /value appends and the first attempt may have landed',
         );
@@ -1043,7 +1048,7 @@ function listMethods() {
  * Factory, matching the shape every other driver in this directory exports —
  * `create*` plus `listMethods` — so `--check-drivers` can discover it.
  */
-function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl } = {}) {
+function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl, warn } = {}) {
   const coreDeviceUuid = selectCoreDeviceUuid(udid);
   if (!coreDeviceUuid) {
     throw new Error(
@@ -1068,6 +1073,9 @@ function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl } 
     hardwareUdid: resolvedHardware,
     bundleId: bundleId || 'com.shyden.shytalk',
     ...(appiumBaseUrl ? { appiumBaseUrl } : {}),
+    // Passed through so the warnings stay assertable through the factory, which
+    // is how every journey and every test builds this device.
+    ...(warn ? { warn } : {}),
   });
 }
 
