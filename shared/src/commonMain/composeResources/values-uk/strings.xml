@@ -985,9 +985,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Підключення...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Не вдалося зв'язатися із серверами ShyTalk. Зазвичай це через ваше з'єднання.</string>
+    <string name="connection_trouble">Не вдалося зв'язатися із серверами ShyTalk.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Спробуйте: перевірте підключення до інтернету, вимкніть VPN, потім перезапустіть застосунок або телефон.</string>
+    <string name="connection_tips">Спробуйте: перевірте підключення до інтернету, вимкніть VPN, потім перезапустіть застосунок або пристрій.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Зв'яжіться з нами</string>
     <!-- google-translated 2026-05-04 -->

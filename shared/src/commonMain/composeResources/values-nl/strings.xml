@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Verbinden...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">We konden de servers van ShyTalk niet bereiken. Meestal ligt dat aan je verbinding.</string>
+    <string name="connection_trouble">We konden de servers van ShyTalk niet bereiken.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Probeer dit: controleer je internetverbinding, schakel VPN uit en start de app of je telefoon opnieuw.</string>
+    <string name="connection_tips">Probeer dit: controleer je internetverbinding, schakel VPN uit en start de app of je apparaat opnieuw.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Neem contact met ons op</string>
     <!-- google-translated 2026-05-04 -->

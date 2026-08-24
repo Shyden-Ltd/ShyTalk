@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">कनेक्ट हो रहा है...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके। आमतौर पर यह आपके कनेक्शन की वजह से होता है।</string>
+    <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके।</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">यह आज़माएँ: देखें कि आप इंटरनेट से जुड़े हैं, कोई भी VPN बंद करें, फिर ऐप या अपना फ़ोन दोबारा चालू करें।</string>
+    <string name="connection_tips">यह आज़माएँ: देखें कि आप इंटरनेट से जुड़े हैं, कोई भी VPN बंद करें, फिर ऐप या अपना डिवाइस दोबारा चालू करें।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">हमसे संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->

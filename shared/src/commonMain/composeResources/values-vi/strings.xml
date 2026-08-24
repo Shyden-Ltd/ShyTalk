@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Đang kết nối...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Chúng tôi không kết nối được tới máy chủ ShyTalk. Thường là do kết nối của bạn.</string>
+    <string name="connection_trouble">Chúng tôi không kết nối được tới máy chủ ShyTalk.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Hãy thử: kiểm tra bạn đã kết nối internet, tắt VPN, rồi khởi động lại ứng dụng hoặc điện thoại.</string>
+    <string name="connection_tips">Hãy thử: kiểm tra bạn đã kết nối internet, tắt VPN, rồi khởi động lại ứng dụng hoặc thiết bị.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Liên hệ với chúng tôi</string>
     <!-- google-translated 2026-05-04 -->

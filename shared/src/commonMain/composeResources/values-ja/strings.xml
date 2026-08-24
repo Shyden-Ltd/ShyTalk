@@ -986,7 +986,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">接続中...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">ShyTalk のサーバーに接続できませんでした。多くの場合、接続環境が原因です。</string>
+    <string name="connection_trouble">ShyTalk のサーバーに接続できませんでした。</string>
     <!-- claude-translated 2026-08-25 -->
     <string name="connection_tips">お試しください：インターネットに接続されているか確認し、VPN をオフにして、アプリまたは端末を再起動してください。</string>
     <!-- google-translated 2026-05-04 -->

@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Conectando...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Não conseguimos aceder aos servidores do ShyTalk. Normalmente é algo na tua ligação.</string>
+    <string name="connection_trouble">Não conseguimos aceder aos servidores do ShyTalk.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Tenta isto: confirma que tens internet, desliga qualquer VPN e reinicia a aplicação ou o telemóvel.</string>
+    <string name="connection_tips">Tenta isto: confirma que tens internet, desliga qualquer VPN e reinicia a aplicação ou o dispositivo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contate-nos</string>
     <!-- google-translated 2026-05-04 -->

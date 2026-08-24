@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Menghubungkan...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Kami tidak dapat menghubungi server ShyTalk. Biasanya ini karena koneksi kamu.</string>
+    <string name="connection_trouble">Kami tidak dapat menghubungi server ShyTalk.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Coba ini: pastikan kamu terhubung ke internet, matikan VPN, lalu mulai ulang aplikasi atau ponselmu.</string>
+    <string name="connection_tips">Coba ini: pastikan kamu terhubung ke internet, matikan VPN, lalu mulai ulang aplikasi atau perangkatmu.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Hubungi kami</string>
     <!-- google-translated 2026-05-04 -->

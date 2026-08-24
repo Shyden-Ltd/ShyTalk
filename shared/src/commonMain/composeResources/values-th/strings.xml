@@ -984,9 +984,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">กำลังเชื่อมต่อ...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">เราไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ของ ShyTalk ได้ ส่วนใหญ่มักเกิดจากการเชื่อมต่อของคุณ</string>
+    <string name="connection_trouble">เราไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ของ ShyTalk ได้</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">ลองทำแบบนี้: ตรวจสอบว่าคุณเชื่อมต่ออินเทอร์เน็ต ปิด VPN แล้วรีสตาร์ทแอปหรือโทรศัพท์ของคุณ</string>
+    <string name="connection_tips">ลองทำแบบนี้: ตรวจสอบว่าคุณเชื่อมต่ออินเทอร์เน็ต ปิด VPN แล้วรีสตาร์ทแอปหรืออุปกรณ์ของคุณ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">ติดต่อเรา</string>
     <!-- google-translated 2026-05-04 -->

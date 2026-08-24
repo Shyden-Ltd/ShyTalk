@@ -97,6 +97,31 @@ class ConnectionCopyTakesNoBlameTest {
     }
 
     @Test
+    fun `the failure states the fact and guesses at no cause`() {
+        // Operator, 2026-08-25: "remove the line 'this is usually something on
+        // your connection'."
+        //
+        // The first version of this fix swung from blaming us to blaming them.
+        // Both are guesses, and a guess printed as a fact is wrong roughly as
+        // often as it is right. The screen says what HAPPENED — we could not
+        // reach the servers — and the tips below it say what to try. Neither
+        // needs a culprit.
+        val text = string("connection_trouble").lowercase()
+        val guesses = listOf("your connection", "our end", "usually", "probably", "may be")
+        assertEquals(emptyList(), guesses.filter { text.contains(it) }, "connection_trouble: $text")
+    }
+
+    @Test
+    fun `the tips say device, because ShyTalk is not only on phones`() {
+        // Operator, 2026-08-25. A tablet is not a phone, and telling somebody to
+        // restart a phone they are not holding is the kind of small wrongness
+        // that makes the rest of the advice easy to dismiss.
+        val tips = string("connection_tips").lowercase()
+        assertTrue(tips.contains("device"), "connection_tips: $tips")
+        assertTrue(!tips.contains("phone"), "connection_tips still says phone: $tips")
+    }
+
+    @Test
     fun `the person is given something they can actually do`() {
         // The point of removing the blame is not tone, it is ACTION. A screen
         // that says "it is our end" leaves somebody with nothing to try, and

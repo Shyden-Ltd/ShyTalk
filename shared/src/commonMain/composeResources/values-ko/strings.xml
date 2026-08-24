@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">연결 중...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">ShyTalk 서버에 연결할 수 없습니다. 대개 연결 환경 때문입니다.</string>
+    <string name="connection_trouble">ShyTalk 서버에 연결할 수 없습니다.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">이렇게 해 보세요: 인터넷 연결을 확인하고 VPN을 끈 다음 앱이나 휴대폰을 다시 시작하세요.</string>
+    <string name="connection_tips">이렇게 해 보세요: 인터넷 연결을 확인하고 VPN을 끈 다음 앱이나 기기를 다시 시작하세요.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">문의하기</string>
     <!-- google-translated 2026-05-04 -->

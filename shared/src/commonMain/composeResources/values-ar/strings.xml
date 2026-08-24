@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">جارٍ الاتصال...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">لم نتمكن من الوصول إلى خوادم ShyTalk. عادةً ما يكون السبب في اتصالك.</string>
+    <string name="connection_trouble">لم نتمكن من الوصول إلى خوادم ShyTalk.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">جرّب هذا: تأكد من اتصالك بالإنترنت، وأوقف أي VPN، ثم أعد تشغيل التطبيق أو هاتفك.</string>
+    <string name="connection_tips">جرّب هذا: تأكد من اتصالك بالإنترنت، وأوقف أي VPN، ثم أعد تشغيل التطبيق أو جهازك.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">اتصل بنا</string>
     <!-- google-translated 2026-05-04 -->

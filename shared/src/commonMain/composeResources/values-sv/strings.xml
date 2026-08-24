@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Ansluter...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Vi kunde inte nå ShyTalks servrar. Det beror oftast på din anslutning.</string>
+    <string name="connection_trouble">Vi kunde inte nå ShyTalks servrar.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Prova det här: kontrollera att du har internet, stäng av eventuell VPN och starta om appen eller telefonen.</string>
+    <string name="connection_tips">Prova det här: kontrollera att du har internet, stäng av eventuell VPN och starta om appen eller enheten.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Kontakta oss</string>
     <!-- google-translated 2026-05-04 -->

@@ -985,9 +985,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">De liaison...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Nous n'avons pas pu joindre les serveurs de ShyTalk. C'est généralement lié à votre connexion.</string>
+    <string name="connection_trouble">Nous n'avons pas pu joindre les serveurs de ShyTalk.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Essayez ceci : vérifiez votre connexion internet, désactivez tout VPN, puis redémarrez l'application ou votre téléphone.</string>
+    <string name="connection_tips">Essayez ceci : vérifiez votre connexion internet, désactivez tout VPN, puis redémarrez l'application ou votre appareil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contactez-nous</string>
     <!-- google-translated 2026-05-04 -->

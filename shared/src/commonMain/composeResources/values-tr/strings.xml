@@ -986,9 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Bağlanıyor...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">ShyTalk sunucularına ulaşamadık. Bu genellikle bağlantınızla ilgilidir.</string>
+    <string name="connection_trouble">ShyTalk sunucularına ulaşamadık.</string>
     <!-- claude-translated 2026-08-25 -->
-    <string name="connection_tips">Şunu deneyin: internete bağlı olduğunuzu kontrol edin, varsa VPN'i kapatın, ardından uygulamayı veya telefonunuzu yeniden başlatın.</string>
+    <string name="connection_tips">Şunu deneyin: internete bağlı olduğunuzu kontrol edin, varsa VPN'i kapatın, ardından uygulamayı veya cihazınızı yeniden başlatın.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Bize Ulaşın</string>
     <!-- google-translated 2026-05-04 -->
