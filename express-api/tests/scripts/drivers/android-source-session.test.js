@@ -178,3 +178,57 @@ describe('normaliseUiAutomator2Source', () => {
     expect(normaliseUiAutomator2Source(already)).toBe(already);
   });
 });
+
+/**
+ * SHY-0451, swept to the sibling platform.
+ *
+ * The iPhone stall was an Appium round trip with no timeout: `fetch` has no
+ * default, so a wedged server holds the request until the OS gives up. Android
+ * had never shown the symptom — its reads are 65ms and its Appium path is
+ * healthier — but it had the identical unbounded call, so it was one bad day
+ * away from the same once-per-run stall.
+ *
+ * A lesson found in one place applies everywhere; this pins it here so the
+ * sweep cannot quietly come undone. See [[feedback-consistency-whole-project]].
+ */
+describe('the Android Appium round trip is bounded (SHY-0451 sweep)', () => {
+  const http = require('node:http');
+  const {
+    createAndroidSourceSession,
+    APPIUM_REQUEST_TIMEOUT_MS,
+  } = require('../../../scripts/drivers/android-source-session');
+
+  test('the budget is finite', () => {
+    // The value it replaced was Infinity, which is the whole defect.
+    expect(Number.isFinite(APPIUM_REQUEST_TIMEOUT_MS)).toBe(true);
+    expect(APPIUM_REQUEST_TIMEOUT_MS).toBeGreaterThan(0);
+  });
+
+  test('a server that never answers does not hang the read forever', async () => {
+    // A REAL socket that is accepted and never written to — what a wedged
+    // Appium actually looks like. No mock could prove a signal is attached.
+    const held = [];
+    const server = http.createServer((_req, res) => held.push(res));
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const baseUrl = `http://127.0.0.1:${server.address().port}`;
+
+    try {
+      // No `request` override, so the REAL `httpRequest` runs — an injected
+      // stand-in would prove nothing about whether a signal is attached.
+      // Opening the session IS the round trip: it returns null when Appium
+      // cannot serve, and the contract is that it RETURNS at all.
+      await expect(
+        createAndroidSourceSession({
+          serial: 'no-such-device',
+          appiumBaseUrl: baseUrl,
+          requestTimeoutMs: 300,
+        }),
+      ).resolves.toBeNull();
+    } finally {
+      for (const res of held) res.destroy();
+      await new Promise((resolve) => server.close(resolve));
+    }
+    // Reaching this line at all is the assertion: an unbounded call never
+    // returns, and jest kills the test instead.
+  });
+});

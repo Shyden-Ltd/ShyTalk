@@ -195,9 +195,9 @@ const MJPEG_SERVER_PORT = 9100;
  *
  * `fetch` has no default timeout, so a wedged WDA left the request open until
  * the OS gave up around 38 seconds -- and `dumpWithRetry` did that eight times.
- * The result was a ~313 SECOND stall that struck roughly once per matrix and
- * landed on a different journey each run: J06, then J38, then J02. It looked
- * like a slow journey; it was one hung socket.
+ * That was offered as the ~313 second once-per-matrix stall; bounding commands
+ * at 20s and then 10s did not move it, and the real cause was elsewhere
+ * (SHY-0451). Commands still need a bound, and this is it.
  *
  * Generous against reality: a read is 300ms on a sparse screen and ~2.3s on the
  * busiest one measured. Ten seconds is four times the worst healthy case, so
@@ -205,10 +205,71 @@ const MJPEG_SERVER_PORT = 9100;
  * worth having -- the driver drops the session on error, so the next attempt
  * reconnects instead of queueing behind the same dead one.
  *
- * NOT applied to session creation, which legitimately takes minutes while
- * WebDriverAgent builds and installs (`appium:wdaLaunchTimeout`).
+ * Session creation has its own budgets and does NOT use this one — see
+ * `SESSION_COLD_TIMEOUT_MS`. That exemption used to be unbounded, and it was
+ * the whole of SHY-0451.
  */
 const COMMAND_TIMEOUT_MS = 10000;
+
+/**
+ * How long a FIRST session may take before we stop waiting for Appium.
+ *
+ * A cold start legitimately builds and installs WebDriverAgent, which is what
+ * `appium:wdaLaunchTimeout` (180s) is sized for. This sits just above it so
+ * Appium's own limit is the one that speaks first and ours is a backstop —
+ * a backstop that exists at all, which before SHY-0451 it did not.
+ */
+const SESSION_COLD_TIMEOUT_MS = 210000;
+
+/**
+ * How long a RECONNECT may take — and the fix for SHY-0451.
+ *
+ * These two cases are not the same operation and must not share a budget.
+ * A recovery session reattaches to a WebDriverAgent already built and
+ * installed; measured across a full matrix it is 4.6-5.7s, seventeen times a
+ * run. Thirty seconds is roughly five times the worst healthy case, the same
+ * ratio `COMMAND_TIMEOUT_MS` is drawn at.
+ *
+ * Giving the reconnect the COLD budget is exactly how a wedge came to cost
+ * minutes: `withSessionRecovery` answers a dead WDA by clearing `_sessionId`
+ * and re-running the operation, the re-run calls `_session()`, and Appium then
+ * takes the RELAUNCH path — up to 180 unbounded seconds, reached from inside a
+ * call the code believed was capped at ten. Twice in one `ensureAtSignIn`
+ * ladder is the 310-415s that struck once per run.
+ *
+ * Failing here is not the end of anything: `ensureAtSignIn` catches it and
+ * restarts the app through devicectl, which does not need Appium to be well.
+ */
+const SESSION_RECOVERY_TIMEOUT_MS = 30000;
+
+/**
+ * How long the best-effort performance-settings POST may take.
+ *
+ * It runs INSIDE `_session()`, after the session has been granted, so an
+ * unbounded one hangs a session that had already succeeded — and it runs once
+ * per session, seventeen times a run. Best-effort has to mean bounded, or it
+ * only means "the failure is silent".
+ */
+const SETTINGS_TIMEOUT_MS = 5000;
+
+/**
+ * How long ONE session DELETE may take at teardown.
+ *
+ * `quit()` walks every session id ever opened, sequentially. Seventeen
+ * unbounded DELETEs against a wedged WebDriverAgent is another whole run spent
+ * after the last journey has already finished.
+ */
+const QUIT_TIMEOUT_MS = 5000;
+
+/**
+ * Above this, a session creation is reported rather than absorbed.
+ *
+ * Twice the measured healthy 4.6-5.7s. The point is not the threshold, it is
+ * that the SLOW one gets a line of its own: SHY-0451 stayed hidden for two
+ * fix attempts because seventeen healthy creations a run kept the average
+ * innocent while one pathological creation carried the entire stall.
+ */
+const SESSION_SLOW_WARN_MS = 12000;
 
 /**
  * How long ONE screen read may spend retrying before it gives up.
@@ -218,17 +279,15 @@ const COMMAND_TIMEOUT_MS = 10000;
  * attempt is a command that ran out of time, so eight of them is 166 seconds
  * for a single read.
  *
- * That is what a ~312 SECOND stall inside `signOutFlow` turned out to be. It
- * struck roughly once per matrix and landed on a different journey each run --
- * J-ADMIN, J02, J06, J38 -- which is why it read as a slow journey rather than
- * as one wedged read.
+ * This was ALSO believed to be the ~312 second stall in `signOutFlow`, and the
+ * arithmetic fitted well enough to be convincing -- 7 reads x a 45s budget is
+ * 315s against a measured 312,193ms. It was a coincidence. The budget was cut
+ * to 45s and then to 10s and the stall survived both; the cause was unbounded
+ * session creation (SHY-0451, see `SESSION_RECOVERY_TIMEOUT_MS`).
  *
- * The budget has to be SMALL, because the multiplier is not the retry -- it is
- * the number of reads in the path. When WebDriverAgent wedges, every dump costs
- * the whole budget, and `signOutFlow` does about seven of them:
- *
- *     45s budget  ->  7 x 45s  =  315s   (measured: 312,193ms)
- *     10s budget  ->  7 x 10s  =   70s
+ * The budget is still right, and still small, because the multiplier is not the
+ * retry -- it is the number of reads in the path. When WebDriverAgent wedges,
+ * every dump costs the whole budget, and `signOutFlow` does about seven.
  *
  * Clearing the session between attempts does not help: a fresh session hits the
  * same wedged WDA. The only lever is to stop paying for it.
@@ -256,8 +315,24 @@ class IosDevice {
    * @param {string} o.hardwareUdid    for `appium:udid` (ECID-based)
    * @param {string} o.bundleId        the app under test
    * @param {string} [o.appiumBaseUrl]
+   * @param {number} [o.sessionColdTimeoutMs] budget for the FIRST session
+   * @param {number} [o.sessionRecoveryTimeoutMs] budget for a RECONNECT
+   * @param {number} [o.settingsTimeoutMs] budget for the performance-settings POST
+   * @param {number} [o.quitTimeoutMs] budget for one session DELETE at teardown
    */
-  constructor({ coreDeviceUuid, hardwareUdid, bundleId, appiumBaseUrl = DEFAULT_APPIUM_BASE_URL }) {
+  constructor({
+    coreDeviceUuid,
+    hardwareUdid,
+    bundleId,
+    appiumBaseUrl = DEFAULT_APPIUM_BASE_URL,
+    // Injectable so the bounds can be PROVEN against a real hung socket in
+    // milliseconds. A test that had to wait out the production values could
+    // not be run, and a bound nobody runs is a bound nobody notices losing.
+    sessionColdTimeoutMs = SESSION_COLD_TIMEOUT_MS,
+    sessionRecoveryTimeoutMs = SESSION_RECOVERY_TIMEOUT_MS,
+    settingsTimeoutMs = SETTINGS_TIMEOUT_MS,
+    quitTimeoutMs = QUIT_TIMEOUT_MS,
+  }) {
     // Validated at construction, not at first use. Appium's answer to
     // `appium:udid: undefined` is "Unknown device or simulator UDID:
     // 'undefined'", which reads as a hardware fault and sends you to the
@@ -286,6 +361,10 @@ class IosDevice {
     this._sessionId = null;
     this._allSessionIds = new Set();
     this._size = null;
+    this._sessionColdTimeoutMs = sessionColdTimeoutMs;
+    this._sessionRecoveryTimeoutMs = sessionRecoveryTimeoutMs;
+    this._settingsTimeoutMs = settingsTimeoutMs;
+    this._quitTimeoutMs = quitTimeoutMs;
   }
 
   /**
@@ -316,19 +395,45 @@ class IosDevice {
     };
   }
 
+  /**
+   * Open the session, under a budget chosen by WHICH session this is.
+   *
+   * A first session may be building WebDriverAgent; a reconnect is reattaching
+   * to one already installed. Before SHY-0451 neither was bounded at all, and
+   * the reconnect — reached from inside `_get`/`_post`, whose 10s signal
+   * covers only the request AFTER this returns — is where the once-per-run
+   * 310-415s stall lived.
+   */
   async _session() {
     if (this._sessionId) return this._sessionId;
-    const r = await fetch(`${this.appiumBaseUrl}/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        capabilities: {
-          // Built by capabilities(), so the identifier routing has exactly
-          // one definition and can be asserted without a phone.
-          alwaysMatch: this.capabilities(),
-        },
-      }),
-    });
+    // A session has been opened before, so WebDriverAgent is installed and
+    // this is a reattach, not a build.
+    const isReconnect = this._allSessionIds.size > 0;
+    const budgetMs = isReconnect ? this._sessionRecoveryTimeoutMs : this._sessionColdTimeoutMs;
+    const started = Date.now();
+    let r;
+    try {
+      r = await fetch(`${this.appiumBaseUrl}/session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          capabilities: {
+            // Built by capabilities(), so the identifier routing has exactly
+            // one definition and can be asserted without a phone.
+            alwaysMatch: this.capabilities(),
+          },
+        }),
+        signal: AbortSignal.timeout(budgetMs),
+      });
+    } catch (e) {
+      // Named for the operator reading a red matrix: the phone is fine, the
+      // cable is fine, Appium did not answer a SESSION request in time.
+      throw new Error(
+        `Appium did not grant a ${isReconnect ? 'reconnect' : 'cold'} session within ` +
+          `${budgetMs}ms (WebDriverAgent is probably wedged): ${e.message}`,
+        { cause: e },
+      );
+    }
     const body = await r.json().catch(() => ({}));
     const sid = body?.value?.sessionId || body?.sessionId;
     if (!sid) {
@@ -342,6 +447,16 @@ class IosDevice {
     // is forgotten — so a teardown that closes only `_sessionId` orphans it.
     // Measured: 14 sessions created, 13 removed.
     this._allSessionIds.add(sid);
+    // Surfaced rather than averaged away. SHY-0451 hid inside a mean of
+    // "4.6-5.7s, seventeen a run" because a once-per-run outlier does not move
+    // a mean — so the OUTLIER is what gets printed.
+    const tookMs = Date.now() - started;
+    if (tookMs > SESSION_SLOW_WARN_MS) {
+      console.warn(
+        `[ios] ${isReconnect ? 'reconnect' : 'cold'} session took ${tookMs}ms ` +
+          `(healthy is ~5000ms) — WebDriverAgent is struggling`,
+      );
+    }
     await this._applyPerformanceSettings(sid);
     return sid;
   }
@@ -370,6 +485,9 @@ class IosDevice {
         body: JSON.stringify({
           settings: { waitForIdleTimeout: 0, animationCoolOffTimeout: 0 },
         }),
+        // Bounded because this runs INSIDE `_session()`, after the session has
+        // already been granted. Unbounded, it hangs a session that succeeded.
+        signal: AbortSignal.timeout(this._settingsTimeoutMs),
       });
       if (!res.ok) {
         console.warn(`[ios] WDA settings refused (${res.status}); reads will be slower`);
@@ -779,7 +897,12 @@ class IosDevice {
     const ids = [...this._allSessionIds];
     if (this._sessionId) ids.push(this._sessionId);
     for (const id of new Set(ids)) {
-      await fetch(`${this.appiumBaseUrl}/session/${id}`, { method: 'DELETE' }).catch(() => {});
+      await fetch(`${this.appiumBaseUrl}/session/${id}`, {
+        method: 'DELETE',
+        // Seventeen ids, sequentially. Unbounded, a wedged WebDriverAgent
+        // costs another whole run after the last journey has finished.
+        signal: AbortSignal.timeout(this._quitTimeoutMs),
+      }).catch(() => {});
     }
     this._allSessionIds.clear();
     this._sessionId = null;
@@ -855,4 +978,9 @@ module.exports = {
   connectedPhoneIn,
   pairedPhoneIn,
   IOS_JOURNEY_METHOD_NAMES,
+  COMMAND_TIMEOUT_MS,
+  SESSION_COLD_TIMEOUT_MS,
+  SESSION_RECOVERY_TIMEOUT_MS,
+  SETTINGS_TIMEOUT_MS,
+  QUIT_TIMEOUT_MS,
 };

@@ -121,12 +121,27 @@ function androidTextSelector(text) {
   return `new UiSelector().text("${escapeUiSelectorArg(text)}")`;
 }
 
+/**
+ * How long one Appium round trip may take before it is abandoned.
+ *
+ * `fetch` has no default timeout, so a wedged Appium holds the request until
+ * the OS gives up — minutes, inside a step the caller believes is quick. That
+ * is SHY-0451, found on the iPhone (`ios-journey-device.js`), and this is the
+ * same channel on the sibling platform: identical shape, no bound, and no
+ * reason to wait for it to strike here too.
+ *
+ * Android reads measure ~65ms. Ten seconds is well over a hundred times the
+ * healthy case, so anything reaching it is stuck, not slow.
+ */
+const APPIUM_REQUEST_TIMEOUT_MS = 10000;
+
 /** One JSON round trip to Appium. Injected in tests so the policy is testable. */
-async function httpRequest(baseUrl, method, path, _body) {
+async function httpRequest(baseUrl, method, path, _body, timeoutMs = APPIUM_REQUEST_TIMEOUT_MS) {
   const res = await fetch(baseUrl + path, {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: method === 'GET' || method === 'DELETE' ? undefined : JSON.stringify(_body ?? {}),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const parsed = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -147,8 +162,14 @@ async function createAndroidSourceSession({
   serial,
   appiumBaseUrl = DEFAULT_APPIUM_BASE_URL,
   request,
+  // Injectable so the bound can be PROVEN against a real hung socket in
+  // milliseconds. Racing jest's own timeout against the production value
+  // tests which number is larger, not whether a signal is attached.
+  requestTimeoutMs = APPIUM_REQUEST_TIMEOUT_MS,
 } = {}) {
-  const call = request || ((method, path, body) => httpRequest(appiumBaseUrl, method, path, body));
+  const call =
+    request ||
+    ((method, path, body) => httpRequest(appiumBaseUrl, method, path, body, requestTimeoutMs));
 
   let sessionId = null;
 
@@ -256,4 +277,5 @@ module.exports = {
   looksLikeLostSession,
   ANDROID_SOURCE_UNAVAILABLE,
   DEFAULT_APPIUM_BASE_URL,
+  APPIUM_REQUEST_TIMEOUT_MS,
 };
