@@ -1,6 +1,6 @@
 ---
 id: SHY-0452
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-24
 priority: P1
@@ -59,7 +59,40 @@ Measured across the twelve runs that closed SHY-0451:
 **SHY-0451's evidence page** carries the twelve-run data this story rests on:
 https://claude.ai/code/artifact/7bf240a7-8cb4-4954-8767-a0d42de50c2f
 
-## Where to look next
+## Resolution — 2026-08-25
+
+The second hypothesis in the list below was the right one: **Appium was still
+holding the session that died**, and the new one queued behind it. Nothing had
+ever asked Appium to let go.
+
+A refused RECONNECT now releases the sessions the driver knows about and asks
+once more. Only on a reconnect — before the first session there is nothing to
+clear — and exactly one extra attempt, because a WebDriverAgent that will not
+come back has to fail the step rather than spin against the phone.
+
+**Caught in the field, on the third verification run:**
+
+```
+▶ Reach SignIn (for host@shytalk.dev) ... [ios] reconnect refused after 30012ms
+  — releasing 16 known session(s) and asking once more
+--- J39: ✓ PASS
+```
+
+Sixteen stale sessions. Before this, that same event cost the journey.
+
+| | Before | After |
+| --- | --- | --- |
+| iPhone matrix | 13/14 or 12/14, ~1 run in 3 | **14/14, 14/14, 14/14** |
+| A wedge mid-run | lost the journey | recovered, journey passed |
+
+The fix carried a trap, and the test written for it caught the trap rather than
+the fix: `isReconnect` was derived from "do we hold any session ids", and
+releasing them empties that set — so the attempt after a recovery would have
+looked like a COLD start and waited the 210s cold budget, which is exactly the
+stall SHY-0451 removed. Having opened a session is a fact about the run, not
+about what is currently held, and is tracked separately now.
+
+## Where it was looked for
 
 - **Why does WebDriverAgent die at all?** The death is what starts this; the
   refused reconnect is only the consequence. Appium server logs across a wedge
