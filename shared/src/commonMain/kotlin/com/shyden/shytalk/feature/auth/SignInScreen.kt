@@ -53,8 +53,8 @@ import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.account_restricted
 import com.shyden.shytalk.resources.apple_sign_in_failed
+import com.shyden.shytalk.resources.connection_tips
 import com.shyden.shytalk.resources.connection_trouble
-import com.shyden.shytalk.resources.contact_support_hint
 import com.shyden.shytalk.resources.device_locked_description
 import com.shyden.shytalk.resources.google_sign_in_failed
 import com.shyden.shytalk.resources.ok
@@ -211,7 +211,7 @@ fun SignInScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = stringResource(Res.string.contact_support_hint),
+                    text = stringResource(Res.string.connection_tips),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

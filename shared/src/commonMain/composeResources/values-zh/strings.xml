@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">正在连接...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">我们无法连接到 ShyTalk 的服务器。可能是你的网络，也可能是我们这边的问题 — 请再试一次。</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">这是我们的问题，不是你的。请稍后再试。</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">如果一直发生，那是我们这边的问题。请稍后再试。</string>
+    <string name="connection_trouble">我们无法连接到 ShyTalk 的服务器。通常是你的网络连接问题。</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">试试看：检查是否已连接互联网，关闭所有 VPN，然后重启应用或手机。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">联系我们</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">原因：%1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">点击返回</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">技术难点</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk 目前遇到技术困难。某些功能可能无法正常工作。服务将自动恢复。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">无法连接</string>
     <!-- google-translated 2026-05-04 -->

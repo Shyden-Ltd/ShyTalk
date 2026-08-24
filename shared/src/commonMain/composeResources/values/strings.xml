@@ -630,7 +630,7 @@
     <string name="retrying">Retrying…</string>
     <string name="account_restricted">Account Restricted</string>
     <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, visit shyden.co.uk</string>
-    <string name="contact_support_hint">If it keeps happening, it is our end. Please try again shortly.</string>
+    <string name="connection_tips">Try this: check you're connected to the internet, turn off any VPN, then restart the app or your phone.</string>
     <string name="sign_in_with_google">Sign in with Google</string>
     <string name="sign_in_with_apple">Sign in with Apple</string>
     <string name="sign_in_with_email">Sign in with Email</string>
@@ -654,10 +654,6 @@
     <string name="i_understand">I Understand</string>
     <string name="tap_to_return">Tap to return</string>
 
-    <!-- Degraded Mode -->
-    <string name="technical_difficulties">Technical Difficulties</string>
-    <string name="technical_difficulties_description">ShyTalk is currently experiencing technical difficulties. Some features may not work correctly. Services will be restored automatically.</string>
-    <string name="contact_support_help">This is our problem, not yours. Please try again shortly.</string>
 
     <!-- Force Update -->
     <string name="update_required">Update Required</string>
@@ -678,7 +674,7 @@
 
     <!-- Connection / Loading states -->
     <string name="unable_to_connect">Unable to Connect</string>
-    <string name="connection_trouble">We could not reach ShyTalk's servers. That may be your connection, or it may be us — please try again.</string>
+    <string name="connection_trouble">We could not reach ShyTalk's servers. That is usually something on your connection.</string>
     <string name="voice_chat_reimagined">Voice chat rooms, reimagined.</string>
     <string name="profile_not_available">This profile is not available</string>
     <string name="blocked_by_user">You have been blocked by this user</string>

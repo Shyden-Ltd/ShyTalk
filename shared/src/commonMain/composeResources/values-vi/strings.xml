@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Đang kết nối...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Chúng tôi không thể kết nối tới máy chủ của ShyTalk. Có thể do kết nối của bạn, cũng có thể do chúng tôi — vui lòng thử lại.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">Đây là vấn đề của chúng tôi, không phải của bạn. Vui lòng thử lại sau giây lát.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">Nếu vẫn tiếp diễn thì đó là do phía chúng tôi. Vui lòng thử lại sau giây lát.</string>
+    <string name="connection_trouble">Chúng tôi không kết nối được tới máy chủ ShyTalk. Thường là do kết nối của bạn.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Hãy thử: kiểm tra bạn đã kết nối internet, tắt VPN, rồi khởi động lại ứng dụng hoặc điện thoại.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Liên hệ với chúng tôi</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">Lý do: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Nhấn để quay lại</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Khó khăn kỹ thuật</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk hiện đang gặp sự cố kỹ thuật. Một số tính năng có thể không hoạt động chính xác. Dịch vụ sẽ được khôi phục tự động.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Không thể kết nối</string>
     <!-- google-translated 2026-05-04 -->

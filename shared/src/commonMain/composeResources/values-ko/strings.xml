@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">연결 중...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">ShyTalk 서버에 연결하지 못했습니다. 연결 환경 때문일 수도 있고, 저희 쪽 문제일 수도 있습니다. 다시 시도해 주세요.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">저희 쪽 문제이며 고객님의 문제가 아닙니다. 잠시 후 다시 시도해 주세요.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">계속 발생한다면 저희 쪽 문제입니다. 잠시 후 다시 시도해 주세요.</string>
+    <string name="connection_trouble">ShyTalk 서버에 연결할 수 없습니다. 대개 연결 환경 때문입니다.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">이렇게 해 보세요: 인터넷 연결을 확인하고 VPN을 끈 다음 앱이나 휴대폰을 다시 시작하세요.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">문의하기</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">이유: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">돌아가려면 탭하세요.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">기술적인 어려움</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk는 현재 기술적인 문제를 겪고 있습니다. 일부 기능이 제대로 작동하지 않을 수 있습니다. 서비스가 자동으로 복원됩니다.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">연결할 수 없습니다</string>
     <!-- google-translated 2026-05-04 -->

@@ -1186,8 +1186,8 @@
 មានតែមួយគណនីក្នុងមួយឧបករណ៍។
 
 សម្រាប់ជំនួយ សូមចូលទៅកាន់ shyden.co.uk</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">ប្រសិនបើវានៅតែកើតឡើង នោះជាបញ្ហាខាងយើង។ សូមព្យាយាមម្ដងទៀតក្នុងពេលបន្តិចទៀត។</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">សាកល្បង៖ ពិនិត្យមើលថាអ្នកភ្ជាប់អ៊ីនធឺណិត បិទ VPN ទាំងអស់ រួចចាប់ផ្តើមកម្មវិធី ឬទូរស័ព្ទរបស់អ្នកឡើងវិញ។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_google">ចូលជាមួយ Google</string>
     <!-- google-translated 2026-05-04 -->
@@ -1232,12 +1232,6 @@
     <string name="tap_to_return">ប៉ះដើម្បីត្រឡប់មកវិញ</string>
 
     <!-- Degraded Mode -->
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">ការលំបាកបច្ចេកទេស</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk បច្ចុប្បន្នកំពុងជួបប្រទះបញ្ហាបច្ចេកទេស។ មុខងារមួយចំនួនប្រហែលជាមិនដំណើរការត្រឹមត្រូវ។ សេវាកម្មនឹងត្រូវបានស្ដារឡើងវិញដោយស្វ័យប្រវត្តិ។</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">នេះជាបញ្ហារបស់យើង មិនមែនរបស់អ្នកទេ។ សូមព្យាយាមម្ដងទៀតក្នុងពេលបន្តិចទៀត។</string>
 
     <!-- Force Update -->
     <!-- google-translated 2026-05-04 -->
@@ -1271,7 +1265,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">មិនអាចភ្ជាប់បានទេ។</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">យើងមិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេ ShyTalk បានទេ។ វាអាចបណ្ដាលមកពីការតភ្ជាប់របស់អ្នក ឬអាចមកពីយើង — សូមព្យាយាមម្ដងទៀត។</string>
+    <string name="connection_trouble">យើងមិនអាចភ្ជាប់ទៅម៉ាស៊ីនមេ ShyTalk បានទេ។ ភាគច្រើនវាបណ្តាលមកពីការតភ្ជាប់របស់អ្នក។</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_reimagined">បន្ទប់ជជែកជាសំឡេង គិតឡើងវិញ។</string>
     <!-- google-translated 2026-05-04 -->
