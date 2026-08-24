@@ -121,7 +121,14 @@ describe('source-level guard', () => {
     // matches the class docstring first — which listed both method names on
     // one line, so the slice was a fragment of a COMMENT and the regex could
     // never match. A guard that scans the wrong region reports on nothing.
-    const block = src.match(/^ {2}launch\(\) \{[\s\S]*?^ {2}\}/m)?.[0] ?? '';
+    //
+    // `async` is optional because the anchor has already gone stale once: the
+    // method became `async launch()` when it moved to `activate_app`, the
+    // slice went empty, and BOTH assertions below started failing about the
+    // uuid — which is not what had changed. That is the failure mode of every
+    // source-scanning guard, and the reason `foundLaunchMethod` is asserted
+    // separately: it names the drift instead of blaming the payload.
+    const block = src.match(/^ {2}(?:async )?launch\(\) \{[\s\S]*?^ {2}\}/m)?.[0] ?? '';
     expect({ foundLaunchMethod: block !== '' }).toEqual({ foundLaunchMethod: true });
     expect({
       passesCoreDevice: /'--device',\s*\n\s*this\.serial,/.test(block),

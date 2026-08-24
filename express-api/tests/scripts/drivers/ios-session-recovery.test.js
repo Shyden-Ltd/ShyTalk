@@ -178,6 +178,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
     _post: 'raw transport',
     _session: 'raw transport',
     ensureSession: 'ESTABLISHES the session — recovering it would be circular',
+    _applyPerformanceSettings:
+      'runs INSIDE session establishment, on a session just granted — the same ' +
+      'circularity as ensureSession. It calls fetch directly rather than through ' +
+      '_get/_post, is best-effort by design, and swallows its own failure with a ' +
+      'warning: a slower run is worth more than no run.',
     install: 'never reaches WDA — refuses by design, see SHY-0446',
     uninstall: 'never reaches WDA — refuses by design, see SHY-0446',
   };
@@ -242,8 +247,21 @@ describe('every device command survives a WebDriverAgent restart', () => {
     });
   });
 
-  test('an element that is absent still fails, and is not retried away', async () => {
+  test('an element that is absent still fails, and the look is bounded', async () => {
     // The recovery must not become a way for a missing control to pass.
+    //
+    // `tapElement` deliberately looks TWICE: `404 could not be located` does not
+    // mean the control is absent, it means WebDriverAgent did not see it in that
+    // instant, which a screen still arriving produces for a control the caller
+    // has just read from the tree. Observed twice on 2026-08-24, on
+    // `persona_row_P-02` and `main_settingsButton`, each failing a journey that
+    // was otherwise fine.
+    //
+    // So the contract this guards is NOT "exactly one look" — that was a
+    // statement about the mechanism, and the mechanism changed on purpose. It is
+    // that an absent control still FAILS, and that the looking is BOUNDED. Both
+    // are asserted: an unbounded retry, or a miss that resolves, still reddens
+    // this test. See [[feedback-assert-the-seam-not-the-sides]].
     const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
     let calls = 0;
     d._post = async () => {
@@ -251,6 +269,6 @@ describe('every device command survives a WebDriverAgent restart', () => {
       throw new Error('POST /element -> 404: An element could not be located on the page');
     };
     await expect(d.tapElement('nope')).rejects.toThrow(/could not be located/);
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
   });
 });
