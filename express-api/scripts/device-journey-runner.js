@@ -1374,8 +1374,15 @@ async function ensureAtSignIn(device, pkg) {
   }
   if (nodes && atSignIn(nodes)) return;
   if (nodes && anyMainTab(nodes)) {
-    await signOutFlow(device);
-    return;
+    try {
+      await signOutFlow(device);
+      return;
+    } catch (_e) {
+      // Falls through to the restart below rather than failing the journey.
+      // This function's whole job is to ARRIVE at SignIn, and it has a stronger
+      // way of doing that a few lines down; refusing to use it because the
+      // polite route was slow is how a timeout became a red journey.
+    }
   }
   await device.forceStop(pkg);
   device.launch(pkg);
@@ -1394,7 +1401,17 @@ async function signOutFlow(device) {
   await tapId(device, 'settings_signOutButton');
   await waitForText(device, 'Are you sure you want to sign out', 6000);
   await tapLowestText(device, 'Sign Out');
-  await reachSignIn(device, 12000);
+  // 12s -> 45s. Signing out is a network round trip and a navigation, and on
+  // the iPhone it routinely takes longer than twelve seconds. The symptom was
+  // a perfectly ALTERNATING matrix: a journey that succeeded left the app on
+  // Home, the next one's sign-out timed out and failed, that sign-out then
+  // completed anyway, and the journey after it passed. Seven of fourteen, every
+  // other one, all reporting "SignIn not reached within 12000ms".
+  //
+  // It only appeared once the persona-picker fixes made sign-ins SUCCEED --
+  // before that, failing journeys left the app at SignIn and no sign-out was
+  // ever attempted. A latent tuning, sized for Android.
+  await reachSignIn(device, 45000);
 }
 
 // --------------------------------------------------------------------------
