@@ -203,6 +203,13 @@ describe('every device command survives a WebDriverAgent restart', () => {
     _get: 'raw transport — the retry wraps whole operations, not single calls',
     _post: 'raw transport',
     _session: 'raw transport',
+    _sessionRefused:
+      'pure — builds the error a refused session raises, and touches nothing. ' +
+      'There is no operation here to retry.',
+    _releaseKnownSessions:
+      'tears sessions DOWN, like quit. It runs when things are ALREADY wrong — ' +
+      'it is the SHY-0452 escalation for a wedged WebDriverAgent — so recovering ' +
+      'it into a fresh session would defeat the thing it exists to do.',
     ensureSession: 'ESTABLISHES the session — recovering it would be circular',
     _applyPerformanceSettings:
       'runs INSIDE session establishment, on a session just granted — the same ' +
