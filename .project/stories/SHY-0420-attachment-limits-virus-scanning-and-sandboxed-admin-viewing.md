@@ -232,7 +232,15 @@ objects exist.
 
 ### 3. Scanning — the seam is built; the ENGINE is your call
 
-This is the one part not finished, and deliberately so.
+**DECIDED 2026-08-24 by the operator: self-hosted ClamAV.** The recommendation
+below stood and is now the decision. What remains is to build it, not to choose
+it — a follow-on story owns standing the container up, wiring
+`ATTACHMENT_SCANNER_URL`, and proving the fail-closed path against a real
+scanner rather than a described one.
+
+The reasoning is kept below, because the reason a thing was chosen is what tells
+a future session whether a proposed change still respects it: a hosted API is
+not a cheaper version of this decision, it is a different one.
 
 | Option | Cost | Latency | Where the file goes |
 | --- | --- | --- | --- |

@@ -1,9 +1,9 @@
 ---
 id: SHY-0452
-status: Draft
+status: In Progress
 owner: unassigned
 created: 2026-08-24
-priority: P2
+priority: P1
 effort: M
 type: bug
 roadmap_ids: []

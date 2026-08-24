@@ -41,80 +41,107 @@ the client uploaded evidence to `path = "report_evidence"`, which the storage
 route's allowlist did not contain, so **every** report with a screenshot was
 refused. That half is fixed. This half is a decision.
 
-## The decision, for Shyden
+## The decision — RESOLVED 2026-08-24, and neither of the options offered
 
-| Option | What somebody gets |
-| --- | --- |
-| **A — file it anyway** (recommended) | The report reaches moderation with whatever evidence uploaded, and they are told plainly which images did not attach and that they can add them by replying |
-| B — keep today's behaviour, but say so | Nothing is filed, and the message says clearly that the report was NOT sent and they must try again |
+The story asked Shyden to choose between filing the report anyway and failing it
+loudly. The operator's answer named a third thing, and it is better than both:
 
-**Recommendation: A.** The report is the thing that matters. A moderator reading
-"they keep sending me this" with one image instead of two can still act; a
-moderator who never receives the report cannot. Option B is only defensible if
-we think a report without its evidence is worse than no report, and for
-harassment and safety it plainly is not.
+> "The upload happens at the moment of attaching, not at the moment of sending,
+> so the user will know immediately if a file fails to attach and can retry to
+> attach it."
 
-Whichever is chosen, the current behaviour — the report vanishing while the
-message talks only about the picture — is not one of the options.
+That is not how the REPORT flow works. It is exactly how the SUPPORT flow
+already works, twenty files away:
+
+| Flow | Uploads | When it fails |
+| --- | --- | --- |
+| `SupportFormViewModel.attach` (SHY-0387) | at ATTACH, with an `isAttaching` state | error shown, file NOT added to the list, person retries the file |
+| `submitUserReport` | at SEND, from raw `ByteArray` | `EvidenceUploadFailed`, and no report is filed |
+
+So the real defect is not the failure policy. It is that one app has **two
+attachment designs**, and the report flow got the worse one. The failure policy
+question only exists because the upload was deferred to send; move it to attach
+and it stops being a question, because by the time Send is pressed the evidence
+is already on the server and there is nothing left to fail.
+
+**Resolution: make the report flow work the way the support flow already does.**
+Upload on attach, show the failure against the file it belongs to, keep the
+file out of the list until it is really uploaded, and let Send carry keys rather
+than bytes.
+
+This also removes the compressor/scanner/size failures from the send path
+entirely — every one of them becomes a message about the picture the person is
+attaching, at the moment they attach it, which is the only moment they can do
+anything about it.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-- [ ] With every image uploaded, nothing changes.
-- [ ] With one image failing, the report is still filed (option A) and names
-      which images are missing.
+- [ ] Attaching a picture to a report uploads it there and then, with a visible
+      "attaching" state, exactly as the support form does.
+- [ ] A picture that uploads appears in the list; pressing Send files the report
+      with it and nothing is uploaded at send time.
 
 ### Error paths
 
-- [ ] With EVERY image failing, the report is still filed with none attached.
-- [ ] The person is told what did not attach, in their own language.
+- [ ] A picture that fails to upload says so AGAINST THAT PICTURE, is not added
+      to the list, and can be attached again without losing anything else.
+- [ ] The report itself is never lost to a picture. There is no path where
+      pressing Send files nothing because of an image.
 - [ ] A failure to file the report itself is still reported as a failure — this
-      must not turn into "it always says it worked".
+      must not become "it always says it worked".
 
 ### Edge cases
 
-- [ ] A report with no images at all behaves exactly as it does today.
-- [ ] Ten images with the fifth failing files the other nine.
-- [ ] A scanner refusal (SHY-0420) is treated as a failed image, not a failed
-      report.
+- [ ] A report with no pictures at all behaves exactly as it does today.
+- [ ] Ten pictures with the fifth failing leaves the other nine attached and the
+      fifth retryable.
+- [ ] A scanner refusal (SHY-0420) and an over-size refusal both surface at
+      attach time, naming the actual limit.
+- [ ] Attaching, then removing, then sending leaves nothing orphaned in storage
+      (the SHY-0434 guarantee, which the support flow already carries).
 
 ### Performance
 
-- [ ] No change.
+- [ ] Sending is FASTER, because the bytes have already gone. The send request
+      carries keys, not images.
 
 ### Security
 
-- [ ] No change. A refused file is still refused; it simply no longer takes the
-      report with it.
+- [ ] No change to what is refused. A refused file is still refused; it simply
+      no longer takes the report with it.
 
 ### UX
 
-- [ ] The message distinguishes "sent, without some pictures" from "not sent".
-      Today they are the same message.
+- [ ] The person never sees a message about a picture that silently also means
+      "your report was not sent". That state stops existing.
+- [ ] The report screen and the support form behave the same way when a file
+      fails, because they are the same act.
 
 ### i18n
 
-- [ ] Every new string is translated for all locales.
+- [ ] Every new string is translated for all locales. Where the support form
+      already has the equivalent string, it is reused rather than re-authored.
 
 ### Observability
 
-- [ ] Reports filed with evidence missing are distinguishable, so a rise in
-      upload failures is visible rather than being read as fewer reports.
+- [ ] Attachment upload failures are distinguishable from report failures, so a
+      rise in one is not read as the other.
 
 ## BDD Scenarios
 
 **Scenario: The picture will not upload**
 
-- **Given** somebody reporting another person with a screenshot that fails to upload
-- **When** they submit the report
-- **Then** the report reaches moderation and they are told the picture did not attach
+- **Given** somebody adding a screenshot to a report
+- **When** the picture fails to upload
+- **Then** they are told about that picture and can try it again
 
-**Scenario: Nothing was wrong**
+**Scenario: The report is never lost to a picture**
 
-- **Given** somebody reporting another person with a screenshot that uploads
-- **When** they submit the report
-- **Then** it behaves exactly as it does today
+- **Given** somebody who could not attach their screenshot
+- **When** they send the report anyway
+- **Then** the report reaches moderation
 
 ## Test Plan
 
