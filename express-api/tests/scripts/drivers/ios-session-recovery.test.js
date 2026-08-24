@@ -28,6 +28,22 @@ const {
   createIosJourneyDevice,
 } = require('../../../scripts/drivers/ios-journey-device');
 
+/**
+ * The HARDWARE udid, passed explicitly on purpose.
+ *
+ * `createIosJourneyDevice` resolves an absent one through
+ * `xcrun xctrace list devices`. On a Mac with an iPhone plugged in that
+ * SUCCEEDS, so these tests passed locally for the wrong reason -- they were
+ * quietly depending on attached hardware -- and on ubuntu CI, where there is no
+ * xcrun, the factory threw and every iOS driver suite failed to run.
+ *
+ * A unit test must not need a phone. Stating both identifiers means no
+ * detection happens at all. It must DIFFER from the CoreDevice uuid: the
+ * constructor rejects one value spent on both, which is the bug
+ * ios-journey-device-udid.test.js exists for.
+ */
+const TEST_HARDWARE_UDID = '00008150-000954D90A20401C';
+
 describe('isSessionLost', () => {
   test('the failure that actually took the journeys out', () => {
     expect(
@@ -80,7 +96,12 @@ describe('isSessionLost', () => {
 });
 
 describe('withSessionRecovery', () => {
-  const device = () => createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+  const device = () =>
+    createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
+      bundleId: 'com.example',
+    });
 
   test('a call that works is not retried and is not slowed', async () => {
     const d = device();
@@ -205,7 +226,13 @@ describe('every device command survives a WebDriverAgent restart', () => {
   };
 
   const commands = Object.getOwnPropertyNames(
-    Object.getPrototypeOf(createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'x' })),
+    Object.getPrototypeOf(
+      createIosJourneyDevice({
+        udid: 'A'.repeat(36),
+        hardwareUdid: TEST_HARDWARE_UDID,
+        bundleId: 'x',
+      }),
+    ),
   ).filter((name) => !(name in NOT_A_SESSION_COMMAND));
 
   /**
@@ -263,6 +290,7 @@ describe('every device command survives a WebDriverAgent restart', () => {
   const speakingDevice = (over = {}) =>
     createIosJourneyDevice({
       udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
       bundleId: 'com.example',
       warn: (...args) => warnings.push(args.join(' ')),
       ...over,
@@ -270,7 +298,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
 
   /** A device whose transport dies once with a session-lost error, then works. */
   function deviceThatLosesWdaOnce() {
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
+      bundleId: 'com.example',
+    });
     d._sessionId = 'dead-session';
     let failed = false;
     const reply = (routePath) => {
@@ -383,7 +415,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
     // The tolerance is scoped to "we already clicked it". A label that was
     // never there must still be an error, or a typo'd dialog button becomes a
     // silent no-op that passes every run.
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
+      bundleId: 'com.example',
+    });
     d._sessionId = 'live';
     d._post = async () => {
       throw new Error('POST /element -> 404: An element could not be located on the page');
@@ -440,7 +476,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
     // Scoped deliberately. "Going back costs her nothing she typed" is a real
     // J38 assertion: the field keeps its content across a navigation, and a
     // typeText that always cleared would erase it.
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
+      bundleId: 'com.example',
+    });
     d._sessionId = 'live';
     const routes = [];
     d._post = async (routePath) => {
@@ -467,7 +507,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
     // that an absent control still FAILS, and that the looking is BOUNDED. Both
     // are asserted: an unbounded retry, or a miss that resolves, still reddens
     // this test. See [[feedback-assert-the-seam-not-the-sides]].
-    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const d = createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
+      bundleId: 'com.example',
+    });
     let calls = 0;
     d._post = async () => {
       calls += 1;

@@ -25,6 +25,22 @@ const { AndroidJourneyDevice } = require(RUNNER);
 const { createIosJourneyDevice } = require('../../../scripts/drivers/ios-journey-device');
 
 /**
+ * The HARDWARE udid, passed explicitly on purpose.
+ *
+ * `createIosJourneyDevice` resolves an absent one through
+ * `xcrun xctrace list devices`. On a Mac with an iPhone plugged in that
+ * SUCCEEDS, so these tests passed locally for the wrong reason -- they were
+ * quietly depending on attached hardware -- and on ubuntu CI, where there is no
+ * xcrun, the factory threw and every iOS driver suite failed to run.
+ *
+ * A unit test must not need a phone. Stating both identifiers means no
+ * detection happens at all. It must DIFFER from the CoreDevice uuid: the
+ * constructor rejects one value spent on both, which is the bug
+ * ios-journey-device-udid.test.js exists for.
+ */
+const TEST_HARDWARE_UDID = '00008150-000954D90A20401C';
+
+/**
  * Calls the runner makes on ONE platform on purpose, each with the guard that
  * makes it safe. The guard is named so this list cannot quietly become a
  * dumping ground for "it broke, add it here".
@@ -47,7 +63,11 @@ const androidMethods = () => {
   return new Set(Object.getOwnPropertyNames(Object.getPrototypeOf(d)));
 };
 const iosMethods = () => {
-  const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+  const d = createIosJourneyDevice({
+    udid: 'A'.repeat(36),
+    hardwareUdid: TEST_HARDWARE_UDID,
+    bundleId: 'com.example',
+  });
   return new Set(Object.getOwnPropertyNames(Object.getPrototypeOf(d)));
 };
 
@@ -106,7 +126,11 @@ describe('journey device parity', () => {
     // Mac's LAN address baked in by scripts/dev/ios-local-install.sh --
     // reinstalling from the runner would silently replace it with a build
     // pointed at a different host.
-    const ios = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    const ios = createIosJourneyDevice({
+      udid: 'A'.repeat(36),
+      hardwareUdid: TEST_HARDWARE_UDID,
+      bundleId: 'com.example',
+    });
     await expect(ios.uninstall('com.example')).rejects.toThrow(/ios-local-install/);
     await expect(ios.install('/tmp/whatever.app')).rejects.toThrow(/ios-local-install/);
   });
@@ -116,6 +140,12 @@ describe('journey device parity', () => {
     // set it, so the Android side was `undefined`. A check the other way round
     // would have been silently false everywhere.
     expect(new AndroidJourneyDevice('SERIAL').kind).toBe('android');
-    expect(createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'x' }).kind).toBe('ios');
+    expect(
+      createIosJourneyDevice({
+        udid: 'A'.repeat(36),
+        hardwareUdid: TEST_HARDWARE_UDID,
+        bundleId: 'x',
+      }).kind,
+    ).toBe('ios');
   });
 });

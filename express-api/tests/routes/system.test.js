@@ -438,17 +438,42 @@ describe('POST /api/system/sweep-support-retention', () => {
   test('its in-flight flag is its own, not shared with the other sweep', async () => {
     // Each handler closes over its own flag. Sharing one would let a long
     // account-deletion sweep 409 an unrelated retention run.
+    //
+    // Held open by a promise THIS TEST resolves, not by a timer. A 50ms sleep
+    // here was a RACE, and one that failed silently in the safe direction: if
+    // the retention sweep finished before the second request landed, its flag
+    // was already clear, the 200 came back for the wrong reason, and the test
+    // passed without ever exercising a shared flag. Waiting for the sweep to
+    // have actually STARTED is the condition that matters.
+    let releaseRetention;
+    let retentionStarted;
+    const started = new Promise((resolve) => {
+      retentionStarted = resolve;
+    });
     mockSupportRetention.mockImplementationOnce(
-      () => new Promise((resolve) => setTimeout(resolve, 50)),
+      () =>
+        new Promise((resolve) => {
+          releaseRetention = resolve;
+          retentionStarted();
+        }),
     );
     const app = createApp();
+    // `.then()` is what STARTS a supertest request. Without it the request is
+    // never sent, and this test used to await the other sweep FIRST and this
+    // one afterwards -- so the two were never in flight together, and a test
+    // named for a shared flag never had two sweeps to share one.
     const inFlight = request(app)
       .post('/api/system/sweep-support-retention')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .then((r) => r);
+    // The retention sweep is now provably in flight and its flag is set, so the
+    // request below is a real test of whether the OTHER sweep sees that flag.
+    await started;
     const other = await request(app)
       .post('/api/system/sweep-account-deletions')
       .set('Authorization', `Bearer ${TEST_SECRET}`);
     expect(other.status).toBe(200);
+    releaseRetention();
     await inFlight;
   });
 });

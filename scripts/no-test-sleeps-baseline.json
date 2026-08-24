@@ -2,6 +2,7 @@
   "express-api/scripts/device-journey-runner.js": 1,
   "express-api/scripts/drivers/android-adb-driver.js": 19,
   "express-api/scripts/drivers/ios-appium-driver.js": 1,
+  "express-api/scripts/drivers/ios-journey-device.js": 1,
   "express-api/scripts/drivers/ios-simctl-driver.js": 1,
   "express-api/scripts/drivers/ui-dump-retry.js": 1,
   "express-api/scripts/drivers/web-mobile-firefox-android-driver.js": 1,
