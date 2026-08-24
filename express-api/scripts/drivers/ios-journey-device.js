@@ -828,11 +828,34 @@ class IosDevice {
    * product dropped the input.
    */
   async typeText(tag, text) {
+    // Survives the replay, like `tapElement`'s `clickIssued` and for a sharper
+    // reason: XCUITest's /value APPENDS keystrokes, it does not replace. When
+    // the answer to a type is lost and `withSessionRecovery` re-runs the
+    // operation, the text lands TWICE.
+    //
+    // J38, 2026-08-24: the field read "...since this morningJ38 run ...since
+    // this morning" against a single typed sentence. That is worse than the
+    // click case -- a replayed click fails loudly on a control that has gone,
+    // and this one corrupts the field quietly and fails later, at an assertion
+    // about content, pointing at the wrong thing entirely.
+    let keysSent = false;
     return this.withSessionRecovery(`typeText(${tag})`, async () => {
       const el = await this._post('/element', { using: 'accessibility id', value: tag });
       const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
       if (!id) throw new Error(`no element with accessibility id "${tag}" to type into`);
       await this._post(`/element/${id}/click`, {});
+      if (keysSent) {
+        // Only on the REPLAY. Journeys rely on typing ADDING to a field that
+        // already holds something -- "going back costs her nothing she typed"
+        // is a real J38 assertion -- so an unconditional clear would erase
+        // content the caller meant to keep.
+        console.warn(
+          `[ios] retyping ${tag} after a type whose answer was lost — clearing first, ` +
+            'because /value appends and the first attempt may have landed',
+        );
+        await this._post(`/element/${id}/clear`, {});
+      }
+      keysSent = true;
       await this._post(`/element/${id}/value`, { text });
     });
   }

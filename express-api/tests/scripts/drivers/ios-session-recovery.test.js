@@ -208,6 +208,37 @@ describe('every device command survives a WebDriverAgent restart', () => {
     Object.getPrototypeOf(createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'x' })),
   ).filter((name) => !(name in NOT_A_SESSION_COMMAND));
 
+  /**
+   * How each replayed command is made SAFE to run twice — or why it is not.
+   *
+   * `withSessionRecovery` re-runs the whole operation, so every command it
+   * wraps can execute twice against the phone. That was documented as an
+   * accepted risk, and on 2026-08-24 it cost three journeys in nine runs, in
+   * two different shapes: a click replayed onto the screen it had already
+   * opened (J39, loud), and a sentence typed twice into one field (J38,
+   * silent). Fixing them one at a time is how the third one gets missed, so
+   * the DECISION is what is pinned here.
+   * See [[feedback-guard-the-class-not-the-instance]].
+   */
+  const REPLAY_SAFETY = {
+    tapElement: 'a control that has GONE after a click we issued means the click landed',
+    tapElementByLabel: 'same as tapElement — and dialog buttons are the likeliest to vanish',
+    typeText: 'the replay CLEARS first, because XCUITest /value appends rather than replaces',
+    tap: 'ACCEPTED: a coordinate carries no identity, so a replay cannot tell what it hit',
+    swipe: 'ACCEPTED: a repeated scroll overshoots at worst, and the callers re-read after',
+    screencap: 'idempotent — overwrites the same file',
+    measure: 'idempotent — reads the window size',
+  };
+
+  test('every replayed command has DECIDED how it survives running twice', () => {
+    // The guard that stops this being a list of three bugs someone fixed.
+    // Non-vacuous first: an empty CALLS would make the filter below pass while
+    // proving nothing. See [[feedback-source-scanning-guards-need-their-own-anchors]].
+    expect(Object.keys(CALLS).length).toBeGreaterThan(0);
+    const undecided = Object.keys(CALLS).filter((c) => !(c in REPLAY_SAFETY));
+    expect({ undecided }).toEqual({ undecided: [] });
+  });
+
   test('the call table covers every command the prototype exposes', () => {
     // The guard on the guard. A new WDA command lands here first, so it cannot
     // be added without someone deciding whether it needs recovery.
@@ -351,6 +382,67 @@ describe('every device command survives a WebDriverAgent restart', () => {
       throw new Error('POST /element -> 404: An element could not be located on the page');
     };
     await expect(d.tapElementByLabel('Nope')).rejects.toThrow(/could not be located/);
+  });
+
+  test('typing that lost its answer is REPLACED on the replay, not appended', async () => {
+    // J38, run 8 of 9 on 2026-08-24, and the worst shape this defect takes:
+    //
+    //   the field says "J38 run ...since this morningJ38 run ...since this
+    //   morning" but she typed "J38 run ...since this morning"
+    //
+    // XCUITest's /value APPENDS keystrokes; it does not replace. So when the
+    // answer to a type is lost and withSessionRecovery replays the operation,
+    // the text lands TWICE. That is worse than the click case: a click replay
+    // fails loudly on a missing control, and this one silently corrupts the
+    // field and fails later at an assertion about content.
+    //
+    // Clearing first makes the replay idempotent, so the field ends up with
+    // what the caller asked for whether or not the first attempt landed --
+    // and clearing is scoped to the REPLAY, because journeys rely on typing
+    // adding to a field that already holds something.
+    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    d._sessionId = 'live';
+    const routes = [];
+    let values = 0;
+    d._post = async (routePath) => {
+      routes.push(String(routePath));
+      if (String(routePath).includes('/value')) {
+        values += 1;
+        // The keystrokes LAND, then the answer is lost.
+        if (values === 1) {
+          throw new Error(
+            'POST /value -> 500: Could not proxy command to the remote server. ' +
+              'Original error: socket hang up',
+          );
+        }
+        return {};
+      }
+      if (String(routePath).includes('/element/')) return {};
+      return { 'element-6066-11e4-a52e-4f735466cecf': 'el-1' };
+    };
+
+    await expect(d.typeText('support_input', 'hello')).resolves.toBeUndefined();
+    // The replay must CLEAR before it types again, or the field holds "hellohello".
+    const clearIndex = routes.findIndex((r) => r.includes('/clear'));
+    const secondValueIndex = routes.map((r) => r.includes('/value')).lastIndexOf(true);
+    expect(clearIndex).toBeGreaterThan(-1);
+    expect(clearIndex).toBeLessThan(secondValueIndex);
+  });
+
+  test('a FIRST type does not clear, because journeys add to filled fields', async () => {
+    // Scoped deliberately. "Going back costs her nothing she typed" is a real
+    // J38 assertion: the field keeps its content across a navigation, and a
+    // typeText that always cleared would erase it.
+    const d = createIosJourneyDevice({ udid: 'A'.repeat(36), bundleId: 'com.example' });
+    d._sessionId = 'live';
+    const routes = [];
+    d._post = async (routePath) => {
+      routes.push(String(routePath));
+      if (String(routePath).includes('/element/')) return {};
+      return { 'element-6066-11e4-a52e-4f735466cecf': 'el-1' };
+    };
+    await d.typeText('support_input', 'hello');
+    expect(routes.some((r) => r.includes('/clear'))).toBe(false);
   });
 
   test('an element that is absent still fails, and the look is bounded', async () => {
