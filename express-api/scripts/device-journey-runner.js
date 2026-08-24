@@ -708,8 +708,17 @@ async function pollGap(tickStarted, device) {
 /** Is this tree recent enough to tap from? */
 function treeIsFresh(nodes, device) {
   // Android only. The saving is one ~2332ms read per tap, which is why this
-  // exists; on iOS a read is 278ms, so it saves almost nothing and the walk
-  // then arrives ahead of the UI. See IOS_POLL_GAP_MS.
+  // exists.
+  //
+  // It stays off for iOS on CORRECTNESS, not on speed. The old reason given
+  // here -- "on iOS a read is 278ms, so it saves almost nothing" -- was
+  // measured on the near-empty SignIn screen; mid-journey a read cost 1323ms,
+  // and 478ms once WDA's idle waits were disabled. So the saving would be real.
+  //
+  // The reason not to take it is the other half: those idle waits are now off,
+  // so a snapshot can already catch the UI mid-animation, and reusing that tree
+  // for a tap would compound it. Every tap re-reads before it acts -- SHY-0441
+  // exists because a control that is findable is not necessarily where it was.
   if (device?.kind === 'ios') return false;
   return (
     Array.isArray(nodes) &&
@@ -1385,7 +1394,10 @@ async function ensureAtSignIn(device, pkg) {
     }
   }
   await device.forceStop(pkg);
-  device.launch(pkg);
+  // Awaited: on iOS this foregrounds the app through the Appium session and
+  // re-attaches WebDriverAgent to it. Unawaited, the next dump races the
+  // activation and photographs the springboard.
+  await device.launch(pkg);
   await sleep(1500);
   nodes = await settle(device, 45000);
   if (atSignIn(nodes)) return;
@@ -2552,7 +2564,7 @@ const J38 = {
       async () => {
         // Back to a fresh form the way somebody would: leave, and come in again.
         await device.forceStop(pkg);
-        device.launch(pkg);
+        await device.launch(pkg);
         await openSupport();
 
         const followUp = messages.followUp;
@@ -2809,12 +2821,23 @@ function buildJourneys(ctx) {
       }
       await reporter.step(device, `Launch app`, async () => {
         await device.forceStop(ctx.pkg);
-        device.launch(ctx.pkg);
+        await device.launch(ctx.pkg);
         await sleep(2500);
         return 'launcher intent sent';
       });
       await reporter.step(device, `Reaches SignIn (backend reachable)`, async () => {
-        await reachSignIn(device, 75000);
+        // `ensureAtSignIn`, not a bare wait for SignIn.
+        //
+        // Android reinstalls the app in the step above, so it always starts
+        // signed out. iOS does not -- the install is owned by
+        // scripts/dev/ios-local-install.sh -- so the phone arrives here still
+        // signed in from whatever ran last, sits on Home, and this step spent
+        // its full 75 seconds waiting for a screen it had already gone past.
+        // 82 wasted seconds and a red journey, on a build that was working.
+        //
+        // `ensureAtSignIn` signs out when it finds Home, which is what
+        // "reaches SignIn" was always meant to assert.
+        await ensureAtSignIn(device, ctx.pkg);
         const nodes = await dump(device);
         if (byId(nodes, 'signIn_retryConnection'))
           throw new Error('SignIn shows "retry connection" — backend NOT reachable from device');

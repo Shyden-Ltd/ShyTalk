@@ -1,3 +1,6 @@
+/* eslint-disable no-console -- driver methods log diagnostics for the
+   manual QA runner (operator-facing CLI), not application code. Same exemption
+   as android-adb-driver.js, for the same reason. */
 /**
  * An iPhone that looks exactly like the Android `Device` the journey runner
  * drives — SHY-0396.
@@ -291,7 +294,41 @@ class IosDevice {
     // is forgotten — so a teardown that closes only `_sessionId` orphans it.
     // Measured: 14 sessions created, 13 removed.
     this._allSessionIds.add(sid);
+    await this._applyPerformanceSettings(sid);
     return sid;
+  }
+
+  /**
+   * Turn off WebDriverAgent's pre-snapshot waits.
+   *
+   * Reading the screen is ~80% of an iPhone run. Before every snapshot WDA
+   * waits for the app to go idle and then for animations to cool off, and on a
+   * walk that is doing something almost continuously, that wait IS the run.
+   *
+   * These go through the SETTINGS endpoint, not the session capabilities.
+   * `appium:waitForIdleTimeout` as a capability is accepted, ignored, and reads
+   * back `undefined` -- which is how a first attempt at this appeared to work
+   * while changing nothing at all.
+   *
+   * Not fatal if it fails: a slower run is worth more than no run, and the
+   * journey summary reports the per-dump cost either way, so a silent
+   * regression here is visible in the next report rather than hidden.
+   */
+  async _applyPerformanceSettings(sessionId) {
+    try {
+      const res = await fetch(`${this.appiumBaseUrl}/session/${sessionId}/appium/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: { waitForIdleTimeout: 0, animationCoolOffTimeout: 0 },
+        }),
+      });
+      if (!res.ok) {
+        console.warn(`[ios] WDA settings refused (${res.status}); reads will be slower`);
+      }
+    } catch (e) {
+      console.warn(`[ios] WDA settings could not be applied: ${e.message}`);
+    }
   }
 
   /**
@@ -555,7 +592,36 @@ class IosDevice {
     );
   }
 
-  launch() {
+  /**
+   * Bring the app to the front, and make sure WebDriverAgent is looking at it.
+   *
+   * `forceStop` terminates the app through the Appium session, and the session
+   * SURVIVES that — still attached to a process that no longer exists. Starting
+   * the app again with devicectl left WDA reporting the SPRINGBOARD: every
+   * subsequent `/source` came back as the iOS Home screen, forty app icons and
+   * all, so the journey waited its full 45 seconds for a SignIn screen that was
+   * running the whole time and reported "SignIn not reached".
+   *
+   * That also made those runs SLOW, not just red. The springboard is a far
+   * bigger accessibility tree than any of our screens: reads cost ~1320ms while
+   * dumping it, against ~480ms inside the app. A failing iPhone run spends its
+   * whole budget photographing the home screen.
+   *
+   * `activate_app` asks WDA itself to foreground the bundle, so it re-attaches
+   * rather than being told about it afterwards. devicectl remains the fallback
+   * for when there is no session to ask -- and in that case the session id is
+   * cleared, so the next command builds one against the running app.
+   */
+  async launch() {
+    if (this._sessionId) {
+      try {
+        await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
+        return;
+      } catch (_e) {
+        // Fall through: the session is unusable, so drop it and start cold.
+        this._sessionId = null;
+      }
+    }
     run('xcrun', [
       'devicectl',
       'device',
@@ -565,6 +631,10 @@ class IosDevice {
       this.serial,
       this.bundleId,
     ]);
+    // A session created BEFORE this launch is attached to the process that has
+    // just been replaced. Dropping it makes the next command open one against
+    // the app that is actually running.
+    this._sessionId = null;
   }
 
   /**
