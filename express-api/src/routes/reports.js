@@ -27,6 +27,7 @@ const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
 const { findPendingAppeal, createAppeal } = require('../utils/appeals');
+const { suspensionEndedFields, SUSPENSION_STARTED_RESET } = require('../utils/suspension');
 const { createWarning } = require('./admin-users');
 const { MAX_ATTACHMENTS } = require('../utils/attachment-limits');
 const {
@@ -599,6 +600,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
           suspensionStartDate: timestamp,
           suspensionEndDate: endTimestamp,
           suspensionCanAppeal: canAppeal,
+          ...SUSPENSION_STARTED_RESET,
           suspendedBy: req.auth.uid,
           preSuspensionDisplayName: reportedUser?.displayName ?? reportedUser?.display_name ?? null,
           preSuspensionProfilePhotoUrl:
@@ -856,6 +858,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           suspensionStartDate: timestamp,
           suspensionEndDate: endTimestamp,
           suspensionCanAppeal: canAppeal,
+          ...SUSPENSION_STARTED_RESET,
           suspendedBy: req.auth.uid,
           preSuspensionDisplayName: reportedUser?.displayName ?? reportedUser?.display_name ?? null,
           preSuspensionProfilePhotoUrl:
@@ -1267,6 +1270,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         suspensionStartDate: timestamp,
         suspensionEndDate: endTimestamp,
         suspensionCanAppeal: body.canAppeal,
+        ...SUSPENSION_STARTED_RESET,
         suspendedBy: req.auth.uid,
         preSuspensionDisplayName: user.displayName ?? user.display_name ?? null,
         preSuspensionProfilePhotoUrl: user.profilePhotoUrl ?? user.profile_photo_url ?? null,
@@ -1335,18 +1339,7 @@ router.post('/admin/users/:uniqueId/unsuspend', async (req, res) => {
     if (preCover) restore.coverPhotoUrl = preCover;
 
     await Promise.all([
-      db.doc(`users/${req.params.uniqueId}`).update({
-        isSuspended: false,
-        suspensionReason: null,
-        suspensionStartDate: null,
-        suspensionEndDate: null,
-        suspensionCanAppeal: null,
-        suspendedBy: null,
-        preSuspensionDisplayName: null,
-        preSuspensionProfilePhotoUrl: null,
-        preSuspensionCoverPhotoUrl: null,
-        ...restore,
-      }),
+      db.doc(`users/${req.params.uniqueId}`).update(suspensionEndedFields(restore)),
       db.doc(`adminAuditLog/${generateId()}`).set(
         {
           adminId: req.auth.uid,
@@ -1509,15 +1502,7 @@ router.patch('/appeals/:id', async (req, res) => {
         if (preCover) restore.coverPhotoUrl = preCover;
 
         await db.doc(`users/${userId}`).update({
-          isSuspended: false,
-          suspensionReason: null,
-          suspensionStartDate: null,
-          suspensionEndDate: null,
-          suspensionCanAppeal: null,
-          suspendedBy: null,
-          preSuspensionDisplayName: null,
-          preSuspensionProfilePhotoUrl: null,
-          preSuspensionCoverPhotoUrl: null,
+          ...suspensionEndedFields(),
           ...restore,
         });
         clearSuspensionCache(userId);

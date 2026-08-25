@@ -32,6 +32,7 @@ const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
 const { checkUserBans } = require('../utils/bans');
 const { findPendingAppeal, createAppeal } = require('../utils/appeals');
+const { suspensionEndedFields } = require('../utils/suspension');
 const {
   mintClaimsMerging,
   deriveCohortFromUser,
@@ -1277,14 +1278,10 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
 
     log.info('users', 'Lifting expired suspension', { uniqueId });
 
-    await db.doc(`users/${uniqueId}`).update({
-      isSuspended: false,
-      suspensionReason: null,
-      suspensionEndDate: null,
-      suspensionCanAppeal: true,
-      suspensionAppealStatus: null,
-      suspendedBy: null,
-    });
+    // `suspensionCanAppeal: true` is this route's own addition — an expired
+    // suspension leaves the account able to appeal a future one — so it is
+    // spread over the shared clear rather than replacing it.
+    await db.doc(`users/${uniqueId}`).update(suspensionEndedFields({ suspensionCanAppeal: true }));
 
     clearSuspensionCache(Number(uniqueId));
 

@@ -48,6 +48,7 @@ const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
 const { authMiddleware } = require('../../src/middleware/auth');
 const usersRouter = require('../../src/routes/users');
 const reportsRouter = require('../../src/routes/reports');
+const adminUsersRouter = require('../../src/routes/admin-users');
 
 const APPEALS = 'suspensionAppeals';
 const APPELLANT = 50990470;
@@ -61,6 +62,7 @@ function appApp() {
   app.use('/api', authMiddleware);
   app.use('/api', usersRouter);
   app.use('/api', reportsRouter);
+  app.use('/api', adminUsersRouter);
   return app;
 }
 
@@ -271,5 +273,61 @@ describe('the appeal right is still bounded', () => {
       .set(user.headers)
       .send({})
       .expect(400);
+  });
+});
+
+// ─── The flag's lifecycle, because the PHONE renders from it ──────────────
+
+describe('suspensionAppealStatus does not outlive its suspension', () => {
+  // The endpoint no longer GATES on this flag (see above), but the suspension
+  // screen still renders from it: `pending` hides the appeal field and the
+  // submit button. So a stale flag does not merely mis-answer an API call, it
+  // removes the form. Fixing the reader and leaving the data is half a fix —
+  // the flag has to stop outliving the suspension it describes.
+  test('an admin unsuspend clears it', async () => {
+    const user = await mintRealUser({ uniqueId: APPELLANT });
+    const admin = await mintRealUser({ uniqueId: ADMIN_ID, admin: true });
+    await suspend(APPELLANT);
+
+    await request(appApp())
+      .post(`/api/users/${APPELLANT}/appeal`)
+      .set(user.headers)
+      .send({ appealText: 'first accusation' })
+      .expect(200);
+
+    expect((await db.doc(`users/${APPELLANT}`).get()).data().suspensionAppealStatus).toBe(
+      'pending',
+    );
+
+    await request(appApp())
+      .post(`/api/admin/users/${APPELLANT}/unsuspend`)
+      .set(admin.headers)
+      .send({ reason: 'appeal upheld' })
+      .expect(200);
+
+    const after = (await db.doc(`users/${APPELLANT}`).get()).data();
+    expect(after.suspensionAppealStatus ?? null).toBeNull();
+  });
+
+  test('a fresh admin suspension starts with no appeal against it', async () => {
+    const user = await mintRealUser({ uniqueId: APPELLANT });
+    const admin = await mintRealUser({ uniqueId: ADMIN_ID, admin: true });
+    await suspend(APPELLANT);
+
+    await request(appApp())
+      .post(`/api/users/${APPELLANT}/appeal`)
+      .set(user.headers)
+      .send({ appealText: 'first accusation' })
+      .expect(200);
+
+    await request(appApp())
+      .post(`/api/admin/users/${APPELLANT}/suspend`)
+      .set(admin.headers)
+      .send({ reason: 'a different accusation', canAppeal: true })
+      .expect(200);
+
+    // A new suspension has not been appealed yet, whatever the last one was.
+    const after = (await db.doc(`users/${APPELLANT}`).get()).data();
+    expect(after.suspensionAppealStatus ?? null).toBeNull();
   });
 });
