@@ -671,6 +671,10 @@ module.exports = {
   authMiddlewareStrict,
   requireAdmin,
   isLiveAdmin,
+  // Exported for the SSE fan-out (SHY-0169): a stream is ONE request, so the
+  // middleware's suspension check runs once and then never again for the life
+  // of a long connection. The fan-out re-checks per delivery.
+  checkSuspension,
   clearSuspensionCache,
   clearUniqueIdCache,
   clearAdminClaimCache,
