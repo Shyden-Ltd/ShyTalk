@@ -1,6 +1,6 @@
 ---
 id: SHY-0169
-status: Draft
+status: Done
 owner: claude
 created: 2026-07-09
 priority: P0
@@ -126,3 +126,43 @@ The spike's **written artifacts** (`.md` story + `.project/plans/` design doc + 
 ## Notes (running log)
 
 - 2026-07-09 — Created as the [[EPIC-0006]] real-time-transport spike after the operator chose "investigate + recommend first" (over picking SSE/WebSocket/poll cold) via AskUserQuestion. Companion decisions the same day: Firebase Auth is an allowed exception (auth plane, not data); the staff admin console gets its own admin-API. This spike unblocks the read-side remediation; the write-path remediation is decision-independent and can proceed in parallel. Source inventory: `.project/audit/direct-backend-access-audit-2026-07-09.md` (~50 real-time reads; RTDB presence/`onDisconnect` flagged as the hard sub-case).
+
+---
+
+## OPERATOR DECISION — 2026-08-25: **SSE**
+
+Ratified by the operator on 2026-08-25, during the SHY-0457 investigation that
+found private messaging entirely broken on the client:
+
+> "b. nothing should be read directly! this is a major issue. we should always
+> be using the API. that's what it's there for. look for more instances and fix
+> them"
+
+and, asked how real-time reads should work once the client stops touching
+Firestore, chose **Add SSE to the API**.
+
+**Transport: Server-Sent Events.** Express holds the Firestore/RTDB listener
+with the Admin SDK and fans out to authorised subscribers over
+`text/event-stream`.
+
+**Why it answers this spike's constraints:**
+
+| Constraint | How SSE meets it |
+| --- | --- |
+| $0 hosting, existing Oracle-Cloud Express | Plain HTTP; no new broker, no new port, no new infra. |
+| Authorization is the point of the epic | The stream is an ordinary authed route — the SAME server-side authz as every other endpoint, evaluated once at subscribe and again per fan-out. |
+| iOS + Android + web parity | `EventSource` on web; a plain chunked-HTTP read on both mobile clients — no SDK. |
+| Live UX must survive | Server pushes; chat, seat state and mic state stay live rather than polled. |
+| `onDisconnect()` equivalence | SSE gives the server a connection-close event, which is the same signal RTDB's `onDisconnect` provided — presence and stale-room reaping can hang off it server-side. |
+
+One-way is sufficient: every client→server action in this app is already a
+mutation, and mutations go through ordinary POST/PATCH routes. Nothing needs a
+duplex channel.
+
+**Consequence:** the read-side remediation stories are UNBLOCKED and are written
+against SSE. First implementation is the conversations read path, because that
+is where the P0 was found (SHY-0457): `getOrCreateConversation` reads a
+non-existent document directly, `firestore.rules` L355 dereferences
+`resource.data` with no null guard, and the read is denied with
+`Null value error` — so no private conversation can ever be created.
+

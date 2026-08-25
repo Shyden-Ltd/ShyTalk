@@ -212,6 +212,122 @@ async function broadcastToConversation(conversationId, data) {
 }
 
 // -- Get messages --
+// -- The conversation READ path (SHY-0458) --
+//
+// These exist because the client used to read conversations straight from
+// Firestore, and could not. `firestore.rules:355` dereferences
+// `resource.data.participantIds`, so reading a conversation that does not exist
+// YET is a rules EVALUATION ERROR rather than a miss:
+//
+//   GET /conversations/50000010_50000020 -> 403
+//     "evaluation error at L355:21 for 'get' @ L355, Null value error."
+//
+// `getOrCreateConversation` opens with exactly that read, so no conversation
+// could ever be created and every first message was silently dropped. Deciding
+// this server-side also puts it where every other authorization decision in
+// this app already lives (EPIC-0006).
+
+const DEFAULT_CONVERSATION_LIMIT = 50;
+const MAX_CONVERSATION_LIMIT = 200;
+
+/** The id the clients already generate: both ids sorted, joined with "_". */
+function conversationIdFor(a, b) {
+  return [String(a), String(b)].sort().join('_');
+}
+
+// -- List the caller's conversations --
+router.get('/conversations', async (req, res) => {
+  try {
+    // participantIds are stored as STRINGS; req.auth.uniqueId is a NUMBER.
+    // Same coercion the message routes already document.
+    const callerId = String(req.auth.uniqueId);
+    const limit = Math.min(
+      Number.parseInt(req.query.limit, 10) || DEFAULT_CONVERSATION_LIMIT,
+      MAX_CONVERSATION_LIMIT,
+    );
+
+    const snap = await db
+      .collection('conversations')
+      .where('participantIds', 'array-contains', callerId)
+      .orderBy('lastMessageAt', 'desc')
+      .limit(limit)
+      .get();
+
+    // Filtered HERE rather than with a `where` on the flag: a query filter also
+    // drops documents that simply lack the field, which is every conversation
+    // written before the migration backfill. UK OSA #17 — threads frozen at
+    // migration stay hidden either way.
+    const conversations = snap.docs
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .filter((c) => c.crossCohortAtMigration !== true);
+
+    return res.json(conversations);
+  } catch (err) {
+    log.error('conversations', 'Failed to list conversations', {
+      callerId: req.auth?.uniqueId,
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// -- Get or create the 1:1 conversation with another person --
+router.post('/conversations', async (req, res) => {
+  try {
+    const callerId = String(req.auth.uniqueId);
+    const raw = req.body?.otherUserId;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return res.status(400).json({ error: 'otherUserId required' });
+    }
+    const otherId = String(raw).trim();
+
+    if (otherId === callerId) {
+      return res.status(400).json({ error: 'Cannot start a conversation with yourself' });
+    }
+
+    const otherSnap = await db.doc(`users/${otherId}`).get();
+    if (!otherSnap.exists) return res.status(404).json({ error: 'User not found' });
+    const other = otherSnap.data() || {};
+
+    // Cohort gate, server-side. 404 rather than 403 so a refusal does not
+    // confirm that the account exists — the same posture the read gate takes.
+    const callerCohort = req.auth.cohort;
+    if (callerCohort && other.cohort && String(other.cohort) !== String(callerCohort)) {
+      log.info('conversations', 'Refused cross-cohort conversation', {
+        callerId,
+        otherId,
+        callerCohort,
+        otherCohort: other.cohort,
+      });
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const conversationId = conversationIdFor(callerId, otherId);
+    const existing = await db.doc(`conversations/${conversationId}`).get();
+    if (existing.exists) {
+      return res.json({ ...existing.data(), id: conversationId });
+    }
+
+    const timestamp = now();
+    const doc = {
+      participantIds: [callerId, otherId].sort(),
+      isGroup: false,
+      crossCohortAtMigration: false,
+      createdAt: timestamp,
+      lastMessageAt: timestamp,
+    };
+    await db.doc(`conversations/${conversationId}`).set(doc);
+    log.info('conversations', 'Created conversation', { conversationId, callerId, otherId });
+    return res.json({ ...doc, id: conversationId });
+  } catch (err) {
+    log.error('conversations', 'Failed to get or create conversation', {
+      callerId: req.auth?.uniqueId,
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/conversations/:id/messages', async (req, res) => {
   try {
     // Verify the requester is a participant
