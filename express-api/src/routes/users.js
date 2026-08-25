@@ -31,6 +31,7 @@ const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
 const { checkUserBans } = require('../utils/bans');
+const { findPendingAppeal, createAppeal } = require('../utils/appeals');
 const {
   mintClaimsMerging,
   deriveCohortFromUser,
@@ -447,7 +448,22 @@ router.post('/users/sign-in', async (req, res) => {
     //
     // Not an extra round trip: the middleware used to perform this same lookup
     // on this same request, and its per-uid cache is shared.
-    const ban = await checkUserBans(uniqueId, req.ip);
+    let ban;
+    try {
+      ban = await checkUserBans(uniqueId, req.ip);
+    } catch (banErr) {
+      // Fail CLOSED, and say why. A control that fails open is not a control,
+      // and falling through here would hand a banned caller the `update()`
+      // below — a refreshed firebaseUid and a custom-claim grant — during the
+      // exact outage that stopped us checking. The shape is the middleware's
+      // `rejectStandingUnavailable`: the credential was never the problem, and
+      // a client that already renders that code should not meet a bare 500.
+      log.error('users', 'Sign-in refused: ban lookup failed', {
+        uniqueId,
+        error: banErr.message,
+      });
+      return res.status(401).json({ error: 'Authentication failed', code: 'standing_unavailable' });
+    }
     if (ban.isBanned) {
       log.warn('users', 'Sign-in attempt by banned user', {
         uniqueId,
@@ -1204,35 +1220,30 @@ router.post('/users/:uniqueId/appeal', async (req, res) => {
 
     const uniqueId = req.params.uniqueId;
 
-    // Idempotency check: if a pending appeal already exists, reject
-    // with 409. Without this, a user could spam the endpoint, creating
-    // unbounded suspensionAppeals docs (Spark quota burn) and admin
-    // noise. Audit H2 (Phase 2A).
-    const userSnap = await db.doc(`users/${uniqueId}`).get();
-    if (userSnap.exists) {
-      const userData = userSnap.data();
-      const currentStatus = userData.suspensionAppealStatus;
-      if (currentStatus === 'pending') {
-        return res.status(409).json({ error: 'Appeal already pending' });
-      }
+    // Idempotency check: if a pending appeal already exists, reject with 409.
+    // Without this, a user could spam the endpoint, creating unbounded
+    // suspensionAppeals docs (Spark quota burn) and admin noise.
+    // Audit H2 (Phase 2A).
+    //
+    // Asked of the COLLECTION, not of `users/{id}.suspensionAppealStatus`
+    // (SHY-0463). That flag is set here and cleared by only one of the three
+    // writers that end a suspension — the admin suspend and unsuspend routes
+    // both leave it alone — so gating on it meant one appeal in a lifetime:
+    // every later suspension, a new accusation entirely, was refused 409 for
+    // ever. Shared with `POST /api/appeals` so the two routes cannot disagree
+    // about what "already pending" means, which is how they came to.
+    const pending = await findPendingAppeal(uniqueId);
+    if (pending) {
+      log.info('users', 'Suspension appeal refused: one is already pending', {
+        uniqueId,
+        appealId: pending.id,
+      });
+      return res.status(409).json({ error: 'Appeal already pending' });
     }
 
     log.info('users', 'Suspension appeal submitted', { uniqueId });
 
-    await Promise.all([
-      db.doc(`suspensionAppeals/${generateId()}`).set(
-        {
-          uniqueId,
-          appealText: body.appealText,
-          status: 'pending',
-          createdAt: now(),
-        },
-        { merge: true },
-      ),
-      db.doc(`users/${uniqueId}`).update({
-        suspensionAppealStatus: 'pending',
-      }),
-    ]);
+    await createAppeal({ uniqueId, appealText: body.appealText });
 
     res.json({ success: true });
   } catch (err) {

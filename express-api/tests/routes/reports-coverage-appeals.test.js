@@ -295,13 +295,22 @@ describe('PATCH /api/appeals/:id - edge cases', () => {
 describe('POST /api/appeals - snake_case user fields', () => {
   let app, getDoc, queryDocs;
   beforeEach(() => {
-    app = createUserApp({ uid: 'uid', uniqueId: 'sus' });
+    // A NUMERIC uniqueId, because that is what one is — `users/{id}.uniqueId`
+    // is an integer, so `req.auth.uniqueId` is a Number. This suite is about
+    // reading snake_case FIELDS, not about the id's type, and the appeal
+    // writer now refuses a non-integer owner rather than silently storing
+    // `userId: NaN` (SHY-0463).
+    app = createUserApp({ uid: 'uid', uniqueId: 50990490 });
     jest.clearAllMocks();
     ({ getDoc, queryDocs } = require('../../src/utils/firestore-helpers'));
   });
 
   it('uses is_suspended and suspension_can_appeal snake_case fields', async () => {
-    getDoc.mockResolvedValueOnce({ id: 'sus', is_suspended: true, suspension_can_appeal: true });
+    getDoc.mockResolvedValueOnce({
+      id: '50990490',
+      is_suspended: true,
+      suspension_can_appeal: true,
+    });
     queryDocs.mockResolvedValueOnce([]);
     const res = await request(app).post('/api/appeals').send({ appealText: 'Please reconsider' });
     expect(res.status).toBe(200);

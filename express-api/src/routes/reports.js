@@ -26,6 +26,7 @@ const { computeDisplayScore } = require('../utils/gcs');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
+const { findPendingAppeal, createAppeal } = require('../utils/appeals');
 const { createWarning } = require('./admin-users');
 const { MAX_ATTACHMENTS } = require('../utils/attachment-limits');
 const {
@@ -1394,29 +1395,14 @@ router.post('/appeals', async (req, res) => {
     if (!canAppeal)
       return res.status(403).json({ error: 'Appeals are not allowed for this suspension' });
 
-    // Check for existing pending appeal
-    const existing = await queryDocs(
-      db
-        .collection('suspensionAppeals')
-        .where('userId', '==', uniqueId)
-        .where('status', '==', 'pending')
-        .limit(1),
-    );
+    // Check for existing pending appeal. Shared with the app's
+    // `POST /api/users/:uniqueId/appeal` (SHY-0463) so the two routes cannot
+    // hold different opinions about whether this person has already appealed
+    // — they did, and an appeal made on one was invisible to the other.
+    const existing = await findPendingAppeal(uniqueId);
+    if (existing) return res.status(409).json({ error: 'An appeal is already pending' });
 
-    if (existing.length > 0) return res.status(409).json({ error: 'An appeal is already pending' });
-
-    const appealId = generateId();
-    await db.doc(`suspensionAppeals/${appealId}`).set(
-      {
-        userId: uniqueId,
-        appealText: body.appealText,
-        status: 'pending',
-        reviewedBy: null,
-        reviewedAt: null,
-        createdAt: now(),
-      },
-      { merge: true },
-    );
+    const appealId = await createAppeal({ uniqueId, appealText: body.appealText });
 
     res.json({ success: true, appealId });
   } catch (err) {

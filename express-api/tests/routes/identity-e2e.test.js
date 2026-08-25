@@ -103,27 +103,64 @@ jest.mock('../../src/utils/firebase', () => ({
       update: (...args) => mockDocUpdate(path, ...args),
       delete: () => mockDocDelete(path),
     })),
-    collection: jest.fn((collectionPath) => ({
-      where: jest.fn((field, op, value) => ({
-        limit: jest.fn(() => ({
-          get: () => {
-            // For user queries by firebaseUid, search the store
-            const prefix = `${collectionPath}/`;
-            const matches = Object.entries(store.docs)
-              .filter(([key, data]) => key.startsWith(prefix) && data[field] === value)
-              .map(([key, data]) => ({
-                id: key.replace(prefix, ''),
-                data: () => data,
-              }));
-            return Promise.resolve({
-              empty: matches.length === 0,
-              docs: matches,
-            });
-          },
-        })),
-        get: () => mockCollectionQuery(collectionPath),
-      })),
-    })),
+    collection: jest.fn((collectionPath) => {
+      // A query chain that finds nothing, for the ban lookups (SHY-0461).
+      // `getActiveNetworkBans` starts with `.orderBy()` on the COLLECTION, not
+      // after a `where`, so the collection itself has to answer the whole
+      // builder surface — `where`/`orderBy`/`limit`/`startAfter`/`get`.
+      const emptySnap = { empty: true, size: 0, docs: [] };
+      const banChain = {
+        where: () => banChain,
+        orderBy: () => banChain,
+        limit: () => banChain,
+        startAfter: () => banChain,
+        get: () => Promise.resolve(emptySnap),
+      };
+      return {
+        orderBy: () => banChain,
+        limit: () => banChain,
+        startAfter: () => banChain,
+        get: () => Promise.resolve(emptySnap),
+        where: jest.fn((field, op, value) => {
+          // `POST /users/sign-in` reaches `checkUserBans` since SHY-0461, and
+          // those queries are `where(Filter.or(...))` — the first argument is an
+          // OBJECT, not a field name, and they chain further `where`/`orderBy`/
+          // `startAfter` calls this mock had no answer for.
+          //
+          // Two things would go wrong without this branch. The chain would
+          // return undefined and throw; and if it fell through to the store
+          // search below it would compare `data[undefined] === undefined` and
+          // match EVERY document in the collection — a mock reporting bans that
+          // do not exist. This suite is about identity, so ban queries resolve
+          // empty here; their real behaviour is pinned by
+          // tests/middleware/auth-pre-identity-standing.test.js.
+          if (typeof field !== 'string') return banChain;
+          return {
+            where: () => banChain,
+            orderBy: () => banChain,
+            startAfter: () => banChain,
+            limit: jest.fn(() => ({
+              get: () => {
+                // For user queries by firebaseUid, search the store
+                const prefix = `${collectionPath}/`;
+                const matches = Object.entries(store.docs)
+                  .filter(([key, data]) => key.startsWith(prefix) && data[field] === value)
+                  .map(([key, data]) => ({
+                    id: key.replace(prefix, ''),
+                    data: () => data,
+                  }));
+                return Promise.resolve({
+                  empty: matches.length === 0,
+                  size: matches.length,
+                  docs: matches,
+                });
+              },
+            })),
+            get: () => mockCollectionQuery(collectionPath),
+          };
+        }),
+      };
+    }),
     runTransaction: jest.fn(async (fn) => {
       return fn({
         get: (ref) => mockTransactionGet(ref._path),

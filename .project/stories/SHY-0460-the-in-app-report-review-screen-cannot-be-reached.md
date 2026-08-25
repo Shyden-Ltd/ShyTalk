@@ -62,11 +62,8 @@ this invisible: everything about it looks alive.
 
 ### Performance
 
-- [ ] If it is kept, the screen loads its queue within the same budget as the
-      other admin surfaces — a review screen nobody could reach has never been
-      measured under a real queue, so "it renders" is not evidence.
-- [ ] If it is removed, the app carries less: its route, screen and nav
-      registrations go with it rather than staying as dead weight in the graph.
+- [ ] Reaching the screen costs no extra call: the moderation queue it renders
+      is already fetched by the surface that will link to it.
 
 ### Security
 
