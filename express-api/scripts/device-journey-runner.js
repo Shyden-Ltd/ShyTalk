@@ -2512,8 +2512,15 @@ const J07 = {
 // boundary on the admin endpoints — read-only, no mutations.
 const J12 = {
   id: 'J12',
-  kind: 'ui',
-  title: 'j12 — admin routine: admin reaches moderation queues; non-admin rejected',
+  // There is no app UI to drive. ReportReviewScreen EXISTS and is registered in
+  // both nav graphs, but nothing navigates to it anywhere in the repo — the
+  // moderation queues a human actually uses are the web admin console
+  // (public/admin/js/tabs/). Declared honestly rather than left to look like a
+  // device journey it can never be (SHY-0457, orphaned screen: SHY-0460).
+  kind: 'api-contract',
+  title:
+    'j12 — API contract: the moderation queues are admin-only — admin 200, non-admin 403 ' +
+    '(no reachable app UI; the queues live in the web admin console)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
     if (!ctx.db) return;
