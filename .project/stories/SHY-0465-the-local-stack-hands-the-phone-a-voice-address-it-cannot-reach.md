@@ -1,6 +1,6 @@
 ---
 id: SHY-0465
-status: Draft
+status: In Progress
 owner: unassigned
 created: 2026-08-26
 priority: P1
