@@ -154,7 +154,7 @@ val iosPlatformModule =
         single<PrivateMessageRepository> { IosPrivateMessageRepositoryImpl(get(), get(), get()) }
         single<ReportRepository> { IosReportRepositoryImpl(get()) }
         single<TypingRepository> { IosTypingRepositoryImpl(get()) }
-        single<NotificationRepository> { IosNotificationRepositoryImpl(get(), get()) }
+        single<NotificationRepository> { IosNotificationRepositoryImpl(get()) }
         single<GiftRepository> { IosGiftRepositoryImpl(get()) }
         single<EconomyRepository> { IosEconomyRepositoryImpl(get(), get(), get()) }
         single<BannerRepository> { IosBannerRepositoryImpl(get()) }

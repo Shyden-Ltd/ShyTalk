@@ -16,7 +16,6 @@
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosPrivateMessageRepositoryImpl.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosRoomRepositoryImpl.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosSeatRequestRepositoryImpl.kt",
-    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosSmallRepositories.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosUserRepositoryImpl.kt"
   ],
   "rtdb": [
