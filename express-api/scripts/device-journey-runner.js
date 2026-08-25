@@ -1058,8 +1058,11 @@ async function typeInto(device, id, text, { clearFirst = false } = {}) {
     // Addressed by identifier and set directly. Typing key-by-key through the
     // on-screen keyboard is slower and can drop characters when the field
     // scrolls under it -- which looks like the product losing input.
-    // Setting the value replaces it, so `clearFirst` needs nothing extra here.
-    await device.typeText(id, text);
+    // XCUITest's /value APPENDS too — the comment that once claimed this
+    // branch "sets directly" was wrong, and believing it cost SHY-0456 an
+    // identical concatenated-name failure on the iPhone after it was fixed on
+    // Android. The driver clears via /element/{id}/clear when asked.
+    await device.typeText(id, text, { clearFirst });
     await sleep(400);
     return;
   }

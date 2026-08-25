@@ -832,7 +832,7 @@ class IosDevice {
    * whatever happens to be focused is the kind of failure that looks like the
    * product dropped the input.
    */
-  async typeText(tag, text) {
+  async typeText(tag, text, { clearFirst = false } = {}) {
     // Survives the replay, like `tapElement`'s `clickIssued` and for a sharper
     // reason: XCUITest's /value APPENDS keystrokes, it does not replace. When
     // the answer to a type is lost and `withSessionRecovery` re-runs the
@@ -849,6 +849,15 @@ class IosDevice {
       const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
       if (!id) throw new Error(`no element with accessibility id "${tag}" to type into`);
       await this._post(`/element/${id}/click`, {});
+      if (clearFirst) {
+        // The caller says the field may arrive PRE-FILLED. /value appends, so
+        // without this the old contents survive and the new text is glued to
+        // them — SHY-0456's room was created as "JR-CORE-<t1>JR-CORE-<t2>",
+        // and the failure surfaced later as a database lookup finding nothing.
+        // Still opt-in: J38 asserts that going back costs her nothing she
+        // typed, so clearing unconditionally would erase content on purpose.
+        await this._post(`/element/${id}/clear`, {});
+      }
       if (keysSent) {
         // Only on the REPLAY. Journeys rely on typing ADDING to a field that
         // already holds something -- "going back costs her nothing she typed"
