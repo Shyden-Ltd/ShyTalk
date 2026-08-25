@@ -98,8 +98,7 @@ data class RoomUiState(
     val speakingUserIds: Set<String> = emptySet(),
     val isVoiceJoined: Boolean = false,
     val isVoiceReady: Boolean = false,
-    val isVoiceUnavailable: Boolean = false,
-    val voiceErrorDetail: String? = null,
+    val voiceUnavailableReason: VoiceUnavailableReason? = null,
     val pendingInvite: String? = null,
     val seatUsers: Map<String, User> = emptyMap(),
     val participantUsers: Map<String, User> = emptyMap(),
@@ -126,7 +125,16 @@ data class RoomUiState(
     val showExpiryUpsellDialog: Boolean = false,
     val effectiveSeatCount: Int = Constants.MAX_SEATS,
     val translations: Map<String, String> = emptyMap(),
-)
+) {
+    /**
+     * Derived, never stored: voice is unavailable exactly when something has
+     * said why. SHY-0466 — three of the four sites that raised this flag
+     * recorded no reason, and a Boolean cannot make that a compile error.
+     * A reason can: there is no `copy(isVoiceUnavailable = true)` to write.
+     */
+    val isVoiceUnavailable: Boolean
+        get() = voiceUnavailableReason != null
+}
 
 class RoomViewModel(
     private val roomId: String,
@@ -541,7 +549,7 @@ class RoomViewModel(
                 viewModelScope.launch {
                     delay(VOICE_CONNECT_TIMEOUT_MS)
                     if (!_uiState.value.isVoiceReady) {
-                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                        markVoiceUnavailable(VoiceUnavailableReason.CONNECT_TIMED_OUT)
                     }
                 }
             }
@@ -852,14 +860,7 @@ class RoomViewModel(
                     }
                     // Voice error — show the banner with diagnostic detail
                     if (errorMsg != null) {
-                        _uiState.update {
-                            it.copy(
-                                isVoiceReady = true,
-                                isVoiceUnavailable = true,
-                                voiceErrorDetail = errorMsg,
-                                speakingUserIds = emptySet(),
-                            )
-                        }
+                        markVoiceUnavailable(VoiceUnavailableReason.SERVICE_ERROR, errorMsg)
                         voiceService.clearError()
                     }
                 }
@@ -868,12 +869,47 @@ class RoomViewModel(
         viewModelScope.launch {
             voiceService.connectionState.collect { connState ->
                 if (connState == VoiceConnectionState.CONNECTED) {
-                    _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = false) }
+                    markVoiceAvailable()
                 } else if (connState == VoiceConnectionState.DISCONNECTED && _uiState.value.isVoiceReady) {
-                    _uiState.update { it.copy(isVoiceUnavailable = true, speakingUserIds = emptySet()) }
+                    markVoiceUnavailable(VoiceUnavailableReason.CONNECTION_LOST)
                 }
             }
         }
+    }
+
+    /**
+     * The ONE way voice becomes unavailable (SHY-0466).
+     *
+     * Four call sites used to raise the flag and three of them recorded no
+     * reason, so the banner could only say "temporarily unavailable". Routing
+     * every site through here means a reason cannot be omitted — and the
+     * service's own English text still reaches the log, where it is useful,
+     * without reaching a screen, where it is untranslatable.
+     *
+     * `isVoiceReady` is set here too: voice has settled, even though it
+     * settled badly. It no longer gates the room — see [roomScreenContentFor]
+     * — but it is still what separates "connecting" from "gave up".
+     */
+    private fun markVoiceUnavailable(
+        reason: VoiceUnavailableReason,
+        diagnostic: String? = null,
+    ) {
+        logW(TAG, "voice unavailable ($reason)" + (diagnostic?.let { ": $it" } ?: ""))
+        _uiState.update {
+            it.copy(
+                isVoiceReady = true,
+                voiceUnavailableReason = reason,
+                speakingUserIds = emptySet(),
+            )
+        }
+    }
+
+    /** Voice arrived, possibly late. Clears the banner and re-enables the mic. */
+    private fun markVoiceAvailable() {
+        if (_uiState.value.isVoiceUnavailable) {
+            logI(TAG, "voice recovered — clearing the unavailable banner")
+        }
+        _uiState.update { it.copy(isVoiceReady = true, voiceUnavailableReason = null) }
     }
 
     private fun observeDisconnectedUsers() {
@@ -969,7 +1005,7 @@ class RoomViewModel(
                 launch {
                     delay(VOICE_CONNECT_TIMEOUT_MS)
                     if (!_uiState.value.isVoiceReady) {
-                        _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                        markVoiceUnavailable(VoiceUnavailableReason.CONNECT_TIMED_OUT)
                     }
                 }
             } else {
@@ -1523,7 +1559,7 @@ class RoomViewModel(
                         viewModelScope.launch {
                             delay(VOICE_CONNECT_TIMEOUT_MS)
                             if (!_uiState.value.isVoiceReady) {
-                                _uiState.update { it.copy(isVoiceReady = true, isVoiceUnavailable = true) }
+                                markVoiceUnavailable(VoiceUnavailableReason.CONNECT_TIMED_OUT)
                             }
                         }
                     }

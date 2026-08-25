@@ -217,6 +217,9 @@ fun RoomScreen(
     var isCompressingEvidence by remember { mutableStateOf(false) }
 
     val evidenceScope = rememberCoroutineScope()
+    // Resolved here rather than in the click lambda: stringResource is a
+    // composable read and cannot be called from a callback.
+    val micBlockedMessage = stringResource(Res.string.voice_unavailable_mic_blocked)
     val fileTooLargeMsg = stringResource(Res.string.file_too_large)
     val platformSettings: PlatformSettingsService = org.koin.compose.koinInject()
 
@@ -624,27 +627,6 @@ fun RoomScreen(
                         ) {
                             CircularProgressIndicator()
                         }
-                    } else if (uiState.hasJoined && !uiState.isVoiceReady) {
-                        // Loading screen while connecting to voice
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text(
-                                text = uiState.room?.name ?: stringResource(Res.string.room),
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onBackground,
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            CircularProgressIndicator()
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = stringResource(Res.string.connecting),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
                     } else if (uiState.hasJoined) {
                         Column(modifier = Modifier.fillMaxSize().imePadding()) {
                             // Degraded Mode Banner
@@ -659,33 +641,11 @@ fun RoomScreen(
                                 )
                             }
 
-                            // Voice Unavailable Banner
-                            if (uiState.isVoiceUnavailable) {
-                                Row(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .background(Color(0xFFFFF3E0))
-                                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center,
-                                ) {
-                                    Icon(
-                                        Icons.Default.MicOff,
-                                        contentDescription =
-                                            stringResource(Res.string.microphone) + " " + stringResource(Res.string.denied).lowercase(),
-                                        tint = Color(0xFFE65100),
-                                        modifier = Modifier.padding(end = 8.dp),
-                                    )
-                                    Text(
-                                        text =
-                                            uiState.voiceErrorDetail
-                                                ?: stringResource(Res.string.voice_chat_unavailable),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFFE65100),
-                                    )
-                                }
-                            }
+                            // Voice status — never blocks the room (SHY-0466)
+                            VoiceStatusBanner(
+                                isVoiceReady = uiState.isVoiceReady,
+                                reason = uiState.voiceUnavailableReason,
+                            )
 
                             // Seat Grid (upper portion — only occupied seats)
                             val isCurrentUserSeated = uiState.currentUserId in seatedUserIds
@@ -734,6 +694,11 @@ fun RoomScreen(
                                 userMap = userMap,
                                 _isOwnerOrHost = isOwnerOrHost,
                                 isVoiceUnavailable = uiState.isVoiceUnavailable,
+                                onVoiceUnavailable = {
+                                    evidenceScope.launch {
+                                        snackbarHostState.showSnackbar(micBlockedMessage)
+                                    }
+                                },
                                 onToggleMic = { seatIndex ->
                                     // Refresh from the LIVE OS state first. `hasAudioPermission`
                                     // is otherwise only ever written by the initial
@@ -1301,6 +1266,82 @@ fun RoomScreen(
                 viewModel.reportMessage(msg, reason, description)
                 reportingRoomMessage = null
             },
+        )
+    }
+}
+
+/**
+ * Says what voice is doing, without ever standing in front of the room.
+ *
+ * SHY-0466. Two states are deliberately distinct: a slow network is still
+ * trying, and should not be dressed as a failure, while a network that has
+ * given up should say so AND say what still works — because the room, the
+ * chat and the seats do.
+ *
+ * The reason is a value rather than the voice service's own message: that
+ * message is English and technical, so showing it to a reader in Thai is not
+ * a gap a translator can close later.
+ */
+@Composable
+private fun VoiceStatusBanner(
+    isVoiceReady: Boolean,
+    reason: VoiceUnavailableReason?,
+) {
+    if (reason == null) {
+        if (!isVoiceReady) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Text(
+                    text = stringResource(Res.string.voice_connecting),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.testTag("room_voiceConnecting"),
+                )
+            }
+        }
+        return
+    }
+
+    val headline =
+        when (reason) {
+            VoiceUnavailableReason.CONNECTION_LOST -> stringResource(Res.string.voice_chat_disconnected)
+
+            VoiceUnavailableReason.CONNECT_TIMED_OUT,
+            VoiceUnavailableReason.SERVICE_ERROR,
+            -> stringResource(Res.string.voice_chat_unavailable)
+        }
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFFFF3E0))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            Icons.Default.MicOff,
+            contentDescription =
+                stringResource(Res.string.microphone) + " " + stringResource(Res.string.denied).lowercase(),
+            tint = Color(0xFFE65100),
+            modifier = Modifier.padding(end = 8.dp),
+        )
+        Text(
+            // Both halves, always: what is unavailable, and what still works.
+            text = headline + " — " + stringResource(Res.string.voice_unavailable_can_still_chat),
+            style = MaterialTheme.typography.bodySmall,
+            color = Color(0xFFE65100),
+            // Tagged on the TEXT, not the Row, so the tag and the words it
+            // guards are the same node — a device test that finds the tag can
+            // then assert what the banner actually SAYS.
+            modifier = Modifier.testTag("room_voiceBanner"),
         )
     }
 }

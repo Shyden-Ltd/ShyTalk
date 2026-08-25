@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Sesli sohbet odaları yeniden tasarlandı.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Sesli sohbet geçici olarak kullanılamıyor</string>
+    <string name="voice_chat_disconnected">Sesli sohbet bağlantısı kesildi</string>
+    <string name="voice_unavailable_can_still_chat">Yine de okuyup sohbet edebilirsiniz</string>
+    <string name="voice_connecting">Ses bağlanıyor...</string>
+    <string name="voice_unavailable_mic_blocked">Mikrofon için sesli sohbet gerekir, şu anda kullanılamıyor</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Cüzdan · %1$s</string>
     <!-- google-translated 2026-05-04 -->

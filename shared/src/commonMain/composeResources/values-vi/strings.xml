@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Phòng trò chuyện bằng giọng nói được thiết kế lại.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Trò chuyện thoại tạm thời không khả dụng</string>
+    <string name="voice_chat_disconnected">Đã ngắt kết nối trò chuyện thoại</string>
+    <string name="voice_unavailable_can_still_chat">Bạn vẫn có thể đọc và trò chuyện</string>
+    <string name="voice_connecting">Đang kết nối thoại...</string>
+    <string name="voice_unavailable_mic_blocked">Micrô cần trò chuyện thoại, hiện không khả dụng</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Ví · %1$s</string>
     <!-- google-translated 2026-05-04 -->

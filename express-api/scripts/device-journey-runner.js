@@ -466,10 +466,19 @@ const byTextContains = (nodes, sub) =>
 // diagnosing failures without re-driving the device by hand.
 function summarizeScreen(nodes) {
   const ids = [...new Set(nodes.map((n) => n.id).filter(Boolean))].slice(0, 40);
-  const texts = [...new Set(nodes.map((n) => n.text).filter((t) => t && t.length <= 40))].slice(
-    0,
-    20,
-  );
+  // Long strings are TRUNCATED, not dropped. The 40-char cap used to filter
+  // them out entirely, which quietly removed the longest sentences on screen —
+  // exactly the banners and warnings a reader needs to see. SHY-0466's own
+  // banner ("Voice chat is temporarily unavailable — You can still read and
+  // chat", 67 chars) was on screen and absent from every report of it.
+  const texts = [
+    ...new Set(
+      nodes
+        .map((n) => n.text)
+        .filter(Boolean)
+        .map((t) => (t.length <= 40 ? t : `${t.slice(0, 39)}…`)),
+    ),
+  ].slice(0, 20);
   return { testTags: ids, texts };
 }
 

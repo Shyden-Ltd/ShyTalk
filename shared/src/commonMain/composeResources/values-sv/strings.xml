@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Röstchattrum, omarbetade.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Röstchatt är inte tillgängligt för tillfället</string>
+    <string name="voice_chat_disconnected">Röstchatten frånkopplad</string>
+    <string name="voice_unavailable_can_still_chat">Du kan fortfarande läsa och chatta</string>
+    <string name="voice_connecting">Ansluter röst...</string>
+    <string name="voice_unavailable_mic_blocked">Mikrofonen kräver röstchatt, som inte är tillgänglig just nu</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Plånbok · %1$s</string>
     <!-- google-translated 2026-05-04 -->

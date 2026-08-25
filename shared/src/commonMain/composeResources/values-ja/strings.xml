@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">ボイス チャット ルームを再考しました。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">ボイスチャットは一時的に利用できません</string>
+    <string name="voice_chat_disconnected">ボイスチャットが切断されました</string>
+    <string name="voice_unavailable_can_still_chat">読むこととチャットは引き続きできます</string>
+    <string name="voice_connecting">音声に接続しています...</string>
+    <string name="voice_unavailable_mic_blocked">マイクにはボイスチャットが必要ですが、現在利用できません</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">ウォレット · %1$s</string>
     <!-- google-translated 2026-05-04 -->

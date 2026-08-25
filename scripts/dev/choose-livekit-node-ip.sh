@@ -9,12 +9,17 @@
 #
 # SHY-0273 taught the stack to advertise this machine's LAN address instead of
 # the Docker bridge address. That answered "what is my LAN IP" and never
-# "can the phone reach it". On a router with AP client isolation the two
-# answers differ: phone and host sit on the same SSID and the same /24 and
-# cannot exchange a packet. Measured 2026-08-26 —
+# "can the phone reach it". The two can differ: on 2026-08-26 the phone and
+# this host sat on the same SSID and the same /24 and could not exchange a
+# packet —
 #
 #   phone -> 192.168.1.1  (gateway)   0% loss     the phone's Wi-Fi is fine
-#   phone -> 192.168.1.3  (this host) unreachable the AP refuses peer traffic
+#   phone -> 192.168.1.3  (this host) unreachable and this one is not
+#
+# It cleared hours later after both devices took new DHCP leases. AP client
+# isolation, a stale lease and a band split all fit and none was proven — which
+# is exactly why this script probes instead of diagnosing. It does not need to
+# know WHY the phone cannot reach the host, only WHETHER it can.
 #
 # So this script ASKS the phone, and falls back to loopback when the answer is
 # no. Loopback works because `adb reverse` carries LiveKit's TCP media port

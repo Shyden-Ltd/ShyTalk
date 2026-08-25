@@ -38,9 +38,18 @@ arp -an                                     192.168.1.5 (incomplete)
 macOS firewall                              disabled
 ```
 
-Gateway reachable, peer ARP unanswered in **both** directions, firewall off:
-the access point forwards to the internet and refuses peer-to-peer. Nothing is
-wrong with the code, the tunnels, or the app.
+Gateway reachable, peer ARP unanswered in **both** directions, firewall off.
+The obvious reading was AP client isolation. It was not confirmed: the
+condition cleared later the same night, after both devices took new DHCP
+leases (host `.3` -> `.5`, phone `.5` -> `.6`), and the phone then reached the
+host with 0% loss. Isolation, a stale lease, or a band/AP split all fit the
+evidence and none was pinned down.
+
+**That is the argument for probing rather than diagnosing.** The stack cannot
+know which of those it is facing either, and it does not need to — it needs to
+know whether this phone can reach this host right now.
+
+Nothing was wrong with the code, the tunnels, or the app.
 
 The cost is that it does not present as a network problem. Signalling connects
 over the USB tunnel, so the room opens; ICE then never completes, so voice

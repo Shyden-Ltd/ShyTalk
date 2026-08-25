@@ -684,6 +684,10 @@
     <string name="closing">Closing...</string>
     <string name="connecting">Connecting...</string>
     <string name="voice_chat_unavailable">Voice chat is temporarily unavailable</string>
+    <string name="voice_chat_disconnected">Voice chat disconnected</string>
+    <string name="voice_unavailable_can_still_chat">You can still read and chat</string>
+    <string name="voice_connecting">Connecting voice...</string>
+    <string name="voice_unavailable_mic_blocked">The microphone needs voice chat, which is unavailable right now</string>
     <string name="mic_permission_denied">Microphone permission denied. You won't be able to use voice chat.</string>
     <string name="replace_room_title">Close existing room?</string>
     <string name="replace_room_message">You already have an active room. Opening a new room will close your existing one. Do you want to continue?</string>

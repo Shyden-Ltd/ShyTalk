@@ -81,6 +81,11 @@ fun ChatPanel(
     // compiler makes every call site wire it. Same reasoning as the
     // age-verification CTA in SHY-0268.
     onToggleMic: (Int) -> Unit,
+    // Also deliberately NOT defaulted (SHY-0466), for the same reason as
+    // onToggleMic above: a mic button that is disabled AND silent is how
+    // "voice is unavailable" reads as "the app is broken". The compiler makes
+    // every call site decide what to say.
+    onVoiceUnavailable: () -> Unit,
     onSendMessage: (String) -> Unit,
     onTapUser: (String) -> Unit,
     onInviteUser: (String, String) -> Unit,
@@ -319,9 +324,14 @@ fun ChatPanel(
                 IconButton(
                     onClick = {
                         focusManager.clearFocus()
-                        currentSeatEntry.key.toIntOrNull()?.let { onToggleMic(it) }
+                        if (isVoiceUnavailable) {
+                            // Answer the tap. A disabled control gives a sighted
+                            // person nothing at all to read (SHY-0466).
+                            onVoiceUnavailable()
+                        } else {
+                            currentSeatEntry.key.toIntOrNull()?.let { onToggleMic(it) }
+                        }
                     },
-                    enabled = !isVoiceUnavailable,
                     // Tagged for manual-qa-runner: j09 (host mic on/off),
                     // j10 (warning auto-mutes), j15 (MC unmutes between sets).
                     modifier = Modifier.testTag("room_micToggleButton"),

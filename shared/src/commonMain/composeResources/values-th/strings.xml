@@ -1302,6 +1302,10 @@
     <string name="voice_chat_reimagined">ห้องแชทด้วยเสียงโฉมใหม่</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">การแชทด้วยเสียงไม่สามารถใช้งานได้ชั่วคราว</string>
+    <string name="voice_chat_disconnected">แชทด้วยเสียงถูกตัดการเชื่อมต่อ</string>
+    <string name="voice_unavailable_can_still_chat">คุณยังอ่านและแชทได้</string>
+    <string name="voice_connecting">กำลังเชื่อมต่อเสียง...</string>
+    <string name="voice_unavailable_mic_blocked">ไมโครโฟนต้องใช้แชทด้วยเสียง ซึ่งขณะนี้ใช้งานไม่ได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">กระเป๋าเงิน · %1$s</string>
     <!-- google-translated 2026-05-04 -->

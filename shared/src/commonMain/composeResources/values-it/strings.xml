@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Chat room vocali, reinventate.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">La chat vocale è temporaneamente non disponibile</string>
+    <string name="voice_chat_disconnected">Chat vocale disconnessa</string>
+    <string name="voice_unavailable_can_still_chat">Puoi ancora leggere e chattare</string>
+    <string name="voice_connecting">Connessione voce in corso...</string>
+    <string name="voice_unavailable_mic_blocked">Il microfono richiede la chat vocale, non disponibile al momento</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Portafoglio · %1$s</string>
     <!-- google-translated 2026-05-04 -->

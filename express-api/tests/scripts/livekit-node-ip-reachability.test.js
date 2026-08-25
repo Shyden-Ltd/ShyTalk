@@ -14,10 +14,14 @@
  *   phone -> 192.168.1.1      (gateway)       0% loss    positive control
  *   arp -an                                   192.168.1.5 (incomplete)
  *
- * AP client isolation: the access point routes to the internet and refuses
- * peer-to-peer. Signalling still connects over the USB tunnel, so the room
- * opens and only ICE dies — which reads as flakiness, not as a network wall.
- * J09 was red for a session on exactly this.
+ * Signalling still connects over the USB tunnel, so the room opens and only
+ * ICE dies — which reads as flakiness, not as a network wall. J09 was red for
+ * a session on exactly this.
+ *
+ * The condition cleared hours later, after both devices took new DHCP leases.
+ * AP client isolation, a stale lease and a band split all fit the evidence and
+ * none was proven — so the script probes rather than diagnoses. It only has to
+ * know WHETHER the phone can reach the host, never why.
  *
  * These tests RUN the chooser rather than reading it. The probe is injected
  * as a real command with a real exit code (`true` / `false` / a missing

@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Voicechatrooms, opnieuw uitgevonden.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Voicechat is tijdelijk niet beschikbaar</string>
+    <string name="voice_chat_disconnected">Spraakchat verbroken</string>
+    <string name="voice_unavailable_can_still_chat">Je kunt nog steeds lezen en chatten</string>
+    <string name="voice_connecting">Spraak verbinden...</string>
+    <string name="voice_unavailable_mic_blocked">De microfoon heeft spraakchat nodig, en die is nu niet beschikbaar</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Portemonnee · %1$s</string>
     <!-- google-translated 2026-05-04 -->

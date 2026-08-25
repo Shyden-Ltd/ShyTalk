@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">重新设计的语音聊天室。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">语音聊天暂时无法使用</string>
+    <string name="voice_chat_disconnected">语音聊天已断开</string>
+    <string name="voice_unavailable_can_still_chat">你仍然可以阅读和聊天</string>
+    <string name="voice_connecting">正在连接语音...</string>
+    <string name="voice_unavailable_mic_blocked">麦克风需要语音聊天，但目前无法使用</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">钱包·%1$s</string>
     <!-- google-translated 2026-05-04 -->

@@ -1302,6 +1302,10 @@
     <string name="voice_chat_reimagined">Voice-Chat-Räume, neu gedacht.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Der Voice-Chat ist vorübergehend nicht verfügbar</string>
+    <string name="voice_chat_disconnected">Sprachchat getrennt</string>
+    <string name="voice_unavailable_can_still_chat">Du kannst weiterhin lesen und chatten</string>
+    <string name="voice_connecting">Sprachverbindung wird hergestellt...</string>
+    <string name="voice_unavailable_mic_blocked">Das Mikrofon benötigt den Sprachchat, der derzeit nicht verfügbar ist</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Brieftasche · %1$s</string>
     <!-- google-translated 2026-05-04 -->

@@ -1303,6 +1303,10 @@
     <string name="voice_chat_reimagined">Переосмислені голосові чати.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Голосовий чат тимчасово недоступний</string>
+    <string name="voice_chat_disconnected">Голосовий чат від'єднано</string>
+    <string name="voice_unavailable_can_still_chat">Ви все ще можете читати й писати</string>
+    <string name="voice_connecting">Підключення голосу...</string>
+    <string name="voice_unavailable_mic_blocked">Мікрофону потрібен голосовий чат, який зараз недоступний</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Гаманець · %1$s</string>
     <!-- google-translated 2026-05-04 -->

@@ -129,7 +129,13 @@ describe('locale strings render as written', () => {
     // A fourth string was RENAMED rather than removed in the same change
     // (`contact_support_hint` -> `connection_tips`), which is why this falls by
     // three and not four.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([880]);
+    // 880 -> 884 on 2026-08-26: SHY-0466. A room used to render nothing until
+    // voice connected, so a network that blocks media cost ten seconds of
+    // blank screen, and the banner that followed could only say "temporarily
+    // unavailable" because three of its four sites recorded no reason. Four
+    // strings: voice dropped, what still works, voice connecting, and what
+    // the microphone says when it is tapped and cannot be used.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([884]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

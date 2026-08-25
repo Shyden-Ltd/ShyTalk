@@ -36,6 +36,32 @@ class FakeUserRepository : UserRepository {
         return Resource.Success(user)
     }
 
+    /**
+     * Viewers the profile owner has blocked. Empty by default, so the common
+     * case needs no setup and a test that cares about blocking has to say so.
+     */
+    val blockedFromViewing = mutableSetOf<String>()
+
+    /**
+     * Added when `getProfileForViewing` reached the interface (SHY-0348) and
+     * this fake was not updated with it, which stopped the whole androidTest
+     * source set from COMPILING — so every instrumented test silently stopped
+     * running rather than failing. Restored 2026-08-26 while fixing SHY-0466,
+     * whose own evidence is in this source set.
+     *
+     * Mirrors the real repository's three outcomes rather than collapsing them:
+     * a fake that cannot express "blocked" would let a caller that ignores the
+     * block case pass, which is a defect invented by the double rather than
+     * found by it.
+     */
+    override suspend fun getProfileForViewing(userId: String): Resource<UserRepository.ProfileAccess> {
+        if (userId in blockedFromViewing) {
+            return Resource.Success(UserRepository.ProfileAccess.BlockedByOwner)
+        }
+        val user = users[userId] ?: return Resource.Success(UserRepository.ProfileAccess.NotFound)
+        return Resource.Success(UserRepository.ProfileAccess.Visible(user))
+    }
+
     override suspend fun userExists(userId: String): Resource<Boolean> = Resource.Success(users.containsKey(userId))
 
     override suspend fun updateDisplayName(

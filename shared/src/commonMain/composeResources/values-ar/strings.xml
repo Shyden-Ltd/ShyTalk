@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">غرف الدردشة الصوتية، بإعادة تصورها.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">الدردشة الصوتية غير متاحة مؤقتًا</string>
+    <string name="voice_chat_disconnected">انقطع الاتصال الصوتي</string>
+    <string name="voice_unavailable_can_still_chat">لا يزال بإمكانك القراءة والدردشة</string>
+    <string name="voice_connecting">جارٍ الاتصال بالصوت...</string>
+    <string name="voice_unavailable_mic_blocked">يحتاج الميكروفون إلى الدردشة الصوتية، وهي غير متاحة حالياً</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">المحفظة · %1$s</string>
     <!-- google-translated 2026-05-04 -->
