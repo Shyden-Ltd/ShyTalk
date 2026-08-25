@@ -87,7 +87,11 @@ fun RoomToolbar(
             }
         },
         actions = {
-            IconButton(onClick = onSettings) {
+            // Tagged for SHY-0456: closing a room is owner-only and lives
+            // inside the settings sheet, so the core-set journey cannot reach
+            // room_endRoomButton without opening this first. An untagged
+            // opener would force the journey to tap a remembered coordinate.
+            IconButton(onClick = onSettings, modifier = Modifier.testTag("room_settingsButton")) {
                 Icon(
                     Icons.Default.Settings,
                     contentDescription = stringResource(Res.string.room_settings),
