@@ -70,7 +70,10 @@ const BUCKETS = [
     key: "listen",
     label: "live subscription (needs SSE)",
     strong:
-      /addSnapshotListener|addValueEventListener|addChildEventListener|onSnapshot\s*\(|\bvalueEvents\b|\bchildEvents\b|\.snapshots\b/,
+      // `(?<!@)` matters: `return@addSnapshotListener` is a CONTINUATION inside
+      // a listener block, not a second listener. Without it a four-line lambda
+      // counts as three subscriptions and the hard set looks bigger than it is.
+      /(?<!@)addSnapshotListener|(?<!@)addValueEventListener|(?<!@)addChildEventListener|onSnapshot\s*\(|\bvalueEvents\b|\bchildEvents\b|\.snapshots\b/,
     weak: null,
   },
   {

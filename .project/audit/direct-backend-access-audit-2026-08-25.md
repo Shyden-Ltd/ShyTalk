@@ -16,15 +16,24 @@ can be re-run after every remediation story instead of being re-counted by hand.
 
 | | |
 | --- | --- |
-| **Files with direct access** | **24** (+4 that only hold the SDK — see §5) |
-| **Total call sites** | **244** |
-| — one-shot reads | **62** → ordinary `GET` endpoints |
-| — **live subscriptions** | **74** → **SSE** — the architecturally hard set |
+| **Files with direct access** | **24** at audit time (+5 that only hold the SDK — see §5) |
+| **Total call sites** | **215** |
+| — one-shot reads | **58** → ordinary `GET` endpoints |
+| — **live subscriptions** | **49** → **SSE** — the architecturally hard set |
 | — writes | **85** → ordinary `POST` / `PATCH` |
 | — deletes | **23** → ordinary `DELETE` |
-| Android | 12 files · read 30 · listen 48 · write 58 · delete 14 |
-| iOS | 8 files · read 30 · listen 21 · write 25 · delete 9 |
-| Web | 4 files · read 2 · listen 5 · write 2 · delete 0 |
+| Android | read 28 · listen 23 · write 58 · delete 14 |
+| iOS | read 28 · listen 21 · write 25 · delete 9 |
+| Web | read 2 · listen 5 · write 2 · delete 0 |
+
+> **Corrected 2026-08-25, after remediation began.** The first published figure was
+> 244 sites with **74** live subscriptions. It over-counted listeners:
+> `return@addSnapshotListener` is a *continuation* inside a listener block, and the
+> pattern matched it as a second subscription. Of 42 raw `addSnapshotListener`
+> occurrences in `app/src/main`, **25 are `return@` continuations** — so Android has
+> **17** real Firestore listeners, not 42. A four-line lambda was counting as three.
+> The hard set is a third smaller than first reported. Numbers above are the corrected
+> ones; the file list never changed.
 
 **Storage: zero.** Already 100% compliant — uploads go through the API's signed Cloudflare R2 URLs.
 
