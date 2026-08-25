@@ -99,6 +99,19 @@ function assertNoTestNamespace() {
   }
 }
 
+// The seeded personas' own uniqueIds. `mintRealUser` writes with `.set()` and
+// NO merge, so minting on one of these REPLACES a seeded document — reducing
+// it to { firebaseUid, uniqueId, isSuspended } and taking its dateOfBirth,
+// cohort, ageVerified and displayName with it.
+//
+// That is not theoretical. `livekit.test.js` minted 50000010 and
+// `livekit-cohort.test.js` minted 60000010, so running the Express suite
+// silently destroyed adult-power and minor-power, and EVERY later device
+// journey stopped at the "we need your date of birth" screen. Read off the
+// registry the seeder itself uses, so the two cannot drift.
+const { personas: SEEDED_PERSONAS } = require('../../scripts/provision-test-personas');
+const SEEDED_UNIQUE_IDS = new Set(SEEDED_PERSONAS.map((p) => Number(p.uniqueId)));
+
 async function mintRealUser({
   uniqueId,
   cohort,
@@ -111,6 +124,15 @@ async function mintRealUser({
   assertNoTestNamespace();
   if (uniqueId === undefined || uniqueId === null) {
     throw new Error('mintRealUser requires a uniqueId');
+  }
+  if (SEEDED_UNIQUE_IDS.has(Number(uniqueId))) {
+    throw new Error(
+      `mintRealUser refuses uniqueId ${uniqueId}: it belongs to a SEEDED PERSONA. ` +
+        'This helper replaces the document rather than merging into it, so minting ' +
+        "here destroys that persona's dateOfBirth, cohort and ageVerified, and every " +
+        'device journey afterwards stops at the date-of-birth screen. Pick an id ' +
+        'outside the persona registry.',
+    );
   }
   const firebaseUid = uid || `rt-uid-${uniqueId}`;
   await db.doc(`users/${uniqueId}`).set({
