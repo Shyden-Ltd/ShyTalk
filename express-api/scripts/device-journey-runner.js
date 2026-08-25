@@ -535,8 +535,10 @@ class Reporter {
 
   // Wrap a unit of work: time it, capture a screenshot + screen summary,
   // record pass/fail. On failure it throws so the journey aborts cleanly.
-  async step(device, name, fn) {
-    const rec = { name, status: 'running', startedAt: Date.now() };
+  async step(device, name, fn, { preamble = false } = {}) {
+    const rec = { name, status: 'running', startedAt: Date.now(), preamble };
+    // Snapshot the counter so this step is credited only with what IT did.
+    const uiOpsBefore = uiOps.count;
     process.stdout.write(`  ▶ ${name} ... `);
     let caught = null;
     try {
@@ -555,6 +557,7 @@ class Reporter {
         /* dump may itself fail */
       }
     }
+    rec.uiOps = uiOps.count - uiOpsBefore;
     rec.durationMs = Date.now() - rec.startedAt;
     // Screenshot every step (cheap and invaluable for "see the results").
     //
@@ -685,6 +688,47 @@ const MAIN_TABS = ['main_roomsTab', 'main_messagesTab', 'main_profileTab'];
  * walk's Zs" is.
  */
 const dumpCost = { count: 0, ms: 0 };
+
+/**
+ * Real interactions with the device: taps, typing, swipes.
+ *
+ * Counted because a journey can assert its way to green without ever asking
+ * the product to do anything. J07 signed in and then spoke only to the API and
+ * Firestore; every assertion it made was true, four of its screenshots were
+ * byte-identical, and a completely broken UI would still have reported a pass
+ * (SHY-0457). Reading the screen does NOT count — a dump is an observation,
+ * not a use of the product.
+ */
+const uiOps = { count: 0 };
+
+/** The kinds a journey may declare. Closed set: an unknown kind is a bug. */
+const JOURNEY_KINDS = Object.freeze(['ui', 'api-contract']);
+
+/**
+ * Did this journey actually use the product?
+ *
+ * The sign-in preamble is excluded on purpose: logging in is not evidence that
+ * the FEATURE under test works, and counting it would let every API-only
+ * journey pass on the strength of its own login. A failed step does not count
+ * either — taps that led nowhere are not proof.
+ */
+function journeyTouchedTheUi(journey) {
+  return (journey?.steps ?? []).some(
+    (st) => !st.preamble && st.status === 'pass' && Number(st.uiOps ?? 0) > 0,
+  );
+}
+
+/** Fail a journey that claims to drive the UI and never did. */
+function assertJourneyTouchedTheUi(journey) {
+  if (journey?.kind === 'api-contract') return;
+  if (journeyTouchedTheUi(journey)) return;
+  throw new Error(
+    `${journey?.id}: declared a UI journey but never touched the device outside sign-in — ` +
+      'every step after the preamble spoke only to the API or the database, so this run ' +
+      'proves nothing about what a person can do. Either drive the screens it claims to ' +
+      "cover, or declare kind: 'api-contract' and say so in the title (SHY-0457).",
+  );
+}
 
 async function dump(device) {
   const started = Date.now();
@@ -1008,6 +1052,11 @@ async function tapResolved(device, node, labelOrOpts, extra) {
   // same way whichever backend is driving.
   assertReachable(fresh, again, label || again.id || again.text || '(unnamed)');
 
+  // Counted here rather than in each click route below, so no backend can tap
+  // without the journey being credited with having used the product
+  // (SHY-0457). Past this line the tap is going to happen.
+  uiOps.count += 1;
+
   if (again.id && typeof device.tapElement === 'function') {
     await device.tapElement(again.id);
     return;
@@ -1100,6 +1149,7 @@ async function tapLowestText(device, text) {
  * against; pass it wherever the field is not guaranteed empty.
  */
 async function typeInto(device, id, text, { clearFirst = false } = {}) {
+  uiOps.count += 1;
   if (device.kind === 'ios') {
     // Addressed by identifier and set directly. Typing key-by-key through the
     // on-screen keyboard is slower and can drop characters when the field
@@ -1757,57 +1807,78 @@ function accountOnDevice(nodes) {
  *   account's screen while seeding another's data proves nothing at all.
  */
 async function signInAs(device, reporter, ctx, email) {
-  await reporter.step(device, `Reach SignIn (for ${email})`, async () => {
-    await ensureAtSignIn(device, ctx.pkg);
-    return 'at SignIn (persona picker available)';
-  });
-  await reporter.step(device, `Pick persona ${email}`, async () => {
-    // Open the dev picker + select the persona. A scroll-to-row mistap on a
-    // below-the-fold persona can dismiss the picker WITHOUT signing in (bounces
-    // back to SignIn). Detect that — the persona_picker_open button is back on
-    // screen after the tap settles — and retry the whole open+select.
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      await openPersonaPicker(device);
-      await selectPersonaByText(device, email);
-      // Polled, not slept. A flat 2.5s was paid on EVERY journey whether the
-      // picker had already closed or never would -- 32 seconds across a matrix,
-      // spent looking at a screen that had finished changing.
-      if (await pickerClosed(device, 6000)) {
-        return `selected ${email} (attempt ${attempt})`;
+  await reporter.step(
+    device,
+    `Reach SignIn (for ${email})`,
+    async () => {
+      await ensureAtSignIn(device, ctx.pkg);
+      return 'at SignIn (persona picker available)';
+    },
+    { preamble: true },
+  );
+  await reporter.step(
+    device,
+    `Pick persona ${email}`,
+    async () => {
+      // Open the dev picker + select the persona. A scroll-to-row mistap on a
+      // below-the-fold persona can dismiss the picker WITHOUT signing in (bounces
+      // back to SignIn). Detect that — the persona_picker_open button is back on
+      // screen after the tap settles — and retry the whole open+select.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await openPersonaPicker(device);
+        await selectPersonaByText(device, email);
+        // Polled, not slept. A flat 2.5s was paid on EVERY journey whether the
+        // picker had already closed or never would -- 32 seconds across a matrix,
+        // spent looking at a screen that had finished changing.
+        if (await pickerClosed(device, 6000)) {
+          return `selected ${email} (attempt ${attempt})`;
+        }
       }
-    }
-    throw new Error(`selecting ${email} bounced back to SignIn 3x (sign-in failing?)`);
-  });
-  await reporter.step(device, `Land on Home`, async () => {
-    await advanceToMain(device);
-    return 'home reached — interstitials cleared';
-  });
+      throw new Error(`selecting ${email} bounced back to SignIn 3x (sign-in failing?)`);
+    },
+    { preamble: true },
+  );
+  await reporter.step(
+    device,
+    `Land on Home`,
+    async () => {
+      await advanceToMain(device);
+      return 'home reached — interstitials cleared';
+    },
+    { preamble: true },
+  );
   const expected = personaUniqueId(email);
-  await reporter.step(device, `Confirm the phone is signed in as ${expected}`, async () => {
-    const deadline = Date.now() + 8000;
-    let seen = null;
-    // The badge samples its inputs on a 2s tick, so the account can lag the
-    // sign-in by a frame or two. Polled rather than slept on: a fixed wait is
-    // either too short on a cold device or dead time on a warm one.
-    while (Date.now() < deadline) {
-      seen = accountOnDevice(await dump(device));
-      if (seen === expected) return `debug overlay shows account ${seen}`;
-      await sleep(500);
-    }
-    throw new Error(
-      seen === null
-        ? `the debug overlay is not showing an account id, so who is signed in ` +
-            `cannot be confirmed (expected ${expected} for ${email})`
-        : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
-            `every assertion after this would be about the wrong person`,
-    );
-  });
+  await reporter.step(
+    device,
+    `Confirm the phone is signed in as ${expected}`,
+    async () => {
+      const deadline = Date.now() + 8000;
+      let seen = null;
+      // The badge samples its inputs on a 2s tick, so the account can lag the
+      // sign-in by a frame or two. Polled rather than slept on: a fixed wait is
+      // either too short on a cold device or dead time on a warm one.
+      while (Date.now() < deadline) {
+        seen = accountOnDevice(await dump(device));
+        if (seen === expected) return `debug overlay shows account ${seen}`;
+        await sleep(500);
+      }
+      throw new Error(
+        seen === null
+          ? `the debug overlay is not showing an account id, so who is signed in ` +
+              `cannot be confirmed (expected ${expected} for ${email})`
+          : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
+              `every assertion after this would be about the wrong person`,
+      );
+    },
+    { preamble: true },
+  );
 }
 
 // Auth-smoke journey: sign in as a persona + assert their Firestore doc.
 function personaJourney(id, title, email, uid, cohort) {
   return {
     id,
+    kind: 'ui',
     title,
     async run(device, reporter, ctx) {
       await signInAs(device, reporter, ctx, email);
@@ -1838,6 +1909,7 @@ function personaJourney(id, title, email, uid, cohort) {
 // app has no email/password signup screen (auth is OAuth/OTP/persona-picker).
 const J02 = {
   id: 'J02',
+  kind: 'ui',
   title: 'j02 — minor (Marcus P-04): UI renders + server-enforced cross-cohort gate',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'minor-power@shytalk.dev');
@@ -1902,6 +1974,7 @@ const J02 = {
 // adult→minor surface 404s" lives in requireSameCohort, not the UI).
 const J08 = {
   id: 'J08',
+  kind: 'ui',
   title: 'j08 — cross-cohort wall: adult (Vexa P-07) blocked from minor (Marcus)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-prober@shytalk.dev');
@@ -1959,8 +2032,10 @@ const J08 = {
 // override is cleared at the end so re-runs are idempotent.
 const J04 = {
   id: 'J04',
+  kind: 'api-contract',
   title:
-    'j04 — cohort-override is staff-only: regular member rejected (422), staff allowed + audited',
+    'j04 — API contract: cohort-override is staff-only — regular member rejected (422), ' +
+    'staff allowed + audited (no app UI exists for cohort override; back-office only)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
     if (!ctx.db) return;
@@ -2031,6 +2106,7 @@ const J04 = {
 // up (unsuspend + delete the pending appeal) so re-runs are idempotent.
 const J11 = {
   id: 'J11',
+  kind: 'ui',
   title: 'j11 — moderation cycle: report → admin suspend (+audit) → appeal → unsuspend',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'victim@shytalk.dev');
@@ -2138,6 +2214,7 @@ const J11 = {
 // up the conversation + follow so re-runs are idempotent.
 const J07 = {
   id: 'J07',
+  kind: 'ui',
   title: 'j07 — social: follow + same-cohort PM round-trip (Alice ↔ Lena)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
@@ -2219,6 +2296,7 @@ const J07 = {
 // boundary on the admin endpoints — read-only, no mutations.
 const J12 = {
   id: 'J12',
+  kind: 'ui',
   title: 'j12 — admin routine: admin reaches moderation queues; non-admin rejected',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
@@ -2421,6 +2499,7 @@ async function resolveStaleJourneyTickets(ctx, { ownerId, keepTicketId }) {
 
 const J38 = {
   id: 'J38',
+  kind: 'ui',
   title: 'j38 — a second support request is warned about, never refused (SHY-0396)',
   async run(device, reporter, ctx) {
     const pkg = ctx.pkg;
@@ -2722,6 +2801,7 @@ const J38 = {
  */
 const J39 = {
   id: 'J39',
+  kind: 'ui',
   title: 'j39 — safety shows the report guide, and the way out of it (SHY-0437)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, ctx.supportPersona);
@@ -2810,6 +2890,7 @@ const J39 = {
 // 409 replay guard (receiptId = sha256(purchaseToken)).
 const J05 = {
   id: 'J05',
+  kind: 'ui',
   title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
@@ -2856,6 +2937,7 @@ const J05 = {
 // the sha256-receipt idempotency guard). No real money, no second device.
 const J06 = {
   id: 'J06',
+  kind: 'ui',
   title: 'j06 — IAP failure handling: unknown product (404) + receipt replay (409)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
@@ -2912,6 +2994,7 @@ const J06 = {
 // OWNER_AWAY | CLOSED — there is no OPEN).
 const J09 = {
   id: 'J09',
+  kind: 'ui',
   title: 'j09 — room lifecycle: create → mic on → mic off → close (Theo)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'host@shytalk.dev');
@@ -3143,6 +3226,7 @@ function selectJourneys(all, selectedIds) {
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
+    kind: 'ui',
     title: 'Clean install launches and reaches SignIn',
     async run(device, reporter) {
       if (ctx.reset) {
@@ -3434,6 +3518,10 @@ async function main() {
       reporter.startJourney(j.id, j.title);
       try {
         await j.run(device, reporter, ctx);
+        // Checked AFTER the journey's own assertions and before it is called a
+        // pass: every step can be true and the run still prove nothing about
+        // the product if the phone was never touched (SHY-0457).
+        assertJourneyTouchedTheUi({ ...j, steps: reporter.current?.steps ?? [] });
         reporter.endJourney('pass');
       } catch (e) {
         reporter.endJourney('fail', e.message);
@@ -3513,6 +3601,11 @@ module.exports = {
   CORE_JOURNEY_IDS,
   isCoreJourney,
   selectJourneys,
+  // SHY-0457 — the guard that stops a journey passing without using the app.
+  JOURNEY_KINDS,
+  journeyTouchedTheUi,
+  assertJourneyTouchedTheUi,
+  uiOps,
   parseArgs,
   capturesScreenFor,
   occluderOf,
