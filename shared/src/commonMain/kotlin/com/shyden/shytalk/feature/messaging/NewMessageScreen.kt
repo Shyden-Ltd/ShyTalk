@@ -252,7 +252,12 @@ fun NewMessageScreen(
                         val userId = uiState.selectedIds.first()
                         onNavigateToChat(userId)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    // Tagged for SHY-0457: selecting a person here only TICKS
+                    // them, so a journey that stops at the tick never opens a
+                    // chat. This is the control that does, and an untagged one
+                    // would force a journey to tap a remembered coordinate --
+                    // under a keyboard, at that.
+                    modifier = Modifier.fillMaxWidth().testTag("newMessage_messageButton"),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))

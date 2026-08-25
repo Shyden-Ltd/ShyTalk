@@ -1148,6 +1148,30 @@ async function tapLowestText(device, text) {
  * Off by default so existing journeys keep the behaviour they were written
  * against; pass it wherever the field is not guaranteed empty.
  */
+/**
+ * Put the on-screen keyboard away.
+ *
+ * The IME is a SEPARATE WINDOW: it does not appear in the uiautomator dump at
+ * all, so `assertReachable` cannot see it and a control underneath it looks
+ * perfectly tappable. The tap is then swallowed by the keyboard and the screen
+ * simply does not move — which is how SHY-0457's J07 found, tapped and
+ * "successfully" pressed a Message button three times without opening a chat.
+ *
+ * Call this before tapping anything low on a screen you have just typed into.
+ */
+async function dismissKeyboard(device) {
+  if (device.kind === 'ios') {
+    // WDA closes the keyboard with its own call where the driver offers one;
+    // otherwise typing has already committed and the field can be blurred.
+    if (typeof device.hideKeyboard === 'function') await device.hideKeyboard();
+    await sleep(250);
+    return;
+  }
+  // BACK closes the IME when it is up, and does NOT navigate in that case.
+  device.shell('input keyevent KEYCODE_BACK');
+  await sleep(350);
+}
+
 async function typeInto(device, id, text, { clearFirst = false } = {}) {
   uiOps.count += 1;
   if (device.kind === 'ios') {
@@ -1164,12 +1188,18 @@ async function typeInto(device, id, text, { clearFirst = false } = {}) {
   }
   await tapId(device, id);
   if (clearFirst) {
-    // Cursor to the end, then delete back through whatever was there. Bounded
-    // by the longest field this is used on rather than looping on a re-read,
-    // which would cost a full dump per character.
-    device.shell('input keyevent KEYCODE_MOVE_END');
-    device.shell(`input keyevent ${new Array(60).fill('KEYCODE_DEL').join(' ')}`);
-    await sleep(200);
+    // Only when there is something to clear. Firing sixty KEYCODE_DELs at an
+    // already-empty field costs seconds and, with the IME still settling after
+    // the focus tap, the `input text` that follows can land nowhere at all.
+    const before = byId(await dump(device), id);
+    const existing = `${before?.text || ''}`.trim();
+    if (existing) {
+      device.shell('input keyevent KEYCODE_MOVE_END');
+      device.shell(
+        `input keyevent ${new Array(existing.length + 4).fill('KEYCODE_DEL').join(' ')}`,
+      );
+      await sleep(200);
+    }
   }
   device.shell(`input text ${JSON.stringify(text.replace(/ /g, '%s'))}`);
   await sleep(500);
@@ -2212,81 +2242,185 @@ const J11 = {
 // The express-api message-send path needs the conversation doc to pre-exist —
 // the app writes it directly to Firestore, so the runner mirrors that. Cleans
 // up the conversation + follow so re-runs are idempotent.
+// j07 — the social round-trip, ON THE PHONE.
+//
+// Rewritten for SHY-0457. It used to sign in and then speak only to the API
+// and Firestore: eleven steps, four byte-identical screenshots, and a green
+// tick that would have survived the Messages tab being deleted entirely.
+//
+// Alice now does what a person does — opens Messages, finds Lena, types,
+// sends, and reads the reply on screen. Lena answers over the API because she
+// is not on this phone; that half is legitimately server-side. Every claim
+// about Alice's side is asserted on the screen AND in Firestore, because a
+// bubble that renders without persisting is just as broken as the reverse.
 const J07 = {
   id: 'J07',
   kind: 'ui',
-  title: 'j07 — social: follow + same-cohort PM round-trip (Alice ↔ Lena)',
+  title: 'j07 — social: Alice messages Lena on the phone and reads her reply',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
     if (!ctx.db) return;
+
     const alice = 50000010;
     const lena = 50000020;
-    const convId = `jr-j07-${alice}-${lena}`;
-    let aliceToken;
-    let lenaToken;
-    await reporter.step(device, 'Mint Alice + Lena tokens', async () => {
-      aliceToken = await getIdToken('adult-power@shytalk.dev');
-      lenaToken = await getIdToken('lapsed-adult@shytalk.dev');
-      return 'tokens minted';
+    const stamp = Date.now();
+    const outbound = `JR-J07-OUT-${stamp}`;
+    const reply = `JR-J07-REPLY-${stamp}`;
+    let convId = null;
+    let lenaToken = null;
+
+    await reporter.step(device, 'Setup: clear any earlier Alice-Lena conversation', async () => {
+      // On the way IN, because a run that fails mid-journey never reaches its
+      // cleanup and the next one would then open an existing thread instead of
+      // creating one — failing somewhere else entirely.
+      let removed = 0;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const snap = await ctx.db
+            .collection('conversations')
+            .where('participantIds', 'array-contains', alice)
+            .limit(20)
+            .get();
+          const mine = snap.docs.filter((d) => arrayContains(d.data().participantIds, lena));
+          for (const d of mine) {
+            const msgs = await d.ref.collection('messages').get();
+            for (const m of msgs.docs) await m.ref.delete();
+            await d.ref.delete();
+          }
+          removed = mine.length;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          await sleep(500 * attempt);
+        }
+      }
+      if (lastErr) throw lastErr;
+      return removed ? `removed ${removed} old conversation(s)` : 'none to clear';
     });
-    await reporter.step(device, 'API: Alice follows Lena (same-cohort → 200)', async () => {
-      const r = await apiCall('POST', `/api/users/${alice}/follow`, {
-        token: aliceToken,
-        body: { targetUserId: lena },
+
+    await reporter.step(device, 'UI: Alice opens Messages', async () => {
+      await tapId(device, 'main_messagesTab');
+      await waitForId(device, 'main_newMessageFab', 10000);
+      return 'the messages tab is open';
+    });
+
+    await reporter.step(device, 'UI: Alice finds Lena and opens the chat', async () => {
+      await tapId(device, 'main_newMessageFab');
+      await waitForId(device, 'newMessage_searchField', 10000);
+      await typeInto(device, 'newMessage_searchField', 'Lena', { clearFirst: true });
+      // Matched on part of the seeded display name that was NOT typed — the
+      // query "Lena" is sitting in the search field, so matching on it finds
+      // the FIELD first and taps that, leaving the screen exactly where it was.
+      // "P-05" appears only in Lena's row.
+      const RESULT = 'P-05';
+      const pickRow = (nodes) =>
+        nodes.find(
+          (n) =>
+            n.center &&
+            n.id !== 'newMessage_searchField' &&
+            `${n.text || ''} ${n.desc || ''}`.includes(RESULT),
+        );
+      const rows = await waitForText(device, RESULT, 12000);
+      const node = pickRow(rows);
+      if (!node) {
+        throw new Error(
+          `Lena's row did not appear in the people search; on screen: ${summarizeScreen(rows)
+            .texts.slice(0, 12)
+            .join(' | ')}`,
+        );
+      }
+      await tapResolved(device, node, {
+        label: "Lena's row in search results",
+        relocate: pickRow,
       });
-      if (r.status !== 200)
-        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      await dbWaitField(
-        ctx.db,
-        `users/${alice}`,
-        'followingIds',
-        (v) => arrayContains(v, lena),
-        6000,
+      // Selecting only TICKS her — the screen is a multi-select and says
+      // "1 selected". The chat opens from the button below, which is why
+      // stopping at the tick left the journey on the same screen it started.
+      //
+      // The keyboard is still up from the search and covers that button. It is
+      // not in the dump, so the tap looks fine and is simply eaten.
+      await dismissKeyboard(device);
+      await waitForId(device, 'newMessage_messageButton', 10000);
+      await tapId(device, 'newMessage_messageButton');
+      await waitForId(device, 'privateChat_messageInput', 12000);
+      return 'the private chat with Lena is open';
+    });
+
+    await reporter.step(device, 'UI: Alice types and sends a message', async () => {
+      await typeInto(device, 'privateChat_messageInput', outbound, { clearFirst: true });
+      // Asserted BEFORE sending. Without this, typing that lands nowhere fails
+      // later at "the message never appeared", which points at rendering or at
+      // the database — anywhere except the keystrokes that never arrived.
+      const typed = await waitForText(device, outbound, 8000).catch(() => null);
+      if (!typed) {
+        const now = byId(await dump(device), 'privateChat_messageInput');
+        throw new Error(
+          `the message never reached the input; it holds ${JSON.stringify(now?.text || '')}`,
+        );
+      }
+      await tapId(device, 'conversation_sendButton');
+      // Asserted on the SCREEN. A send that reaches Firestore but never renders
+      // is a defect a database-only check cannot see.
+      await waitForText(device, outbound, 12000);
+      return `"${outbound}" is on Alice's screen`;
+    });
+
+    await reporter.step(device, 'DB: the message Alice sent is stored', async () => {
+      // The app chose the conversation id, so it is looked up by participants
+      // rather than assumed — an id the test invented would prove nothing about
+      // the one the product actually used.
+      const snap = await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('conversations')
+            .where('participantIds', 'array-contains', alice)
+            .limit(20)
+            .get(),
+        { timeoutMs: 12000, what: `conversations containing ${alice}` },
       );
-      return 'followingIds contains Lena';
+      const doc = snap.docs.find((d) => arrayContains(d.data().participantIds, lena));
+      if (!doc) throw new Error(`no conversation between ${alice} and ${lena} after sending`);
+      convId = doc.id;
+      const msgs = await doc.ref.collection('messages').get();
+      const hit = msgs.docs.find((m) => (m.data().text || '').includes(outbound));
+      if (!hit) {
+        throw new Error(
+          `the message rendered on screen but is not in conversations/${convId}/messages ` +
+            `(${msgs.size} message(s) there)`,
+        );
+      }
+      return `conversations/${convId} holds the message Alice typed`;
     });
-    await reporter.step(device, 'Setup: create the Alice↔Lena conversation doc', async () => {
-      await ctx.db.doc(`conversations/${convId}`).set({
-        participantIds: [alice, lena],
-        crossCohortAtMigration: false,
-        isGroup: false,
-        createdAt: Date.now(),
-      });
-      return `conversations/${convId} created`;
-    });
-    await reporter.step(device, 'API: Alice sends Lena a PM', async () => {
-      const r = await apiCall('POST', `/api/conversations/${convId}/messages`, {
-        token: aliceToken,
-        body: { text: 'hi Lena (journey-runner)', type: 'TEXT' },
-      });
-      if (r.status !== 200)
-        throw new Error(`send expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return 'Alice → message sent';
-    });
-    await reporter.step(device, 'API: Lena replies (round-trip)', async () => {
+
+    await reporter.step(device, 'API: Lena replies from her own account', async () => {
+      // Legitimately server-side: Lena is not on this phone. Her half is a
+      // stimulus, and what it proves is asserted on Alice's screen below.
+      lenaToken = await getIdToken('lapsed-adult@shytalk.dev');
       const r = await apiCall('POST', `/api/conversations/${convId}/messages`, {
         token: lenaToken,
-        body: { text: 'hi Alice (reply)', type: 'TEXT' },
+        body: { text: reply, type: 'TEXT' },
       });
-      if (r.status !== 200)
-        throw new Error(`reply expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return 'Lena → reply sent';
+      if (r.status !== 200) {
+        throw new Error(`Lena's reply expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      }
+      return 'Lena replied over the API';
     });
-    await reporter.step(device, 'DB: conversation holds both messages', async () => {
-      const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
-      if (msgs.size < 2) throw new Error(`expected >=2 messages; got ${msgs.size}`);
-      return `${msgs.size} messages in conversations/${convId}`;
+
+    await reporter.step(device, "UI: Lena's reply arrives on Alice's phone", async () => {
+      // The point of the whole journey: a message sent by someone else reaches
+      // this screen without Alice doing anything.
+      await waitForText(device, reply, 20000);
+      return `"${reply}" rendered on Alice's phone`;
     });
-    await reporter.step(device, 'Cleanup: delete conversation + Alice unfollows Lena', async () => {
+
+    await reporter.step(device, 'Cleanup: remove the conversation', async () => {
+      if (!convId) return 'nothing to remove';
       const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
-      for (const d of msgs.docs) await d.ref.delete();
+      for (const m of msgs.docs) await m.ref.delete();
       await ctx.db.doc(`conversations/${convId}`).delete();
-      const un = await apiCall('POST', `/api/users/${alice}/unfollow`, {
-        token: aliceToken,
-        body: { targetUserId: lena },
-      });
-      if (un.status !== 200) throw new Error(`unfollow cleanup failed: ${un.status}`);
-      return 'conversation + messages deleted; unfollowed';
+      return `conversations/${convId} deleted`;
     });
   },
 };
@@ -3605,6 +3739,7 @@ module.exports = {
   JOURNEY_KINDS,
   journeyTouchedTheUi,
   assertJourneyTouchedTheUi,
+  dismissKeyboard,
   uiOps,
   parseArgs,
   capturesScreenFor,
