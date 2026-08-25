@@ -121,11 +121,43 @@ Legitimate. They provide or adapt the SDK; they do not read or write.
 - `shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt`
 - `shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt`
 - `shared/src/iosMain/kotlin/com/shyden/shytalk/data/firestore/DocumentSnapshotIosExt.kt`
+- `public/admin/js/main.js` — the web equivalent: `const clientDb = getFirestore(app)`, then
+  injects `firestoreFns` into the tabs. Holds the SDK; makes no calls of its own.
 
 They leave the ratchet baseline last, once nothing needs the SDK injected any more. Until then they
 are the honest reason the ratchet counts 29 files and this audit counts 24.
 
 ---
+
+## 5b. Second sweep — where else was checked, and found clean
+
+The first pass had a *scope*, and a scope is an assumption. Everything below was
+searched afterwards specifically because it lay outside it. **Nothing new was
+found.** Recorded so the next person does not have to re-derive that.
+
+| Area | Result |
+| --- | --- |
+| `iosApp/` — 21 native **Swift** files | Clean. The only `Firestore` mention in our own Swift is a comment; every real import lives in vendored `iosApp/Pods/`. |
+| `app/src/dev/`, `app/src/local/` — flavour source sets | Resources, manifests and `google-services.json` only. No code. |
+| `shared/src/{jvmMain,jvmTest,commonTest,androidHostTest}` | Zero files with a data SDK. |
+| `functions/` | Cloudflare Pages middleware (basic-auth + robots). No Firebase. |
+| `public/js/**` — 19 files | Clean. All traffic goes through `public/js/core/api.js` → `fetch(apiBase + path)`. Firebase **Auth** only in 3 files (allowed exception). |
+| `public/*.html` inline scripts | `roadmap.html` loads firebase-app + firebase-**auth** only (allowed). `admin/index.html` mentions firebaseio in a CSP header. |
+| **Direct REST**, bypassing the SDK entirely | `firestore.googleapis.com` appears only in `tests/web/dev-smoke.spec.ts`, which deliberately writes as a client would in order to TEST `firestore.rules`. Legitimate — and note it becomes the *only* exercise of those rules once no client connects. |
+| `identitytoolkit` / `securetoken` REST | Auth plane, in tests and test helpers. Allowed exception. |
+| **R2 / MinIO / S3** direct from client | None. Uploads go through the API's signed URLs. |
+| `local/seed.js`, `scripts/*.mjs` | Dev-machine tooling on the **Admin SDK**, shipped to no client. Sanctioned. |
+| Dev/ops tooling, `.github/`, `.claude/` | Not client code. |
+
+Two things found that are **not** violations but should be remembered:
+
+- **`public/portal/index.html` loads `firebase-firestore-compat.js` in a script tag.** Its consumer
+  `portal/portal.js` is already counted, so this is not a separate site — but removing the JS usage
+  must also remove the script tag, or the SDK keeps shipping to browsers for nothing.
+- **LiveKit is a direct client→media WebSocket** (`ws://…:7880`). The *authorization* is the token,
+  which the API issues (`POST /api/livekit/token`); media cannot be proxied through Express. It is
+  architecturally necessary and out of scope for this rule, but it is a direct backend connection and
+  should be a deliberate exception rather than an oversight — worth the operator's ratification.
 
 ## 6. Out of scope
 
