@@ -1958,16 +1958,27 @@ const J02 = {
       if (!byId(nodes, 'profile_walletButton')) throw new Error('profile_walletButton missing');
       return 'profile shows "17 years old" + wallet';
     });
-    await reporter.step(device, 'FINDING: minor UI is NOT feature-hidden', async () => {
-      // Spec j02 expects minors to have the PM tab + buy-coins HIDDEN. The
-      // shipped app shows both (verified on-device), so cohort enforcement is
-      // action/server-side, not UI-hiding. Recorded as a divergence finding,
-      // not a failure — the journey verifies real behavior per the mandate.
+    await reporter.step(device, 'Minor UI hides the features spec j02 says it hides', async () => {
+      // This used to be a step named "FINDING: minor UI is NOT feature-hidden"
+      // that PASSED while recording a spec violation in its detail text. A
+      // known deviation encoded as green is how a defect becomes invisible —
+      // the operator found it reading the sign-off evidence and ruled, on
+      // 2026-08-25, that it must fail (SHY-0457, SHY-0459).
+      //
+      // It stays red until the controls are hidden for minors, or the spec is
+      // formally changed. Either is a decision; a green tick was neither.
       const nodes = await dump(device);
       const exposed = ['main_messagesTab', 'profile_walletButton'].filter((t) => byId(nodes, t));
-      return `minor UI exposes ${exposed.join(' + ')} — spec expected hidden (gating is server-side)`;
+      if (exposed.length) {
+        throw new Error(
+          `minor UI exposes ${exposed.join(' + ')}; spec j02 expects these hidden for a minor. ` +
+            'Cohort enforcement is server-side only today, so a minor sees the controls and is ' +
+            'refused on use. See SHY-0459.',
+        );
+      }
+      return 'minor UI hides the gated features';
     });
-    // The REAL minor restriction (server-enforced, per the FINDING above).
+    // The server-side restriction, which DOES hold.
     if (ctx.db) {
       await reporter.step(
         device,
@@ -2005,53 +2016,112 @@ const J02 = {
 const J08 = {
   id: 'J08',
   kind: 'ui',
-  title: 'j08 — cross-cohort wall: adult (Vexa P-07) blocked from minor (Marcus)',
+  title: 'j08 — cross-cohort wall: an adult cannot reach a minor, on the phone',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-prober@shytalk.dev');
     if (!ctx.db) return;
+
     const vexa = 50000040;
     const marcus = 60000010;
+    let vToken = null;
+
+    // The wall is the point, so the journey WALKS it: an adult searches for a
+    // minor on the phone and does not find them. Rewritten for SHY-0457 — it
+    // used to sign in and then only call the API, so it proved the gate held
+    // in Express and nothing at all about what an adult can reach by hand.
+    //
+    // The control matters as much as the wall. Without it, "Marcus did not
+    // appear" is indistinguishable from "search is broken", and a journey that
+    // cannot tell those apart is not evidence of segregation.
+
+    await reporter.step(device, 'UI: Vexa opens people search, across everyone', async () => {
+      await tapId(device, 'main_messagesTab');
+      await waitForId(device, 'main_newMessageFab', 10000);
+      await tapId(device, 'main_newMessageFab');
+      await waitForId(device, 'newMessage_searchField', 10000);
+      // Scoped to people you already know by default. Absence in THAT list
+      // proves nothing about who you are allowed to reach, so the search is
+      // widened to everyone before the wall is tested against it.
+      await tapId(device, 'newMessage_searchAllToggle');
+      return 'people search is open, across all users';
+    });
+
     const lena = 50000020;
-    let vToken;
+
+    await reporter.step(device, 'UI: CONTROL — another adult IS findable', async () => {
+      // Proves the screen can find ANYBODY before absence is used as evidence
+      // of anything. Searched by uniqueId: the name branch is a prefix match
+      // and the seeded names all begin "[SEED] ".
+      await typeInto(device, 'newMessage_searchField', String(lena), { clearFirst: true });
+      await waitForText(device, 'P-05', 12000);
+      return 'Lena (P-05, adult) appears — the search works';
+    });
+
+    await reporter.step(device, 'UI: the minor is NOT findable by an adult', async () => {
+      // By exact uniqueId — the strongest form of the question. An adult who
+      // already KNOWS a minor's id still must not reach them; the API answers
+      // that lookup with an existence-hiding 404.
+      await typeInto(device, 'newMessage_searchField', String(marcus), { clearFirst: true });
+      // Given the control above, absence here is the wall and not a broken
+      // screen. Waited out rather than sampled once, so a slow result cannot
+      // be mistaken for a blocked one.
+      const deadline = Date.now() + 8000;
+      let seen = null;
+      while (Date.now() < deadline) {
+        const nodes = await dump(device);
+        const row = nodes.find(
+          (n) =>
+            n.id !== 'newMessage_searchField' && `${n.text || ''} ${n.desc || ''}`.includes('P-04'),
+        );
+        if (row) {
+          seen = `${row.text || row.desc}`;
+          break;
+        }
+        await pollGap(Date.now(), device);
+      }
+      if (seen) {
+        throw new Error(
+          `an adult found the minor in people search: "${seen}". The cross-cohort wall is ` +
+            'server-enforced but the minor must not be reachable from this screen either.',
+        );
+      }
+      return 'Marcus (P-04, minor) does not appear for an adult';
+    });
+
     await reporter.step(device, 'Mint Vexa (adult) API token', async () => {
       vToken = await getIdToken('adult-prober@shytalk.dev');
-      return 'ID token minted from Auth emulator';
+      return 'token minted';
     });
+
+    // Defence in depth. The UI not offering it is not the same as the server
+    // refusing it, and this journey asserts BOTH — that is the whole reason
+    // the API half was worth keeping.
     await reporter.step(device, 'API: adult→minor follow blocked (404)', async () => {
       const r = await apiCall('POST', `/api/users/${vexa}/follow`, {
         token: vToken,
         body: { targetUserId: marcus },
       });
-      if (r.status !== 404)
+      if (r.status !== 404) {
         throw new Error(`expected 404; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return `follow Marcus → 404 "${r.body?.error ?? r.status}"`;
+      }
+      return 'follow → 404 (existence-hiding)';
     });
+
     await reporter.step(device, 'API: adult→minor profile view blocked (404)', async () => {
       const r = await apiCall('GET', `/api/users/${marcus}`, { token: vToken });
-      if (r.status !== 404)
+      if (r.status !== 404) {
         throw new Error(`expected 404; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return `GET Marcus profile → 404 (existence-hidden)`;
+      }
+      return 'profile → 404 (existence-hiding)';
     });
-    await reporter.step(device, 'Control: adult→adult follow SUCCEEDS', async () => {
-      const r = await apiCall('POST', `/api/users/${vexa}/follow`, {
-        token: vToken,
-        body: { targetUserId: lena },
-      });
-      if (r.status !== 200)
-        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      // Unfollow so re-runs stay idempotent (same-cohort, so allowed).
-      const un = await apiCall('POST', `/api/users/${vexa}/unfollow`, {
-        token: vToken,
-        body: { targetUserId: lena },
-      });
-      if (un.status !== 200) throw new Error(`control unfollow cleanup failed: ${un.status}`);
-      return `follow Lena → 200 (gate is cohort-specific); unfollowed for idempotency`;
-    });
-    await reporter.step(device, 'DB: Vexa followingIds excludes the minor', async () => {
-      const d = await dbGet(ctx.db, `users/${vexa}`);
-      if (arrayContains(d?.followingIds, marcus))
-        throw new Error('followingIds wrongly contains minor 60000010');
-      return 'followingIds excludes 60000010 — cross-cohort write never happened';
+
+    await reporter.step(device, 'DB: Vexa did not end up following the minor', async () => {
+      const snap = await ctx.db.doc(`users/${vexa}`).get();
+      const following = snap.data()?.followingIds || [];
+      if (following.map(String).includes(String(marcus))) {
+        throw new Error(`users/${vexa}.followingIds contains the minor ${marcus}`);
+      }
+      return 'followingIds excludes the minor';
     });
   },
 };
@@ -2314,7 +2384,12 @@ const J07 = {
     await reporter.step(device, 'UI: Alice finds Lena and opens the chat', async () => {
       await tapId(device, 'main_newMessageFab');
       await waitForId(device, 'newMessage_searchField', 10000);
-      await typeInto(device, 'newMessage_searchField', 'Lena', { clearFirst: true });
+      // Searched by uniqueId. The name branch is a PREFIX match and every
+      // seeded display name starts with "[SEED] ", so "Lena" matches nothing —
+      // this journey only ever worked because Lena happened to sit in Alice's
+      // recents, which is not something a test may rely on.
+      await tapId(device, 'newMessage_searchAllToggle');
+      await typeInto(device, 'newMessage_searchField', String(lena), { clearFirst: true });
       // Matched on part of the seeded display name that was NOT typed — the
       // query "Lena" is sitting in the search field, so matching on it finds
       // the FIELD first and taps that, leaving the screen exactly where it was.
