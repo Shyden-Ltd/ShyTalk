@@ -2277,12 +2277,17 @@ const J07 = {
       let lastErr = null;
       for (let attempt = 1; attempt <= 3; attempt += 1) {
         try {
+          // participantIds are STRINGS. Querying with the number matches
+          // nothing and the journey then blames the product for losing a
+          // message it can see on screen.
           const snap = await ctx.db
             .collection('conversations')
-            .where('participantIds', 'array-contains', alice)
+            .where('participantIds', 'array-contains', String(alice))
             .limit(20)
             .get();
-          const mine = snap.docs.filter((d) => arrayContains(d.data().participantIds, lena));
+          const mine = snap.docs.filter((d) =>
+            (d.data().participantIds || []).map(String).includes(String(lena)),
+          );
           for (const d of mine) {
             const msgs = await d.ref.collection('messages').get();
             for (const m of msgs.docs) await m.ref.delete();
@@ -2375,12 +2380,14 @@ const J07 = {
         () =>
           ctx.db
             .collection('conversations')
-            .where('participantIds', 'array-contains', alice)
+            .where('participantIds', 'array-contains', String(alice))
             .limit(20)
             .get(),
-        { timeoutMs: 12000, what: `conversations containing ${alice}` },
+        { timeoutMs: 12000, what: `conversations containing "${alice}" (as a string)` },
       );
-      const doc = snap.docs.find((d) => arrayContains(d.data().participantIds, lena));
+      const doc = snap.docs.find((d) =>
+        (d.data().participantIds || []).map(String).includes(String(lena)),
+      );
       if (!doc) throw new Error(`no conversation between ${alice} and ${lena} after sending`);
       convId = doc.id;
       const msgs = await doc.ref.collection('messages').get();
