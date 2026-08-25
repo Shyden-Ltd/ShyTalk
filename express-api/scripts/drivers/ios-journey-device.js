@@ -737,6 +737,25 @@ class IosDevice {
    *
    * @param {string} tag accessibility identifier
    */
+  /**
+   * Press and hold an element.
+   *
+   * WebDriverAgent's own gesture endpoint rather than a synthesised touch
+   * sequence: it takes the element, so it cannot drift if the row moves
+   * between the look and the hold.
+   *
+   * Needed because reporting a message is a long press on its bubble, and
+   * there is no button for it (SHY-0457).
+   */
+  async longPressElement(tag, durationSec = 0.6) {
+    return this.withSessionRecovery(`longPressElement(${tag})`, async () => {
+      const el = await this._post('/element', { using: 'accessibility id', value: tag });
+      const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+      if (!id) throw new Error(`no element with accessibility id "${tag}" to long-press`);
+      await this._post(`/wda/element/${id}/touchAndHold`, { duration: durationSec });
+    });
+  }
+
   async tapElement(tag) {
     // Declared OUTSIDE the operation, so it survives the replay:
     // `withSessionRecovery` re-runs the operation, not this method. That is

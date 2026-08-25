@@ -346,6 +346,18 @@ class Device {
     this.shell(`input tap ${cx} ${cy}`);
   }
 
+  /**
+   * Press and hold.
+   *
+   * A swipe from a point to ITSELF, which is how Android expresses a long
+   * press through `input` — there is no `input longpress`. The duration has to
+   * clear the platform long-press threshold (~500ms), so 600 is the floor
+   * rather than a preference.
+   */
+  longPress(cx, cy, ms = 600) {
+    this.shell(`input swipe ${cx} ${cy} ${cx} ${cy} ${ms}`);
+  }
+
   swipe(x1, y1, x2, y2, ms = 400) {
     this.shell(`input swipe ${x1} ${y1} ${x2} ${y2} ${ms}`);
   }
@@ -1148,6 +1160,34 @@ async function tapLowestText(device, text) {
  * Off by default so existing journeys keep the behaviour they were written
  * against; pass it wherever the field is not guaranteed empty.
  */
+/**
+ * Press and hold a tagged control, whichever backend is driving.
+ *
+ * Reporting a message is a long press on its bubble — there is no button for
+ * it — so a journey covering moderation cannot be written without this.
+ * Counted as a UI operation like any tap, because it is one (SHY-0457).
+ *
+ * Prefers the driver's own element-addressed hold where there is one (iOS,
+ * through WebDriverAgent), and falls back to holding the node's centre.
+ */
+async function longPressId(device, id, { ms = 600 } = {}) {
+  if (typeof device.longPressElement === 'function') {
+    uiOps.count += 1;
+    await device.longPressElement(id, ms / 1000);
+    await sleep(400);
+    return;
+  }
+  const nodes = await dump(device);
+  const node = byId(nodes, id);
+  if (!node || !node.center) {
+    throw new Error(`long-press target #${id} not found on screen`);
+  }
+  assertReachable(nodes, node, id);
+  uiOps.count += 1;
+  device.longPress(node.center.x, node.center.y, ms);
+  await sleep(400);
+}
+
 /**
  * Put the on-screen keyboard away.
  *
@@ -2204,45 +2244,178 @@ const J04 = {
 // Raul (P-08); admin Greta suspends Raul (appealable) with an audit row; Raul
 // files an appeal; Greta unsuspends. Verified at the API + Firestore. Cleans
 // up (unsuspend + delete the pending appeal) so re-runs are idempotent.
+// j11 — the moderation cycle, with a person at both ends.
+//
+// Rewritten for SHY-0457. It used to sign in and then make four API calls:
+// nine steps, THREE distinct screenshots, and a green tick for "report →
+// suspend → appeal → unsuspend" in which nobody reported anybody.
+//
+// Nora now reports a message by long-pressing it, which is the only way a
+// person can — there is no button. Raul meets the suspension screen when he
+// signs in and types his appeal into it. The admin half stays server-side on
+// purpose: the moderation queue a human uses is the web console, and the
+// in-app screen is unreachable (SHY-0460).
 const J11 = {
   id: 'J11',
   kind: 'ui',
-  title: 'j11 — moderation cycle: report → admin suspend (+audit) → appeal → unsuspend',
+  title: 'j11 — moderation: Nora reports a message, Raul appeals his suspension',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'victim@shytalk.dev');
     if (!ctx.db) return;
+
+    const nora = 50000051;
     const raul = 50000050;
-    let noraToken;
+    const stamp = Date.now();
+    const offending = `JR-J11-OFFENSIVE-${stamp}`;
     let gretaToken;
     let raulToken;
-    await reporter.step(device, 'Mint Nora + Greta + Raul tokens', async () => {
+    let convId = null;
+
+    await reporter.step(device, 'Mint Greta + Raul tokens', async () => {
       // Order is load-bearing: mint Raul's token BEFORE he is suspended so the
       // appeal step has a valid ID token (ID tokens stay valid ~1h regardless).
-      noraToken = await getIdToken('victim@shytalk.dev');
+      //
+      // Nora needs no token any more — she reports from the phone, which is the
+      // point of this rewrite.
       gretaToken = await getIdToken('admin@shytalk.dev');
       raulToken = await getIdToken('harasser@shytalk.dev');
-      return '3 persona tokens minted';
+      return '2 persona tokens minted';
     });
-    await reporter.step(device, 'API: Nora reports Raul', async () => {
-      // Reports resolve the reported user SERVER-SIDE by firebaseUid (auth uid),
-      // not uniqueId — see resolveUniqueId() in middleware/auth.js. firebaseUids
-      // are per-seed dynamic, so read Raul's from Firestore at runtime.
-      const raulDoc = await dbGet(ctx.db, `users/${raul}`);
-      if (!raulDoc?.firebaseUid) throw new Error('could not read Raul firebaseUid from Firestore');
-      const r = await apiCall('POST', '/api/reports', {
-        token: noraToken,
-        body: {
-          reportedUserId: raulDoc.firebaseUid,
-          reason: 'harassment',
-          description: 'offensive PMs (journey-runner)',
-        },
+
+    await reporter.step(device, 'Setup: lift any suspension left by an earlier run', async () => {
+      // A run that fails after the suspend step leaves Raul suspended, and the
+      // NEXT run then cannot even create the thread — every request he makes
+      // answers 403. The second failure hides the first, which is the whole
+      // reason state is cleared on the way IN.
+      const before = await dbGet(ctx.db, `users/${raul}`);
+      if (!before?.isSuspended) return 'not suspended; nothing to lift';
+      const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
+        token: gretaToken,
+        body: { reason: 'journey-runner: clearing state left by an earlier run' },
       });
-      if (r.status >= 300) {
-        throw new Error(`report expected 2xx; got ${r.status}: ${JSON.stringify(r.body)}`);
-      }
-      return `POST /reports {reported: Raul firebaseUid} → ${r.status}`;
+      if (r.status !== 200) throw new Error(`could not lift the old suspension: ${r.status}`);
+      await dbWaitField(ctx.db, `users/${raul}`, 'isSuspended', (v) => v !== true, 8000);
+      const stale = await ctx.db.collection('suspensionAppeals').where('userId', '==', raul).get();
+      for (const a of stale.docs) await a.ref.delete();
+      return `lifted a leftover suspension (+${stale.size} stale appeal(s))`;
     });
+
+    await reporter.step(device, 'Setup: give Nora a message from Raul to report', async () => {
+      // On the way IN, for the same reason.
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const prior = await ctx.db
+            .collection('conversations')
+            .where('participantIds', 'array-contains', String(nora))
+            .limit(20)
+            .get();
+          for (const d of prior.docs) {
+            if (!(d.data().participantIds || []).map(String).includes(String(raul))) continue;
+            const msgs = await d.ref.collection('messages').get();
+            for (const m of msgs.docs) await m.ref.delete();
+            await d.ref.delete();
+          }
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          await sleep(500 * attempt);
+        }
+      }
+      if (lastErr) throw lastErr;
+
+      // Raul opens the thread and sends, over the API — he is not on this
+      // phone. What it sets up is asserted on Nora's screen below.
+      const created = await apiCall('POST', '/api/conversations', {
+        token: raulToken,
+        body: { otherUserId: nora },
+      });
+      if (created.status !== 200) {
+        throw new Error(`could not create the thread: ${created.status}`);
+      }
+      convId = created.body?.id;
+      const sent = await apiCall('POST', `/api/conversations/${convId}/messages`, {
+        token: raulToken,
+        body: { text: offending, type: 'TEXT', senderName: 'Raul' },
+      });
+      if (sent.status !== 200) throw new Error(`Raul could not send: ${sent.status}`);
+      return `Raul sent "${offending}" in conversations/${convId}`;
+    });
+
+    await reporter.step(device, "UI: Nora opens Raul's chat", async () => {
+      await tapId(device, 'main_messagesTab');
+      await waitForId(device, 'main_newMessageFab', 10000);
+      await tapId(device, 'main_newMessageFab');
+      await waitForId(device, 'newMessage_searchField', 10000);
+      await tapId(device, 'newMessage_searchAllToggle');
+      await typeInto(device, 'newMessage_searchField', String(raul), { clearFirst: true });
+      const rows = await waitForText(device, 'P-08', 12000);
+      const pickRow = (nodes) =>
+        nodes.find(
+          (n) =>
+            n.center && n.id !== 'newMessage_searchField' && `${n.text || ''}`.includes('P-08'),
+        );
+      const row = pickRow(rows);
+      if (!row) throw new Error('Raul did not appear in the people search');
+      await tapResolved(device, row, { label: "Raul's row", relocate: pickRow });
+      await dismissKeyboard(device);
+      await waitForId(device, 'newMessage_messageButton', 10000);
+      await tapId(device, 'newMessage_messageButton');
+      await waitForId(device, 'privateChat_messageInput', 12000);
+      return "Raul's chat is open";
+    });
+
+    await reporter.step(device, 'UI: Nora long-presses the message to report it', async () => {
+      // The ONLY way to report. There is no button — the bubble carries the
+      // action on its long press, and only on messages that are not your own.
+      const nodes = await waitForText(device, offending, 12000);
+      const target = nodes.find((n) => n.id.startsWith('privateChat_msgTarget_') && n.center);
+      if (!target) {
+        throw new Error(
+          `the message is on screen but carries no addressable bubble; tags: ${summarizeScreen(
+            nodes,
+          )
+            .testTags.slice(0, 12)
+            .join(', ')}`,
+        );
+      }
+      // Private chat puts the actions behind a context menu, unlike a room
+      // where the long press reports directly. Two gestures, not one.
+      await longPressId(device, target.id);
+      await waitForId(device, 'privateChat_reportMenuItem', 10000);
+      await tapId(device, 'privateChat_reportMenuItem');
+      await waitForId(device, 'reportSubmit', 10000);
+      return 'the report dialog is open';
+    });
+
+    await reporter.step(device, 'UI: Nora describes it and submits', async () => {
+      // The reason defaults to the first option, so a description and submit is
+      // the whole interaction a person performs.
+      await typeInto(device, 'reportDescription', `offensive PM ${stamp}`, { clearFirst: true });
+      await dismissKeyboard(device);
+      await tapId(device, 'reportSubmit');
+      return 'report submitted from the phone';
+    });
+
+    await reporter.step(device, "DB: Nora's report is recorded against Raul", async () => {
+      const raulDoc = await dbGet(ctx.db, `users/${raul}`);
+      if (!raulDoc?.firebaseUid) throw new Error('could not read Raul firebaseUid');
+      await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('reports')
+            .where('reportedUserId', '==', raulDoc.firebaseUid)
+            .limit(5)
+            .get(),
+        { timeoutMs: 12000, what: 'reports against Raul' },
+      );
+      return 'a report against Raul exists';
+    });
+
     await reporter.step(device, 'API: admin suspends Raul (appealable) + audit row', async () => {
+      // Server-side on purpose: the moderation queue a human uses is the web
+      // admin console, and the in-app screen is unreachable (SHY-0460).
       const r = await apiCall('POST', `/api/admin/users/${raul}/suspend`, {
         token: gretaToken,
         body: { reason: 'harassment confirmed (journey-runner)', canAppeal: true },
@@ -2260,50 +2433,82 @@ const J11 = {
       if (audit.empty) throw new Error('no SUSPEND audit row for Raul');
       return 'Raul isSuspended=true + adminAuditLog SUSPEND present';
     });
-    await reporter.step(device, 'API: Raul files an appeal', async () => {
-      const r = await apiCall('POST', '/api/appeals', {
-        token: raulToken,
-        body: { appealText: 'I will not do it again (journey-runner)' },
+
+    // signInAs waits for Home, which a suspended person never reaches — so the
+    // sign-in is attempted and then the SCREEN is asked what happened. Without
+    // this the journey reports "Home not reached", which is true and useless.
+    await signInAs(device, reporter, ctx, 'harasser@shytalk.dev').catch(() => {});
+
+    await reporter.step(
+      device,
+      'UI: Raul is told he is suspended, and offered the appeal',
+      async () => {
+        const nodes = await dump(device);
+        if (byId(nodes, 'suspension_title')) {
+          return 'the suspension screen is shown';
+        }
+        if (byId(nodes, 'signIn_retryConnection')) {
+          throw new Error(
+            'a suspended person is shown "cannot connect" instead of the suspension screen. ' +
+              'The app learns it is suspended by reading its own user document, and suspension ' +
+              'forbids that read (403 Account suspended), so it falls through to ' +
+              'isBackendUnreachable. The appeal right exists but is unreachable. See SHY-0461.',
+          );
+        }
+        throw new Error(
+          `neither the suspension screen nor the connection screen appeared; on screen: ${summarizeScreen(
+            nodes,
+          )
+            .testTags.slice(0, 12)
+            .join(', ')}`,
+        );
+      },
+    );
+
+    await reporter.step(device, 'UI: Raul writes an appeal and submits it', async () => {
+      await typeInto(device, 'suspension_appealField', `I will not do it again ${stamp}`, {
+        clearFirst: true,
       });
-      if (r.status !== 200 && r.status !== 409) {
-        throw new Error(`appeal expected 200/409; got ${r.status}: ${JSON.stringify(r.body)}`);
-      }
+      await dismissKeyboard(device);
+      await tapId(device, 'suspension_submitAppealButton');
+      return 'appeal submitted from the phone';
+    });
+
+    await reporter.step(device, 'DB: the appeal is pending review', async () => {
+      await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('suspensionAppeals')
+            .where('userId', '==', raul)
+            .where('status', '==', 'pending')
+            .limit(1)
+            .get(),
+        { timeoutMs: 12000, what: 'pending appeal for Raul' },
+      );
+      return 'a pending suspensionAppeals row exists for Raul';
+    });
+
+    await reporter.step(device, 'Cleanup: unsuspend Raul and clear the thread', async () => {
+      const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
+        token: gretaToken,
+        body: { reason: 'journey-runner cleanup' },
+      });
+      if (r.status !== 200) throw new Error(`unsuspend expected 200; got ${r.status}`);
+      await dbWaitField(ctx.db, `users/${raul}`, 'isSuspended', (v) => v !== true, 6000);
+
       const appeals = await ctx.db
         .collection('suspensionAppeals')
         .where('userId', '==', raul)
-        .where('status', '==', 'pending')
-        .limit(1)
         .get();
-      if (appeals.empty) throw new Error('no pending suspensionAppeals row for Raul');
-      return `appeal → ${r.status}; pending suspensionAppeals present`;
+      for (const a of appeals.docs) await a.ref.delete();
+
+      if (convId) {
+        const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
+        for (const m of msgs.docs) await m.ref.delete();
+        await ctx.db.doc(`conversations/${convId}`).delete();
+      }
+      return 'Raul unsuspended; appeal + thread removed';
     });
-    await reporter.step(
-      device,
-      'Cleanup: admin unsuspends Raul + clears pending appeal',
-      async () => {
-        const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
-          token: gretaToken,
-          body: { reason: 'appeal accepted (journey-runner cleanup)' },
-        });
-        if (r.status >= 300) {
-          throw new Error(`unsuspend expected 2xx; got ${r.status}: ${JSON.stringify(r.body)}`);
-        }
-        await dbWaitField(
-          ctx.db,
-          `users/${raul}`,
-          'isSuspended',
-          (v) => v === false || v === undefined,
-          6000,
-        );
-        const pending = await ctx.db
-          .collection('suspensionAppeals')
-          .where('userId', '==', raul)
-          .where('status', '==', 'pending')
-          .get();
-        for (const d of pending.docs) await d.ref.delete();
-        return 'Raul unsuspended; pending appeals cleared (idempotent)';
-      },
-    );
   },
 };
 
@@ -3837,6 +4042,7 @@ module.exports = {
   assertReachable,
   tapResolved,
   tapId,
+  longPressId,
   tapLowestText,
   lowestWithText,
   advanceUntil,

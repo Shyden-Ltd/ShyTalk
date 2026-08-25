@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +60,7 @@ import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.feature.home.RoomListItem
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -241,7 +243,17 @@ fun PrivateMessageBubble(
                         ).combinedClickable(
                             onClick = { showContextMenu = true },
                             onLongClick = { showContextMenu = true },
-                        ).then(
+                            // Tagged for SHY-0457. This bubble carried NO test
+                            // tags at all, so reporting a message — the entry
+                            // point to the whole moderation cycle — could not be
+                            // reached by a journey, and j11 "proved" report →
+                            // suspend → appeal with four API calls and three
+                            // identical screenshots.
+                            //
+                            // Per-message, because a report is about ONE message
+                            // and a journey must be able to say which.
+                        ).testTag("privateChat_msgTarget_${message.messageId}")
+                        .then(
                             if (isMediaOnly) {
                                 Modifier.padding(4.dp)
                             } else {
@@ -623,6 +635,20 @@ fun PrivateMessageBubble(
                                 showContextMenu = false
                                 onReportMessage()
                             },
+                            // Tagged so the journey does not have to match a
+                            // localised menu label — this ships in 21 locales.
+                            //
+                            // exposeTestTagsToPlatformDumps because a
+                            // DropdownMenu is its own Compose window and does
+                            // NOT inherit MainActivity's testTagsAsResourceId,
+                            // so without it the dump shows android:id/content
+                            // and nothing else (SHY-0096's finding, met for the
+                            // third time in this work: AlertDialog, then
+                            // ModalBottomSheet, now DropdownMenu).
+                            modifier =
+                                Modifier
+                                    .exposeTestTagsToPlatformDumps()
+                                    .testTag("privateChat_reportMenuItem"),
                         )
                     }
                 }
