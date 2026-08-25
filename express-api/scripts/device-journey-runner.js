@@ -1039,16 +1039,39 @@ async function tapLowestText(device, text) {
  * and the whole thing is quoted. A message typed without this arrives as only
  * its first word, which looks like a truncation bug in the product.
  */
-async function typeInto(device, id, text) {
+/**
+ * Type into a field.
+ *
+ * `clearFirst` matters whenever the field can arrive PRE-FILLED. Android's
+ * `input text` APPENDS — it does not replace — so typing "B" into a field
+ * already holding "A" leaves "AB". SHY-0456 hit this on the create-room
+ * dialog, which pre-fills the last room name: the journey asked for a room
+ * called JR-CORE-<t2> and got one called "JR-CORE-<t1>JR-CORE-<t2>", so the
+ * lookup that followed found nothing and the failure pointed at the database
+ * rather than at the keystrokes.
+ *
+ * Off by default so existing journeys keep the behaviour they were written
+ * against; pass it wherever the field is not guaranteed empty.
+ */
+async function typeInto(device, id, text, { clearFirst = false } = {}) {
   if (device.kind === 'ios') {
     // Addressed by identifier and set directly. Typing key-by-key through the
     // on-screen keyboard is slower and can drop characters when the field
     // scrolls under it -- which looks like the product losing input.
+    // Setting the value replaces it, so `clearFirst` needs nothing extra here.
     await device.typeText(id, text);
     await sleep(400);
     return;
   }
   await tapId(device, id);
+  if (clearFirst) {
+    // Cursor to the end, then delete back through whatever was there. Bounded
+    // by the longest field this is used on rather than looping on a re-read,
+    // which would cost a full dump per character.
+    device.shell('input keyevent KEYCODE_MOVE_END');
+    device.shell(`input keyevent ${new Array(60).fill('KEYCODE_DEL').join(' ')}`);
+    await sleep(200);
+  }
   device.shell(`input text ${JSON.stringify(text.replace(/ /g, '%s'))}`);
   await sleep(500);
 }
@@ -2835,8 +2858,9 @@ const J06 = {
 // Field names come from the implementation, not from
 // journey-tests/j09-voice-room-host.feature, which is stale on three counts:
 // it says `title` (the field is `name`), `hostId` (it is `ownerId` + a
-// `hostIds` array), and `seats[i].muted` (seats is a map keyed by a STRING
-// index, and the field is `isMuted`).
+// `hostIds` array), `seats[i].muted` (seats is a map keyed by a STRING index,
+// and the field is `isMuted`), and `state: OPEN` (RoomState is ACTIVE |
+// OWNER_AWAY | CLOSED — there is no OPEN).
 const J09 = {
   id: 'J09',
   title: 'j09 — room lifecycle: create → mic on → mic off → close (Theo)',
@@ -2858,6 +2882,52 @@ const J09 = {
       return null;
     };
 
+    // Idempotence. A run that fails mid-journey never reaches its cleanup, so
+    // Theo is left owning an ACTIVE room — and the app then offers "replace
+    // room?" instead of the create dialog. The next run would create nothing
+    // and fail on a DIFFERENT step, hiding the original defect. Clear his
+    // rooms on the way IN, not only on the way out.
+    await reporter.step(device, 'Setup: clear any room Theo still owns', async () => {
+      // Targeted queries, not a whole-collection read: an unbounded get on
+      // `rooms` returned gRPC "1 CANCELLED: call already cancelled" against the
+      // emulator. ownerId has been seen as both a number and a string, so ask
+      // for both rather than guessing which this build wrote.
+      // The first Firestore query of this journey intermittently comes back
+      // "1 CANCELLED: call already cancelled" against the emulator — a gRPC
+      // channel fault, not a data one: the identical query succeeds on the
+      // next attempt. Retried rather than left to fail the whole core set on
+      // a transport hiccup. A persistent failure still surfaces, because the
+      // last error is rethrown.
+      const query = async (value) =>
+        ctx.db.collection('rooms').where('ownerId', '==', value).limit(20).get();
+
+      // Query AND delete both live inside the retry. Scoping it to the query
+      // alone hid the real source: the runs that failed were exactly the ones
+      // with a room to remove, because the cancel comes from the delete, and
+      // the runs that "passed" were the ones with nothing to delete at all.
+      let deleted = 0;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const refs = new Map();
+          for (const value of [theo, String(theo)]) {
+            const snap = await query(value);
+            for (const d of snap.docs) refs.set(d.id, d.ref);
+          }
+          for (const ref of refs.values()) await ref.delete();
+          deleted = refs.size;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          await sleep(500 * attempt);
+        }
+      }
+      if (lastErr) throw lastErr;
+
+      return deleted ? `deleted ${deleted} leftover room(s)` : 'none to clear';
+    });
+
     await reporter.step(device, 'UI: open the rooms tab', async () => {
       await tapId(device, 'main_roomsTab');
       await waitForId(device, 'main_createRoomFab', 8000);
@@ -2867,12 +2937,14 @@ const J09 = {
     await reporter.step(device, `UI: create a room named ${roomName}`, async () => {
       await tapId(device, 'main_createRoomFab');
       await waitForId(device, 'createRoom_nameField', 8000);
-      await typeInto(device, 'createRoom_nameField', roomName);
+      // The dialog pre-fills the last room name, and Android's input text
+      // appends — so this MUST clear first or the room is created with both.
+      await typeInto(device, 'createRoom_nameField', roomName, { clearFirst: true });
       await tapId(device, 'createRoom_confirmButton');
       return 'create-room dialog confirmed';
     });
 
-    await reporter.step(device, 'DB: the room exists, OPEN, owned by Theo', async () => {
+    await reporter.step(device, 'DB: the room exists, ACTIVE, owned by Theo', async () => {
       const snap = await dbWaitQuery(
         () => ctx.db.collection('rooms').where('name', '==', roomName).limit(1).get(),
         { timeoutMs: 10000, what: `rooms where name == ${roomName}` },
@@ -2880,7 +2952,9 @@ const J09 = {
       const doc = snap.docs[0];
       roomId = doc.id;
       const room = doc.data();
-      if (room.state !== 'OPEN') throw new Error(`expected state OPEN; got ${room.state}`);
+      // RoomState is ACTIVE | OWNER_AWAY | CLOSED. There is no OPEN — that is
+      // the fourth thing j09-voice-room-host.feature gets wrong about the model.
+      if (room.state !== 'ACTIVE') throw new Error(`expected state ACTIVE; got ${room.state}`);
       if (String(room.ownerId) !== String(theo)) {
         throw new Error(`expected ownerId ${theo}; got ${room.ownerId}`);
       }
@@ -2903,7 +2977,23 @@ const J09 = {
     // while the seat is still muted for everyone else.
     const setMic = async (wantMuted) => {
       const label = wantMuted ? 'mute' : 'unmute';
-      await tapId(device, 'room_micToggleButton');
+      // Re-read the tree and retry rather than trusting one look. Immediately
+      // after the first toggle the button is still IN the dump but briefly has
+      // no resolvable centre, so the tap reports "not found" while the tag is
+      // right there in the diagnostic. Findable is not the same as reachable.
+      let tapped = false;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 4 && !tapped; attempt += 1) {
+        try {
+          await waitForId(device, 'room_micToggleButton', 6000);
+          await tapId(device, 'room_micToggleButton');
+          tapped = true;
+        } catch (err) {
+          lastErr = err;
+          await sleep(400 * attempt);
+        }
+      }
+      if (!tapped) throw lastErr;
       await dbWaitField(
         ctx.db,
         `rooms/${roomId}`,

@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -39,7 +40,15 @@ fun CreateRoomDialog(
                     value = roomName,
                     onValueChange = { if (it.length <= 50) roomName = it },
                     label = { Text(stringResource(Res.string.room_name_label)) },
-                    modifier = Modifier.fillMaxWidth().testTag("createRoom_nameField"),
+                    // AlertDialog is its own Compose window and does not inherit
+                    // MainActivity's testTagsAsResourceId, so without this the tag
+                    // never reaches uiautomator and the dump shows only
+                    // android:id/content (SHY-0096's finding, SHY-0456's failure).
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("createRoom_nameField"),
                     singleLine = true,
                 )
             }
@@ -50,7 +59,10 @@ fun CreateRoomDialog(
             TextButton(
                 onClick = { onCreate(roomName) },
                 enabled = roomName.isNotBlank(),
-                modifier = Modifier.testTag("createRoom_confirmButton"),
+                modifier =
+                    Modifier
+                        .exposeTestTagsToPlatformDumps()
+                        .testTag("createRoom_confirmButton"),
             ) {
                 Text(stringResource(Res.string.create))
             }
