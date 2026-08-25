@@ -30,6 +30,7 @@ const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
+const { checkUserBans } = require('../utils/bans');
 const {
   mintClaimsMerging,
   deriveCohortFromUser,
@@ -431,6 +432,36 @@ router.post('/users/sign-in', async (req, res) => {
           uniqueId,
         });
       }
+    }
+
+    // The same subtraction the suspension branch above makes, for the other
+    // standing (SHY-0461). This route is a standing-verdict channel, so
+    // `authMiddleware` no longer refuses a banned caller here — otherwise the
+    // app could never resolve its identity, never reach `/device-info`, and
+    // would show "cannot connect" instead of the ban screen.
+    //
+    // That exemption is only safe WITH this branch. Without it a banned caller
+    // would fall through to the `update()` below and take a refreshed
+    // `firebaseUid` plus a custom-claim grant on the way past — precisely the
+    // Audit M5 (Phase 2A) hazard the suspension branch exists to close.
+    //
+    // Not an extra round trip: the middleware used to perform this same lookup
+    // on this same request, and its per-uid cache is shared.
+    const ban = await checkUserBans(uniqueId, req.ip);
+    if (ban.isBanned) {
+      log.warn('users', 'Sign-in attempt by banned user', {
+        uniqueId,
+        provider,
+        banType: ban.banType,
+      });
+      return res.json({
+        found: true,
+        banned: true,
+        uniqueId,
+        banType: ban.banType,
+        reason: ban.reason,
+        expiresAt: ban.expiresAt,
+      });
     }
 
     // Update firebaseUid to current project's UID + refresh lastSeenAt

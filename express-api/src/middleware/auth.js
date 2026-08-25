@@ -318,19 +318,26 @@ async function authMiddleware(req, res, next) {
  */
 const PRE_IDENTITY_ROUTES = [
   // Creates the account. There is no identity yet, by definition.
-  { method: 'POST', path: '/users' },
+  //
+  // NOT `standingExempt`: creating an account is an ACTION, not a verdict.
+  // With no identity to resolve, the standing gates match this caller by
+  // device and IP — which is exactly how a banned person is stopped from
+  // opening a fresh account on the banned handset. Exempting it would
+  // legalise ban evasion at the one route that performs it (SHY-0461).
+  { method: 'POST', path: '/users', standingExempt: false },
   // May be what creates the document for a Firebase account that authenticated
-  // first.
-  { method: 'POST', path: '/users/sign-in' },
+  // first. It is also the FIRST call the app makes, and it already answers
+  // `{ found, suspended }` without mutating — see `POST /users/sign-in`.
+  { method: 'POST', path: '/users/sign-in', standingExempt: true },
   // Device binding, which runs in the SIGN-IN flow before any account exists —
   // it is how the app learns whether this handset is already locked to
-  // somebody. Already carved out of the ban gate for the same reason.
-  { method: 'POST', path: '/devices/lock-check' },
+  // somebody.
+  { method: 'POST', path: '/devices/lock-check', standingExempt: true },
   // How the app LEARNS it is banned. Gating it would replace the ban screen
   // with a generic error while enforcing nothing; it is a verdict channel, not
-  // an abuse-capable action. Also already carved out of the ban gate.
-  { method: 'POST', path: '/device-info' },
-  { method: 'GET', path: '/device-info' },
+  // an abuse-capable action.
+  { method: 'POST', path: '/device-info', standingExempt: true },
+  { method: 'GET', path: '/device-info', standingExempt: true },
 ];
 
 /**
@@ -359,6 +366,37 @@ function allowsMissingIdentity(req) {
 }
 
 /**
+ * A route whose job is to TELL the caller what its standing is must not be
+ * gated on that standing (SHY-0461).
+ *
+ * The gate was circular. `POST /users/sign-in` is the FIRST call the app
+ * makes, and both standing gates refused it — so a suspended person could
+ * not resolve their identity, therefore never reached the user document they
+ * are in fact allowed to read, never reached the ban check, and was shown
+ * "cannot connect" with no reason and no appeal. A banned person hit the same
+ * wall, which put the ban screen out of reach on a cold sign-in too. Verified
+ * on the OnePlus; J11 pins it.
+ *
+ * Read off `PRE_IDENTITY_ROUTES` rather than a second hand-written list, so
+ * the two cannot drift and adding a pre-identity route forces one explicit
+ * decision — `standingExempt` — instead of silently inheriting either answer.
+ *
+ * Being pre-identity is NOT sufficient on its own: `POST /users` is in that
+ * table and is deliberately `standingExempt: false`, because it acts rather
+ * than reports and exempting it would legalise ban evasion.
+ *
+ * Matched on METHOD and EXACT path, exactly as `allowsMissingIdentity` is.
+ */
+function isStandingVerdictChannel(req) {
+  const method = req?.method;
+  const path = req?.path;
+  if (typeof method !== 'string' || typeof path !== 'string') return false;
+  return PRE_IDENTITY_ROUTES.some(
+    (r) => r.standingExempt && r.method === method && r.path === path,
+  );
+}
+
+/**
  * Refuse a caller whose account could not be identified.
  *
  * A distinct code, not a generic 401: the credential was fine, and the client
@@ -384,6 +422,9 @@ function rejectMissingIdentity(req, res) {
  */
 function isSuspensionExemptPath(req) {
   return (
+    // The standing-verdict channels. Without these a suspended person cannot
+    // discover that they are suspended, which is the whole of SHY-0461.
+    isStandingVerdictChannel(req) ||
     /^\/users\/[^/]+\/appeal$/.test(req.path) ||
     /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
     /^\/users\/[^/]+\/delete$/.test(req.path) ||
@@ -422,9 +463,13 @@ function isSuspensionExemptPath(req) {
  */
 function isBanExemptPath(req) {
   if (req.path === '/portal/me') return false;
-  return (
-    isSuspensionExemptPath(req) || req.path === '/device-info' || req.path === '/devices/lock-check'
-  );
+  // `/device-info` and `/devices/lock-check` used to be named again here.
+  // They are standing-verdict channels, so `isSuspensionExemptPath` now
+  // derives them from `PRE_IDENTITY_ROUTES` and this list would have been a
+  // second place for the same fact to be stated — and eventually disagreed
+  // with. The derived form is also method-exact, where the old string compare
+  // matched any verb on those paths.
+  return isSuspensionExemptPath(req);
 }
 
 /**
@@ -474,6 +519,12 @@ async function authMiddlewareStrict(req, res, next) {
     const isSuspended = await checkSuspension(uniqueId);
 
     const isStrictSuspensionExempt =
+      // Same rule as the outer gate. No standing-verdict channel is mounted
+      // under STRICT today (it guards /portal/* and admin), so this term
+      // changes nothing now — it is here because the two gates diverging is
+      // the failure this file has already been bitten by (reviewer R5-C1),
+      // and one rule stated once cannot diverge from itself.
+      isStandingVerdictChannel(req) ||
       req.path === '/portal/me' ||
       req.path === '/portal/sign-out' ||
       /^\/users\/[^/]+\/appeal$/.test(req.path);
