@@ -164,10 +164,35 @@
 
   // ── Server-echo health poll (SHY-0205) ──
   // Asks the EXISTING /api/health which backend is actually ANSWERING —
-  // sha is its self-reported deploy identity ("unknown" on local). The
-  // dot shows the last COMPLETED poll's verdict; a failure keeps the
-  // last-known sha so "which backend did I last reach" stays visible.
+  // sha is its self-reported deploy identity. The dot shows the last
+  // COMPLETED poll's verdict; a failure keeps the last-known sha so
+  // "which backend did I last reach" stays visible.
   var serverHealth = { sha: null, ok: null };
+
+  // What /api/health puts in `sha` when it cannot identify its own build
+  // — no DEPLOYED_SHA env var and no .deployed-sha file, the normal
+  // state of a local stack (express-api/src/index.js resolveDeployedSha).
+  //
+  // It needs rejecting by name rather than by a truthiness check,
+  // because it is a NON-empty string exactly as long as the 7 characters
+  // the sha slot allows. It therefore survived `slice(0, 7)` intact and
+  // rendered as `api unknown` beside a GREEN dot — two halves of one
+  // line that appear to contradict each other, when the dot meant
+  // "reachable" and the word meant "no build id". Operator, journey
+  // J38, 2026-08-22. Mirrors ServerHealth.SERVER_UNKNOWN_SHA.
+  var SERVER_UNKNOWN_SHA = "unknown";
+
+  // Absence — a non-string, blank, or the sentinel in any case or
+  // padding — becomes null so the badge renders its own "?" marker
+  // instead of the server's word. Matched WHOLE: a real sha that merely
+  // begins with those letters is a build we can identify, and is kept.
+  function normaliseServerSha(raw) {
+    if (typeof raw !== "string") return null;
+    var trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.toLowerCase() === SERVER_UNKNOWN_SHA) return null;
+    return trimmed;
+  }
 
   function healthBase() {
     if (typeof window.__preview_api_override === "string") {
@@ -212,8 +237,8 @@
           return res.json();
         })
         .then(function (body) {
-          if (body && typeof body.sha === "string" && body.sha)
-            serverHealth.sha = body.sha;
+          var sha = normaliseServerSha(body && body.sha);
+          if (sha) serverHealth.sha = sha;
           recordHealth(!!(body && body.status === "ok"));
         })
         .catch(function () {

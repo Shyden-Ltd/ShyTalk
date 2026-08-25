@@ -1,3 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!--
+      What Android paints BEFORE Compose draws its first frame (SHY-0443).
+
+      The activity window has a background, and it is shown for the moment
+      between the process starting and the first composition. It has nothing
+      to do with ShyTalkTheme, so it has to be told the same colours by hand.
+
+      This is the LIGHT value: Material 3's baseline `surface`, the documented
+      pair of the dark value measured in values-night. If the app ever sets an
+      explicit `background` on its colour schemes, both of these follow it.
+    -->
+    <color name="shytalk_window_background">#FFFEF7FF</color>
 </resources>

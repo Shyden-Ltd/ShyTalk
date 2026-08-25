@@ -548,31 +548,100 @@ describe('scripts/check-epic-frontmatter.sh', () => {
   });
 
   describe('performance (C4)', () => {
-    test('single-file validation completes in under 500ms', () => {
-      const file = tempEpicFile(VALID_CONTENT);
-      const start = Date.now();
-      const { code } = runScript([file]);
-      const elapsed = Date.now() - start;
-      expect(code).toBe(0);
-      // Budget mirrors the SHY validator's per-file perf budget.
-      expect(elapsed).toBeLessThan(500);
+    /**
+     * These used to be WALL-CLOCK budgets — one file under 500ms, twenty under
+     * 5s — and they were flaky by construction. Jest puts ~190 suites across
+     * every core, so the number they reported was contention as much as code:
+     * measured while two device walks were recording, one file took 1253ms and
+     * twenty took 18756ms, against budgets of 500ms and 5000ms.
+     *
+     * Comparing the two sizes to cancel the load out does not work either. Load
+     * is BURSTY, not steady, so two adjacent measurements can meet completely
+     * different conditions. Three consecutive runs of the UNMODIFIED script gave
+     * ratios of 1.56, 1.70 and 4.91 — the last one worse than a deliberately
+     * quadratic mutant scored (3.11). A timing test that fails clean code and
+     * passes the mutant is worse than no test.
+     *
+     * CPU time is steadier than wall time but still drifted 39% across three
+     * runs here, so it is not sound either.
+     *
+     * So these count WORK instead of timing it. The regression actually worth
+     * catching is a scan that re-validates, re-reads or cross-compares per file
+     * — which is a change in how many times the work happens, and that is exactly
+     * countable. `bash -x` traces every command the script runs, and the count
+     * is identical on an idle machine and a hammered one.
+     */
+    /**
+     * How many times the scan invoked `validate_file`, via a `bash -x` trace.
+     *
+     * Mutation-verified: making the scan quadratic takes this from 10/20 to
+     * 52/51 and reddens the test below.
+     *
+     * KNOWN LIMIT, stated rather than glossed: the trace is stderr, so work
+     * done inside a block that redirects stderr to /dev/null is invisible
+     * here. A first mutation attempt escaped for exactly that reason — it
+     * suppressed its own output — and the test looked like it had caught
+     * nothing when it had simply not been shown anything. Realistic
+     * regressions do not silence themselves, but a guard should say what it
+     * cannot see.
+     */
+    function validateFileCalls(args) {
+      const res = spawnSync('bash', ['-x', SCRIPT, ...args], {
+        encoding: 'utf-8',
+        cwd: REPO_ROOT,
+        timeout: 60_000,
+      });
+      // The trace goes to stderr; the script's own stderr is interleaved, which
+      // is harmless because the marker is the traced CALL, not a message.
+      return ((res.stderr ?? '').match(/^\+* ?validate_file /gm) || []).length;
+    }
+
+    function scanDirOf(count) {
+      const dir = tempScanDir();
+      for (let i = 1; i <= count; i += 1) {
+        const n = String(i).padStart(4, '0');
+        fs.writeFileSync(
+          path.join(dir, `EPIC-${n}-perf.md`),
+          setFrontmatterField(VALID_CONTENT, 'id', `EPIC-${n}`),
+        );
+      }
+      return dir;
+    }
+
+    test('a scan validates each file exactly once', () => {
+      // n calls for n files. A scan that re-validated per pass would show 2n or
+      // 3n; one that cross-compared every file with every other would show n^2.
+      expect({ files: 10, calls: validateFileCalls(['--scan', scanDirOf(10)]) }).toEqual({
+        files: 10,
+        calls: 10,
+      });
     });
 
-    test('--scan over 20 EPIC files completes in under 5s', () => {
-      // Spec Performance AC budget: <2s for 60 SHYs + 1 EPIC + cross-checks.
-      // This is the EPIC-only stress (20 files) at <5s — a looser budget
-      // for the more I/O-bound scan loop.
-      const dir = tempScanDir();
-      for (let i = 1; i <= 20; i += 1) {
-        const n = String(i).padStart(4, '0');
-        const content = setFrontmatterField(VALID_CONTENT, 'id', `EPIC-${n}`);
-        fs.writeFileSync(path.join(dir, `EPIC-${n}-perf.md`), content);
-      }
-      const start = Date.now();
-      const { code } = runScript(['--scan', dir]);
-      const elapsed = Date.now() - start;
-      expect(code).toBe(0);
-      expect(elapsed).toBeLessThan(5000);
+    test('doubling the files doubles the work, and no more', () => {
+      // The complexity class, stated as an equality rather than a bound —
+      // 20 files must cost exactly twice 10 files, not four times.
+      const ten = validateFileCalls(['--scan', scanDirOf(10)]);
+      const twenty = validateFileCalls(['--scan', scanDirOf(20)]);
+      expect({ ten, twenty, linear: twenty === ten * 2 }).toEqual({
+        ten: 10,
+        twenty: 20,
+        linear: true,
+      });
+    });
+
+    test('validating one file does the work once', () => {
+      expect(validateFileCalls([tempEpicFile(VALID_CONTENT)])).toBe(1);
+    });
+
+    test('the scan still terminates in a sane time', () => {
+      // A loose CEILING, not a budget. It cannot catch a modest slowdown and is
+      // not meant to — its only job is to fail loudly if the scan HANGS, which
+      // no amount of contention explains. Deliberately far from any real
+      // measurement (worst seen: 18.8s under two concurrent device recordings).
+      const started = Date.now();
+      const { code } = runScript(['--scan', scanDirOf(20)]);
+      const elapsed = Date.now() - started;
+      expect({ code, hung: elapsed > 120_000 }).toEqual({ code: 0, hung: false });
     });
   });
 });

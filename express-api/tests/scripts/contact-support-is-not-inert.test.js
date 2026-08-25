@@ -8,6 +8,8 @@
  *     action, making the confirm button behaviourally identical to Cancel while
  *     the body text told people to use it.
  *   SHY-0385 RESTORED it, wired to the in-app support form.
+ *   SHY-0387 turned that form into a PAGE, so a call site now NAVIGATES rather
+ *     than showing a dialog.
  *
  * The rule was never "no button" and is not "there is a button". It is
  * **nothing inert**, which held true through both changes — so this file was
@@ -117,9 +119,17 @@ describe('contact support is never an inert control', () => {
     expect(dismissOnly.map((s) => `${s.file}:${s.line} -> { ${s.body} }`)).toEqual([]);
   });
 
-  test('every call site opens the support form', () => {
-    const notOpeningForm = sites.filter((s) => !s.src.includes('SupportFormDialog'));
-    expect(notOpeningForm.map((s) => `${s.file}:${s.line}`)).toEqual([]);
+  test('every call site leads to support', () => {
+    // SHY-0387 moved the form from a DIALOG to a PAGE, so a call site no longer
+    // shows `SupportFormDialog` — it navigates. The rule is unchanged and the
+    // assertion follows the mechanism, which is the third time this file has
+    // been rewritten rather than deleted: the rule is "nothing inert", not
+    // "there is a dialog".
+    const notReachingSupport = sites.filter(
+      (s) => !/onNavigateToSupport|SupportSource\./.test(s.body),
+    );
+
+    expect(notReachingSupport.map((s) => `${s.file}:${s.line} -> { ${s.body} }`)).toEqual([]);
   });
 
   test('support never routes to a mailbox — there is not one', () => {

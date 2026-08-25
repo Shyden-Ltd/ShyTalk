@@ -44,6 +44,17 @@ sealed class Screen(
 
     data object ReportReview : Screen("report_review")
 
+    /**
+     * Contacting support — SHY-0387.
+     *
+     * Carries only WHERE somebody came from. The category and the context an
+     * admin sees are derived from it by `SupportSource`, so the route stays a
+     * single readable token and the mapping stays testable.
+     */
+    data object Support : Screen("support/{source}") {
+        fun createRoute(source: String) = "support/$source"
+    }
+
     data object GroupChat : Screen("group_chat/{conversationId}") {
         fun createRoute(conversationId: String) = "group_chat/$conversationId"
     }

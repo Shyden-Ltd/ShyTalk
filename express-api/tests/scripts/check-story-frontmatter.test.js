@@ -1117,3 +1117,45 @@ describe('scripts/check-story-frontmatter.sh', () => {
     });
   });
 });
+
+// ─── The live corpus, not a fixture ─────────────────────────────
+
+describe('every story actually in the repository parses', () => {
+  /**
+   * Everything above this point runs the validator over fixtures, which proves
+   * the validator works and says nothing about the real stories.
+   *
+   * That check did exist, but only by accident: the SHY-0067 summary-format
+   * test ran a full `--all --dry-run` over the live tree, and parsing every
+   * story was a side effect of asserting the shape of a log line. It cost 1,206
+   * seconds in a full run — about two thirds of the whole suite — and timed out
+   * under the load it created, so on 2026-08-24 it was moved onto a fixture
+   * corpus where it belongs.
+   *
+   * This is what that side effect was worth, done deliberately and in a second.
+   */
+  const { execFileSync } = require('node:child_process');
+
+  it('the validator accepts the whole live corpus', () => {
+    const storiesDir = path.join(REPO_ROOT, '.project', 'stories');
+    expect(fs.existsSync(storiesDir)).toBe(true);
+
+    // An anchor: a scan that silently found nothing would pass forever.
+    const stories = fs.readdirSync(storiesDir).filter((f) => /^SHY-\d+-.*\.md$/.test(f));
+    expect(stories.length).toBeGreaterThan(100);
+
+    let status = 0;
+    let output;
+    try {
+      output = execFileSync(
+        'bash',
+        [path.join(REPO_ROOT, 'scripts', 'check-story-frontmatter.sh'), '--scan', storiesDir],
+        { encoding: 'utf-8', timeout: 120_000 },
+      );
+    } catch (err) {
+      status = err.status ?? 1;
+      output = `${err.stdout ?? ''}${err.stderr ?? ''}`;
+    }
+    expect({ status, output }).toEqual({ status: 0, output: expect.any(String) });
+  });
+});

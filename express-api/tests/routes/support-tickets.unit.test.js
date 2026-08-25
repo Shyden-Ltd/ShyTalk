@@ -34,6 +34,10 @@ const mockCollectionAdd = jest.fn().mockResolvedValue({ id: 'audit-id' });
 const mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
 
 jest.mock('../../src/utils/firebase', () => ({
+  // SHY-0396: adding to an existing ticket appends with FieldValue.arrayUnion.
+  // Without this the real module's export is absent and the route throws a 500,
+  // which looks like a route bug and is not one.
+  FieldValue: { arrayUnion: (...items) => ({ __arrayUnion: items }) },
   db: {
     doc: jest.fn((path) => ({
       _path: path,
@@ -89,6 +93,25 @@ jest.mock('../../src/middleware/rateLimit', () => ({
   sensitiveLimiter: (_req, _res, next) => next(),
 }));
 
+const mockGetSignedPutUrl = jest.fn();
+const mockGetSignedGetUrl = jest.fn();
+const mockDeleteObject = jest.fn();
+const mockHeadObject = jest.fn(async () => ({ contentType: 'image/png', size: 1024 }));
+const mockGetObject = jest.fn(async () => ({
+  ContentType: 'image/png',
+  Body: { pipe: (res) => res.end() },
+}));
+jest.mock('../../src/utils/r2', () => ({
+  getSignedPutUrl: (...args) => mockGetSignedPutUrl(...args),
+  getSignedGetUrl: (...args) => mockGetSignedGetUrl(...args),
+  deleteObject: (...args) => mockDeleteObject(...args),
+  // SHY-0420: the limits are checked against what was actually STORED, so the
+  // create path asks R2 what each object is. An ordinary small image by
+  // default; individual tests override it.
+  headObject: (...args) => mockHeadObject(...args),
+  getObject: (...args) => mockGetObject(...args),
+}));
+
 jest.mock('../../src/utils/log', () => ({
   debug: jest.fn(),
   info: jest.fn(),
@@ -101,6 +124,9 @@ beforeEach(() => {
   mockQueryDocs.mockResolvedValue([]);
   mockIsLiveAdmin.mockResolvedValue(true);
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+  mockGetSignedPutUrl.mockResolvedValue('https://r2.example/signed-put');
+  mockGetSignedGetUrl.mockImplementation(async (key) => `https://r2.example/get/${key}`);
+  mockDeleteObject.mockResolvedValue(undefined);
 });
 
 // ─── App setup ──────────────────────────────────────────────────
@@ -189,17 +215,17 @@ describe('POST /api/support-tickets', () => {
   test('bounds the message length explicitly rather than truncating', async () => {
     const res = await request(createApp())
       .post('/api/support-tickets')
-      .send({ message: 'x'.repeat(2001) });
+      .send({ message: 'x'.repeat(1001) });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/2000/);
+    expect(res.body.error).toMatch(/1000/);
     expect(mockDocSet).not.toHaveBeenCalled();
   });
 
   test('accepts a message at exactly the limit', async () => {
     const res = await request(createApp())
       .post('/api/support-tickets')
-      .send({ message: 'x'.repeat(2000) });
+      .send({ message: 'x'.repeat(1000) });
     expect(res.status).toBe(200);
   });
 
@@ -219,15 +245,36 @@ describe('POST /api/support-tickets', () => {
     expect(writtenTicket().category).toBe('age');
   });
 
-  test('refuses a second ticket while one is still open', async () => {
+  // SHY-0396. This used to assert a 409 and that nothing was written -- it
+  // pinned the defect. A second request is ALLOWED: somebody with an open
+  // ticket may have a genuinely different problem, and refusing them means
+  // their new problem never reaches anyone. The warning belongs in the client,
+  // which shows what is already open and offers to add to it instead.
+  test('raises a SECOND ticket while one is still open — never refuses it', async () => {
     mockQueryDocs.mockResolvedValue([{ id: 'existing', status: 'open' }]);
 
     const res = await request(createApp())
       .post('/api/support-tickets')
-      .send({ message: 'Another one' });
+      .send({ message: 'A different problem entirely' });
 
-    expect(res.status).toBe(409);
-    expect(mockDocSet).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.ticketId).toBeTruthy();
+    expect(writtenTicket().message).toBe('A different problem entirely');
+  });
+
+  test('no request is ever answered with 409', async () => {
+    // The refusal is gone, not merely bypassed on one path. If a 409 comes back
+    // from anywhere here, somebody has reinstated the block.
+    mockQueryDocs.mockResolvedValue([
+      { id: 'a', status: 'open' },
+      { id: 'b', status: 'open' },
+    ]);
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Third one' });
+
+    expect(res.status).not.toBe(409);
   });
 
   test('stores the originating context so an admin need not ask', async () => {
@@ -253,6 +300,458 @@ describe('POST /api/support-tickets', () => {
 });
 
 // ─── Listing (admin) ────────────────────────────────────────────
+
+// ─── SHY-0387: categories and attachments ───────────────────────
+
+describe('POST /api/support-tickets — measuring the warning — SHY-0396', () => {
+  // The story's observability clause: "a ticket raised despite the warning is
+  // distinguishable in the data, so the warning's effect can actually be judged
+  // rather than assumed". Without this, removing the 409 is a change nobody can
+  // evaluate afterwards.
+  test('records how many requests were already open', async () => {
+    mockQueryDocs.mockResolvedValue([
+      { id: 't1', userId: 10000001, status: 'open', message: 'first' },
+      { id: 't2', userId: 10000001, status: 'open', message: 'second' },
+    ]);
+
+    await request(createApp()).post('/api/support-tickets').send({ message: 'A third thing' });
+
+    expect(writtenTicket().openTicketsAtCreation).toBe(2);
+  });
+
+  test('a first-ever request records zero, not an absent field', async () => {
+    mockQueryDocs.mockResolvedValue([]);
+
+    await request(createApp()).post('/api/support-tickets').send({ message: 'First time' });
+
+    // Zero rather than undefined: "raised with none open" and "raised before we
+    // started counting" are different facts and must not look identical.
+    expect(writtenTicket().openTicketsAtCreation).toBe(0);
+  });
+
+  /**
+   * The count is measurement, and measurement must never cost somebody their
+   * ticket. This is the same rule the client follows for its own lookup.
+   */
+  test('a failed count still raises the ticket', async () => {
+    mockQueryDocs.mockRejectedValue(new Error('firestore unavailable'));
+
+    const res = await request(createApp()).post('/api/support-tickets').send({ message: 'Help' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ticketId).toBe('ticket-id');
+    expect(writtenTicket().openTicketsAtCreation).toBeNull();
+  });
+
+  test('the count is taken from the CALLER, never from the body', async () => {
+    mockQueryDocs.mockResolvedValue([{ id: 't1', userId: 10000001, status: 'open', message: 'a' }]);
+
+    await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Help', openTicketsAtCreation: 99 });
+
+    expect(writtenTicket().openTicketsAtCreation).toBe(1);
+  });
+});
+
+describe('POST /api/support-tickets — the sixth approved category', () => {
+  test('accepts "bug", the wire value for "Something is broken"', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'The wheel spins forever.', category: 'bug' });
+
+    expect(res.status).toBe(200);
+    expect(writtenTicket().category).toBe('bug');
+  });
+});
+
+describe('POST /api/support-tickets/upload-url', () => {
+  test('issues a signed PUT URL and a key under the caller own prefix', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.uploadUrl).toBe('https://r2.example/signed-put');
+    expect(res.body.r2Key).toMatch(/^support-tickets\/10000001\/[^/]+\.png$/);
+  });
+
+  test('accepts video, because the operator asked for screenshots AND videos', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'video/mp4' });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('refuses a content type outside the allowed set', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'application/x-msdownload' });
+
+    expect(res.status).toBe(400);
+    expect(mockGetSignedPutUrl).not.toHaveBeenCalled();
+  });
+
+  test('refuses a missing content type rather than guessing one', async () => {
+    const res = await request(createApp()).post('/api/support-tickets/upload-url').send({});
+
+    expect(res.status).toBe(400);
+    expect(mockGetSignedPutUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/support-tickets — attachments', () => {
+  const own = (name) => `support-tickets/10000001/${name}`;
+
+  test('stores attachments the caller uploaded', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('a.png'), own('b.mp4')] });
+
+    expect(res.status).toBe(200);
+    expect(writtenTicket().attachments).toEqual([own('a.png'), own('b.mp4')]);
+  });
+
+  test('a ticket with no attachments stores an empty list, not undefined', async () => {
+    await request(createApp()).post('/api/support-tickets').send({ message: 'No picture.' });
+
+    expect(writtenTicket().attachments).toEqual([]);
+  });
+
+  // The three defences age-verification already applies to an R2 key. A key
+  // arrives from the client, so each one is a way into somebody else's folder.
+  test('refuses a key belonging to another account', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Sneaky.', attachments: ['support-tickets/10000002/theirs.png'] });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses a key containing a path-traversal sequence', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Sneaky.', attachments: [own('../10000002/theirs.png')] });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses a key that extends the prefix into another folder', async () => {
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Sneaky.', attachments: [own('nested/deeper.png')] });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses a non-string attachment', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Odd.', attachments: [{ key: 'x' }] });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('bounds how many attachments one ticket may carry', async () => {
+    const many = Array.from({ length: 11 }, (_, i) => own(`f${i}.png`));
+    const res = await request(createApp({ uniqueId: 10000001 }))
+      .post('/api/support-tickets')
+      .send({ message: 'Too many.', attachments: many });
+
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test('refuses attachments that are not a list', async () => {
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Odd.', attachments: 'support-tickets/10000001/a.png' });
+
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/support-tickets/:id/attachments', () => {
+  const ticketWith = (attachments) => ({
+    exists: true,
+    data: () => ({ userId: 10000001, attachments }),
+  });
+
+  test('an admin gets a VIEW route per attachment, never a download link', async () => {
+    // SHY-0420. This used to mint a signed GET URL per key, which is a
+    // download link: a moderator could pull an arbitrary stranger's file —
+    // often a photograph of a real person, sometimes of abuse — onto their own
+    // machine, and once it is there we have no further say in it.
+    mockDocGet.mockResolvedValue(
+      ticketWith(['support-tickets/10000001/a.png', 'support-tickets/10000001/b.mp4']),
+    );
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.attachments).toEqual([
+      { index: 0, viewUrl: '/api/support-tickets/t-1/attachments/0', contentType: null },
+      { index: 1, viewUrl: '/api/support-tickets/t-1/attachments/1', contentType: null },
+    ]);
+  });
+
+  test('no signed URL is minted at all', async () => {
+    // The stronger statement. Not "the link expires quickly" — there is no
+    // link, so there is nothing to hand to a download manager or paste
+    // elsewhere.
+    mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
+
+    await request(createApp({ admin: true })).get('/api/support-tickets/t-1/attachments');
+
+    expect(mockGetSignedGetUrl).not.toHaveBeenCalled();
+  });
+
+  test('an attachment is addressed by INDEX, so no arbitrary key can be asked for', async () => {
+    // The ticket decides which objects exist. An admin naming a key would be a
+    // route to any object in the bucket.
+    mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments/7',
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  test('a ticket with nothing attached returns an empty list, not an error', async () => {
+    mockDocGet.mockResolvedValue(ticketWith([]));
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.attachments).toEqual([]);
+  });
+
+  test('a ticket predating attachments does not crash', async () => {
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ userId: 10000001 }) });
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.attachments).toEqual([]);
+  });
+
+  test('a ticket that does not exist is a 404', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets/nope/attachments',
+    );
+
+    expect(res.status).toBe(404);
+  });
+
+  test('a non-admin is refused and no link is issued', async () => {
+    mockIsLiveAdmin.mockResolvedValue(false);
+    mockDocGet.mockResolvedValue(ticketWith(['support-tickets/10000001/a.png']));
+
+    const res = await request(createApp({ admin: false })).get(
+      '/api/support-tickets/t-1/attachments',
+    );
+
+    expect(res.status).toBe(403);
+    expect(mockGetSignedGetUrl).not.toHaveBeenCalled();
+  });
+});
+
+describe('a caller with no resolved identity — SHY-0426', () => {
+  /**
+   * `resolveUniqueId` answers null when a Firebase uid has no identityMap
+   * entry, and the auth middleware passes that straight through as
+   * `req.auth.uniqueId = null`. Nothing downstream treated null as "unknown" —
+   * it was used as though it were an account number.
+   *
+   * Reproduced against the real stack on 2026-08-22: two personas whose
+   * uniqueId was null could READ each other's support tickets, including the
+   * summary of a SAFETY report, and APPEND to each other's tickets (HTTP 200).
+   * Their attachments also shared one `support-tickets/null/` folder, so each
+   * could attach the other's uploads.
+   *
+   * The cause is that `null === null`. Every ownership test in this file is of
+   * the form `where('userId','==',uniqueId)` or `doc.userId !== uniqueId`, and
+   * both are satisfied when everybody's id is the same absent value.
+   *
+   * An account we cannot identify cannot be authorised. Refused, not guessed.
+   */
+  test('cannot raise a ticket', async () => {
+    const res = await request(createApp({ uniqueId: null }))
+      .post('/api/support-tickets')
+      .send({ message: 'Who am I?' });
+
+    expect(res.status).toBe(403);
+    expect(mockDocSet).not.toHaveBeenCalled();
+  });
+
+  test("cannot list open tickets — this is how one account read another's", async () => {
+    mockQueryDocs.mockResolvedValue([
+      { id: 'someone-else', userId: null, status: 'open', message: 'my private problem' },
+    ]);
+
+    const res = await request(createApp({ uniqueId: null })).get('/api/support-tickets/mine/open');
+
+    expect(res.status).toBe(403);
+    expect(res.body.tickets).toBeUndefined();
+  });
+
+  test("cannot append to a ticket — this is how one account wrote into another's", async () => {
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ userId: null }) });
+
+    const res = await request(createApp({ uniqueId: null }))
+      .post('/api/support-tickets/someone-elses/messages')
+      .send({ message: "writing into a stranger's ticket" });
+
+    expect(res.status).toBe(403);
+  });
+
+  test('cannot be issued an upload slot, so no shared null folder exists', async () => {
+    const res = await request(createApp({ uniqueId: null }))
+      .post('/api/support-tickets/upload-url')
+      .send({ contentType: 'image/png' });
+
+    expect(res.status).toBe(403);
+  });
+
+  /** Zero is a real account number and must not be caught by a falsy test. */
+  test('an account whose id is 0 is still a real account', async () => {
+    mockQueryDocs.mockResolvedValue([]);
+    const res = await request(createApp({ uniqueId: 0 })).get('/api/support-tickets/mine/open');
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /api/support-tickets/mine/open — SHY-0396', () => {
+  // The client cannot offer "it's the problem I already reported" without
+  // something to show. A summary of their own words is enough to recognise the
+  // problem, and needs no new stored field.
+  test('returns a brief summary of each open ticket', async () => {
+    mockQueryDocs.mockResolvedValue([
+      {
+        id: 't1',
+        userId: 10000001,
+        status: 'open',
+        category: 'payment',
+        message: 'My coins never arrived after I paid',
+        createdAt: 1709913600000,
+      },
+    ]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toHaveLength(1);
+    expect(res.body.tickets[0]).toEqual({
+      ticketId: 't1',
+      category: 'payment',
+      summary: 'My coins never arrived after I paid',
+      createdAt: 1709913600000,
+    });
+  });
+
+  test('a long message is shortened, so the choice stays readable', async () => {
+    mockQueryDocs.mockResolvedValue([
+      { id: 't1', userId: 10000001, status: 'open', category: 'bug', message: 'x'.repeat(400) },
+    ]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.body.tickets[0].summary.length).toBeLessThanOrEqual(121);
+    expect(res.body.tickets[0].summary.endsWith('…')).toBe(true);
+  });
+
+  test('nothing open answers an empty list, not an error', async () => {
+    mockQueryDocs.mockResolvedValue([]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toEqual([]);
+  });
+
+  test("never leaks another person's ticket", async () => {
+    // The query is scoped by the TOKEN's uniqueId. If a ticket belonging to
+    // somebody else reaches the mapper, it must not be returned -- a support
+    // queue holds other people's words.
+    mockQueryDocs.mockResolvedValue([
+      { id: 'mine', userId: 10000001, status: 'open', category: 'bug', message: 'mine' },
+      { id: 'theirs', userId: 10000002, status: 'open', category: 'bug', message: 'theirs' },
+    ]);
+
+    const res = await request(createApp()).get('/api/support-tickets/mine/open');
+
+    expect(res.body.tickets.map((t) => t.ticketId)).toEqual(['mine']);
+  });
+});
+
+describe('POST /api/support-tickets/:id/messages — SHY-0396', () => {
+  // "It's the problem I already reported" needs somewhere to put the text.
+  // Without this the message is simply dropped.
+  test('adds the message to the existing ticket', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 10000001, status: 'open', message: 'first' }),
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/t1/messages')
+      .send({ message: 'Here is more detail' });
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalled();
+  });
+
+  test("refuses to write to somebody else's ticket", async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 10000002, status: 'open', message: 'not yours' }),
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/t1/messages')
+      .send({ message: 'let me in' });
+
+    expect(res.status).toBe(404);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('an empty message is refused', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ userId: 10000001, status: 'open', message: 'first' }),
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/t1/messages')
+      .send({ message: '   ' });
+
+    expect(res.status).toBe(400);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('a ticket that does not exist is refused', async () => {
+    mockDocGet.mockResolvedValue({ exists: false });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets/nope/messages')
+      .send({ message: 'hello' });
+
+    expect(res.status).toBe(404);
+  });
+});
 
 describe('GET /api/support-tickets', () => {
   test('refuses a non-admin', async () => {
@@ -357,5 +856,161 @@ describe('PATCH /api/support-tickets/:id', () => {
       .patch('/api/support-tickets/nope')
       .send({ status: 'resolved' });
     expect(mockCollectionAdd).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Removing an attachment ─────────────────────────────────────
+
+/**
+ * SHY-0434 — a removed attachment must leave the object store.
+ *
+ * The bytes go up the moment a file is PICKED, before anybody presses Send. So
+ * a file removed from the form is already in storage, and once the form drops
+ * the key nothing references it: no ticket carries it, so no retention rule and
+ * no erasure request will ever reach it.
+ *
+ * For this queue that is a data-protection problem, not housekeeping. People
+ * attach screenshots of private conversations and video of other people to
+ * safety reports. Keeping an orphaned copy for ever, with no purpose, is what
+ * data minimisation exists to prevent — and removing a file before sending is
+ * the moment somebody most reasonably believes it is gone.
+ */
+describe('DELETE /api/support-tickets/attachments', () => {
+  const own = (uniqueId, name = 'abc.png') => `support-tickets/${uniqueId}/${name}`;
+
+  test('deletes the object the caller uploaded', async () => {
+    const key = own(10000042);
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: key });
+
+    expect(res.status).toBe(200);
+    expect(mockDeleteObject).toHaveBeenCalledWith(key);
+  });
+
+  test("refuses a key under somebody ELSE'S prefix, and deletes nothing", async () => {
+    // The key comes from the client, so every one is a candidate route into
+    // another person's folder — the same defence the upload path applies.
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: own(99999999) });
+
+    expect(res.status).toBe(400);
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  test('refuses a traversal key, and deletes nothing', async () => {
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: `support-tickets/10000042/../../secrets.png` });
+
+    expect(res.status).toBe(400);
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  test('refuses a missing or non-string key', async () => {
+    for (const bad of [undefined, 42, null, '']) {
+      mockDeleteObject.mockClear();
+      const res = await request(createApp({ uniqueId: 10000042 }))
+        .delete('/api/support-tickets/attachments')
+        .send(bad === undefined ? {} : { r2Key: bad });
+      expect({ bad, status: res.status }).toEqual({ bad, status: 400 });
+      expect(mockDeleteObject).not.toHaveBeenCalled();
+    }
+  });
+
+  test('requires an identity', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'x' }; // no uniqueId
+      next();
+    });
+    app.use('/api', require('../../src/routes/support-tickets'));
+
+    const res = await request(app)
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: own(10000042) });
+
+    // 403, not 401: the caller IS authenticated, but no account could be
+    // resolved for them (SHY-0426). Deleting on behalf of "nobody" would let a
+    // caller with no identity reach a prefix that belongs to someone.
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('no_identity');
+    expect(mockDeleteObject).not.toHaveBeenCalled();
+  });
+
+  test('a storage failure is reported, not swallowed', async () => {
+    // The caller decides what to do about it. Answering 200 on a failed delete
+    // would tell somebody their file is gone when it is still there — the one
+    // lie this endpoint must never tell.
+    mockDeleteObject.mockRejectedValueOnce(new Error('r2 down'));
+
+    const res = await request(createApp({ uniqueId: 10000042 }))
+      .delete('/api/support-tickets/attachments')
+      .send({ r2Key: own(10000042) });
+
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('POST /api/support-tickets — the limits are enforced on the SERVER', () => {
+  /** A key under the caller's own folder, which is what the route requires. */
+  const own = (name) => `support-tickets/10000001/${name}`;
+
+  // The client bounds these too, refused before any upload starts so nobody
+  // spends a video's worth of mobile data to be told no. That is a courtesy to
+  // honest callers; it is not a bound. These files are opened by staff, and a
+  // minor cohort is present, so the rule has to hold for a caller who never
+  // ran our client at all (SHY-0420).
+
+  test('an oversized image is refused even though the client would have caught it', async () => {
+    mockHeadObject.mockResolvedValueOnce({ contentType: 'image/png', size: 11 * 1024 * 1024 });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('big.png')] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/10 MB/);
+  });
+
+  test('a file that is neither an image nor a video is refused', async () => {
+    // Files uploaded by strangers are opened by staff. An executable reaching
+    // a moderator's machine is the delivery path this closes.
+    mockHeadObject.mockResolvedValueOnce({
+      contentType: 'application/x-msdownload',
+      size: 2048,
+    });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('payload.exe')] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/image or a video/i);
+  });
+
+  test('a high-bitrate video is accepted — video is bounded by DURATION', async () => {
+    mockHeadObject.mockResolvedValueOnce({ contentType: 'video/mp4', size: 60 * 1024 * 1024 });
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('clip.mp4')] });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('an object we cannot measure is refused, not waved through', async () => {
+    // Fails closed. "We could not check" must never mean "it is fine" for a
+    // file a stranger uploaded and a member of staff will open.
+    mockHeadObject.mockRejectedValueOnce(new Error('R2 unreachable'));
+
+    const res = await request(createApp())
+      .post('/api/support-tickets')
+      .send({ message: 'Here is what I see.', attachments: [own('mystery.png')] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/could not be checked/i);
   });
 });

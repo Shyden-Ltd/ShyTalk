@@ -1,5 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.ShyTalk" parent="Theme.AppCompat.Light.NoActionBar" />
+    <!--
+      DayNight, not Light (SHY-0443).
+
+      This was Theme.AppCompat.Light.NoActionBar, whose windowBackground is
+      white. ShyTalkTheme follows the system via isSystemInDarkTheme(), so on
+      a phone in dark mode the launch window painted WHITE and then the first
+      Compose frame painted #141218 over it — the flash the operator saw on
+      every cold start.
+
+      DayNight makes the window follow the system the way the app already
+      does, and windowBackground names the exact colour the first frame will
+      paint, so the two are the same shade rather than merely both dark.
+    -->
+    <style name="Theme.ShyTalk" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/shytalk_window_background</item>
+    </style>
 </resources>

@@ -24,6 +24,7 @@ import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -93,14 +94,6 @@ class AuthViewModel(
 ) : ViewModel() {
     companion object {
         private const val TAG = "AuthViewModel"
-
-        /**
-         * Word-boundary match for HTTP status 401 inside otherwise-free-form error text.
-         * `\b` rejects digit-runs embedded in IPv6 prefixes ("[2401:db00::34]"), epoch ms
-         * timestamps ("76401"), or port numbers — those would falsely trigger the
-         * destructive PIN-clearing path in `handleBackendError`.
-         */
-        private val AUTH_401_REGEX = Regex("\\b401\\b")
 
         /**
          * Process-level guard preventing the init() migration path from running more than once
@@ -302,7 +295,11 @@ class AuthViewModel(
         provider: String,
         identifier: String,
     ) {
-        when (val result = identityRepository.resolveIdentity(provider, identifier)) {
+        val identityResult =
+            retryingTransientFailures("identity resolution") {
+                identityRepository.resolveIdentity(provider, identifier)
+            }
+        when (val result = identityResult) {
             is Resource.Success -> {
                 when (val signInResult = result.data) {
                     is SignInResult.Found -> {
@@ -371,6 +368,38 @@ class AuthViewModel(
     }
 
     /**
+     * Run a backend call, giving a transient failure another go before anybody
+     * is shown anything (SHY-0442).
+     *
+     * Wraps the CALL rather than living inside [handleBackendError], because
+     * by the time that runs the operation is over and there is nothing left to
+     * retry. All three of its callers are cold-start calls, and all three go
+     * through here — a retry at one call site would leave the other two able
+     * to produce the same wrong error screen.
+     *
+     * Returns the last result either way, so a failure that survives the
+     * budget reaches [handleBackendError] exactly as it does today and the
+     * genuine-outage path is unchanged.
+     */
+    private suspend fun <T> retryingTransientFailures(
+        label: String,
+        call: suspend () -> Resource<T>,
+    ): Resource<T> {
+        var result = call()
+        var attempt = 1
+        while (result is Resource.Error && BackendFailurePolicy.shouldRetry(attempt, result.message)) {
+            logW(TAG, "$label failed (${result.message}) — retry $attempt of ${BackendFailurePolicy.TRANSIENT_RETRY_ATTEMPTS}")
+            delay(BackendFailurePolicy.delayBeforeAttemptMs(attempt))
+            result = call()
+            attempt++
+        }
+        if (result is Resource.Error) {
+            logE(TAG, "$label failed after ${attempt - 1} retr(ies): ${result.message}")
+        }
+        return result
+    }
+
+    /**
      * Routes auth-related errors to a fresh sign-in screen, network-related errors to
      * "Unable to Connect". A stale refresh token previously fell through to the
      * "Unable to Connect" path, leaving the user stuck retrying instead of re-authenticating.
@@ -391,13 +420,10 @@ class AuthViewModel(
      */
     private suspend fun handleBackendError(errorMessage: String?) {
         val message = errorMessage.orEmpty()
-        val isAuthError =
-            message.contains("Not authenticated", ignoreCase = true) ||
-                message.contains("Token refresh", ignoreCase = true) ||
-                message.contains("INVALID_REFRESH_TOKEN", ignoreCase = true) ||
-                message.contains("UNAUTHENTICATED", ignoreCase = true) ||
-                AUTH_401_REGEX.containsMatchIn(message)
-        if (isAuthError) {
+        // Classified by BackendFailurePolicy, which the retry below also uses.
+        // Two lists would eventually disagree about the same message, and the
+        // disagreement would show up as a session cleared for a network blip.
+        if (BackendFailurePolicy.isAuthError(message)) {
             logW(TAG, "Auth error — clearing session and routing to sign-in: $message")
             var credentialCleared = true
             var signedOut = true
@@ -504,11 +530,13 @@ class AuthViewModel(
 
     @Suppress("kotlin:S3776")
     private suspend fun resolveProfileState(userId: String) {
-        when (val result = userRepository.userExists(userId)) {
+        val existsResult = retryingTransientFailures("userExists") { userRepository.userExists(userId) }
+        when (val result = existsResult) {
             is Resource.Success -> {
                 val hasProfile = result.data
                 if (hasProfile) {
-                    when (val userResult = userRepository.getUser(userId)) {
+                    val loaded = retryingTransientFailures("getUser") { userRepository.getUser(userId) }
+                    when (val userResult = loaded) {
                         is Resource.Success -> {
                             val user = userResult.data
                             authRepository.resolvedDisplayName = user.displayName

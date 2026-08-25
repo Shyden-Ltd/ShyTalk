@@ -985,12 +985,12 @@
     <string name="closing">閉会中...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">接続中...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk がサーバーにアクセスできません。インターネット接続を確認して、もう一度試してください。</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">サポートが必要な場合は、shytalk.help@gmail.com までご連絡ください。</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">問題が解決しない場合は、shytalk.help@gmail.com までご連絡ください。</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">ShyTalk のサーバーに接続できませんでした。お客様の通信環境が原因の場合もあれば、当方が原因の場合もあります。もう一度お試しください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">これは当方の問題で、お客様の問題ではありません。しばらくしてからもう一度お試しください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">繰り返し発生する場合は当方の問題です。しばらくしてからもう一度お試しください。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">お問い合わせ</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">拒否されました</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">説明</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">このデバイスはすでに別のアカウントにリンクされています。\nデバイスごとに許可されるアカウントは 1 つだけです。\n\nサポートについては、shytalk.help@gmail.com にお問い合わせください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">このデバイスはすでに別のアカウントにリンクされています。\nデバイスごとに許可されるアカウントは 1 つだけです。\n\nサポートについては shyden.co.uk をご覧ください</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">サポートされていないデバイス</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">超シャイ ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">超シャイ ✦ 一生</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">サポートが必要な場合は、shytalk.help@gmail.com までお問い合わせください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">サポートが必要な場合は、設定から「お問い合わせ」を選択してください。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">ここで異議を申し立てられない場合は、shyden.co.uk からご連絡ください</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">終了: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1662,12 +1664,46 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">サポートに問い合わせる</string>
     <string name="support_form_hint">どうされましたか。内容を確認いたします。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">相手を報告する方法</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">アプリからの報告は、対応できるモデレーションチームに直接届きます。サポートへの問い合わせでは届きません。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">相手のプロフィールを開き、「報告」をタップします。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">ルームでは、名前か写真をタップしてカードを開き、「報告」をタップします。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">ルームまたは個別チャットでメッセージを長押しし、「報告」を選びます。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">試してもできませんでしたか？</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">報告できなかった場合 — ブロックされた、メッセージが消えた、うまく動かなかった — 教えてください。私たちが代わりに報告します。</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">代わりにサポートに問い合わせる</string>
     <string name="support_form_send">送信</string>
     <string name="support_form_sent">ありがとうございます。メッセージを受け取りました。確認いたします。</string>
     <string name="support_form_error_empty">送信する前にメッセージを入力してください。</string>
     <string name="support_form_error_too_long">メッセージが長すぎます。短くしてもう一度お試しください。</string>
     <string name="support_form_error_generic">メッセージを送信できませんでした。接続を確認してもう一度お試しください。</string>
-    <string name="support_form_error_already_open">すでに対応中のお問い合わせがあります。そちらでご返信します。</string>
+    <string name="support_form_error_attachment_failed">そのファイルをアップロードできませんでした。ファイルなしでメッセージを送信できます。</string>
+    <string name="support_form_error_attachment_too_many">添付できるファイルは 10 件までです。</string>
+    <string name="support_form_error_attachment_type">この種類のファイルは添付できません。画像または動画を選んでください。</string>
+    <string name="support_category_label">どのようなご用件ですか？</string>
+    <string name="support_category_account">アカウントとログイン</string>
+    <string name="support_category_age">年齢と認証</string>
+    <string name="support_category_payment">コイン・豆・購入</string>
+    <string name="support_category_safety">安全と他のユーザー</string>
+    <string name="support_category_bug">不具合がある</string>
+    <string name="support_category_other">その他</string>
+    <string name="support_attachments_label">スクリーンショットまたは動画を追加</string>
+    <string name="support_attachment_add">ファイルを追加</string>
+    <string name="support_attachment_remove">削除</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">プレビューを閉じる</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">このファイルを開く</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">プレビューなし</string>
     <string name="age_restriction_sub_eighteen_confirm">サポートに問い合わせる</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">キャンセル</string>
@@ -1750,4 +1786,30 @@
     <string name="age_seg_age_up_welcome_pm">ようこそ — あなたのアカウントは、より幅広い ShyTalk サークルに移動しました。\n\n今後、検出やリストにさらに多くの人が表示されるようになります。アカウントが小さいサークルに属していたときに整理された以前のつながりは、自動的に復元することはできませんが、フォローしたい人を再度追加することはできます。</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">アカウントの詳細は ShyTalk スタッフによって更新されました。その結果、表示されるユーザーと部屋はより小さな円に狭められました。\n\nこれが間違いだと思われる場合は、サポートにご連絡ください。確認させていただきます。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">ありがとう。これを、すでにオープンされていたリクエストに追加しました。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">同じ問題を再度送信しても速くなりません。あなたがすでに私たちに伝えたことに対する 2 番目のリクエストは、待機している他の人の後ろ、キューの最後尾に送られます。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">それは私がすでに報告した問題です</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">新たな問題です</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">戻る</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">すでに 1 件のリクエストがオープンされています。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">すでに %1$d 件のリクエストが開かれています。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">そしてさらに %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">その画像は大きすぎます。 10MB以下のものを選んでください。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">そのビデオは長すぎます。 30秒以内のものを選んでください。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">そのビデオの長さは確認できませんでした。別のものをお試しください。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">最大 10 ファイル。画像は 10 MB まで、ビデオは 30 秒まで。</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

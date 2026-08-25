@@ -985,12 +985,12 @@
     <string name="closing">Đang đóng...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Đang kết nối...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk đang gặp sự cố khi truy cập máy chủ của chúng tôi. Vui lòng kiểm tra kết nối internet của bạn và thử lại.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Nếu bạn cần trợ giúp, hãy liên hệ với nhút nhát.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Nếu sự cố vẫn tiếp diễn, hãy liên hệ với nhút nhát.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Chúng tôi không thể kết nối tới máy chủ của ShyTalk. Có thể do kết nối của bạn, cũng có thể do chúng tôi — vui lòng thử lại.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Đây là vấn đề của chúng tôi, không phải của bạn. Vui lòng thử lại sau giây lát.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Nếu vẫn tiếp diễn thì đó là do phía chúng tôi. Vui lòng thử lại sau giây lát.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Liên hệ với chúng tôi</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Từ chối</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Sự miêu tả</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Thiết bị này đã được liên kết với một tài khoản khác.\nMỗi thiết bị chỉ được phép có một tài khoản.\n\nĐể được hỗ trợ, hãy liên hệ nhút nhát.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Thiết bị này đã được liên kết với một tài khoản khác.\nMỗi thiết bị chỉ được phép có một tài khoản.\n\nĐể được hỗ trợ, hãy truy cập shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Thiết bị không được hỗ trợ</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Siêu nhút nhát ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Siêu Nhút Nhát ✦ Trọn Đời</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Để được hỗ trợ, hãy liên hệ với nhút nhát.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Để được trợ giúp, vào Cài đặt và chọn Liên hệ với chúng tôi.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Nếu bạn không thể kháng nghị ở đây, hãy liên hệ qua shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Kết thúc: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1663,12 +1665,46 @@
     <string name="age_restriction_sub_eighteen_confirm">Liên hệ hỗ trợ</string>
     <string name="support_form_title">Liên hệ hỗ trợ</string>
     <string name="support_form_hint">Hãy cho chúng tôi biết vấn đề của bạn và chúng tôi sẽ xem xét.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Cách báo cáo một người</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Báo cáo từ trong ứng dụng sẽ đến thẳng đội kiểm duyệt, những người có thể xử lý. Yêu cầu hỗ trợ thì không.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Mở hồ sơ của họ và chạm Báo cáo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Trong phòng, chạm vào tên hoặc ảnh của họ để mở thẻ, rồi chạm Báo cáo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Nhấn giữ một tin nhắn, trong phòng hoặc trò chuyện riêng, rồi chọn Báo cáo.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Đã thử mà không được?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Nếu bạn không thể báo cáo họ — họ đã chặn bạn, tin nhắn đã biến mất, hoặc có gì đó không chạy — hãy cho chúng tôi biết và chúng tôi sẽ gửi báo cáo giúp bạn.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Liên hệ hỗ trợ thay vào đó</string>
     <string name="support_form_send">Gửi</string>
     <string name="support_form_sent">Cảm ơn bạn. Chúng tôi đã nhận được tin nhắn và sẽ xem xét.</string>
     <string name="support_form_error_empty">Vui lòng viết nội dung trước khi gửi.</string>
     <string name="support_form_error_too_long">Nội dung của bạn quá dài. Vui lòng rút ngắn rồi thử lại.</string>
     <string name="support_form_error_generic">Chúng tôi không thể gửi nội dung của bạn. Vui lòng kiểm tra kết nối và thử lại.</string>
-    <string name="support_form_error_already_open">Bạn đã có một yêu cầu đang mở. Chúng tôi sẽ trả lời trong yêu cầu đó.</string>
+    <string name="support_form_error_attachment_failed">Chúng tôi không thể tải tệp đó lên. Bạn vẫn có thể gửi nội dung mà không cần tệp.</string>
+    <string name="support_form_error_attachment_too_many">Bạn có thể đính kèm tối đa 10 tệp.</string>
+    <string name="support_form_error_attachment_type">Không thể đính kèm loại tệp này. Vui lòng chọn ảnh hoặc video.</string>
+    <string name="support_category_label">Vấn đề của bạn là gì?</string>
+    <string name="support_category_account">Tài khoản &amp; đăng nhập</string>
+    <string name="support_category_age">Tuổi &amp; xác minh</string>
+    <string name="support_category_payment">Xu, đậu &amp; giao dịch</string>
+    <string name="support_category_safety">An toàn &amp; người dùng khác</string>
+    <string name="support_category_bug">Có gì đó bị lỗi</string>
+    <string name="support_category_other">Việc khác</string>
+    <string name="support_attachments_label">Thêm ảnh chụp màn hình hoặc video</string>
+    <string name="support_attachment_add">Thêm tệp</string>
+    <string name="support_attachment_remove">Xóa</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Đóng xem trước</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Mở tệp này</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Không có xem trước</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Hủy</string>
 
@@ -1750,4 +1786,30 @@
     <string name="age_seg_age_up_welcome_pm">Xin chào — tài khoản của bạn đã chuyển sang vòng kết nối ShyTalk rộng hơn.\n\nTừ giờ trở đi, bạn sẽ bắt đầu thấy nhiều người hơn trong danh sách và khám phá. Các kết nối trước đây đã được sắp xếp gọn gàng khi tài khoản của bạn nằm trong vòng kết nối nhỏ hơn không thể được khôi phục tự động nhưng bạn có thể thêm lại bất kỳ ai mà bạn muốn theo dõi.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Thông tin tài khoản của bạn đã được nhân viên ShyTalk cập nhật. Do đó, những người và phòng hiển thị với bạn đã bị thu hẹp thành một vòng kết nối nhỏ hơn.\n\nNếu bạn cho rằng đây là sự nhầm lẫn, hãy liên hệ với bộ phận hỗ trợ và chúng tôi sẽ xem xét vấn đề đó.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Cảm ơn. Chúng tôi đã thêm thông tin này vào yêu cầu mà bạn đã mở.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Gửi lại cùng một vấn đề không làm cho nó nhanh hơn. Yêu cầu thứ hai về điều bạn đã nói với chúng tôi sẽ được đưa ra phía sau hàng đợi, phía sau những người khác đang chờ đợi.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Đó là vấn đề tôi đã báo cáo</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Đó là một vấn đề mới</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Quay lại</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Bạn đã có 1 yêu cầu mở.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Bạn đã mở %1$d yêu cầu.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">và %1$d nữa</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Hình ảnh đó quá lớn. Vui lòng chọn một cái có dung lượng dưới 10 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Video đó quá dài. Vui lòng chọn một dưới 30 giây.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Chúng tôi không thể kiểm tra thời lượng của video đó. Vui lòng thử một cái khác.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Tối đa 10 tập tin. Hình ảnh lên tới 10 MB, video lên tới 30 giây.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

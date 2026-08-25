@@ -70,7 +70,6 @@ import com.shyden.shytalk.resources.police_duck_description
 import com.shyden.shytalk.resources.sign_in
 import com.shyden.shytalk.resources.sign_out
 import com.shyden.shytalk.resources.submit_appeal
-import com.shyden.shytalk.resources.support_contact
 import com.shyden.shytalk.resources.suspension_also_device_and_network_banned
 import com.shyden.shytalk.resources.suspension_also_device_banned
 import com.shyden.shytalk.resources.suspension_also_network_banned
@@ -79,6 +78,7 @@ import com.shyden.shytalk.resources.suspension_ends_in
 import com.shyden.shytalk.resources.suspension_login_again
 import com.shyden.shytalk.resources.suspension_permanent
 import com.shyden.shytalk.resources.suspension_reason
+import com.shyden.shytalk.resources.suspension_support_contact
 import com.shyden.shytalk.resources.time_unit_day
 import com.shyden.shytalk.resources.time_unit_hour
 import com.shyden.shytalk.resources.time_unit_millisecond
@@ -356,8 +356,12 @@ fun SuspensionScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // SHY-0422: this screen is terminal -- Sign in, Sign out and the
+                // appeal box are its only controls -- so "go to Settings" is a
+                // route nobody on it can take. It gets its own string for that
+                // reason; do not merge it back into support_contact.
                 Text(
-                    text = stringResource(Res.string.support_contact),
+                    text = stringResource(Res.string.suspension_support_contact),
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

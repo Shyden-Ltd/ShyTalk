@@ -97,6 +97,8 @@ import com.shyden.shytalk.feature.shop.TransactionHistoryScreen
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletScreen
 import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.feature.support.SupportPage
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.warning.WarningScreen
 import com.shyden.shytalk.resources.*
@@ -588,6 +590,9 @@ fun NavGraph(
                     onNavigateToAgeVerification = {
                         navController.navigate(Screen.AgeVerificationSubmit.route)
                     },
+                    onNavigateToSupport = { source ->
+                        navController.navigate(Screen.Support.createRoute(source.wireValue))
+                    },
                 )
             }
 
@@ -677,6 +682,9 @@ fun NavGraph(
                     onNavigateToAgeVerification = {
                         navController.navigate(Screen.AgeVerificationSubmit.route)
                     },
+                    onNavigateToSupport = { source ->
+                        navController.navigate(Screen.Support.createRoute(source.wireValue))
+                    },
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoom?.name,
                     viewModel = chatViewModel,
@@ -723,6 +731,9 @@ fun NavGraph(
                         navController.navigate(Screen.CyberBullyingPolicy.route)
                     },
                     onNavigateToSecurity = { navController.navigate(Screen.SecuritySettings.route) },
+                    onNavigateToSupport = { source ->
+                        navController.navigate(Screen.Support.createRoute(source.wireValue))
+                    },
                     onSignOut = {
                         // Remove FCM token before signing out
                         val signOutUserId = authRepository.currentUserId
@@ -773,6 +784,29 @@ fun NavGraph(
                     onDecline = { navController.safePopBackStack() },
                     onNavigateBack = { navController.safePopBackStack() },
                     showActions = false,
+                )
+            }
+
+            composable(
+                route = Screen.Support.route,
+                arguments = listOf(navArgument("source") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                // An unrecognised source still opens support, categorised
+                // generically — being unable to reach help is worse than one
+                // ticket labelled Other.
+                // `arguments`, like every other route in this graph. The
+                // savedStateHandle form is used in SharedNavGraph but is NOT the
+                // convention here, and reading an unseeded handle would make
+                // fromWire fall back for EVERY entry point — silently turning the
+                // per-source categorisation this story adds into a constant.
+                val source = SupportSource.fromWire(backStackEntry.arguments?.getString("source"))
+                SupportPage(
+                    viewModel =
+                        org.koin.compose.viewmodel.koinViewModel {
+                            org.koin.core.parameter
+                                .parametersOf(source.category, source.context())
+                        },
+                    onBack = { navController.safePopBackStack() },
                 )
             }
 
@@ -898,6 +932,9 @@ fun NavGraph(
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
                     onNavigateToAgeVerification = {
                         navController.navigate(Screen.AgeVerificationSubmit.route)
+                    },
+                    onNavigateToSupport = { source ->
+                        navController.navigate(Screen.Support.createRoute(source.wireValue))
                     },
                     activeRoomId = groupActiveRoomId,
                     activeRoomName = groupActiveRoom?.name,

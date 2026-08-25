@@ -23,6 +23,15 @@
  * @param {number} [opts.maxAttempts=8] total attempts before giving up.
  * @param {number} [opts.backoffMs=800] delay between attempts (~7×800ms ≈ 5.6s
  *   budget covers the observed ~4s app cold-start settle).
+ * @param {number} [opts.deadlineMs=Infinity] total wall-clock budget. The
+ *   attempt COUNT alone sizes the retry correctly only while an attempt is
+ *   cheap — true of Android's `uiautomator dump`, which exits immediately when
+ *   the UI is busy, and false of an iOS read, which is an HTTP call to
+ *   WebDriverAgent bounded at 20 seconds. Eight of those is 166 seconds for a
+ *   single dump, which is what a ~312s stall in `signOutFlow` turned out to be.
+ *   Unset by default, so no existing caller changes behaviour.
+ * @param {() => number} [opts.now] injectable clock, so the budget is testable
+ *   without real time passing.
  * @param {(ms:number)=>Promise<void>} [opts.sleep] injectable delay (tests pass a no-op).
  * @returns {Promise<{ok:boolean, xml:string, attempts:number, lastErr:string}>}
  *   `{ok:true, xml, attempts}` from the first non-throwing attempt; `{ok:false,
@@ -30,15 +39,28 @@
  */
 async function dumpWithRetry(
   dumpOnce,
-  { maxAttempts = 8, backoffMs = 800, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+  {
+    maxAttempts = 8,
+    backoffMs = 800,
+    deadlineMs = Infinity,
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+    now = () => Date.now(),
+  } = {},
 ) {
   let lastErr = '';
+  const startedAt = now();
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const xml = await dumpOnce();
       return { ok: true, xml, attempts: attempt, lastErr: '' };
     } catch (e) {
       lastErr = e && e.message ? e.message : String(e);
+    }
+    // Checked AFTER the attempt, so the budget bounds time actually spent
+    // rather than time predicted. One expensive attempt is allowed; a second
+    // that would take the total past the budget is not.
+    if (now() - startedAt >= deadlineMs) {
+      return { ok: false, xml: '', attempts: attempt, lastErr };
     }
     if (attempt < maxAttempts) {
       await sleep(backoffMs);

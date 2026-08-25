@@ -81,12 +81,12 @@ import com.shyden.shytalk.core.platform.SettingsType
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import org.koin.core.parameter.parametersOf
 
 private enum class SettingsPage {
     Main,
@@ -108,6 +108,9 @@ fun AppSettingsScreen(
     onNavigateToTermsAndConditions: () -> Unit = {},
     onNavigateToCyberBullyingPolicy: () -> Unit = {},
     onNavigateToSecurity: () -> Unit,
+    // Non-defaulted (SHY-0387): the About page's Contact Us is the general way
+    // in to support, and SHY-0384 removed it precisely because it did nothing.
+    onNavigateToSupport: (SupportSource) -> Unit,
     onSignOut: () -> Unit,
     viewModel: AppSettingsViewModel = koinViewModel(),
     platformSettings: PlatformSettingsService = koinInject(),
@@ -230,6 +233,7 @@ fun AppSettingsScreen(
                     onNavigateToCyberBullyingPolicy = onNavigateToCyberBullyingPolicy,
                     onCheckForUpdates = { viewModel.checkForUpdates() },
                     onClearCache = { viewModel.requestClearCache() },
+                    onNavigateToSupport = onNavigateToSupport,
                     snackbarHostState = snackbarHostState,
                     platformSettings = platformSettings,
                 )
@@ -1670,27 +1674,12 @@ private fun AboutPage(
     onNavigateToCyberBullyingPolicy: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onClearCache: () -> Unit,
+    // Non-defaulted (SHY-0387): Contact Us lives on this page and is the general
+    // way in to support. SHY-0384 removed it because it did nothing.
+    onNavigateToSupport: (SupportSource) -> Unit,
     snackbarHostState: SnackbarHostState,
     platformSettings: PlatformSettingsService,
 ) {
-    // SHY-0385: the general way in to support, for anyone not coming from a
-    // refusal. Filed as Other, and with no `reason` -- nothing turned this person
-    // away, and inventing one would mislead whoever triages the ticket.
-    var showSupportForm by remember { mutableStateOf(false) }
-    if (showSupportForm) {
-        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
-            koinViewModel {
-                parametersOf(
-                    com.shyden.shytalk.data.repository.SupportCategory.Other,
-                    mapOf("screen" to "settings"),
-                )
-            }
-        com.shyden.shytalk.feature.support.SupportFormDialog(
-            viewModel = supportViewModel,
-            onDismiss = { showSupportForm = false },
-        )
-    }
-
     SettingsSubPage(
         title = stringResource(Res.string.about),
         onBack = onBack,
@@ -1755,7 +1744,9 @@ private fun AboutPage(
                             // a ticket an admin actions. It used to open a mail
                             // composer to an address that is not monitored --
                             // operator, 2026-08-20: there is no support mailbox.
-                            showSupportForm = true
+                            // SHY-0422 removed the address that was still printed
+                            // beside this row, which read as a mailto link.
+                            onNavigateToSupport(SupportSource.Settings)
                         }.padding(vertical = 12.dp)
                         .testTag("settings_contactUsLink"),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1763,12 +1754,6 @@ private fun AboutPage(
                 Text(
                     text = stringResource(Res.string.contact_us),
                     style = MaterialTheme.typography.bodyLarge,
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "shytalk.help@gmail.com",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary,
                 )
             }
 

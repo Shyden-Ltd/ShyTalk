@@ -77,6 +77,9 @@ describe('locale strings render as written', () => {
     // `splash_tagline` ("Voice chat rooms, reimagined.") out of all 21 locales
     // along with the screen that rendered it. A REMOVAL has to be acknowledged
     // here for the same reason an addition does.
+    // 846 -> 859 on 2026-08-21: SHY-0387 turned the support dialog into a page --
+    // three attachment errors, the category question, six category labels, and
+    // three attachment controls.
     // 838 -> 846 on 2026-08-21: SHY-0385 added the in-app support form -- title,
     // hint, send, sent, and four error strings -- to all 21 locales. Worth noting
     // for the next person: the MVP locale rule (en/zh/id/vi/th) governs which
@@ -84,7 +87,40 @@ describe('locale strings render as written', () => {
     // 16 retired `values-*` directories still exist, and this pin plus the
     // locale-parity guard require every key in every one of them until SHY-0194
     // deletes them.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([846]);
+    // 860 -> 867 on 2026-08-22: SHY-0396 replaced the refusal with a choice.
+    // OUT: `support_form_error_already_open` ("You already have a request open.
+    // We will reply to that one.") and `support_duplicate_title`, both of which
+    // said a second request would not be taken. IN: nine -- the confirmation for
+    // a message ADDED to an open request, the back-of-the-queue reminder, the
+    // three choices, and singular/plural/overflow forms of how many are open.
+    // Net 860 - 2 + 9 = 867, and every one of the 21 files agrees on it, which
+    // is what proves the removals did not silently take a neighbour with them.
+    // 867 -> 870 on 2026-08-22: SHY-0387's attachment limits, corrected by the
+    // operator. OUT: `support_form_error_attachment_too_large` ("under 25 MB"),
+    // a single flat cap over images AND video that nobody had chosen. IN: the
+    // image refusal (5 MB), the video refusal (30 seconds), the honest refusal
+    // for a video whose length could not be READ, and the limits stated up
+    // front before anybody picks a file. Net 867 - 1 + 4 = 870.
+    // 870 -> 871 on 2026-08-22: the live character counter. The message bound
+    // moved from 2,000 to 1,000 (operator), and a bound somebody only discovers
+    // when they press Send costs them what they wrote — so the field shows the
+    // count as they type.
+    // 871 -> 872 on 2026-08-24: SHY-0422. `support_contact` -- "go to Settings
+    // and choose Contact us" -- was shared by WarningScreen and SuspensionScreen.
+    // The warned person lands back in the app; the suspended person is on a
+    // terminal screen with no route to Settings, so for them that sentence names
+    // somewhere they cannot get to. Split into `suspension_support_contact`,
+    // which points at the appeal box beside it and at shyden.co.uk beyond that.
+    // 872 -> 880 on 2026-08-24: SHY-0437's report guide. Choosing "Safety &
+    // another user" now shows how to report -- profile, in-room user card, and
+    // press-and-hold on a message -- before offering a ticket. Eight strings:
+    // title, intro, three steps, and the escape hatch's heading, body and
+    // button. No step mentions reporting a ROOM, because there is no such
+    // control (SHY-0440).
+    // 880 -> 883 on 2026-08-24: SHY-0433. An attachment was a filename and
+    // nothing else; it now shows a thumbnail and opens full screen. Three
+    // strings: open, close, and what a file with no thumbnail says instead.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([883]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

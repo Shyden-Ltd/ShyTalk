@@ -984,12 +984,12 @@
     <string name="closing">Закриття...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Підключення...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk має проблеми з підключенням до наших серверів. Перевірте підключення до Інтернету та повторіть спробу.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Якщо вам потрібна допомога, пишіть на shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Якщо проблема не зникає, зверніться до shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Не вдалося зв'язатися із серверами ShyTalk. Причиною може бути ваше з'єднання або ми — спробуйте ще раз.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Це наша проблема, а не ваша. Спробуйте ще раз трохи згодом.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Якщо це повторюється, проблема на нашому боці. Спробуйте ще раз трохи згодом.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Зв'яжіться з нами</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1016,8 @@
     <string name="denied">Відмовлено</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">опис</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Цей пристрій уже пов’язано з іншим обліковим записом.\nДозволено лише один обліковий запис на одному пристрої.\n\nЩоб отримати підтримку, зв’яжіться з shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Цей пристрій уже пов’язано з іншим обліковим записом.\nДозволено лише один обліковий запис на одному пристрої.\n\nПо підтримку перейдіть на shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Пристрій не підтримується</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1259,10 @@
     <string name="super_shy_days">Супер сором'язливий ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Супер сором’язливий ✦ на все життя</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Для підтримки звертайтеся до shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">По допомогу перейдіть у Налаштування та виберіть «Зв’язатися з нами».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Якщо подати апеляцію тут не вдається, зв’яжіться з нами через shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Закінчується: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1661,12 +1663,46 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Звʼязатися з підтримкою</string>
     <string name="support_form_hint">Розкажіть, що сталося, і ми розберемося.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Як поскаржитися на людину</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Скарга з застосунку одразу потрапляє до команди модерації, яка може вжити заходів. Звернення до підтримки — ні.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Відкрийте їхній профіль і натисніть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">У кімнаті натисніть їхнє ім’я або фото, щоб відкрити картку, потім натисніть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Натисніть і утримуйте повідомлення — у кімнаті чи в приватному чаті — і виберіть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Спробували, і не вийшло?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Якщо поскаржитися не вдалося — вас заблокували, повідомлення зникло або щось не спрацювало — напишіть нам, і ми подамо скаргу за вас.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Натомість звернутися до підтримки</string>
     <string name="support_form_send">Надіслати</string>
     <string name="support_form_sent">Дякуємо. Ми отримали ваше повідомлення та розберемося.</string>
     <string name="support_form_error_empty">Напишіть повідомлення перед надсиланням.</string>
     <string name="support_form_error_too_long">Ваше повідомлення задовге. Скоротіть його та спробуйте ще раз.</string>
     <string name="support_form_error_generic">Не вдалося надіслати повідомлення. Перевірте зʼєднання та спробуйте ще раз.</string>
-    <string name="support_form_error_already_open">У вас уже є відкритий запит. Ми відповімо на нього.</string>
+    <string name="support_form_error_attachment_failed">Не вдалося завантажити цей файл. Ви можете надіслати повідомлення без нього.</string>
+    <string name="support_form_error_attachment_too_many">Можна долучити не більше 10 файлів.</string>
+    <string name="support_form_error_attachment_type">Такий файл не можна долучити. Оберіть зображення або відео.</string>
+    <string name="support_category_label">Про що ваше звернення?</string>
+    <string name="support_category_account">Обліковий запис і вхід</string>
+    <string name="support_category_age">Вік і підтвердження</string>
+    <string name="support_category_payment">Монети, боби та покупки</string>
+    <string name="support_category_safety">Безпека та інший користувач</string>
+    <string name="support_category_bug">Щось не працює</string>
+    <string name="support_category_other">Інше</string>
+    <string name="support_attachments_label">Додайте знімок екрана або відео</string>
+    <string name="support_attachment_add">Додати файл</string>
+    <string name="support_attachment_remove">Видалити</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Закрити перегляд</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Відкрити цей файл</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Без попереднього перегляду</string>
     <string name="age_restriction_sub_eighteen_confirm">Звернутися до підтримки</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Скасувати</string>
@@ -1749,4 +1785,30 @@
     <string name="age_seg_age_up_welcome_pm">Ласкаво просимо — ваш обліковий запис перейшов у ширше коло ShyTalk.\n\nВідтепер ви почнете бачити більше людей у ​​Discovery та списках. Попередні зв’язки, які були впорядковані, коли ваш обліковий запис був у меншому колі, не можна відновити автоматично, але ви можете повторно додати будь-кого, за ким хочете стежити.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Персонал ShyTalk оновив дані вашого облікового запису. У результаті видимі вам люди та кімнати було звужено до меншого кола.\n\nЯкщо ви вважаєте, що це помилка, зверніться до служби підтримки, і ми її розглянемо.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">дякую Ми додали це до вашого вже відкритого запиту.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Повторне надсилання тієї самої проблеми не пришвидшує її. Другий запит на щось, про що ви вже нам сказали, йде в кінці черги, позаду всіх, хто очікує.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Це проблема, про яку я вже повідомляв</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Це нова проблема</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Ідіть назад</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">У вас уже відкритий 1 запит.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">У вас уже є %1$d відкритих запитів.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">і ще %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Це зображення завелике. Будь ласка, виберіть один розмір менше 10 МБ.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Це відео задовге. Будь ласка, виберіть один до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Ми не змогли перевірити, скільки це відео. Будь ласка, спробуйте інший.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">До 10 файлів. Зображення до 10 МБ, відео до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

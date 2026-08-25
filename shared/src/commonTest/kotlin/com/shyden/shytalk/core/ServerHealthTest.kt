@@ -59,16 +59,51 @@ class ServerHealthTest {
     }
 
     @Test
-    fun `unknown emulator sha literal passes through for local builds`() {
-        // Local Express reports sha "unknown" (no .deployed-sha file) —
-        // the verdict passes it through; WatermarkFormat trims to 7 chars
-        // rendering "unknown", which IS the honest local answer.
+    fun `the server's unknown sentinel is absence, not a sha`() {
+        // Express answers `sha: "unknown"` when no DEPLOYED_SHA env var and
+        // no .deployed-sha file exist (src/index.js resolveDeployedSha) —
+        // i.e. "I do not know my build", which is normal on a local stack.
+        //
+        // That word is EXACTLY 7 characters, the same budget
+        // WatermarkFormat.SHA_DISPLAY_CHARS gives a short sha, so it used
+        // to survive truncation untouched and render as `api unknown`
+        // beside a GREEN dot — a line the operator could not read as
+        // anything but a contradiction (2026-08-22, journey J38 step 10).
+        // The server's vocabulary is translated to ours HERE, at the
+        // boundary, so every downstream slot sees plain absence.
         val verdict =
             ServerHealth.verdict(
                 Resource.Success(
                     BackendHealthStatus(status = "ok", firestoreAvailable = true, timestamp = 1L, sha = "unknown"),
                 ),
             )
-        assertEquals(ServerHealthVerdict(sha = "unknown", ok = true), verdict)
+        assertEquals(ServerHealthVerdict(sha = null, ok = true), verdict)
+    }
+
+    @Test
+    fun `the sentinel is rejected whatever case or padding it arrives in`() {
+        listOf("UNKNOWN", "Unknown", "  unknown  ").forEach { sentinel ->
+            val verdict =
+                ServerHealth.verdict(
+                    Resource.Success(
+                        BackendHealthStatus(status = "ok", firestoreAvailable = true, timestamp = 1L, sha = sentinel),
+                    ),
+                )
+            assertEquals(ServerHealthVerdict(sha = null, ok = true), verdict, "sentinel: <$sentinel>")
+        }
+    }
+
+    @Test
+    fun `a real sha that merely starts with the sentinel is kept`() {
+        // Guards the narrowing: rejecting a PREFIX rather than the whole
+        // value would throw away a legitimate commit whose short sha
+        // happens to begin with those letters.
+        val verdict =
+            ServerHealth.verdict(
+                Resource.Success(
+                    BackendHealthStatus(status = "ok", firestoreAvailable = true, timestamp = 1L, sha = "unknown0feed"),
+                ),
+            )
+        assertEquals(ServerHealthVerdict(sha = "unknown0feed", ok = true), verdict)
     }
 }

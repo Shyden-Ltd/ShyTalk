@@ -985,12 +985,12 @@
     <string name="closing">إغلاق...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">جارٍ الاتصال...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">يواجه ShyTalk مشكلة في الوصول إلى خوادمنا. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">إذا كنت بحاجة إلى مساعدة، تواصل مع shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">إذا استمرت المشكلة، فاتصل بـ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">تعذّر الوصول إلى خوادم ShyTalk. قد يكون السبب اتصالك، وقد يكون منّا — يُرجى المحاولة مرة أخرى.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">هذه مشكلتنا، وليست مشكلتك. يُرجى المحاولة مرة أخرى بعد قليل.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">إذا استمر الأمر، فالمشكلة لدينا. يُرجى المحاولة مرة أخرى بعد قليل.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">اتصل بنا</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">رفض</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">وصف</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">هذا الجهاز مرتبط بالفعل بحساب آخر.\nيُسمح بحساب واحد فقط لكل جهاز.\n\nللحصول على الدعم، اتصل بـ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">هذا الجهاز مرتبط بالفعل بحساب آخر.\nيُسمح بحساب واحد فقط لكل جهاز.\n\nللحصول على الدعم، تفضل بزيارة shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">الجهاز غير مدعوم</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">خجول للغاية ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">سوبر خجولة ✦ مدى الحياة</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">للحصول على الدعم، اتصل بـ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">للحصول على المساعدة، انتقل إلى الإعدادات واختر "اتصل بنا".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">إذا لم تتمكن من تقديم استئناف هنا، تواصل معنا عبر shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">ينتهي: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1662,12 +1664,46 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">اتصل بالدعم</string>
     <string name="support_form_hint">أخبرنا بما حدث وسنقوم بمراجعته.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">كيفية الإبلاغ عن شخص</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">الإبلاغ من داخل التطبيق يصل مباشرة إلى فريق الإشراف الذي يمكنه التصرف بشأنه. طلب الدعم لا يفعل ذلك.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">افتح ملفهم الشخصي واضغط على "إبلاغ".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">داخل الغرفة، اضغط على اسمهم أو صورتهم لفتح بطاقتهم، ثم اضغط على "إبلاغ".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">اضغط مطولاً على رسالة، في غرفة أو محادثة خاصة، ثم اختر "إبلاغ".</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">حاولت ولم تستطع؟</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">إذا لم تتمكن من الإبلاغ عنهم — حظروك، أو اختفت الرسالة، أو لم ينجح شيء ما — أخبرنا وسنقدّم البلاغ نيابةً عنك.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">تواصل مع الدعم بدلاً من ذلك</string>
     <string name="support_form_send">إرسال</string>
     <string name="support_form_sent">شكرًا لك. لقد استلمنا رسالتك وسنقوم بمراجعتها.</string>
     <string name="support_form_error_empty">يرجى كتابة رسالة قبل الإرسال.</string>
     <string name="support_form_error_too_long">رسالتك طويلة جدًا. يرجى اختصارها والمحاولة مرة أخرى.</string>
     <string name="support_form_error_generic">تعذر إرسال رسالتك. يرجى التحقق من اتصالك والمحاولة مرة أخرى.</string>
-    <string name="support_form_error_already_open">لديك بالفعل طلب مفتوح. سنرد عليه.</string>
+    <string name="support_form_error_attachment_failed">تعذّر رفع هذا الملف. يمكنك إرسال رسالتك بدونه.</string>
+    <string name="support_form_error_attachment_too_many">يمكنك إرفاق 10 ملفات كحد أقصى.</string>
+    <string name="support_form_error_attachment_type">لا يمكن إرفاق هذا النوع من الملفات. يرجى اختيار صورة أو فيديو.</string>
+    <string name="support_category_label">ما موضوع طلبك؟</string>
+    <string name="support_category_account">الحساب وتسجيل الدخول</string>
+    <string name="support_category_age">العمر والتحقق</string>
+    <string name="support_category_payment">العملات والفاصولياء والمشتريات</string>
+    <string name="support_category_safety">الأمان ومستخدم آخر</string>
+    <string name="support_category_bug">هناك خلل ما</string>
+    <string name="support_category_other">شيء آخر</string>
+    <string name="support_attachments_label">أضف لقطة شاشة أو فيديو</string>
+    <string name="support_attachment_add">إضافة ملف</string>
+    <string name="support_attachment_remove">إزالة</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">إغلاق المعاينة</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">فتح هذا الملف</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">لا توجد معاينة</string>
     <string name="age_restriction_sub_eighteen_confirm">التواصل مع الدعم</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">إلغاء</string>
@@ -1750,4 +1786,30 @@
     <string name="age_seg_age_up_welcome_pm">مرحبًا — لقد انتقل حسابك إلى دائرة ShyTalk الأوسع.\n\nستبدأ في رؤية المزيد من الأشخاص قيد الاكتشاف والقوائم من الآن فصاعدًا. لا يمكن استعادة الاتصالات السابقة التي تم تنظيمها أثناء وجود حسابك في الدائرة الأصغر تلقائيًا، ولكن يمكنك إعادة إضافة أي شخص تريد متابعته.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">تم تحديث تفاصيل حسابك بواسطة موظفي ShyTalk. ونتيجة لذلك، تم تضييق نطاق الأشخاص والغرف المرئية لك إلى دائرة أصغر.\n\nإذا كنت تعتقد أن هذا خطأ، فاتصل بالدعم وسنراجعه.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">شكرًا. لقد أضفنا هذا إلى الطلب الذي قمت بفتحه بالفعل.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">إرسال نفس المشكلة مرة أخرى لا يجعلها أسرع. الطلب الثاني لشيء أخبرتنا به بالفعل يذهب إلى الجزء الخلفي من قائمة الانتظار، خلف الجميع الذين ينتظرون.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">هذه هي المشكلة التي أبلغت عنها بالفعل</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">إنها مشكلة جديدة</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">عُد</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">لديك بالفعل طلب واحد مفتوح.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">لديك بالفعل %1$d طلب مفتوح.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">و%1$d أخرى</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">هذه الصورة كبيرة جدًا. الرجاء اختيار واحد أقل من 10 ميغابايت.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">هذا الفيديو طويل جدًا. يرجى اختيار واحد أقل من 30 ثانية.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">لم نتمكن من التحقق من مدة هذا الفيديو. يرجى تجربة واحدة مختلفة.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">ما يصل إلى 10 ملفات. صور يصل حجمها إلى 10 ميغابايت، ومقاطع فيديو تصل مدتها إلى 30 ثانية.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

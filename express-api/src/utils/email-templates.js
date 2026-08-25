@@ -107,7 +107,7 @@ function buildDeletionScheduledEmail(date) {
     <p style="margin:0 0 8px;color:#d0d0e0;">Hi there,</p>
     <p style="margin:0 0 12px;color:#d0d0e0;">Your ShyTalk account has been scheduled for deletion. All your data will be permanently deleted on <strong style="color:#fff;">${date}</strong>.</p>
     <p style="margin:0 0 12px;color:#d0d0e0;">If you did not request this, sign in to ShyTalk before ${date} to cancel.</p>
-    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you have any questions, contact <a href="mailto:shytalk.help@gmail.com" style="color:#8b7fff;">shytalk.help@gmail.com</a></p>
+    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you have any questions, open <strong style="color:#fff;">Settings &rarr; Contact us</strong> in the app and we will pick it up.</p>
   `);
   return { subject: 'Your ShyTalk account is scheduled for deletion', html };
 }
@@ -116,7 +116,7 @@ function buildDeletionCompleteEmail() {
   const html = wrapTemplate(`
     <p style="margin:0 0 8px;color:#d0d0e0;">Hi there,</p>
     <p style="margin:0 0 12px;color:#d0d0e0;">Your ShyTalk account and all associated data have been permanently deleted.</p>
-    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you believe this was an error, contact <a href="mailto:shytalk.help@gmail.com" style="color:#8b7fff;">shytalk.help@gmail.com</a></p>
+    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you believe this was an error, get in touch through <strong style="color:#fff;">shyden.co.uk</strong> &mdash; your account is closed, so you will not be able to sign in.</p>
   `);
   return { subject: 'Your ShyTalk account has been deleted', html };
 }
@@ -145,7 +145,7 @@ function buildDataExportReadyEmail(downloadUrl, expiresAt, partial = false, fail
       <a href="${downloadUrl}" style="display:inline-block;background:#8b7fff;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;">Download Your Data</a>
     </div>
     <p style="margin:0 0 12px;color:#7a7a9e;font-size:13px;">This link expires on ${expiresAt}. After that, you can request a new export.</p>
-    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you have any questions, contact <a href="mailto:shytalk.help@gmail.com" style="color:#8b7fff;">shytalk.help@gmail.com</a></p>
+    <p style="margin:0;color:#7a7a9e;font-size:13px;">If you have any questions, open <strong style="color:#fff;">Settings &rarr; Contact us</strong> in the app and we will pick it up.</p>
   `);
   const subject = partial
     ? 'Your ShyTalk data export is ready (partial)'

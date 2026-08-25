@@ -131,8 +131,38 @@ test.describe("Preview watermark — git identity lines (SHY-0205)", () => {
   }) => {
     await page.goto("/");
     const watermark = page.locator("#preview-watermark");
-    await expect(watermark).toContainText(/api (unknown|[0-9a-f?]{1,7})/);
+    await expect(watermark).toContainText(/api [0-9a-f?]{1,7}(\s|$)/);
     await expect(watermark).toContainText("●");
+  });
+
+  test("the api slot never shows the server's own `unknown` sentinel", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const watermark = page.locator("#preview-watermark");
+    // Waiting for GREEN first is the point: it proves the health poll
+    // completed and its payload reached the badge. Asserting the slot
+    // before that would pass on the pre-poll placeholder and prove
+    // nothing at all.
+    await expect
+      .poll(
+        async () =>
+          watermark
+            .locator("span")
+            .first()
+            .evaluate((el) => window.getComputedStyle(el).color),
+        { timeout: 10_000 },
+      )
+      .toBe("rgb(102, 187, 106)");
+    // Nothing is mocked here. The LOCAL stack genuinely answers
+    // `sha: "unknown"` — no DEPLOYED_SHA env var and no .deployed-sha
+    // file (express-api/src/index.js, resolveDeployedSha). That word is
+    // exactly 7 characters, the same budget a short sha gets, so it used
+    // to survive `slice(0, 7)` intact and render as `api unknown` beside
+    // this green dot. Operator, journey J38, 2026-08-22: the two halves
+    // of that line contradict each other.
+    await expect(watermark).not.toContainText("api unknown");
+    await expect(watermark).toContainText("api ?");
   });
 
   test("live local stack turns the dot green", async ({ page }) => {

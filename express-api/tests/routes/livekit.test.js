@@ -197,6 +197,10 @@ describe('POST /api/livekit/token (real services + real auth)', () => {
   });
 
   test('403 when the caller has no profile (no users doc → uniqueId null)', async () => {
+    // Refused by the MIDDLEWARE now, before the route runs (SHY-0426). It used
+    // to reach livekit.js, which looked the profile up, failed, and answered
+    // "User profile not found" — a fair message from a route that should never
+    // have been given a null identity to work with in the first place.
     const noProfile = await mintTokenWithoutUserDoc({ cohort: 'adult' });
     const app = createApp();
     const res = await request(app)
@@ -204,7 +208,7 @@ describe('POST /api/livekit/token (real services + real auth)', () => {
       .set(noProfile.headers)
       .send({ roomName: 'room-1' })
       .expect(403);
-    expect(res.body.error).toBe('User profile not found');
+    expect(res.body).toMatchObject({ code: 'no_identity' });
   });
 
   test('404 (opaque) when roomName fails the charset pattern', async () => {

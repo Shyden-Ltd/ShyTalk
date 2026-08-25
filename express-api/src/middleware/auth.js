@@ -292,11 +292,90 @@ async function authMiddleware(req, res, next) {
       }
     }
 
+    if (!hasResolvedIdentity(uniqueId) && !allowsMissingIdentity(req)) {
+      req.__authUid = uid;
+      return rejectMissingIdentity(req, res);
+    }
+
     req.auth = { uid, uniqueId, token: decoded };
     next();
   } catch (err) {
     return rejectStandingUnavailable(req, res, err);
   }
+}
+
+/**
+ * Routes that legitimately run before a `uniqueId` exists (SHY-0426).
+ *
+ * Everything else is refused when the account cannot be identified. This is
+ * the whole allowlist, kept short deliberately so it can be read and argued
+ * with — the alternative was a guard in each of 30 route files, which is 30
+ * chances to miss one and 30 more for every route added afterwards.
+ *
+ * Matched on METHOD and EXACT path: `GET /users` is a listing and has no
+ * business running without an identity, and `/users/50000010/appeal` must not
+ * inherit `/users`'s exemption by prefix.
+ */
+const PRE_IDENTITY_ROUTES = [
+  // Creates the account. There is no identity yet, by definition.
+  { method: 'POST', path: '/users' },
+  // May be what creates the document for a Firebase account that authenticated
+  // first.
+  { method: 'POST', path: '/users/sign-in' },
+  // Device binding, which runs in the SIGN-IN flow before any account exists —
+  // it is how the app learns whether this handset is already locked to
+  // somebody. Already carved out of the ban gate for the same reason.
+  { method: 'POST', path: '/devices/lock-check' },
+  // How the app LEARNS it is banned. Gating it would replace the ban screen
+  // with a generic error while enforcing nothing; it is a verdict channel, not
+  // an abuse-capable action. Also already carved out of the ban gate.
+  { method: 'POST', path: '/device-info' },
+  { method: 'GET', path: '/device-info' },
+];
+
+/**
+ * Is this a real account identifier, or the absence of one?
+ *
+ * PRESENCE, deliberately — not `Number.isInteger`. The defect is that `null`
+ * collapses every unidentified caller into one "account" because
+ * `null === null`. That is what this refuses. Insisting on an integer would
+ * ALSO change an unrelated contract: the codebase is inconsistent about
+ * whether a uniqueId is a number or a string (the seeded personas use numbers,
+ * several suites use strings), so a type gate here would lock out real callers
+ * for a reason nobody asked about.
+ */
+function hasResolvedIdentity(uniqueId) {
+  if (uniqueId === null || uniqueId === undefined) return false;
+  if (typeof uniqueId === 'string') return uniqueId.trim() !== '';
+  return typeof uniqueId === 'number' ? Number.isFinite(uniqueId) : Boolean(uniqueId);
+}
+
+/** Fails CLOSED: an unrecognised request shape is not a way through. */
+function allowsMissingIdentity(req) {
+  const method = req?.method;
+  const path = req?.path;
+  if (typeof method !== 'string' || typeof path !== 'string') return false;
+  return PRE_IDENTITY_ROUTES.some((r) => r.method === method && r.path === path);
+}
+
+/**
+ * Refuse a caller whose account could not be identified.
+ *
+ * A distinct code, not a generic 401: the credential was fine, and the client
+ * needs to tell "sign in again" from "your account is in a state we cannot
+ * resolve" — the second is a bug report, not a retry.
+ *
+ * Shared by both middlewares rather than written twice; byte-identical blocks
+ * in this file are exactly how one of them gets a fix the other does not
+ * (SHY-0308).
+ */
+function rejectMissingIdentity(req, res) {
+  log.warn('auth', 'Refused a caller with no resolved identity', {
+    uid: req.auth?.uid || req.__authUid,
+    method: req.method,
+    path: req.path,
+  });
+  res.status(403).json({ error: 'Your account could not be identified', code: 'no_identity' });
 }
 
 /**
@@ -441,6 +520,11 @@ async function authMiddlewareStrict(req, res, next) {
       }
     }
 
+    if (!hasResolvedIdentity(uniqueId) && !allowsMissingIdentity(req)) {
+      req.__authUid = uid;
+      return rejectMissingIdentity(req, res);
+    }
+
     req.auth = { uid, uniqueId, token: decoded };
     next();
   } catch (err) {
@@ -581,6 +665,9 @@ function updateUniqueIdCache(uid, uniqueId) {
 
 module.exports = {
   authMiddleware,
+  allowsMissingIdentity,
+  hasResolvedIdentity,
+  PRE_IDENTITY_ROUTES,
   authMiddlewareStrict,
   requireAdmin,
   isLiveAdmin,

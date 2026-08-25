@@ -92,6 +92,7 @@ import com.shyden.shytalk.feature.room.components.SeatGrid
 import com.shyden.shytalk.feature.room.components.UserCardPopup
 import com.shyden.shytalk.feature.settings.RoomSettingsSheet
 import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.components.seasonal.SeasonalBackground
@@ -118,6 +119,9 @@ fun RoomScreen(
     // compliance CTA. A default let a call site omit it and ship a dead-end
     // button; without one the compiler enforces every host wires it.
     onNavigateToAgeVerification: () -> Unit,
+    // Non-defaulted for the same reason (SHY-0387): this room shows the age wall
+    // AND hosts the private-chat sheet, so it is the route to support for both.
+    onNavigateToSupport: (SupportSource) -> Unit,
     viewModel: RoomViewModel = koinViewModel { parametersOf(roomId) },
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -1142,6 +1146,7 @@ fun RoomScreen(
                             pmStickerResultHandler = { bytes -> vm.addStickerFromImage(bytes) }
                             launchStickerPicker?.invoke()
                         },
+                        onNavigateToSupport = onNavigateToSupport,
                         activeRoomId = roomId,
                         activeRoomName = uiState.room?.name,
                     )
@@ -1275,37 +1280,15 @@ fun RoomScreen(
     // SHY-0385: "Contact support" opens the in-app form, which raises a ticket an
     // admin actions. The age dialog closes first -- two stacked dialogs would be
     // confusing, and the person has already read the explanation.
-    var showSupportForm by remember { mutableStateOf(false) }
     com.shyden.shytalk.feature.ageverification.AgeRestrictionDialog(
         state = gachaAgeRestrictionState,
         onDismiss = { gachaViewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
         onContactSupport = {
             gachaViewModel.dismissAgeRestrictionDialog()
-            showSupportForm = true
+            onNavigateToSupport(SupportSource.LuckySpinAgeWall)
         },
     )
-
-    if (showSupportForm) {
-        // The context tells an admin where this came from, so the person does not
-        // have to explain that the wheel refused them. Only the keys in the
-        // server's CONTEXT_ALLOWED_FIELDS survive; anything else is dropped there.
-        val supportViewModel: com.shyden.shytalk.feature.support.SupportFormViewModel =
-            org.koin.compose.viewmodel.koinViewModel {
-                parametersOf(
-                    com.shyden.shytalk.data.repository.SupportCategory.Age,
-                    mapOf(
-                        "feature" to "lucky_spin",
-                        "reason" to "age_restriction",
-                        "screen" to "room",
-                    ),
-                )
-            }
-        com.shyden.shytalk.feature.support.SupportFormDialog(
-            viewModel = supportViewModel,
-            onDismiss = { showSupportForm = false },
-        )
-    }
 
     // B3 — room message report dialog (UK OSA per-message reporting).
     // Shown when a non-self TEXT message is long-pressed. The dialog itself

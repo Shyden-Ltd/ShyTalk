@@ -16,6 +16,32 @@ data class WatermarkContent(
 )
 
 /**
+ * How much of the badge to render (SHY-0430).
+ *
+ * The badge is drawn OVER the app, so every line it adds is a line of
+ * the product's own copy somebody cannot read. Which lines are worth
+ * that depends entirely on the surface:
+ *
+ * - [FULL] — the web badge. A browser window has room to spare beside
+ *   the content, and the web matrix runner reads the UID line straight
+ *   off its screenshots to tell a signed-out cell from a broken one.
+ * - [COMPACT] — the phone badge. On a handset the eight-line form
+ *   reached down into body copy: on the duplicate-request screen it
+ *   covered the "goes to the back of the queue" sentence that journey
+ *   J38 step 10 asserts on, so the frame could not evidence the claim
+ *   pinned to it (operator, 2026-08-22). It keeps which build and which
+ *   account, and nothing else — see [WatermarkFormat.content].
+ *
+ * Deliberately has no default anywhere. The two surfaces have drifted
+ * apart on purpose, and a default is how they would silently drift
+ * back together.
+ */
+enum class WatermarkVerbosity {
+    FULL,
+    COMPACT,
+}
+
+/**
  * Pure formatting for the compact preview watermark. No BuildVariant /
  * QaContext reads in here — callers pass plain values so every rule
  * (truncation, dirty star, conditional lines, line budget) is testable
@@ -23,8 +49,12 @@ data class WatermarkContent(
  *
  * Compactness contract (operator ruling 2026-07-18): the badge must not
  * eat the app. Enforced shape:
- * - title + status + ≤7 detail lines ⇒ [MAX_LINES_FULL] total,
- *   [MAX_LINES_IDLE] when signed out with no journey running;
+ * - [WatermarkVerbosity.COMPACT] — title + status + build identity +
+ *   account ⇒ [MAX_LINES_COMPACT] total. What the phone renders
+ *   (SHY-0430).
+ * - [WatermarkVerbosity.FULL] — title + status + ≤7 detail lines ⇒
+ *   [MAX_LINES_FULL] total, [MAX_LINES_IDLE] when signed out with no
+ *   journey running. What the web badge renders.
  * - pair related facts on one line (`env · version · api`, `UID · cohort`,
  *   `locale · route`) instead of one line each;
  * - lines with nothing to say disappear entirely (never a blank or a
@@ -39,6 +69,13 @@ object WatermarkFormat {
 
     /** Signed out, no journey, no route: title + status + 5 detail lines. */
     const val MAX_LINES_IDLE: Int = 7
+
+    /**
+     * [WatermarkVerbosity.COMPACT]: title + status + build identity +
+     * account. Four lines is half the height FULL occupied, which on the
+     * reported screen clears the heading and the body paragraph entirely.
+     */
+    const val MAX_LINES_COMPACT: Int = 4
 
     private const val SHA_DISPLAY_CHARS = 7
     private const val UNKNOWN = "?"
@@ -83,6 +120,7 @@ object WatermarkFormat {
         route: String?,
         journeyMarker: String?,
         serverSha: String?,
+        verbosity: WatermarkVerbosity,
     ): WatermarkContent {
         val serverPart = serverSha?.takeIf { it.isNotBlank() }?.take(SHA_DISPLAY_CHARS) ?: UNKNOWN
         val statusLine = "$environment · $buildVersion · api $serverPart"
@@ -109,15 +147,47 @@ object WatermarkFormat {
             ).joinToString(" · ").takeIf { it.isNotEmpty() }
 
         val detailLines =
-            listOfNotNull(
-                truncateMiddle(gitBranch.ifBlank { UNKNOWN }, MAX_BRANCH_CHARS),
-                shaLine,
-                deviceInfo,
-                uidLine,
-                displayName?.takeIf { it.isNotBlank() }?.let { "Name: $it" },
-                localeRouteLine,
-                journeyMarker?.takeIf { it.isNotBlank() }?.let { "▶ $it" },
-            )
+            when (verbosity) {
+                // WHICH BUILD and WHICH ACCOUNT. Nothing else earns a line
+                // of somebody else's screen.
+                //
+                // Both are load-bearing rather than nice to have. The sha is
+                // the only evidence of the binary actually INSTALLED —
+                // reading git in the worktree proves what was BUILT. And the
+                // device journeys parse the account line: `signInAs` and
+                // J38's "the phone is signed in as the account we seeded"
+                // step both read `UID: <digits>` straight out of this badge,
+                // so it is a contract with the runner, not decoration.
+                //
+                // Dropped, with reasons:
+                //   branch  — the sha identifies the build authoritatively;
+                //             a branch name moves and does not.
+                //   device  — the run report's header names it.
+                //   NAME    — the longest line in the badge, and the one
+                //             that forced its width. It is also the only
+                //             genuinely personal field: on a non-seed device
+                //             it burns a real person's display name into
+                //             every frame of whatever the recording is
+                //             shared with. The account id above identifies
+                //             them for support purposes without doing that.
+                //   locale
+                //   /route  — useful while debugging by hand, not worth
+                //             covering copy on an unattended walk.
+                //   marker  — no producer sets it on device; SHY-0206's
+                //             channels never landed.
+                WatermarkVerbosity.COMPACT -> listOf(shaLine, uidLine)
+
+                WatermarkVerbosity.FULL ->
+                    listOfNotNull(
+                        truncateMiddle(gitBranch.ifBlank { UNKNOWN }, MAX_BRANCH_CHARS),
+                        shaLine,
+                        deviceInfo,
+                        uidLine,
+                        displayName?.takeIf { it.isNotBlank() }?.let { "Name: $it" },
+                        localeRouteLine,
+                        journeyMarker?.takeIf { it.isNotBlank() }?.let { "▶ $it" },
+                    )
+            }
 
         return WatermarkContent(
             title = "ShyTalk Preview",

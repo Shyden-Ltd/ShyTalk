@@ -26,6 +26,7 @@
 const zipArchivePromise = import('archiver').then((m) => m.ZipArchive);
 const { db } = require('./firebase');
 const { queryDocs } = require('./firestore-helpers');
+const { supportTicketForExport } = require('./support-export');
 const log = require('./log');
 const { buildReadme } = require('./data-export-readme-i18n');
 
@@ -322,6 +323,28 @@ async function buildDataExport(uniqueId) {
     recordFailure('reports', err);
   }
 
+  // Support tickets the person raised (SHY-0421).
+  //
+  // Their own words about their own account — the one user→admin queue the
+  // export used to miss, while reports and appeals were both already here.
+  // Their FOLLOW-UPS come too: SHY-0396 added them to the same documents, and
+  // they are equally the person's own writing.
+  //
+  // Ownership filter is the whole safety of this section: a support queue
+  // holds other people's words.
+  let supportTickets = [];
+  try {
+    const supportSnap = await db.collection('supportTickets').where('userId', '==', uniqueId).get();
+    supportTickets = supportSnap.docs
+      .map((d) => supportTicketForExport({ ...d.data(), id: d.id }))
+      .filter(Boolean);
+  } catch (err) {
+    // Recorded the way `reports` and `appeals` failures already are, so a
+    // short export is visible rather than silent. An export that quietly omits
+    // a category is a wrong answer given with confidence.
+    recordFailure('supportTickets', err);
+  }
+
   // Appeals
   let appeals = [];
   try {
@@ -526,6 +549,11 @@ async function buildDataExport(uniqueId) {
     });
     archive.append(JSON.stringify(appeals, null, 2), {
       name: 'reports/appeals.json',
+    });
+    // Always written, even when empty: the difference between "nothing to
+    // show" and "we did not look" has to be visible in the export itself.
+    archive.append(JSON.stringify(supportTickets, null, 2), {
+      name: 'support/support-tickets.json',
     });
     archive.append(JSON.stringify(deviceBindings, null, 2), {
       name: 'devices/device-bindings.json',

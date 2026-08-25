@@ -127,6 +127,8 @@ jobs:
           echo "::error::MinIO/Mailpit did not become ready within 60s"
           exit 1
 
+      - uses: ./.github/actions/install-ffmpeg
+
       - name: Run Express API tests with coverage
         # `--experimental-vm-modules` lets Jest resolve dynamic `import()`
         # callbacks (data-export-builder.js uses `import('archiver')` since

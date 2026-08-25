@@ -148,7 +148,22 @@ function createSweepHandler(name, sweepFn) {
 
 const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', accountDeletion);
 
+// Support-ticket retention: closed tickets seven days after closure, taking
+// their attachments with them, and uploads nobody ever sent (SHY-0436,
+// SHY-0435). Both delete personal data — screenshots of private conversations,
+// photographs of other people — so both belong on a schedule rather than
+// waiting for somebody to remember.
+const sweepSupportRetentionHandler = createSweepHandler('sweep-support-retention', () =>
+  // Required HERE, not at module load. `cron/supportRetention` pulls in
+  // utils/firebase, which exits the process when the environment is not set
+  // up — so a top-level import makes this whole route file unloadable in every
+  // suite that does not happen to mock firebase, including ones that have
+  // nothing to do with support.
+  require('../cron/supportRetention').sweepSupportRetention(),
+);
+
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
+router.post('/system/sweep-support-retention', requireSystemAuth, sweepSupportRetentionHandler);
 
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
 // code can't accidentally clobber the in-flight flags. Calls each
@@ -156,6 +171,7 @@ router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDe
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
     sweepAccountDeletions._reset();
+    sweepSupportRetentionHandler._reset();
   };
 }
 

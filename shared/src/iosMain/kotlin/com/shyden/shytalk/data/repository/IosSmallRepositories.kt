@@ -15,12 +15,14 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.contentType
 import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -545,10 +547,11 @@ class IosAgeVerificationRepositoryImpl(
 /**
  * iOS side of raising a support ticket.
  *
- * The 409 mapping is the only interesting part: the server refuses a second
- * ticket while one is still open, and that is not a failure a retry can fix.
- * Matched on `statusCode` rather than on the server's English message, so it
- * survives a rewording and works for somebody reading the app in any language.
+ * SHY-0396 removed the 409 mapping that used to live here, in step with Android
+ * and with the server. A second request is never refused now — refusing one
+ * meant a genuinely DIFFERENT problem reached nobody. The form asks first, using
+ * [openTickets], and [addToTicket] is the answer to "it is the problem I already
+ * reported".
  */
 class IosSupportRepositoryImpl(
     private val api: IosApiClient,
@@ -557,12 +560,29 @@ class IosSupportRepositoryImpl(
         message: String,
         category: SupportCategory?,
         context: Map<String, String>,
+        attachments: List<String>,
     ): RaiseTicketOutcome =
         try {
             val fields = mutableMapOf<String, JsonElement>("message" to JsonPrimitive(message))
             category?.let { fields["category"] = JsonPrimitive(it.wireValue) }
-            if (context.isNotEmpty()) {
-                fields["context"] = JsonObject(context.mapValues { JsonPrimitive(it.value) })
+            // Same two fields Android fills in, for the same reason: an admin
+            // should not have to ask which platform and which build.
+            val enriched =
+                context +
+                    mapOf(
+                        "platform" to "ios",
+                        "appVersion" to
+                            (
+                                platform.Foundation.NSBundle.mainBundle
+                                    .objectForInfoDictionaryKey("CFBundleShortVersionString") as? String
+                                    ?: "unknown"
+                            ),
+                    )
+            fields["context"] = JsonObject(enriched.mapValues { JsonPrimitive(it.value) })
+            // Absent rather than empty, matching Android and every other optional
+            // in this payload.
+            if (attachments.isNotEmpty()) {
+                fields["attachments"] = JsonArray(attachments.map { JsonPrimitive(it) })
             }
 
             val resp = api.post("/api/support-tickets", JsonObject(fields))
@@ -583,12 +603,8 @@ class IosSupportRepositoryImpl(
             // It must stay ABOVE the broad catch below.
             throw e
         } catch (e: ApiException) {
-            if (e.statusCode == HTTP_CONFLICT_SUPPORT) {
-                RaiseTicketOutcome.AlreadyOpen
-            } else {
-                // ApiException.message is non-nullable on iOS, so no elvis here.
-                RaiseTicketOutcome.Failed(e.message)
-            }
+            // ApiException.message is non-nullable on iOS, so no elvis here.
+            RaiseTicketOutcome.Failed(e.message)
         } catch (e: Exception) {
             // A Ktor transport failure is not an ApiException, so a dropped
             // connection used to escape this repository entirely and take the app
@@ -597,7 +613,131 @@ class IosSupportRepositoryImpl(
             logW(TAG_SUPPORT, "Support ticket failed unexpectedly: ${e.message}")
             RaiseTicketOutcome.Failed(e.message ?: "Support request failed")
         }
+
+    /**
+     * SHY-0396 — what this person still has open, for the duplicate warning.
+     *
+     * Null on ANY failure, deliberately distinct from an empty list: the caller
+     * has to tell "you have nothing open" from "we could not find out".
+     */
+    override suspend fun openTickets(): OpenTicketsView? =
+        try {
+            val resp = api.get("/api/support-tickets/mine/open")
+            val rows = resp["tickets"] as? JsonArray ?: JsonArray(emptyList())
+            // Absent rather than guessed: the server omits the count when it
+            // could not determine one, and falling back to the list length is
+            // the very defect SHY-0424 is about.
+            val count = resp["openCount"]?.jsonPrimitive?.intOrNull
+            val summaries =
+                rows.mapNotNull { row ->
+                    val obj = row as? JsonObject ?: return@mapNotNull null
+                    val id = obj["ticketId"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                    // A row with no id is a row nothing can be added to, so it is
+                    // dropped rather than offered as an unusable choice.
+                    if (id.isBlank()) {
+                        null
+                    } else {
+                        OpenTicketSummary(
+                            ticketId = id,
+                            category = SupportCategory.fromWire(obj["category"]?.jsonPrimitive?.contentOrNull),
+                            summary = obj["summary"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+                        )
+                    }
+                }
+            OpenTicketsView(summaries = summaries, openCount = count)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Could not list open support tickets: ${e.message}")
+            null
+        }
+
+    override suspend fun addToTicket(
+        ticketId: String,
+        message: String,
+    ): Boolean =
+        try {
+            api.post(
+                "/api/support-tickets/$ticketId/messages",
+                JsonObject(mapOf("message" to JsonPrimitive(message))),
+            )
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // False rather than a throw: the caller keeps the person's text on
+            // screen and lets them try again, which is the only useful response.
+            logW(TAG_SUPPORT, "Could not add to support ticket $ticketId: ${e.message}")
+            false
+        }
+
+    /**
+     * SHY-0434 — a removed attachment must leave the object store.
+     *
+     * Best-effort by contract: `false` tells the caller it is still there, and
+     * the caller still takes it off the form. Refusing to let go of a file
+     * somebody has decided against would leave them unable to send at all.
+     */
+    override suspend fun deleteAttachment(r2Key: String): Boolean =
+        try {
+            api.delete("/api/support-tickets/attachments", JsonObject(mapOf("r2Key" to JsonPrimitive(r2Key))))
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Attachment delete failed: ${e.message}")
+            false
+        }
+
+    override suspend fun requestAttachmentUpload(contentType: AttachmentType): UploadHandle? =
+        try {
+            val body = JsonObject(mapOf("contentType" to JsonPrimitive(contentType.wireValue)))
+            val resp = api.post("/api/support-tickets/upload-url", body)
+            val uploadUrl = resp["uploadUrl"]?.jsonPrimitive?.contentOrNull
+            val r2Key = resp["r2Key"]?.jsonPrimitive?.contentOrNull
+            // `parseResponse` answers an EMPTY object for a non-JSON 2xx rather
+            // than throwing, so a missing field here is indistinguishable from a
+            // captive portal. Null either way -- there is no upload to attempt.
+            if (uploadUrl.isNullOrEmpty() || r2Key.isNullOrEmpty()) {
+                logW(TAG_SUPPORT, "Attachment upload URL response was missing its fields")
+                null
+            } else {
+                UploadHandle(uploadUrl, r2Key, resp["expiresInSec"]?.jsonPrimitive?.int ?: 300)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Attachment upload URL refused: ${e.message}")
+            null
+        }
+
+    override suspend fun uploadAttachment(
+        uploadUrl: String,
+        contentType: AttachmentType,
+        bytes: ByteArray,
+    ): Boolean {
+        val client = io.ktor.client.HttpClient()
+        return try {
+            // The signed URL IS the auth -- no token. The Content-Type must match
+            // what the URL was signed for or R2 refuses the object.
+            val response =
+                client.put(uploadUrl) {
+                    contentType(
+                        io.ktor.http.ContentType
+                            .parse(contentType.wireValue),
+                    )
+                    setBody(bytes)
+                }
+            response.status.value in 200..299
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logW(TAG_SUPPORT, "Attachment upload failed: ${e.message}")
+            false
+        } finally {
+            client.close()
+        }
+    }
 }
 
-private const val HTTP_CONFLICT_SUPPORT = 409
 private const val TAG_SUPPORT = "SupportRepository"

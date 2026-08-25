@@ -985,12 +985,12 @@
     <string name="closing">Kapanıyor...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Bağlanıyor...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk sunucularımıza ulaşmada sorun yaşıyor. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Yardıma ihtiyacınız olursa, utangaçtalk.help@gmail.com ile iletişime geçin.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Sorun devam ederse, utangaçtalk.help@gmail.com ile iletişime geçin.</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">ShyTalk sunucularına ulaşamadık. Bunun nedeni bağlantınız olabilir ya da biz olabiliriz — lütfen tekrar deneyin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_help">Bu bizim sorunumuz, sizin değil. Lütfen birazdan tekrar deneyin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="contact_support_hint">Devam ederse sorun bizde demektir. Lütfen birazdan tekrar deneyin.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Bize Ulaşın</string>
     <!-- google-translated 2026-05-04 -->
@@ -1017,8 +1017,8 @@
     <string name="denied">Reddedildi</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Tanım</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Bu cihaz zaten başka bir hesaba bağlı.\nCihaz başına yalnızca bir hesaba izin verilir.\n\nDestek için utangaçtalk.help@gmail.com ile iletişime geçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Bu cihaz zaten başka bir hesaba bağlı.\nCihaz başına yalnızca bir hesaba izin verilir.\n\nDestek için shyden.co.uk adresini ziyaret edin</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Cihaz Desteklenmiyor</string>
     <!-- google-translated 2026-05-04 -->
@@ -1260,8 +1260,10 @@
     <string name="super_shy_days">Aşırı Utangaç ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Süper Utangaç ✦ Ömür Boyu</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Destek için utangaçtalk.help@gmail.com ile iletişime geçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Yardım için Ayarlar’a gidin ve Bize ulaşın’ı seçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Buradan itiraz edemiyorsanız shyden.co.uk üzerinden bize ulaşın</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Bitiş: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1662,12 +1664,46 @@
     <!-- translated 2026-06-01 -->
     <string name="support_form_title">Destek ile iletişime geçin</string>
     <string name="support_form_hint">Sorunun ne olduğunu bize anlatın, inceleyelim.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Birini nasıl bildirirsiniz</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Uygulamadan yapılan bildirim, işlem yapabilen moderasyon ekibimize doğrudan ulaşır. Destek talebi bunu yapamaz.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Profillerini açın ve Bildir’e dokunun.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Bir odada adına veya fotoğrafına dokunup kartını açın, ardından Bildir’e dokunun.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Bir odada veya özel sohbette bir mesaja basılı tutun, sonra Bildir’i seçin.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Denediniz ama olmadı mı?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Onları bildiremediyseniz — sizi engellediler, mesaj kayboldu ya da bir şey çalışmadı — bize söyleyin, bildirimi sizin adınıza biz yapalım.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Bunun yerine desteğe yazın</string>
     <string name="support_form_send">Gönder</string>
     <string name="support_form_sent">Teşekkürler. Mesajınızı aldık ve inceleyeceğiz.</string>
     <string name="support_form_error_empty">Göndermeden önce lütfen bir mesaj yazın.</string>
     <string name="support_form_error_too_long">Mesajınız çok uzun. Lütfen kısaltıp tekrar deneyin.</string>
     <string name="support_form_error_generic">Mesajınızı gönderemedik. Bağlantınızı kontrol edip tekrar deneyin.</string>
-    <string name="support_form_error_already_open">Zaten açık bir talebiniz var. Oradan yanıtlayacağız.</string>
+    <string name="support_form_error_attachment_failed">Bu dosyayı yükleyemedik. Mesajınızı dosya olmadan gönderebilirsiniz.</string>
+    <string name="support_form_error_attachment_too_many">En fazla 10 dosya ekleyebilirsiniz.</string>
+    <string name="support_form_error_attachment_type">Bu tür bir dosya eklenemez. Lütfen bir görsel veya video seçin.</string>
+    <string name="support_category_label">Konu nedir?</string>
+    <string name="support_category_account">Hesap ve giriş</string>
+    <string name="support_category_age">Yaş ve doğrulama</string>
+    <string name="support_category_payment">Jetonlar, fasulyeler ve satın alımlar</string>
+    <string name="support_category_safety">Güvenlik ve başka bir kullanıcı</string>
+    <string name="support_category_bug">Bir şey çalışmıyor</string>
+    <string name="support_category_other">Başka bir şey</string>
+    <string name="support_attachments_label">Ekran görüntüsü veya video ekleyin</string>
+    <string name="support_attachment_add">Dosya ekle</string>
+    <string name="support_attachment_remove">Kaldır</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Önizlemeyi kapat</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Bu dosyayı aç</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Önizleme yok</string>
     <string name="age_restriction_sub_eighteen_confirm">Destekle iletişime geç</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">İptal</string>
@@ -1750,4 +1786,30 @@
     <string name="age_seg_age_up_welcome_pm">Hoş geldiniz — hesabınız daha geniş ShyTalk çevresine taşındı.\n\nBundan sonra keşiflerde ve listelerde daha fazla kişi görmeye başlayacaksınız. Hesabınız daha küçük bir çevredeyken düzenlenen önceki bağlantılar otomatik olarak geri yüklenemez, ancak takip etmek istediğiniz kişileri yeniden ekleyebilirsiniz.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Hesap bilgileriniz ShyTalk personeli tarafından güncellendi. Sonuç olarak, görebileceğiniz kişiler ve odalar daha küçük bir çevreye daraltıldı.\n\nBunun bir hata olduğunu düşünüyorsanız destek ekibiyle iletişime geçin, biz de durumu inceleyelim.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Teşekkürler. Bunu zaten açık olan isteğinize ekledik.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Aynı sorunun tekrar gönderilmesi işlemi hızlandırmaz. Bize daha önce söylediğiniz bir şey için ikinci bir istek, sıranın en arkasına, bekleyen herkesin arkasına gider.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Daha önce bildirdiğim sorun bu</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Bu yeni bir sorun</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Geri gitmek</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Zaten 1 açık isteğiniz var.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Zaten açık %1$d isteğiniz var.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">ve %1$d tane daha</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Bu resim çok büyük. Lütfen 10 MB'ın altındaki birini seçin.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Bu video çok uzun. Lütfen 30 saniyenin altındaki birini seçin.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Bu videonun ne kadar uzun olduğunu kontrol edemedik. Lütfen farklı bir tane deneyin.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">En fazla 10 dosya. 10 MB'a kadar resimler, 30 saniyeye kadar videolar.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>
