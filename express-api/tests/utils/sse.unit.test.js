@@ -22,6 +22,18 @@
  *     leaked interval per dropped phone is how a server dies quietly.
  */
 
+/*
+ * Named `.unit.test.js` deliberately (EPIC-0003). `utils/sse.js` is a pure
+ * transport: it requires nothing, talks to no emulator, and its whole contract
+ * is what it writes to a response object and when it stops. Testing it needs a
+ * fake socket — there is no "real" one to point at that would prove anything
+ * the fake does not, and a real HTTP server would only test Node.
+ *
+ * The no-new-stubs ratchet allows exactly this case, in exactly this location.
+ * The suite it shipped beside, `conversations-stream.test.js`, is a ROUTE test
+ * and does not qualify — that one runs on the real stack.
+ */
+
 const { openStream } = require('../../src/utils/sse');
 
 /** A response double that records what would go over the wire. */
