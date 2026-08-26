@@ -231,9 +231,24 @@ async function broadcastToConversation(conversationId, data) {
 const DEFAULT_CONVERSATION_LIMIT = 50;
 const MAX_CONVERSATION_LIMIT = 200;
 
+/**
+ * Orders two id strings deterministically, by code unit.
+ *
+ * Sonar's S2871 asks for an explicit comparator on `.sort()` and suggests
+ * `localeCompare`. Taking that suggestion here would be a defect: these sorts
+ * decide a conversation's IDENTITY, and iOS, Android and the server must all
+ * compute the same one. `localeCompare` is locale-dependent, so the same pair
+ * of people could resolve to different threads on two devices. Code-unit order
+ * is what the clients already use, and it is the same everywhere.
+ */
+const byCodeUnit = (a, b) => {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+};
+
 /** The id the clients already generate: both ids sorted, joined with "_". */
 function conversationIdFor(a, b) {
-  return [String(a), String(b)].sort().join('_');
+  return [String(a), String(b)].sort(byCodeUnit).join('_');
 }
 
 // -- List the caller's conversations --
@@ -326,7 +341,7 @@ router.post('/conversations', async (req, res) => {
 
     const timestamp = now();
     const doc = {
-      participantIds: [callerId, otherId].sort(),
+      participantIds: [callerId, otherId].sort(byCodeUnit),
       isGroup: false,
       crossCohortAtMigration: false,
       createdAt: timestamp,
