@@ -61,8 +61,9 @@ P2 rather than P0.
 
 ### Performance
 
-- [ ] Deciding what a cohort may see costs no extra call. The cohort is already
-      on the claim and on the user document by the time the UI renders.
+- [ ] Hiding a control costs no extra round trip. The cohort is already known
+      when the screen renders — asking the server again would trade a visible
+      wrong control for a visible delay.
 
 ### Security
 
@@ -77,11 +78,12 @@ P2 rather than P0.
 
 - [ ] No new strings — features are hidden, not relabelled.
 
+
 ### Observability
 
-- [ ] A control rendered to a cohort that the server then refuses is logged, so
-      the gap between what is shown and what is allowed is measurable rather
-      than discovered on a phone.
+- [ ] A refusal that a hidden control should have prevented is distinguishable
+      in the logs from one a determined caller reached another way. The first
+      means a surface was missed; the second is the server doing its job.
 
 ## BDD Scenarios
 
