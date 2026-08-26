@@ -10,6 +10,7 @@ const { db, rtdb, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
+const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
 const { isLiveAdmin } = require('../middleware/auth');
 const { auditAdminFlagBypass } = require('../utils/segregation-audit');
 const { isAgeGatingEnabled } = require('../safety/age-gating-flag');
@@ -291,13 +292,28 @@ router.post('/conversations', async (req, res) => {
 
     // Cohort gate, server-side. 404 rather than 403 so a refusal does not
     // confirm that the account exists — the same posture the read gate takes.
-    const callerCohort = req.auth.cohort;
-    if (callerCohort && other.cohort && String(other.cohort) !== String(callerCohort)) {
+    //
+    // SHY-0468: this read `req.auth.cohort`, which `authMiddleware` never
+    // sets — the claim lives at `req.auth.token.cohort`. `callerCohort` was
+    // therefore always undefined, the `&&` short-circuited, and the gate
+    // passed EVERY caller: an adult could open a thread with a minor. The
+    // second half was the same shape of hole, one step along — a target whose
+    // `cohort` field was missing also skipped the check.
+    //
+    // Both sides now use the resolvers the rest of the codebase already uses
+    // (`sameCohort.js`, `config.js`, `livekit.js`). Each falls back to
+    // 'minor' rather than to "unknown", so a stripped claim or an absent
+    // field restricts the caller instead of freeing them, and
+    // `effectiveCohort` honours an admin `cohortOverride` the raw field
+    // ignores.
+    const callerCohort = cohortFromClaim(req);
+    const otherCohort = effectiveCohort(other);
+    if (otherCohort !== callerCohort) {
       log.info('conversations', 'Refused cross-cohort conversation', {
         callerId,
         otherId,
         callerCohort,
-        otherCohort: other.cohort,
+        otherCohort,
       });
       return res.status(404).json({ error: 'User not found' });
     }

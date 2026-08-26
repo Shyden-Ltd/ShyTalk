@@ -17,149 +17,134 @@
  * The gates asserted here are the ones that matter for a minors-facing product:
  * you may only see conversations you are in, cross-cohort pairs cannot be
  * created, and threads frozen at migration stay hidden (UK OSA #17).
+ *
+ * ─── Why there are no doubles here ──────────────────────────────────────────
+ *
+ * This suite was first written against a hand-built Firestore double — a
+ * `state` object, a `makeQuery()` chain, and `jest.mock` over
+ * `src/utils/firebase`, `src/middleware/sameCohort` and `src/middleware/auth`.
+ * It tripped the no-new-stubs ratchet (EPIC-0003), and the ratchet was right
+ * about more than policy:
+ *
+ *   - mocking `requireSameCohort` to `(req,res,next)=>next()` meant the
+ *     cross-cohort test asserted a 404 that the ROUTE produced while the gate
+ *     that exists to produce it was never executed. The safeguarding assertion
+ *     was testing the thing it had just switched off.
+ *   - the double's `where('participantIds','array-contains', v)` compared
+ *     `.map(String)`, so it could not tell a String from a Number — which is
+ *     precisely the defect SHY-0130 shipped and SHY-0467 is about.
+ *
+ * Everything below runs against the real Firestore emulator, real Auth tokens
+ * and the real middleware chain.
  */
+
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
 const express = require('express');
 const request = require('supertest');
+const { db } = require('../../src/utils/firebase');
+const { authMiddleware } = require('../../src/middleware/auth');
+const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
+const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
+const conversationsRouter = require('../../src/routes/conversations');
 
-// ─── Firestore mock ──────────────────────────────────────────────
-// Modelled on tests/routes/conversations.test.js, extended with the
-// where/orderBy/limit chain the list endpoint needs.
+// Per-file uniqueId prefix so parallel suites cannot collide in the shared
+// emulator, and well clear of the seeded personas that SHY-0464 protects.
+const ALICE = 64200001; // adult, the caller in most tests
+const LENA = 64200002; // adult, the other party
+const MARCUS = 64200003; // minor, the cross-cohort party
 
-const state = {
-  conversations: [], // {id, data}
-  users: {}, // uniqueId -> data
-  written: [], // {path, data}
-};
+// The route's own id scheme (`conversations.js`): sorted, joined, as strings.
+const convIdFor = (a, b) => [String(a), String(b)].sort().join('_');
 
-const docSnap = (id, data) => ({
-  id,
-  exists: data !== undefined,
-  data: () => data,
-  ref: { id },
-});
-
-const makeQuery = () => {
-  const filters = [];
-  const q = {
-    where: (field, op, value) => {
-      filters.push({ field, op, value });
-      return q;
-    },
-    orderBy: () => q,
-    limit: (n) => {
-      q._limit = n;
-      return q;
-    },
-    get: async () => {
-      let rows = state.conversations;
-      for (const f of filters) {
-        if (f.op === 'array-contains') {
-          rows = rows.filter((r) =>
-            (r.data.participantIds || []).map(String).includes(String(f.value)),
-          );
-        } else if (f.op === '==') {
-          rows = rows.filter((r) => (r.data[f.field] ?? false) === f.value);
-        }
-      }
-      if (q._limit) rows = rows.slice(0, q._limit);
-      return {
-        empty: rows.length === 0,
-        size: rows.length,
-        docs: rows.map((r) => docSnap(r.id, r.data)),
-      };
-    },
-  };
-  return q;
-};
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    doc: jest.fn((path) => ({
-      get: async () => {
-        const [coll, id] = path.split('/');
-        if (coll === 'conversations') {
-          const hit = state.conversations.find((c) => c.id === id);
-          return docSnap(id, hit ? hit.data : undefined);
-        }
-        if (coll === 'users') return docSnap(id, state.users[id]);
-        return docSnap(id, undefined);
-      },
-      set: async (data) => {
-        state.written.push({ path, data });
-        const [, id] = path.split('/');
-        state.conversations.push({ id, data });
-      },
-      update: async () => {},
-    })),
-    collection: jest.fn(() => makeQuery()),
-  },
-  rtdb: { ref: jest.fn(() => ({ set: jest.fn().mockResolvedValue() })) },
-  FieldValue: { serverTimestamp: () => 'ts' },
-}));
-
-jest.mock('../../src/middleware/sameCohort', () => ({
-  requireSameCohort: () => (req, res, next) => next(),
-}));
-jest.mock('../../src/middleware/auth', () => ({ isLiveAdmin: async () => false }));
-
-const buildApp = (uniqueId = 50000010) => {
+function createApp() {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => {
-    req.auth = { uniqueId, cohort: 'adult' };
-    next();
-  });
-  app.use('/api', require('../../src/routes/conversations'));
+  app.use('/api', authMiddleware);
+  app.use('/api', conversationsRouter);
   return app;
-};
+}
 
-const reset = () => {
-  state.conversations = [];
-  state.users = {
-    50000010: { uniqueId: 50000010, cohort: 'adult', displayName: 'Alice' },
-    50000020: { uniqueId: 50000020, cohort: 'adult', displayName: 'Lena' },
-    60000010: { uniqueId: 60000010, cohort: 'minor', displayName: 'Marcus' },
-  };
-  state.written = [];
-};
+/** Every conversation this file creates, so each test can clean up after itself. */
+const OWNED = [convIdFor(ALICE, LENA), convIdFor(ALICE, MARCUS), convIdFor(LENA, MARCUS)];
 
-beforeEach(reset);
+async function clearConversations() {
+  await Promise.all(OWNED.map((id) => db.doc(`conversations/${id}`).delete()));
+}
+
+/** Reads the document the ROUTE wrote, not the response it projected. */
+const storedConversation = async (id) => (await db.doc(`conversations/${id}`).get()).data();
+
+let alice;
+
+beforeAll(async () => {
+  await assertEmulatorReachable();
+  // The other parties need real user documents: the route looks them up to
+  // decide cohort, and `requireSameCohort` reads them for real here.
+  await db.doc(`users/${LENA}`).set({ uniqueId: LENA, cohort: 'adult', displayName: 'Lena' });
+  await db.doc(`users/${MARCUS}`).set({ uniqueId: MARCUS, cohort: 'minor', displayName: 'Marcus' });
+});
+
+afterAll(async () => {
+  await clearConversations();
+  await Promise.all([db.doc(`users/${LENA}`).delete(), db.doc(`users/${MARCUS}`).delete()]);
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
+
+beforeEach(async () => {
+  clearAuthCaches();
+  await clearConversations();
+  alice = await mintRealUser({
+    uniqueId: ALICE,
+    cohort: 'adult',
+    extraUserData: { cohort: 'adult', displayName: 'Alice' },
+  });
+});
+
+afterEach(clearConversations);
 
 describe('GET /api/conversations', () => {
   test('returns only conversations the caller is in', async () => {
-    state.conversations = [
-      { id: 'a', data: { participantIds: ['50000010', '50000020'], lastMessageAt: 2 } },
-      { id: 'b', data: { participantIds: ['50000020', '60000010'], lastMessageAt: 3 } },
-    ];
-    const res = await request(buildApp()).get('/api/conversations');
+    await db.doc(`conversations/${convIdFor(ALICE, LENA)}`).set({
+      participantIds: [String(ALICE), String(LENA)],
+      lastMessageAt: 2,
+    });
+    await db.doc(`conversations/${convIdFor(LENA, MARCUS)}`).set({
+      participantIds: [String(LENA), String(MARCUS)],
+      lastMessageAt: 3,
+    });
+
+    const res = await request(createApp()).get('/api/conversations').set(alice.headers);
+
     expect(res.status).toBe(200);
     const ids = res.body.map((c) => c.id);
-    expect(ids).toContain('a');
-    expect(ids).not.toContain('b');
+    expect(ids).toContain(convIdFor(ALICE, LENA));
+    expect(ids).not.toContain(convIdFor(LENA, MARCUS));
   });
 
   test('excludes threads frozen at migration (UK OSA #17)', async () => {
-    state.conversations = [
-      { id: 'ok', data: { participantIds: ['50000010', '50000020'], lastMessageAt: 1 } },
-      {
-        id: 'frozen',
-        data: {
-          participantIds: ['50000010', '60000010'],
-          crossCohortAtMigration: true,
-          lastMessageAt: 9,
-        },
-      },
-    ];
-    const res = await request(buildApp()).get('/api/conversations');
+    await db.doc(`conversations/${convIdFor(ALICE, LENA)}`).set({
+      participantIds: [String(ALICE), String(LENA)],
+      lastMessageAt: 1,
+    });
+    await db.doc(`conversations/${convIdFor(ALICE, MARCUS)}`).set({
+      participantIds: [String(ALICE), String(MARCUS)],
+      crossCohortAtMigration: true,
+      lastMessageAt: 9,
+    });
+
+    const res = await request(createApp()).get('/api/conversations').set(alice.headers);
+
     expect(res.status).toBe(200);
-    expect(res.body.map((c) => c.id)).not.toContain('frozen');
+    expect(res.body.map((c) => c.id)).not.toContain(convIdFor(ALICE, MARCUS));
   });
 
   test('an empty list is 200 with [], not an error', async () => {
     // The defect this story fixes made "no conversations yet" indistinguishable
     // from "denied". They must never look the same again.
-    const res = await request(buildApp()).get('/api/conversations');
+    const res = await request(createApp()).get('/api/conversations').set(alice.headers);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
   });
@@ -167,40 +152,49 @@ describe('GET /api/conversations', () => {
 
 describe('POST /api/conversations — get or create', () => {
   test('creates the conversation when none exists', async () => {
-    const res = await request(buildApp())
+    const res = await request(createApp())
       .post('/api/conversations')
-      .send({ otherUserId: 50000020 });
+      .set(alice.headers)
+      .send({ otherUserId: LENA });
+
     expect(res.status).toBe(200);
-    expect(res.body.id).toBeTruthy();
-    expect(res.body.participantIds.map(String).sort()).toEqual(['50000010', '50000020']);
-    expect(state.written.length).toBe(1);
+    expect(res.body.id).toBe(convIdFor(ALICE, LENA));
+    expect(await storedConversation(convIdFor(ALICE, LENA))).toBeDefined();
   });
 
   test('a conversation that does not exist yet is created, never a rules error', async () => {
     // The exact case that returned "Null value error" from firestore.rules.
-    const res = await request(buildApp())
+    const res = await request(createApp())
       .post('/api/conversations')
-      .send({ otherUserId: 50000020 });
+      .set(alice.headers)
+      .send({ otherUserId: LENA });
     expect(res.status).not.toBe(403);
     expect(res.status).toBe(200);
   });
 
   test('returns the existing conversation instead of creating a second', async () => {
-    state.conversations = [
-      { id: '50000010_50000020', data: { participantIds: ['50000010', '50000020'] } },
-    ];
-    const res = await request(buildApp())
+    const id = convIdFor(ALICE, LENA);
+    await db.doc(`conversations/${id}`).set({
+      participantIds: [String(ALICE), String(LENA)],
+      createdAt: 111,
+    });
+
+    const res = await request(createApp())
       .post('/api/conversations')
-      .send({ otherUserId: 50000020 });
+      .set(alice.headers)
+      .send({ otherUserId: LENA });
+
     expect(res.status).toBe(200);
-    expect(res.body.id).toBe('50000010_50000020');
-    expect(state.written.length).toBe(0);
+    expect(res.body.id).toBe(id);
+    // The original document survived rather than being replaced by a new one.
+    expect((await storedConversation(id)).createdAt).toBe(111);
   });
 
   test('refuses a conversation with yourself', async () => {
-    const res = await request(buildApp())
+    const res = await request(createApp())
       .post('/api/conversations')
-      .send({ otherUserId: 50000010 });
+      .set(alice.headers)
+      .send({ otherUserId: ALICE });
     expect(res.status).toBe(400);
   });
 
@@ -211,27 +205,131 @@ describe('POST /api/conversations — get or create', () => {
     // The body is asserted too: a bare status check passes when the ROUTE does
     // not exist, because Express answers its own 404 — which is how this test
     // passed before a single line of the endpoint was written.
-    const res = await request(buildApp())
+    const res = await request(createApp())
       .post('/api/conversations')
-      .send({ otherUserId: 60000010 });
+      .set(alice.headers)
+      .send({ otherUserId: MARCUS });
+
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
-    expect(state.written.length).toBe(0);
+    expect(await storedConversation(convIdFor(ALICE, MARCUS))).toBeUndefined();
   });
 
   test('requires otherUserId', async () => {
-    const res = await request(buildApp()).post('/api/conversations').send({});
+    const res = await request(createApp()).post('/api/conversations').set(alice.headers).send({});
     expect(res.status).toBe(400);
   });
 
   test('an unknown user is 404, not a created conversation', async () => {
     // Body asserted for the same reason as above — Express's own 404 for a
     // missing route has no body, so this cannot pass before the route exists.
-    const res = await request(buildApp())
+    const res = await request(createApp())
       .post('/api/conversations')
+      .set(alice.headers)
       .send({ otherUserId: 99999999 });
+
     expect(res.status).toBe(404);
     expect(res.body).toHaveProperty('error');
-    expect(state.written.length).toBe(0);
+    expect(await storedConversation(convIdFor(ALICE, 99999999))).toBeUndefined();
+  });
+});
+
+/**
+ * SHY-0468 — the cohort gate on thread CREATION.
+ *
+ * The gate read `req.auth.cohort`, a field `authMiddleware` does not set (the
+ * claim is at `req.auth.token.cohort`). `callerCohort` was always undefined,
+ * the `&&` short-circuited, and every caller passed: an adult could open a
+ * thread with a minor, and the thread was written.
+ *
+ * These run on the real middleware chain deliberately. The suite that missed
+ * this mocked `requireSameCohort` to a pass-through AND hand-supplied
+ * `req.auth.cohort` — it asserted a refusal while switching off the thing that
+ * refuses.
+ */
+describe('POST /api/conversations — the cohort wall holds in both directions', () => {
+  test('an adult cannot open a thread with a minor, and nothing is written', async () => {
+    const res = await request(createApp())
+      .post('/api/conversations')
+      .set(alice.headers)
+      .send({ otherUserId: MARCUS });
+
+    expect(res.status).toBe(404);
+    expect(await storedConversation(convIdFor(ALICE, MARCUS))).toBeUndefined();
+  });
+
+  test('a minor cannot open a thread with an adult either', async () => {
+    // The wall is not directional. A minor initiating must be refused for the
+    // same reason, or the gate is only half present.
+    const marcus = await mintRealUser({
+      uniqueId: MARCUS,
+      cohort: 'minor',
+      extraUserData: { cohort: 'minor', displayName: 'Marcus' },
+    });
+
+    const res = await request(createApp())
+      .post('/api/conversations')
+      .set(marcus.headers)
+      .send({ otherUserId: LENA });
+
+    expect(res.status).toBe(404);
+    expect(await storedConversation(convIdFor(MARCUS, LENA))).toBeUndefined();
+  });
+
+  test('a caller with no cohort claim is treated as a minor, not as unrestricted', async () => {
+    // Fail CLOSED. An absent claim must restrict the caller, never free them —
+    // which is exactly the direction the old code failed in.
+    const noClaim = await mintRealUser({
+      uniqueId: ALICE,
+      extraUserData: { cohort: 'adult', displayName: 'Alice' },
+    });
+
+    const res = await request(createApp())
+      .post('/api/conversations')
+      .set(noClaim.headers)
+      .send({ otherUserId: LENA }); // LENA is an adult
+
+    expect(res.status).toBe(404);
+    expect(await storedConversation(convIdFor(ALICE, LENA))).toBeUndefined();
+  });
+
+  test('a target with no cohort field is treated as a minor', async () => {
+    // The second half of the same hole: `other.cohort &&` meant a missing
+    // field skipped the comparison entirely.
+    const NOFIELD = 64200004;
+    await db.doc(`users/${NOFIELD}`).set({ uniqueId: NOFIELD, displayName: 'No cohort' });
+    try {
+      const res = await request(createApp())
+        .post('/api/conversations')
+        .set(alice.headers)
+        .send({ otherUserId: NOFIELD });
+
+      expect(res.status).toBe(404);
+      expect(await storedConversation(convIdFor(ALICE, NOFIELD))).toBeUndefined();
+    } finally {
+      await db.doc(`users/${NOFIELD}`).delete();
+      await db.doc(`conversations/${convIdFor(ALICE, NOFIELD)}`).delete();
+    }
+  });
+
+  test('an admin cohortOverride on the target is honoured over the raw field', async () => {
+    // `effectiveCohort` prefers an audited override; the raw field alone would
+    // refuse a pairing staff have deliberately allowed.
+    const OVERRIDDEN = 64200005;
+    await db
+      .doc(`users/${OVERRIDDEN}`)
+      .set({ uniqueId: OVERRIDDEN, cohort: 'minor', cohortOverride: 'adult', displayName: 'Ovr' });
+    try {
+      const res = await request(createApp())
+        .post('/api/conversations')
+        .set(alice.headers)
+        .send({ otherUserId: OVERRIDDEN });
+
+      expect(res.status).toBe(200);
+      expect(await storedConversation(convIdFor(ALICE, OVERRIDDEN))).toBeDefined();
+    } finally {
+      await db.doc(`users/${OVERRIDDEN}`).delete();
+      await db.doc(`conversations/${convIdFor(ALICE, OVERRIDDEN)}`).delete();
+    }
   });
 });
