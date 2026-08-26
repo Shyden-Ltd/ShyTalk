@@ -211,3 +211,20 @@ describe('PATCH /api/notifications/settings', () => {
     expect(stored.pmNotificationsEnabled).toBe(true);
   });
 });
+
+describe('PATCH /api/notifications/settings — a body that is not a body', () => {
+  test('a request with no JSON body is refused, not treated as an empty update', () => {
+    // `express.json()` only populates req.body for a JSON content type. A
+    // client that sends the wrong one — or nothing — leaves it undefined, and
+    // the route must answer 400 rather than fall through to a write with no
+    // fields in it.
+    return callerWith({}).then((headers) =>
+      request(createApp())
+        .patch('/api/notifications/settings')
+        .set(headers)
+        .set('Content-Type', 'text/plain')
+        .send('not json')
+        .expect(400),
+    );
+  });
+});
