@@ -225,6 +225,8 @@ describe('every device command survives a WebDriverAgent restart', () => {
   const CALLS = {
     tapElement: (d) => d.tapElement('support_send'),
     tapElementByLabel: (d) => d.tapElementByLabel('Sign Out'),
+    longPressElement: (d) => d.longPressElement('room_message_1', 0.6),
+    hideKeyboard: (d) => d.hideKeyboard(),
     typeText: (d) => d.typeText('support_input', 'hello'),
     tap: (d) => d.tap(100, 200),
     swipe: (d) => d.swipe(100, 800, 100, 200),
@@ -257,6 +259,13 @@ describe('every device command survives a WebDriverAgent restart', () => {
   const REPLAY_SAFETY = {
     tapElement: 'a control that has GONE after a click we issued means the click landed',
     tapElementByLabel: 'same as tapElement — and dialog buttons are the likeliest to vanish',
+    hideKeyboard:
+      'idempotent — dismissing a keyboard that is already down is a no-op, and it swallows ' +
+      'a WDA refusal rather than failing a journey over a cosmetic tidy-up',
+    longPressElement:
+      'same as tapElement, and more so: a long press that LANDED has opened a context ' +
+      'menu over the element, so the replay cannot find it and fails loudly rather than ' +
+      'pressing something the menu now covers',
     typeText: 'the replay CLEARS first, because XCUITest /value appends rather than replaces',
     tap: 'ACCEPTED: a coordinate carries no identity, so a replay cannot tell what it hit',
     swipe: 'ACCEPTED: a repeated scroll overshoots at worst, and the callers re-read after',

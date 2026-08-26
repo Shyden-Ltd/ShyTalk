@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.additional_details_optional
 import com.shyden.shytalk.resources.cancel
@@ -83,7 +84,13 @@ fun ReportMessageDialog(
                     value = description,
                     onValueChange = { description = it },
                     placeholder = { Text(stringResource(Res.string.additional_details_optional)) },
-                    modifier = Modifier.fillMaxWidth().testTag("reportDescription"),
+                    // AlertDialog is its own Compose window and does not
+                    // inherit MainActivity's testTagsAsResourceId (SHY-0096).
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("reportDescription"),
                     maxLines = 3,
                 )
             }
@@ -91,7 +98,10 @@ fun ReportMessageDialog(
         confirmButton = {
             TextButton(
                 onClick = { onSubmit(selectedReason, description) },
-                modifier = Modifier.testTag("reportSubmit"),
+                modifier =
+                    Modifier
+                        .exposeTestTagsToPlatformDumps()
+                        .testTag("reportSubmit"),
             ) {
                 Text(stringResource(Res.string.submit_report))
             }
@@ -99,7 +109,10 @@ fun ReportMessageDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                modifier = Modifier.testTag("reportDismiss"),
+                modifier =
+                    Modifier
+                        .exposeTestTagsToPlatformDumps()
+                        .testTag("reportDismiss"),
             ) {
                 Text(stringResource(Res.string.cancel))
             }

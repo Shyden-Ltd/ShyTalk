@@ -346,6 +346,18 @@ class Device {
     this.shell(`input tap ${cx} ${cy}`);
   }
 
+  /**
+   * Press and hold.
+   *
+   * A swipe from a point to ITSELF, which is how Android expresses a long
+   * press through `input` — there is no `input longpress`. The duration has to
+   * clear the platform long-press threshold (~500ms), so 600 is the floor
+   * rather than a preference.
+   */
+  longPress(cx, cy, ms = 600) {
+    this.shell(`input swipe ${cx} ${cy} ${cx} ${cy} ${ms}`);
+  }
+
   swipe(x1, y1, x2, y2, ms = 400) {
     this.shell(`input swipe ${x1} ${y1} ${x2} ${y2} ${ms}`);
   }
@@ -544,8 +556,10 @@ class Reporter {
 
   // Wrap a unit of work: time it, capture a screenshot + screen summary,
   // record pass/fail. On failure it throws so the journey aborts cleanly.
-  async step(device, name, fn) {
-    const rec = { name, status: 'running', startedAt: Date.now() };
+  async step(device, name, fn, { preamble = false } = {}) {
+    const rec = { name, status: 'running', startedAt: Date.now(), preamble };
+    // Snapshot the counter so this step is credited only with what IT did.
+    const uiOpsBefore = uiOps.count;
     process.stdout.write(`  ▶ ${name} ... `);
     let caught = null;
     try {
@@ -564,6 +578,7 @@ class Reporter {
         /* dump may itself fail */
       }
     }
+    rec.uiOps = uiOps.count - uiOpsBefore;
     rec.durationMs = Date.now() - rec.startedAt;
     // Screenshot every step (cheap and invaluable for "see the results").
     //
@@ -694,6 +709,47 @@ const MAIN_TABS = ['main_roomsTab', 'main_messagesTab', 'main_profileTab'];
  * walk's Zs" is.
  */
 const dumpCost = { count: 0, ms: 0 };
+
+/**
+ * Real interactions with the device: taps, typing, swipes.
+ *
+ * Counted because a journey can assert its way to green without ever asking
+ * the product to do anything. J07 signed in and then spoke only to the API and
+ * Firestore; every assertion it made was true, four of its screenshots were
+ * byte-identical, and a completely broken UI would still have reported a pass
+ * (SHY-0457). Reading the screen does NOT count — a dump is an observation,
+ * not a use of the product.
+ */
+const uiOps = { count: 0 };
+
+/** The kinds a journey may declare. Closed set: an unknown kind is a bug. */
+const JOURNEY_KINDS = Object.freeze(['ui', 'api-contract']);
+
+/**
+ * Did this journey actually use the product?
+ *
+ * The sign-in preamble is excluded on purpose: logging in is not evidence that
+ * the FEATURE under test works, and counting it would let every API-only
+ * journey pass on the strength of its own login. A failed step does not count
+ * either — taps that led nowhere are not proof.
+ */
+function journeyTouchedTheUi(journey) {
+  return (journey?.steps ?? []).some(
+    (st) => !st.preamble && st.status === 'pass' && Number(st.uiOps ?? 0) > 0,
+  );
+}
+
+/** Fail a journey that claims to drive the UI and never did. */
+function assertJourneyTouchedTheUi(journey) {
+  if (journey?.kind === 'api-contract') return;
+  if (journeyTouchedTheUi(journey)) return;
+  throw new Error(
+    `${journey?.id}: declared a UI journey but never touched the device outside sign-in — ` +
+      'every step after the preamble spoke only to the API or the database, so this run ' +
+      'proves nothing about what a person can do. Either drive the screens it claims to ' +
+      "cover, or declare kind: 'api-contract' and say so in the title (SHY-0457).",
+  );
+}
 
 async function dump(device) {
   const started = Date.now();
@@ -1017,6 +1073,11 @@ async function tapResolved(device, node, labelOrOpts, extra) {
   // same way whichever backend is driving.
   assertReachable(fresh, again, label || again.id || again.text || '(unnamed)');
 
+  // Counted here rather than in each click route below, so no backend can tap
+  // without the journey being credited with having used the product
+  // (SHY-0457). Past this line the tap is going to happen.
+  uiOps.count += 1;
+
   if (again.id && typeof device.tapElement === 'function') {
     await device.tapElement(again.id);
     return;
@@ -1108,7 +1169,60 @@ async function tapLowestText(device, text) {
  * Off by default so existing journeys keep the behaviour they were written
  * against; pass it wherever the field is not guaranteed empty.
  */
+/**
+ * Press and hold a tagged control, whichever backend is driving.
+ *
+ * Reporting a message is a long press on its bubble — there is no button for
+ * it — so a journey covering moderation cannot be written without this.
+ * Counted as a UI operation like any tap, because it is one (SHY-0457).
+ *
+ * Prefers the driver's own element-addressed hold where there is one (iOS,
+ * through WebDriverAgent), and falls back to holding the node's centre.
+ */
+async function longPressId(device, id, { ms = 600 } = {}) {
+  if (typeof device.longPressElement === 'function') {
+    uiOps.count += 1;
+    await device.longPressElement(id, ms / 1000);
+    await sleep(400);
+    return;
+  }
+  const nodes = await dump(device);
+  const node = byId(nodes, id);
+  if (!node || !node.center) {
+    throw new Error(`long-press target #${id} not found on screen`);
+  }
+  assertReachable(nodes, node, id);
+  uiOps.count += 1;
+  device.longPress(node.center.x, node.center.y, ms);
+  await sleep(400);
+}
+
+/**
+ * Put the on-screen keyboard away.
+ *
+ * The IME is a SEPARATE WINDOW: it does not appear in the uiautomator dump at
+ * all, so `assertReachable` cannot see it and a control underneath it looks
+ * perfectly tappable. The tap is then swallowed by the keyboard and the screen
+ * simply does not move — which is how SHY-0457's J07 found, tapped and
+ * "successfully" pressed a Message button three times without opening a chat.
+ *
+ * Call this before tapping anything low on a screen you have just typed into.
+ */
+async function dismissKeyboard(device) {
+  if (device.kind === 'ios') {
+    // WDA closes the keyboard with its own call where the driver offers one;
+    // otherwise typing has already committed and the field can be blurred.
+    if (typeof device.hideKeyboard === 'function') await device.hideKeyboard();
+    await sleep(250);
+    return;
+  }
+  // BACK closes the IME when it is up, and does NOT navigate in that case.
+  device.shell('input keyevent KEYCODE_BACK');
+  await sleep(350);
+}
+
 async function typeInto(device, id, text, { clearFirst = false } = {}) {
+  uiOps.count += 1;
   if (device.kind === 'ios') {
     // Addressed by identifier and set directly. Typing key-by-key through the
     // on-screen keyboard is slower and can drop characters when the field
@@ -1123,12 +1237,18 @@ async function typeInto(device, id, text, { clearFirst = false } = {}) {
   }
   await tapId(device, id);
   if (clearFirst) {
-    // Cursor to the end, then delete back through whatever was there. Bounded
-    // by the longest field this is used on rather than looping on a re-read,
-    // which would cost a full dump per character.
-    device.shell('input keyevent KEYCODE_MOVE_END');
-    device.shell(`input keyevent ${new Array(60).fill('KEYCODE_DEL').join(' ')}`);
-    await sleep(200);
+    // Only when there is something to clear. Firing sixty KEYCODE_DELs at an
+    // already-empty field costs seconds and, with the IME still settling after
+    // the focus tap, the `input text` that follows can land nowhere at all.
+    const before = byId(await dump(device), id);
+    const existing = `${before?.text || ''}`.trim();
+    if (existing) {
+      device.shell('input keyevent KEYCODE_MOVE_END');
+      device.shell(
+        `input keyevent ${new Array(existing.length + 4).fill('KEYCODE_DEL').join(' ')}`,
+      );
+      await sleep(200);
+    }
   }
   device.shell(`input text ${JSON.stringify(text.replace(/ /g, '%s'))}`);
   await sleep(500);
@@ -1766,57 +1886,78 @@ function accountOnDevice(nodes) {
  *   account's screen while seeding another's data proves nothing at all.
  */
 async function signInAs(device, reporter, ctx, email) {
-  await reporter.step(device, `Reach SignIn (for ${email})`, async () => {
-    await ensureAtSignIn(device, ctx.pkg);
-    return 'at SignIn (persona picker available)';
-  });
-  await reporter.step(device, `Pick persona ${email}`, async () => {
-    // Open the dev picker + select the persona. A scroll-to-row mistap on a
-    // below-the-fold persona can dismiss the picker WITHOUT signing in (bounces
-    // back to SignIn). Detect that — the persona_picker_open button is back on
-    // screen after the tap settles — and retry the whole open+select.
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      await openPersonaPicker(device);
-      await selectPersonaByText(device, email);
-      // Polled, not slept. A flat 2.5s was paid on EVERY journey whether the
-      // picker had already closed or never would -- 32 seconds across a matrix,
-      // spent looking at a screen that had finished changing.
-      if (await pickerClosed(device, 6000)) {
-        return `selected ${email} (attempt ${attempt})`;
+  await reporter.step(
+    device,
+    `Reach SignIn (for ${email})`,
+    async () => {
+      await ensureAtSignIn(device, ctx.pkg);
+      return 'at SignIn (persona picker available)';
+    },
+    { preamble: true },
+  );
+  await reporter.step(
+    device,
+    `Pick persona ${email}`,
+    async () => {
+      // Open the dev picker + select the persona. A scroll-to-row mistap on a
+      // below-the-fold persona can dismiss the picker WITHOUT signing in (bounces
+      // back to SignIn). Detect that — the persona_picker_open button is back on
+      // screen after the tap settles — and retry the whole open+select.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await openPersonaPicker(device);
+        await selectPersonaByText(device, email);
+        // Polled, not slept. A flat 2.5s was paid on EVERY journey whether the
+        // picker had already closed or never would -- 32 seconds across a matrix,
+        // spent looking at a screen that had finished changing.
+        if (await pickerClosed(device, 6000)) {
+          return `selected ${email} (attempt ${attempt})`;
+        }
       }
-    }
-    throw new Error(`selecting ${email} bounced back to SignIn 3x (sign-in failing?)`);
-  });
-  await reporter.step(device, `Land on Home`, async () => {
-    await advanceToMain(device);
-    return 'home reached — interstitials cleared';
-  });
+      throw new Error(`selecting ${email} bounced back to SignIn 3x (sign-in failing?)`);
+    },
+    { preamble: true },
+  );
+  await reporter.step(
+    device,
+    `Land on Home`,
+    async () => {
+      await advanceToMain(device);
+      return 'home reached — interstitials cleared';
+    },
+    { preamble: true },
+  );
   const expected = personaUniqueId(email);
-  await reporter.step(device, `Confirm the phone is signed in as ${expected}`, async () => {
-    const deadline = Date.now() + 8000;
-    let seen = null;
-    // The badge samples its inputs on a 2s tick, so the account can lag the
-    // sign-in by a frame or two. Polled rather than slept on: a fixed wait is
-    // either too short on a cold device or dead time on a warm one.
-    while (Date.now() < deadline) {
-      seen = accountOnDevice(await dump(device));
-      if (seen === expected) return `debug overlay shows account ${seen}`;
-      await sleep(500);
-    }
-    throw new Error(
-      seen === null
-        ? `the debug overlay is not showing an account id, so who is signed in ` +
-            `cannot be confirmed (expected ${expected} for ${email})`
-        : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
-            `every assertion after this would be about the wrong person`,
-    );
-  });
+  await reporter.step(
+    device,
+    `Confirm the phone is signed in as ${expected}`,
+    async () => {
+      const deadline = Date.now() + 8000;
+      let seen = null;
+      // The badge samples its inputs on a 2s tick, so the account can lag the
+      // sign-in by a frame or two. Polled rather than slept on: a fixed wait is
+      // either too short on a cold device or dead time on a warm one.
+      while (Date.now() < deadline) {
+        seen = accountOnDevice(await dump(device));
+        if (seen === expected) return `debug overlay shows account ${seen}`;
+        await sleep(500);
+      }
+      throw new Error(
+        seen === null
+          ? `the debug overlay is not showing an account id, so who is signed in ` +
+              `cannot be confirmed (expected ${expected} for ${email})`
+          : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
+              `every assertion after this would be about the wrong person`,
+      );
+    },
+    { preamble: true },
+  );
 }
 
 // Auth-smoke journey: sign in as a persona + assert their Firestore doc.
 function personaJourney(id, title, email, uid, cohort) {
   return {
     id,
+    kind: 'ui',
     title,
     async run(device, reporter, ctx) {
       await signInAs(device, reporter, ctx, email);
@@ -1847,6 +1988,7 @@ function personaJourney(id, title, email, uid, cohort) {
 // app has no email/password signup screen (auth is OAuth/OTP/persona-picker).
 const J02 = {
   id: 'J02',
+  kind: 'ui',
   title: 'j02 — minor (Marcus P-04): UI renders + server-enforced cross-cohort gate',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'minor-power@shytalk.dev');
@@ -1865,16 +2007,27 @@ const J02 = {
       if (!byId(nodes, 'profile_walletButton')) throw new Error('profile_walletButton missing');
       return 'profile shows "17 years old" + wallet';
     });
-    await reporter.step(device, 'FINDING: minor UI is NOT feature-hidden', async () => {
-      // Spec j02 expects minors to have the PM tab + buy-coins HIDDEN. The
-      // shipped app shows both (verified on-device), so cohort enforcement is
-      // action/server-side, not UI-hiding. Recorded as a divergence finding,
-      // not a failure — the journey verifies real behavior per the mandate.
+    await reporter.step(device, 'Minor UI hides the features spec j02 says it hides', async () => {
+      // This used to be a step named "FINDING: minor UI is NOT feature-hidden"
+      // that PASSED while recording a spec violation in its detail text. A
+      // known deviation encoded as green is how a defect becomes invisible —
+      // the operator found it reading the sign-off evidence and ruled, on
+      // 2026-08-25, that it must fail (SHY-0457, SHY-0459).
+      //
+      // It stays red until the controls are hidden for minors, or the spec is
+      // formally changed. Either is a decision; a green tick was neither.
       const nodes = await dump(device);
       const exposed = ['main_messagesTab', 'profile_walletButton'].filter((t) => byId(nodes, t));
-      return `minor UI exposes ${exposed.join(' + ')} — spec expected hidden (gating is server-side)`;
+      if (exposed.length) {
+        throw new Error(
+          `minor UI exposes ${exposed.join(' + ')}; spec j02 expects these hidden for a minor. ` +
+            'Cohort enforcement is server-side only today, so a minor sees the controls and is ' +
+            'refused on use. See SHY-0459.',
+        );
+      }
+      return 'minor UI hides the gated features';
     });
-    // The REAL minor restriction (server-enforced, per the FINDING above).
+    // The server-side restriction, which DOES hold.
     if (ctx.db) {
       await reporter.step(
         device,
@@ -1911,53 +2064,113 @@ const J02 = {
 // adult→minor surface 404s" lives in requireSameCohort, not the UI).
 const J08 = {
   id: 'J08',
-  title: 'j08 — cross-cohort wall: adult (Vexa P-07) blocked from minor (Marcus)',
+  kind: 'ui',
+  title: 'j08 — cross-cohort wall: an adult cannot reach a minor, on the phone',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-prober@shytalk.dev');
     if (!ctx.db) return;
+
     const vexa = 50000040;
     const marcus = 60000010;
+    let vToken = null;
+
+    // The wall is the point, so the journey WALKS it: an adult searches for a
+    // minor on the phone and does not find them. Rewritten for SHY-0457 — it
+    // used to sign in and then only call the API, so it proved the gate held
+    // in Express and nothing at all about what an adult can reach by hand.
+    //
+    // The control matters as much as the wall. Without it, "Marcus did not
+    // appear" is indistinguishable from "search is broken", and a journey that
+    // cannot tell those apart is not evidence of segregation.
+
+    await reporter.step(device, 'UI: Vexa opens people search, across everyone', async () => {
+      await tapId(device, 'main_messagesTab');
+      await waitForId(device, 'main_newMessageFab', 10000);
+      await tapId(device, 'main_newMessageFab');
+      await waitForId(device, 'newMessage_searchField', 10000);
+      // Scoped to people you already know by default. Absence in THAT list
+      // proves nothing about who you are allowed to reach, so the search is
+      // widened to everyone before the wall is tested against it.
+      await tapId(device, 'newMessage_searchAllToggle');
+      return 'people search is open, across all users';
+    });
+
     const lena = 50000020;
-    let vToken;
+
+    await reporter.step(device, 'UI: CONTROL — another adult IS findable', async () => {
+      // Proves the screen can find ANYBODY before absence is used as evidence
+      // of anything. Searched by uniqueId: the name branch is a prefix match
+      // and the seeded names all begin "[SEED] ".
+      await typeInto(device, 'newMessage_searchField', String(lena), { clearFirst: true });
+      await waitForText(device, 'P-05', 12000);
+      return 'Lena (P-05, adult) appears — the search works';
+    });
+
+    await reporter.step(device, 'UI: the minor is NOT findable by an adult', async () => {
+      // By exact uniqueId — the strongest form of the question. An adult who
+      // already KNOWS a minor's id still must not reach them; the API answers
+      // that lookup with an existence-hiding 404.
+      await typeInto(device, 'newMessage_searchField', String(marcus), { clearFirst: true });
+      // Given the control above, absence here is the wall and not a broken
+      // screen. Waited out rather than sampled once, so a slow result cannot
+      // be mistaken for a blocked one.
+      const deadline = Date.now() + 8000;
+      let seen = null;
+      while (Date.now() < deadline) {
+        const nodes = await dump(device);
+        const row = nodes.find(
+          (n) =>
+            n.id !== 'newMessage_searchField' && `${n.text || ''} ${n.desc || ''}`.includes('P-04'),
+        );
+        if (row) {
+          seen = `${row.text || row.desc}`;
+          break;
+        }
+        await pollGap(Date.now(), device);
+      }
+      if (seen) {
+        throw new Error(
+          `an adult found the minor in people search: "${seen}". The cross-cohort wall is ` +
+            'server-enforced but the minor must not be reachable from this screen either.',
+        );
+      }
+      return 'Marcus (P-04, minor) does not appear for an adult';
+    });
+
     await reporter.step(device, 'Mint Vexa (adult) API token', async () => {
       vToken = await getIdToken('adult-prober@shytalk.dev');
-      return 'ID token minted from Auth emulator';
+      return 'token minted';
     });
+
+    // Defence in depth. The UI not offering it is not the same as the server
+    // refusing it, and this journey asserts BOTH — that is the whole reason
+    // the API half was worth keeping.
     await reporter.step(device, 'API: adult→minor follow blocked (404)', async () => {
       const r = await apiCall('POST', `/api/users/${vexa}/follow`, {
         token: vToken,
         body: { targetUserId: marcus },
       });
-      if (r.status !== 404)
+      if (r.status !== 404) {
         throw new Error(`expected 404; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return `follow Marcus → 404 "${r.body?.error ?? r.status}"`;
+      }
+      return 'follow → 404 (existence-hiding)';
     });
+
     await reporter.step(device, 'API: adult→minor profile view blocked (404)', async () => {
       const r = await apiCall('GET', `/api/users/${marcus}`, { token: vToken });
-      if (r.status !== 404)
+      if (r.status !== 404) {
         throw new Error(`expected 404; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return `GET Marcus profile → 404 (existence-hidden)`;
+      }
+      return 'profile → 404 (existence-hiding)';
     });
-    await reporter.step(device, 'Control: adult→adult follow SUCCEEDS', async () => {
-      const r = await apiCall('POST', `/api/users/${vexa}/follow`, {
-        token: vToken,
-        body: { targetUserId: lena },
-      });
-      if (r.status !== 200)
-        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      // Unfollow so re-runs stay idempotent (same-cohort, so allowed).
-      const un = await apiCall('POST', `/api/users/${vexa}/unfollow`, {
-        token: vToken,
-        body: { targetUserId: lena },
-      });
-      if (un.status !== 200) throw new Error(`control unfollow cleanup failed: ${un.status}`);
-      return `follow Lena → 200 (gate is cohort-specific); unfollowed for idempotency`;
-    });
-    await reporter.step(device, 'DB: Vexa followingIds excludes the minor', async () => {
-      const d = await dbGet(ctx.db, `users/${vexa}`);
-      if (arrayContains(d?.followingIds, marcus))
-        throw new Error('followingIds wrongly contains minor 60000010');
-      return 'followingIds excludes 60000010 — cross-cohort write never happened';
+
+    await reporter.step(device, 'DB: Vexa did not end up following the minor', async () => {
+      const snap = await ctx.db.doc(`users/${vexa}`).get();
+      const following = snap.data()?.followingIds || [];
+      if (following.map(String).includes(String(marcus))) {
+        throw new Error(`users/${vexa}.followingIds contains the minor ${marcus}`);
+      }
+      return 'followingIds excludes the minor';
     });
   },
 };
@@ -1968,8 +2181,10 @@ const J08 = {
 // override is cleared at the end so re-runs are idempotent.
 const J04 = {
   id: 'J04',
+  kind: 'api-contract',
   title:
-    'j04 — cohort-override is staff-only: regular member rejected (422), staff allowed + audited',
+    'j04 — API contract: cohort-override is staff-only — regular member rejected (422), ' +
+    'staff allowed + audited (no app UI exists for cohort override; back-office only)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
     if (!ctx.db) return;
@@ -2038,44 +2253,178 @@ const J04 = {
 // Raul (P-08); admin Greta suspends Raul (appealable) with an audit row; Raul
 // files an appeal; Greta unsuspends. Verified at the API + Firestore. Cleans
 // up (unsuspend + delete the pending appeal) so re-runs are idempotent.
+// j11 — the moderation cycle, with a person at both ends.
+//
+// Rewritten for SHY-0457. It used to sign in and then make four API calls:
+// nine steps, THREE distinct screenshots, and a green tick for "report →
+// suspend → appeal → unsuspend" in which nobody reported anybody.
+//
+// Nora now reports a message by long-pressing it, which is the only way a
+// person can — there is no button. Raul meets the suspension screen when he
+// signs in and types his appeal into it. The admin half stays server-side on
+// purpose: the moderation queue a human uses is the web console, and the
+// in-app screen is unreachable (SHY-0460).
 const J11 = {
   id: 'J11',
-  title: 'j11 — moderation cycle: report → admin suspend (+audit) → appeal → unsuspend',
+  kind: 'ui',
+  title: 'j11 — moderation: Nora reports a message, Raul appeals his suspension',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'victim@shytalk.dev');
     if (!ctx.db) return;
+
+    const nora = 50000051;
     const raul = 50000050;
-    let noraToken;
+    const stamp = Date.now();
+    const offending = `JR-J11-OFFENSIVE-${stamp}`;
     let gretaToken;
     let raulToken;
-    await reporter.step(device, 'Mint Nora + Greta + Raul tokens', async () => {
+    let convId = null;
+
+    await reporter.step(device, 'Mint Greta + Raul tokens', async () => {
       // Order is load-bearing: mint Raul's token BEFORE he is suspended so the
       // appeal step has a valid ID token (ID tokens stay valid ~1h regardless).
-      noraToken = await getIdToken('victim@shytalk.dev');
+      //
+      // Nora needs no token any more — she reports from the phone, which is the
+      // point of this rewrite.
       gretaToken = await getIdToken('admin@shytalk.dev');
       raulToken = await getIdToken('harasser@shytalk.dev');
-      return '3 persona tokens minted';
+      return '2 persona tokens minted';
     });
-    await reporter.step(device, 'API: Nora reports Raul', async () => {
-      // Reports resolve the reported user SERVER-SIDE by firebaseUid (auth uid),
-      // not uniqueId — see resolveUniqueId() in middleware/auth.js. firebaseUids
-      // are per-seed dynamic, so read Raul's from Firestore at runtime.
-      const raulDoc = await dbGet(ctx.db, `users/${raul}`);
-      if (!raulDoc?.firebaseUid) throw new Error('could not read Raul firebaseUid from Firestore');
-      const r = await apiCall('POST', '/api/reports', {
-        token: noraToken,
-        body: {
-          reportedUserId: raulDoc.firebaseUid,
-          reason: 'harassment',
-          description: 'offensive PMs (journey-runner)',
-        },
+
+    await reporter.step(device, 'Setup: lift any suspension left by an earlier run', async () => {
+      // A run that fails after the suspend step leaves Raul suspended, and the
+      // NEXT run then cannot even create the thread — every request he makes
+      // answers 403. The second failure hides the first, which is the whole
+      // reason state is cleared on the way IN.
+      const before = await dbGet(ctx.db, `users/${raul}`);
+      if (!before?.isSuspended) return 'not suspended; nothing to lift';
+      const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
+        token: gretaToken,
+        body: { reason: 'journey-runner: clearing state left by an earlier run' },
       });
-      if (r.status >= 300) {
-        throw new Error(`report expected 2xx; got ${r.status}: ${JSON.stringify(r.body)}`);
-      }
-      return `POST /reports {reported: Raul firebaseUid} → ${r.status}`;
+      if (r.status !== 200) throw new Error(`could not lift the old suspension: ${r.status}`);
+      await dbWaitField(ctx.db, `users/${raul}`, 'isSuspended', (v) => v !== true, 8000);
+      const stale = await ctx.db.collection('suspensionAppeals').where('userId', '==', raul).get();
+      for (const a of stale.docs) await a.ref.delete();
+      return `lifted a leftover suspension (+${stale.size} stale appeal(s))`;
     });
+
+    await reporter.step(device, 'Setup: give Nora a message from Raul to report', async () => {
+      // On the way IN, for the same reason.
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const prior = await ctx.db
+            .collection('conversations')
+            .where('participantIds', 'array-contains', String(nora))
+            .limit(20)
+            .get();
+          for (const d of prior.docs) {
+            if (!(d.data().participantIds || []).map(String).includes(String(raul))) continue;
+            const msgs = await d.ref.collection('messages').get();
+            for (const m of msgs.docs) await m.ref.delete();
+            await d.ref.delete();
+          }
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          await sleep(500 * attempt);
+        }
+      }
+      if (lastErr) throw lastErr;
+
+      // Raul opens the thread and sends, over the API — he is not on this
+      // phone. What it sets up is asserted on Nora's screen below.
+      const created = await apiCall('POST', '/api/conversations', {
+        token: raulToken,
+        body: { otherUserId: nora },
+      });
+      if (created.status !== 200) {
+        throw new Error(`could not create the thread: ${created.status}`);
+      }
+      convId = created.body?.id;
+      const sent = await apiCall('POST', `/api/conversations/${convId}/messages`, {
+        token: raulToken,
+        body: { text: offending, type: 'TEXT', senderName: 'Raul' },
+      });
+      if (sent.status !== 200) throw new Error(`Raul could not send: ${sent.status}`);
+      return `Raul sent "${offending}" in conversations/${convId}`;
+    });
+
+    await reporter.step(device, "UI: Nora opens Raul's chat", async () => {
+      await tapId(device, 'main_messagesTab');
+      await waitForId(device, 'main_newMessageFab', 10000);
+      await tapId(device, 'main_newMessageFab');
+      await waitForId(device, 'newMessage_searchField', 10000);
+      await tapId(device, 'newMessage_searchAllToggle');
+      await typeInto(device, 'newMessage_searchField', String(raul), { clearFirst: true });
+      const rows = await waitForText(device, 'P-08', 12000);
+      const pickRow = (nodes) =>
+        nodes.find(
+          (n) =>
+            n.center && n.id !== 'newMessage_searchField' && `${n.text || ''}`.includes('P-08'),
+        );
+      const row = pickRow(rows);
+      if (!row) throw new Error('Raul did not appear in the people search');
+      await tapResolved(device, row, { label: "Raul's row", relocate: pickRow });
+      await dismissKeyboard(device);
+      await waitForId(device, 'newMessage_messageButton', 10000);
+      await tapId(device, 'newMessage_messageButton');
+      await waitForId(device, 'privateChat_messageInput', 12000);
+      return "Raul's chat is open";
+    });
+
+    await reporter.step(device, 'UI: Nora long-presses the message to report it', async () => {
+      // The ONLY way to report. There is no button — the bubble carries the
+      // action on its long press, and only on messages that are not your own.
+      const nodes = await waitForText(device, offending, 12000);
+      const target = nodes.find((n) => n.id.startsWith('privateChat_msgTarget_') && n.center);
+      if (!target) {
+        throw new Error(
+          `the message is on screen but carries no addressable bubble; tags: ${summarizeScreen(
+            nodes,
+          )
+            .testTags.slice(0, 12)
+            .join(', ')}`,
+        );
+      }
+      // Private chat puts the actions behind a context menu, unlike a room
+      // where the long press reports directly. Two gestures, not one.
+      await longPressId(device, target.id);
+      await waitForId(device, 'privateChat_reportMenuItem', 10000);
+      await tapId(device, 'privateChat_reportMenuItem');
+      await waitForId(device, 'reportSubmit', 10000);
+      return 'the report dialog is open';
+    });
+
+    await reporter.step(device, 'UI: Nora describes it and submits', async () => {
+      // The reason defaults to the first option, so a description and submit is
+      // the whole interaction a person performs.
+      await typeInto(device, 'reportDescription', `offensive PM ${stamp}`, { clearFirst: true });
+      await dismissKeyboard(device);
+      await tapId(device, 'reportSubmit');
+      return 'report submitted from the phone';
+    });
+
+    await reporter.step(device, "DB: Nora's report is recorded against Raul", async () => {
+      const raulDoc = await dbGet(ctx.db, `users/${raul}`);
+      if (!raulDoc?.firebaseUid) throw new Error('could not read Raul firebaseUid');
+      await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('reports')
+            .where('reportedUserId', '==', raulDoc.firebaseUid)
+            .limit(5)
+            .get(),
+        { timeoutMs: 12000, what: 'reports against Raul' },
+      );
+      return 'a report against Raul exists';
+    });
+
     await reporter.step(device, 'API: admin suspends Raul (appealable) + audit row', async () => {
+      // Server-side on purpose: the moderation queue a human uses is the web
+      // admin console, and the in-app screen is unreachable (SHY-0460).
       const r = await apiCall('POST', `/api/admin/users/${raul}/suspend`, {
         token: gretaToken,
         body: { reason: 'harassment confirmed (journey-runner)', canAppeal: true },
@@ -2093,50 +2442,82 @@ const J11 = {
       if (audit.empty) throw new Error('no SUSPEND audit row for Raul');
       return 'Raul isSuspended=true + adminAuditLog SUSPEND present';
     });
-    await reporter.step(device, 'API: Raul files an appeal', async () => {
-      const r = await apiCall('POST', '/api/appeals', {
-        token: raulToken,
-        body: { appealText: 'I will not do it again (journey-runner)' },
+
+    // signInAs waits for Home, which a suspended person never reaches — so the
+    // sign-in is attempted and then the SCREEN is asked what happened. Without
+    // this the journey reports "Home not reached", which is true and useless.
+    await signInAs(device, reporter, ctx, 'harasser@shytalk.dev').catch(() => {});
+
+    await reporter.step(
+      device,
+      'UI: Raul is told he is suspended, and offered the appeal',
+      async () => {
+        const nodes = await dump(device);
+        if (byId(nodes, 'suspension_title')) {
+          return 'the suspension screen is shown';
+        }
+        if (byId(nodes, 'signIn_retryConnection')) {
+          throw new Error(
+            'a suspended person is shown "cannot connect" instead of the suspension screen. ' +
+              'The app learns it is suspended by reading its own user document, and suspension ' +
+              'forbids that read (403 Account suspended), so it falls through to ' +
+              'isBackendUnreachable. The appeal right exists but is unreachable. See SHY-0461.',
+          );
+        }
+        throw new Error(
+          `neither the suspension screen nor the connection screen appeared; on screen: ${summarizeScreen(
+            nodes,
+          )
+            .testTags.slice(0, 12)
+            .join(', ')}`,
+        );
+      },
+    );
+
+    await reporter.step(device, 'UI: Raul writes an appeal and submits it', async () => {
+      await typeInto(device, 'suspension_appealField', `I will not do it again ${stamp}`, {
+        clearFirst: true,
       });
-      if (r.status !== 200 && r.status !== 409) {
-        throw new Error(`appeal expected 200/409; got ${r.status}: ${JSON.stringify(r.body)}`);
-      }
+      await dismissKeyboard(device);
+      await tapId(device, 'suspension_submitAppealButton');
+      return 'appeal submitted from the phone';
+    });
+
+    await reporter.step(device, 'DB: the appeal is pending review', async () => {
+      await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('suspensionAppeals')
+            .where('userId', '==', raul)
+            .where('status', '==', 'pending')
+            .limit(1)
+            .get(),
+        { timeoutMs: 12000, what: 'pending appeal for Raul' },
+      );
+      return 'a pending suspensionAppeals row exists for Raul';
+    });
+
+    await reporter.step(device, 'Cleanup: unsuspend Raul and clear the thread', async () => {
+      const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
+        token: gretaToken,
+        body: { reason: 'journey-runner cleanup' },
+      });
+      if (r.status !== 200) throw new Error(`unsuspend expected 200; got ${r.status}`);
+      await dbWaitField(ctx.db, `users/${raul}`, 'isSuspended', (v) => v !== true, 6000);
+
       const appeals = await ctx.db
         .collection('suspensionAppeals')
         .where('userId', '==', raul)
-        .where('status', '==', 'pending')
-        .limit(1)
         .get();
-      if (appeals.empty) throw new Error('no pending suspensionAppeals row for Raul');
-      return `appeal → ${r.status}; pending suspensionAppeals present`;
+      for (const a of appeals.docs) await a.ref.delete();
+
+      if (convId) {
+        const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
+        for (const m of msgs.docs) await m.ref.delete();
+        await ctx.db.doc(`conversations/${convId}`).delete();
+      }
+      return 'Raul unsuspended; appeal + thread removed';
     });
-    await reporter.step(
-      device,
-      'Cleanup: admin unsuspends Raul + clears pending appeal',
-      async () => {
-        const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
-          token: gretaToken,
-          body: { reason: 'appeal accepted (journey-runner cleanup)' },
-        });
-        if (r.status >= 300) {
-          throw new Error(`unsuspend expected 2xx; got ${r.status}: ${JSON.stringify(r.body)}`);
-        }
-        await dbWaitField(
-          ctx.db,
-          `users/${raul}`,
-          'isSuspended',
-          (v) => v === false || v === undefined,
-          6000,
-        );
-        const pending = await ctx.db
-          .collection('suspensionAppeals')
-          .where('userId', '==', raul)
-          .where('status', '==', 'pending')
-          .get();
-        for (const d of pending.docs) await d.ref.delete();
-        return 'Raul unsuspended; pending appeals cleared (idempotent)';
-      },
-    );
   },
 };
 
@@ -2145,80 +2526,197 @@ const J11 = {
 // The express-api message-send path needs the conversation doc to pre-exist —
 // the app writes it directly to Firestore, so the runner mirrors that. Cleans
 // up the conversation + follow so re-runs are idempotent.
+// j07 — the social round-trip, ON THE PHONE.
+//
+// Rewritten for SHY-0457. It used to sign in and then speak only to the API
+// and Firestore: eleven steps, four byte-identical screenshots, and a green
+// tick that would have survived the Messages tab being deleted entirely.
+//
+// Alice now does what a person does — opens Messages, finds Lena, types,
+// sends, and reads the reply on screen. Lena answers over the API because she
+// is not on this phone; that half is legitimately server-side. Every claim
+// about Alice's side is asserted on the screen AND in Firestore, because a
+// bubble that renders without persisting is just as broken as the reverse.
 const J07 = {
   id: 'J07',
-  title: 'j07 — social: follow + same-cohort PM round-trip (Alice ↔ Lena)',
+  kind: 'ui',
+  title: 'j07 — social: Alice messages Lena on the phone and reads her reply',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
     if (!ctx.db) return;
+
     const alice = 50000010;
     const lena = 50000020;
-    const convId = `jr-j07-${alice}-${lena}`;
-    let aliceToken;
-    let lenaToken;
-    await reporter.step(device, 'Mint Alice + Lena tokens', async () => {
-      aliceToken = await getIdToken('adult-power@shytalk.dev');
-      lenaToken = await getIdToken('lapsed-adult@shytalk.dev');
-      return 'tokens minted';
+    const stamp = Date.now();
+    const outbound = `JR-J07-OUT-${stamp}`;
+    const reply = `JR-J07-REPLY-${stamp}`;
+    let convId = null;
+    let lenaToken = null;
+
+    await reporter.step(device, 'Setup: clear any earlier Alice-Lena conversation', async () => {
+      // On the way IN, because a run that fails mid-journey never reaches its
+      // cleanup and the next one would then open an existing thread instead of
+      // creating one — failing somewhere else entirely.
+      let removed = 0;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          // participantIds are STRINGS. Querying with the number matches
+          // nothing and the journey then blames the product for losing a
+          // message it can see on screen.
+          const snap = await ctx.db
+            .collection('conversations')
+            .where('participantIds', 'array-contains', String(alice))
+            .limit(20)
+            .get();
+          const mine = snap.docs.filter((d) =>
+            (d.data().participantIds || []).map(String).includes(String(lena)),
+          );
+          for (const d of mine) {
+            const msgs = await d.ref.collection('messages').get();
+            for (const m of msgs.docs) await m.ref.delete();
+            await d.ref.delete();
+          }
+          removed = mine.length;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          await sleep(500 * attempt);
+        }
+      }
+      if (lastErr) throw lastErr;
+      return removed ? `removed ${removed} old conversation(s)` : 'none to clear';
     });
-    await reporter.step(device, 'API: Alice follows Lena (same-cohort → 200)', async () => {
-      const r = await apiCall('POST', `/api/users/${alice}/follow`, {
-        token: aliceToken,
-        body: { targetUserId: lena },
+
+    await reporter.step(device, 'UI: Alice opens Messages', async () => {
+      await tapId(device, 'main_messagesTab');
+      await waitForId(device, 'main_newMessageFab', 10000);
+      return 'the messages tab is open';
+    });
+
+    await reporter.step(device, 'UI: Alice finds Lena and opens the chat', async () => {
+      await tapId(device, 'main_newMessageFab');
+      await waitForId(device, 'newMessage_searchField', 10000);
+      // Searched by uniqueId. The name branch is a PREFIX match and every
+      // seeded display name starts with "[SEED] ", so "Lena" matches nothing —
+      // this journey only ever worked because Lena happened to sit in Alice's
+      // recents, which is not something a test may rely on.
+      await tapId(device, 'newMessage_searchAllToggle');
+      await typeInto(device, 'newMessage_searchField', String(lena), { clearFirst: true });
+      // Matched on part of the seeded display name that was NOT typed — the
+      // query "Lena" is sitting in the search field, so matching on it finds
+      // the FIELD first and taps that, leaving the screen exactly where it was.
+      // "P-05" appears only in Lena's row.
+      const RESULT = 'P-05';
+      const pickRow = (nodes) =>
+        nodes.find(
+          (n) =>
+            n.center &&
+            n.id !== 'newMessage_searchField' &&
+            `${n.text || ''} ${n.desc || ''}`.includes(RESULT),
+        );
+      const rows = await waitForText(device, RESULT, 12000);
+      const node = pickRow(rows);
+      if (!node) {
+        throw new Error(
+          `Lena's row did not appear in the people search; on screen: ${summarizeScreen(rows)
+            .texts.slice(0, 12)
+            .join(' | ')}`,
+        );
+      }
+      await tapResolved(device, node, {
+        label: "Lena's row in search results",
+        relocate: pickRow,
       });
-      if (r.status !== 200)
-        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      await dbWaitField(
-        ctx.db,
-        `users/${alice}`,
-        'followingIds',
-        (v) => arrayContains(v, lena),
-        6000,
+      // Selecting only TICKS her — the screen is a multi-select and says
+      // "1 selected". The chat opens from the button below, which is why
+      // stopping at the tick left the journey on the same screen it started.
+      //
+      // The keyboard is still up from the search and covers that button. It is
+      // not in the dump, so the tap looks fine and is simply eaten.
+      await dismissKeyboard(device);
+      await waitForId(device, 'newMessage_messageButton', 10000);
+      await tapId(device, 'newMessage_messageButton');
+      await waitForId(device, 'privateChat_messageInput', 12000);
+      return 'the private chat with Lena is open';
+    });
+
+    await reporter.step(device, 'UI: Alice types and sends a message', async () => {
+      await typeInto(device, 'privateChat_messageInput', outbound, { clearFirst: true });
+      // Asserted BEFORE sending. Without this, typing that lands nowhere fails
+      // later at "the message never appeared", which points at rendering or at
+      // the database — anywhere except the keystrokes that never arrived.
+      const typed = await waitForText(device, outbound, 8000).catch(() => null);
+      if (!typed) {
+        const now = byId(await dump(device), 'privateChat_messageInput');
+        throw new Error(
+          `the message never reached the input; it holds ${JSON.stringify(now?.text || '')}`,
+        );
+      }
+      await tapId(device, 'conversation_sendButton');
+      // Asserted on the SCREEN. A send that reaches Firestore but never renders
+      // is a defect a database-only check cannot see.
+      await waitForText(device, outbound, 12000);
+      return `"${outbound}" is on Alice's screen`;
+    });
+
+    await reporter.step(device, 'DB: the message Alice sent is stored', async () => {
+      // The app chose the conversation id, so it is looked up by participants
+      // rather than assumed — an id the test invented would prove nothing about
+      // the one the product actually used.
+      const snap = await dbWaitQuery(
+        () =>
+          ctx.db
+            .collection('conversations')
+            .where('participantIds', 'array-contains', String(alice))
+            .limit(20)
+            .get(),
+        { timeoutMs: 12000, what: `conversations containing "${alice}" (as a string)` },
       );
-      return 'followingIds contains Lena';
+      const doc = snap.docs.find((d) =>
+        (d.data().participantIds || []).map(String).includes(String(lena)),
+      );
+      if (!doc) throw new Error(`no conversation between ${alice} and ${lena} after sending`);
+      convId = doc.id;
+      const msgs = await doc.ref.collection('messages').get();
+      const hit = msgs.docs.find((m) => (m.data().text || '').includes(outbound));
+      if (!hit) {
+        throw new Error(
+          `the message rendered on screen but is not in conversations/${convId}/messages ` +
+            `(${msgs.size} message(s) there)`,
+        );
+      }
+      return `conversations/${convId} holds the message Alice typed`;
     });
-    await reporter.step(device, 'Setup: create the Alice↔Lena conversation doc', async () => {
-      await ctx.db.doc(`conversations/${convId}`).set({
-        participantIds: [alice, lena],
-        crossCohortAtMigration: false,
-        isGroup: false,
-        createdAt: Date.now(),
-      });
-      return `conversations/${convId} created`;
-    });
-    await reporter.step(device, 'API: Alice sends Lena a PM', async () => {
-      const r = await apiCall('POST', `/api/conversations/${convId}/messages`, {
-        token: aliceToken,
-        body: { text: 'hi Lena (journey-runner)', type: 'TEXT' },
-      });
-      if (r.status !== 200)
-        throw new Error(`send expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return 'Alice → message sent';
-    });
-    await reporter.step(device, 'API: Lena replies (round-trip)', async () => {
+
+    await reporter.step(device, 'API: Lena replies from her own account', async () => {
+      // Legitimately server-side: Lena is not on this phone. Her half is a
+      // stimulus, and what it proves is asserted on Alice's screen below.
+      lenaToken = await getIdToken('lapsed-adult@shytalk.dev');
       const r = await apiCall('POST', `/api/conversations/${convId}/messages`, {
         token: lenaToken,
-        body: { text: 'hi Alice (reply)', type: 'TEXT' },
+        body: { text: reply, type: 'TEXT' },
       });
-      if (r.status !== 200)
-        throw new Error(`reply expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return 'Lena → reply sent';
+      if (r.status !== 200) {
+        throw new Error(`Lena's reply expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      }
+      return 'Lena replied over the API';
     });
-    await reporter.step(device, 'DB: conversation holds both messages', async () => {
-      const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
-      if (msgs.size < 2) throw new Error(`expected >=2 messages; got ${msgs.size}`);
-      return `${msgs.size} messages in conversations/${convId}`;
+
+    await reporter.step(device, "UI: Lena's reply arrives on Alice's phone", async () => {
+      // The point of the whole journey: a message sent by someone else reaches
+      // this screen without Alice doing anything.
+      await waitForText(device, reply, 20000);
+      return `"${reply}" rendered on Alice's phone`;
     });
-    await reporter.step(device, 'Cleanup: delete conversation + Alice unfollows Lena', async () => {
+
+    await reporter.step(device, 'Cleanup: remove the conversation', async () => {
+      if (!convId) return 'nothing to remove';
       const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
-      for (const d of msgs.docs) await d.ref.delete();
+      for (const m of msgs.docs) await m.ref.delete();
       await ctx.db.doc(`conversations/${convId}`).delete();
-      const un = await apiCall('POST', `/api/users/${alice}/unfollow`, {
-        token: aliceToken,
-        body: { targetUserId: lena },
-      });
-      if (un.status !== 200) throw new Error(`unfollow cleanup failed: ${un.status}`);
-      return 'conversation + messages deleted; unfollowed';
+      return `conversations/${convId} deleted`;
     });
   },
 };
@@ -2228,7 +2726,15 @@ const J07 = {
 // boundary on the admin endpoints — read-only, no mutations.
 const J12 = {
   id: 'J12',
-  title: 'j12 — admin routine: admin reaches moderation queues; non-admin rejected',
+  // There is no app UI to drive. ReportReviewScreen EXISTS and is registered in
+  // both nav graphs, but nothing navigates to it anywhere in the repo — the
+  // moderation queues a human actually uses are the web admin console
+  // (public/admin/js/tabs/). Declared honestly rather than left to look like a
+  // device journey it can never be (SHY-0457, orphaned screen: SHY-0460).
+  kind: 'api-contract',
+  title:
+    'j12 — API contract: the moderation queues are admin-only — admin 200, non-admin 403 ' +
+    '(no reachable app UI; the queues live in the web admin console)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
     if (!ctx.db) return;
@@ -2430,6 +2936,7 @@ async function resolveStaleJourneyTickets(ctx, { ownerId, keepTicketId }) {
 
 const J38 = {
   id: 'J38',
+  kind: 'ui',
   title: 'j38 — a second support request is warned about, never refused (SHY-0396)',
   async run(device, reporter, ctx) {
     const pkg = ctx.pkg;
@@ -2731,6 +3238,7 @@ const J38 = {
  */
 const J39 = {
   id: 'J39',
+  kind: 'ui',
   title: 'j39 — safety shows the report guide, and the way out of it (SHY-0437)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, ctx.supportPersona);
@@ -2819,6 +3327,7 @@ const J39 = {
 // 409 replay guard (receiptId = sha256(purchaseToken)).
 const J05 = {
   id: 'J05',
+  kind: 'ui',
   title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
@@ -2865,6 +3374,7 @@ const J05 = {
 // the sha256-receipt idempotency guard). No real money, no second device.
 const J06 = {
   id: 'J06',
+  kind: 'ui',
   title: 'j06 — IAP failure handling: unknown product (404) + receipt replay (409)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
@@ -2921,6 +3431,7 @@ const J06 = {
 // OWNER_AWAY | CLOSED — there is no OPEN).
 const J09 = {
   id: 'J09',
+  kind: 'ui',
   title: 'j09 — room lifecycle: create → mic on → mic off → close (Theo)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'host@shytalk.dev');
@@ -3152,6 +3663,7 @@ function selectJourneys(all, selectedIds) {
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
+    kind: 'ui',
     title: 'Clean install launches and reaches SignIn',
     async run(device, reporter) {
       if (ctx.reset) {
@@ -3443,6 +3955,10 @@ async function main() {
       reporter.startJourney(j.id, j.title);
       try {
         await j.run(device, reporter, ctx);
+        // Checked AFTER the journey's own assertions and before it is called a
+        // pass: every step can be true and the run still prove nothing about
+        // the product if the phone was never touched (SHY-0457).
+        assertJourneyTouchedTheUi({ ...j, steps: reporter.current?.steps ?? [] });
         reporter.endJourney('pass');
       } catch (e) {
         reporter.endJourney('fail', e.message);
@@ -3522,6 +4038,12 @@ module.exports = {
   CORE_JOURNEY_IDS,
   isCoreJourney,
   selectJourneys,
+  // SHY-0457 — the guard that stops a journey passing without using the app.
+  JOURNEY_KINDS,
+  journeyTouchedTheUi,
+  assertJourneyTouchedTheUi,
+  dismissKeyboard,
+  uiOps,
   parseArgs,
   capturesScreenFor,
   occluderOf,
@@ -3529,6 +4051,7 @@ module.exports = {
   assertReachable,
   tapResolved,
   tapId,
+  longPressId,
   tapLowestText,
   lowestWithText,
   advanceUntil,
