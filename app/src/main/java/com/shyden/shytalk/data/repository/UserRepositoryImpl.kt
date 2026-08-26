@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.toMap
@@ -250,6 +251,11 @@ class UserRepositoryImpl(
                                 suspensionEndDate = data["suspensionEndDate"] as? Long,
                                 hasActiveWarning = data["hasActiveWarning"] as? Boolean ?: false,
                                 warningReason = data["warningReason"] as? String,
+                                // SHY-0459: the surface a minor is offered rides
+                                // this listener so an aged-up account or an admin
+                                // override takes effect without a reinstall.
+                                cohort = data["cohort"] as? String ?: COHORT_MINOR,
+                                cohortOverride = data["cohortOverride"] as? String,
                             ),
                         )
                     }

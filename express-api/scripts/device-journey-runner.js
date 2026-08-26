@@ -2050,14 +2050,20 @@ const J02 = {
         return `Firestore cohort = "${v}"`;
       });
     }
-    await reporter.step(device, 'Minor profile renders (age 17 + wallet)', async () => {
+    await reporter.step(device, 'Minor profile renders, without the wallet', async () => {
+      // This step used to REQUIRE profile_walletButton, one step before the
+      // next one required it gone — the journey asserted both sides of the
+      // same question and could only ever be half right. SHY-0459 settled it:
+      // spec j02 hides the wallet from a minor, so the profile must render
+      // fully WITHOUT it, not despite it.
       await tapId(device, 'main_profileTab');
       await waitForId(device, 'profile_displayName', 6000);
       const nodes = await dump(device);
       if (!byTextContains(nodes, '17 years old'))
         throw new Error('expected minor age "17 years old" on profile');
-      if (!byId(nodes, 'profile_walletButton')) throw new Error('profile_walletButton missing');
-      return 'profile shows "17 years old" + wallet';
+      if (byId(nodes, 'profile_walletButton'))
+        throw new Error('profile_walletButton is shown to a minor; spec j02 hides it');
+      return 'profile shows "17 years old", and no wallet';
     });
     await reporter.step(device, 'Minor UI hides the features spec j02 says it hides', async () => {
       // This used to be a step named "FINDING: minor UI is NOT feature-hidden"
@@ -2066,8 +2072,10 @@ const J02 = {
       // the operator found it reading the sign-off evidence and ruled, on
       // 2026-08-25, that it must fail (SHY-0457, SHY-0459).
       //
-      // It stays red until the controls are hidden for minors, or the spec is
-      // formally changed. Either is a decision; a green tick was neither.
+      // Resolved by SHY-0459 on 2026-08-26: the controls are hidden for minors
+      // in the app, so this passes by the UI obeying the spec rather than by
+      // the test tolerating a deviation. It stays here as the guard against
+      // the gating being removed again.
       const nodes = await dump(device);
       const exposed = ['main_messagesTab', 'profile_walletButton'].filter((t) => byId(nodes, t));
       if (exposed.length) {

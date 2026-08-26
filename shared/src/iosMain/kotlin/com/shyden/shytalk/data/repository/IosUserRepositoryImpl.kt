@@ -2,6 +2,7 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
@@ -251,6 +252,11 @@ class IosUserRepositoryImpl(
                     suspensionEndDate = (data["suspensionEndDate"] as? Number)?.toLong(),
                     hasActiveWarning = data["hasActiveWarning"] as? Boolean ?: false,
                     warningReason = data["warningReason"] as? String,
+                    // SHY-0459: the twin of the Android reader. A cohort read on
+                    // one platform and not the other is how the two surfaces
+                    // drift apart without anybody noticing.
+                    cohort = data["cohort"] as? String ?: COHORT_MINOR,
+                    cohortOverride = data["cohortOverride"] as? String,
                 )
             }
             // SHY-0185: a `.snapshots` listener error (rules denial / network
