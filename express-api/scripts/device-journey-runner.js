@@ -88,9 +88,21 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
  * signs in as, so an iOS support run cannot collide with an Android voice run
  * either.
  */
+// The two support walks must not share an account: Android and iOS run in
+// PARALLEL, so one signed-in session would evict the other and the failure
+// would read as a product defect.
+//
+// SHY-0456 gave J09 (room lifecycle) the voice host, `host@shytalk.dev` —
+// which was ALSO the iOS support persona, so an Android J09 beside an iOS
+// support walk reintroduced the collision by another route. That is exactly
+// what device-journey-parallel-isolation.test.js exists to catch, and it did.
+//
+// The voice host stays with the voice journey; support moves to P-11, the
+// only adult/en/MEMBER persona no journey signs in as. A support walk needs
+// nothing of the account but that it can sign in and raise a ticket.
 const SUPPORT_PERSONA_BY_PLATFORM = {
   android: 'adult-power@shytalk.dev',
-  ios: 'host@shytalk.dev',
+  ios: 'joiner-flaky@shytalk.dev',
 };
 
 const TARGETS = {
