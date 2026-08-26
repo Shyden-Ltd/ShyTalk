@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Ruang obrolan suara, ditata ulang.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Obrolan suara untuk sementara tidak tersedia</string>
+    <string name="voice_chat_disconnected">Obrolan suara terputus</string>
+    <string name="voice_unavailable_can_still_chat">Kamu masih bisa membaca dan mengobrol</string>
+    <string name="voice_connecting">Menghubungkan suara...</string>
+    <string name="voice_unavailable_mic_blocked">Mikrofon memerlukan obrolan suara, yang saat ini tidak tersedia</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Dompet · %1$s</string>
     <!-- google-translated 2026-05-04 -->

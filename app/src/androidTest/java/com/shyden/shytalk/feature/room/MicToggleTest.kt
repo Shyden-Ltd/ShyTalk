@@ -4,7 +4,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -60,6 +59,7 @@ class MicToggleTest {
         seats: Map<String, Seat>,
         voiceUnavailable: Boolean = false,
         taps: MutableList<Int> = mutableListOf(),
+        explanations: MutableList<Unit> = mutableListOf(),
     ): MutableList<Int> {
         composeTestRule.setContent {
             MaterialTheme {
@@ -71,6 +71,7 @@ class MicToggleTest {
                     userMap = emptyMap(),
                     isVoiceUnavailable = voiceUnavailable,
                     onToggleMic = { taps += it },
+                    onVoiceUnavailable = { explanations += Unit },
                     onSendMessage = {},
                     onTapUser = {},
                     onInviteUser = { _, _ -> },
@@ -108,17 +109,24 @@ class MicToggleTest {
     }
 
     @Test
-    fun theToggleIsDisabledAndSilentWhenVoiceIsUnavailable() {
-        // Disabled here is CORRECT — there is no voice session to mute. This
-        // pins that the disabled state is reserved for that genuine case, so a
-        // future regression cannot quietly disable the control for everyone
-        // (which is, in effect, what the permission bug did).
-        val taps = renderPanel(seats(muted = false), voiceUnavailable = true)
+    fun theToggleExplainsItselfWhenVoiceIsUnavailable() {
+        // SHY-0466 changes what "unavailable" looks like, and keeps what the
+        // original test protected. SHY-0272's guarantee stands: a tap must NOT
+        // report a mute when there is no voice session to mute. What changes is
+        // the silence — a control that is disabled AND says nothing on use is
+        // how "voice is unavailable" reads as "the app is broken".
+        val explanations = mutableListOf<Unit>()
+        val taps = renderPanel(seats(muted = false), voiceUnavailable = true, explanations = explanations)
+
         composeTestRule.onNodeWithContentDescription("Voice unavailable").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("room_micToggleButton").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("room_micToggleButton").assertIsEnabled()
+
         composeTestRule.onNodeWithTag("room_micToggleButton").performClick()
         composeTestRule.waitForIdle()
+
+        // Still no mute reported — and now the tap is answered.
         assertEquals(emptyList<Int>(), taps)
+        assertEquals(1, explanations.size)
     }
 
     @Test

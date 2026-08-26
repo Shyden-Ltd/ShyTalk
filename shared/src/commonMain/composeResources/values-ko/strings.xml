@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">새롭게 디자인된 음성 채팅방.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">음성 채팅을 일시적으로 사용할 수 없습니다.</string>
+    <string name="voice_chat_disconnected">음성 채팅 연결이 끊겼습니다</string>
+    <string name="voice_unavailable_can_still_chat">읽기와 채팅은 계속할 수 있습니다</string>
+    <string name="voice_connecting">음성 연결 중...</string>
+    <string name="voice_unavailable_mic_blocked">마이크를 사용하려면 음성 채팅이 필요하지만 지금은 사용할 수 없습니다</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">지갑 · %1$s</string>
     <!-- google-translated 2026-05-04 -->

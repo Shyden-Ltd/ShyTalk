@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">वॉइस चैट रूम की फिर से कल्पना की गई।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">वॉइस चैट अस्थायी रूप से अनुपलब्ध है</string>
+    <string name="voice_chat_disconnected">वॉइस चैट डिस्कनेक्ट हो गया</string>
+    <string name="voice_unavailable_can_still_chat">आप अब भी पढ़ और चैट कर सकते हैं</string>
+    <string name="voice_connecting">वॉइस कनेक्ट हो रहा है...</string>
+    <string name="voice_unavailable_mic_blocked">माइक्रोफ़ोन के लिए वॉइस चैट ज़रूरी है, जो अभी उपलब्ध नहीं है</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">बटुआ · %1$s</string>
     <!-- google-translated 2026-05-04 -->

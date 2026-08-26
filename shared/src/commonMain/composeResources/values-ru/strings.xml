@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Переосмысление голосовых чатов.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Голосовой чат временно недоступен</string>
+    <string name="voice_chat_disconnected">Голосовой чат отключён</string>
+    <string name="voice_unavailable_can_still_chat">Вы всё ещё можете читать и писать</string>
+    <string name="voice_connecting">Подключение голоса...</string>
+    <string name="voice_unavailable_mic_blocked">Микрофону нужен голосовой чат, который сейчас недоступен</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Кошелек · %1$s</string>
     <!-- google-translated 2026-05-04 -->

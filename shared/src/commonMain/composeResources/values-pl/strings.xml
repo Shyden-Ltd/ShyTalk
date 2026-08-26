@@ -1304,6 +1304,10 @@
     <string name="voice_chat_reimagined">Nowe pokoje rozmów głosowych.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Czat głosowy jest chwilowo niedostępny</string>
+    <string name="voice_chat_disconnected">Czat głosowy rozłączony</string>
+    <string name="voice_unavailable_can_still_chat">Nadal możesz czytać i pisać</string>
+    <string name="voice_connecting">Łączenie głosu...</string>
+    <string name="voice_unavailable_mic_blocked">Mikrofon wymaga czatu głosowego, który jest teraz niedostępny</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Portfel · %1$s</string>
     <!-- google-translated 2026-05-04 -->

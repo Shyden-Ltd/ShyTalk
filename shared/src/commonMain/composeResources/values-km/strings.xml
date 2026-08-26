@@ -1283,6 +1283,10 @@
     <string name="connecting">កំពុងភ្ជាប់...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">ការ​ជជែក​ជា​សំឡេង​មិន​អាច​ប្រើ​បាន​ជា​បណ្ដោះអាសន្ន</string>
+    <string name="voice_chat_disconnected">ការជជែកជាសំឡេងត្រូវបានផ្តាច់</string>
+    <string name="voice_unavailable_can_still_chat">អ្នកនៅតែអាចអាន និងជជែកបាន</string>
+    <string name="voice_connecting">កំពុងភ្ជាប់សំឡេង...</string>
+    <string name="voice_unavailable_mic_blocked">មីក្រូហ្វូនត្រូវការការជជែកជាសំឡេង ដែលមិនអាចប្រើបានឥឡូវនេះ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="mic_permission_denied">ការអនុញ្ញាតមីក្រូហ្វូនត្រូវបានបដិសេធ។ អ្នកនឹងមិនអាចប្រើការជជែកជាសំឡេងបានទេ។</string>
     <!-- google-translated 2026-05-04 -->
