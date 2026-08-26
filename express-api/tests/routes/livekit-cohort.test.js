@@ -520,7 +520,7 @@ describe('POST /api/livekit/token — cohort gate (real services + real auth)', 
     // Pre-PR-7 rooms have no cohort field; effectiveCohort fails them closed to
     // 'minor', so an adult cannot mint a token until the room is migration-tagged.
     await seedRoom('legacy-room-1', { name: 'legacy' /* no cohort */ });
-    const user = await mintRealUser({ uniqueId: 60000010, cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 50990511, cohort: 'adult' });
     const app = createApp();
 
     const res = await request(app)
@@ -530,7 +530,7 @@ describe('POST /api/livekit/token — cohort gate (real services + real auth)', 
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
-    const rows = await pollSegregationEvent(60000010);
+    const rows = await pollSegregationEvent(50990511);
     expect(rows[0]).toMatchObject({ sourceCohort: 'adult', targetCohort: 'minor' });
   });
 

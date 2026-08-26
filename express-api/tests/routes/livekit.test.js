@@ -162,7 +162,7 @@ describe('POST /api/livekit/token (real services + real auth)', () => {
 
   test('403 when the caller is suspended (real middleware enforces it)', async () => {
     await seedRoom('room-susp', { cohort: 'adult' });
-    const user = await mintRealUser({ uniqueId: 50000020, cohort: 'adult', isSuspended: true });
+    const user = await mintRealUser({ uniqueId: 50990512, cohort: 'adult', isSuspended: true });
     const app = createApp();
     const res = await request(app)
       .post('/api/livekit/token')
@@ -367,7 +367,7 @@ describe('POST /api/livekit/token (real services + real auth)', () => {
 
   test('omits the url field in local mode', async () => {
     await seedRoom('room-adult-6', { cohort: 'adult' });
-    const user = await mintRealUser({ uniqueId: 50000010, cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 50990510, cohort: 'adult' });
     const app = createApp();
 
     const res = await request(app)

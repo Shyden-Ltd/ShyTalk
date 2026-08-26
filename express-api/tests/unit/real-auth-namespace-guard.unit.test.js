@@ -50,7 +50,7 @@ describe('assertNoTestNamespace — Firestore namespacing and Auth minting are m
   });
 
   test.each([
-    ['mintRealUser', () => mintRealUser({ uniqueId: 1 })],
+    ['mintRealUser', () => mintRealUser({ uniqueId: 50990513 })],
     ['mintTokenWithoutUserDoc', () => mintTokenWithoutUserDoc({})],
   ])('%s refuses to mint while a namespace is set', async (_name, call) => {
     process.env.FIRESTORE_TEST_NAMESPACE = 'storage';

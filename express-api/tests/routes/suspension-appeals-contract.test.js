@@ -119,8 +119,21 @@ beforeEach(async () => {
   await clearAppealsFor(APPELLANT, OTHER);
 });
 
+/**
+ * Delete this file's user documents outright.
+ *
+ * Leaving a SUSPENDED user behind is a leak with teeth: the next suite — or
+ * the next device journey — meets an account it did not suspend and blames
+ * the product. J07 lost an evening to exactly that, from a sibling suite
+ * minting a seeded persona as suspended.
+ */
+async function clearUsers(...ids) {
+  await Promise.all(ids.map((id) => db.doc(`users/${id}`).delete()));
+}
+
 afterAll(async () => {
   await clearAppealsFor(APPELLANT, OTHER);
+  await clearUsers(APPELLANT, OTHER, ADMIN_ID);
   process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
 

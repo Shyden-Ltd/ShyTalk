@@ -137,6 +137,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await clearPrefixed(db, DEVICE_BANS, ID_PREFIX);
+  // A suspended user left behind is met by the next suite — or the next
+  // device journey — as an account nobody suspended, and the product gets
+  // the blame. Delete them rather than merely un-suspending them.
+  await Promise.all(
+    [SUSPENDED_ID, BANNED_ID, CLEAN_ID].map((id) => db.doc(`users/${id}`).delete()),
+  );
   process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
 
