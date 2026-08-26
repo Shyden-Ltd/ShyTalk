@@ -7,47 +7,50 @@
  * stop their messages arriving — the moderator would see the account disabled
  * and the person would carry on reading.
  *
- * That is the property these tests exist for. The rest — the wire format, the
- * heartbeat, the teardown — belongs to tests/utils/sse.test.js.
+ * That is the property these tests exist for. The wire format, the heartbeat
+ * and the teardown belong to tests/utils/sse.unit.test.js.
+ *
+ * ─── What is real here, and what is not ─────────────────────────────────────
+ *
+ * This suite used to mock `src/utils/firebase`, `src/middleware/auth` and
+ * `src/middleware/sameCohort`. It tripped the no-new-stubs ratchet
+ * (EPIC-0003), and the doubles were doing more harm than the policy suggests:
+ * `checkSuspension` was replaced by a Set, so the test asserted that a Set
+ * lookup worked, not that suspending a person in Firestore stops their stream.
+ *
+ * Now:
+ *   - Firestore is the REAL emulator. Deliveries are driven by real writes
+ *     through a real `onSnapshot` listener, not by calling a captured callback.
+ *   - `checkSuspension` is the real one, reading the real user document,
+ *     through the same cache the middleware uses.
+ *   - `requireSameCohort` is not mocked away.
+ *
+ * The response object is still a double, and deliberately so: it stands in for
+ * a socket, exactly as in `sse.unit.test.js`. There is no real socket that
+ * would prove anything this one does not, and driving SSE through a live HTTP
+ * server would test Node's streams rather than this route's decisions.
+ *
+ * `req.auth` is set directly because identity resolution is not the subject —
+ * the per-delivery RE-CHECK is, and that half reads Firestore for real.
  */
 
-let mockSuspended = new Set();
-const mockSnapshotHandlers = [];
-const mockUnsubscribe = jest.fn();
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-jest.mock('../../src/middleware/auth', () => ({
-  isLiveAdmin: async () => false,
-  checkSuspension: async (uniqueId) => mockSuspended.has(String(uniqueId)),
-}));
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    doc: jest.fn(() => ({ get: async () => ({ exists: false, data: () => undefined }) })),
-    collection: jest.fn(() => {
-      const q = {
-        where: () => q,
-        orderBy: () => q,
-        limit: () => q,
-        get: async () => ({ docs: [], empty: true, size: 0 }),
-        onSnapshot: (onNext, onError) => {
-          mockSnapshotHandlers.push({ onNext, onError });
-          return mockUnsubscribe;
-        },
-      };
-      return q;
-    }),
-  },
-  rtdb: { ref: jest.fn(() => ({ set: jest.fn().mockResolvedValue() })) },
-  FieldValue: { serverTimestamp: () => 'ts' },
-}));
-
-jest.mock('../../src/middleware/sameCohort', () => ({
-  requireSameCohort: () => (req, res, next) => next(),
-}));
-
+const { db } = require('../../src/utils/firebase');
+const { clearAuthCaches } = require('../helpers/real-auth');
+const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
 const routes = require('../../src/routes/conversations');
 
-/** Doubles that capture what the stream would put on the wire. */
+// Per-file id range: no seeded persona, no other suite (SHY-0464).
+const CALLER = 64400001;
+const OTHER = 64400002;
+const MINOR = 64400003;
+
+const convIdFor = (a, b) => [String(a), String(b)].sort().join('_');
+const OWNED = [convIdFor(CALLER, OTHER), convIdFor(CALLER, MINOR)];
+
+/** Captures what the stream would put on the wire. */
 const makeRes = () => ({
   headers: {},
   chunks: [],
@@ -65,7 +68,7 @@ const makeRes = () => ({
   },
 });
 
-const makeReq = (uniqueId = 50000010) => {
+const makeReq = (uniqueId = CALLER) => {
   const handlers = {};
   return {
     auth: { uniqueId, cohort: 'adult' },
@@ -98,12 +101,49 @@ const events = (res) =>
       return { name, data: JSON.parse(payload) };
     });
 
-const snapshotOf = (docs) => ({ docs: docs.map((d) => ({ id: d.id, data: () => d.data })) });
+/**
+ * Waits for a condition instead of for a duration.
+ *
+ * A real listener fires when Firestore decides it has, which is soon but not
+ * at a time this test may assume. A fixed sleep would be either flaky or slow,
+ * and the repo forbids them outright.
+ */
+async function waitFor(predicate, what, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (await predicate()) return true;
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((r) => setImmediate(r));
+  }
+}
 
-beforeEach(() => {
-  mockSuspended = new Set();
-  mockSnapshotHandlers.length = 0;
-  mockUnsubscribe.mockClear();
+const named = (res, name) => events(res).filter((e) => e.name === name);
+
+async function seedConversation(id, participants, extra = {}) {
+  await db.doc(`conversations/${id}`).set({
+    participantIds: participants.map(String),
+    lastMessageAt: Date.now(),
+    ...extra,
+  });
+}
+
+const clearOwned = () => Promise.all(OWNED.map((id) => db.doc(`conversations/${id}`).delete()));
+
+beforeAll(assertEmulatorReachable);
+
+afterAll(async () => {
+  await clearOwned();
+  await Promise.all([CALLER, OTHER, MINOR].map((u) => db.doc(`users/${u}`).delete()));
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
+
+beforeEach(async () => {
+  clearAuthCaches();
+  await clearOwned();
+  await db.doc(`users/${CALLER}`).set({ uniqueId: CALLER, cohort: 'adult', isSuspended: false });
+  await db.doc(`users/${OTHER}`).set({ uniqueId: OTHER, cohort: 'adult' });
+  await db.doc(`users/${MINOR}`).set({ uniqueId: MINOR, cohort: 'minor' });
 });
 
 describe('GET /api/conversations/stream', () => {
@@ -113,91 +153,115 @@ describe('GET /api/conversations/stream', () => {
 
   test('opens an event stream', async () => {
     const res = makeRes();
-    await streamHandler()(makeReq(), res);
+    const req = makeReq();
+    await streamHandler()(req, res);
     expect(res.headers['content-type']).toBe('text/event-stream');
+    req.emitClose();
   });
 
-  test('delivers the caller conversations on a snapshot', async () => {
+  test('delivers the caller conversations when one is written', async () => {
     const res = makeRes();
-    await streamHandler()(makeReq(), res);
-    mockSnapshotHandlers[0].onNext(
-      snapshotOf([{ id: 'a', data: { participantIds: ['50000010', '50000020'] } }]),
+    const req = makeReq();
+    await streamHandler()(req, res);
+
+    const id = convIdFor(CALLER, OTHER);
+    await seedConversation(id, [CALLER, OTHER]);
+
+    await waitFor(
+      () => named(res, 'conversations').some((e) => e.data.some((c) => c.id === id)),
+      'the conversation to arrive',
     );
-    await Promise.resolve();
-    await Promise.resolve();
-    const got = events(res);
-    expect(got.map((e) => e.name)).toContain('conversations');
-    expect(got.find((e) => e.name === 'conversations').data.map((c) => c.id)).toEqual(['a']);
+    req.emitClose();
   });
 
   test('never delivers threads frozen at migration (UK OSA #17)', async () => {
     const res = makeRes();
-    await streamHandler()(makeReq(), res);
-    mockSnapshotHandlers[0].onNext(
-      snapshotOf([
-        { id: 'ok', data: { participantIds: ['50000010'] } },
-        { id: 'frozen', data: { participantIds: ['50000010'], crossCohortAtMigration: true } },
-      ]),
+    const req = makeReq();
+    await streamHandler()(req, res);
+
+    const ok = convIdFor(CALLER, OTHER);
+    const frozen = convIdFor(CALLER, MINOR);
+    await seedConversation(frozen, [CALLER, MINOR], { crossCohortAtMigration: true });
+    await seedConversation(ok, [CALLER, OTHER]);
+
+    // Wait for the ALLOWED one, then assert the frozen one never appeared —
+    // waiting on an absence alone would pass before anything was delivered.
+    await waitFor(
+      () => named(res, 'conversations').some((e) => e.data.some((c) => c.id === ok)),
+      'the allowed thread',
     );
-    await Promise.resolve();
-    await Promise.resolve();
-    const delivered = events(res).find((e) => e.name === 'conversations').data;
-    expect(delivered.map((c) => c.id)).toEqual(['ok']);
+    const everDelivered = named(res, 'conversations').flatMap((e) => e.data.map((c) => c.id));
+    expect(everDelivered).not.toContain(frozen);
+    req.emitClose();
   });
 
   test('a caller suspended AFTER subscribing stops receiving, and the stream closes', async () => {
     // The whole point. Authorization is re-checked per delivery, because the
-    // middleware's check ran once, hours ago, when the connection opened.
+    // middleware's check ran once, when the connection opened.
     const res = makeRes();
-    await streamHandler()(makeReq(), res);
+    const req = makeReq();
+    await streamHandler()(req, res);
 
-    mockSnapshotHandlers[0].onNext(
-      snapshotOf([{ id: 'a', data: { participantIds: ['50000010'] } }]),
-    );
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(events(res).some((e) => e.name === 'conversations')).toBe(true);
+    const first = convIdFor(CALLER, OTHER);
+    await seedConversation(first, [CALLER, OTHER]);
+    await waitFor(() => named(res, 'conversations').length > 0, 'the first delivery');
+    const deliveredBefore = named(res, 'conversations').length;
 
-    mockSuspended.add('50000010'); // moderator suspends them mid-stream
-    mockSnapshotHandlers[0].onNext(
-      snapshotOf([{ id: 'b', data: { participantIds: ['50000010'] } }]),
-    );
-    await Promise.resolve();
-    await Promise.resolve();
+    // A moderator suspends them mid-stream, for real.
+    await db.doc(`users/${CALLER}`).set({ uniqueId: CALLER, cohort: 'adult', isSuspended: true });
+    clearAuthCaches();
 
-    const got = events(res);
-    expect(got.some((e) => e.name === 'closed')).toBe(true);
-    expect(got.filter((e) => e.name === 'conversations')).toHaveLength(1);
-    expect(got.find((e) => e.name === 'conversations').data.map((c) => c.id)).toEqual(['a']);
+    await seedConversation(convIdFor(CALLER, MINOR), [CALLER, OTHER]);
+
+    await waitFor(() => named(res, 'closed').length > 0, 'the stream to close');
+    expect(named(res, 'closed')[0].data.reason).toBe('suspended');
+    expect(named(res, 'conversations').length).toBe(deliveredBefore);
+    req.emitClose();
   });
 
   test('a caller already suspended at subscribe never receives anything', async () => {
-    mockSuspended.add('50000010');
-    const res = makeRes();
-    await streamHandler()(makeReq(), res);
-    mockSnapshotHandlers[0].onNext(
-      snapshotOf([{ id: 'a', data: { participantIds: ['50000010'] } }]),
-    );
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(events(res).some((e) => e.name === 'conversations')).toBe(false);
-  });
+    await db.doc(`users/${CALLER}`).set({ uniqueId: CALLER, cohort: 'adult', isSuspended: true });
+    clearAuthCaches();
 
-  test('disconnect detaches the Firestore listener', async () => {
-    // A leaked listener per dropped phone is the failure mode that kills the
-    // server slowly rather than loudly.
+    const res = makeRes();
     const req = makeReq();
-    await streamHandler()(req, makeRes());
-    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    await streamHandler()(req, res);
+    await seedConversation(convIdFor(CALLER, OTHER), [CALLER, OTHER]);
+
+    await waitFor(() => named(res, 'closed').length > 0, 'the stream to close');
+    expect(named(res, 'conversations')).toHaveLength(0);
     req.emitClose();
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
   });
 
-  test('a listener error closes the stream instead of hanging the client', async () => {
+  test('disconnect detaches the listener — later writes deliver nothing', async () => {
+    // A leaked listener per dropped phone is the failure mode that kills the
+    // server slowly rather than loudly. Asserted by BEHAVIOUR: a write after
+    // the disconnect must not reach a stream nobody is holding.
     const res = makeRes();
-    await streamHandler()(makeReq(), res);
-    mockSnapshotHandlers[0].onError(new Error('permission denied'));
-    expect(events(res).some((e) => e.name === 'error')).toBe(true);
-    expect(res.ended).toBe(true);
+    const req = makeReq();
+    await streamHandler()(req, res);
+
+    await seedConversation(convIdFor(CALLER, OTHER), [CALLER, OTHER]);
+    await waitFor(() => named(res, 'conversations').length > 0, 'the first delivery');
+
+    req.emitClose();
+    const afterDisconnect = res.chunks.length;
+
+    // A POSITIVE control rather than a wait. Asserting an absence after a
+    // pause proves only that the pause was long enough; a second, live stream
+    // proves the write actually propagated, so the silence on the first one
+    // means the listener detached rather than that nothing happened yet.
+    const liveRes = makeRes();
+    const liveReq = makeReq();
+    await streamHandler()(liveReq, liveRes);
+
+    await seedConversation(convIdFor(CALLER, MINOR), [CALLER, OTHER]);
+    await waitFor(
+      () => named(liveRes, 'conversations').length > 0,
+      'the live stream to receive the write',
+    );
+
+    expect(res.chunks.length).toBe(afterDisconnect);
+    liveReq.emitClose();
   });
 });
