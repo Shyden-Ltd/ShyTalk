@@ -2013,6 +2013,31 @@ function personaJourney(id, title, email, uid, cohort) {
     title,
     async run(device, reporter, ctx) {
       await signInAs(device, reporter, ctx, email);
+
+      // SHY-0457's guard caught this journey declaring itself `ui` while every
+      // step after the preamble spoke only to Firestore. It was right: "the
+      // persona signs in" was proven by reading a database, which a signed-out
+      // phone would also have passed.
+      //
+      // So it now looks at the screen, and looks at something that DIFFERS by
+      // cohort — the wallet, which SHY-0459 hides from minors. An assertion
+      // that is identical for every persona proves only that the app renders;
+      // this one fails if the wrong person is signed in.
+      await reporter.step(device, `UI: ${cohort} profile renders for ${uid}`, async () => {
+        await tapId(device, 'main_profileTab');
+        await waitForId(device, 'profile_displayName', 8000);
+        const nodes = await dump(device);
+        const wallet = Boolean(byId(nodes, 'profile_walletButton'));
+        const expectWallet = cohort !== 'minor';
+        if (wallet !== expectWallet) {
+          throw new Error(
+            `profile_walletButton ${wallet ? 'shown' : 'hidden'} for a ${cohort}; ` +
+              `expected ${expectWallet ? 'shown' : 'hidden'} (SHY-0459)`,
+          );
+        }
+        return `profile renders; wallet ${expectWallet ? 'shown' : 'hidden'}, as a ${cohort} should see`;
+      });
+
       if (ctx.db && uid) {
         await reporter.step(device, `DB users/${uid} cohort=${cohort}`, async () => {
           const got = await dbWaitField(
@@ -3418,15 +3443,38 @@ const J05 = {
         return `POST /economy/purchase {local_100_coins} → 200 ${JSON.stringify(r.body).slice(0, 100)}`;
       },
     );
+    let credited = before;
     await reporter.step(device, 'DB: Alice shyCoins increased', async () => {
-      const got = await dbWaitField(
+      credited = await dbWaitField(
         ctx.db,
         `users/${alice}`,
         'shyCoins',
         (v) => typeof v === 'number' && v > before,
         6000,
       );
-      return `shyCoins ${before} → ${got}`;
+      return `shyCoins ${before} → ${credited}`;
+    });
+
+    // SHY-0457's guard caught this journey declaring itself `ui` while proving
+    // a purchase entirely in Firestore. The store side genuinely cannot be
+    // driven on a device — you cannot complete a Google Play purchase in a
+    // journey — but the OUTCOME can: somebody who buys coins expects to see
+    // more coins. The profile's wallet button carries the balance, so the
+    // journey can read it without entering the wallet.
+    await reporter.step(device, 'UI: Alice sees the new balance on her wallet', async () => {
+      await tapId(device, 'main_profileTab');
+      await waitForId(device, 'profile_walletButton', 8000);
+      const nodes = await dump(device);
+      const shown = nodes
+        .map((n) => `${n.text || ''} ${n.desc || ''}`)
+        .find((t) => /Wallet\s*·/.test(t));
+      if (!shown) throw new Error('the wallet button did not show a balance');
+      const digits = shown.replace(/[^0-9]/g, '');
+      if (!digits) throw new Error(`wallet showed no number: "${shown.trim()}"`);
+      // The label abbreviates large balances, so this asserts a balance is
+      // RENDERED and that the screen is Alice's — not a digit-for-digit match
+      // against Firestore, which would be asserting the formatter.
+      return `wallet shows "${shown.trim().slice(0, 40)}" (Firestore says ${credited})`;
     });
   },
 };
@@ -3434,10 +3482,23 @@ const J05 = {
 // j06 — IAP failure handling. Same /economy/purchase endpoint: an unknown
 // product is rejected (404) and a replayed purchaseToken is rejected (409,
 // the sha256-receipt idempotency guard). No real money, no second device.
+//
+// Declared api-contract, not ui, and SHY-0457's guard is why. Both refusals
+// happen entirely at the endpoint and neither has an outcome on screen: the
+// app never offers an unknown product, and a replayed receipt is a thing the
+// SERVER notices, not something a person can do twice from the UI. J05 covers
+// the successful purchase and does show its result on the phone.
+//
+// The honest declaration matters more than the label. A `ui` journey that only
+// speaks to the API passes while touching nothing, which is exactly what
+// SHY-0457 exists to stop — and calling this one what it is keeps that guard
+// meaningful for the journeys that ARE lying.
 const J06 = {
   id: 'J06',
-  kind: 'ui',
-  title: 'j06 — IAP failure handling: unknown product (404) + receipt replay (409)',
+  kind: 'api-contract',
+  title:
+    'j06 — API contract: IAP failure handling — unknown product (404) + receipt replay (409) ' +
+    '(no app UI offers either case)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
     if (!ctx.db) return;
