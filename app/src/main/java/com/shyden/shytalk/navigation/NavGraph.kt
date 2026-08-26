@@ -54,6 +54,7 @@ import com.shyden.shytalk.core.crop.CropInput
 import com.shyden.shytalk.core.push.notifyPushPermissionPrompted
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.BiometricAuth
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.BillingService
@@ -171,9 +172,16 @@ fun NavGraph(
     //
     // Reading one's OWN user document is not a cross-cohort read, so the
     // cohort claim was never what gated it. Knowing the correct key is.
+    var ownCohort by remember { mutableStateOf(COHORT_MINOR) }
+    var ownCohortOverride by remember { mutableStateOf<String?>(null) }
     if (uid != null) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
+                // SHY-0459: the twin of SharedNavGraph. Two nav graphs, and a
+                // cohort read in one and not the other is how the surfaces
+                // drift apart with nothing to say so.
+                ownCohort = flags.cohort
+                ownCohortOverride = flags.cohortOverride
                 if (flags.isSuspended) {
                     val endDate = flags.suspensionEndDate
                     val isActive =
@@ -504,6 +512,8 @@ fun NavGraph(
                 val voiceService: VoiceService = koinInject()
 
                 MainScreen(
+                    cohort = ownCohort,
+                    cohortOverride = ownCohortOverride,
                     isBackendDegraded = isBackendDegraded,
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
                     onPrewarmRoom = { room ->

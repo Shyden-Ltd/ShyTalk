@@ -2,6 +2,7 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -11,6 +12,21 @@ data class UserFlags(
     val suspensionEndDate: Long? = null,
     val hasActiveWarning: Boolean = false,
     val warningReason: String? = null,
+    /**
+     * The caller's own cohort, carried on the SAME live listener as the
+     * suspension flags (SHY-0459).
+     *
+     * Not a separate fetch, because the surface a minor is offered has to
+     * follow a cohort that changes mid-session — an aged-up account, or an
+     * admin override — without a reinstall, which is that story's edge case.
+     *
+     * Defaults to minor: unknown is the most-restrictive answer everywhere
+     * else cohort is resolved (`effectiveCohort`, `cohortFromClaim`, the
+     * Firestore rules), and a surface that opens before the answer arrives is
+     * the same failure direction as SHY-0468.
+     */
+    val cohort: String = COHORT_MINOR,
+    val cohortOverride: String? = null,
 )
 
 interface UserRepository {

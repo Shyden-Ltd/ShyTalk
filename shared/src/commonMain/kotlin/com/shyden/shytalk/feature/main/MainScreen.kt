@@ -36,6 +36,8 @@ import com.shyden.shytalk.core.model.BannerActionType
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.ui.DegradedModeBanner
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.util.CohortGatedFeature
+import com.shyden.shytalk.core.util.isFeatureOffered
 import com.shyden.shytalk.feature.home.RoomListContent
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -54,6 +56,12 @@ enum class BottomNavTab(
 @Composable
 fun MainScreen(
     isBackendDegraded: Boolean = false,
+    // SHY-0459. Deliberately NOT defaulted, for the same reason as ChatPanel's
+    // onToggleMic: a default here decides for every call site that forgets, and
+    // the two possible defaults are "show a minor the messages tab" or "hide it
+    // from adults". Neither is a decision to make by omission.
+    cohort: String,
+    cohortOverride: String? = null,
     onNavigateToRoom: (String) -> Unit,
     onPrewarmRoom: (ChatRoom) -> Unit = {},
     _onNavigateToUserProfile: (String) -> Unit,
@@ -66,7 +74,15 @@ fun MainScreen(
     totalUnreadCount: Long = 0,
     profileContent: @Composable (Modifier) -> Unit,
 ) {
+    val offersMessages = isFeatureOffered(CohortGatedFeature.DIRECT_MESSAGES, cohort, cohortOverride)
+
     var selectedTabName by rememberSaveable { mutableStateOf(BottomNavTab.Rooms.name) }
+    // A tab that is no longer offered must not stay SELECTED. A cohort can
+    // change mid-session, and rememberSaveable would otherwise leave somebody
+    // sitting on a screen the app has just decided not to show them.
+    if (!offersMessages && selectedTabName == BottomNavTab.Messages.name) {
+        selectedTabName = BottomNavTab.Rooms.name
+    }
     val selectedTab = BottomNavTab.valueOf(selectedTabName)
     var showCreateDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -101,31 +117,36 @@ fun MainScreen(
                     label = { Text(stringResource(Res.string.rooms)) },
                     modifier = Modifier.testTag("main_roomsTab"),
                 )
-                NavigationBarItem(
-                    selected = selectedTab == BottomNavTab.Messages,
-                    onClick = { selectedTabName = BottomNavTab.Messages.name },
-                    icon = {
-                        BadgedBox(
-                            badge = {
-                                if (totalUnreadCount > 0) {
-                                    Badge {
-                                        Text(
-                                            if (totalUnreadCount > 99) {
-                                                "99+"
-                                            } else {
-                                                "$totalUnreadCount"
-                                            },
-                                        )
+                // SHY-0459: spec j02 expects a minor not to be OFFERED this. The
+                // server already refuses; this stops the app showing a door that
+                // does not open.
+                if (offersMessages) {
+                    NavigationBarItem(
+                        selected = selectedTab == BottomNavTab.Messages,
+                        onClick = { selectedTabName = BottomNavTab.Messages.name },
+                        icon = {
+                            BadgedBox(
+                                badge = {
+                                    if (totalUnreadCount > 0) {
+                                        Badge {
+                                            Text(
+                                                if (totalUnreadCount > 99) {
+                                                    "99+"
+                                                } else {
+                                                    "$totalUnreadCount"
+                                                },
+                                            )
+                                        }
                                     }
-                                }
-                            },
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
-                        }
-                    },
-                    label = { Text(stringResource(Res.string.messages)) },
-                    modifier = Modifier.testTag("main_messagesTab"),
-                )
+                                },
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null)
+                            }
+                        },
+                        label = { Text(stringResource(Res.string.messages)) },
+                        modifier = Modifier.testTag("main_messagesTab"),
+                    )
+                }
                 NavigationBarItem(
                     selected = selectedTab == BottomNavTab.Profile,
                     onClick = { selectedTabName = BottomNavTab.Profile.name },

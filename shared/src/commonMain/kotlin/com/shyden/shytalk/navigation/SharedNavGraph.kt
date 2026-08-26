@@ -33,6 +33,7 @@ import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.BiometricAuth
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
@@ -134,6 +135,13 @@ fun SharedNavGraph(
     // Real-time suspension + warning listener
     val uid = currentUserId
     val userRepository: UserRepository = koinInject()
+    // SHY-0459: the caller's own cohort, so the app stops offering a minor
+    // controls the server will refuse. Fed by the SAME live listener as the
+    // suspension flags below, so an aged-up account or an admin override takes
+    // effect without a reinstall. Starts minor — unknown is the restrictive
+    // answer everywhere else cohort is resolved.
+    var ownCohort by remember { mutableStateOf(COHORT_MINOR) }
+    var ownCohortOverride by remember { mutableStateOf<String?>(null) }
     // SHY-0143 — `currentUserId` above is now `resolvedUniqueId`, NOT the
     // `resolvedUniqueId ?: firebaseUid` fallback. That fallback is the whole
     // hazard: on a cache miss it made this subscribe to `users/<firebaseUid>`,
@@ -151,6 +159,8 @@ fun SharedNavGraph(
     if (uid != null) {
         LaunchedEffect(uid) {
             userRepository.observeUserFlags(uid).collect { flags ->
+                ownCohort = flags.cohort
+                ownCohortOverride = flags.cohortOverride
                 if (flags.isSuspended) {
                     val endDate = flags.suspensionEndDate
                     val isActive = endDate == null || endDate > currentTimeMillis()
@@ -415,6 +425,8 @@ fun SharedNavGraph(
 
                 MainScreen(
                     isBackendDegraded = isBackendDegraded,
+                    cohort = ownCohort,
+                    cohortOverride = ownCohortOverride,
                     onNavigateToRoom = { roomId -> navigateToRoom(roomId) },
                     onPrewarmRoom = { room ->
                         val userId = authRepository.currentUserId
