@@ -140,3 +140,74 @@ describe('GET /api/notifications/settings', () => {
     expect(typeof res.body.pmNotificationsEnabled).toBe('boolean');
   });
 });
+
+/**
+ * EPIC-0006 — the PATCH half, and the round trip.
+ *
+ * The read test above asserts that GET returns every field PATCH accepts, by
+ * reading a shared list. That proves the two lists are the same object; it does
+ * not prove a setting can actually be written and read back. A field that can be
+ * written but never read — or accepted and silently dropped — is invisible until
+ * somebody notices it does nothing, which is the failure the shared list exists
+ * to prevent.
+ */
+describe('PATCH /api/notifications/settings', () => {
+  test('every field the GET returns can be written and read back', async () => {
+    const headers = await callerWith({});
+
+    // Read what the API says exists, then write the opposite of each.
+    const before = await request(createApp()).get('/api/notifications/settings').set(headers);
+    const fields = Object.keys(before.body);
+    expect(fields.length).toBeGreaterThan(0);
+
+    const flipped = Object.fromEntries(fields.map((k) => [k, !before.body[k]]));
+    await request(createApp())
+      .patch('/api/notifications/settings')
+      .set(headers)
+      .send(flipped)
+      .expect(200);
+
+    const after = await request(createApp()).get('/api/notifications/settings').set(headers);
+    expect(after.body).toEqual(flipped);
+  });
+
+  test('a field that is not a setting is ignored, not stored', async () => {
+    const headers = await callerWith({});
+
+    await request(createApp())
+      .patch('/api/notifications/settings')
+      .set(headers)
+      .send({ pmSoundEnabled: false, notASetting: true })
+      .expect(200);
+
+    const stored = (await db.doc(`users/${CALLER}`).get()).data();
+    expect(stored.pmSoundEnabled).toBe(false);
+    expect(stored).not.toHaveProperty('notASetting');
+  });
+
+  test('a body with no recognised field is refused, not silently accepted', async () => {
+    // Answering 200 to a write that changed nothing is how a client comes to
+    // believe a setting is saved when it never was.
+    const headers = await callerWith({});
+
+    const res = await request(createApp())
+      .patch('/api/notifications/settings')
+      .set(headers)
+      .send({ notASetting: true });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('values are coerced to booleans on the way in', async () => {
+    const headers = await callerWith({});
+
+    await request(createApp())
+      .patch('/api/notifications/settings')
+      .set(headers)
+      .send({ pmNotificationsEnabled: 'yes' })
+      .expect(200);
+
+    const stored = (await db.doc(`users/${CALLER}`).get()).data();
+    expect(stored.pmNotificationsEnabled).toBe(true);
+  });
+});
