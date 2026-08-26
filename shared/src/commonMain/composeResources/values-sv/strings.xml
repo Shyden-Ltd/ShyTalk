@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Ansluter...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Vi kunde inte nå ShyTalks servrar. Det kan bero på din anslutning, eller på oss – försök igen.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">Det här är vårt fel, inte ditt. Försök igen om en stund.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">Om det fortsätter är det vårt fel. Försök igen om en stund.</string>
+    <string name="connection_trouble">Vi kunde inte nå ShyTalks servrar.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Prova det här: kontrollera att du har internet, stäng av eventuell VPN och starta om appen eller enheten.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Kontakta oss</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">Orsak: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Tryck för att gå tillbaka</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Tekniska svårigheter</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk har för närvarande tekniska problem. Vissa funktioner kanske inte fungerar korrekt. Tjänsterna kommer att återställas automatiskt.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Kan inte ansluta</string>
     <!-- google-translated 2026-05-04 -->

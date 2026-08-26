@@ -162,12 +162,26 @@ internal fun assembleContent(locale: String): WatermarkContent {
         route = QaContext.currentRoute,
         journeyMarker = QaContext.journeyMarker,
         serverSha = QaContext.serverSha,
-        // COMPACT on device (SHY-0430): the badge draws over the app, and
-        // at FULL its eight lines reached into body copy — including the
-        // exact sentence journey J38 step 10 asserts on, which made the
-        // frame useless as evidence for its own claim. The web badge
-        // stays FULL; see WatermarkVerbosity for why they differ.
-        verbosity = WatermarkVerbosity.COMPACT,
+        // FULL on device. Operator, 2026-08-25, reversing SHY-0430's COMPACT:
+        //
+        //   "This is designed on purpose, in case a tester leaks the
+        //    application. I need to be able to see easily who it was."
+        //
+        // The `Name:` line and the account id are a LEAK-ATTRIBUTION mark, not
+        // an accident — SHY-0430 read them as a privacy slip and dropped them,
+        // which quietly removed the one thing that identifies who a leaked
+        // recording came from. Every field it dropped is restored.
+        //
+        // The height problem is solved where it belongs, in the LINE SPACING
+        // below: these are 9sp lines rendered with Compose's default ~1.4x
+        // line height, so most of the badge was air. Nothing is removed to
+        // make it fit.
+        //
+        // And explicitly NOT compacted to keep it off a screenshot, or to make
+        // a journey assertion easier. Operator, same message: "you need to be
+        // able to prove the app is working without affecting the watermark."
+        // A debug surface is not something the test harness gets to shrink.
+        verbosity = WatermarkVerbosity.FULL,
     )
 }
 
@@ -218,7 +232,7 @@ private fun WatermarkBadge(modifier: Modifier = Modifier) {
         modifier =
             modifier
                 .background(WatermarkBackgroundColor)
-                .padding(horizontal = 6.dp, vertical = 3.dp)
+                .padding(horizontal = 6.dp, vertical = 2.dp)
                 .widthIn(max = WATERMARK_MAX_WIDTH_DP.dp),
         horizontalAlignment = Alignment.End,
     ) {
@@ -226,6 +240,7 @@ private fun WatermarkBadge(modifier: Modifier = Modifier) {
             text = content.title,
             color = Color.White,
             fontSize = WATERMARK_TITLE_SIZE_SP.sp,
+            lineHeight = WATERMARK_TITLE_SIZE_SP.sp,
             fontWeight = FontWeight.Bold,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -233,6 +248,7 @@ private fun WatermarkBadge(modifier: Modifier = Modifier) {
                 text = content.statusLine + " ",
                 color = Color.White,
                 fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
+                lineHeight = WATERMARK_LINE_HEIGHT_SP.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -253,6 +269,7 @@ private fun WatermarkBadge(modifier: Modifier = Modifier) {
                 text = line,
                 color = Color.White,
                 fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
+                lineHeight = WATERMARK_LINE_HEIGHT_SP.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -272,6 +289,18 @@ private val WatermarkBackgroundColor =
         .copy(red = 0xD3 / 255f, green = 0x2F / 255f, blue = 0x2F / 255f, alpha = PreviewWatermarkConstants.BADGE_BACKGROUND_ALPHA)
 private const val WATERMARK_TITLE_SIZE_SP = 10
 private const val WATERMARK_DETAIL_SIZE_SP = 9
+
+/**
+ * Line height for the badge's detail rows.
+ *
+ * Compose defaults a 9sp line to roughly 1.4x — about 13sp — so more than a
+ * third of the badge's height was empty space between rows. Setting it flat to
+ * the glyph size buys back that third WITHOUT dropping a field, which is the
+ * only kind of compaction worth having: the operator reads this badge to
+ * identify who a leaked build belongs to, and a field that is not there cannot
+ * be read at any spacing.
+ */
+private const val WATERMARK_LINE_HEIGHT_SP = 10
 
 // Compactness cap (operator ruling 2026-07-18): the badge never spans
 // more than ~60% of a small phone's width; long lines ellipsize.

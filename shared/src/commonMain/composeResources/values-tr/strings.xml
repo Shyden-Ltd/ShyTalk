@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Bağlanıyor...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">ShyTalk sunucularına ulaşamadık. Bunun nedeni bağlantınız olabilir ya da biz olabiliriz — lütfen tekrar deneyin.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">Bu bizim sorunumuz, sizin değil. Lütfen birazdan tekrar deneyin.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">Devam ederse sorun bizde demektir. Lütfen birazdan tekrar deneyin.</string>
+    <string name="connection_trouble">ShyTalk sunucularına ulaşamadık.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Şunu deneyin: internete bağlı olduğunuzu kontrol edin, varsa VPN'i kapatın, ardından uygulamayı veya cihazınızı yeniden başlatın.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Bize Ulaşın</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">Sebep: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Geri dönmek için dokunun</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Teknik Zorluklar</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk şu anda teknik sorunlar yaşıyor. Bazı özellikler düzgün çalışmayabilir. Hizmetler otomatik olarak geri yüklenecektir.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Bağlantı Kurulamıyor</string>
     <!-- google-translated 2026-05-04 -->

@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Conectando...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">No pudimos conectar con los servidores de ShyTalk. Puede ser tu conexión, o puede ser cosa nuestra: inténtalo de nuevo.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">Es un problema nuestro, no tuyo. Inténtalo de nuevo en un momento.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">Si sigue ocurriendo, es cosa nuestra. Inténtalo de nuevo en un momento.</string>
+    <string name="connection_trouble">No pudimos conectar con los servidores de ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Prueba esto: comprueba que tienes internet, desactiva cualquier VPN y reinicia la aplicación o tu dispositivo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contáctenos</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">Razón: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Toca para regresar</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Dificultades técnicas</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk actualmente está experimentando dificultades técnicas. Es posible que algunas funciones no funcionen correctamente. Los servicios se restablecerán automáticamente.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">No se puede conectar</string>
     <!-- google-translated 2026-05-04 -->

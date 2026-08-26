@@ -985,11 +985,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Підключення...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Не вдалося зв'язатися із серверами ShyTalk. Причиною може бути ваше з'єднання або ми — спробуйте ще раз.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">Це наша проблема, а не ваша. Спробуйте ще раз трохи згодом.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">Якщо це повторюється, проблема на нашому боці. Спробуйте ще раз трохи згодом.</string>
+    <string name="connection_trouble">Не вдалося зв'язатися із серверами ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Спробуйте: перевірте підключення до інтернету, вимкніть VPN, потім перезапустіть застосунок або пристрій.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Зв'яжіться з нами</string>
     <!-- google-translated 2026-05-04 -->
@@ -1275,10 +1273,6 @@
     <string name="suspension_reason">Причина: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Торкніться, щоб повернутися</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Технічні труднощі</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk зараз має технічні проблеми. Деякі функції можуть не працювати належним чином. Послуги будуть відновлені автоматично.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Неможливо підключитися</string>
     <!-- google-translated 2026-05-04 -->

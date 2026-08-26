@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">कनेक्ट हो रहा है...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके। यह आपके कनेक्शन की वजह से हो सकता है, या हमारी वजह से — कृपया फिर से कोशिश करें।</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">यह हमारी समस्या है, आपकी नहीं। कृपया थोड़ी देर बाद फिर कोशिश करें।</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">अगर ऐसा होता रहे, तो समस्या हमारी ओर से है। कृपया थोड़ी देर बाद फिर कोशिश करें।</string>
+    <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके।</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">यह आज़माएँ: देखें कि आप इंटरनेट से जुड़े हैं, कोई भी VPN बंद करें, फिर ऐप या अपना डिवाइस दोबारा चालू करें।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">हमसे संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">कारण: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">वापस लौटने के लिए टैप करें</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">तकनीकी कठिनाई</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk वर्तमान में तकनीकी कठिनाइयों का सामना कर रहा है। कुछ सुविधाएं संभवतः ठीक से न कार्य करें। सेवाएं स्वचालित रूप से बहाल हो जाएंगी.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">कनेक्ट करने में असमर्थ</string>
     <!-- google-translated 2026-05-04 -->

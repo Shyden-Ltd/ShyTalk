@@ -16,25 +16,31 @@ data class WatermarkContent(
 )
 
 /**
- * How much of the badge to render (SHY-0430).
+ * How much of the badge to render.
  *
- * The badge is drawn OVER the app, so every line it adds is a line of
- * the product's own copy somebody cannot read. Which lines are worth
- * that depends entirely on the surface:
+ * - [FULL] — what BOTH surfaces render. The badge carries the build, the
+ *   account and the tester's name, and the last of those is the point:
+ *   it is a leak-attribution mark, so a build that turns up somewhere it
+ *   should not can be traced to whoever it was given to. The web matrix
+ *   runner also reads the UID line straight off its screenshots.
+ * - [COMPACT] — a trimmed form, currently asked for by NOBODY. It was the
+ *   phone badge between 2026-08-23 and 2026-08-25 (SHY-0430), because at
+ *   FULL the badge reached down into the duplicate-request screen's body
+ *   copy that journey J38 step 10 asserts on.
  *
- * - [FULL] — the web badge. A browser window has room to spare beside
- *   the content, and the web matrix runner reads the UID line straight
- *   off its screenshots to tell a signed-out cell from a broken one.
- * - [COMPACT] — the phone badge. On a handset the eight-line form
- *   reached down into body copy: on the duplicate-request screen it
- *   covered the "goes to the back of the queue" sentence that journey
- *   J38 step 10 asserts on, so the frame could not evidence the claim
- *   pinned to it (operator, 2026-08-22). It keeps which build and which
- *   account, and nothing else — see [WatermarkFormat.content].
+ * That is no longer how the height is solved, and the reversal is worth
+ * stating because the original reasoning reads convincingly. Operator,
+ * 2026-08-25: shrinking a debug surface so it stays out of a screenshot,
+ * or so a journey assertion is easier, is the wrong trade —
  *
- * Deliberately has no default anywhere. The two surfaces have drifted
- * apart on purpose, and a default is how they would silently drift
- * back together.
+ *   "you need to be able to prove the app is working without affecting
+ *    the watermark."
+ *
+ * Height is dealt with in the LINE SPACING instead, which costs no field.
+ * See PreviewWatermark's WATERMARK_LINE_HEIGHT_SP.
+ *
+ * Deliberately has no default anywhere. A surface should have to say what
+ * it wants, so a change of mind like this one is visible at the call site.
  */
 enum class WatermarkVerbosity {
     FULL,
@@ -163,13 +169,14 @@ object WatermarkFormat {
                 //   branch  — the sha identifies the build authoritatively;
                 //             a branch name moves and does not.
                 //   device  — the run report's header names it.
-                //   NAME    — the longest line in the badge, and the one
-                //             that forced its width. It is also the only
-                //             genuinely personal field: on a non-seed device
-                //             it burns a real person's display name into
-                //             every frame of whatever the recording is
-                //             shared with. The account id above identifies
-                //             them for support purposes without doing that.
+                //   NAME    — REVERSED 2026-08-25. Dropped here as a privacy
+                //             slip — "a real person's display name burned
+                //             into every frame". That was wrong about what
+                //             the field is FOR. Operator: "This is designed
+                //             on purpose, in case a tester leaks the
+                //             application. I need to be able to see easily
+                //             who it was." Dropping it removed the only way
+                //             to trace a leaked recording to a tester.
                 //   locale
                 //   /route  — useful while debugging by hand, not worth
                 //             covering copy on an unattended walk.

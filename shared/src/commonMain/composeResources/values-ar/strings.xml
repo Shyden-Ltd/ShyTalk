@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">جارٍ الاتصال...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">تعذّر الوصول إلى خوادم ShyTalk. قد يكون السبب اتصالك، وقد يكون منّا — يُرجى المحاولة مرة أخرى.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">هذه مشكلتنا، وليست مشكلتك. يُرجى المحاولة مرة أخرى بعد قليل.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">إذا استمر الأمر، فالمشكلة لدينا. يُرجى المحاولة مرة أخرى بعد قليل.</string>
+    <string name="connection_trouble">لم نتمكن من الوصول إلى خوادم ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">جرّب هذا: تأكد من اتصالك بالإنترنت، وأوقف أي VPN، ثم أعد تشغيل التطبيق أو جهازك.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">اتصل بنا</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">السبب: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">انقر للعودة</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">الصعوبات التقنية</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">يواجه ShyTalk حاليًا صعوبات فنية. قد لا تعمل بعض الميزات بشكل صحيح. سيتم استعادة الخدمات تلقائيا.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">غير قادر على الاتصال</string>
     <!-- google-translated 2026-05-04 -->

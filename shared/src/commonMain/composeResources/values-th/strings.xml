@@ -984,11 +984,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">กำลังเชื่อมต่อ...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">เราไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ของ ShyTalk ได้ อาจเป็นที่การเชื่อมต่อของคุณ หรืออาจเป็นที่เรา — โปรดลองอีกครั้ง</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">นี่เป็นปัญหาของเรา ไม่ใช่ของคุณ โปรดลองอีกครั้งในอีกสักครู่</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">หากยังเกิดขึ้นอีก แสดงว่าเป็นที่ฝั่งเรา โปรดลองอีกครั้งในอีกสักครู่</string>
+    <string name="connection_trouble">เราไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ของ ShyTalk ได้</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">ลองทำแบบนี้: ตรวจสอบว่าคุณเชื่อมต่ออินเทอร์เน็ต ปิด VPN แล้วรีสตาร์ทแอปหรืออุปกรณ์ของคุณ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">ติดต่อเรา</string>
     <!-- google-translated 2026-05-04 -->
@@ -1274,10 +1272,6 @@
     <string name="suspension_reason">เหตุผล: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">แตะเพื่อกลับ</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">ความยากลำบากทางเทคนิค</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ขณะนี้ ShyTalk กำลังประสบปัญหาทางเทคนิค คุณสมบัติบางอย่างอาจทำงานไม่ถูกต้อง บริการจะถูกกู้คืนโดยอัตโนมัติ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">ไม่สามารถเชื่อมต่อได้</string>
     <!-- google-translated 2026-05-04 -->

@@ -986,11 +986,9 @@
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Menghubungkan...</string>
     <!-- claude-translated 2026-08-22 -->
-    <string name="connection_trouble">Kami tidak dapat menghubungi server ShyTalk. Ini bisa jadi karena koneksi Anda, atau karena kami — silakan coba lagi.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_help">Ini masalah kami, bukan Anda. Silakan coba lagi sebentar lagi.</string>
-    <!-- claude-translated 2026-08-24 -->
-    <string name="contact_support_hint">Jika terus terjadi, itu dari pihak kami. Silakan coba lagi sebentar lagi.</string>
+    <string name="connection_trouble">Kami tidak dapat menghubungi server ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Coba ini: pastikan kamu terhubung ke internet, matikan VPN, lalu mulai ulang aplikasi atau perangkatmu.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Hubungi kami</string>
     <!-- google-translated 2026-05-04 -->
@@ -1276,10 +1274,6 @@
     <string name="suspension_reason">Alasan: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Ketuk untuk kembali</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Kesulitan Teknis</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk saat ini mengalami kesulitan teknis. Beberapa fitur mungkin tidak berfungsi dengan benar. Layanan akan dipulihkan secara otomatis.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Tidak Dapat Terhubung</string>
     <!-- google-translated 2026-05-04 -->

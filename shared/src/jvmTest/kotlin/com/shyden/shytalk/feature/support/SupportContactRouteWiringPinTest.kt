@@ -89,8 +89,19 @@ class SupportContactRouteWiringPinTest {
         val missing =
             listOf(
                 "support_contact",
-                "contact_support_help",
-                "contact_support_hint",
+                // `contact_support_help` was here. Its SCREEN was deleted on
+                // 2026-08-25 (operator: "we should only have 1 screen, saying
+                // that we cannot connect"), so the surface this pin protected
+                // no longer exists to print an address on. Removed rather than
+                // renamed — OneConnectionFailureScreenTest now asserts the
+                // whole thing stays gone, string included.
+                // Was `contact_support_hint`, renamed 2026-08-25. The SURFACE is
+                // what this pin protects — the line under Retry on SignIn — and
+                // it still exists and still prints no address. Only its name and
+                // its job changed: it told people the fault was ours, and it now
+                // tells them what to try. The rename is deliberate; the pin
+                // failing on it is the pin working.
+                "connection_tips",
                 "device_locked_description",
             ).filterNot { english.contains("""<string name="$it">""") }
         assertEquals(emptyList(), missing)

@@ -72,7 +72,6 @@ import com.shyden.shytalk.feature.security.UnsafeDeviceScreen
 import com.shyden.shytalk.feature.starting.StartingScreenCache
 import com.shyden.shytalk.feature.starting.StartingScreenComposable
 import com.shyden.shytalk.feature.suspension.BanScreen
-import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.BanState
 import com.shyden.shytalk.navigation.ColdStartSequencer
@@ -247,7 +246,6 @@ class MainActivity : AppCompatActivity() {
                         var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
                         var isUnsafe by remember { mutableStateOf(false) }
                         var backendDegraded by remember { mutableStateOf(false) }
-                        var degradedAcknowledged by remember { mutableStateOf(false) }
                         var legalAccepted by remember {
                             mutableStateOf(LanguagePreference.getAcceptedLegalVersion() >= CURRENT_LEGAL_VERSION)
                         }
@@ -600,10 +598,6 @@ class MainActivity : AppCompatActivity() {
 
                             updateRequired -> {
                                 ForceUpdateScreen()
-                            }
-
-                            backendDegraded && !degradedAcknowledged -> {
-                                DegradedModeScreen(onAcknowledge = { degradedAcknowledged = true })
                             }
 
                             !legalAccepted -> {
