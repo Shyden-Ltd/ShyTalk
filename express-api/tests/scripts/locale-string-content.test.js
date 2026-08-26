@@ -120,16 +120,7 @@ describe('locale strings render as written', () => {
     // 880 -> 883 on 2026-08-24: SHY-0433. An attachment was a filename and
     // nothing else; it now shows a thumbnail and opens full screen. Three
     // strings: open, close, and what a file with no thumbnail says instead.
-    // 883 -> 880 on 2026-08-25: SHY-0454, and the only entry here that goes
-    // DOWN. DegradedModeScreen was deleted -- a full-screen interstitial shown
-    // whenever /api/health answered "degraded", announcing "Technical
-    // Difficulties" to the public before anybody could get in. Its three
-    // strings went with it: the title, the description, and
-    // `contact_support_help`, which said "This is our problem, not yours".
-    // A fourth string was RENAMED rather than removed in the same change
-    // (`contact_support_hint` -> `connection_tips`), which is why this falls by
-    // three and not four.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([880]);
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([883]);
   });
 
   test('no string carries an Android-style escape sequence', () => {
