@@ -88,9 +88,21 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
  * signs in as, so an iOS support run cannot collide with an Android voice run
  * either.
  */
+// The two support walks must not share an account: Android and iOS run in
+// PARALLEL, so one signed-in session would evict the other and the failure
+// would read as a product defect.
+//
+// SHY-0456 gave J09 (room lifecycle) the voice host, `host@shytalk.dev` —
+// which was ALSO the iOS support persona, so an Android J09 beside an iOS
+// support walk reintroduced the collision by another route. That is exactly
+// what device-journey-parallel-isolation.test.js exists to catch, and it did.
+//
+// The voice host stays with the voice journey; support moves to P-11, the
+// only adult/en/MEMBER persona no journey signs in as. A support walk needs
+// nothing of the account but that it can sign in and raise a ticket.
 const SUPPORT_PERSONA_BY_PLATFORM = {
   android: 'adult-power@shytalk.dev',
-  ios: 'host@shytalk.dev',
+  ios: 'joiner-flaky@shytalk.dev',
 };
 
 const TARGETS = {
@@ -1073,16 +1085,42 @@ async function tapLowestText(device, text) {
  * and the whole thing is quoted. A message typed without this arrives as only
  * its first word, which looks like a truncation bug in the product.
  */
-async function typeInto(device, id, text) {
+/**
+ * Type into a field.
+ *
+ * `clearFirst` matters whenever the field can arrive PRE-FILLED. Android's
+ * `input text` APPENDS — it does not replace — so typing "B" into a field
+ * already holding "A" leaves "AB". SHY-0456 hit this on the create-room
+ * dialog, which pre-fills the last room name: the journey asked for a room
+ * called JR-CORE-<t2> and got one called "JR-CORE-<t1>JR-CORE-<t2>", so the
+ * lookup that followed found nothing and the failure pointed at the database
+ * rather than at the keystrokes.
+ *
+ * Off by default so existing journeys keep the behaviour they were written
+ * against; pass it wherever the field is not guaranteed empty.
+ */
+async function typeInto(device, id, text, { clearFirst = false } = {}) {
   if (device.kind === 'ios') {
     // Addressed by identifier and set directly. Typing key-by-key through the
     // on-screen keyboard is slower and can drop characters when the field
     // scrolls under it -- which looks like the product losing input.
-    await device.typeText(id, text);
+    // XCUITest's /value APPENDS too — the comment that once claimed this
+    // branch "sets directly" was wrong, and believing it cost SHY-0456 an
+    // identical concatenated-name failure on the iPhone after it was fixed on
+    // Android. The driver clears via /element/{id}/clear when asked.
+    await device.typeText(id, text, { clearFirst });
     await sleep(400);
     return;
   }
   await tapId(device, id);
+  if (clearFirst) {
+    // Cursor to the end, then delete back through whatever was there. Bounded
+    // by the longest field this is used on rather than looping on a re-read,
+    // which would cost a full dump per character.
+    device.shell('input keyevent KEYCODE_MOVE_END');
+    device.shell(`input keyevent ${new Array(60).fill('KEYCODE_DEL').join(' ')}`);
+    await sleep(200);
+  }
   device.shell(`input text ${JSON.stringify(text.replace(/ /g, '%s'))}`);
   await sleep(500);
 }
@@ -2857,6 +2895,251 @@ const J06 = {
   },
 };
 
+// j09 — the room lifecycle, on the phone: create → mic on → mic off → close.
+//
+// Written for SHY-0456 because this runner had NO room journey at all, so a
+// green fourteen-of-fourteen said nothing about the product's core feature.
+//
+// Deliberately UI-driven for create / mic / close — the point is to prove the
+// app does these things, not that the API can. Firestore is asserted after
+// each one so a screen that merely LOOKS right cannot pass.
+//
+// Field names come from the implementation, not from
+// journey-tests/j09-voice-room-host.feature, which is stale on three counts:
+// it says `title` (the field is `name`), `hostId` (it is `ownerId` + a
+// `hostIds` array), `seats[i].muted` (seats is a map keyed by a STRING index,
+// and the field is `isMuted`), and `state: OPEN` (RoomState is ACTIVE |
+// OWNER_AWAY | CLOSED — there is no OPEN).
+const J09 = {
+  id: 'J09',
+  title: 'j09 — room lifecycle: create → mic on → mic off → close (Theo)',
+  async run(device, reporter, ctx) {
+    await signInAs(device, reporter, ctx, 'host@shytalk.dev');
+    if (!ctx.db) return;
+
+    const theo = 50000060;
+    // Unique per run so a re-run never matches a room a previous run left.
+    const roomName = `JR-CORE-${Date.now()}`;
+    let roomId = null;
+    let seatIndex = null;
+
+    /** Which seat holds this user — robust to the owner not landing in seat 0. */
+    const seatOf = (room, uid) => {
+      for (const [idx, s] of Object.entries(room.seats || {})) {
+        if (s && String(s.userId) === String(uid)) return idx;
+      }
+      return null;
+    };
+
+    // Idempotence. A run that fails mid-journey never reaches its cleanup, so
+    // Theo is left owning an ACTIVE room — and the app then offers "replace
+    // room?" instead of the create dialog. The next run would create nothing
+    // and fail on a DIFFERENT step, hiding the original defect. Clear his
+    // rooms on the way IN, not only on the way out.
+    await reporter.step(device, 'Setup: clear any room Theo still owns', async () => {
+      // Targeted queries, not a whole-collection read: an unbounded get on
+      // `rooms` returned gRPC "1 CANCELLED: call already cancelled" against the
+      // emulator. ownerId has been seen as both a number and a string, so ask
+      // for both rather than guessing which this build wrote.
+      // The first Firestore query of this journey intermittently comes back
+      // "1 CANCELLED: call already cancelled" against the emulator — a gRPC
+      // channel fault, not a data one: the identical query succeeds on the
+      // next attempt. Retried rather than left to fail the whole core set on
+      // a transport hiccup. A persistent failure still surfaces, because the
+      // last error is rethrown.
+      const query = async (value) =>
+        ctx.db.collection('rooms').where('ownerId', '==', value).limit(20).get();
+
+      // Query AND delete both live inside the retry. Scoping it to the query
+      // alone hid the real source: the runs that failed were exactly the ones
+      // with a room to remove, because the cancel comes from the delete, and
+      // the runs that "passed" were the ones with nothing to delete at all.
+      let deleted = 0;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        try {
+          const refs = new Map();
+          for (const value of [theo, String(theo)]) {
+            const snap = await query(value);
+            for (const d of snap.docs) refs.set(d.id, d.ref);
+          }
+          for (const ref of refs.values()) await ref.delete();
+          deleted = refs.size;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          await sleep(500 * attempt);
+        }
+      }
+      if (lastErr) throw lastErr;
+
+      return deleted ? `deleted ${deleted} leftover room(s)` : 'none to clear';
+    });
+
+    await reporter.step(device, 'UI: open the rooms tab', async () => {
+      await tapId(device, 'main_roomsTab');
+      await waitForId(device, 'main_createRoomFab', 8000);
+      return 'rooms tab shows the create-room control';
+    });
+
+    await reporter.step(device, `UI: create a room named ${roomName}`, async () => {
+      await tapId(device, 'main_createRoomFab');
+      await waitForId(device, 'createRoom_nameField', 8000);
+      // The dialog pre-fills the last room name, and Android's input text
+      // appends — so this MUST clear first or the room is created with both.
+      await typeInto(device, 'createRoom_nameField', roomName, { clearFirst: true });
+      await tapId(device, 'createRoom_confirmButton');
+      return 'create-room dialog confirmed';
+    });
+
+    await reporter.step(device, 'DB: the room exists, ACTIVE, owned by Theo', async () => {
+      const snap = await dbWaitQuery(
+        () => ctx.db.collection('rooms').where('name', '==', roomName).limit(1).get(),
+        { timeoutMs: 10000, what: `rooms where name == ${roomName}` },
+      );
+      const doc = snap.docs[0];
+      roomId = doc.id;
+      const room = doc.data();
+      // RoomState is ACTIVE | OWNER_AWAY | CLOSED. There is no OPEN — that is
+      // the fourth thing j09-voice-room-host.feature gets wrong about the model.
+      if (room.state !== 'ACTIVE') throw new Error(`expected state ACTIVE; got ${room.state}`);
+      if (String(room.ownerId) !== String(theo)) {
+        throw new Error(`expected ownerId ${theo}; got ${room.ownerId}`);
+      }
+      seatIndex = seatOf(room, theo);
+      if (seatIndex === null) {
+        throw new Error(
+          `Theo (${theo}) holds no seat in the room he created. seats=${JSON.stringify(room.seats)}`,
+        );
+      }
+      return `rooms/${roomId} OPEN, owner ${theo}, seat ${seatIndex}`;
+    });
+
+    await reporter.step(device, 'UI: the room screen shows the seat grid', async () => {
+      await waitForId(device, 'room_seatGrid', 10000);
+      return 'seat grid rendered';
+    });
+
+    // The pair the operator named: a mic that turns on and off, proven in the
+    // database rather than by the icon alone. A room can render a mic-on icon
+    // while the seat is still muted for everyone else.
+    const setMic = async (wantMuted) => {
+      const label = wantMuted ? 'mute' : 'unmute';
+      // Re-read the tree and retry rather than trusting one look. Immediately
+      // after the first toggle the button is still IN the dump but briefly has
+      // no resolvable centre, so the tap reports "not found" while the tag is
+      // right there in the diagnostic. Findable is not the same as reachable.
+      let tapped = false;
+      let lastErr = null;
+      for (let attempt = 1; attempt <= 4 && !tapped; attempt += 1) {
+        try {
+          await waitForId(device, 'room_micToggleButton', 6000);
+          await tapId(device, 'room_micToggleButton');
+          tapped = true;
+        } catch (err) {
+          lastErr = err;
+          await sleep(400 * attempt);
+        }
+      }
+      if (!tapped) throw lastErr;
+      await dbWaitField(
+        ctx.db,
+        `rooms/${roomId}`,
+        'seats',
+        (seats) => Boolean(seats?.[seatIndex]) && seats[seatIndex].isMuted === wantMuted,
+        8000,
+      );
+      return `seats.${seatIndex}.isMuted === ${wantMuted} after ${label}`;
+    };
+
+    await reporter.step(device, 'UI+DB: Theo opens his mic', () => setMic(false));
+    await reporter.step(device, 'UI+DB: Theo closes his mic again', () => setMic(true));
+
+    await reporter.step(device, 'UI: close the room from the settings sheet', async () => {
+      // room_endRoomButton is owner-only and lives inside RoomSettingsSheet,
+      // not on the room screen — it is unreachable until the sheet is open.
+      await tapId(device, 'room_settingsButton');
+      await waitForId(device, 'room_endRoomButton', 8000);
+      await tapId(device, 'room_endRoomButton');
+      // No confirmation dialog: RoomSettingsSheet wires the button straight to
+      // onCloseRoom. The next step is the assertion that it took effect.
+      return 'close-room tapped';
+    });
+
+    await reporter.step(device, 'DB: the room is CLOSED', async () => {
+      await dbWaitField(ctx.db, `rooms/${roomId}`, 'state', (v) => v === 'CLOSED', 10000);
+      return `rooms/${roomId} state === CLOSED`;
+    });
+
+    await reporter.step(device, 'Cleanup: remove the journey room', async () => {
+      await ctx.db.doc(`rooms/${roomId}`).delete();
+      return `rooms/${roomId} deleted`;
+    });
+  },
+};
+
+// ─── The core set (SHY-0456) ────────────────────────────────────────────────
+//
+// A fixed, small set of journeys that runs EVERY session, before anything the
+// ticket asked for. It exists because a green report only proves the paths it
+// walked: this runner's fourteen journeys never created a room or opened a
+// microphone, and "14/14 on both devices" was offered as sign-off evidence for
+// a platform whose core feature is voice rooms.
+//
+// The point is that it runs when the ticket has nothing to do with rooms. That
+// is precisely when a break goes unnoticed.
+//
+// Sign-in (J-SMOKE), the room lifecycle including the mic (J09), social
+// (J07), and the cross-cohort wall (J02, J08) — age segregation being the one
+// defect class here with real safeguarding exposure. Adding to this list is a
+// story of its own; it is pinned by tests/scripts/core-journey-set.test.js.
+const CORE_JOURNEY_IDS = Object.freeze(['J-SMOKE', 'J09', 'J07', 'J02', 'J08']);
+
+/** True when a journey id belongs to the core set — used to halt a run. */
+function isCoreJourney(id) {
+  return CORE_JOURNEY_IDS.includes(id);
+}
+
+/**
+ * Resolve which journeys run, in order, with the core set ALWAYS first.
+ *
+ * A narrower `--journeys` selection cannot opt out of the core set — that is
+ * the whole guard. Throws rather than returning a short list, because a core
+ * set that silently selects nothing is worse than no core set at all: it
+ * reports green.
+ */
+function selectJourneys(all, selectedIds) {
+  const index = new Map((all ?? []).map((j) => [j.id, j]));
+
+  const missingCore = CORE_JOURNEY_IDS.filter((id) => !index.has(id));
+  if (missingCore.length) {
+    throw new Error(
+      `core journey missing from the corpus: ${missingCore.join(', ')}. ` +
+        'The core set must run every session, so a missing one is a blocker, ' +
+        'not a journey to skip. Either the journey was renamed or deleted — ' +
+        'fix CORE_JOURNEY_IDS and say so in a story (SHY-0456).',
+    );
+  }
+
+  const core = CORE_JOURNEY_IDS.map((id) => index.get(id));
+
+  if (!selectedIds) {
+    return [...core, ...all.filter((j) => !isCoreJourney(j.id))];
+  }
+
+  const unknown = selectedIds.filter((id) => !index.has(id));
+  if (unknown.length) {
+    throw new Error(
+      `unknown journey id(s): ${unknown.join(', ')}. ` +
+        `Known ids: ${[...index.keys()].join(', ')}`,
+    );
+  }
+
+  const rest = selectedIds.filter((id) => !isCoreJourney(id)).map((id) => index.get(id));
+  return [...core, ...rest];
+}
+
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
@@ -2949,6 +3232,7 @@ function buildJourneys(ctx) {
     J04,
     J11,
     J07,
+    J09,
     J12,
     J05,
     J06,
@@ -2993,7 +3277,9 @@ Usage: node express-api/scripts/device-journey-runner.js [options]
   --target local|dev   environment (default local)
   --platform android|ios  which device to drive (default android)
   --serial <serial>    adb serial (default auto-select)
-  --journeys <ids>     comma list e.g. J-SMOKE,J-ALICE (default all)
+  --journeys <ids>     comma list e.g. J-SMOKE,J-ALICE (default all).
+                       The core set always runs first and cannot be skipped,
+                       whatever you select here.
   --rebuild            rebuild the APK first
   --no-reset           skip clean reinstall in J-SMOKE
   --no-record          skip the screen recording (default: record)
@@ -3114,8 +3400,9 @@ async function main() {
     }
   }
 
-  let journeys = buildJourneys(ctx);
-  if (opts.journeys) journeys = journeys.filter((j) => opts.journeys.includes(j.id));
+  // The core set is prepended here, not filtered in — a narrow --journeys run
+  // still proves the core still works (SHY-0456).
+  const journeys = selectJourneys(buildJourneys(ctx), opts.journeys ?? null);
   if (journeys.length === 0) throw new Error('No journeys selected.');
 
   // Video, not just stills. A PNG per step cannot show a TRANSITION, and this
@@ -3221,6 +3508,11 @@ module.exports = {
   AndroidJourneyDevice: Device,
   // Exported so J-SMOKE's platform branch can be exercised without a phone.
   buildJourneys,
+  // The core set and the selection it drives (SHY-0456), exported so the
+  // guard can be asserted without a device.
+  CORE_JOURNEY_IDS,
+  isCoreJourney,
+  selectJourneys,
   parseArgs,
   capturesScreenFor,
   occluderOf,
