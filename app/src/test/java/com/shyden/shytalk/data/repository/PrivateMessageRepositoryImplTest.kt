@@ -97,81 +97,91 @@ class PrivateMessageRepositoryImplTest {
         repo = PrivateMessageRepositoryImpl(api, firestore, authRepository)
     }
 
-    // region getOrCreateConversation — direct Firestore
+    // region getOrCreateConversation — through the API (SHY-0458 / SHY-0467)
 
-    @Test
-    fun `getOrCreateConversation returns Success when creating new`() =
-        runTest {
-            val result = repo.getOrCreateConversation("10000001", "10000002")
-            assertTrue(result is Resource.Success)
+    // SHY-0458 moved this call off Firestore: it now POSTs to /api/conversations
+    // and the SERVER decides. These tests used to drive a Firestore write that no
+    // longer happens — they captured a `slot` that was never filled, so they
+    // asserted the shape of a document this class had stopped writing.
+    //
+    // SHY-0467: the invariants they were guarding — participantIds stored as
+    // Strings (SHY-0130) and the crossCohortAtMigration stamp (SHY-0132) — did not
+    // stop mattering, they moved. They are asserted server-side now, against the
+    // document the route actually writes, in
+    // express-api/tests/routes/conversations-read-path.test.js. What belongs HERE
+    // is the client's half of the contract: which endpoint it calls, what it sends,
+    // and what it does with the answer.
+
+    private fun conversationResponse(id: String) =
+        JSONObject().apply {
+            put("id", id)
+            put("participantIds", JSONArray(listOf("10000001", "10000002")))
+            put("isGroup", false)
         }
 
     @Test
-    fun `getOrCreateConversation returns Success when existing`() =
+    fun `getOrCreateConversation asks the API rather than reading Firestore`() =
         runTest {
-            every { mockDocSnapshot.exists() } returns true
-            every { mockDocSnapshot.data } returns
-                mapOf(
-                    "participantIds" to listOf(10000001L, 10000002L),
-                    "isGroup" to false,
-                    "createdAt" to 1700000000000L,
-                    "lastMessageAt" to 1700000000000L,
-                    "isClosed" to false,
-                )
+            coEvery { api.post("/api/conversations", any()) } returns conversationResponse("10000001_10000002")
 
             val result = repo.getOrCreateConversation("10000001", "10000002")
+
             assertTrue(result is Resource.Success)
+            coVerify(exactly = 1) { api.post("/api/conversations", any()) }
+            // The read that could not work is gone: firestore.rules dereferences
+            // resource.data.participantIds, so reading a conversation that does not
+            // exist yet was an evaluation error rather than a miss.
+            io.mockk.verify(exactly = 0) { firestore.document(match { it.startsWith("conversations/") }) }
         }
 
     @Test
-    fun `getOrCreateConversation stores participantIds as String values`() =
+    fun `getOrCreateConversation sends the OTHER party, whichever order it is given`() =
         runTest {
-            val dataSlot = slot<Map<String, Any>>()
-            every { mockDocRef.set(capture(dataSlot)) } returns Tasks.forResult(null)
+            // The API infers the caller from the token, so the body carries only the
+            // other party. The signed-in user is 10000001; passing the pair either
+            // way round must send 10000002 and never the caller themselves.
+            val bodies = mutableListOf<JSONObject>()
+            coEvery { api.post("/api/conversations", capture(bodies)) } returns
+                conversationResponse("10000001_10000002")
+
+            repo.getOrCreateConversation("10000001", "10000002")
+            repo.getOrCreateConversation("10000002", "10000001")
+
+            assertEquals(2, bodies.size)
+            assertEquals("10000002", bodies[0].optString("otherUserId"))
+            assertEquals("10000002", bodies[1].optString("otherUserId"))
+        }
+
+    @Test
+    fun `getOrCreateConversation returns the conversation the API answered`() =
+        runTest {
+            coEvery { api.post("/api/conversations", any()) } returns conversationResponse("10000001_10000002")
 
             val result = repo.getOrCreateConversation("10000001", "10000002")
-            assertTrue(result is Resource.Success)
 
-            val participantIds = dataSlot.captured["participantIds"] as List<*>
-            // SHY-0130 — participantIds MUST be Strings: the canonical type the
-            // rule (`string(callerUniqueId()) in resource.data.participantIds`),
-            // the model (`List<String>`), iOS, and Express (`.map(String)`) all
-            // use. This test previously asserted Longs — it ENCODED the bug that
-            // made Android-created threads unreadable by the string gate.
-            assertTrue("participantIds[0] should be String", participantIds[0] is String)
-            assertTrue("participantIds[1] should be String", participantIds[1] is String)
-            assertEquals(listOf("10000001", "10000002"), participantIds)
-            // SHY-0132 — new DM threads are stamped crossCohortAtMigration:false so they
-            // match the segregation filter `where('crossCohortAtMigration','==', false)`.
-            assertEquals(false, dataSlot.captured["crossCohortAtMigration"])
+            assertTrue(result is Resource.Success)
+            assertEquals("10000001_10000002", (result as Resource.Success).data.conversationId)
+        }
+
+    @Test
+    fun `getOrCreateConversation returns Error when the answer carries no id`() =
+        runTest {
+            // A 200 with no id is not a conversation. Treating it as one would hand
+            // the rest of the app an identity-less thread to write messages into.
+            coEvery { api.post("/api/conversations", any()) } returns JSONObject().apply { put("isGroup", false) }
+
+            val result = repo.getOrCreateConversation("10000001", "10000002")
+
+            assertTrue(result is Resource.Error)
         }
 
     @Test
     fun `getOrCreateConversation returns Error on exception`() =
         runTest {
-            every { mockDocRef.get() } returns Tasks.forException(RuntimeException("Fail"))
+            coEvery { api.post("/api/conversations", any()) } throws RuntimeException("Fail")
 
             val result = repo.getOrCreateConversation("uid1", "uid2")
             assertTrue(result is Resource.Error)
-        }
-
-    @Test
-    fun `getOrCreateConversation stores participantIds sorted regardless of argument order`() =
-        runTest {
-            // SHY-0130 — the stored `participantIds` must be the canonical SORTED
-            // string list so all three platforms agree on the shape; passing the
-            // ids in reverse must still produce ["10000001", "10000002"]. Guards a
-            // regression that drops `.sorted()` (which the existing test, using
-            // already-ordered args, would not catch). Identity is keyed off
-            // Conversation.generateId, so order never affects dedup — this pins the
-            // stored-array invariant only.
-            val dataSlot = slot<Map<String, Any>>()
-            every { mockDocRef.set(capture(dataSlot)) } returns Tasks.forResult(null)
-
-            val result = repo.getOrCreateConversation("10000002", "10000001")
-            assertTrue(result is Resource.Success)
-
-            assertEquals(listOf("10000001", "10000002"), dataSlot.captured["participantIds"])
         }
 
     // endregion

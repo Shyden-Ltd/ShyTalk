@@ -247,6 +247,81 @@ describe('POST /api/conversations — get or create', () => {
  * `req.auth.cohort` — it asserted a refusal while switching off the thing that
  * refuses.
  */
+/**
+ * SHY-0467 — what a new conversation is STORED as.
+ *
+ * This shape has shipped as a defect twice: SHY-0130, where Android wrote
+ * Longs and `firestore.rules`' string gate could no longer read the threads it
+ * created, and SHY-0132, the cross-cohort stamp. The only tests asserting
+ * either were Android unit tests driving a Firestore write that SHY-0458
+ * removed, and the server-side coverage only LOOKED like it covered them:
+ *
+ *   expect(res.body.participantIds.map(String).sort()).toEqual([...])
+ *
+ * `.map(String)` coerces before comparing, so that passes identically whether
+ * Strings or Numbers were stored — it cannot see the bug it appears to guard.
+ * The line below it counted how MANY documents were written and never what was
+ * in them.
+ *
+ * These read the STORED document and do not coerce.
+ */
+describe('POST /api/conversations — the shape it is stored in', () => {
+  test('participantIds are stored as Strings, sorted, and stamped', async () => {
+    await request(createApp())
+      .post('/api/conversations')
+      .set(alice.headers)
+      .send({ otherUserId: LENA })
+      .expect(200);
+
+    const stored = await storedConversation(convIdFor(ALICE, LENA));
+    expect(stored).toBeDefined();
+
+    // Type, not value: a Number would satisfy any comparison that coerces.
+    expect(stored.participantIds.map((p) => typeof p)).toEqual(['string', 'string']);
+    // Sorted, so every platform agrees on the canonical order.
+    expect(stored.participantIds).toEqual([...stored.participantIds].sort());
+    expect(stored.participantIds).toEqual([String(ALICE), String(LENA)].sort());
+    // SHY-0132: present AND false. Missing would slip through a `!== true` filter.
+    expect(stored.crossCohortAtMigration).toBe(false);
+  });
+
+  test('the order the caller asked in does not change what is stored', async () => {
+    // Whichever way round the pair arrives, the stored array is the same.
+    await request(createApp())
+      .post('/api/conversations')
+      .set(alice.headers)
+      .send({ otherUserId: LENA })
+      .expect(200);
+    const first = (await storedConversation(convIdFor(ALICE, LENA))).participantIds;
+
+    await db.doc(`conversations/${convIdFor(ALICE, LENA)}`).delete();
+
+    const lena = await mintRealUser({
+      uniqueId: LENA,
+      cohort: 'adult',
+      extraUserData: { cohort: 'adult', displayName: 'Lena' },
+    });
+    await request(createApp())
+      .post('/api/conversations')
+      .set(lena.headers)
+      .send({ otherUserId: ALICE })
+      .expect(200);
+    const second = (await storedConversation(convIdFor(ALICE, LENA))).participantIds;
+
+    expect(second).toEqual(first);
+  });
+
+  test('a refused create writes nothing at all', async () => {
+    await request(createApp())
+      .post('/api/conversations')
+      .set(alice.headers)
+      .send({ otherUserId: MARCUS })
+      .expect(404);
+
+    expect(await storedConversation(convIdFor(ALICE, MARCUS))).toBeUndefined();
+  });
+});
+
 describe('POST /api/conversations — the cohort wall holds in both directions', () => {
   test('an adult cannot open a thread with a minor, and nothing is written', async () => {
     const res = await request(createApp())
