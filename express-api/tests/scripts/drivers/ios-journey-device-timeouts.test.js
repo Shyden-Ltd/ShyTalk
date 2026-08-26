@@ -253,6 +253,113 @@ describe('IosDevice bounds every request it makes (SHY-0451)', () => {
     expect(call).toBeGreaterThan(1);
   });
 
+  test('a refused reconnect CLEARS the wedged session and tries once more', async () => {
+    // SHY-0452. WebDriverAgent wedges about twice in twelve runs; the reconnect
+    // is then refused and a journey is lost. The likeliest reason is the one
+    // the story names: Appium is still holding the session that died, and a new
+    // one queues behind it. Nothing had ever asked Appium to let go of it.
+    //
+    // So a refused RECONNECT now deletes the sessions this driver knows about
+    // and asks once more, instead of failing on the first refusal.
+    let sessions = 0;
+    let deleted = 0;
+    server = await startServer((req, res) => {
+      if (req.method === 'DELETE') {
+        deleted += 1;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ value: null }));
+      }
+      if (req.url !== '/session') return false;
+      sessions += 1;
+      // 1: the cold session, healthy. 2: the reconnect, wedged.
+      // 3: after the wedged session is cleared, healthy again.
+      if (sessions === 2) return false;
+      return respondWithSession(res, `sess-${sessions}`);
+    });
+    const device = buildAgainst(server.baseUrl);
+    await expect(device.ensureSession()).resolves.toBe('sess-1');
+
+    device._sessionId = null; // what withSessionRecovery does on a dead WDA
+    await expect(device.ensureSession()).resolves.toBe('sess-3');
+    expect(deleted).toBeGreaterThan(0);
+  });
+
+  test('a COLD session does not try to clear anything', async () => {
+    // There is nothing to clear before the first session, and a DELETE against
+    // a server that has never issued one is noise in the log at best.
+    let deleted = 0;
+    server = await startServer((req, res) => {
+      if (req.method === 'DELETE') {
+        deleted += 1;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ value: null }));
+      }
+      return false; // the cold session never lands
+    });
+    const device = buildAgainst(server.baseUrl);
+    await expect(device.ensureSession()).rejects.toThrow(/session/i);
+    expect(deleted).toBe(0);
+  });
+
+  test('a reconnect that stays wedged still gives up', async () => {
+    // The escalation is ONE extra attempt, not a loop. A WebDriverAgent that
+    // will not come back must fail the step, not spin against the phone.
+    let sessions = 0;
+    server = await startServer((req, res) => {
+      if (req.method === 'DELETE') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ value: null }));
+      }
+      if (req.url !== '/session') return false;
+      sessions += 1;
+      if (sessions === 1) return respondWithSession(res, 'sess-1');
+      return false; // wedged, and stays wedged
+    });
+    const device = buildAgainst(server.baseUrl);
+    await device.ensureSession();
+    device._sessionId = null;
+
+    await expect(device.ensureSession()).rejects.toThrow(/session/i);
+    // 1 cold + 2 reconnect attempts, and no more.
+    expect(sessions).toBe(3);
+  });
+
+  test('clearing the wedged sessions does not hand the NEXT one a cold budget', async () => {
+    // The trap in the fix above. `isReconnect` was derived from "have we any
+    // session ids", and releasing them empties that set — so the attempt after
+    // a wedge recovery would look like a COLD start and wait the cold budget:
+    // 210 seconds, which is the stall SHY-0451 exists to have removed.
+    //
+    // Having opened a session is a fact about the RUN, not about what is
+    // currently held.
+    let sessions = 0;
+    server = await startServer((req, res) => {
+      if (req.method === 'DELETE') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ value: null }));
+      }
+      if (req.url !== '/session') return false;
+      sessions += 1;
+      if (sessions === 1) return respondWithSession(res, 'sess-1');
+      return false; // everything after the first wedges
+    });
+    const device = buildAgainst(server.baseUrl, {
+      // Far apart, so reading the wrong one is unmissable rather than subtle.
+      sessionColdTimeoutMs: 60000,
+      sessionRecoveryTimeoutMs: TEST_TIMEOUT_MS,
+    });
+    await device.ensureSession();
+
+    device._sessionId = null;
+    await expect(device.ensureSession()).rejects.toThrow(/session/i);
+
+    // The sessions were released by the attempt above. This one must STILL be
+    // treated as a reconnect and give up fast, not wait out the cold budget.
+    const started = Date.now();
+    await expect(device.ensureSession()).rejects.toThrow(/reconnect/i);
+    expect(Date.now() - started).toBeLessThan(TEST_TIMEOUT_MS * 20);
+  });
+
   test('every budget the driver waits on is finite', () => {
     // Pins the defect itself: before SHY-0451 this budget did not exist, and
     // the value it stands in for was Infinity.

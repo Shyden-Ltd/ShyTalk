@@ -365,6 +365,12 @@ class IosDevice {
     this.appiumBaseUrl = appiumBaseUrl;
     this._sessionId = null;
     this._allSessionIds = new Set();
+    // Separate from `_allSessionIds` on purpose. That set is what we currently
+    // HOLD, and SHY-0452's recovery empties it; this is whether a session has
+    // ever been granted, which is what decides cold-vs-reconnect. Deriving the
+    // budget from the set meant the attempt after a wedge recovery looked
+    // COLD and waited 210s — the stall SHY-0451 exists to have removed.
+    this._everOpened = false;
     this._size = null;
     this._commandTimeoutMs = commandTimeoutMs;
     this._sessionColdTimeoutMs = sessionColdTimeoutMs;
@@ -415,12 +421,12 @@ class IosDevice {
     if (this._sessionId) return this._sessionId;
     // A session has been opened before, so WebDriverAgent is installed and
     // this is a reattach, not a build.
-    const isReconnect = this._allSessionIds.size > 0;
+    const isReconnect = this._everOpened;
     const budgetMs = isReconnect ? this._sessionRecoveryTimeoutMs : this._sessionColdTimeoutMs;
     const started = Date.now();
-    let r;
-    try {
-      r = await fetch(`${this.appiumBaseUrl}/session`, {
+
+    const ask = () =>
+      fetch(`${this.appiumBaseUrl}/session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -432,14 +438,35 @@ class IosDevice {
         }),
         signal: AbortSignal.timeout(budgetMs),
       });
-    } catch (e) {
-      // Named for the operator reading a red matrix: the phone is fine, the
-      // cable is fine, Appium did not answer a SESSION request in time.
-      throw new Error(
-        `Appium did not grant a ${isReconnect ? 'reconnect' : 'cold'} session within ` +
-          `${budgetMs}ms (WebDriverAgent is probably wedged): ${e.message}`,
-        { cause: e },
+
+    let r;
+    try {
+      r = await ask();
+    } catch (first) {
+      // SHY-0452. A refused RECONNECT is not simply "the phone is gone" — the
+      // likeliest reason is that Appium is still holding the session that
+      // died, and this new one is queueing behind it. Nothing had ever asked
+      // Appium to let go, so the wedge lasted as long as Appium's own
+      // patience and cost a journey roughly twice in twelve runs.
+      //
+      // Only on a reconnect: before the first session there is nothing to
+      // clear, and a DELETE against a server that has issued none is noise.
+      //
+      // ONE extra attempt. A WebDriverAgent that will not come back has to
+      // fail the step rather than spin against the phone.
+      if (!isReconnect) {
+        throw this._sessionRefused(first, isReconnect, budgetMs);
+      }
+      this._warn(
+        `[ios] reconnect refused after ${Date.now() - started}ms — releasing ` +
+          `${this._allSessionIds.size} known session(s) and asking once more`,
       );
+      await this._releaseKnownSessions();
+      try {
+        r = await ask();
+      } catch (again) {
+        throw this._sessionRefused(again, isReconnect, budgetMs);
+      }
     }
     const body = await r.json().catch(() => ({}));
     const sid = body?.value?.sessionId || body?.sessionId;
@@ -454,6 +481,7 @@ class IosDevice {
     // is forgotten — so a teardown that closes only `_sessionId` orphans it.
     // Measured: 14 sessions created, 13 removed.
     this._allSessionIds.add(sid);
+    this._everOpened = true;
     // Surfaced rather than averaged away. SHY-0451 hid inside a mean of
     // "4.6-5.7s, seventeen a run" because a once-per-run outlier does not move
     // a mean — so the OUTLIER is what gets printed.
@@ -466,6 +494,41 @@ class IosDevice {
     }
     await this._applyPerformanceSettings(sid);
     return sid;
+  }
+
+  /**
+   * The error a refused session raises.
+   *
+   * Named for whoever is reading a red matrix: the phone is fine, the cable is
+   * fine, and Appium did not answer a SESSION request in time. Shared by both
+   * attempts so the two paths cannot drift into saying different things about
+   * the same failure.
+   */
+  _sessionRefused(cause, isReconnect, budgetMs) {
+    return new Error(
+      `Appium did not grant a ${isReconnect ? 'reconnect' : 'cold'} session within ` +
+        `${budgetMs}ms (WebDriverAgent is probably wedged): ${cause.message}`,
+      { cause },
+    );
+  }
+
+  /**
+   * Ask Appium to let go of every session this driver has opened.
+   *
+   * Best-effort and bounded, deliberately: this runs when things are ALREADY
+   * wrong, and a teardown that hangs would replace the wedge it is trying to
+   * clear. Each id is forgotten whether or not its DELETE succeeded — keeping
+   * one we have asked to delete would mean asking again on the next wedge.
+   */
+  async _releaseKnownSessions() {
+    for (const id of [...this._allSessionIds]) {
+      await fetch(`${this.appiumBaseUrl}/session/${id}`, {
+        method: 'DELETE',
+        signal: AbortSignal.timeout(this._quitTimeoutMs),
+      }).catch(() => {});
+    }
+    this._allSessionIds.clear();
+    this._sessionId = null;
   }
 
   /**
