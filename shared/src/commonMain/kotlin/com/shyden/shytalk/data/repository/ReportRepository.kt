@@ -32,7 +32,7 @@ interface ReportRepository {
         evidenceUrls: List<String> = emptyList(),
     ): Resource<Unit>
 
-    suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.feature.messaging.Report>>
+    suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.core.model.Report>>
 
     suspend fun resolveReport(
         reportId: String,

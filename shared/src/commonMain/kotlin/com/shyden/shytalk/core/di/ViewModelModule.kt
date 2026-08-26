@@ -14,7 +14,6 @@ import com.shyden.shytalk.feature.messaging.ConversationListViewModel
 import com.shyden.shytalk.feature.messaging.GroupSetupViewModel
 import com.shyden.shytalk.feature.messaging.NewMessageViewModel
 import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
-import com.shyden.shytalk.feature.messaging.ReportReviewViewModel
 import com.shyden.shytalk.feature.profile.FollowListViewModel
 import com.shyden.shytalk.feature.profile.GiftWallViewModel
 import com.shyden.shytalk.feature.profile.ProfileViewModel
@@ -75,7 +74,6 @@ val viewModelModule =
                 ageRestrictionService = get(),
             )
         }
-        viewModel { ReportReviewViewModel(get(), get()) }
         viewModel { NewMessageViewModel(get(), get(), get()) }
         viewModel { params -> GroupSetupViewModel(params[0], get(), get(), get(), get()) }
         viewModel { GachaViewModel(get(), get(), get(), get(), get()) }

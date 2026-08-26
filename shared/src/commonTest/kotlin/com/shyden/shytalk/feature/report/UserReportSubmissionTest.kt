@@ -1,10 +1,10 @@
 package com.shyden.shytalk.feature.report
 
+import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.StorageRepository
-import com.shyden.shytalk.feature.messaging.Report
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals

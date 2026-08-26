@@ -26,7 +26,6 @@ class ScreenTest {
                 Screen.CommunityStandards,
                 Screen.TermsAndConditions,
                 Screen.LegalAcceptance,
-                Screen.ReportReview,
                 Screen.Warning,
                 Screen.Wallet,
                 Screen.Transactions,
@@ -231,11 +230,6 @@ class ScreenTest {
     @Test
     fun `LegalAcceptance has correct route`() {
         assertEquals("legal_acceptance", Screen.LegalAcceptance.route)
-    }
-
-    @Test
-    fun `ReportReview has correct route`() {
-        assertEquals("report_review", Screen.ReportReview.route)
     }
 
     // ─── Aggregate route invariants ──────────────────────────────

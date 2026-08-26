@@ -207,7 +207,7 @@ class IosReportRepositoryImpl(
             api.post("/api/reports", JsonObject(fields))
         }
 
-    override suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.feature.messaging.Report>> =
+    override suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.core.model.Report>> =
         firebaseCall("Failed to load reports") {
             val arr = api.getArray("/api/reports")
             arr.map { element -> parseReportFromApi(element.jsonObject) }

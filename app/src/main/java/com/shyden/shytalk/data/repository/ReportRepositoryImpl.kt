@@ -1,9 +1,9 @@
 package com.shyden.shytalk.data.repository
 
+import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import com.shyden.shytalk.feature.messaging.Report
 import org.json.JSONArray
 import org.json.JSONObject as OrgJsonObject
 

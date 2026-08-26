@@ -83,7 +83,6 @@ import com.shyden.shytalk.feature.messaging.GroupSetupViewModel
 import com.shyden.shytalk.feature.messaging.NewMessageScreen
 import com.shyden.shytalk.feature.messaging.PrivateChatScreen
 import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
-import com.shyden.shytalk.feature.messaging.ReportReviewScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
 import com.shyden.shytalk.feature.profile.FollowListScreen
 import com.shyden.shytalk.feature.profile.GiftWallScreen
@@ -872,12 +871,6 @@ fun NavGraph(
                     onViewCyberBullyingPolicy = {
                         navController.navigate(Screen.CyberBullyingPolicy.route)
                     },
-                )
-            }
-
-            composable(Screen.ReportReview.route) {
-                ReportReviewScreen(
-                    onNavigateBack = { navController.safePopBackStack() },
                 )
             }
 
