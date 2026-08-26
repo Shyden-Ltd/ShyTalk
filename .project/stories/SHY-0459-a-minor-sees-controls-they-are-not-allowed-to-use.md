@@ -59,6 +59,12 @@ P2 rather than P0.
 - [ ] A user whose cohort changes mid-session gets the correct surface without
       a reinstall.
 
+### Performance
+
+- [ ] Hiding a control costs no extra round trip. The cohort is already known
+      when the screen renders — asking the server again would trade a visible
+      wrong control for a visible delay.
+
 ### Security
 
 - [ ] No change. The refusal already holds; this is about not offering.
@@ -71,6 +77,13 @@ P2 rather than P0.
 ### i18n
 
 - [ ] No new strings — features are hidden, not relabelled.
+
+
+### Observability
+
+- [ ] A refusal that a hidden control should have prevented is distinguishable
+      in the logs from one a determined caller reached another way. The first
+      means a surface was missed; the second is the server doing its job.
 
 ## BDD Scenarios
 

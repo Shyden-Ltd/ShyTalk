@@ -60,6 +60,14 @@ this invisible: everything about it looks alive.
 - [ ] If it is removed, no dangling `Screen` entry or nav registration is left
       behind — the leftovers are what made this look reachable.
 
+### Performance
+
+- [ ] If it is kept, the screen loads its queue within the same budget as the
+      other admin surfaces — a review screen nobody could reach has never been
+      measured under a real queue, so "it renders" is not evidence.
+- [ ] If it is removed, the app carries less: its route, screen and nav
+      registrations go with it rather than staying as dead weight in the graph.
+
 ### Security
 
 - [ ] If it is kept, the queue is admin-gated server-side, not merely hidden.
