@@ -2779,11 +2779,12 @@ const J07 = {
 // boundary on the admin endpoints — read-only, no mutations.
 const J12 = {
   id: 'J12',
-  // There is no app UI to drive. ReportReviewScreen EXISTS and is registered in
-  // both nav graphs, but nothing navigates to it anywhere in the repo — the
-  // moderation queues a human actually uses are the web admin console
-  // (public/admin/js/tabs/). Declared honestly rather than left to look like a
-  // device journey it can never be (SHY-0457, orphaned screen: SHY-0460).
+  // There is no app UI to drive, and now nothing pretending there might be.
+  // ReportReviewScreen was registered in both nav graphs while nothing
+  // navigated to it anywhere in the repo; SHY-0460 removed it, along with the
+  // driver capabilities written to inspect a queue that could not be reached.
+  // The moderation queues a human actually uses are the web admin console
+  // (public/admin/js/tabs/), which is unaffected.
   kind: 'api-contract',
   title:
     'j12 — API contract: the moderation queues are admin-only — admin 200, non-admin 403 ' +

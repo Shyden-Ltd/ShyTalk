@@ -42,8 +42,6 @@ sealed class Screen(
 
     data object LegalAcceptance : Screen("legal_acceptance")
 
-    data object ReportReview : Screen("report_review")
-
     /**
      * Contacting support — SHY-0387.
      *

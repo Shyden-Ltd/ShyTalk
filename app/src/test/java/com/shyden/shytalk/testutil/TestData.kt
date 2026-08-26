@@ -16,6 +16,7 @@ import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.PrivateMessageType
 import com.shyden.shytalk.core.model.ProfileVisitor
+import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatRequest
@@ -24,7 +25,6 @@ import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.model.TransactionType
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.feature.messaging.Report
 
 object TestData {
     val BASE_TIMESTAMP = 1_000_000_000L

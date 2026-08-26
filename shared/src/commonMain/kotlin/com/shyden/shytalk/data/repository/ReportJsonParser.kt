@@ -1,6 +1,6 @@
 package com.shyden.shytalk.data.repository
 
-import com.shyden.shytalk.feature.messaging.Report
+import com.shyden.shytalk.core.model.Report
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
