@@ -397,7 +397,12 @@ describe('POST /api/appeals (user submit appeal)', () => {
   let getDoc, queryDocs;
 
   beforeEach(() => {
-    app = createApp({ uid: 'user-firebase-uid', uniqueId: 'suspended-user' });
+    // A NUMERIC uniqueId, because that is what one is: `users/{id}.uniqueId`
+    // is an integer, so `req.auth.uniqueId` is a Number. The string this
+    // fixture used to carry is a shape the server never sees, and it is why
+    // the String-vs-Number divergence in the appeals schema survived here
+    // unnoticed (SHY-0463).
+    app = createApp({ uid: 'user-firebase-uid', uniqueId: 50990480 });
     jest.clearAllMocks();
     ({ getDoc, queryDocs } = require('../../src/utils/firestore-helpers'));
   });
@@ -472,7 +477,7 @@ describe('POST /api/appeals (user submit appeal)', () => {
     expect(res.body.appealId).toBeDefined();
     expect(mockDocSet).toHaveBeenCalledWith(
       expect.objectContaining({
-        userId: 'suspended-user',
+        userId: 50990480,
         appealText: 'I believe this suspension was a mistake',
         status: 'pending',
       }),

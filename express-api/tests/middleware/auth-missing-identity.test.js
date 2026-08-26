@@ -152,12 +152,18 @@ describe('the allowlist is a ratchet', () => {
     // The security of this fix IS the shortness of this list. Adding a route
     // must be a deliberate act somebody argued for, not a line that appeared
     // in a diff while making something else work.
+    //
+    // `standingExempt` is pinned here for the same reason (SHY-0461). It says
+    // whether the route REPORTS a standing or ACTS, and the standing gates
+    // read it: flipping `POST /users` to true would let a banned handset open
+    // a fresh account, which is ban evasion. That flip must trip this ratchet,
+    // not pass as a one-word diff.
     expect(PRE_IDENTITY_ROUTES).toEqual([
-      { method: 'POST', path: '/users' },
-      { method: 'POST', path: '/users/sign-in' },
-      { method: 'POST', path: '/devices/lock-check' },
-      { method: 'POST', path: '/device-info' },
-      { method: 'GET', path: '/device-info' },
+      { method: 'POST', path: '/users', standingExempt: false },
+      { method: 'POST', path: '/users/sign-in', standingExempt: true },
+      { method: 'POST', path: '/devices/lock-check', standingExempt: true },
+      { method: 'POST', path: '/device-info', standingExempt: true },
+      { method: 'GET', path: '/device-info', standingExempt: true },
     ]);
   });
 

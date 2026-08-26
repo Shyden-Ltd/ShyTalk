@@ -34,6 +34,7 @@ const { computeDisplayScore } = require('../utils/gcs');
 const { sendSystemPm } = require('../utils/system-pm');
 const { getDoc } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
+const { suspensionEndedFields, SUSPENSION_STARTED_RESET } = require('../utils/suspension');
 const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
@@ -1117,6 +1118,7 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
         suspensionStartDate: timestamp,
         suspensionEndDate: endTimestamp,
         suspensionCanAppeal: body.canAppeal,
+        ...SUSPENSION_STARTED_RESET,
         suspendedBy: req.auth.uid,
         preSuspensionDisplayName: user.displayName ?? user.display_name ?? null,
         preSuspensionProfilePhotoUrl: user.profilePhotoUrl ?? user.profile_photo_url ?? null,
@@ -1288,18 +1290,7 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
     });
 
     await Promise.all([
-      db.doc(`users/${req.params.uniqueId}`).update({
-        isSuspended: false,
-        suspensionReason: null,
-        suspensionStartDate: null,
-        suspensionEndDate: null,
-        suspensionCanAppeal: null,
-        suspendedBy: null,
-        preSuspensionDisplayName: null,
-        preSuspensionProfilePhotoUrl: null,
-        preSuspensionCoverPhotoUrl: null,
-        ...restore,
-      }),
+      db.doc(`users/${req.params.uniqueId}`).update(suspensionEndedFields(restore)),
       db.doc(`adminAuditLog/${generateId()}`).set({
         adminId: req.auth.uid,
         action: 'UNSUSPEND',

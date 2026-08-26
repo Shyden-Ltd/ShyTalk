@@ -21,6 +21,25 @@ jest.mock('../../src/utils/firebase', () => ({
       update: mockBatchUpdate,
       commit: mockBatchCommit,
     })),
+    // A query chain that finds nothing. Two routes in this file reach one
+    // since SHY-0461/SHY-0463: `POST /users/sign-in` checks bans (it must
+    // ANSWER a banned caller rather than be refused for being one), and the
+    // appeal route asks the appeals collection whether one is already pending
+    // instead of trusting a flag on the user doc. Without a `collection` here
+    // both threw. `size` is present because `bans.js` pages with
+    // `if (snap.size < LIMIT) break` — omit it and `undefined < LIMIT` is
+    // false, so the loop runs on and dereferences `docs[-1]`.
+    collection: jest.fn(() => {
+      const emptySnap = { empty: true, size: 0, docs: [] };
+      const chain = {
+        where: () => chain,
+        orderBy: () => chain,
+        limit: () => chain,
+        startAfter: () => chain,
+        get: () => Promise.resolve(emptySnap),
+      };
+      return chain;
+    }),
   },
   auth: {
     setCustomUserClaims: jest.fn().mockResolvedValue(),
@@ -49,12 +68,20 @@ jest.mock('../../src/middleware/auth', () => ({
   updateUniqueIdCache: jest.fn(),
 }));
 
-// Mock firestore-helpers so getDoc goes through our mockDocGet
+// Mock firestore-helpers so getDoc goes through our mockDocGet.
+//
+// `queryDocs` is mocked too, and must stay mocked: a PARTIAL module mock lies
+// about the module's surface, so any new consumer of a missing export gets
+// `undefined` and throws — which arrives as a product 500, not as "the mock is
+// incomplete". The appeal route became such a consumer in SHY-0463, when it
+// stopped trusting a flag on the user doc and started asking the appeals
+// collection whether one is already pending.
 jest.mock('../../src/utils/firestore-helpers', () => ({
   getDoc: jest.fn(),
+  queryDocs: jest.fn().mockResolvedValue([]),
 }));
 
-const { getDoc } = require('../../src/utils/firestore-helpers');
+const { getDoc, queryDocs } = require('../../src/utils/firestore-helpers');
 
 // ─── App setup ───────────────────────────────────────────────────
 
@@ -173,12 +200,16 @@ describe('POST /api/users/:uniqueId/appeal', () => {
   // ── PR #496 (audit H2): idempotency — reject duplicate pending ──
 
   it('rejects duplicate appeal with 409 when one is already pending', async () => {
-    // Pre-fix: user could spam the endpoint creating unbounded
-    // suspensionAppeals docs. Now the route reads suspensionAppealStatus
-    // and 409s if already pending.
+    // Pre-fix: a user could spam the endpoint, creating unbounded
+    // suspensionAppeals docs. The 409 is still the answer — but it is decided
+    // by an actual pending APPEAL, not by `users/{id}.suspensionAppealStatus`
+    // (SHY-0463). That flag is cleared by only one of the three writers that
+    // end a suspension, so gating on it meant one appeal in a lifetime: every
+    // later suspension, a new accusation entirely, was refused for ever.
+    queryDocs.mockResolvedValueOnce([{ id: 'existing-appeal', status: 'pending' }]);
     mockDocGet.mockResolvedValue({
       exists: true,
-      data: () => ({ suspensionAppealStatus: 'pending' }),
+      data: () => ({ suspensionAppealStatus: null }),
     });
     const app = createApp('uid-A', 10000001);
     const res = await request(app)

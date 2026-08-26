@@ -1305,6 +1305,34 @@ async function waitForId(device, id, timeoutMs = 8000) {
   );
 }
 
+/**
+ * Wait for the FIRST of several ids and say which one arrived.
+ *
+ * A sign-in that is EXPECTED not to reach Home — a suspended or banned person
+ * — still has to assert something. "The app settled" is not an assertion if
+ * nothing was checked, which is the class of pass SHY-0457 exists to stop.
+ * This names the outcome, so the report records the screen that actually
+ * appeared rather than the absence of a different one.
+ */
+async function waitForAnyId(device, ids, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = [];
+  while (Date.now() < deadline) {
+    const tick = Date.now();
+    const nodes = await dump(device);
+    for (const id of ids) {
+      if (byId(nodes, id)) return { id, nodes };
+    }
+    last = summarizeScreen(nodes).testTags;
+    await pollGap(tick, device);
+  }
+  throw new Error(
+    `timed out (${timeoutMs}ms) waiting for any of #${ids.join(', #')}; screen showed: ${
+      last.join(', ') || '(none)'
+    }`,
+  );
+}
+
 async function waitForText(device, sub, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   let last = [];
@@ -1885,7 +1913,15 @@ function accountOnDevice(nodes) {
  *   said nothing about the account underneath; a journey that asserts on one
  *   account's screen while seeding another's data proves nothing at all.
  */
-async function signInAs(device, reporter, ctx, email) {
+/**
+ * Sign in as a persona.
+ *
+ * `expectHome: false` for somebody the product must NOT let through — a
+ * suspended or banned person. Asserting Home for them recorded a red step for
+ * correct behaviour and made J11 unpassable no matter what the product did
+ * (SHY-0461).
+ */
+async function signInAs(device, reporter, ctx, email, { expectHome = true } = {}) {
   await reporter.step(
     device,
     `Reach SignIn (for ${email})`,
@@ -1917,6 +1953,22 @@ async function signInAs(device, reporter, ctx, email) {
     },
     { preamble: true },
   );
+  if (!expectHome) {
+    await reporter.step(
+      device,
+      `Settle after sign-in (Home is not expected)`,
+      async () => {
+        const { id } = await waitForAnyId(
+          device,
+          ['suspension_title', 'ban_title', 'main_roomsTab', 'signIn_retryConnection'],
+          60000,
+        );
+        return `settled on #${id}`;
+      },
+      { preamble: true },
+    );
+    return;
+  }
   await reporter.step(
     device,
     `Land on Home`,
@@ -2443,10 +2495,11 @@ const J11 = {
       return 'Raul isSuspended=true + adminAuditLog SUSPEND present';
     });
 
-    // signInAs waits for Home, which a suspended person never reaches — so the
-    // sign-in is attempted and then the SCREEN is asked what happened. Without
-    // this the journey reports "Home not reached", which is true and useless.
-    await signInAs(device, reporter, ctx, 'harasser@shytalk.dev').catch(() => {});
+    // A suspended person never reaches Home, so the preamble is told not to
+    // expect it. It used to assert Home and swallow the throw, which left a
+    // red "Home not reached" step recording correct product behaviour — the
+    // journey could not pass however well the app behaved.
+    await signInAs(device, reporter, ctx, 'harasser@shytalk.dev', { expectHome: false });
 
     await reporter.step(
       device,
