@@ -89,32 +89,24 @@ echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, Mailpit)..."
 # LiveKit advertises NODE_IP to clients as its ICE candidate address
 # (SHY-0273). Without it, it advertises the Docker bridge address
 # (172.18.0.2) — unreachable from a phone, so voice signalling connects but
-# media never does. Detect the host's LAN address and hand it over.
+# media never does.
 #
-# `route get` picks the interface that actually carries traffic, which is
-# correct when Wi-Fi and Ethernet are both up; en0/en1 guesswork is not.
-detect_lan_ip() {
-  if [ "$(uname -s)" = "Darwin" ]; then
-    local iface
-    iface=$(route -n get default 2>/dev/null | awk '/interface: /{print $2; exit}')
-    [ -n "$iface" ] && ipconfig getifaddr "$iface" 2>/dev/null && return 0
-    for i in en0 en1; do ipconfig getifaddr "$i" 2>/dev/null && return 0; done
-  else
-    hostname -I 2>/dev/null | awk '{print $1}'
-  fi
-}
-
-# Two working modes for a REAL device:
+# WHICH address to advertise is not obvious, and SHY-0465 is why this asks
+# rather than detects. Two working modes for a REAL device:
 #
-#   Wi-Fi (default) — phone and this machine on the same network. LiveKit
-#     advertises the LAN IP; UDP media flows directly. Nothing else to do.
+#   Wi-Fi     — phone and this machine can reach each other. LiveKit
+#     advertises the LAN address and UDP media flows directly.
 #
-#   USB-only        — phone has no route to this machine's LAN. Run with
-#     `LIVEKIT_NODE_IP=127.0.0.1 bash local/start.sh` and add
-#     `adb reverse tcp:7881 tcp:7881` (alongside 3000/7880). ICE then falls
-#     back to the TCP candidate, which the reverse tunnel can carry — `adb
-#     reverse` forwards TCP ONLY, which is why the UDP range alone never
-#     worked over USB.
+#   USB-only  — the phone has no route to this machine. That happens on a
+#     router with AP client isolation even when both sit on the same SSID and
+#     the same /24, and it presents as flaky voice rather than as a wall:
+#     signalling connects over the USB tunnel, then ICE never completes.
+#     LiveKit advertises 127.0.0.1 and ICE falls back to the TCP candidate
+#     that `adb reverse tcp:7881` carries — `adb reverse` forwards TCP ONLY,
+#     which is why the UDP range alone never worked over the cable.
+#
+# The chooser asks the attached phone and prints the evidence for its answer.
+# `LIVEKIT_NODE_IP=<addr> bash local/start.sh` still overrides it outright.
 # The same address has to reach two other settings, and those live in
 # express-api/.env.local rather than in this shell: MINIO_ENDPOINT, which signed
 # upload URLs are minted against, and CDN_URL, which attachments are served
@@ -127,19 +119,17 @@ if [ -x "$(dirname "$0")/../scripts/dev/sync-local-lan-ip.sh" ]; then
     echo "  WARNING: could not sync the LAN address into .env.local." >&2
 fi
 
-LIVEKIT_NODE_IP="${LIVEKIT_NODE_IP:-$(detect_lan_ip)}"
+LIVEKIT_NODE_IP="$(bash "$SCRIPT_DIR/../scripts/dev/choose-livekit-node-ip.sh")"
 if [ -n "$LIVEKIT_NODE_IP" ]; then
   export LIVEKIT_NODE_IP
-  echo "  LiveKit will advertise $LIVEKIT_NODE_IP to clients (real devices need this)."
   if [ "$LIVEKIT_NODE_IP" = "127.0.0.1" ]; then
-    echo "  USB-only mode: also run 'adb reverse tcp:7881 tcp:7881' for TCP media."
+    echo "  USB-only mode: media rides 'adb reverse tcp:7881', tunnelled in Step 8."
   fi
 else
-  # Loud, not fatal: emulator/simulator and web-on-localhost still work, but a
-  # real device will fail ICE. Silence here is how this cost an evening.
-  echo "  WARNING: could not detect a LAN IP — LiveKit will advertise its Docker" >&2
-  echo "           address and voice will NOT connect from a real device." >&2
-  echo "           Set LIVEKIT_NODE_IP=<this machine's LAN IP> and re-run." >&2
+  # The chooser always prints something, so an empty value means it could not
+  # run at all. Loud, not fatal: web-on-localhost still works, a phone will not.
+  echo "  WARNING: no LiveKit node address chosen — voice will NOT connect" >&2
+  echo "           from a real device. Set LIVEKIT_NODE_IP=<addr> and re-run." >&2
 fi
 
 docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d

@@ -38,6 +38,8 @@ const COMPOSE_RAW = read('local/docker-compose.yml');
 const COMPOSE = yaml.load(COMPOSE_RAW);
 const START_SH = read('local/start.sh');
 const LIVEKIT_YAML = yaml.load(read('local/livekit.yaml'));
+// SHY-0465 — the node-IP decision moved here; start.sh calls it.
+const CHOOSER_SH = read('scripts/dev/choose-livekit-node-ip.sh');
 
 describe('SHY-0273 — LiveKit advertises a reachable address on the local stack', () => {
   test('the livekit service exists and is the service under test', () => {
@@ -67,21 +69,33 @@ describe('SHY-0273 — LiveKit advertises a reachable address on the local stack
     expect(ports.some((p) => p.startsWith('7880:'))).toBe(true);
   });
 
-  test('start.sh detects the host LAN address rather than committing one', () => {
+  test('the host LAN address is detected rather than committed', () => {
     // A committed IP is correct until the machine changes network — which
     // happened inside one session (192.168.1.13 → 10.179.17.101).
-    expect(START_SH).toMatch(/detect_lan_ip\(\)/);
+    //
+    // SHY-0465 moved the detection into the chooser start.sh calls, because
+    // detecting the address and proving the phone can reach it are the same
+    // decision. Assert it across the pair: start.sh must delegate, and the
+    // chooser must still detect. Dropping either fails this test.
+    expect(START_SH).toMatch(/choose-livekit-node-ip\.sh/);
     expect(START_SH).toMatch(/export LIVEKIT_NODE_IP/);
+    expect(CHOOSER_SH).toMatch(/detect_lan_ip\(\)/);
     // Chooses the interface carrying default-route traffic, not en0 guesswork.
-    expect(START_SH).toMatch(/route -n get default/);
+    expect(CHOOSER_SH).toMatch(/route -n get default/);
   });
 
-  test('start.sh warns LOUDLY when it cannot determine an address', () => {
+  test('an address that cannot be determined is warned about LOUDLY', () => {
     // Degrading silently here means voice quietly fails on device only, which
     // reads as "flaky voice" rather than "misconfigured stack".
-    const block = START_SH.slice(START_SH.indexOf('LIVEKIT_NODE_IP='));
-    expect(block).toMatch(/WARNING: could not detect a LAN IP/);
-    expect(block).toMatch(/>&2/);
+    const block = CHOOSER_SH.slice(CHOOSER_SH.indexOf('HOST_IP='));
+    expect(block).toMatch(/WARNING: could not detect a LAN address/);
+    // The chooser routes every message through `say`, which redirects once.
+    // stdout is the RESULT channel here — a warning printed there would be
+    // captured as the address. Behaviour is proven in
+    // livekit-node-ip-reachability.test.js; this pins the mechanism.
+    expect(CHOOSER_SH).toMatch(/say\(\)\s*\{[^}]*>&2/);
+    // start.sh keeps its own guard for a chooser that produced nothing at all.
+    expect(START_SH).toMatch(/WARNING: no LiveKit node address chosen/);
   });
 
   test('no hard-coded address is committed as the node IP', () => {
