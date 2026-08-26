@@ -824,6 +824,37 @@ class IosDevice {
    *
    * @param {string} label
    */
+  /**
+   * Dismisses the on-screen keyboard, best effort.
+   *
+   * A control behind the keyboard is invisible to every suite: it is in the
+   * view tree with sane bounds, and a tap at its centre lands on a key. The
+   * runner's `dismissKeyboard()` called this whenever the driver offered it —
+   * and this driver did not, so on iOS the keyboard was never dismissed and
+   * the guard silently did nothing (SHY-0457).
+   *
+   * Best effort on purpose: WDA answers 404 for this route on some iOS
+   * versions, and a keyboard that will not close is a worse screenshot, not a
+   * failed journey. It warns instead of throwing, so the tolerance is part of
+   * the output rather than a silence.
+   */
+  async hideKeyboard() {
+    // The tolerance sits OUTSIDE withSessionRecovery, not inside it. Catching
+    // within the callback swallows a DEAD SESSION before the recovery machinery
+    // can see it, so the stale session id survives and every later command
+    // fails too — one WDA death becoming a whole failed journey, which is the
+    // defect that wrapper exists to prevent.
+    try {
+      return await this.withSessionRecovery('hideKeyboard()', async () => {
+        await this._post('/wda/keyboard/dismiss', {});
+        return true;
+      });
+    } catch (err) {
+      this._warn(`[ios] hideKeyboard: WDA would not dismiss the keyboard (${err.message})`);
+      return false;
+    }
+  }
+
   async tapElementByLabel(label) {
     const quoted = JSON.stringify(String(label));
     // Same class of defect as `tapElement`, and fixed the same way rather than

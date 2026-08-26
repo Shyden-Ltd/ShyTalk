@@ -53,6 +53,17 @@ const PLATFORM_SPECIFIC = {
   tapElementByLabel: "ios-only; guarded by `typeof device.tapElementByLabel === 'function'`",
   quit: "ios-only; guarded by `typeof device.quit === 'function'`",
   measure: 'ios-only; called inside the ios branch of main()',
+  longPressElement:
+    "ios-only; guarded by `typeof device.longPressElement === 'function'`, with the " +
+    'android path falling through to the coordinate longPress below it',
+  longPress:
+    'android-only; the fallback the guard above falls through to. iOS presses BY ELEMENT ' +
+    'through WebDriverAgent, which needs no coordinates',
+  hideKeyboard:
+    "ios-only; guarded by `typeof device.hideKeyboard === 'function'`. Android dismisses " +
+    'the IME with KEYCODE_BACK in the same helper, which does not navigate while a keyboard ' +
+    'is up. Implemented on iOS in SHY-0457 — the guard used to short-circuit forever, so the ' +
+    'iOS keyboard was never dismissed at all',
   attachSourceSession:
     'android-only; called inside the android branch of main(). iOS reads the screen over ' +
     'WebDriverAgent, which is already a warm server — this is Android catching up (SHY-0447)',
