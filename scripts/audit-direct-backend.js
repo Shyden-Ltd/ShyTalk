@@ -26,9 +26,9 @@
  *   node scripts/audit-direct-backend.js --file X   # one file, every hit
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -183,7 +183,8 @@ function audit() {
     } catch {
       continue;
     }
-    if (!IMPORTS_DATA_SDK.test(content) && !RECEIVES_DATA_SDK.test(content)) continue;
+    if (!IMPORTS_DATA_SDK.test(content) && !RECEIVES_DATA_SDK.test(content))
+      continue;
 
     const lines = content.split("\n");
     const hits = [];
@@ -238,7 +239,21 @@ function main() {
   const only = args.indexOf("--file");
   if (only !== -1) {
     const want = args[only + 1];
-    for (const f of result.filter((x) => x.file.includes(want))) {
+    const matched = result.filter((x) => x.file.includes(want));
+    // Say so rather than printing nothing. Silence here reads as "this file
+    // has no direct backend access", which is the same sentence a typo
+    // produces — and this script exists on the principle that a silent miss in
+    // an audit is worse than a noisy one.
+    if (matched.length === 0) {
+      console.log(
+        `No audited file matches "${want}".\n` +
+          "  Nothing was scanned for it — this is NOT a report of zero call sites.\n" +
+          "  Paths are repo-relative and only client code is audited " +
+          "(app/src/main, shared/src/{androidMain,iosMain,commonMain}, public).",
+      );
+      return;
+    }
+    for (const f of matched) {
       console.log(`\n${f.file}  (${f.platform})`);
       for (const h of f.hits) {
         console.log(
