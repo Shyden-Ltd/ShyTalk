@@ -2,15 +2,13 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logW
-import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.IosApiClient
-import dev.gitlive.firebase.firestore.FirebaseFirestore
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.http.contentType
@@ -20,6 +18,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -97,7 +96,6 @@ class IosDeviceRepositoryImpl(
 
 class IosNotificationRepositoryImpl(
     private val api: IosApiClient,
-    private val firestore: FirebaseFirestore,
 ) : NotificationRepository {
     override suspend fun saveFcmToken(
         userId: String,
@@ -132,10 +130,15 @@ class IosNotificationRepositoryImpl(
 
     override suspend fun getPmNotificationsEnabled(userId: String): Resource<Boolean> =
         firebaseCall("Failed to get notification setting") {
-            val doc = firestore.collection("users").document(userId).get()
-            if (!doc.exists) return@firebaseCall true
-            val data = doc.dataMap()
-            (data["pmNotificationsEnabled"] as? Boolean) ?: true
+            // Through the API (EPIC-0006). The PATCH above was already behind it
+            // and only this read was not — setter migrated, getter left on a
+            // direct Firestore connection.
+            //
+            // `userId` is ignored deliberately: the endpoint answers for the
+            // CALLER, because honouring an id here would let anybody read
+            // anybody's settings.
+            val json = api.get("/api/notifications/settings")
+            (json["pmNotificationsEnabled"] as? JsonPrimitive)?.booleanOrNull ?: true
         }
 }
 
@@ -401,28 +404,34 @@ class IosBiometricRepositoryImpl(
 
 // ── BannerRepository ────────────────────────────────────────────
 
+/**
+ * Banners, through the API (EPIC-0006) — the iOS twin of BannerRepositoryImpl.
+ *
+ * Was a direct Firestore query that re-did on the phone what
+ * `GET /api/banners/active` already does server-side: filter by isActive, drop
+ * anything outside its date window, order by sortOrder. No new endpoint was
+ * needed; only for somebody to notice the work was being done twice, over a
+ * connection the app should not have had.
+ */
 class IosBannerRepositoryImpl(
-    private val firestore: FirebaseFirestore,
+    private val api: IosApiClient,
 ) : BannerRepository {
     override suspend fun getActiveBanners(): List<Banner> {
-        val now = currentTimeMillis()
-        val snapshot =
-            firestore
-                .collection("banners")
-                .where { "isActive" equalTo true }
-                .get()
-        return snapshot.documents
-            .mapNotNull { doc ->
+        val arr = api.getArray("/api/banners/active")
+        return arr
+            .mapNotNull { element ->
                 try {
-                    val data = doc.dataMap()
-                    val startDate = (data["startDate"] as? Number)?.toLong() ?: 0L
-                    val endDate = (data["endDate"] as? Number)?.toLong() ?: Long.MAX_VALUE
-                    if (startDate > now || endDate < now) return@mapNotNull null
-                    Banner.fromMap(data, doc.id)
+                    val obj = element.jsonObject
+                    val id = (obj["id"] as? JsonPrimitive)?.contentOrNull
+                    if (id.isNullOrEmpty()) return@mapNotNull null
+                    Banner.fromMap(jsonToMap(obj), id)
                 } catch (e: Exception) {
                     null
                 }
-            }.sortedBy { it.sortOrder }
+            }
+            // The server already orders by sortOrder; kept so display order is a
+            // property of this list rather than of the transport that fetched it.
+            .sortedBy { it.sortOrder }
     }
 }
 

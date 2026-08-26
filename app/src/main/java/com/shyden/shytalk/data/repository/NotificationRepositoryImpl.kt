@@ -1,15 +1,12 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 class NotificationRepositoryImpl(
     private val api: WorkerApiClient,
-    private val firestore: FirebaseFirestore,
 ) : NotificationRepository {
     override suspend fun saveFcmToken(
         userId: String,
@@ -56,8 +53,14 @@ class NotificationRepositoryImpl(
 
     override suspend fun getPmNotificationsEnabled(userId: String): Resource<Boolean> =
         firebaseCall("Failed to get notification setting") {
-            val doc = firestore.document("users/$userId").get().await()
-            val data = doc.data ?: return@firebaseCall true
-            (data["pmNotificationsEnabled"] as? Boolean) ?: true
+            // Through the API (EPIC-0006). The PATCH above was already behind
+            // it; only this read was not — setter migrated, getter left on a
+            // direct Firestore connection.
+            //
+            // `userId` is ignored on purpose: the endpoint answers for the
+            // CALLER, because honouring an id here would let anybody read
+            // anybody's settings.
+            val json = api.get("/api/notifications/settings")
+            json.optBoolean("pmNotificationsEnabled", true)
         }
 }
