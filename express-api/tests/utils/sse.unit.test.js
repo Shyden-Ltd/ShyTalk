@@ -34,7 +34,7 @@
  * and does not qualify — that one runs on the real stack.
  */
 
-const { openStream } = require('../../src/utils/sse');
+const { openStream, DEFAULT_HEARTBEAT_MS } = require('../../src/utils/sse');
 
 /** A response double that records what would go over the wire. */
 const makeRes = () => {
@@ -194,5 +194,101 @@ describe('openStream — teardown', () => {
     stream.onClose(after);
     expect(() => req.emitClose()).not.toThrow();
     expect(after).toHaveBeenCalled();
+  });
+});
+
+/**
+ * A socket that has gone away.
+ *
+ * These paths are the module's central claim: "writing to a dead socket throws
+ * asynchronously, which takes the process down — and a fan-out racing a
+ * disconnect is the normal case, not an edge case." Every one of them was
+ * uncovered, so the claim was made in a comment and nowhere else.
+ */
+const makeDeadRes = ({ failWrite = true, failEnd = false } = {}) => ({
+  headers: {},
+  chunks: [],
+  ended: false,
+  setHeader(k, v) {
+    this.headers[k.toLowerCase()] = v;
+  },
+  flushHeaders() {},
+  write(c) {
+    if (failWrite) throw new Error('EPIPE: socket is gone');
+    this.chunks.push(c);
+    return true;
+  },
+  end() {
+    if (failEnd) throw new Error('EPIPE: cannot end a gone socket');
+    this.ended = true;
+  },
+});
+
+describe('openStream — the socket has gone away', () => {
+  test('a failed send answers false instead of throwing at the caller', () => {
+    // The caller is a fan-out loop. A throw here would abort delivery to
+    // everyone else on the same snapshot.
+    const stream = openStream(makeReq(), makeDeadRes());
+    expect(() => stream.send('conversations', [])).not.toThrow();
+    expect(stream.send('conversations', [])).toBe(false);
+  });
+
+  test('a failed send closes the stream rather than leaving it half-alive', () => {
+    const stream = openStream(makeReq(), makeDeadRes());
+    stream.send('conversations', []);
+    expect(stream.isOpen).toBe(false);
+  });
+
+  test('a failed heartbeat closes the stream and stops beating', () => {
+    // One dead socket per dropped phone, beating for ever, is the leak that
+    // kills a server slowly rather than loudly.
+    const before = jest.getTimerCount();
+    const stream = openStream(makeReq(), makeDeadRes());
+    jest.advanceTimersByTime(DEFAULT_HEARTBEAT_MS + 1);
+    expect(stream.isOpen).toBe(false);
+    expect(jest.getTimerCount()).toBeLessThanOrEqual(before);
+  });
+
+  test('a socket that refuses to end does not take the close path down with it', () => {
+    // close() is called from cleanup paths. A throw here would strand every
+    // cleanup registered after it.
+    const stream = openStream(makeReq(), makeDeadRes({ failWrite: false, failEnd: true }));
+    expect(() => stream.close()).not.toThrow();
+    expect(stream.isOpen).toBe(false);
+  });
+});
+
+describe('openStream — a cleanup registered too late', () => {
+  test('runs immediately rather than being queued on a dead stream', () => {
+    // Registering after the stream has gone is a race, not a mistake: the
+    // caller sets up its teardown after an await that the disconnect beat.
+    // Queueing it would leak the very thing it was meant to release.
+    const stream = openStream(makeReq(), makeRes());
+    stream.close();
+
+    let released = false;
+    stream.onClose(() => {
+      released = true;
+    });
+    expect(released).toBe(true);
+  });
+
+  test('a late cleanup that throws is contained', () => {
+    const stream = openStream(makeReq(), makeRes());
+    stream.close();
+    expect(() =>
+      stream.onClose(() => {
+        throw new Error('cleanup exploded');
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('openStream — isOpen', () => {
+  test('reports the stream state, so callers can stop before writing', () => {
+    const stream = openStream(makeReq(), makeRes());
+    expect(stream.isOpen).toBe(true);
+    stream.close();
+    expect(stream.isOpen).toBe(false);
   });
 });
