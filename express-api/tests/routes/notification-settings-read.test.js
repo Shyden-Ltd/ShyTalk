@@ -10,48 +10,67 @@
  * The read is deliberately about the CALLER and takes no user id. The client
  * method accepts one, and passing it through would have let anybody read
  * anybody's settings. The token already says who is asking.
+ *
+ * ─── Why there are no doubles here ──────────────────────────────────────────
+ *
+ * This suite mocked `src/utils/firebase` wholesale and hand-built
+ * `req.auth = { uniqueId }`. It tripped the no-new-stubs ratchet (EPIC-0003),
+ * and the double was weaker than it looked: supplying `req.auth` by hand skips
+ * the middleware that decides who the caller IS, which is the entire subject of
+ * the "reads the CALLER, never a user named in the request" test below.
+ *
+ * It also drove persona 50000010 — a SEEDED account. Against the real emulator
+ * that would have written over the persona the device journeys depend on, which
+ * is what SHY-0464 exists to stop. The ids here are a per-file range no seed and
+ * no other suite uses.
  */
+
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
 const express = require('express');
 const request = require('supertest');
+const { db } = require('../../src/utils/firebase');
+const { authMiddleware } = require('../../src/middleware/auth');
+const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
+const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
+const notificationsRouter = require('../../src/routes/notifications');
 
-const mockUsers = {};
+const CALLER = 64300001;
+const OTHER = 64300002;
 
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    doc: jest.fn((path) => ({
-      get: async () => {
-        const id = path.split('/')[1];
-        const data = mockUsers[id];
-        return { exists: data !== undefined, data: () => data };
-      },
-      update: jest.fn().mockResolvedValue(),
-    })),
-    collection: jest.fn(),
-  },
-  rtdb: { ref: jest.fn(() => ({ set: jest.fn().mockResolvedValue() })) },
-  FieldValue: {},
-}));
-
-const buildApp = (uniqueId = 50000010) => {
+function createApp() {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => {
-    req.auth = { uniqueId };
-    next();
-  });
-  app.use('/api', require('../../src/routes/notifications'));
+  app.use('/api', authMiddleware);
+  app.use('/api', notificationsRouter);
   return app;
-};
+}
 
-beforeEach(() => {
-  for (const k of Object.keys(mockUsers)) delete mockUsers[k];
+/** Mints the caller with the given stored settings, and returns their headers. */
+async function callerWith(settings) {
+  clearAuthCaches();
+  const user = await mintRealUser({ uniqueId: CALLER, extraUserData: settings });
+  return user.headers;
+}
+
+beforeAll(assertEmulatorReachable);
+
+afterAll(async () => {
+  await Promise.all([db.doc(`users/${CALLER}`).delete(), db.doc(`users/${OTHER}`).delete()]);
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
+
+beforeEach(async () => {
+  clearAuthCaches();
+  await Promise.all([db.doc(`users/${CALLER}`).delete(), db.doc(`users/${OTHER}`).delete()]);
 });
 
 describe('GET /api/notifications/settings', () => {
   test('returns the settings stored on the caller', async () => {
-    mockUsers['50000010'] = { pmNotificationsEnabled: false, pmSoundEnabled: true };
-    const res = await request(buildApp()).get('/api/notifications/settings');
+    const headers = await callerWith({ pmNotificationsEnabled: false, pmSoundEnabled: true });
+    const res = await request(createApp()).get('/api/notifications/settings').set(headers);
     expect(res.status).toBe(200);
     expect(res.body.pmNotificationsEnabled).toBe(false);
     expect(res.body.pmSoundEnabled).toBe(true);
@@ -60,21 +79,32 @@ describe('GET /api/notifications/settings', () => {
   test('defaults to enabled when a setting was never stored', async () => {
     // The client defaulted to `true` when the field was absent. Moving the read
     // server-side must not quietly change what a person experiences.
-    mockUsers['50000010'] = {};
-    const res = await request(buildApp()).get('/api/notifications/settings');
+    const headers = await callerWith({});
+    const res = await request(createApp()).get('/api/notifications/settings').set(headers);
     expect(res.status).toBe(200);
     expect(res.body.pmNotificationsEnabled).toBe(true);
   });
 
-  test('a user document that does not exist still yields defaults, not an error', async () => {
-    const res = await request(buildApp()).get('/api/notifications/settings');
-    expect(res.status).toBe(200);
-    expect(res.body.pmNotificationsEnabled).toBe(true);
+  test('a caller whose user document is gone is refused, not given defaults', async () => {
+    // The mocked version asserted that this case returned 200 with defaults.
+    // It cannot: identity resolution reads the user document, so a credential
+    // whose record has been deleted never reaches the route — the middleware
+    // answers 403 first. The double let a request arrive in a state production
+    // does not permit, and the assertion described that fiction.
+    //
+    // The route still defaults a MISSING FIELD to enabled; that is the test
+    // above, and it is the reachable half of the original intent.
+    const headers = await callerWith({});
+    await db.doc(`users/${CALLER}`).delete();
+
+    const res = await request(createApp()).get('/api/notifications/settings').set(headers);
+
+    expect(res.status).toBe(403);
   });
 
   test('returns every field the PATCH accepts, so the two cannot drift apart', async () => {
-    mockUsers['50000010'] = {};
-    const res = await request(buildApp()).get('/api/notifications/settings');
+    const headers = await callerWith({});
+    const res = await request(createApp()).get('/api/notifications/settings').set(headers);
     for (const key of [
       'pmNotificationsEnabled',
       'pmSoundEnabled',
@@ -89,18 +119,24 @@ describe('GET /api/notifications/settings', () => {
   test('reads the CALLER, never a user named in the request', async () => {
     // The client method takes a userId. If the route honoured one, anybody
     // could read anybody's settings — so it must be ignored entirely.
-    mockUsers['50000010'] = { pmNotificationsEnabled: true };
-    mockUsers['99999999'] = { pmNotificationsEnabled: false };
-    const res = await request(buildApp(50000010)).get(
-      '/api/notifications/settings?userId=99999999',
-    );
+    //
+    // This runs through the real auth middleware deliberately: the identity
+    // under test is the one the TOKEN resolves to, and a hand-built req.auth
+    // would be asserting the fixture rather than the mechanism.
+    await db.doc(`users/${OTHER}`).set({ uniqueId: OTHER, pmNotificationsEnabled: false });
+    const headers = await callerWith({ pmNotificationsEnabled: true });
+
+    const res = await request(createApp())
+      .get(`/api/notifications/settings?userId=${OTHER}`)
+      .set(headers);
+
     expect(res.status).toBe(200);
     expect(res.body.pmNotificationsEnabled).toBe(true);
   });
 
   test('coerces stored non-booleans, so a bad write cannot reach the client', async () => {
-    mockUsers['50000010'] = { pmNotificationsEnabled: 'yes' };
-    const res = await request(buildApp()).get('/api/notifications/settings');
+    const headers = await callerWith({ pmNotificationsEnabled: 'yes' });
+    const res = await request(createApp()).get('/api/notifications/settings').set(headers);
     expect(typeof res.body.pmNotificationsEnabled).toBe('boolean');
   });
 });
