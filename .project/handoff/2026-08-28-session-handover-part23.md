@@ -65,6 +65,18 @@ a real batch and refuses only the commit carrying a `users/` write.
 
 ---
 
+## The umbrella could not record its own progress
+
+This handover was meant to carry a running-log update on SHY-0113 itself. The
+**pre-merge gate refused it**: `check-pr-story-status.js` fails any PR that
+modifies a story unless its status is `In Review`/`Done`/`Cancelled`, and
+SHY-0113 is deliberately **In Progress**.
+
+Both ways out were wrong — flipping the status would be a lie told to satisfy a
+check, and never updating the log leaves an umbrella unable to say what has been
+done under it. Filed as **SHY-0486** (Draft, a policy decision for the operator).
+The progress it would have recorded is the table above.
+
 ## Next
 
 `owner-away` (10 tests) and `disconnect-user` (12) are the remaining
