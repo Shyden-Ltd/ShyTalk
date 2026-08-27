@@ -154,6 +154,35 @@ The pin is doing its job — it must be moved deliberately, not weakened.
 - [ ] Adult and minor surfaces both asserted on Android.
 - [ ] The promotion PR's Android E2E job is green.
 
+## Outcome
+
+103/103 executed on a real OnePlus (`3b402284`), **all eight CI failures fixed**,
+nothing regressed. Four failures remain and are **not this story's**:
+`RoomBrowsingTest` (3) and `RoomCreationTest` (1) fail identically on **clean
+develop** on the same phone, and pass on CI's emulator. Filed as SHY-0475.
+
+Five causes were found, not the three the promotion showed, because fixing the
+first three exposed two more:
+
+1. `AgeVerificationSubmitViewModel` missing from `TestKoinModule` — and once
+   registered, its `AgeVerificationRepository` was missing too, so Koin failed
+   one layer deeper.
+2. The resource-count pin, moved 838 → 884 deliberately.
+3. Instrumentation tests were never SIGNED IN. `SharedNavGraph` reads
+   `resolvedUniqueId`, the fake defaults it to null, so the user-flags listener
+   never subscribed and `ownCohort` stayed `minor` regardless of the fake.
+4. The cohort has **two readers**: the messages tab asks the nav graph's
+   `ownCohort`; the wallet asks `user.cohort` on the profile document. Setting
+   one left the other correctly hidden.
+5. `FakeUserRepository` is a Koin singleton that `ResetFakesRule` never reset,
+   so a cohort written by one test leaked into every later one.
+
+And one design correction worth recording: signing every test in **wholesale**
+broke ten passing tests, because a resolved id turns the whole app signed-in —
+the private-message sync service starts and room screens take another path. The
+shipped design is opt-IN (`cohort: String? = null`), so a test that does not ask
+for a cohort behaves exactly as it did before.
+
 ## Notes
 
 Found by the develop→main promotion, which is the first thing in months to run
