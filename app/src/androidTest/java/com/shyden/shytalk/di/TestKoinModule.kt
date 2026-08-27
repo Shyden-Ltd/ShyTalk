@@ -10,6 +10,7 @@ import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.TokenService
 import com.shyden.shytalk.data.remote.VoiceService
+import com.shyden.shytalk.data.repository.AgeVerificationRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
@@ -28,6 +29,7 @@ import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.fake.FakeActiveRoomManager
+import com.shyden.shytalk.fake.FakeAgeVerificationRepository
 import com.shyden.shytalk.fake.FakeAppConfigService
 import com.shyden.shytalk.fake.FakeAuthRepository
 import com.shyden.shytalk.fake.FakeBannerRepository
@@ -49,6 +51,7 @@ import com.shyden.shytalk.fake.FakeTypingRepository
 import com.shyden.shytalk.fake.FakeUserRepository
 import com.shyden.shytalk.fake.FakeVoiceService
 import com.shyden.shytalk.feature.ageverification.AgeRestrictionService
+import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitViewModel
 import com.shyden.shytalk.feature.auth.AuthViewModel
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.feature.gacha.GachaViewModel
@@ -100,6 +103,11 @@ val testModule =
         single { FakeAppConfigService() } bind AppConfigService::class
 
         // Fake repositories
+        // SHY-0474: registered in the real ViewModelModule and missing here, so
+        // navigating to the screen threw NoDefinitionFoundException -- a failure
+        // that existed only in tests and said nothing about the app.
+        single { FakeAgeVerificationRepository() } bind AgeVerificationRepository::class
+        viewModel { AgeVerificationSubmitViewModel(get()) }
         single { FakeAuthRepository() } bind AuthRepository::class
         single { FakeUserRepository() } bind UserRepository::class
         single { FakeRoomRepository() } bind RoomRepository::class
