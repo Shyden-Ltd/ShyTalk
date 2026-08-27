@@ -1,6 +1,6 @@
 ---
 id: SHY-0380
-status: In Review
+status: Done
 owner: shyden
 created: 2026-08-20
 priority: P1
@@ -9,6 +9,7 @@ type: feature
 roadmap_ids: []
 epic: EPIC-0012
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0380: A support-ticket queue an admin can action

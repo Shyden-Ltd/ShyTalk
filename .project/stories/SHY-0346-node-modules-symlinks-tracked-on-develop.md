@@ -1,6 +1,6 @@
 ---
 id: SHY-0346
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: false
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1803
+released_in: v0.99.0
 ---
 
 # SHY-0346: Two symlinks into one developer's home directory are committed on develop

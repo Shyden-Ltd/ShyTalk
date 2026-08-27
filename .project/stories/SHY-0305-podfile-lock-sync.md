@@ -1,12 +1,13 @@
 ---
 id: SHY-0305
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-17
 priority: P0
 effort: S
 type: bug
 roadmap_ids: []
+released_in: v0.99.0
 ---
 
 # SHY-0305: Every iOS build fails, and the guard that should have caught it was skipped by the same omission

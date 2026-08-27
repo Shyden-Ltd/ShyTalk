@@ -1,6 +1,6 @@
 ---
 id: SHY-0329
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -8,6 +8,7 @@ effort: XS
 type: infra
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0329: A driver PR cannot merge whenever the Playwright cache misses

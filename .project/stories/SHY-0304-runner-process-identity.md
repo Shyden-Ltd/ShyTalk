@@ -1,12 +1,13 @@
 ---
 id: SHY-0304
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-17
 priority: P1
 effort: S
 type: bug
 roadmap_ids: []
+released_in: v0.99.0
 ---
 
 # SHY-0304: The gauntlet finds runners by name, so it reports and kills the wrong processes

@@ -1,6 +1,6 @@
 ---
 id: SHY-0356
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-19
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0356: A browser shard installs every other browser's dependencies

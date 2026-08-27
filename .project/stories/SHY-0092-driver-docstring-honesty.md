@@ -1,6 +1,6 @@
 ---
 id: SHY-0092
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-13
 priority: P2
@@ -10,6 +10,7 @@ roadmap_ids: []
 epic: EPIC-0003
 pr:
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0092: Correct the misleading "STUB / SCAFFOLD for every method" driver docstrings

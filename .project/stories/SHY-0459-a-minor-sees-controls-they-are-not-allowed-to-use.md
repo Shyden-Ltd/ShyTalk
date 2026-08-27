@@ -1,6 +1,6 @@
 ---
 id: SHY-0459
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-25
 priority: P2
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0459: A minor sees controls they are not allowed to use

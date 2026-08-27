@@ -1,6 +1,6 @@
 ---
 id: SHY-0275
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-04
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 pr:
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0275: The iOS local build points a real iPhone at itself

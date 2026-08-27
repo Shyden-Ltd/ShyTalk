@@ -1,6 +1,6 @@
 ---
 id: SHY-0339
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-18
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0339: CI runs test suites that the change cannot possibly affect

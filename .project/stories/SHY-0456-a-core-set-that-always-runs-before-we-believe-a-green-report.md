@@ -1,6 +1,6 @@
 ---
 id: SHY-0456
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-25
 priority: P1
@@ -8,6 +8,7 @@ effort: L
 type: feature
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0456: A core set that always runs, before we believe a green report

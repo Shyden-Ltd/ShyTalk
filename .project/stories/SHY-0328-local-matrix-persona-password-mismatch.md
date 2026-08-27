@@ -1,6 +1,6 @@
 ---
 id: SHY-0328
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0328: The local journey matrix cannot pass on any branch, because it seeds with one password and signs in with another

@@ -1,6 +1,6 @@
 ---
 id: SHY-0351
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-19
 priority: P1
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0351: The warning that someone in a room has blocked you never appears

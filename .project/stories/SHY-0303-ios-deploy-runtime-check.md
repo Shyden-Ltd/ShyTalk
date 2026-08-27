@@ -1,6 +1,6 @@
 ---
 id: SHY-0303
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-16
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0303: Every iOS deploy to dev dies before it builds anything

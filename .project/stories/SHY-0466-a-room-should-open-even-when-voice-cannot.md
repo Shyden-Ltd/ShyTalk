@@ -1,6 +1,6 @@
 ---
 id: SHY-0466
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-26
 priority: P2
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: false
 epic: EPIC-0003
+released_in: v0.99.0
 ---
 
 # SHY-0466: A room should open even when voice cannot

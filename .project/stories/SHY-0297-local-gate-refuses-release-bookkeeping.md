@@ -1,6 +1,6 @@
 ---
 id: SHY-0297
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-14
 priority: P1
@@ -9,6 +9,7 @@ type: infra
 roadmap_ids: []
 pr:
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0297: The local gate refuses the release bookkeeping the lifecycle demands

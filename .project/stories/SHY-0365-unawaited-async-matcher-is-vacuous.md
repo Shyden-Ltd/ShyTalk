@@ -1,6 +1,6 @@
 ---
 id: SHY-0365
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-20
 priority: P1
@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0365: A test asserts nothing, because its async matcher is never awaited

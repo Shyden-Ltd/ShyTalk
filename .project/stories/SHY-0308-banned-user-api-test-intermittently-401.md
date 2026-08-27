@@ -1,12 +1,13 @@
 ---
 id: SHY-0308
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-17
 priority: P1
 effort: S
 type: bug
 roadmap_ids: []
+released_in: v0.99.0
 ---
 
 # SHY-0308: The banned-user API test intermittently gets 401 where it demands 403

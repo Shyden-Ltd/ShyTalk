@@ -1,6 +1,6 @@
 ---
 id: SHY-0342
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -8,6 +8,7 @@ effort: M
 type: docs
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0342: Nobody has worked out what age rating this app must carry, or checked it matches what we built

@@ -1,6 +1,6 @@
 ---
 id: SHY-0457
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-25
 priority: P0
@@ -8,6 +8,7 @@ effort: L
 type: bug
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0457: A journey that never touches the phone must not pass

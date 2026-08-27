@@ -1,6 +1,6 @@
 ---
 id: SHY-0245
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-25
 priority: P0
@@ -8,6 +8,7 @@ effort: L
 type: bug
 roadmap_ids: []
 epic: EPIC-0008
+released_in: v0.99.0
 ---
 
 # SHY-0245: Eradicate every sleep from the test suites and make them impossible to reintroduce

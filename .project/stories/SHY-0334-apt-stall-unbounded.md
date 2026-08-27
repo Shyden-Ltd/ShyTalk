@@ -1,6 +1,6 @@
 ---
 id: SHY-0334
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0334: A stalled package mirror hangs a build until its budget runs out

@@ -1,6 +1,6 @@
 ---
 id: SHY-0300
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-16
 priority: P0
@@ -9,6 +9,7 @@ type: feature
 roadmap_ids: []
 epic: EPIC-0005
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0300: Attest the unauthenticated ban gate with App Check

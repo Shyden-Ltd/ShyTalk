@@ -1,6 +1,6 @@
 ---
 id: SHY-0348
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0348: Blocking someone does not stop them looking at your profile

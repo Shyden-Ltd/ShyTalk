@@ -1,6 +1,6 @@
 ---
 id: SHY-0455
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-25
 priority: P3
@@ -8,6 +8,7 @@ effort: S
 type: feature
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0455: See the screen on a passing step, not only a failing one

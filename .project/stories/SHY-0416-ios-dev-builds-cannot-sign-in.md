@@ -1,6 +1,6 @@
 ---
 id: SHY-0416
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-21
 priority: P0
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0416: No iOS dev build can sign in, which is why iOS is never walked

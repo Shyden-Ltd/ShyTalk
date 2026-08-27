@@ -1,6 +1,6 @@
 ---
 id: SHY-0362
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-20
 priority: P0
@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0362: develop carries two ktlint errors, so every app-touching PR fails lint

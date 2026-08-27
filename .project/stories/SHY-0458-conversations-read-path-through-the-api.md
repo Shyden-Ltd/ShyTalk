@@ -1,6 +1,6 @@
 ---
 id: SHY-0458
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-25
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: true
 epic: EPIC-0006
+released_in: v0.99.0
 ---
 
 # SHY-0458: The conversations read path goes through the API, and private messaging works again

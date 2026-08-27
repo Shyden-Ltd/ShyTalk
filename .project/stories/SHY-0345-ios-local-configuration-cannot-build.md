@@ -1,6 +1,6 @@
 ---
 id: SHY-0345
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: true
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1804
+released_in: v0.99.0
 ---
 
 # SHY-0345: The iOS Local build fails before it compiles a single line

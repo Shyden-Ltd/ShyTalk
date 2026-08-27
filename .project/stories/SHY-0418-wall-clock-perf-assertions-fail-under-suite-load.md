@@ -1,6 +1,6 @@
 ---
 id: SHY-0418
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-21
 priority: P2
@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0418: Two wall-clock assertions go red when the machine is busy

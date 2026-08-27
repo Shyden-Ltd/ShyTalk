@@ -1,6 +1,6 @@
 ---
 id: SHY-0359
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-20
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: chore
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0359: Remove the Relationships feature, and every mechanism that could bring it back

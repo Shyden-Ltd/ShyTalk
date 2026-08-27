@@ -1,6 +1,6 @@
 ---
 id: SHY-0355
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-19
 priority: P1
@@ -8,6 +8,7 @@ effort: XS
 type: infra
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0355: SonarCloud runs out of time and cancels itself, failing pull requests that did nothing wrong

@@ -1,6 +1,6 @@
 ---
 id: SHY-0144
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -10,6 +10,7 @@ roadmap_ids: []
 epic: EPIC-0004
 pr:
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0144: Retire the FunFact splash + app-side fun-fact code
