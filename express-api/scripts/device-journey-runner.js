@@ -105,6 +105,91 @@ const SUPPORT_PERSONA_BY_PLATFORM = {
   ios: 'joiner-flaky@shytalk.dev',
 };
 
+// --------------------------------------------------------------------------
+// Where a target's API lives (SHY-0473)
+// --------------------------------------------------------------------------
+// The runner used to hold `API_BASE_URL = 'http://localhost:3000'` and an Auth
+// emulator URL as module-level constants, while `--target` decided the package,
+// the APK and the tunnelling. On `dev` -- which is deliberately untunnelled --
+// the phone talked to the remote dev API while every server-rule assertion
+// talked to whatever was listening on the laptop. That does not fail. With a
+// local stack up, which is the normal state of this machine, it PASSES, and a
+// green dev report is evidence about the laptop.
+//
+// So the API base and the auth endpoint come from the TARGET. Both dev values
+// are read from the very files the dev APK is built from: a copy here would be
+// a second place for them to be true, which is how two truths drift apart.
+
+const REPO_ROOT_DIR = path.join(__dirname, '..', '..');
+
+/**
+ * The dev flavour's API base, read from the file the dev APK is built with.
+ *
+ * Deliberately strict: exactly one match, or a named failure. A regex that
+ * quietly found none and returned a default would be this very defect wearing
+ * a different constant.
+ */
+function devApiBaseFromGradle() {
+  const file = path.join(REPO_ROOT_DIR, 'app', 'build.gradle.kts');
+  const src = fs.readFileSync(file, 'utf8');
+  const found = [
+    ...src.matchAll(/buildConfigField\("String",\s*"API_BASE_URL",\s*"\\"([^\\]+)\\""\)/g),
+  ]
+    .map((m) => m[1])
+    .filter((u) => u.includes('dev-api'));
+  if (found.length !== 1) {
+    throw new Error(
+      `Could not read the dev API base from ${file}: expected exactly one ` +
+        `API_BASE_URL containing "dev-api", found ${found.length}.`,
+    );
+  }
+  return found[0];
+}
+
+/** Where the dev flavour's Firebase config lives on a machine that can build it. */
+const DEV_GOOGLE_SERVICES = path.join(REPO_ROOT_DIR, 'app', 'src', 'dev', 'google-services.json');
+
+/**
+ * The dev flavour's Firebase client key.
+ *
+ * Two sources, in order, because the file has two different truths about
+ * whether it exists:
+ *
+ *   1. `DEV_FIREBASE_API_KEY` — the name deploy-dev.yml's smoke job already
+ *      uses. This is the only source available in CI.
+ *   2. `app/src/dev/google-services.json` — what the dev APK is actually built
+ *      from, and the reason a developer machine needs no configuration at all.
+ *
+ * The file is gitignored -- a recursive glob on `google-services.json` -- and
+ * written from a secret, so it is present wherever the dev APK can be built
+ * and absent
+ * wherever it cannot. Reading it unconditionally is what made the first cut of
+ * SHY-0473 pass on this Mac and fail in CI with ENOENT.
+ *
+ * Not a silent fallback: with neither source, this throws and names both.
+ */
+function devFirebaseKey(env = process.env) {
+  const fromEnv = env.DEV_FIREBASE_API_KEY;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+
+  if (!fs.existsSync(DEV_GOOGLE_SERVICES)) {
+    throw new Error(
+      `No dev Firebase client key. Set DEV_FIREBASE_API_KEY, or provide ` +
+        `${DEV_GOOGLE_SERVICES} (gitignored; written from a secret, and present ` +
+        'wherever the dev APK can be built).',
+    );
+  }
+  const key = JSON.parse(fs.readFileSync(DEV_GOOGLE_SERVICES, 'utf8'))?.client?.[0]?.api_key?.[0]
+    ?.current_key;
+  if (!key) {
+    throw new Error(`Could not read the dev Firebase client key from ${DEV_GOOGLE_SERVICES}`);
+  }
+  return key;
+}
+
+/** Where the operator's dev persona password is kept, per provision-test-personas.js. */
+const DEV_CREDENTIALS_FILE = '~/.shytalk/dev-personas-credentials';
+
 const TARGETS = {
   local: {
     pkg: 'com.shyden.shytalk.local',
@@ -126,6 +211,14 @@ const TARGETS = {
     // scripts/dev/ios-local-install.sh, which points the app at THIS Mac's LAN
     // address. There is no adb-reverse equivalent to fall back on.
     iosBundleId: 'com.shyden.shytalk',
+    apiBaseUrl: 'http://localhost:3000',
+    // The Auth emulator accepts any project key; `demo` is the convention the
+    // stack starts with. Custom claims (uniqueId/cohort) ARE minted, which is
+    // what makes these tokens worth asserting with.
+    authUrl:
+      'http://localhost:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo',
+    // Seeded by scripts/seed-personas-local.js, which fixes it.
+    password: { kind: 'fixed', value: 'localdev123' },
   },
   dev: {
     pkg: 'com.shyden.shytalk.dev',
@@ -134,6 +227,18 @@ const TARGETS = {
     gradleArgs: [],
     reversePorts: [], // dev backend is remote; no tunnelling
     iosBundleId: 'com.shyden.shytalk',
+    get apiBaseUrl() {
+      return devApiBaseFromGradle();
+    },
+    // A function, not a getter: the key can come from the environment, and a
+    // getter has no way to be told which environment is meant.
+    authUrlFor(env) {
+      return `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${devFirebaseKey(env)}`;
+    },
+    // Generated per-environment by provision-test-personas.js. There is no
+    // default, and that is the point: a dev run without it must refuse rather
+    // than reach for something that happens to work.
+    password: { kind: 'env', name: 'PERSONAS_PASSWORD' },
   },
 };
 
@@ -1788,15 +1893,86 @@ const arrayContains = (v, needle) => Array.isArray(v) && v.includes(needle);
 // like uniqueId/cohort ARE included), then call the express-api as that
 // persona. This verifies the server-enforced rules (cohort gate, economy,
 // moderation) the journey specs assert but the shipped UI doesn't expose.
-const AUTH_EMU_URL =
-  'http://localhost:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo';
-const API_BASE_URL = 'http://localhost:3000';
+/**
+ * Resolve the API surface a run should question, from the target it declared.
+ *
+ * Pure, and exported, so the targets can be checked without a phone attached.
+ * `env` is passed in rather than read from `process.env` so a test can state
+ * the environment it means instead of mutating the process.
+ *
+ * Throws rather than defaulting. SHY-0473: a default is exactly how a dev run
+ * came to assert against localhost and report green.
+ */
+function resolveTargetApi(target, env = process.env) {
+  const cfg = TARGETS[target];
+  if (!cfg) {
+    throw new Error(`Unknown --target "${target}" (use ${Object.keys(TARGETS).join('|')}).`);
+  }
 
-async function getIdToken(email, pw = 'localdev123') {
-  const r = await fetch(AUTH_EMU_URL, {
+  let password;
+  if (cfg.password.kind === 'fixed') {
+    password = cfg.password.value;
+  } else {
+    const raw = env[cfg.password.name];
+    if (!raw || !raw.trim()) {
+      throw new Error(
+        `The "${target}" target needs ${cfg.password.name}, and it is not set.\n` +
+          `  The dev personas' password is generated per-environment by ` +
+          `provision-test-personas.js and kept in ${DEV_CREDENTIALS_FILE} (chmod 600).\n` +
+          `  Refusing to start: without it the API assertions would have to fall back to ` +
+          `something, and the only thing to fall back to is the local stack — which is how ` +
+          `a dev run comes to report green about this laptop (SHY-0473).`,
+      );
+    }
+    password = raw;
+  }
+
+  const { apiBaseUrl } = cfg;
+  const authUrl = cfg.authUrlFor ? cfg.authUrlFor(env) : cfg.authUrl;
+  return {
+    apiBaseUrl,
+    authUrl,
+    password,
+    // Printed in the run header so the target is legible without reading the
+    // source. The password is deliberately absent: a header reaches CI logs,
+    // screenshots and evidence pages.
+    describe: `api=${apiBaseUrl} auth=${new URL(authUrl).host}`,
+  };
+}
+
+/**
+ * The API surface the current run questions, set once from the target.
+ *
+ * Module state, because the journeys call `apiCall` directly and threading a
+ * config through every one of them would be a large diff for no extra safety.
+ * Unset is an error rather than a fallback, for the reason above.
+ */
+let activeApi = null;
+
+function setActiveApi(resolved) {
+  activeApi = resolved;
+}
+
+function requireActiveApi() {
+  if (!activeApi) {
+    throw new Error(
+      'No API target resolved. resolveTargetApi()/setActiveApi() must run before any API ' +
+        'assertion — see SHY-0473.',
+    );
+  }
+  return activeApi;
+}
+
+async function getIdToken(email, pw) {
+  const api = requireActiveApi();
+  const r = await fetch(api.authUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: pw, returnSecureToken: true }),
+    body: JSON.stringify({
+      email,
+      password: pw ?? api.password,
+      returnSecureToken: true,
+    }),
   });
   const j = await r.json();
   if (!j.idToken) {
@@ -1808,7 +1984,7 @@ async function getIdToken(email, pw = 'localdev123') {
 async function apiCall(method, pathStr, { token, body } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const r = await fetch(`${API_BASE_URL}${pathStr}`, {
+  const r = await fetch(`${requireActiveApi().apiBaseUrl}${pathStr}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -3946,6 +4122,11 @@ async function main() {
     return 0;
   }
 
+  // Resolve the API surface BEFORE anything is built or installed, so a dev
+  // run with no credentials costs seconds rather than a gradle build. Placed
+  // after --list and --help on purpose: naming the journeys needs no account.
+  setActiveApi(resolveTargetApi(opts.target, process.env));
+
   // ONE journey definition, TWO device backends. A journey written once
   // asserts the same things on both phones, so a platform difference surfaces
   // as a failing step rather than as a walk nobody ran -- which is how
@@ -4206,4 +4387,9 @@ module.exports = {
   JOURNEY_TICKET_PREFIX,
   MAX_OPEN_TICKETS_LISTED,
   getIdToken,
+  resolveTargetApi,
+  devFirebaseKey,
+  DEV_GOOGLE_SERVICES,
+  setActiveApi,
+  TARGETS,
 };
