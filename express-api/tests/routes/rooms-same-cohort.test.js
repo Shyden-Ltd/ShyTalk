@@ -52,12 +52,6 @@ process.env.NODE_ENV = 'local';
 const express = require('express');
 const request = require('supertest');
 
-// No local FCM emulator (EPIC-0003 carve-out); real push is proven in dev.
-jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: jest.fn().mockResolvedValue([]),
-  cleanupInvalidTokens: jest.fn().mockResolvedValue(),
-}));
-
 const { db } = require('../../src/utils/firebase');
 const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
 const { _resetAuditDedup } = require('../../src/middleware/sameCohort');

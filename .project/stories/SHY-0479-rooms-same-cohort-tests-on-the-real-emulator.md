@@ -118,6 +118,50 @@ remaining files and the one whose subject is safety.
 | Mutation | Removing `requireSameCohort` from either route fails the suite. |
 | Ratchet | The no-new-stubs debt SHRINKS; the baseline is regenerated only because the count went down. |
 
+## Outcome
+
+**28 doubles → 0.** The file left the no-stubs baseline entirely: 615 baselined
+paths → 612, `jest.mock` 179 → 178, `jest.fn` 209 → 208, `mockResolvedValue`
+187 → 186.
+
+The FCM double was carved out in advance as unavoidable — and turned out to be
+**unnecessary**. The invite route only calls FCM when the invitee has
+`fcmTokens`, and no test seeds any, so the branch never ran with the double
+either. It was insurance against a path the suite does not walk. Removing it
+took the file to zero.
+
+Three assertions got stronger on the way:
+
+| Was | Now |
+| --- | --- |
+| `expect(mockDocUpdate).not.toHaveBeenCalled()` | read the room back; `pendingInvites` is `{}` |
+| `expect(mockDocSet).not.toHaveBeenCalled()` | query the real `seatRequests` subcollection |
+| `expect(res.body.requestId).toBe('req-123')` | fetch the document AT the returned id and check its contents |
+
+The last was pinned to a stubbed `generateId`, so it asserted the stub's return
+value and said nothing about whether anything was written.
+
+Both gates mutation-tested: replacing `requireSameCohort` with `false` on either
+route fails two tests each.
+
+## A collision the guard caught
+
+Migrating onto real Firestore made this suite assert on `segregationEvents` — a
+**shared** collection that `livekit-cohort.test.js` was clearing WHOLESALE, on
+the stated justification:
+
+> SEG_EVENTS is the exception: the route writes it via `.add()` … and **ONLY
+> this file touches it**, so clearing it here races nothing.
+
+True when written, false the moment this migration landed. A wholesale wipe would
+have deleted these audit rows mid-test — a scheduling-dependent flake, the kind
+that costs a day to find. `test-isolation-analyzer` flagged it before it could
+happen, naming both files.
+
+`livekit-cohort` now clears only rows whose `sourceUniqueId` is in its own range.
+**A shared collection may only be cleared of one's own rows**, and its comment
+now says why rather than asserting exclusivity it no longer has.
+
 ## Out of Scope
 
 - `rooms.test.js` and `room-mutations.test.js` — the other two files in the
