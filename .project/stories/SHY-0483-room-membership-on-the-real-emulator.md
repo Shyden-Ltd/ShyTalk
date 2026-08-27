@@ -119,6 +119,37 @@ still there".
 | Unit (`*.unit.test.js`) | Each route answers 500 when the transaction throws. |
 | Mutation | Removing the ban check fails the suite. |
 
+## Outcome
+
+`room-membership.test.js` — **23 tests, zero doubles**.
+`room-membership-errors.unit.test.js` — 4. **26 → 27**.
+`room-mutations.test.js` drops **1065 → 818 lines, 136 → 110 doubles**.
+
+Running total for the file across SHY-0481/0482/0483:
+**1922 → 818 lines, 181 → 110 doubles.**
+
+### Mutation-tested
+
+| Mutation | Result |
+| --- | --- |
+| Drop the ban check on join | **1 fails** |
+| Broadcast on a no-op leave | **1 fails** |
+| Break `first-join` set-once | **1 fails** |
+
+The middle one is the operational claim made good: the no-op branch exists to
+stop a retried `/leave` waking every connected client, and that is now asserted
+against **real RTDB** rather than an uncalled spy.
+
+### Two behaviours gained coverage
+
+- **Joining twice adds the caller once.** `arrayUnion`'s whole purpose is that a
+  repeat is not a duplicate, and a marker object could not show it.
+- **Declining leaves somebody else's invite alone.** A single recorded
+  `{ __delete: true }` could not distinguish "mine" from "all of them".
+
+And `first-join` set-once now asserts the **original value survived**, not merely
+that no write occurred.
+
 ## Out of Scope
 
 - `disconnect-user` (RTDB presence — sequenced against SHY-0103), the
