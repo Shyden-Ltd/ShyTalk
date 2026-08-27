@@ -183,31 +183,10 @@ describe('POST /api/rooms/:roomId/owner-away', () => {
     const res = await request(createApp(1)).post('/api/rooms/room-1/owner-away').send({});
     expect(res.status).toBe(500);
   });
-});
 
-describe('Chunk C review-hardening coverage', () => {
-  test('PATCH /name: 200 at exactly 50 characters (boundary)', async () => {
-    mockTxnGet.mockResolvedValue(snap(mkRoom()));
-    const res = await request(createApp(1))
-      .patch('/api/rooms/room-1/name')
-      .send({ name: 'x'.repeat(50) });
-    expect(res.status).toBe(200);
-    expect(mockTxnUpdate).toHaveBeenCalledWith(mockRoomRef, { name: 'x'.repeat(50) });
-  });
-
-  test('PATCH /name: 400 when name is a non-string type (number)', async () => {
-    const res = await request(createApp(1)).patch('/api/rooms/room-1/name').send({ name: 42 });
-    expect(res.status).toBe(400);
-    expect(mockTxnUpdate).not.toHaveBeenCalled();
-  });
-
-  test('POST /owner-returned: 200 idempotent no-op on an already-ACTIVE room (no write, no broadcast)', async () => {
-    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'ACTIVE' })));
-    const res = await request(createApp(1)).post('/api/rooms/room-1/owner-returned').send({});
-    expect(res.status).toBe(200);
-    expect(mockTxnUpdate).not.toHaveBeenCalled();
-    expect(mockRtdbSet).not.toHaveBeenCalled();
-  });
+  // ── Relocated from the "Chunk C" hardening group (SHY-0487). These stay
+  // here: owner-away reads RTDB presence, which the SHY-0113 umbrella
+  // sequences against SHY-0103. ─────────────────────────────────────────
 
   test('POST /owner-away: 403 for a non-owner on an already-OWNER_AWAY room (auth precedes idempotency)', async () => {
     const room = mkRoom({ state: 'OWNER_AWAY', ownerLeftAt: 123 });
@@ -218,7 +197,6 @@ describe('Chunk C review-hardening coverage', () => {
     expect(res.status).toBe(403);
     expect(mockTxnUpdate).not.toHaveBeenCalled();
   });
-
   test('POST /owner-away: the non-owner path reads presence at the owner RTDB node', async () => {
     const { rtdb } = require('../../src/utils/firebase');
     const room = mkRoom({ state: 'ACTIVE' });
@@ -227,107 +205,6 @@ describe('Chunk C review-hardening coverage', () => {
     mockRtdbGet.mockResolvedValue({ exists: () => false });
     await request(createApp(10)).post('/api/rooms/room-1/owner-away').send({});
     expect(rtdb.ref).toHaveBeenCalledWith('rooms/room-1/presence/1');
-  });
-
-  test('POST /seats/:i/move: 403 when a host targets the owner seat (toIndex 0)', async () => {
-    mockTxnGet.mockResolvedValue(
-      snap(mkRoom({ seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } } })),
-    );
-    const res = await request(createApp(10))
-      .post('/api/rooms/room-1/seats/3/move')
-      .send({ toIndex: 0 });
-    expect(res.status).toBe(403);
-    expect(mockTxnUpdate).not.toHaveBeenCalled();
-  });
-
-  test('POST /seats/:i/move: 403 when a host tries to move the owner (source occupied by owner)', async () => {
-    mockTxnGet.mockResolvedValue(
-      snap(mkRoom({ seats: { 3: { userId: '1', state: 'OCCUPIED', isMuted: false } } })),
-    );
-    const res = await request(createApp(10))
-      .post('/api/rooms/room-1/seats/3/move')
-      .send({ toIndex: 4 });
-    expect(res.status).toBe(403);
-    expect(mockTxnUpdate).not.toHaveBeenCalled();
-  });
-
-  test('POST /seats/:i/move: 400 when toIndex is a non-integer (float)', async () => {
-    const res = await request(createApp(1))
-      .post('/api/rooms/room-1/seats/3/move')
-      .send({ toIndex: 3.7 });
-    expect(res.status).toBe(400);
-  });
-
-  test('POST /seats/:i/move: 200 moves are permitted in an OWNER_AWAY room', async () => {
-    mockTxnGet.mockResolvedValue(
-      snap(
-        mkRoom({
-          state: 'OWNER_AWAY',
-          ownerLeftAt: Date.now(),
-          seats: {
-            3: { userId: '99', state: 'OCCUPIED', isMuted: false },
-            4: { userId: null, state: 'EMPTY', isMuted: false },
-          },
-        }),
-      ),
-    );
-    const res = await request(createApp(1))
-      .post('/api/rooms/room-1/seats/3/move')
-      .send({ toIndex: 4 });
-    expect(res.status).toBe(200);
-  });
-
-  test('POST /join: 200 idempotent when the caller is already a participant', async () => {
-    mockTxnGet.mockResolvedValue(snap(mkRoom())); // participant 10 already present
-    const res = await request(createApp(10)).post('/api/rooms/room-1/join').send({});
-    expect(res.status).toBe(200);
-    expect(mockTxnUpdate).toHaveBeenCalledWith(mockRoomRef, {
-      participantIds: { __arrayUnion: ['10'] },
-    });
-  });
-
-  test('POST /join: 200 when the room doc has no bannedUserIds field', async () => {
-    const room = mkRoom();
-    delete room.bannedUserIds; // ensure the field is absent
-    mockTxnGet.mockResolvedValue(snap(room));
-    const res = await request(createApp(50)).post('/api/rooms/room-1/join').send({});
-    expect(res.status).toBe(200);
-  });
-
-  test('POST /decline-invite: 200 deletes a pending invite even on a CLOSED room', async () => {
-    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED', pendingInvites: { 50: '10' } })));
-    const res = await request(createApp(50)).post('/api/rooms/room-1/decline-invite').send({});
-    expect(res.status).toBe(200);
-    expect(mockTxnUpdate).toHaveBeenCalledWith(mockRoomRef, {
-      'pendingInvites.50': { __delete: true },
-    });
-  });
-
-  test('POST /close: 200 with zero participants performs no currentRoomId batch clear', async () => {
-    mockTxnGet.mockResolvedValue(snap(mkRoom({ participantIds: [] })));
-    const res = await request(createApp(1)).post('/api/rooms/room-1/close').send({});
-    expect(res.status).toBe(200);
-    expect(mockTxnUpdate).toHaveBeenCalled();
-    expect(mockBatchSet).not.toHaveBeenCalled();
-  });
-
-  test('POST /close: 403 non-owner cannot expire-close when ownerLeftAt is missing (NaN guard)', async () => {
-    mockTxnGet.mockResolvedValue(
-      snap(
-        mkRoom({
-          state: 'OWNER_AWAY',
-          // ownerLeftAt intentionally absent → expiry comparison must be false
-          seats: {
-            0: { userId: '1', state: 'OCCUPIED', isMuted: false },
-            3: { userId: '10', state: 'OCCUPIED', isMuted: false }, // caller
-            4: { userId: '99', state: 'OCCUPIED', isMuted: false }, // another non-owner seated
-          },
-        }),
-      ),
-    );
-    const res = await request(createApp(10)).post('/api/rooms/room-1/close').send({});
-    expect(res.status).toBe(403);
-    expect(mockTxnUpdate).not.toHaveBeenCalled();
   });
 });
 

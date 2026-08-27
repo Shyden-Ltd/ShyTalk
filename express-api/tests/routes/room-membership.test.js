@@ -165,6 +165,31 @@ describe('POST /api/rooms/:roomId/join', () => {
     expect((await room()).participantIds.filter((id) => id === '50')).toHaveLength(1);
   });
 
+  // ── Relocated from the "Chunk C" hardening group (SHY-0487) ──────────
+
+  test('200 idempotent when the caller is already a participant', async () => {
+    // A client re-joining a room it never left. The list must not grow.
+    await seed(); // 10 is already a participant
+    const res = await request(createApp(10)).post(`/api/rooms/${ROOM}/join`).send({});
+    expect(res.status).toBe(200);
+    expect((await room()).participantIds.filter((id) => id === '10')).toHaveLength(1);
+  });
+
+  test('200 when the room document has NO bannedUserIds field at all', async () => {
+    // Absent and empty must behave alike. A ban check that reads `undefined`
+    // and throws — or that treats absence as "everybody is banned" — only
+    // shows up against a real document that genuinely lacks the field.
+    const data = mkRoom();
+    delete data.bannedUserIds;
+    await roomRef().set(data);
+    expect('bannedUserIds' in (await room())).toBe(false);
+
+    const res = await request(createApp(50)).post(`/api/rooms/${ROOM}/join`).send({});
+
+    expect(res.status).toBe(200);
+    expect((await room()).participantIds).toContain('50');
+  });
+
   test('200 joins an OWNER_AWAY room (still joinable)', async () => {
     await seed({ state: 'OWNER_AWAY', ownerLeftAt: Date.now() });
     expect((await join()).status).toBe(200);

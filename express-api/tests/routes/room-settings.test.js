@@ -120,6 +120,15 @@ describe('PATCH /api/rooms/:roomId/name', () => {
     expect((await room()).name).toBe(atLimit);
   });
 
+  test('400 when the name is a non-string type (SHY-0487)', async () => {
+    // A number is not "missing" and not "blank" — it is a third thing, and the
+    // guard is a typeof check rather than a truthiness one.
+    const before = await seed();
+    const res = await request(createApp()).patch(`/api/rooms/${ROOM}/name`).send({ name: 42 });
+    expect(res.status).toBe(400);
+    expect(await room()).toEqual(before);
+  });
+
   test('404 when the room does not exist', async () => {
     expect((await rename('Hi')).status).toBe(404);
   });
