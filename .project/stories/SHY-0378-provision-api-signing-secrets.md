@@ -1,6 +1,6 @@
 ---
 id: SHY-0378
-status: In Review
+status: Done
 owner: shyden
 created: 2026-08-20
 priority: P1
@@ -8,6 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0378: The two API signing secrets are unset, so signatures use a public key

@@ -1,6 +1,6 @@
 ---
 id: SHY-0350
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-19
 priority: P0
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0350: You cannot find anyone to message — search is refused outright

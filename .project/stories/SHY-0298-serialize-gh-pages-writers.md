@@ -1,6 +1,6 @@
 ---
 id: SHY-0298
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-15
 priority: P2
@@ -8,6 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1751
+released_in: v0.99.0
 ---
 
 # SHY-0298: Make every gh-pages writer concurrency-safe, and give PR branches their reports back

@@ -1,6 +1,6 @@
 ---
 id: SHY-0268
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-03
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 pr:
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0268: The 18+ "Verify now" button closes the app on Android

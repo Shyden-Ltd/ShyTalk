@@ -1,6 +1,6 @@
 ---
 id: SHY-0363
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-20
 priority: P2
@@ -8,6 +8,7 @@ effort: XS
 type: chore
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0363: Every Gradle build warns that the project is incompatible with Gradle 10

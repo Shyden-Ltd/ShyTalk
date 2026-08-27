@@ -1,6 +1,6 @@
 ---
 id: SHY-0452
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-24
 priority: P1
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0452: WebDriverAgent wedges and the phone stops answering for one journey

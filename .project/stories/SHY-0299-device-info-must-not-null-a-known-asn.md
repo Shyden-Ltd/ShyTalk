@@ -1,6 +1,6 @@
 ---
 id: SHY-0299
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-16
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 epic: EPIC-0005
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0299: A geo blip must not erase a device's known ASN

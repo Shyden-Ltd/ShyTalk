@@ -1,6 +1,6 @@
 ---
 id: SHY-0269
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-03
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1687
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0269: Dev persona seeding died silently and stayed dead for 18 days

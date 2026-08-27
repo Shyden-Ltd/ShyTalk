@@ -1,6 +1,6 @@
 ---
 id: SHY-0366
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-20
 priority: P2
@@ -8,6 +8,7 @@ effort: XS
 type: docs
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0366: EPIC-0004's child statuses say nothing has started, when half of it has

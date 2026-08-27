@@ -1,6 +1,6 @@
 ---
 id: SHY-0460
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-25
 priority: P3
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0460: The in-app report-review screen cannot be reached

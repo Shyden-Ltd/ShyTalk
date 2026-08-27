@@ -1,6 +1,6 @@
 ---
 id: SHY-0338
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-18
 priority: P0
@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0338: The followers, following and stalkers lists do not work at all

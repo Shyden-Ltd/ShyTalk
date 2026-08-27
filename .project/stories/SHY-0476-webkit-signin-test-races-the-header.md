@@ -1,6 +1,6 @@
 ---
 id: SHY-0476
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-27
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: true
 epic: EPIC-0003
+released_in: v0.99.0
 ---
 
 # SHY-0476: The shared-header Sign In test races the header it clicks

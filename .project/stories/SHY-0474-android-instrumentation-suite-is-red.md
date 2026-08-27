@@ -1,6 +1,6 @@
 ---
 id: SHY-0474
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-27
 priority: P0
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: true
 epic: EPIC-0003
+released_in: v0.99.0
 ---
 
 # SHY-0474: The Android instrumentation suite is red — eight failures, three causes

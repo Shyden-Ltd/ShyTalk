@@ -1,6 +1,6 @@
 ---
 id: SHY-0463
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-26
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: true
 epic: EPIC-0005
+released_in: v0.99.0
 ---
 
 # SHY-0463: An appeal sent from the phone reaches nobody, and can only ever be sent once

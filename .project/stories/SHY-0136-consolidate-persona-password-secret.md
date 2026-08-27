@@ -1,6 +1,6 @@
 ---
 id: SHY-0136
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-20
 priority: P2
@@ -10,6 +10,7 @@ roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/PENDING
 public: false
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0136: Consolidate the dev persona-password secret to a single source of truth

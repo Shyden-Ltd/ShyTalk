@@ -1,6 +1,6 @@
 ---
 id: SHY-0358
-status: In Review
+status: Done
 owner: claude
 created: 2026-08-20
 priority: P2
@@ -8,6 +8,7 @@ effort: XS
 type: chore
 roadmap_ids: []
 mvp: false
+released_in: v0.99.0
 ---
 
 # SHY-0358: Remove CLAUDE.md

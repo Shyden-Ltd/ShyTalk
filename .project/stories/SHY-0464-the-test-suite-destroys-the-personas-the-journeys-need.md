@@ -1,6 +1,6 @@
 ---
 id: SHY-0464
-status: In Review
+status: Done
 owner: unassigned
 created: 2026-08-26
 priority: P1
@@ -9,6 +9,7 @@ type: bug
 roadmap_ids: []
 mvp: true
 epic: EPIC-0003
+released_in: v0.99.0
 ---
 
 # SHY-0464: Running the test suite destroys the personas the device journeys need

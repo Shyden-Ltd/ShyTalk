@@ -1,6 +1,6 @@
 ---
 id: SHY-0151
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -10,6 +10,7 @@ roadmap_ids: []
 epic: EPIC-0005
 pr:
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0151: Reinstall-proof device bans via DeviceCheck (iOS) + Play Integrity (Android)

@@ -1,6 +1,6 @@
 ---
 id: SHY-0372
-status: In Review
+status: Done
 owner: shyden
 created: 2026-08-20
 priority: P1
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0372: Lucky Spin goes dead after cancelling the age dialog

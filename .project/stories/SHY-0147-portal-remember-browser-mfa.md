@@ -1,6 +1,6 @@
 ---
 id: SHY-0147
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -10,6 +10,7 @@ roadmap_ids: []
 epic: EPIC-0004
 pr:
 mvp: true
+released_in: v0.99.0
 ---
 
 # SHY-0147: Portal "remember this browser" for TOTP (bounded MFA-verified window)
