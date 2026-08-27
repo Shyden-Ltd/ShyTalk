@@ -115,6 +115,28 @@ minutes on a commit that changes one JSON file. The alternative costs a release.
 | Workflow test | The sidecar is still absent from the trigger paths, so no loop. |
 | Live | This story's own PR moves develop past the stranded head and #2033 becomes mergeable. |
 
+## The pin that preserved it
+
+`sync-stories-to-issues-develop-source.test.js` asserted the marker **must
+stay**:
+
+> Regression pin (green from birth, deliberately): on main this tag was
+> belt-and-braces; on develop it is load-bearing — develop has push-triggered
+> workflows that the sidecar commit must not fire.
+
+That rationale no longer holds, and was checked two ways before reversing it:
+
+- **Statically** — of the four workflows with a `push:` trigger, `codeql` and
+  `sync-roadmap-data` are `branches: [main]`, `release-tag` is tag-driven, and
+  this workflow is the only one reaching develop. It is paths-filtered, and the
+  sidecar is deliberately not among its paths.
+- **Observationally** — every push-triggered run on develop in the preceding day
+  was this workflow and nothing else.
+
+So the marker fired nothing and cost a release. The test now pins its ABSENCE,
+with that evidence written into it, because a test that pins a marker in place
+is how a defect survives review.
+
 ## Out of Scope
 
 - Changing how promotions are cut. Cutting from a fixed SHA would also avoid

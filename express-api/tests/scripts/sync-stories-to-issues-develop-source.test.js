@@ -130,11 +130,31 @@ describe('SHY-0177: workflow syncs the board from develop', () => {
     expect(yaml).toContain('echo "[sidecar] signed commit ${OID} (.project/board-items.json)"');
   });
 
-  test('sidecar commit message retains [skip ci]', () => {
-    // Regression pin (green from birth, deliberately): on main this tag was
-    // belt-and-braces; on develop it is load-bearing — develop has
-    // push-triggered workflows that the sidecar commit must not fire.
-    expect(yaml).toMatch(/sync board-items\.json id-map \[skip ci\]/);
+  test('sidecar commit message carries NO [skip ci] (SHY-0477 reverses SHY-0177)', () => {
+    // This pin used to assert the OPPOSITE, on the stated grounds that
+    // "develop has push-triggered workflows that the sidecar commit must not
+    // fire". That is no longer true, and was checked two ways before reversing:
+    //
+    //   * Statically — of the four workflows with a `push:` trigger, codeql and
+    //     sync-roadmap-data are `branches: [main]`, release-tag is tag-driven,
+    //     and this workflow is the only one reaching develop. It is
+    //     paths-filtered, and board-items.json is deliberately not among its
+    //     paths, so the sidecar commit does not re-fire it.
+    //   * Observationally — every push-triggered run on develop in the
+    //     preceding day was this workflow and nothing else.
+    //
+    // So the marker fired nothing. What it DID do was strand releases: GitHub
+    // honours it on the HEAD commit for `pull_request` events, so the instant
+    // the sidecar landed on develop, any open PR whose head is develop — which
+    // is exactly what a promotion PR is — had a head commit with zero check
+    // runs. main's ruleset requires three. #2033 (328 commits, 106 stories) sat
+    // BLOCKED with `mergeable: MERGEABLE` and no failing check to point at,
+    // eleven minutes after a fully green 28/28 run.
+    //
+    // A test that pins a marker in place is how a defect survives review, so
+    // this one now pins its ABSENCE.
+    expect(yaml).toContain('sync board-items.json id-map');
+    expect(yaml).not.toMatch(/sync board-items\.json id-map \[skip ci\]/);
   });
 
   test('footer Source URL points at blob/develop', () => {
