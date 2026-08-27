@@ -161,6 +161,25 @@ is how a defect survives review.
 - [ ] The sync still does not re-fire itself.
 - [ ] #2033 becomes mergeable.
 
+## The marker cannot be QUOTED either
+
+While fixing this, a commit on this very branch was titled:
+
+> test(ci): reverse the pin that kept `[skip ci]` in place (SHY-0477)
+
+GitHub read the literal marker out of the head commit's **subject** and skipped
+the entire run — so the pull request fixing the skip-marker problem was itself
+skipped by a skip marker, and presented the identical signature: `BLOCKED`,
+`mergeable: MERGEABLE`, zero check runs.
+
+The marker is matched textually, in prose, in any commit that becomes a head.
+Backticks do not quote it, and neither does a sentence saying it should not be
+there. Refer to it descriptively — "the ci-skip marker" — in commit subjects and
+in any file a check might scan.
+
+Fixed forward with a new commit rather than an amend: history rewriting is not
+permitted on this repository.
+
 ## Notes
 
 Found while promoting 106 stories. The promotion had passed everything; the only
