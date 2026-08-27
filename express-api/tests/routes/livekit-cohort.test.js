@@ -120,7 +120,7 @@ const request = require('supertest');
 const { TokenVerifier } = require('livekit-server-sdk');
 const { auth, db } = require('../../src/utils/firebase');
 const { authMiddleware } = require('../../src/middleware/auth');
-const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
+const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
 const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
 const livekitRouter = require('../../src/routes/livekit');
 
@@ -153,6 +153,23 @@ function verifyWith(token, key, secret) {
  * query would need a composite index); the collection is cleared per-test and
  * each test uses a unique uniqueId, so at most one row matches.
  */
+/**
+ * This file's actors: 60000001-60000027 (see the range note above).
+ *
+ * Filtered in JS rather than by query: `in` caps at 30 values and a string range
+ * over ids is fragile. The collection holds only what a test run just wrote, so
+ * reading it whole is cheap and unambiguous.
+ */
+const OWN_SOURCE = (v) => /^600000\d{2}$/.test(String(v ?? ''));
+
+/** Delete only OUR audit rows. Never wipe a collection another suite asserts on. */
+async function clearOwnSegregationEvents() {
+  const snap = await db.collection(SEG_EVENTS).get();
+  await Promise.all(
+    snap.docs.filter((d) => OWN_SOURCE(d.data().sourceUniqueId)).map((d) => d.ref.delete()),
+  );
+}
+
 async function pollSegregationEvent(sourceUniqueId, { timeoutMs = 4000, intervalMs = 50 } = {}) {
   const deadline = Date.now() + timeoutMs;
   const query = db.collection(SEG_EVENTS).where('sourceUniqueId', '==', String(sourceUniqueId));
@@ -191,16 +208,25 @@ beforeAll(async () => {
 // disjoint ranges: this file 60000001–60000027 used, next free 60000028;
 // livekit.test.js 5xxxx/9xxxx/7xxxx), so no
 // ROOMS/USERS clear is needed. SEG_EVENTS is the exception: the route writes it
-// via `.add()` (non-idempotent — accumulates across runs) and ONLY this file
-// touches it, so clearing it here races nothing and keeps per-run counts exact.
+// via `.add()` (non-idempotent — accumulates across runs), so it must be cleared
+// to keep per-run counts exact.
+//
+// SHY-0479 — it used to be cleared WHOLESALE, justified by "ONLY this file
+// touches it". That stopped being true the moment rooms-same-cohort.test.js
+// migrated onto the real emulator and started asserting its own audit rows: a
+// wholesale wipe here would delete them mid-test, as a scheduling-dependent
+// flake. The isolation guard caught it before it could happen.
+//
+// So the clear is SCOPED to this file's own id range. A shared collection may
+// only be cleared of one's own rows.
 beforeEach(async () => {
   setRegionEnv();
   clearAuthCaches();
-  await clearCollection(db, SEG_EVENTS);
+  await clearOwnSegregationEvents();
 });
 
 afterAll(async () => {
-  await clearCollection(db, SEG_EVENTS);
+  await clearOwnSegregationEvents();
   for (const k of LK_ENV_KEYS) {
     if (PRIOR_LK_ENV[k] === undefined) delete process.env[k];
     else process.env[k] = PRIOR_LK_ENV[k];
