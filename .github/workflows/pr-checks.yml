@@ -22,6 +22,40 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  # SHY-0478 (recurrence of SHY-0296) — a promotion PR must NOT be opened from
+  # `develop`.
+  #
+  # This repo sets delete_branch_on_merge: true, and GitHub deletes a merged
+  # PR's HEAD branch. For a promotion PR the head branch IS develop, so merging
+  # a release deletes the integration branch, silently, at the moment of
+  # success. It happened on 2026-08-13 (#1652) and again on 2026-08-27 (#2033).
+  #
+  # SHY-0296 already "fixed" this by writing a HARD rule into CLAUDE.md.
+  # SHY-0358 then deleted CLAUDE.md, and the rule went with it — which is why
+  # this is a JOB and not a sentence. A check fails; a document only reads.
+  #
+  # Cut `promote/YYYY-MM-DD` from develop and open the PR from that.
+  promotion-head-branch:
+    name: Promotion head branch
+    if: github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Refuse a promotion PR whose head is a long-lived branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # The danger is head-branch DELETION, so it applies to any long-lived
+          # branch used as a head — not to the name "develop" alone.
+          case "$HEAD_REF" in
+            develop|main|master)
+              echo "::error::This PR's head branch is '$HEAD_REF'. Merging it would DELETE that branch (delete_branch_on_merge is on, and GitHub deletes a merged PR's head). Cut a throwaway branch — promote/$(date +%Y-%m-%d) — from develop and open the promotion from that instead. See SHY-0478 / SHY-0296."
+              exit 1
+              ;;
+          esac
+          echo "Head branch '$HEAD_REF' is disposable — safe to auto-delete on merge."
+
   detect-changes:
     name: Detect Changes
     runs-on: ubuntu-latest
