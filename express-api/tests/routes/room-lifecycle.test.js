@@ -145,6 +145,18 @@ describe('POST /api/rooms/:roomId/owner-returned', () => {
     expect(await room()).toEqual(before);
   });
 
+  test('200 idempotent on an already-ACTIVE room — no write, and NOTHING BROADCAST', async () => {
+    // Relocated from the "Chunk C" hardening group (SHY-0487). The room is
+    // already ACTIVE, so there is nothing to clear; publishing anyway would
+    // wake every connected client for no reason.
+    const before = await seed({ state: 'ACTIVE' });
+
+    expect((await returned()).status).toBe(200);
+
+    expect(await room()).toEqual(before);
+    expect((await eventRef().once('value')).val()).toBeNull();
+  });
+
   test('200 the owner returns — the away state is really cleared', async () => {
     await seed({ state: 'OWNER_AWAY', ownerLeftAt: 123 });
 
@@ -264,6 +276,38 @@ describe('POST /api/rooms/:roomId/close', () => {
 
     expect((await close(HOST)).status).toBe(200);
     expect((await room()).state).toBe('CLOSED');
+  });
+
+  // ── Relocated from the "Chunk C" hardening group (SHY-0487) ──────────
+
+  test('200 with zero participants performs no user-document write at all', async () => {
+    await seed({ participantIds: [] });
+    // Somebody still carries a stale pointer but is NOT a participant, so the
+    // clear must not reach them.
+    await db.doc(`users/${OUTSIDER}`).set({ uniqueId: OUTSIDER, currentRoomId: ROOM });
+
+    expect((await close()).status).toBe(200);
+
+    expect((await room()).state).toBe('CLOSED');
+    expect(await currentRoomIdOf(OUTSIDER)).toBe(ROOM);
+  });
+
+  test('403 a non-owner cannot expire-close when ownerLeftAt is MISSING (NaN guard)', async () => {
+    // `now - Number(undefined) >= TIMEOUT` is `NaN >= TIMEOUT`, which is false
+    // — so an absent timestamp must never read as expired. A room that lost
+    // its `ownerLeftAt` is not thereby abandoned.
+    const before = await seed({
+      state: 'OWNER_AWAY',
+      // ownerLeftAt deliberately absent
+      seats: {
+        0: { userId: String(OWNER), state: 'OCCUPIED', isMuted: false },
+        3: { userId: String(HOST), state: 'OCCUPIED', isMuted: false },
+        4: { userId: String(ATTENDEE), state: 'OCCUPIED', isMuted: false },
+      },
+    });
+
+    expect((await close(HOST)).status).toBe(403);
+    expect(await room()).toEqual(before);
   });
 
   test('403 a non-owner who is not a participant cannot close', async () => {

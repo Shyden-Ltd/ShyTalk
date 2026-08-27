@@ -523,6 +523,58 @@ describe('POST /api/rooms/:roomId/seats/:seatIndex/move', () => {
     });
   });
 
+  // ── Relocated from the "Chunk C" hardening group (SHY-0487) ──────────
+
+  test('400 when toIndex is a non-integer (float)', async () => {
+    const before = await seed();
+    const res = await request(createApp(1))
+      .post(`/api/rooms/${ROOM}/seats/3/move`)
+      .send({ toIndex: 3.7 });
+    expect(res.status).toBe(400);
+    expect(await room()).toEqual(before);
+  });
+
+  test('403 when a HOST targets the owner seat (toIndex 0)', async () => {
+    // The owner seat is protected from every role, not only from the owner's
+    // own mistakes — asserted here from a host rather than the owner.
+    const before = await seed({
+      seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } },
+    });
+    const res = await request(createApp(10))
+      .post(`/api/rooms/${ROOM}/seats/3/move`)
+      .send({ toIndex: 0 });
+    expect(res.status).toBe(403);
+    expect(await room()).toEqual(before);
+  });
+
+  test('403 when a host tries to move the OWNER out of a non-owner seat', async () => {
+    // Protection follows the PERSON, not just seat 0: an owner sitting
+    // elsewhere still may not be moved by a host.
+    const before = await seed({ seats: { 3: { userId: '1', state: 'OCCUPIED', isMuted: false } } });
+    const res = await request(createApp(10))
+      .post(`/api/rooms/${ROOM}/seats/3/move`)
+      .send({ toIndex: 4 });
+    expect(res.status).toBe(403);
+    expect(await room()).toEqual(before);
+  });
+
+  test('200 moves are permitted in an OWNER_AWAY room', async () => {
+    // OWNER_AWAY is not CLOSED: the room is still live and seats still move.
+    await seed({
+      state: 'OWNER_AWAY',
+      ownerLeftAt: Date.now(),
+      seats: {
+        3: { userId: '99', state: 'OCCUPIED', isMuted: false },
+        4: { userId: null, state: 'EMPTY', isMuted: false },
+      },
+    });
+    const res = await request(createApp(1))
+      .post(`/api/rooms/${ROOM}/seats/3/move`)
+      .send({ toIndex: 4 });
+    expect(res.status).toBe(200);
+    expect((await seats())['4']).toMatchObject({ userId: '99', state: 'OCCUPIED' });
+  });
+
   test('200 swaps two occupied non-owner seats', async () => {
     await seed({
       participantIds: ['1', '10', '99', '77'],
