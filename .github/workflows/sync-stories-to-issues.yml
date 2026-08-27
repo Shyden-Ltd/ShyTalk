@@ -15,9 +15,20 @@ name: Sync SHY Stories to GitHub Issues
 # cards). The final step commits that file to develop (SHY-0177; was main
 # pre-git-flow) via createCommitOnBranch with the Release App token (signed;
 # SHY-0063 mechanism). board-items.json is deliberately ABSENT from the push
-# `paths:` below and the commit message carries [skip ci], so committing it
-# does NOT re-fire this workflow (no loop); the actor guard on the job is
-# belt-and-braces.
+# `paths:` below, so committing it does NOT re-fire this workflow (no loop);
+# the actor guard on the job is belt-and-braces.
+#
+# SHY-0477 — the commit message deliberately carries NO ci-skip marker, and
+# must not regain one. GitHub honours such a marker on the HEAD commit for
+# `pull_request` events too, so the moment this landed on develop, every open
+# PR whose head is develop -- which is exactly what a promotion PR is -- had a
+# head commit with zero check runs. main's ruleset requires three of them, so
+# the PR sat at BLOCKED with `mergeable: MERGEABLE` and no failing check to
+# point at. It stranded #2033 (328 commits, 106 stories) eleven minutes after a
+# fully green 28/28 run.
+#
+# The marker never added loop protection: the sidecar is not a trigger path and
+# the job has an actor guard. It only suppressed UNRELATED workflows.
 
 on:
   push:
@@ -141,8 +152,9 @@ jobs:
           # Release App token. SHY-0177: targets DEVELOP — the branch the next
           # sync checks out and reads the sidecar from. Develop's only blocking
           # rule is non_fast_forward (ruleset 16058327), so the App needs no
-          # bypass there. Not a trigger path + [skip ci] + actor guard ⇒ this
-          # commit fires nothing.
+          # bypass there. Not a trigger path + actor guard ⇒ this commit does
+          # not re-fire THIS workflow. It deliberately carries no ci-skip
+          # marker: one there blocks every open promotion PR (SHY-0477).
           if git diff --quiet "$SIDECAR" 2>/dev/null && git ls-files --error-unmatch "$SIDECAR" >/dev/null 2>&1; then
             echo "[sidecar] board-items.json unchanged — no commit."
             exit 0
@@ -175,7 +187,7 @@ jobs:
               --arg repo "${{ github.repository }}" \
               --arg branch "develop" \
               --arg oid "${LIVE_HEAD}" \
-              --arg msg "chore(board): sync board-items.json id-map [skip ci]" \
+              --arg msg "chore(board): sync board-items.json id-map" \
               --rawfile c1 "$SIDECAR" \
               "$JQ_PROG")
             set +e
