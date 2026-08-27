@@ -122,6 +122,37 @@ documents are untouched — which is exactly the state that branch produces.
 | Unit (`*.unit.test.js`) | Each route answers 500 when the transaction throws. |
 | Mutation | Dropping the participant clear, and the OWNER_AWAY seat check, each fail the suite. |
 
+## Outcome
+
+`room-lifecycle.test.js` — **14 tests, zero doubles**.
+`room-lifecycle-errors.unit.test.js` — 3. **17 → 17**.
+`room-mutations.test.js` drops **672 → 503 lines, 96 → 78 doubles**.
+
+Running total across SHY-0481 → SHY-0485:
+**1922 → 503 lines, 181 → 78 doubles**, and 170 → 36 tests remaining on the fake.
+
+### Mutation-tested
+
+| Mutation | Result |
+| --- | --- |
+| Skip the participant `currentRoomId` clear | **1 fails** |
+| Let a non-owner close while another non-owner is seated | **1 fails** |
+
+The first is the assertion this story existed to add. Under the old harness the
+same mutation would have been caught only as "the spy was called 0 times instead
+of 3"; it is now caught as **people were not released from the room**.
+
+### A trap worth recording
+
+The first attempt at the best-effort test replaced `db.batch` wholesale. That
+broke the **transaction**, because the Firestore SDK builds its own `WriteBatch`
+through `db.batch()` — the route answered 500 with
+`this._writeBatch._reset is not a function`, and the test would have "passed" as
+a failure for entirely the wrong reason had it been asserting 500.
+
+The spy now returns a **real** batch and refuses only the commit that has been
+given a `users/` write, so the transaction's own batch commits normally.
+
 ## Out of Scope
 
 - `owner-away` (RTDB presence — sequenced against SHY-0103), `disconnect-user`,
