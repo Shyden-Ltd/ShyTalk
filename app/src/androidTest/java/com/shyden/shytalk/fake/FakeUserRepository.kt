@@ -25,6 +25,24 @@ class FakeUserRepository : UserRepository {
 
     val userFlagsFlow = MutableStateFlow(UserFlags())
 
+    /**
+     * Restore the seeded state — call between tests to stop state leaking.
+     *
+     * SHY-0474. This is a Koin SINGLETON and `ResetFakesRule` only reset the
+     * auth fake, so anything a test wrote here survived into every later test
+     * in the run. A cohort test writing "not-a-cohort" onto the seeded user
+     * made three private-messaging tests fail several classes later, which
+     * reads as a defect in messaging rather than as leakage from a test that
+     * had already finished.
+     */
+    fun reset() {
+        users.clear()
+        users["test-user-1"] = TestData.currentUser
+        users["test-user-2"] = TestData.otherUser
+        userFlagsFlow.value = UserFlags()
+        signedInUserId = "test-user-1"
+    }
+
     override suspend fun createOrUpdateUser(user: User): Resource<Unit> {
         users[user.uid] = user
         _userUpdates.tryEmit(user)

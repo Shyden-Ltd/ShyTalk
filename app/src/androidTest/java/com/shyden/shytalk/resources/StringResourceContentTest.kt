@@ -20,7 +20,7 @@ import java.util.Locale
  * the question that actually matters: what does Compose Multiplatform DO with
  * an escape sequence?
  *
- * `Res.allStringResources` answers it directly. This resolves all ~838 keys via
+ * `Res.allStringResources` answers it directly. This resolves all ~884 keys via
  * `getString` — the same path `stringResource` uses — and asserts on the value a
  * user would actually read. A test written against the files can be fooled by a
  * new escape family nobody thought to grep for; this one cannot, because it
@@ -54,7 +54,7 @@ class StringResourceContentTest {
         val all = resolveAll()
         assertEquals(
             "resource count changed — update this number deliberately, do not weaken it",
-            838,
+            884,
             all.size,
         )
         assertTrue("every resource resolved to a non-null value", all.values.all { it.isNotEmpty() })

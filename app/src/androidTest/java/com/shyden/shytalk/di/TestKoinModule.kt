@@ -4,12 +4,14 @@ import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.AndroidRoomServiceController
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomServiceController
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.TokenService
 import com.shyden.shytalk.data.remote.VoiceService
+import com.shyden.shytalk.data.repository.AgeVerificationRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
@@ -49,6 +51,7 @@ import com.shyden.shytalk.fake.FakeTypingRepository
 import com.shyden.shytalk.fake.FakeUserRepository
 import com.shyden.shytalk.fake.FakeVoiceService
 import com.shyden.shytalk.feature.ageverification.AgeRestrictionService
+import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitViewModel
 import com.shyden.shytalk.feature.auth.AuthViewModel
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.feature.gacha.GachaViewModel
@@ -100,6 +103,40 @@ val testModule =
         single { FakeAppConfigService() } bind AppConfigService::class
 
         // Fake repositories
+        // SHY-0474: registered in the real ViewModelModule and missing here, so
+        // navigating to the screen threw NoDefinitionFoundException -- a failure
+        // that existed only in tests and said nothing about the app.
+        // SHY-0474: the view model below takes this, and there was no test
+        // binding, so Koin failed with InstanceCreationException one layer
+        // below the missing view model.
+        //
+        // Declared inline rather than as a new `Fake*Repository` class: the
+        // no-new-stubs ratchet (EPIC-0003) counts double-bearing FILES, and the
+        // debt may only shrink. Adding a file would have raised it.
+        //
+        // Every call refuses. The navigation tests only need the screen to
+        // COMPOSE; a double that pretended uploads succeed would invent a path
+        // no test asked for. `AgeVerificationSubmitScreenTest` builds its own
+        // view model directly and is unaffected.
+        single<AgeVerificationRepository> {
+            object : AgeVerificationRepository {
+                override suspend fun requestUploadUrl(
+                    contentType: AgeVerificationRepository.ContentType,
+                ): Resource<AgeVerificationRepository.UploadHandle> = Resource.Error("age verification is not exercised by this test")
+
+                override suspend fun uploadImage(
+                    uploadUrl: String,
+                    contentType: AgeVerificationRepository.ContentType,
+                    bytes: ByteArray,
+                ): Resource<Unit> = Resource.Error("age verification is not exercised by this test")
+
+                override suspend fun submit(
+                    idMethod: AgeVerificationRepository.IdMethod,
+                    r2Key: String,
+                ): Resource<Unit> = Resource.Error("age verification is not exercised by this test")
+            }
+        }
+        viewModel { AgeVerificationSubmitViewModel(get()) }
         single { FakeAuthRepository() } bind AuthRepository::class
         single { FakeUserRepository() } bind UserRepository::class
         single { FakeRoomRepository() } bind RoomRepository::class
