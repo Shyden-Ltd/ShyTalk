@@ -132,6 +132,35 @@ FCM group.
 | Unit (`*.unit.test.js`) | FCM payloads, token cleanup, display-name fallbacks, send failures. |
 | Ratchet | `rooms.test.js` leaves the baseline; the unit file is in a sanctioned location. |
 
+## Outcome
+
+**94 doubles → 0** in `rooms.test.js`, which leaves the baseline: 612 paths →
+609, `jest.mock` 178 → 177, `jest.fn` 208 → 207, `mockResolvedValue` 186 → 185.
+
+**38 tests → 43**, split 23 route / 20 unit. Nothing was dropped; two behaviours
+gained coverage that did not exist before — the RTDB room event read back from
+the emulator, and the full stored shape of a new seat request.
+
+The unit file mocks **only FCM**. The originals stubbed `db.doc()` with
+`mockResolvedValueOnce` CHAINS, so "the invitee's tokens" meant "the second
+document the route happens to fetch" — any reordering inside the route would
+have handed a test the wrong document while still passing. Real documents remove
+the ordering dependency: the invitee has tokens because the invitee's document
+has tokens.
+
+The three induced failures use targeted, restored `jest.spyOn` calls rather than
+replacing the module, so the rest of that file stays real.
+
+### Mutation-tested
+
+| Mutation | Result |
+| --- | --- |
+| Stop truncating `userName` | **1 fails** |
+| Drop the spoofed-`invitedBy` check | **1 fails** |
+| Always create a seat request, never update | **1 fails** |
+
+The route file was restored and verified clean after each.
+
 ## Out of Scope
 
 - `room-mutations.test.js` — 181 doubles, the umbrella's largest remaining file.
