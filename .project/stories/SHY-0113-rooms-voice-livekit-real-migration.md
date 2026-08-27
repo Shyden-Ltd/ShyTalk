@@ -109,6 +109,40 @@ The operator reported: *"I tried out the dev app yesterday and I still can't cre
 - Judgment-merge per slice. Each slice → In Review → Done on its release cut.
 
 ## Notes (running log)
+- **2026-08-27/28 — express scope substantially drained (five slices).** The
+  three remaining express files at pickup carried **303 doubles**; two are now at
+  zero and the third is down by more than half.
+
+  | Slice | File | Doubles | Tests |
+  | --- | --- | --- | --- |
+  | SHY-0479 | `rooms-same-cohort.test.js` | 28 → **0** | 10 |
+  | SHY-0480 | `rooms.test.js` (+ FCM unit split) | 94 → **0** | 38 → 43 |
+  | SHY-0481 | `room-seats.test.js` extracted | — | 43 → 45 |
+  | SHY-0482 | `room-moderation.test.js` extracted | — | 29 |
+  | SHY-0483 | `room-membership.test.js` extracted | — | 26 → 27 |
+  | SHY-0484 | `room-settings.test.js` extracted | — | 19 → 20 |
+  | SHY-0485 | `room-lifecycle.test.js` extracted | — | 17 |
+
+  `room-mutations.test.js`: **1922 → 503 lines, 181 → 78 doubles, 170 → 36
+  tests** still on the fake. No-stubs baseline **615 → 609** paths.
+
+  **Every slice was mutation-tested**, and several caught defects the old
+  harness structurally could not express:
+
+  - a real **two-caller race** for one seat (the fake `runTransaction` called
+    its callback once with a fixed snapshot, so `SEAT_TAKEN` was asserted
+    against a stub that had been *told* the seat was taken);
+  - reintroducing **SHY-0272** — self-mute routed back through the moderator
+    gate, so nobody could mute their own microphone — fails 3 tests;
+  - skipping the participant `currentRoomId` clear on close is now caught as
+    *people were not released from the room*, not as *a spy was called 0 times
+    instead of 3*;
+  - the classic falsy bug `!req.body?.requireApproval`, which would mean nobody
+    could ever **disable** room approval.
+
+  **Remaining express work:** `owner-away` (10) and `disconnect-user` (12), both
+  RTDB-presence and therefore sequenced against **SHY-0103** as this story's
+  decomposition prescribes, plus the Chunk C review-hardening group (14).
 - **2026-06-17 — created Draft (P0, first migration after the keystone).** Sequenced first because it surfaces the operator's reproducible room-creation failure — the canonical evidence for "no more faking". Likely BLOCKING → pivot-fix TDD-first; ties to SHY-0102/0103 (operator rules-deploy checkpoint required). XL → sub-split at pickup.
 - **2026-06-17 ~15:40 BST — PICKED UP (Draft→In Progress) as the area UMBRELLA; DECOMPOSED into just-in-time child SHYs.** Pickup-fitness review (Explore map of the express surface) surfaced two corrections to the Draft's premise and three operator decisions:
   - **Correction A — express tests use the Admin SDK, which BYPASSES security rules.** So the express route-test migration (Admin SDK → emulator) **cannot reproduce SHY-0102/0103** (those are *client-side* rule denials). The express slices drain the in-process doubles; the rule bugs are reproduced on a different surface.
