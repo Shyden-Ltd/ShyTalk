@@ -27,27 +27,28 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.5.2",
-    "firebase-admin": "^13.10.0",
+    "express-rate-limit": "^8.6.2",
+    "firebase-admin": "^14.1.0",
     "helmet": "^8.2.0",
-    "livekit-server-sdk": "^2.15.5",
+    "livekit-server-sdk": "^2.18.0",
     "multer": "^2.2.0",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^9.0.1",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^9.0.5",
     "otplib": "^13.4.0",
-    "sharp": "^0.35.2"
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.7",
     "@eslint/js": "^10.0.1",
-    "@firebase/rules-unit-testing": "^5.0.1",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "eslint": "^10.6.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-sonarjs": "^4.0.3",
-    "globals": "^17.7.0",
+    "eslint-plugin-sonarjs": "^4.2.0",
+    "globals": "^17.11.0",
     "jest": "^30.4.2",
+    "js-yaml": "^4.3.1",
     "playwright": "^1.61.0",
-    "prettier": "^3.8.4",
+    "prettier": "^3.9.6",
     "supertest": "^7.2.2"
   },
   "overrides": {
@@ -55,6 +56,6 @@
     "@tootallnate/once": ">=3.0.1",
     "uuid": ">=14.0.0",
     "protobufjs": "^7.6.3",
-    "js-yaml": "^4.2.0"
+    "js-yaml": "^4.3.1"
   }
 }

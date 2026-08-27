@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Подробности: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Сообщение: \"%1$s\"</string>
+    <string name="report_message_prefix">Сообщение: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Репортер: %1$s | Сообщено: %2$s</string>
 
@@ -899,7 +899,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="account_suspended_label">Аккаунт заблокирован</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="active_days_ago">Активен %1$дд назад</string>
+    <string name="active_days_ago">Активен %1$dд назад</string>
     <!-- google-translated 2026-05-04 -->
     <string name="active_hours_ago">Активен %1$dh назад</string>
     <!-- google-translated 2026-05-04 -->
@@ -907,7 +907,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="active_long_ago">Активен более 30 дней назад</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="active_minutes_ago">Активен %1$дм назад</string>
+    <string name="active_minutes_ago">Активен %1$dм назад</string>
     <!-- google-translated 2026-05-04 -->
     <string name="allow">Позволять</string>
     <!-- google-translated 2026-05-04 -->
@@ -944,6 +944,7 @@
     <string name="block_description">Они не смогут просмотреть ваш профиль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Вы были заблокированы этим пользователем</string>
+    <string name="blocked_unblock_required">Пользователь должен снять блокировку, прежде чем вы сможете открыть его профиль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Пользователь в этой комнате заблокировал вас. Возможно, у вас ограниченный опыт. Все равно войти?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">Закрытие...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Подключение...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">У ShyTalk проблемы с доступом к нашим серверам. Пожалуйста, проверьте подключение к Интернету и повторите попытку.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Если вам нужна помощь, свяжитесь с shytalk.help@gmail.com.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Если проблема не устранена, свяжитесь с shytalk.help@gmail.com.</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Не удалось связаться с серверами ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Попробуйте: проверьте подключение к интернету, отключите VPN, затем перезапустите приложение или устройство.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Связаться с нами</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">Отклонен</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Описание</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Это устройство уже связано с другой учетной записью.\nДля каждого устройства разрешена только одна учетная запись.\n\nДля поддержки обращайтесь по адресу shytalk.help@gmail.com.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Это устройство уже связано с другой учетной записью.\nДля каждого устройства разрешена только одна учетная запись.\n\nЗа поддержкой перейдите на shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Устройство не поддерживается</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">Супер застенчивый ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Супер застенчивый ✦ На всю жизнь</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Для поддержки свяжитесь с shytalk.help@gmail.com.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">За помощью перейдите в Настройки и выберите «Связаться с нами».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Если подать апелляцию здесь нельзя, свяжитесь с нами через shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Окончание: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">Причина: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Нажмите, чтобы вернуться</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Технические трудности</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk в настоящее время испытывает технические трудности. Некоторые функции могут работать некорректно. Услуги будут восстановлены автоматически.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Невозможно подключиться</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">Переосмысление голосовых чатов.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Голосовой чат временно недоступен</string>
+    <string name="voice_chat_disconnected">Голосовой чат отключён</string>
+    <string name="voice_unavailable_can_still_chat">Вы всё ещё можете читать и писать</string>
+    <string name="voice_connecting">Подключение голоса...</string>
+    <string name="voice_unavailable_mic_blocked">Микрофону нужен голосовой чат, который сейчас недоступен</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Кошелек · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1413,7 +1414,6 @@
     <string name="time_unit_millisecond">РС</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">Переосмысление голосовых чатов.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">ВСЕ (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Предупреждающая иллюстрация</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Загрузка\u2026</string>
+    <string name="starting_screen_loading">Загрузка…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Безопасность</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Введите свой PIN-код, чтобы продолжить</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Проверка\u2026</string>
+    <string name="pin_verifying">Проверка…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Неправильный ПИН-код. Осталось %1$d попыток.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Не удалось начать биометрическую проверку.</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Вход\u2026</string>
+    <string name="signing_in_loading">Вход…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">прямо сейчас</string>
@@ -1660,6 +1660,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Личные сообщения и гача доступны только пользователям 18 лет и старше. Согласно дате рождения в вашей учётной записи, вы пока не соответствуете требованиям. Если вы считаете, что это ошибка, обратитесь в поддержку — мы не можем принимать документы, удостоверяющие личность, для изменения указанной даты рождения.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Связаться с поддержкой</string>
+    <string name="support_form_hint">Расскажите, что не так, и мы разберёмся.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Как пожаловаться на человека</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Жалоба из приложения попадает напрямую к команде модерации, которая может принять меры. Обращение в поддержку — нет.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Откройте их профиль и нажмите «Пожаловаться».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">В комнате нажмите на имя или фото, чтобы открыть карточку, затем нажмите «Пожаловаться».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Нажмите и удерживайте сообщение — в комнате или в личном чате — и выберите «Пожаловаться».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Пробовали, но не получилось?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Если пожаловаться не получилось — вас заблокировали, сообщение исчезло или что-то не сработало — напишите нам, и мы подадим жалобу за вас.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Вместо этого написать в поддержку</string>
+    <string name="support_form_send">Отправить</string>
+    <string name="support_form_sent">Спасибо. Мы получили ваше сообщение и разберёмся.</string>
+    <string name="support_form_error_empty">Напишите сообщение перед отправкой.</string>
+    <string name="support_form_error_too_long">Ваше сообщение слишком длинное. Сократите его и попробуйте снова.</string>
+    <string name="support_form_error_generic">Не удалось отправить сообщение. Проверьте соединение и попробуйте снова.</string>
+    <string name="support_form_error_attachment_failed">Не удалось загрузить этот файл. Вы можете отправить сообщение без него.</string>
+    <string name="support_form_error_attachment_too_many">Можно прикрепить не более 10 файлов.</string>
+    <string name="support_form_error_attachment_type">Такой файл нельзя прикрепить. Выберите изображение или видео.</string>
+    <string name="support_category_label">О чём ваш вопрос?</string>
+    <string name="support_category_account">Аккаунт и вход</string>
+    <string name="support_category_age">Возраст и проверка</string>
+    <string name="support_category_payment">Монеты, бобы и покупки</string>
+    <string name="support_category_safety">Безопасность и другой пользователь</string>
+    <string name="support_category_bug">Что-то не работает</string>
+    <string name="support_category_other">Другое</string>
+    <string name="support_attachments_label">Добавьте скриншот или видео</string>
+    <string name="support_attachment_add">Добавить файл</string>
+    <string name="support_attachment_remove">Удалить</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Закрыть просмотр</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Открыть этот файл</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Без превью</string>
     <string name="age_restriction_sub_eighteen_confirm">Связаться с поддержкой</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Отмена</string>
@@ -1742,4 +1784,30 @@
     <string name="age_seg_age_up_welcome_pm">Добро пожаловать! Ваша учетная запись перешла в более широкий круг ShyTalk.\n\nС этого момента вы начнете видеть больше людей в списках и открытиях. Предыдущие соединения, которые были удалены, пока ваша учетная запись находилась в меньшем круге, не могут быть восстановлены автоматически, но вы можете повторно добавить любого, на кого хотите подписаться.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Данные вашей учетной записи были обновлены сотрудниками ShyTalk. В результате круг видимых вам людей и комнат сузился до меньшего круга.\n\nЕсли вы считаете, что это ошибка, обратитесь в службу поддержки, и мы рассмотрим ее.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Спасибо. Мы добавили это к уже открытому запросу.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Повторная отправка той же проблемы не ускоряет ее. Второй запрос на то, о чем вы уже нам сказали, попадает в конец очереди, позади всех ожидающих.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Это проблема, о которой я уже сообщал</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Это новая проблема</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Возвращаться</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">У вас уже открыт 1 запрос.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">У вас уже открыто %1$d запросов.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">и еще %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Это изображение слишком велико. Пожалуйста, выберите один размером менее 10 МБ.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Это видео слишком длинное. Пожалуйста, выберите один до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Мы не смогли проверить длину этого видео. Пожалуйста, попробуйте другой.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">До 10 файлов. Изображения до 10 МБ, видео до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

@@ -134,6 +134,12 @@
     var token = await auth.currentUser.getIdToken();
     var fetchOptions = {
       method: options.method || 'GET',
+      // SHY-0147 — the MFA-remember cookie is httpOnly and the API is a
+      // different origin, so without this the browser neither stores the
+      // Set-Cookie nor sends it back, and the remembered browser is forgotten
+      // on every visit. Same-site (both under shyden.co.uk), so SameSite=Strict
+      // still permits it.
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
@@ -535,9 +541,15 @@
   async function verifyTotp(code) {
     showLoading();
     try {
+      // SHY-0147 — opt-in only. Unticked is the previous behaviour exactly:
+      // the code is asked for on every visit. The server issues nothing
+      // unless this is true AND the code was genuinely correct.
+      var rememberEl = $('totp-remember');
+      var remember = !!(rememberEl && rememberEl.checked);
+
       var res = await portalFetch('/api/portal/totp/verify', {
         method: 'POST',
-        body: { code: code },
+        body: { code: code, rememberBrowser: remember },
       });
 
       if (!res.ok) {

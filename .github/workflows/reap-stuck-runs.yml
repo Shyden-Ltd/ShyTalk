@@ -46,7 +46,7 @@ jobs:
           # Compute cutoff timestamp in ISO-8601 (gh api filters by date
           # client-side via jq — simpler than maintaining server-side
           # comparison expressions).
-          CUTOFF=$(date -u -v-${THRESHOLD_MIN}M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
+          CUTOFF=$(date -u -v-"${THRESHOLD_MIN}"M +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
             || date -u -d "${THRESHOLD_MIN} minutes ago" +%Y-%m-%dT%H:%M:%SZ)
           echo "Reaping runs queued before $CUTOFF (threshold ${THRESHOLD_MIN} min)"
 
@@ -70,14 +70,36 @@ jobs:
           echo ""
 
           CANCELLED=0
+          UNCLEARABLE=0
           while IFS=$'\t' read -r run_id run_name created_at branch; do
             [ -z "$run_id" ] && continue
             echo "Cancelling run $run_id ($run_name on $branch, queued since $created_at)..."
-            if gh api -X POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" \
-                 >/dev/null 2>&1; then
+            # SHY-0469: keep the response. `>/dev/null 2>&1` used to throw away
+            # the only thing that explains a failed reap, leaving a warning that
+            # GUESSED ("may already be completed/cancelled") — and on
+            # 2026-08-26 the guess was wrong. The real answer was in the body:
+            # "Cannot cancel a workflow run that has not been queued yet" (409),
+            # a run reported as queued that GitHub never enqueued. Reading a
+            # wrong guess next to a deploy that would not start is what turned a
+            # re-dispatch into an outage diagnosis.
+            if RESP=$(gh api -X POST \
+                 "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel" 2>&1); then
               CANCELLED=$((CANCELLED + 1))
             else
-              echo "::warning::Failed to cancel run $run_id (may already be completed/cancelled)"
+              REASON=$(printf '%s' "$RESP" | tr '\n' ' ' | sed 's/  */ /g')
+              case "$RESP" in
+                *"has not been queued yet"*)
+                  # Uncancellable AND undeletable (delete refuses a run that is
+                  # not completed). It will reappear on every run until GitHub
+                  # expires it. Reported, not failed: a job that is red every
+                  # fifteen minutes for ever stops being read.
+                  UNCLEARABLE=$((UNCLEARABLE + 1))
+                  echo "::notice::Run $run_id cannot be cleared — GitHub never enqueued it, so it can be neither cancelled nor deleted. It needs no action and will keep appearing here. API said: ${REASON}"
+                  ;;
+                *)
+                  echo "::warning::Failed to cancel run $run_id — API said: ${REASON}"
+                  ;;
+              esac
             fi
           done <<< "$STUCK"
 
@@ -91,4 +113,5 @@ jobs:
             echo "|---|---|"
             echo "| Threshold | ${THRESHOLD_MIN} min |"
             echo "| Cancelled | ${CANCELLED} |"
+            echo "| Unclearable | ${UNCLEARABLE} |"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -1,6 +1,6 @@
 ---
 id: SHY-0243
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-25
 priority: P0
@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: []
 epic: EPIC-0009
+released_in: v0.98.0
 ---
 
 # SHY-0243: Two test harnesses lie on Linux CI — make the liveness probe and the git-identity probe environment-honest

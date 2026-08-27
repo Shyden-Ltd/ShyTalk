@@ -6,7 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/svg+xml" href="../favicon.svg">
     <meta name="robots" content="noindex, nofollow">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob: http://localhost:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
+    <!--
+      img-src / media-src carry a bare `http:` on purpose.
+
+      Attachments are served from the object store, and locally that is MinIO on
+      this machine's LAN address (a phone cannot reach `localhost` — see
+      express-api/.env.local.example). Pinning the CSP to `http://localhost:*`
+      therefore blocked every local image and video the moment device testing
+      started working.
+
+      It is not a production weakening: this page is served over https there,
+      and a browser blocks http subresources on an https page as mixed content
+      whatever the CSP says. So `http:` only ever widens the LOCAL http page.
+
+      Keep img-src and media-src in step. They were not once, and video evidence
+      — on reports and appeals as well as support — was unplayable for as long
+      as that lasted, failing as "This video could not be played".
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://recaptcha.net https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data: blob:; media-src 'self' https: http: blob:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://*.shytalk.shyden.co.uk wss://*.shytalk.shyden.co.uk https://recaptcha.net http://localhost:* ws://localhost:*;">
     <meta name="theme-color" content="#0f1117">
     <title>ShyTalk Admin</title>
     <style>
@@ -580,6 +597,8 @@
         /* --- Appeals panel --- */
         #appeals-panel { display: none; }
         #appeals-panel.visible { display: block; }
+        #support-panel { display: none; }
+        #support-panel.visible { display: block; }
 
         .filter-bar {
           display: flex;
@@ -1659,8 +1678,6 @@
         #reports-panel.visible { display: block; }
         #banners-panel { display: none; }
         #banners-panel.visible { display: block; }
-        #funfacts-panel { display: none; }
-        #funfacts-panel.visible { display: block; }
         #backups-panel { display: none; }
         #backups-panel.visible { display: block; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -3157,13 +3174,13 @@
         <div class="tab-bar">
             <button class="tab-btn active" id="tab-users" data-i18n="tab_users">Users</button>
             <button class="tab-btn" id="tab-appeals" data-i18n="tab_appeals">Appeals</button>
+            <button class="tab-btn" id="tab-support" data-i18n="tab_support">Support</button>
             <button class="tab-btn" id="tab-reports" data-i18n="tab_reports">Reports</button>
             <button class="tab-btn" id="tab-gifts" data-i18n="tab_gifts">Gifts</button>
             <button class="tab-btn" id="tab-economy" data-i18n="tab_economy">Economy</button>
             <button class="tab-btn" id="tab-maintenance" data-i18n="tab_maintenance">Maintenance</button>
             <button class="tab-btn" id="tab-monitor" data-i18n="tab_monitor">Spin Monitor</button>
             <button class="tab-btn" id="tab-banners" data-i18n="tab_banners">Banners</button>
-            <button class="tab-btn" id="tab-funfacts" data-i18n="tab_funfacts">Fun Facts</button>
             <button class="tab-btn" id="tab-backups" data-i18n="tab_backups">Backups</button>
             <button class="tab-btn" id="tab-logs" data-i18n="tab_logs">Logs</button>
             <button class="tab-btn" id="tab-devices" data-i18n="tab_devices">Devices</button>
@@ -3884,6 +3901,16 @@
             <div id="appeals-list"></div>
         </div>
 
+        <!-- Support Panel (SHY-0380) -->
+        <div id="support-panel">
+            <div class="filter-bar">
+                <button class="tab-btn active" data-support-filter="open">Open</button>
+                <button class="tab-btn" data-support-filter="resolved">Resolved</button>
+                <button class="tab-btn" data-support-filter="converted_to_report">Became reports</button>
+            </div>
+            <div id="support-list"></div>
+        </div>
+
         <!-- Reports Panel -->
         <div id="reports-panel">
             <!-- Stats bar -->
@@ -4523,16 +4550,6 @@
                     <button id="banner-dialog-save" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Save</button>
                 </div>
             </div>
-        </div>
-
-        <!-- Fun Facts Panel -->
-        <div id="funfacts-panel">
-            <h2 style="margin-bottom:16px;">Fun Facts</h2>
-            <p style="color:var(--text2);margin-bottom:12px;">Manage language and culture fun facts shown on the splash screen.</p>
-            <div style="margin-bottom:16px;">
-                <button id="funfact-add-btn" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">+ Add Fun Fact</button>
-            </div>
-            <div id="funfacts-list" style="display:flex;flex-direction:column;gap:10px;"></div>
         </div>
 
         <!-- Backups Panel -->
@@ -5224,45 +5241,6 @@
             </div>
         </div><!-- end #age-segregation-panel -->
 
-        <!-- Fun Fact Add/Edit Dialog -->
-        <div id="funfact-dialog-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
-            <div style="background:var(--card);border-radius:12px;padding:24px;max-width:520px;width:90%;max-height:90vh;overflow-y:auto;">
-                <h3 id="funfact-dialog-title" style="margin-bottom:16px;">Add Fun Fact</h3>
-                <div style="display:flex;flex-direction:column;gap:14px;">
-                    <div>
-                        <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text2);">Fact Text *</label>
-                        <textarea id="funfact-text-input" placeholder="e.g. Japanese has three writing systems..." rows="3" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;resize:vertical;font-family:inherit;"></textarea>
-                    </div>
-                    <div style="display:flex;gap:12px;">
-                        <div style="flex:1;">
-                            <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text2);">Category</label>
-                            <select id="funfact-category-input" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
-                                <option value="language">Language</option>
-                                <option value="greeting">Greeting</option>
-                                <option value="culture">Culture</option>
-                                <option value="trivia">Trivia</option>
-                            </select>
-                        </div>
-                        <div style="flex:1;">
-                            <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text2);">Emoji</label>
-                            <input type="text" id="funfact-emoji-input" placeholder="e.g. 🇯🇵" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
-                        </div>
-                    </div>
-                    <div>
-                        <label style="display:block;margin-bottom:4px;font-size:13px;color:var(--text2);">Source Language / Country</label>
-                        <input type="text" id="funfact-sourcelang-input" placeholder="e.g. Japanese, Swahili" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;">
-                    </div>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" id="funfact-active-check" checked>
-                        <label for="funfact-active-check" style="font-size:14px;">Active</label>
-                    </div>
-                </div>
-                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
-                    <button id="funfact-dialog-cancel" style="padding:8px 18px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;">Cancel</button>
-                    <button id="funfact-dialog-save" style="padding:8px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Save</button>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 

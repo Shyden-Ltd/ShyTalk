@@ -1,9 +1,9 @@
 package com.shyden.shytalk.fake
 
+import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.ResolveReportOutcome
-import com.shyden.shytalk.feature.messaging.Report
 
 class FakeReportRepository : ReportRepository {
     val reports = mutableListOf<Report>()

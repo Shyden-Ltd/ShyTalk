@@ -27,6 +27,22 @@ jest.mock('../../src/utils/firebase', () => ({
       update: mockBatchUpdate,
       commit: mockBatchCommit,
     })),
+    // A query chain that finds nothing. `POST /users/sign-in` checks bans
+    // since SHY-0461 — it must ANSWER a banned caller rather than be refused
+    // for being one — and `bans.js` pages with `if (snap.size < LIMIT) break`,
+    // so `size` has to be present: without it `undefined < LIMIT` is false,
+    // the loop runs on, and it dereferences `docs[-1]`.
+    collection: jest.fn(() => {
+      const emptySnap = { empty: true, size: 0, docs: [] };
+      const chain = {
+        where: () => chain,
+        orderBy: () => chain,
+        limit: () => chain,
+        startAfter: () => chain,
+        get: () => Promise.resolve(emptySnap),
+      };
+      return chain;
+    }),
     runTransaction: jest.fn(async (fn) => {
       return fn({
         get: (ref) => mockTransactionGet(ref._path),
@@ -50,8 +66,13 @@ jest.mock('../../src/utils/helpers', () => ({
   now: () => 1709913600000,
 }));
 
+// `queryDocs` is mocked alongside `getDoc` deliberately: a PARTIAL module mock
+// lies about the module's surface, so a new consumer of a missing export gets
+// `undefined` and throws — arriving as a product 500 rather than as an
+// incomplete mock (SHY-0463).
 jest.mock('../../src/utils/firestore-helpers', () => ({
   getDoc: jest.fn(),
+  queryDocs: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('../../src/middleware/auth', () => ({

@@ -15,6 +15,9 @@ const r2 = require('../utils/r2');
 const { getExtension } = require('../utils/helpers');
 const log = require('../utils/log');
 const { compressImage, ImagePolicyError } = require('../utils/imageCompressor');
+// Required as a MODULE, not destructured: the route has to call whatever
+// `scanAttachment` is at call time, which is also what lets a test replace it.
+const attachmentScan = require('../utils/attachment-scan');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -25,13 +28,38 @@ const ALLOWED_UPLOAD_PATHS = [
   'messages',
   'groups',
   'evidence',
+  // What `submitUserReport` actually sends. Its absence meant every user report
+  // WITH a screenshot was refused here, and the client abandons the whole report
+  // when evidence fails -- so somebody reporting harassment with a picture of it
+  // filed nothing at all. Every test of that flow mocked StorageRepository and
+  // asserted the path STRING against a fake that always succeeded, so the two
+  // halves disagreed and nothing went red. The admin cleanup tools have swept a
+  // `report_evidence/` folder the whole time.
+  'report_evidence',
   'stickers',
   'banners',
   'starting-screens',
 ];
 
+// Multer must never be mounted as BARE middleware here. Mounted bare, a
+// LIMIT_FILE_SIZE (or any other multer error) propagates to Express's default
+// error handler, which answers 500 with an HTML body — so an API client asking
+// for JSON gets an HTML 500 for the entirely expected "your file is too big".
+// `banners.js` already wrapped multer this way; storage.js did not (SHY-0368).
+const handleUpload = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'File too large (max 10 MB)' });
+      }
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+};
+
 // POST /api/storage/upload
-router.post('/storage/upload', upload.single('file'), async (req, res) => {
+router.post('/storage/upload', handleUpload, async (req, res) => {
   try {
     const file = req.file;
     const path = req.body.path;
@@ -100,6 +128,35 @@ router.post('/storage/upload', upload.single('file'), async (req, res) => {
     const key = `${path}/${uniqueId}/${Date.now()}-${crypto.randomBytes(4).toString('hex')}.${extension}`;
 
     const url = await r2.putObject(key, uploadBuffer, uploadMime);
+
+    // SHY-0420. Every file on this route was uploaded by somebody we do not
+    // know, and a member of staff opens all of them -- report evidence, profile
+    // photos, room covers alike. Scanned AFTER the store, because the scanner
+    // takes a key; a file that does not pass is removed rather than left
+    // behind, since storing it and merely withholding its URL leaves an object
+    // reachable by anybody who later obtains the key.
+    //
+    // While no engine is configured this answers `scanned:false, clean:true`
+    // and changes nothing -- stated loudly at startup rather than pretended
+    // otherwise.
+    const scan = await attachmentScan.scanAttachment(key);
+    if (!scan.clean) {
+      log.warn('storage', 'Upload refused by the scanner', { key, uniqueId, reason: scan.reason });
+      try {
+        await r2.deleteObject(key);
+      } catch (deleteErr) {
+        // Logged, not surfaced: the caller is being refused either way, and a
+        // failure to tidy up must not read to them as a failure to refuse.
+        log.error('storage', 'Could not delete a refused upload', {
+          key,
+          error: deleteErr.message,
+        });
+      }
+      return res.status(400).json({
+        error: 'That file could not be accepted.',
+      });
+    }
+
     log.info('storage', 'File uploaded', { key, uniqueId, contentType: uploadMime });
     res.json({ url, originalSize, compressedSize });
   } catch (err) {

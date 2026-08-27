@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Detaljer: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Meddelande: \"%1$s\"</string>
+    <string name="report_message_prefix">Meddelande: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Reporter: %1$s | Rapporterad: %2$s</string>
 
@@ -944,6 +944,7 @@
     <string name="block_description">De kommer inte att kunna se din profil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Du har blivit blockerad av den här användaren</string>
+    <string name="blocked_unblock_required">De måste häva blockeringen innan du kan se deras profil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">En användare i det här rummet har blockerat dig. Du kan ha en begränsad erfarenhet. Gå in ändå?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">Stängning...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Ansluter...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk har problem med att nå våra servrar. Kontrollera din internetanslutning och försök igen.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Om du behöver hjälp, kontakta shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Om problemet kvarstår, kontakta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Vi kunde inte nå ShyTalks servrar.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Prova det här: kontrollera att du har internet, stäng av eventuell VPN och starta om appen eller enheten.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Kontakta oss</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">Nekad</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Beskrivning</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Den här enheten är redan länkad till ett annat konto.\nEndast ett konto är tillåtet per enhet.\n\nFör support, kontakta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Den här enheten är redan länkad till ett annat konto.\nEndast ett konto är tillåtet per enhet.\n\nBesök shyden.co.uk för support</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Enheten stöds inte</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">Superblyg ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super Blyg ✦ Livstid</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">För support, kontakta shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Gå till Inställningar och välj Kontakta oss för hjälp.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Om du inte kan överklaga här, kontakta oss via shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Slutar: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">Orsak: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Tryck för att gå tillbaka</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Tekniska svårigheter</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk har för närvarande tekniska problem. Vissa funktioner kanske inte fungerar korrekt. Tjänsterna kommer att återställas automatiskt.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Kan inte ansluta</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">Röstchattrum, omarbetade.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Röstchatt är inte tillgängligt för tillfället</string>
+    <string name="voice_chat_disconnected">Röstchatten frånkopplad</string>
+    <string name="voice_unavailable_can_still_chat">Du kan fortfarande läsa och chatta</string>
+    <string name="voice_connecting">Ansluter röst...</string>
+    <string name="voice_unavailable_mic_blocked">Mikrofonen kräver röstchatt, som inte är tillgänglig just nu</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Plånbok · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1412,7 +1413,6 @@
     <string name="time_unit_millisecond">MS</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">Röstchattrum, omarbetade.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">ALLA (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1573,7 +1573,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Ange din PIN-kod för att fortsätta</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verifierar\u2026</string>
+    <string name="pin_verifying">Verifierar…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Fel PIN-kod. %1$d försök kvar.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1599,7 +1599,7 @@
     <string name="biometric_start_failed">Det gick inte att starta biometrisk verifiering</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Loggar in\u2026</string>
+    <string name="signing_in_loading">Loggar in…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">just nu</string>
@@ -1659,6 +1659,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Privata meddelanden och gacha är endast tillgängliga för användare som är 18 år eller äldre. Baserat på födelsedatumet på ditt konto är du ännu inte behörig. Om du tror att detta är fel, kontakta supporten — vi kan inte godta id-handlingar för att åsidosätta det registrerade födelsedatumet.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Kontakta supporten</string>
+    <string name="support_form_hint">Berätta vad som är fel så tittar vi på det.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Så anmäler du någon</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">En anmälan i appen går direkt till vårt moderationsteam, som kan agera. En supportförfrågan gör det inte.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Öppna deras profil och tryck på Anmäl.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">I ett rum trycker du på namnet eller bilden för att öppna kortet och sedan på Anmäl.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Håll in ett meddelande, i ett rum eller en privat chatt, och välj Anmäl.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Försökte du utan att lyckas?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Om du inte kunde anmäla dem — de blockerade dig, meddelandet är borta, eller något strulade — berätta för oss så gör vi anmälan åt dig.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Kontakta supporten i stället</string>
+    <string name="support_form_send">Skicka</string>
+    <string name="support_form_sent">Tack. Vi har fått ditt meddelande och tittar på det.</string>
+    <string name="support_form_error_empty">Skriv ett meddelande innan du skickar.</string>
+    <string name="support_form_error_too_long">Ditt meddelande är för långt. Korta ner det och försök igen.</string>
+    <string name="support_form_error_generic">Vi kunde inte skicka ditt meddelande. Kontrollera din anslutning och försök igen.</string>
+    <string name="support_form_error_attachment_failed">Vi kunde inte ladda upp filen. Du kan skicka ditt meddelande ändå.</string>
+    <string name="support_form_error_attachment_too_many">Du kan bifoga upp till 10 filer.</string>
+    <string name="support_form_error_attachment_type">Den filtypen kan inte bifogas. Välj en bild eller en video.</string>
+    <string name="support_category_label">Vad gäller det?</string>
+    <string name="support_category_account">Konto och inloggning</string>
+    <string name="support_category_age">Ålder och verifiering</string>
+    <string name="support_category_payment">Mynt, bönor och köp</string>
+    <string name="support_category_safety">Säkerhet och andra användare</string>
+    <string name="support_category_bug">Något fungerar inte</string>
+    <string name="support_category_other">Något annat</string>
+    <string name="support_attachments_label">Lägg till en skärmbild eller video</string>
+    <string name="support_attachment_add">Lägg till fil</string>
+    <string name="support_attachment_remove">Ta bort</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Stäng förhandsvisning</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Öppna den här filen</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Ingen förhandsvisning</string>
     <string name="age_restriction_sub_eighteen_confirm">Kontakta supporten</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Avbryt</string>
@@ -1741,4 +1783,30 @@
     <string name="age_seg_age_up_welcome_pm">Välkommen – ditt konto har flyttat in i den bredare ShyTalk-cirkeln.\n\nDu kommer att börja se fler personer i upptäckter och listor från och med nu. Tidigare anslutningar som städats medan ditt konto var i den mindre cirkeln kan inte återställas automatiskt, men du kan lägga till vem du vill följa igen.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Dina kontouppgifter har uppdaterats av ShyTalks personal. Som ett resultat har de personer och rum som är synliga för dig begränsats till en mindre cirkel.\n\nOm du tror att detta är ett misstag, kontakta supporten så granskar vi det.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Tack. Vi har lagt till detta i förfrågan som du redan hade öppen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Att skicka samma problem igen gör det inte snabbare. En andra begäran om något du redan har berättat för oss går längst bak i kön, bakom alla andra som väntar.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Det är problemet jag redan rapporterat</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Det är ett nytt problem</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Gå tillbaka</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Du har redan 1 förfrågan öppen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Du har redan %1$d förfrågningar öppna.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">och %1$d till</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Den bilden är för stor. Välj en under 10 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Den videon är för lång. Vänligen välj en under 30 sekunder.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Vi kunde inte kontrollera hur lång den videon är. Vänligen prova en annan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Upp till 10 filer. Bilder upp till 10 MB, videor upp till 30 sekunder.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

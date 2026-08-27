@@ -26,7 +26,15 @@ const { computeDisplayScore } = require('../utils/gcs');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { sendFcmToTokens } = require('../utils/fcm');
 const log = require('../utils/log');
+const { findPendingAppeal, createAppeal } = require('../utils/appeals');
+const { suspensionEndedFields, SUSPENSION_STARTED_RESET } = require('../utils/suspension');
 const { createWarning } = require('./admin-users');
+const { MAX_ATTACHMENTS } = require('../utils/attachment-limits');
+const {
+  REPORT_ORIGIN,
+  ReportDocumentError,
+  buildReportDocument,
+} = require('../utils/report-document');
 
 // See admin-users.js for rationale; same caps apply here so a long reason
 // can't sneak in through the report-resolve path and bypass the warn/suspend
@@ -47,7 +55,10 @@ const REPORTED_USER_NAME_MAX_LENGTH = 50;
 // evidenceUrls is iterated by the orphan-storage cron, which loads up to 1000 reports'
 // urls into a Set in memory. Cap entry-count + per-entry length so a malicious report
 // can't OOM the cron on the Oracle Cloud free tier (1 GB RAM).
-const EVIDENCE_URLS_MAX_COUNT = 10;
+// SHY-0420: ONE definition of "how many files per submission", shared with
+// support tickets. Two constants agreeing today is two constants that can
+// disagree tomorrow, and the surfaces are meant to have the same rules.
+const EVIDENCE_URLS_MAX_COUNT = MAX_ATTACHMENTS;
 const EVIDENCE_URL_MAX_LENGTH = 500;
 
 // Stable error tokens for the moderation partial-failure contract. Centralised
@@ -181,28 +192,33 @@ router.post('/reports', async (req, res) => {
     const reportId = generateId();
     const timestamp = now();
 
-    await db.doc(`reports/${reportId}`).set(
-      {
-        reporterId: req.auth.uniqueId,
+    // SHY-0438: one definition of a report document, shared with conversion from
+    // a support ticket. Reporting yourself now throws from the builder rather
+    // than being written and found later by a moderator.
+    let reportDocument;
+    try {
+      reportDocument = buildReportDocument({
+        reporterUniqueId: req.auth.uniqueId,
         reporterName: reporter?.displayName ?? reporter?.display_name ?? null,
-        reporterUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
-        reportedUserId: reportedUserId,
+        reporterDocUniqueId: reporter?.uniqueId ?? reporter?.unique_id ?? null,
+        reportedUserId,
         reportedUserName: reportedUserName || null,
         reportedUserUniqueId,
         conversationId: conversationId || null,
         messageId: messageId || null,
         messageText: messageText || null,
-        reason: reason,
+        reason,
         description: description || null,
         evidenceUrls: evidenceUrls || [],
-        status: 'pending',
-        actionTaken: null,
-        resolvedAt: null,
-        resolvedBy: null,
+        origin: REPORT_ORIGIN.DIRECT,
         createdAt: timestamp,
-      },
-      { merge: true },
-    );
+      });
+    } catch (err) {
+      if (!(err instanceof ReportDocumentError)) throw err;
+      return res.status(400).json({ error: err.message });
+    }
+
+    await db.doc(`reports/${reportId}`).set(reportDocument, { merge: true });
 
     // Fire-and-forget: FCM push notification to admin tokens
     (async () => {
@@ -584,6 +600,7 @@ router.post('/reports/:id/resolve', async (req, res) => {
           suspensionStartDate: timestamp,
           suspensionEndDate: endTimestamp,
           suspensionCanAppeal: canAppeal,
+          ...SUSPENSION_STARTED_RESET,
           suspendedBy: req.auth.uid,
           preSuspensionDisplayName: reportedUser?.displayName ?? reportedUser?.display_name ?? null,
           preSuspensionProfilePhotoUrl:
@@ -841,6 +858,7 @@ router.post('/reports/resolve-all/:userId', async (req, res) => {
           suspensionStartDate: timestamp,
           suspensionEndDate: endTimestamp,
           suspensionCanAppeal: canAppeal,
+          ...SUSPENSION_STARTED_RESET,
           suspendedBy: req.auth.uid,
           preSuspensionDisplayName: reportedUser?.displayName ?? reportedUser?.display_name ?? null,
           preSuspensionProfilePhotoUrl:
@@ -1252,6 +1270,7 @@ router.post('/admin/users/:uniqueId/suspend', async (req, res) => {
         suspensionStartDate: timestamp,
         suspensionEndDate: endTimestamp,
         suspensionCanAppeal: body.canAppeal,
+        ...SUSPENSION_STARTED_RESET,
         suspendedBy: req.auth.uid,
         preSuspensionDisplayName: user.displayName ?? user.display_name ?? null,
         preSuspensionProfilePhotoUrl: user.profilePhotoUrl ?? user.profile_photo_url ?? null,
@@ -1320,18 +1339,7 @@ router.post('/admin/users/:uniqueId/unsuspend', async (req, res) => {
     if (preCover) restore.coverPhotoUrl = preCover;
 
     await Promise.all([
-      db.doc(`users/${req.params.uniqueId}`).update({
-        isSuspended: false,
-        suspensionReason: null,
-        suspensionStartDate: null,
-        suspensionEndDate: null,
-        suspensionCanAppeal: null,
-        suspendedBy: null,
-        preSuspensionDisplayName: null,
-        preSuspensionProfilePhotoUrl: null,
-        preSuspensionCoverPhotoUrl: null,
-        ...restore,
-      }),
+      db.doc(`users/${req.params.uniqueId}`).update(suspensionEndedFields(restore)),
       db.doc(`adminAuditLog/${generateId()}`).set(
         {
           adminId: req.auth.uid,
@@ -1380,29 +1388,14 @@ router.post('/appeals', async (req, res) => {
     if (!canAppeal)
       return res.status(403).json({ error: 'Appeals are not allowed for this suspension' });
 
-    // Check for existing pending appeal
-    const existing = await queryDocs(
-      db
-        .collection('suspensionAppeals')
-        .where('userId', '==', uniqueId)
-        .where('status', '==', 'pending')
-        .limit(1),
-    );
+    // Check for existing pending appeal. Shared with the app's
+    // `POST /api/users/:uniqueId/appeal` (SHY-0463) so the two routes cannot
+    // hold different opinions about whether this person has already appealed
+    // — they did, and an appeal made on one was invisible to the other.
+    const existing = await findPendingAppeal(uniqueId);
+    if (existing) return res.status(409).json({ error: 'An appeal is already pending' });
 
-    if (existing.length > 0) return res.status(409).json({ error: 'An appeal is already pending' });
-
-    const appealId = generateId();
-    await db.doc(`suspensionAppeals/${appealId}`).set(
-      {
-        userId: uniqueId,
-        appealText: body.appealText,
-        status: 'pending',
-        reviewedBy: null,
-        reviewedAt: null,
-        createdAt: now(),
-      },
-      { merge: true },
-    );
+    const appealId = await createAppeal({ uniqueId, appealText: body.appealText });
 
     res.json({ success: true, appealId });
   } catch (err) {
@@ -1509,15 +1502,7 @@ router.patch('/appeals/:id', async (req, res) => {
         if (preCover) restore.coverPhotoUrl = preCover;
 
         await db.doc(`users/${userId}`).update({
-          isSuspended: false,
-          suspensionReason: null,
-          suspensionStartDate: null,
-          suspensionEndDate: null,
-          suspensionCanAppeal: null,
-          suspendedBy: null,
-          preSuspensionDisplayName: null,
-          preSuspensionProfilePhotoUrl: null,
-          preSuspensionCoverPhotoUrl: null,
+          ...suspensionEndedFields(),
           ...restore,
         });
         clearSuspensionCache(userId);

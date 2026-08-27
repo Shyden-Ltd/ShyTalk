@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -46,6 +47,12 @@ fun PmBottomSheet(
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
+    // SHY-0268: the sheet hosts the same private chat — and therefore the same
+    // 18+ wall — as the full-screen route, so it must forward the CTA too.
+    onNavigateToAgeVerification: () -> Unit,
+    // SHY-0387: this sheet hosts the same wall, which offers support to
+    // anybody it cannot offer verification to. Forwarded, never defaulted.
+    onNavigateToSupport: (SupportSource) -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
 ) {
@@ -68,6 +75,8 @@ fun PmBottomSheet(
                     onPickImages = onPickImages,
                     onPickStickerImage = onPickStickerImage,
                     onNavigateToRoom = onNavigateToRoom,
+                    onNavigateToAgeVerification = onNavigateToAgeVerification,
+                    onNavigateToSupport = onNavigateToSupport,
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoomName,
                 )
@@ -81,6 +90,8 @@ fun PmBottomSheet(
                     onPickImages = onPickImages,
                     onPickStickerImage = onPickStickerImage,
                     onNavigateToRoom = onNavigateToRoom,
+                    onNavigateToAgeVerification = onNavigateToAgeVerification,
+                    onNavigateToSupport = onNavigateToSupport,
                     activeRoomId = activeRoomId,
                     activeRoomName = activeRoomName,
                 )
@@ -185,6 +196,10 @@ private fun PmSheetChatView(
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
+    onNavigateToAgeVerification: () -> Unit,
+    // SHY-0387: this sheet hosts the same wall, which offers support to
+    // anybody it cannot offer verification to. Forwarded, never defaulted.
+    onNavigateToSupport: (SupportSource) -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     viewModel: PrivateChatViewModel = koinViewModel(key = otherUserId) { parametersOf(otherUserId) },
@@ -211,6 +226,8 @@ private fun PmSheetChatView(
                     null
                 },
             onNavigateToRoom = onNavigateToRoom,
+            onNavigateToAgeVerification = onNavigateToAgeVerification,
+            onNavigateToSupport = onNavigateToSupport,
             activeRoomId = activeRoomId,
             activeRoomName = activeRoomName,
             viewModel = viewModel,
@@ -226,6 +243,10 @@ private fun PmSheetGroupChatView(
     onPickImages: ((PrivateChatViewModel) -> Unit)? = null,
     onPickStickerImage: ((PrivateChatViewModel) -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
+    onNavigateToAgeVerification: () -> Unit,
+    // SHY-0387: this sheet hosts the same wall, which offers support to
+    // anybody it cannot offer verification to. Forwarded, never defaulted.
+    onNavigateToSupport: (SupportSource) -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     viewModel: PrivateChatViewModel = koinViewModel(key = conversationId) { parametersOf("", conversationId) },
@@ -252,6 +273,8 @@ private fun PmSheetGroupChatView(
                     null
                 },
             onNavigateToRoom = onNavigateToRoom,
+            onNavigateToAgeVerification = onNavigateToAgeVerification,
+            onNavigateToSupport = onNavigateToSupport,
             activeRoomId = activeRoomId,
             activeRoomName = activeRoomName,
             viewModel = viewModel,

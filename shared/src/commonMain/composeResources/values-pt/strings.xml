@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Detalhes: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Mensagem: \"%1$s\"</string>
+    <string name="report_message_prefix">Mensagem: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Repórter: %1$s | Relatado: %2$s</string>
 
@@ -944,6 +944,7 @@
     <string name="block_description">Eles não poderão ver seu perfil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Você foi bloqueado por este usuário</string>
+    <string name="blocked_unblock_required">Precisam de desbloqueá-lo antes de poder ver o perfil.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Um usuário nesta sala bloqueou você. Você pode ter uma experiência limitada. Entrar mesmo assim?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">Fechando...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Conectando...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk está tendo problemas para acessar nossos servidores. Verifique sua conexão com a Internet e tente novamente.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Se precisar de ajuda, entre em contato com shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Se o problema persistir, entre em contato com shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Não conseguimos aceder aos servidores do ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Tenta isto: confirma que tens internet, desliga qualquer VPN e reinicia a aplicação ou o dispositivo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Contate-nos</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">Negado</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Descrição</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Este dispositivo já está vinculado a outra conta.\nApenas uma conta é permitida por dispositivo.\n\nPara suporte, entre em contato com Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Este dispositivo já está vinculado a outra conta.\nApenas uma conta é permitida por dispositivo.\n\nPara obter apoio, visite shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Dispositivo não compatível</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">Super Tímido ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super tímido ✦ para toda a vida</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Para suporte, entre em contato com shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Para obter ajuda, vá a Definições e escolha Contacte-nos.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Se não puder recorrer aqui, fale connosco através de shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Termina: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">Motivo: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Toque para retornar</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Dificuldades Técnicas</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk está atualmente enfrentando dificuldades técnicas. Alguns recursos podem não funcionar corretamente. Os serviços serão restaurados automaticamente.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Não foi possível conectar</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">Salas de bate-papo por voz reinventadas.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">O bate-papo por voz está temporariamente indisponível</string>
+    <string name="voice_chat_disconnected">Chat de voz desconectado</string>
+    <string name="voice_unavailable_can_still_chat">Você ainda pode ler e conversar</string>
+    <string name="voice_connecting">Conectando a voz...</string>
+    <string name="voice_unavailable_mic_blocked">O microfone precisa do chat de voz, que não está disponível agora</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Carteira · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1413,7 +1414,6 @@
     <string name="time_unit_millisecond">EM</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">Salas de bate-papo por voz reinventadas.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">TODOS (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Ilustração de aviso</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Carregando\u2026</string>
+    <string name="starting_screen_loading">Carregando…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Segurança</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Digite seu PIN para continuar</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verificando\u2026</string>
+    <string name="pin_verifying">Verificando…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN errado. %1$d tentativas restantes.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Não foi possível iniciar a verificação biométrica</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Fazendo login\u2026</string>
+    <string name="signing_in_loading">Fazendo login…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">agora mesmo</string>
@@ -1660,6 +1660,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">As mensagens privadas e o gacha só estão disponíveis para utilizadores com 18 anos ou mais. Com base na data de nascimento da sua conta, ainda não é elegível. Se acredita que isto é um erro, contacte o suporte — não podemos aceitar o envio de documentos para alterar a data de nascimento registada.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Contactar o suporte</string>
+    <string name="support_form_hint">Diga-nos o que se passa e iremos analisar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Como denunciar alguém</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Uma denúncia feita na aplicação chega diretamente à nossa equipa de moderação, que pode agir. Um pedido de apoio não.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Abra o perfil da pessoa e toque em Denunciar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Numa sala, toque no nome ou na foto para abrir o cartão e depois toque em Denunciar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Mantenha premida uma mensagem, numa sala ou num chat privado, e escolha Denunciar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Tentou e não conseguiu?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Se não conseguiu denunciar — bloquearam-no, a mensagem desapareceu, ou algo não funcionou — diga-nos e apresentamos a denúncia por si.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Contactar o apoio</string>
+    <string name="support_form_send">Enviar</string>
+    <string name="support_form_sent">Obrigado. Recebemos a sua mensagem e iremos analisá-la.</string>
+    <string name="support_form_error_empty">Escreva uma mensagem antes de enviar.</string>
+    <string name="support_form_error_too_long">A sua mensagem é demasiado longa. Encurte-a e tente novamente.</string>
+    <string name="support_form_error_generic">Não foi possível enviar a sua mensagem. Verifique a ligação e tente novamente.</string>
+    <string name="support_form_error_attachment_failed">Não conseguimos enviar esse ficheiro. Pode enviar a sua mensagem sem ele.</string>
+    <string name="support_form_error_attachment_too_many">Pode anexar até 10 ficheiros.</string>
+    <string name="support_form_error_attachment_type">Esse tipo de ficheiro não pode ser anexado. Escolha uma imagem ou um vídeo.</string>
+    <string name="support_category_label">Sobre o que se trata?</string>
+    <string name="support_category_account">Conta e início de sessão</string>
+    <string name="support_category_age">Idade e verificação</string>
+    <string name="support_category_payment">Moedas, feijões e compras</string>
+    <string name="support_category_safety">Segurança e outra pessoa</string>
+    <string name="support_category_bug">Algo não funciona</string>
+    <string name="support_category_other">Outro assunto</string>
+    <string name="support_attachments_label">Adicione uma captura de ecrã ou vídeo</string>
+    <string name="support_attachment_add">Adicionar ficheiro</string>
+    <string name="support_attachment_remove">Remover</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Fechar pré-visualização</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Abrir este ficheiro</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Sem pré-visualização</string>
     <string name="age_restriction_sub_eighteen_confirm">Contactar suporte</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Cancelar</string>
@@ -1742,4 +1784,30 @@
     <string name="age_seg_age_up_welcome_pm">Bem-vindo: sua conta passou para o círculo mais amplo do ShyTalk.\n\nVocê começará a ver mais pessoas em descobertas e listas a partir de agora. As conexões anteriores que foram organizadas enquanto sua conta estava no círculo menor não podem ser restauradas automaticamente, mas você pode adicionar novamente qualquer pessoa que gostaria de seguir.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Os detalhes da sua conta foram atualizados pela equipe do ShyTalk. Como resultado, as pessoas e salas visíveis para você foram reduzidas a um círculo menor.\n\nSe você acha que isso é um erro, entre em contato com o suporte e nós analisaremos o problema.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Obrigado. Adicionamos isso à solicitação que você já tinha aberta.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Enviar o mesmo problema novamente não o torna mais rápido. Um segundo pedido de algo que você já nos contou vai para o final da fila, atrás de todos os outros que estão esperando.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">É o problema que já relatei</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">É um problema novo</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Volte</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Você já tem 1 solicitação aberta.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Você já tem %1$d solicitações abertas.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">e mais %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Essa imagem é muito grande. Escolha um com menos de 10 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Esse vídeo é muito longo. Escolha um com menos de 30 segundos.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Não foi possível verificar a duração desse vídeo. Por favor, tente um diferente.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Até 10 arquivos. Imagens de até 10 MB, vídeos de até 30 segundos.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d/%2$d</string>
 </resources>

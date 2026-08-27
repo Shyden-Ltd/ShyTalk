@@ -41,6 +41,20 @@ const HELPER_FILES = new Set([
   'ios-driver-loader.js',
   'driver-screenshot-helper.js',
   'ui-dump-retry.js', // SHY-0154: pure retry helper for androidUiDump — not a driver
+  // SHY-0328: shared webSignIn sequence, wired into all 7 web drivers. It owns
+  // the auth steps, never page acquisition, so it is a helper and not a driver.
+  'web-sign-in.js',
+  // SHY-0387: records the SCREEN during a walk (scrcpy on Android, XCUITest on
+  // iOS). It drives no device surface of its own — it observes one — so it has
+  // start/stop, not tap/dump/screencap, and a listMethods() here would claim a
+  // parity it does not have.
+  'journey-screen-recorder.js',
+  // SHY-0447: owns ONE Appium session used only to READ the Android screen,
+  // because `uiautomator dump` costs ~2332ms per call against ~65ms warm and
+  // was 86% of a walk. It drives nothing — taps and swipes stay on adb — so it
+  // has dumpXml/close, not a driver surface, and a listMethods() here would
+  // claim a parity it does not have.
+  'android-source-session.js',
 ]);
 
 function discoverDrivers() {

@@ -361,6 +361,11 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
+    // SHY-0300. The DEBUG provider mints tokens for anyone holding the debug
+    // secret, so it must never reach a release build — `debugImplementation`
+    // keeps it off the release classpath entirely, and AppCheckInstaller
+    // selects it reflectively so release builds still compile.
+    debugImplementation(libs.firebase.appcheck.debug)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)

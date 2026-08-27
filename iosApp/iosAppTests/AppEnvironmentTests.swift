@@ -127,4 +127,89 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertNotNil(dev.devPersonasPassword, "dev has the picker")
         XCTAssertNil(rel.devPersonasPassword, "release does not")
     }
+
+    // ── bypassDeviceChecks — auth-stage device checks (Security, SHY-0170) ──
+
+    func test_local_bypassesDeviceChecks_forEmulatorE2E() {
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+        XCTAssertTrue(cfg.bypassDeviceChecks,
+                      "local mirrors Android's BYPASS_DEVICE_CHECKS=true (emulator/E2E journeys)")
+    }
+
+    func test_dev_enforcesDeviceChecks() {
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+        XCTAssertFalse(cfg.bypassDeviceChecks,
+                       "dev mirrors Android's BYPASS_DEVICE_CHECKS=false — device-lock + ban checks must run")
+    }
+
+    func test_release_enforcesDeviceChecks() {
+        // The regression this section exists for: IosPlatformModule used to
+        // hardcode the bypass to `true` for EVERY build — TestFlight included —
+        // silently skipping the SHY-0170 device-lock and SHY-0149 ban checks
+        // on iOS while Android enforced them.
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil)
+        XCTAssertFalse(cfg.bypassDeviceChecks,
+                       "distributable builds must NEVER skip device-lock/ban checks")
+    }
+
+    // ── SHY-0275 — the local host a real iPhone uses to reach the Mac ──
+    //
+    // `LOCAL_HOST` (Local.xcconfig) → `ShyTalkLocalHost` (Info.plist) →
+    // `AppEnvironment.localHost` → API / RTDB / LiveKit URLs. Before this, the
+    // URLs were literals containing `localhost`, so a physical iPhone — which
+    // has no `adb reverse` equivalent — sent every backend call to a port on
+    // ITSELF. Measured on device: `Firestore=localhost:8080` while the Mac was
+    // at 192.168.1.9.
+
+    // Resolution takes the RAW plist value, so these are real strings — no
+    // stand-in Bundle. (A Bundle subclass here would be a test double in an
+    // iOS `*Tests` target, which the no-stubs ratchet correctly rejects.)
+
+    func test_localHost_usesTheStampedAddress() {
+        // The whole point: a real iPhone must get the Mac's LAN address.
+        XCTAssertEqual(AppEnvironment.resolveLocalHost(rawValue: "192.168.1.9"), "192.168.1.9")
+    }
+
+    func test_localHost_fallsBackToLocalhostWhenTheKeyIsAbsent() {
+        // dev/release builds never stamp the key, and a Mac-hosted run wants
+        // localhost anyway. Absent must NOT become "" — that would build
+        // "http://:3000", which parses and then fails opaquely much later.
+        XCTAssertEqual(AppEnvironment.resolveLocalHost(rawValue: nil), "localhost")
+    }
+
+    func test_localHost_treatsAnUnsubstitutedOrBlankValueAsAbsent() {
+        // An xcconfig that never substituted leaves the key EMPTY rather than
+        // missing — a different input that must land in the same place.
+        XCTAssertEqual(AppEnvironment.resolveLocalHost(rawValue: ""), "localhost")
+        XCTAssertEqual(AppEnvironment.resolveLocalHost(rawValue: "   "), "localhost")
+    }
+
+    func test_localHost_trimsSurroundingWhitespace() {
+        // xcconfig values keep trailing spaces before an inline comment, which
+        // would otherwise produce "http://192.168.1.9 :3000".
+        XCTAssertEqual(AppEnvironment.resolveLocalHost(rawValue: "  192.168.1.9  "), "192.168.1.9")
+    }
+
+    func test_localHost_infoKeyMatchesTheOneInfoPlistDeclares() {
+        // The plist declares <key>ShyTalkLocalHost</key>; if these ever diverge
+        // the read silently returns nil and every URL falls back to localhost —
+        // the original bug, restored, with nothing red.
+        XCTAssertEqual(AppEnvironment.localHostInfoKey, "ShyTalkLocalHost")
+    }
+
+    func test_localUrls_areAllBuiltFromTheResolvedHost() {
+        // The three the device console named, one per line of its output.
+        let host = AppEnvironment.localHost
+        XCTAssertEqual(AppEnvironment.localApiBaseUrl, "http://\(host):3000")
+        XCTAssertEqual(AppEnvironment.localLiveKitUrl, "ws://\(host):7880")
+        XCTAssertEqual(AppEnvironment.localRtdbUrl, "http://\(host):9000?ns=demo-shytalk")
+    }
+
+    func test_localVariant_carriesTheLocalApiBaseUrl() {
+        // Ties the resolved host to what actually reaches Koin: `.local` must
+        // hand over the host-derived URL, not a literal.
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+        XCTAssertEqual(cfg.apiBaseUrl, AppEnvironment.localApiBaseUrl)
+        XCTAssertTrue(cfg.apiBaseUrl.contains(AppEnvironment.localHost))
+    }
 }

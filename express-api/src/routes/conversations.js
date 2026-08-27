@@ -10,11 +10,13 @@ const { db, rtdb, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
-const { isLiveAdmin } = require('../middleware/auth');
+const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
+const { isLiveAdmin, checkSuspension } = require('../middleware/auth');
 const { auditAdminFlagBypass } = require('../utils/segregation-audit');
 const { isAgeGatingEnabled } = require('../safety/age-gating-flag');
 const { checkFeatureAccess } = require('../safety/enforce');
 const log = require('../utils/log');
+const { openStream } = require('../utils/sse');
 
 /**
  * UK OSA #17 PR 4 + PR 8 — combined gate for conversation reads.
@@ -212,6 +214,226 @@ async function broadcastToConversation(conversationId, data) {
 }
 
 // -- Get messages --
+// -- The conversation READ path (SHY-0458) --
+//
+// These exist because the client used to read conversations straight from
+// Firestore, and could not. `firestore.rules:355` dereferences
+// `resource.data.participantIds`, so reading a conversation that does not exist
+// YET is a rules EVALUATION ERROR rather than a miss:
+//
+//   GET /conversations/50000010_50000020 -> 403
+//     "evaluation error at L355:21 for 'get' @ L355, Null value error."
+//
+// `getOrCreateConversation` opens with exactly that read, so no conversation
+// could ever be created and every first message was silently dropped. Deciding
+// this server-side also puts it where every other authorization decision in
+// this app already lives (EPIC-0006).
+
+const DEFAULT_CONVERSATION_LIMIT = 50;
+const MAX_CONVERSATION_LIMIT = 200;
+
+/**
+ * Orders two id strings deterministically, by code unit.
+ *
+ * Sonar's S2871 asks for an explicit comparator on `.sort()` and suggests
+ * `localeCompare`. Taking that suggestion here would be a defect: these sorts
+ * decide a conversation's IDENTITY, and iOS, Android and the server must all
+ * compute the same one. `localeCompare` is locale-dependent, so the same pair
+ * of people could resolve to different threads on two devices. Code-unit order
+ * is what the clients already use, and it is the same everywhere.
+ */
+const byCodeUnit = (a, b) => {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+};
+
+/** The id the clients already generate: both ids sorted, joined with "_". */
+function conversationIdFor(a, b) {
+  return [String(a), String(b)].sort(byCodeUnit).join('_');
+}
+
+// -- List the caller's conversations --
+router.get('/conversations', async (req, res) => {
+  try {
+    // participantIds are stored as STRINGS; req.auth.uniqueId is a NUMBER.
+    // Same coercion the message routes already document.
+    const callerId = String(req.auth.uniqueId);
+    const limit = Math.min(
+      Number.parseInt(req.query.limit, 10) || DEFAULT_CONVERSATION_LIMIT,
+      MAX_CONVERSATION_LIMIT,
+    );
+
+    const snap = await db
+      .collection('conversations')
+      .where('participantIds', 'array-contains', callerId)
+      .orderBy('lastMessageAt', 'desc')
+      .limit(limit)
+      .get();
+
+    // Filtered HERE rather than with a `where` on the flag: a query filter also
+    // drops documents that simply lack the field, which is every conversation
+    // written before the migration backfill. UK OSA #17 — threads frozen at
+    // migration stay hidden either way.
+    const conversations = snap.docs
+      .map((d) => ({ ...d.data(), id: d.id }))
+      .filter((c) => c.crossCohortAtMigration !== true);
+
+    return res.json(conversations);
+  } catch (err) {
+    log.error('conversations', 'Failed to list conversations', {
+      callerId: req.auth?.uniqueId,
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// -- Live conversation list over SSE (SHY-0169) --
+//
+// The replacement for the client's own Firestore listener. The server holds the
+// listener with the Admin SDK and fans out; the client subscribes to an
+// ordinary authed route, so who may see what is decided here rather than by
+// rules evaluated on a phone (EPIC-0006).
+//
+// Authorization is re-checked PER FAN-OUT, not only at subscribe. A stream is a
+// single request, so `authMiddleware` runs its suspension check once and then
+// never again for the life of a connection that may last hours — without the
+// re-check, suspending somebody would not stop their messages arriving.
+router.get('/conversations/stream', async (req, res) => {
+  const callerId = String(req.auth.uniqueId);
+  const stream = openStream(req, res);
+
+  const deliver = async (conversations) => {
+    // Re-checked every time. `checkSuspension` is the same function the auth
+    // middleware uses, cache and all.
+    if (await checkSuspension(callerId)) {
+      log.info('conversations', 'Closing stream for suspended caller', { callerId });
+      stream.send('closed', { reason: 'suspended' });
+      stream.close();
+      return;
+    }
+    stream.send('conversations', conversations);
+  };
+
+  try {
+    const query = db
+      .collection('conversations')
+      .where('participantIds', 'array-contains', callerId)
+      .orderBy('lastMessageAt', 'desc')
+      .limit(DEFAULT_CONVERSATION_LIMIT);
+
+    const unsubscribe = query.onSnapshot(
+      (snap) => {
+        const conversations = snap.docs
+          .map((d) => ({ ...d.data(), id: d.id }))
+          .filter((c) => c.crossCohortAtMigration !== true);
+        // Deliberately not awaited: onSnapshot is a sync callback, and an
+        // unhandled rejection here would take the process down.
+        deliver(conversations).catch((err) =>
+          log.error('conversations', 'Stream delivery failed', {
+            callerId,
+            error: err.message,
+          }),
+        );
+      },
+      (err) => {
+        log.error('conversations', 'Stream listener failed', { callerId, error: err.message });
+        stream.send('error', { error: 'stream failed' });
+        stream.close();
+      },
+    );
+
+    // The expensive half. Released when the phone goes away, or it lives for
+    // the life of the process.
+    stream.onClose(() => {
+      try {
+        unsubscribe();
+      } catch (err) {
+        log.error('conversations', 'Failed to detach stream listener', { error: err.message });
+      }
+    });
+  } catch (err) {
+    log.error('conversations', 'Failed to open conversation stream', {
+      callerId,
+      error: err.message,
+    });
+    stream.send('error', { error: 'stream failed' });
+    stream.close();
+  }
+});
+
+// -- Get or create the 1:1 conversation with another person --
+router.post('/conversations', async (req, res) => {
+  try {
+    const callerId = String(req.auth.uniqueId);
+    const raw = req.body?.otherUserId;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return res.status(400).json({ error: 'otherUserId required' });
+    }
+    const otherId = String(raw).trim();
+
+    if (otherId === callerId) {
+      return res.status(400).json({ error: 'Cannot start a conversation with yourself' });
+    }
+
+    const otherSnap = await db.doc(`users/${otherId}`).get();
+    if (!otherSnap.exists) return res.status(404).json({ error: 'User not found' });
+    const other = otherSnap.data() || {};
+
+    // Cohort gate, server-side. 404 rather than 403 so a refusal does not
+    // confirm that the account exists — the same posture the read gate takes.
+    //
+    // SHY-0468: this read `req.auth.cohort`, which `authMiddleware` never
+    // sets — the claim lives at `req.auth.token.cohort`. `callerCohort` was
+    // therefore always undefined, the `&&` short-circuited, and the gate
+    // passed EVERY caller: an adult could open a thread with a minor. The
+    // second half was the same shape of hole, one step along — a target whose
+    // `cohort` field was missing also skipped the check.
+    //
+    // Both sides now use the resolvers the rest of the codebase already uses
+    // (`sameCohort.js`, `config.js`, `livekit.js`). Each falls back to
+    // 'minor' rather than to "unknown", so a stripped claim or an absent
+    // field restricts the caller instead of freeing them, and
+    // `effectiveCohort` honours an admin `cohortOverride` the raw field
+    // ignores.
+    const callerCohort = cohortFromClaim(req);
+    const otherCohort = effectiveCohort(other);
+    if (otherCohort !== callerCohort) {
+      log.info('conversations', 'Refused cross-cohort conversation', {
+        callerId,
+        otherId,
+        callerCohort,
+        otherCohort,
+      });
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const conversationId = conversationIdFor(callerId, otherId);
+    const existing = await db.doc(`conversations/${conversationId}`).get();
+    if (existing.exists) {
+      return res.json({ ...existing.data(), id: conversationId });
+    }
+
+    const timestamp = now();
+    const doc = {
+      participantIds: [callerId, otherId].sort(byCodeUnit),
+      isGroup: false,
+      crossCohortAtMigration: false,
+      createdAt: timestamp,
+      lastMessageAt: timestamp,
+    };
+    await db.doc(`conversations/${conversationId}`).set(doc);
+    log.info('conversations', 'Created conversation', { conversationId, callerId, otherId });
+    return res.json({ ...doc, id: conversationId });
+  } catch (err) {
+    log.error('conversations', 'Failed to get or create conversation', {
+      callerId: req.auth?.uniqueId,
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/conversations/:id/messages', async (req, res) => {
   try {
     // Verify the requester is a participant

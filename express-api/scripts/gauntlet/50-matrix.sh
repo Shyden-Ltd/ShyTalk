@@ -17,6 +17,13 @@
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib.sh"
+# shellcheck source=../lib/runner-pids.sh
+# `|| die` is load-bearing: this script runs under `set -uo pipefail` WITHOUT
+# -e, so a failed source would only print a warning and carry on. `runner_pids`
+# would then be an unknown command producing empty output, and cmd_stop's
+# verification would report every run clean forever — the exact reassuring lie
+# SHY-0236 removed. Fail loudly instead.
+source "$HERE/../lib/runner-pids.sh" || die "cannot load $HERE/../lib/runner-pids.sh"
 require_repo
 
 SECRETS_ENV="${HOME}/.shytalk/dev-personas.env"
@@ -104,7 +111,30 @@ cmd_launch() {
   # bundle id (pbxproj never applies the .local suffix).
   # dev: explicit RTDB URL (region-specific) or every cell dies at init.
   local env_prefix=""
-  [ "$target" = "local" ] && env_prefix="NODE_ENV=local WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
+  # PERSONAS_PASSWORD is PINNED to localdev123 for local, and must stay pinned.
+  # This script sources ~/.shytalk/dev-personas.env, which carries the 32-char
+  # DEV password. 20-reseed.sh meanwhile FORCES local personas to localdev123
+  # (:43), because the .local app flavour bakes DEV_QA_PERSONAS_PASSWORD.
+  # Without this override the run SEEDS with one credential and SIGNS IN with
+  # another, so every persona sign-in fails and every journey dies at its first
+  # gate: 0 pass, and per cell exactly OK=2 / FAIL=224. The uniformity across
+  # every browser -- including desktop chromium, which touches no device -- is
+  # the tell that it is auth and not product debt.
+  #
+  # The seed side is already guarded (20-reseed.sh:63 dies on INVALID_PASSWORD).
+  # The runner side was not, which is why this cost two separate investigations.
+  # dev MUST NOT be overridden -- dev personas use the real secret.
+  #
+  # FIREBASE_AUTH_EMULATOR_HOST is pinned for the SAME reason, one variable
+  # over: 20-reseed.sh:32 sets it for seeding, this script never did, and
+  # manual-qa-runner.js resolved the Identity Toolkit base as
+  # `target === local && FIREBASE_AUTH_EMULATOR_HOST ? emulator : PRODUCTION`.
+  # Unset, every local run therefore signed personas in against REAL Google
+  # auth with a fake-local-key, failed silently, and showed up only as
+  # `UID: —` in a watermark and 224 failures per cell. The runner now REFUSES
+  # that fallback (resolveAuthBase), so this variable is required, not optional.
+  # Pinned by tests/scripts/gauntlet/matrix-local-persona-password.test.js.
+  [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------
@@ -167,7 +197,7 @@ cmd_stop() {
   [ -f "$dir/pid" ] || die "no pid file in $dir"
   local pid; pid="$(cat "$dir/pid" 2>/dev/null)"
   local run_id; run_id="$(basename "$dir")"
-  local self=$$ pass p targets serial leftover by_runid
+  local self=$$ pass p targets serial by_runid orphans mine others
 
   # SHY-0236 permanent fix (matrix-orphans / hung-uiautomator thrash): the old
   # `kill $pid` killed ONLY the nohup wrapper, orphaning the manual-qa-runner +
@@ -182,9 +212,20 @@ cmd_stop() {
     # unrelated live process, and recursively kill -9'ing that stale pid's subtree
     # would take down an innocent tree. The run_id-scoped pgrep is the identity
     # cross-check (kill-servers-by-port-not-pkill / pkill-hits-your-own-waiters).
+    #
+    # Two sources, deliberately different (SHY-0304):
+    #  - the TREE GATE stays a plain run-id match. The recorded pid is the
+    #    `bash -c` wrapper, not a node process, so narrowing this predicate to
+    #    the runner's identity would fail the gate and stop the whole
+    #    descendant tree from ever being walked.
+    #  - the ORPHAN additions require the runner's identity. Anything else
+    #    carrying the run id is an OBSERVER, not a participant: the run's log
+    #    path contains the run id, so `tail -f .../matrix-<id>/log` was on the
+    #    kill list and was being SIGKILLed out from under the operator.
     by_runid="$(pgrep -f "$run_id" 2>/dev/null || true)"
+    orphans="$(runner_pids "$run_id")"
     targets="$( { [ -n "$pid" ] && printf '%s\n' "$by_runid" | grep -qxF "$pid" && _pid_tree "$pid"; \
-                  printf '%s\n' "$by_runid"; } \
+                  printf '%s\n' "$orphans"; } \
                  | sort -u | grep -vw "$self" || true)"
     [ -n "$targets" ] || break
     for p in $targets; do kill -TERM "$p" 2>/dev/null || true; done
@@ -201,14 +242,29 @@ cmd_stop() {
     adb -s "$serial" shell 'pkill -f uiautomator; pkill -f androidx.test' >/dev/null 2>&1 || true
   done
 
-  # Honest verification — never the old reassuring "stopped pid N" lie.
-  leftover="$(pgrep -fl manual-qa-runner 2>/dev/null | grep -v ' grep' | grep -vw "$self" || true)"
-  if [ -n "$leftover" ]; then
-    warn "stop: runner(s) STILL alive after 3 kill passes — manual check needed:"
-    printf '%s\n' "$leftover" >&2
+  # Honest verification — never the old reassuring "stopped pid N" lie, but
+  # scoped to the run we were asked about (SHY-0304). The old check was
+  # machine-wide, so `stop A` returned 1 because run B was alive: the run it
+  # was asked about HAD stopped and the message said it had not. It also
+  # matched anything merely naming the runner, which is why running the
+  # gauntlet's own test suite made this fail — Jest, npm and the invoking
+  # shell all carry `manual-qa-runner` when they run its tests.
+  mine="$(runner_pids "$run_id")"
+  if [ -n "$mine" ]; then
+    warn "stop: run $run_id still has runner(s) STILL alive after 3 kill passes — manual check needed:"
+    runner_ps_lines "$mine" >&2
     return 1
   fi
-  echo "stopped run $run_id — full process tree killed, devices force-stopped, uiautomator cleared; 0 runners remain"
+  echo "stopped run $run_id — full process tree killed, devices force-stopped, uiautomator cleared; 0 runners remain for this run"
+
+  # Other runs are reported, never charged to this one. Dropping the signal
+  # entirely would trade a false alarm for a blind spot: a runner from another
+  # run is still driving the phone, and the operator needs to know.
+  others="$(runner_pids)"
+  if [ -n "$others" ]; then
+    warn "note: $(printf '%s\n' "$others" | grep -c .) runner(s) from OTHER run(s) still live — not this run, not stopped by it:"
+    runner_ps_lines "$others" >&2
+  fi
 }
 
 cmd_results() {

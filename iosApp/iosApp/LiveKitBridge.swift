@@ -105,6 +105,42 @@ final class LiveKitBridgeImpl: NSObject, @unchecked Sendable, shared.LiveKitBrid
         return !token.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
+    /// Is `host` an RFC1918 private IPv4 **literal**? (SHY-0275)
+    ///
+    /// Decided by parsing the four octets NUMERICALLY, because the two ways a
+    /// string check gets this wrong are both reachable:
+    ///
+    ///   - `172.32.0.1` is **public**. The private block is 172.16–172.31, so
+    ///     `hasPrefix("172.")` hands an attacker a public host.
+    ///   - `10.0.0.5.evil.com` is a **hostname** the attacker controls, not an
+    ///     address, and `hasPrefix("10.")` accepts it.
+    ///
+    /// Requiring exactly four ASCII-numeric components in 0...255 rejects both.
+    /// ASCII is required explicitly: `Character.isNumber` is also true for
+    /// non-ASCII digit forms, which `Int()` would then refuse inconsistently.
+    ///
+    /// Not itself gated on `#if DEBUG` so it stays unit-testable; it is inert in
+    /// a Release binary because its only caller is inside the guard below.
+    static func isPrivateLAN(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        var octets: [Int] = []
+        for part in parts {
+            guard !part.isEmpty,
+                  part.allSatisfy({ $0.isASCII && $0.isNumber }),
+                  let value = Int(part),
+                  (0...255).contains(value)
+            else { return false }
+            octets.append(value)
+        }
+        switch (octets[0], octets[1]) {
+        case (10, _): return true
+        case (172, 16...31): return true
+        case (192, 168): return true
+        default: return false
+        }
+    }
+
     static func isAllowedURL(_ url: String) -> Bool {
         guard let parsed = URL(string: url), let host = parsed.host else { return false }
         let scheme = parsed.scheme?.lowercased() ?? ""
@@ -115,6 +151,21 @@ final class LiveKitBridgeImpl: NSObject, @unchecked Sendable, shared.LiveKitBrid
             "livekit.shytalk.shyden.co.uk",
             "livekit-eu.shytalk.shyden.co.uk",
         ]
+
+        #if DEBUG
+        // SHY-0275 — a physical iPhone reaches the developer's Mac by its LAN
+        // address; unlike Android it has no `adb reverse`, so loopback cannot
+        // serve and `ws://<mac-lan-ip>:7880` was rejected here before any
+        // network call. That is why iOS-local voice had never worked.
+        //
+        // Deliberately narrow: cleartext only, private IPv4 literals only, and
+        // compiled OUT of Release entirely — a shipped build's allow-list is
+        // byte-for-byte the expression below, unchanged. Cleartext signalling
+        // carries the join token, so this must never reach a distributable
+        // binary.
+        if scheme == "ws" && isPrivateLAN(host) { return true }
+        #endif
+
         return isLoopbackOk || (isTLS && allowedHosts.contains(host))
     }
 

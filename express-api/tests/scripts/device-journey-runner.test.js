@@ -187,3 +187,156 @@ describe('parseArgs', () => {
     expect(() => parseArgs(['--target'])).toThrow(/--target requires a value/);
   });
 });
+
+/**
+ * SHY-0396 — one journey definition, two accessibility trees.
+ *
+ * The runner was Android-only: its matchers read uiautomator's
+ * `<node resource-id bounds="[x,y][x,y]">`. iOS had driver primitives but no
+ * journey runner, so every iOS walk was hand-driven — slowly, unrepeatably, and
+ * checking whatever the person driving remembered to check.
+ *
+ * That is how two platforms drift, and SHY-0419 is the standing example: the
+ * Send button sat under the keyboard on iPhone while unit tests, the web suite
+ * and two Android walks were all green.
+ *
+ * `parseNodes` is where both trees become one shape, so it is the piece
+ * everything above it trusts. A silent mis-parse here does not fail loudly — it
+ * produces zero nodes and a timeout that reads like the screen never appeared.
+ */
+describe('parseNodes — XCUITest (iOS) and uiautomator (Android) agree on one shape', () => {
+  const XCUI = `<?xml version="1.0" encoding="UTF-8"?>
+<AppiumAUT>
+  <XCUIElementTypeApplication name="ShyTalk" x="0" y="0" width="393" height="852">
+    <XCUIElementTypeTextView name="support_input" value="nobody can hear me"
+      label="Tell us what is wrong" enabled="true" visible="true"
+      x="16" y="300" width="361" height="120"/>
+    <XCUIElementTypeButton name="support_send" label="Send" enabled="true"
+      visible="true" x="16" y="470" width="361" height="48"/>
+    <XCUIElementTypeStaticText name="" label="You already have 2 requests open."
+      enabled="true" visible="true" x="16" y="120" width="361" height="20"/>
+    <XCUIElementTypeButton name="support_offscreen" label="Hidden" enabled="true"
+      visible="false" x="16" y="900" width="361" height="48"/>
+  </XCUIElementTypeApplication>
+</AppiumAUT>`;
+
+  const UIAUTOMATOR = `<?xml version="1.0" encoding="UTF-8"?>
+<hierarchy rotation="0">
+  <node resource-id="support_input" text="nobody can hear me" content-desc=""
+    enabled="true" clickable="true" checked="false" bounds="[16,300][377,420]"/>
+  <node resource-id="support_send" text="Send" content-desc="" enabled="true"
+    clickable="true" checked="false" bounds="[16,470][377,518]"/>
+</hierarchy>`;
+
+  test('an iOS dump is recognised without being told which platform it is', () => {
+    // Dispatched on CONTENT, not on a caller-supplied flag. A caller that says
+    // "android" while holding an iPhone dump would yield zero nodes and a
+    // timeout that looks like the screen never rendered.
+    const nodes = parseNodes(XCUI);
+    expect(nodes.length).toBeGreaterThan(0);
+    expect(byId(nodes, 'support_send')).toBeDefined();
+  });
+
+  test('iOS `name` is the testTag, so both platforms address a control the same way', () => {
+    const ios = byId(parseNodes(XCUI), 'support_send');
+    const android = byId(parseNodes(UIAUTOMATOR), 'support_send');
+    expect(ios).toBeDefined();
+    expect(android).toBeDefined();
+    // Same journey line -> same control on both phones. If these diverged, a
+    // journey would silently assert different things per platform.
+    expect(ios.text).toBe('Send');
+    expect(android.text).toBe('Send');
+  });
+
+  /**
+   * A text field's typed contents live in `value`, not `label` — `label` is the
+   * placeholder. Reading `label` would make "the words she typed are still
+   * there" assert the placeholder instead, and pass while the field was empty.
+   */
+  test("a field's typed CONTENTS are read, not its placeholder", () => {
+    const field = byId(parseNodes(XCUI), 'support_input');
+    expect(field.text).toBe('nobody can hear me');
+    expect(field.text).not.toBe('Tell us what is wrong');
+  });
+
+  test('text matching works on iOS labels, so waitForText is cross-platform', () => {
+    expect(byTextContains(parseNodes(XCUI), 'You already have 2 requests open.')).toBeDefined();
+  });
+
+  test('centre points are derived from x/y/width/height, as whole pixels', () => {
+    const send = byId(parseNodes(XCUI), 'support_send');
+    // 16 + 361/2 = 196.5. Rounded, because a tap is sent as integer
+    // coordinates -- a fractional x would be truncated somewhere downstream and
+    // land a pixel off, which on a tightly packed row is a different control.
+    expect(send.center).toEqual({ x: 197, y: 494 });
+  });
+
+  /**
+   * SHY-0419 in one assertion. The Send button EXISTED at coordinates under the
+   * keyboard; what was wrong was that nobody could see or reach it. XCUITest
+   * reports that as `visible="false"`, so the flag must survive parsing or the
+   * runner can never tell "on screen" from "in the tree".
+   */
+  test('an off-screen control is marked not visible rather than dropped silently', () => {
+    const hidden = parseNodes(XCUI).find((n) => n.id === 'support_offscreen');
+    expect(hidden).toBeDefined();
+    expect(hidden.visible).toBe(false);
+    expect(byId(parseNodes(XCUI), 'support_send').visible).toBe(true);
+  });
+
+  test('every Android node reports visible, so one field is readable on both', () => {
+    for (const n of parseNodes(UIAUTOMATOR)) expect(n.visible).toBe(true);
+  });
+
+  test('a dump from neither tree yields nothing rather than throwing', () => {
+    expect(parseNodes('<html><body>not a device dump</body></html>')).toEqual([]);
+  });
+});
+
+/**
+ * `--debug`: dump the screen on EVERY step, not only the failing one.
+ *
+ * Operator, 2026-08-25: *"the passing log doesn't dump tags (only failures do)
+ * — can we run it in a 'debug mode' or something similar so that we can see
+ * these logs, even without failures."*
+ *
+ * The default stays quiet on purpose: capturing the screen costs a full dump,
+ * which is ~65ms on Android but ~700ms on iOS, and a fourteen-journey run makes
+ * a few hundred steps. Paying that on every run to serve the occasional
+ * question is the wrong default — so it is a flag, and the flag is the contract
+ * this pins. See [[feedback-consumer-first-surface-design]].
+ */
+describe('--debug dumps the screen on passing steps too', () => {
+  const { parseArgs: parse, capturesScreenFor } = require('../../scripts/device-journey-runner');
+
+  test('the flag is off unless asked for', () => {
+    expect(parse([]).debug).toBe(false);
+  });
+
+  test('--debug turns it on', () => {
+    expect(parse(['--debug']).debug).toBe(true);
+  });
+
+  test('a FAILING step is always captured, flag or not', () => {
+    // The diagnostic that already existed must not become opt-in. A failure
+    // with no screen behind it is the one case nobody can afford to lose.
+    expect(capturesScreenFor('fail', false)).toBe(true);
+    expect(capturesScreenFor('fail', true)).toBe(true);
+  });
+
+  test('a PASSING step is captured only in debug', () => {
+    expect(capturesScreenFor('pass', false)).toBe(false);
+    expect(capturesScreenFor('pass', true)).toBe(true);
+  });
+
+  test('--help names it, or nobody will find it', () => {
+    // `--platform` was parsed, typo-checked and undocumented for months. A
+    // flag that only helps whoever already knows about it is not a feature.
+    const src = require('node:fs').readFileSync(
+      require('node:path').join(__dirname, '../../scripts/device-journey-runner.js'),
+      'utf8',
+    );
+    const help = src.slice(src.indexOf('ShyTalk on-device journey runner'));
+    expect(help.slice(0, 900)).toContain('--debug');
+  });
+});

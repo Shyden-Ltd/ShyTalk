@@ -302,7 +302,7 @@ function createAppWithExtraRoutes() {
 // ─── UniqueId resolution caching ─────────────────────────────────
 
 describe('uniqueId resolution', () => {
-  test('returns null uniqueId when no user doc found (new user)', async () => {
+  test('REFUSES a user-scoped route when no user doc is found (SHY-0426)', async () => {
     mockVerifyIdToken.mockResolvedValueOnce({ uid: 'new-user-uid' });
     // Collection query returns empty (no user doc with this firebaseUid)
     mockCollectionQuery.mockResolvedValueOnce({ empty: true, docs: [] });
@@ -310,13 +310,14 @@ describe('uniqueId resolution', () => {
     mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp();
-    const res = await request(app)
+    // Used to pass through with `uniqueId: null`, which made every
+    // unidentified caller the same account as every other one.
+    await request(app)
       .get('/api/users/10000070')
       .set('Authorization', 'Bearer valid-token')
-      .expect(200);
+      .expect(403);
 
-    expect(res.body.success).toBe(true);
-    // The collection query should have been called
+    // The lookup still happens — this is about what we do with its ANSWER.
     expect(mockCollectionQuery).toHaveBeenCalledTimes(1);
   });
 
@@ -393,7 +394,7 @@ describe('uniqueId resolution', () => {
     }
   });
 
-  test('handles user doc missing uniqueId field (uses ?? null)', async () => {
+  test('REFUSES when the user doc exists but carries no uniqueId (SHY-0426)', async () => {
     mockVerifyIdToken.mockResolvedValueOnce({ uid: 'no-field-uid' });
     // User doc exists but has no uniqueId field
     mockCollectionQuery.mockResolvedValueOnce({
@@ -403,32 +404,36 @@ describe('uniqueId resolution', () => {
     mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp();
+    // A document with no uniqueId identifies nobody, which is the same
+    // problem as no document at all.
     const res = await request(app)
       .get('/api/users/10000073')
       .set('Authorization', 'Bearer valid-token')
-      .expect(200);
+      .expect(403);
 
-    // Should proceed (uniqueId resolved to null → no suspension check)
-    expect(res.body.success).toBe(true);
+    expect(res.body).toMatchObject({ code: 'no_identity' });
   });
 });
 
 // ─── Suspension check caching ────────────────────────────────────
 
 describe('suspension check', () => {
-  test('skips suspension check when uniqueId is null', async () => {
+  test('does not even look up suspension for an unidentified caller', async () => {
     mockVerifyIdToken.mockResolvedValueOnce({ uid: 'null-unique' });
     mockCollectionQuery.mockResolvedValueOnce({ empty: true, docs: [] });
     // mockDocGet should NOT be called for suspension check
     mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp();
+    // Refused before it gets that far. Worth keeping the assertion: a null
+    // identity used to skip the suspension lookup AND be let through, so an
+    // account the server could not identify was one it would never see as
+    // suspended.
     await request(app)
       .get('/api/users/10000074')
       .set('Authorization', 'Bearer valid-token')
-      .expect(200);
+      .expect(403);
 
-    // doc().get() should NOT have been called since uniqueId is null
     expect(mockDocGet).not.toHaveBeenCalled();
   });
 
@@ -1050,7 +1055,10 @@ describe('Synthetic-token bypass', () => {
     expect(res.status).toBe(401);
     // In production the bypass is inert — the token reaches verifyIdToken
     // and fails the real check.
-    expect(mockVerifyIdToken).toHaveBeenCalledWith('synthetic:Mia:60000010');
+    // SHY-0308: the second argument is checkRevoked. authMiddleware passes
+    // false -- it does NOT consult revocation, which is why a banned user's
+    // pre-ban token reaches the ban gate in production and gets the 403.
+    expect(mockVerifyIdToken).toHaveBeenCalledWith('synthetic:Mia:60000010', false);
   });
 
   test('refuses synthetic:* with NODE_ENV undefined', async () => {
@@ -1102,7 +1110,7 @@ describe('Synthetic-token bypass', () => {
       .get('/api/users/50000010')
       .set('Authorization', 'Bearer real.firebase.jwt');
     expect(res.status).toBe(200);
-    expect(mockVerifyIdToken).toHaveBeenCalledWith('real.firebase.jwt');
+    expect(mockVerifyIdToken).toHaveBeenCalledWith('real.firebase.jwt', false);
   });
 
   test('synthetic-uid is namespaced so it cannot collide with a real Firebase UID', async () => {

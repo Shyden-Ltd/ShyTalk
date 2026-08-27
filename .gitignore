@@ -16,9 +16,7 @@ shytalk-dev-firebase-adminsdk*.json
 
 # Firebase config (contains API keys — injected from secrets in CI)
 **/google-services.json
-worker/node_modules/
 worker/.wrangler/
-worker-api/node_modules/
 worker-api/.wrangler/
 .env
 
@@ -27,6 +25,9 @@ worker-api/.wrangler/
 
 # Local development
 local/firebase-emulator-data/
+# Snapshots taken with `--export-on-exit` land beside it with a suffix
+# (…accumulated-<date>/). Same data, same reason to keep it out of git.
+local/firebase-emulator-data.*/
 express-api/.env.local
 
 # Config files injected at deploy time (contain Firebase API keys)
@@ -35,7 +36,17 @@ public/admin/config.dev.js
 public/portal/config.js
 public/js/roadmap-config.js
 .scannerwork/
-/node_modules/
+# node_modules — the trailing slash matches a DIRECTORY only, so a SYMLINK
+# named node_modules slipped past it and was committed onto develop
+# (SHY-0346). The slash-less form matches a file, a symlink or a directory,
+# at any depth, which is what a worktree setup that symlinks node_modules
+# needs. It also SUBSUMES the dir-only forms that used to sit here
+# (`node_modules/`, `worker/node_modules/`, `worker-api/node_modules/`), which
+# were removed: three redundant rules are an ordering trap — move this line
+# above them and the dir-only one becomes last-matching again, silently
+# reopening the bug, with nothing to catch it.
+# Pinned by express-api/tests/scripts/no-tracked-node-modules.test.js
+node_modules
 e2e_results/
 test_output.txt
 nul
@@ -49,6 +60,9 @@ replay_pid*.log
 .playwright-mcp/
 playwright-report/
 playwright-results.xml
+# The integration project writes its own report/results alongside.
+playwright-report-integration/
+playwright-results-integration.xml
 playwright-errors.log
 
 # Migration scripts (one-time use)
@@ -134,7 +148,13 @@ database-debug.log
 
 # Deployed git SHA marker — written by deploy workflow on the server
 express-api/.deployed-sha
+# Device-journey artefacts: screenshots, UI dumps and — since 2026-08-22 —
+# SCREEN RECORDINGS, which run to tens of MB per walk. The glob covers the
+# per-platform directories the parallel runs write to
+# (journey-results-android / -ios); the bare `journey-results/` pattern
+# matched only the exact name and would have let both through.
 journey-results/
+journey-results-*/
 
 # ─── SHY-0035 (2026-06-08): prevent re-commit of Allure-pattern CI artefacts ───
 # Historical audit (`.project/audit/repo-size-audit-2026-06-08.md`) found 6

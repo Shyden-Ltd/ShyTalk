@@ -9,7 +9,6 @@
  *  1. economy       — POST /api/economy/daily-reward  (Firestore doc.get throws)
  *  2. reports       — POST /api/reports               (Firestore doc.set throws)
  *  3. banners       — GET  /api/banners/active        (queryDocs throws)
- *  4. fun-facts     — GET  /api/fun-facts             (queryDocs throws)
  *  5. rooms         — POST /api/rooms/:id/seat-requests (collection.get throws)
  *  6. conversations — POST /api/conversations/:id/messages (doc.get throws)
  *  7. storage       — DELETE /api/storage/delete      (r2.deleteObject throws)
@@ -302,71 +301,6 @@ describe('banners: GET /api/banners/active returns 500 on Firestore error', () =
 
   test('returns 500 when queryDocs throws', async () => {
     const res = await request(app).get('/api/banners/active');
-
-    expect(res.status).toBe(500);
-    expect(res.body.error).toBeDefined();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 4. Fun-facts — GET /api/fun-facts
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('fun-facts: GET /api/fun-facts returns 500 on Firestore error', () => {
-  let app;
-
-  beforeAll(() => {
-    jest.resetModules();
-
-    jest.mock('../../src/utils/firebase', () => ({
-      db: {
-        doc: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({ exists: false }),
-          set: jest.fn().mockResolvedValue(),
-          update: jest.fn().mockResolvedValue(),
-          delete: jest.fn().mockResolvedValue(),
-        })),
-        collection: jest.fn(() => ({
-          where: jest.fn().mockReturnThis(),
-          orderBy: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnThis(),
-          get: jest.fn().mockResolvedValue({ docs: [] }),
-        })),
-      },
-    }));
-
-    jest.mock('../../src/utils/helpers', () => ({
-      generateId: () => 'fact-id',
-      now: () => 1700000000000,
-    }));
-
-    jest.mock('../../src/utils/log', () => ({
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }));
-
-    jest.mock('../../src/middleware/auth', () => ({
-      requireAdmin: jest.fn(() => false),
-    }));
-
-    jest.mock('../../src/utils/firestore-helpers', () => ({
-      queryDocs: jest.fn().mockRejectedValue(new Error('Firestore unavailable')),
-    }));
-
-    const funFactsRouter = require('../../src/routes/fun-facts');
-
-    app = express();
-    app.use(express.json());
-    app.use((req, _res, next) => {
-      req.auth = { uid: 'firebase-uid', uniqueId: 'user-abc' };
-      next();
-    });
-    app.use('/api', funFactsRouter);
-  });
-
-  test('returns 500 when queryDocs throws', async () => {
-    const res = await request(app).get('/api/fun-facts');
 
     expect(res.status).toBe(500);
     expect(res.body.error).toBeDefined();

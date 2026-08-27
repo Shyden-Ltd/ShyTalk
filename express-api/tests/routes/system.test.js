@@ -11,6 +11,15 @@ jest.mock('../../src/cron/serverHealth', () => mockServerHealth);
 const mockAccountDeletion = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../src/cron/accountDeletion', () => mockAccountDeletion);
 
+// Same for support retention (SHY-0436, SHY-0435). Mocked for the same reason
+// as the two above: this suite is about the ENDPOINT's contract — auth,
+// in-flight, timeout, error shape — and the sweep's own behaviour is pinned in
+// tests/unit/support-retention.test.js against real rules.
+const mockSupportRetention = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../src/cron/supportRetention', () => ({
+  sweepSupportRetention: mockSupportRetention,
+}));
+
 // Mock alertManager — its real init touches Firestore which we don't
 // need for the heartbeat endpoint's contract.
 jest.mock('../../src/utils/alertManagerInstance', () => ({
@@ -315,5 +324,156 @@ describe('POST /api/system/sweep-account-deletions', () => {
     } finally {
       delete process.env.SWEEP_TIMEOUT_MS_OVERRIDE;
     }
+  });
+});
+
+describe('GET /api/system/app-check — the SHY-0300 rollout instrument', () => {
+  const {
+    __resetCountersForTests,
+    __setVerifierForTests,
+    appCheckMiddleware,
+  } = require('../../src/middleware/app-check');
+
+  beforeEach(() => {
+    __resetCountersForTests();
+  });
+
+  afterEach(() => {
+    delete process.env.APP_CHECK_MODE;
+  });
+
+  test('requires the shared secret — the MODE is a timing signal', () => {
+    // The obvious home for this was /system/health, which is PUBLIC. Telling
+    // an unauthenticated caller when attestation is off hands an abuser of
+    // the ban gate the one fact they need.
+    return request(createApp()).get('/api/system/app-check').expect(401);
+  });
+
+  test('a wrong secret is refused', () =>
+    request(createApp())
+      .get('/api/system/app-check')
+      .set('Authorization', 'Bearer not-the-secret')
+      .expect(401));
+
+  test('reports the current mode and zeroed counters', async () => {
+    process.env.APP_CHECK_MODE = 'monitor';
+    const res = await request(createApp())
+      .get('/api/system/app-check')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      mode: 'monitor',
+      verified: 0,
+      missing: 0,
+      invalid: 0,
+      error: 0,
+      off: 0,
+      refused: 0,
+    });
+  });
+
+  test('counts move as requests are classified — a live number, not a shape', async () => {
+    // A zeroed response proves the wiring exists; it cannot tell a live
+    // counter from a frozen one.
+    process.env.APP_CHECK_MODE = 'enforce';
+    __setVerifierForTests(async () => ({}));
+    const noop = { status: () => noop, json: () => noop };
+    await appCheckMiddleware({ method: 'GET', path: '/ban-status', headers: {} }, noop, () => {});
+
+    const res = await request(createApp())
+      .get('/api/system/app-check')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.body).toMatchObject({ mode: 'enforce', missing: 1, refused: 1 });
+  });
+
+  test('the PUBLIC health endpoint still says nothing about App Check', async () => {
+    process.env.APP_CHECK_MODE = 'enforce';
+    const res = await request(createApp()).get('/api/system/health');
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body)).not.toMatch(/appCheck|enforce|monitor/i);
+  });
+});
+
+describe('POST /api/system/sweep-support-retention', () => {
+  // It deletes closed tickets, their attachments, and uploads nobody ever
+  // sent — screenshots of private conversations and photographs of other
+  // people. An unauthenticated caller must not be able to trigger that.
+
+  test('returns 401 without bearer token', async () => {
+    const res = await request(createApp()).post('/api/system/sweep-support-retention');
+    expect(res.status).toBe(401);
+    expect(mockSupportRetention).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 with wrong bearer token', async () => {
+    const res = await request(createApp())
+      .post('/api/system/sweep-support-retention')
+      .set('Authorization', 'Bearer wrong-secret');
+    expect(res.status).toBe(401);
+    expect(mockSupportRetention).not.toHaveBeenCalled();
+  });
+
+  test('runs the sweep with the correct secret', async () => {
+    const res = await request(createApp())
+      .post('/api/system/sweep-support-retention')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
+    expect(mockSupportRetention).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failing sweep is a 500, not a silent success', async () => {
+    // A deletion sweep that reports "ok" while doing nothing is how personal
+    // data quietly outlives its retention window.
+    mockSupportRetention.mockRejectedValueOnce(new Error('R2 unreachable'));
+    const res = await request(createApp())
+      .post('/api/system/sweep-support-retention')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(res.status).toBe(500);
+  });
+
+  test('its in-flight flag is its own, not shared with the other sweep', async () => {
+    // Each handler closes over its own flag. Sharing one would let a long
+    // account-deletion sweep 409 an unrelated retention run.
+    //
+    // Held open by a promise THIS TEST resolves, not by a timer. A 50ms sleep
+    // here was a RACE, and one that failed silently in the safe direction: if
+    // the retention sweep finished before the second request landed, its flag
+    // was already clear, the 200 came back for the wrong reason, and the test
+    // passed without ever exercising a shared flag. Waiting for the sweep to
+    // have actually STARTED is the condition that matters.
+    let releaseRetention;
+    let retentionStarted;
+    const started = new Promise((resolve) => {
+      retentionStarted = resolve;
+    });
+    mockSupportRetention.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseRetention = resolve;
+          retentionStarted();
+        }),
+    );
+    const app = createApp();
+    // `.then()` is what STARTS a supertest request. Without it the request is
+    // never sent, and this test used to await the other sweep FIRST and this
+    // one afterwards -- so the two were never in flight together, and a test
+    // named for a shared flag never had two sweeps to share one.
+    const inFlight = request(app)
+      .post('/api/system/sweep-support-retention')
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .then((r) => r);
+    // The retention sweep is now provably in flight and its flag is set, so the
+    // request below is a real test of whether the OTHER sweep sees that flag.
+    await started;
+    const other = await request(app)
+      .post('/api/system/sweep-account-deletions')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(other.status).toBe(200);
+    releaseRetention();
+    await inFlight;
   });
 });

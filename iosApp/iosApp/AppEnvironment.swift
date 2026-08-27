@@ -19,6 +19,13 @@ struct AppEnvironmentConfig: Equatable {
     let apiBaseUrl: String
     let devPersonasPassword: String?
     let googleWebClientId: String?
+    /// Auth-stage device checks (server-authoritative device-lock +
+    /// ban application) are bypassed ONLY on `.local` — mirroring
+    /// Android's per-flavor `BuildConfig.BYPASS_DEVICE_CHECKS`
+    /// (local → true, dev → false, prod → false). Threaded through
+    /// `doInitKoin(bypassDeviceChecks:)`; Kotlin defaults to false
+    /// (enforce) if this is ever dropped from the call.
+    let bypassDeviceChecks: Bool
 }
 
 /// Side-effect-free env resolution, extracted from `iOSApp.swift`'s `init()`
@@ -31,7 +38,50 @@ struct AppEnvironmentConfig: Equatable {
 /// `isPersonaPickerAvailable` from the password's presence.
 enum AppEnvironment {
     static let devApiBaseUrl = "https://dev-api.shytalk.shyden.co.uk"
-    static let localApiBaseUrl = "http://localhost:3000"
+
+    /// SHY-0275 — the address a LOCAL build uses to reach the developer's Mac.
+    ///
+    /// Comes from `Info.plist`'s `ShyTalkLocalHost`, substituted at build time
+    /// from the `LOCAL_HOST` build setting (`Local.xcconfig`, overridable on the
+    /// xcodebuild command line). Falls back to `localhost`, which is correct for
+    /// a Mac-hosted run and WRONG on a physical iPhone — an iPhone has no
+    /// `adb reverse` equivalent, so `localhost` is the phone itself.
+    ///
+    /// Previously these were literals and the plist value did not exist, so
+    /// `LOCAL_HOST=<mac-ip>` on the command line set a value nothing read: the
+    /// documented recipe looked followed while every backend call went to a port
+    /// on the handset. `iOSApp.swift` logs the resolved value at launch so a
+    /// wrong one is visible on first run rather than as "the app is broken".
+    /// Info.plist key carrying the build-time `LOCAL_HOST` value.
+    static let localHostInfoKey = "ShyTalkLocalHost"
+
+    /// Takes the RAW plist value so the resolution rules are testable with real
+    /// strings — no stand-in Bundle. Every input a build can actually produce is
+    /// covered: a stamped address, an absent key (`nil`, on dev/release), and an
+    /// xcconfig that expanded to empty or whitespace.
+    ///
+    /// Absent must resolve to `localhost`, never `""`: an empty host builds
+    /// `http://:3000`, which parses fine and then fails opaquely much later.
+    static func resolveLocalHost(rawValue: String?) -> String {
+        let trimmed = (rawValue ?? "").trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "localhost" : trimmed
+    }
+
+    static var localHost: String {
+        resolveLocalHost(rawValue: Bundle.main.object(forInfoDictionaryKey: localHostInfoKey) as? String)
+    }
+
+    static var localApiBaseUrl: String { "http://\(localHost):3000" }
+
+    /// The local LiveKit signalling URL. `express-api/src/routes/livekit.js`
+    /// deliberately omits `url` from the token response when NODE_ENV is
+    /// `local`, leaving the client to supply its own — Android does this via
+    /// `BuildConfig.LIVEKIT_SERVER_URL`. iOS had no equivalent, so the voice
+    /// service fell through to `""` and refused its own connection.
+    static var localLiveKitUrl: String { "ws://\(localHost):7880" }
+
+    /// The local Realtime Database emulator URL, used to configure Firebase.
+    static var localRtdbUrl: String { "http://\(localHost):9000?ns=demo-shytalk" }
 
     /// WEB OAuth client ID for the `shytalk-dev` Firebase project — Android
     /// passes the same value via `BuildConfig.WEB_CLIENT_ID`. Needed by
@@ -56,7 +106,8 @@ enum AppEnvironment {
                 environment: "local",
                 apiBaseUrl: localApiBaseUrl,
                 devPersonasPassword: cleaned,
-                googleWebClientId: nil
+                googleWebClientId: nil,
+                bypassDeviceChecks: true
             )
         case .dev:
             return AppEnvironmentConfig(
@@ -64,7 +115,8 @@ enum AppEnvironment {
                 environment: "dev",
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: cleaned,
-                googleWebClientId: devGoogleWebClientId
+                googleWebClientId: devGoogleWebClientId,
+                bypassDeviceChecks: false
             )
         case .release:
             // Distributable build: NEVER carry the persona picker, regardless
@@ -75,7 +127,8 @@ enum AppEnvironment {
                 environment: "dev",
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: nil,
-                googleWebClientId: devGoogleWebClientId
+                googleWebClientId: devGoogleWebClientId,
+                bypassDeviceChecks: false
             )
         }
     }

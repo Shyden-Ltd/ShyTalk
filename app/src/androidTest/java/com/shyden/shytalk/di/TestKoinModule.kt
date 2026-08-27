@@ -4,17 +4,18 @@ import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.AndroidRoomServiceController
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomServiceController
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.TokenService
 import com.shyden.shytalk.data.remote.VoiceService
+import com.shyden.shytalk.data.repository.AgeVerificationRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
-import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.MessageRepository
@@ -23,6 +24,7 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
@@ -33,7 +35,6 @@ import com.shyden.shytalk.fake.FakeAuthRepository
 import com.shyden.shytalk.fake.FakeBannerRepository
 import com.shyden.shytalk.fake.FakeDeviceRepository
 import com.shyden.shytalk.fake.FakeEconomyRepository
-import com.shyden.shytalk.fake.FakeFunFactRepository
 import com.shyden.shytalk.fake.FakeGiftRepository
 import com.shyden.shytalk.fake.FakeIdentityRepository
 import com.shyden.shytalk.fake.FakeMessageRepository
@@ -50,6 +51,7 @@ import com.shyden.shytalk.fake.FakeTypingRepository
 import com.shyden.shytalk.fake.FakeUserRepository
 import com.shyden.shytalk.fake.FakeVoiceService
 import com.shyden.shytalk.feature.ageverification.AgeRestrictionService
+import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitViewModel
 import com.shyden.shytalk.feature.auth.AuthViewModel
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
 import com.shyden.shytalk.feature.gacha.GachaViewModel
@@ -59,7 +61,6 @@ import com.shyden.shytalk.feature.messaging.ConversationListViewModel
 import com.shyden.shytalk.feature.messaging.GroupSetupViewModel
 import com.shyden.shytalk.feature.messaging.NewMessageViewModel
 import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
-import com.shyden.shytalk.feature.messaging.ReportReviewViewModel
 import com.shyden.shytalk.feature.profile.FollowListViewModel
 import com.shyden.shytalk.feature.profile.GiftWallViewModel
 import com.shyden.shytalk.feature.profile.ProfileViewModel
@@ -69,7 +70,6 @@ import com.shyden.shytalk.feature.settings.AppSettingsViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
-import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -86,6 +86,13 @@ val testModule =
         // tests run in a sandboxed package).
         single { SecureStorage(androidContext()) }
 
+        // SHY-0143 — the cold-start identity cache. MainActivity resolves this
+        // with `by inject()` at construction, so without this binding EVERY
+        // instrumented test that launches the Activity dies on Koin resolution
+        // before its first assertion. Real impl over the real SecureStorage
+        // above — there is nothing to fake, it is a wrapper over local storage.
+        single { SessionCache(get()) }
+
         // Pure-logic services (no fake needed)
         single { AgeRestrictionService() }
 
@@ -96,6 +103,40 @@ val testModule =
         single { FakeAppConfigService() } bind AppConfigService::class
 
         // Fake repositories
+        // SHY-0474: registered in the real ViewModelModule and missing here, so
+        // navigating to the screen threw NoDefinitionFoundException -- a failure
+        // that existed only in tests and said nothing about the app.
+        // SHY-0474: the view model below takes this, and there was no test
+        // binding, so Koin failed with InstanceCreationException one layer
+        // below the missing view model.
+        //
+        // Declared inline rather than as a new `Fake*Repository` class: the
+        // no-new-stubs ratchet (EPIC-0003) counts double-bearing FILES, and the
+        // debt may only shrink. Adding a file would have raised it.
+        //
+        // Every call refuses. The navigation tests only need the screen to
+        // COMPOSE; a double that pretended uploads succeed would invent a path
+        // no test asked for. `AgeVerificationSubmitScreenTest` builds its own
+        // view model directly and is unaffected.
+        single<AgeVerificationRepository> {
+            object : AgeVerificationRepository {
+                override suspend fun requestUploadUrl(
+                    contentType: AgeVerificationRepository.ContentType,
+                ): Resource<AgeVerificationRepository.UploadHandle> = Resource.Error("age verification is not exercised by this test")
+
+                override suspend fun uploadImage(
+                    uploadUrl: String,
+                    contentType: AgeVerificationRepository.ContentType,
+                    bytes: ByteArray,
+                ): Resource<Unit> = Resource.Error("age verification is not exercised by this test")
+
+                override suspend fun submit(
+                    idMethod: AgeVerificationRepository.IdMethod,
+                    r2Key: String,
+                ): Resource<Unit> = Resource.Error("age verification is not exercised by this test")
+            }
+        }
+        viewModel { AgeVerificationSubmitViewModel(get()) }
         single { FakeAuthRepository() } bind AuthRepository::class
         single { FakeUserRepository() } bind UserRepository::class
         single { FakeRoomRepository() } bind RoomRepository::class
@@ -112,7 +153,6 @@ val testModule =
         single { FakeEconomyRepository() } bind EconomyRepository::class
         single { FakeTranslationRepository() } bind TranslationRepository::class
         single { FakeBannerRepository() } bind BannerRepository::class
-        single { FakeFunFactRepository() } bind FunFactRepository::class
 
         // Fake managers
         single { FakeActiveRoomManager() } bind RoomLifecycleManager::class
@@ -183,7 +223,6 @@ val testModule =
                 ageRestrictionService = get(),
             )
         }
-        viewModel { ReportReviewViewModel(get(), get()) }
         viewModel { NewMessageViewModel(get(), get(), get()) }
         viewModel { params -> GroupSetupViewModel(params[0], get(), get(), get(), get()) }
         viewModel { GachaViewModel(get(), get(), get(), get(), get()) }
@@ -192,5 +231,4 @@ val testModule =
         viewModel { GiftingViewModel(get(), get(), get()) }
         viewModel { params -> GiftWallViewModel(params[0], get()) }
         viewModel { DailyRewardViewModel(get(), get()) }
-        viewModel { FunFactSplashViewModel(get(), get(), null, null, get(), get(), get(), get()) }
     }

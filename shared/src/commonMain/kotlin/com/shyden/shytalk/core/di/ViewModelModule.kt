@@ -14,7 +14,6 @@ import com.shyden.shytalk.feature.messaging.ConversationListViewModel
 import com.shyden.shytalk.feature.messaging.GroupSetupViewModel
 import com.shyden.shytalk.feature.messaging.NewMessageViewModel
 import com.shyden.shytalk.feature.messaging.PrivateChatViewModel
-import com.shyden.shytalk.feature.messaging.ReportReviewViewModel
 import com.shyden.shytalk.feature.profile.FollowListViewModel
 import com.shyden.shytalk.feature.profile.GiftWallViewModel
 import com.shyden.shytalk.feature.profile.ProfileViewModel
@@ -24,7 +23,7 @@ import com.shyden.shytalk.feature.settings.AppSettingsViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
-import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
+import com.shyden.shytalk.feature.support.SupportFormViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -51,6 +50,7 @@ val viewModelModule =
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }
         viewModel { RequiredDOBViewModel(get(), get()) }
         viewModel { AgeVerificationSubmitViewModel(get()) }
+        viewModel { params -> SupportFormViewModel(get(), params[0], params[1]) }
         viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }
         viewModel { params -> RoomViewModel(params[0], get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { AppSettingsViewModel(get(), get(), get(), get()) }
@@ -74,7 +74,6 @@ val viewModelModule =
                 ageRestrictionService = get(),
             )
         }
-        viewModel { ReportReviewViewModel(get(), get()) }
         viewModel { NewMessageViewModel(get(), get(), get()) }
         viewModel { params -> GroupSetupViewModel(params[0], get(), get(), get(), get()) }
         viewModel { GachaViewModel(get(), get(), get(), get(), get()) }
@@ -83,5 +82,4 @@ val viewModelModule =
         viewModel { GiftingViewModel(get(), get(), get()) }
         viewModel { params -> GiftWallViewModel(params[0], get()) }
         viewModel { DailyRewardViewModel(get(), get()) }
-        viewModel { FunFactSplashViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     }

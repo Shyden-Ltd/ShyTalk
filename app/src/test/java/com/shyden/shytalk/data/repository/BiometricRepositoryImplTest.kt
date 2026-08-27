@@ -123,8 +123,19 @@ class BiometricRepositoryImplTest {
 
             repo.getChallenge("hello world", "device&id=1")
 
+            // SHY-0143 moved both platforms onto the shared
+            // `encodeUrlQueryComponent`, so the two could not drift again —
+            // iOS had been using Ktor's default, which leaves `&` and `#`
+            // literal. The one visible difference from `URLEncoder` is space:
+            // `%20` rather than `+`.
+            //
+            // `+` means space only by `application/x-www-form-urlencoded`
+            // convention — `URLEncoder` is a FORM encoder, and using it on a
+            // query component is the classic misuse. It happens to work with
+            // Express's `qs`, but `%20` is unambiguous under every reader.
+            // The characters that actually matter are unchanged.
             assertEquals(
-                "/api/auth/biometric/challenge?uniqueId=hello+world&deviceId=device%26id%3D1",
+                "/api/auth/biometric/challenge?uniqueId=hello%20world&deviceId=device%26id%3D1",
                 capturedPath,
             )
         }

@@ -502,10 +502,31 @@ describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
   test('--all --dry-run summary line contains the extended SHY-0067 counters', () => {
     const repoRoot = REPO_ROOT;
     const SYNC_SCRIPT = path.join(repoRoot, 'scripts', 'sync-stories-to-issues.sh');
+
+    // Run against a FIXTURE corpus, which is what STORIES_DIR exists for.
+    //
+    // This ran over the live tree until 2026-08-24, and the timeout had already
+    // been raised 90s -> 300s once because "the budget does not scale with the
+    // corpus, and the corpus does". It went on failing: 1,206 SECONDS in a full
+    // suite run, which is roughly two thirds of the whole run for one test, and
+    // it timed out anyway under the load it created.
+    //
+    // The assertions below are about the SHAPE of the summary line. Three
+    // stories prove that exactly as well as three hundred do, and no number of
+    // stories would prove it better. Whether the live corpus parses is a real
+    // question, and a different one — it belongs to a check that runs the sync
+    // for real, not to a format assertion inside a parallel unit suite.
+    const { ghPath } = makeMockGh();
+    const storiesDir = makeBugStoryDir();
     const res = require('node:child_process').spawnSync(
       'bash',
       [SYNC_SCRIPT, '--all', '--dry-run'],
-      { encoding: 'utf-8', cwd: repoRoot, timeout: 90_000 },
+      {
+        encoding: 'utf-8',
+        cwd: repoRoot,
+        timeout: 60_000,
+        env: mockEnv(ghPath, storiesDir),
+      },
     );
     expect(res.status ?? 1).toBe(0);
     const stderr = res.stderr ?? '';

@@ -157,10 +157,17 @@ fun NewMessageScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Search all users toggle
+            //
+            // Tagged for SHY-0457: without it the search is scoped to people
+            // you already know, so a journey that types a name and finds
+            // nothing cannot tell "not allowed" from "not in your recents" —
+            // which is exactly how the cross-cohort wall test failed on its own
+            // control before this existed.
             FilterChip(
                 selected = uiState.searchAllMode,
                 onClick = { viewModel.toggleSearchAllMode() },
                 label = { Text(stringResource(Res.string.search_all_users)) },
+                modifier = Modifier.testTag("newMessage_searchAllToggle"),
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -252,7 +259,12 @@ fun NewMessageScreen(
                         val userId = uiState.selectedIds.first()
                         onNavigateToChat(userId)
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    // Tagged for SHY-0457: selecting a person here only TICKS
+                    // them, so a journey that stops at the tick never opens a
+                    // chat. This is the control that does, and an untagged one
+                    // would force a journey to tap a remembered coordinate --
+                    // under a keyboard, at that.
+                    modifier = Modifier.fillMaxWidth().testTag("newMessage_messageButton"),
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))

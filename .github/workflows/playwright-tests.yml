@@ -76,12 +76,20 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
+            // `deps` is the browser whose apt packages this shard needs.
+            // SHY-0356 — `install-deps` with no argument installs the UNION for
+            // every browser: on ubuntu24.04 that is chromium 21 packages,
+            // firefox 25, webkit 52 — and WebKit's half is the expensive half
+            // (the GStreamer/ffmpeg stack, libflite1 alone is 13.6 MB). A
+            // chromium shard was downloading all of it and a slow mirror then
+            // blew the step budget. The mobile projects are Playwright
+            // PROJECTS, not browsers, so they map to their real engines.
             const WEB_ALL = [
-              { project: 'chromium', browser: 'Chromium', viewport: '1280x720' },
-              { project: 'firefox', browser: 'Firefox', viewport: '1280x720' },
-              { project: 'webkit', browser: 'WebKit', viewport: '1280x720' },
-              { project: 'mobile-chrome', browser: 'Mobile Chrome (Pixel 5)', viewport: '393x851' },
-              { project: 'mobile-safari', browser: 'Mobile Safari (iPhone 13)', viewport: '390x844' },
+              { project: 'chromium', browser: 'Chromium', viewport: '1280x720', deps: 'chromium' },
+              { project: 'firefox', browser: 'Firefox', viewport: '1280x720', deps: 'firefox' },
+              { project: 'webkit', browser: 'WebKit', viewport: '1280x720', deps: 'webkit' },
+              { project: 'mobile-chrome', browser: 'Mobile Chrome (Pixel 5)', viewport: '393x851', deps: 'chromium' },
+              { project: 'mobile-safari', browser: 'Mobile Safari (iPhone 13)', viewport: '390x844', deps: 'webkit' },
             ];
 
             const web = '${{ inputs.web }}' || 'all';
@@ -188,8 +196,12 @@ jobs:
           path: /var/cache/apt/archives
           key: apt-playwright-${{ needs.prepare-playwright.outputs.pw-version }}
 
+      - uses: ./.github/actions/harden-apt
       - name: Install system dependencies
-        run: npx playwright install-deps
+        # SHY-0356 — scoped to THIS shard's browser. Unscoped, every shard
+        # installed the union for all three engines; see the WEB_ALL comment.
+        timeout-minutes: 15
+        run: npx playwright install-deps ${{ matrix.deps }}
 
       - uses: ./.github/actions/start-local-services
 

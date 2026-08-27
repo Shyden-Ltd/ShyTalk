@@ -254,9 +254,7 @@ describe('takeScreenshotViaAppium — Appium HTTP screenshot endpoint', () => {
     const outDir = tmpDir('appium-missing');
     const fetchImpl = jest.fn(async () => ({
       ok: true,
-      json: async () => ({
-        /* no value */
-      }),
+      json: async () => ({/* no value */}),
     }));
     try {
       const r = await takeScreenshotViaAppium({

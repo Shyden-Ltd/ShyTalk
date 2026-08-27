@@ -1,0 +1,282 @@
+---
+id: SHY-0419
+status: In Review
+owner: unassigned
+created: 2026-08-22
+priority: P1
+effort: M
+type: bug
+roadmap_ids: []
+mvp: true
+---
+
+# SHY-0419: On iPhone you can fill in the support form but you cannot send it
+
+## User Story
+
+As **somebody on an iPhone who needs help**, I want to be able to send the
+support request I just typed, so that asking for help is not itself the thing
+that fails.
+
+## Why
+
+Found on a **real iPhone Air (iOS 27)**, walking SHY-0387 before merging #1940.
+
+Measured from the live accessibility tree:
+
+| Element | Position |
+| --- | --- |
+| Software keyboard | y = 609 → 854 |
+| `support_send` ("Send") | y = 616 → 665, `visible="false"` |
+
+The Send button sits **entirely inside the keyboard's area**. The keyboard opens
+as soon as the message field is touched, and the message field must be touched
+because an empty message is refused.
+
+**Every route a real person has was tried, and none of them works:**
+
+| Attempt | Result |
+| --- | --- |
+| Tap empty right margin | keyboard stays up |
+| Tap empty area under the title | keyboard stays up |
+| Tap the gap between the hint and the categories | keyboard stays up |
+| Tap a category button (works, it is above y=609) | keyboard stays up |
+| Swipe down over the keyboard (the iOS convention) | keyboard stays up |
+| Drag the page upward (700 ms, with hold) | `support_send` stays at y=616 — the page does not scroll |
+
+So on iOS the support form can be filled in and cannot be submitted.
+
+### Why this is P1 and MVP
+
+This is the surface a person reaches when something has already gone wrong for
+them — a wrong date of birth, a payment problem, a safety report. Failing there
+fails the people least able to route around it, and it is the only in-app way to
+reach us: the operator confirmed on 2026-08-20 that there is no monitored
+inbound mailbox, which is the whole reason SHY-0385 replaced the mail composer.
+
+It also blocks **#1940**, since that PR is what introduces the page.
+
+### What was tried and did NOT fix it
+
+`SupportPage.kt`'s content Column carries no `imePadding()`, which looked like
+the obvious cause — three sibling screens already use it (`RoomScreen.kt:649`,
+`EmailOtpScreen.kt:94`, `PrivateChatScreen.kt:420`).
+
+**Both placements were built and installed on the device, and neither changed
+anything:**
+
+1. `.verticalScroll(...).imePadding()` — the sibling screens' ordering.
+   `support_send` stayed at y=616, `visible="false"`.
+2. `.imePadding().verticalScroll(...)` — before the scroll, so the viewport
+   itself should shrink. `support_send` stayed at y=616, `visible="false"`.
+
+3. Scrolling after applying (2). The viewport should have shrunk, making the
+   content below it scrollable; a 700 ms drag with hold changed nothing.
+
+### The insets ARE reported — that hypothesis is dead
+
+The first write-up of this story guessed that `WindowInsets.ime` was not
+reported on iOS. **That was measured and it is false.** A temporary probe
+rendering `WindowInsets.ime.getBottom(density)` into the page, read off the
+device:
+
+| Keyboard | `XCUIElementTypeKeyboard` | `support_send` | `ime` inset |
+| --- | --- | --- | --- |
+| closed | absent | y=629, `visible="true"` | **0** |
+| open | y=609 | y=629, `visible="false"` | **960** |
+
+So the inset is reported and tracks the keyboard exactly (960 px ≈ the keyboard
+height at this device's density). `imePadding()` is not inert for lack of an
+inset. Something between that inset and this layout is not applying it — the
+`Scaffold` content slot, the `fillMaxSize()` ahead of it, or how the scroll
+viewport is constrained.
+
+**So the first job of this story is no longer "is the inset reported".** It is:
+given a correct inset, why does `imePadding()` not shrink this viewport? Worth
+trying next, roughly in order of cheapness: applying the inset to the `Scaffold`
+via `contentWindowInsets` rather than to the content Column; dropping
+`fillMaxSize()` so the Column is not pinned to the incoming max constraints;
+moving Send out of the scrolling content into a `bottomBar`; or padding by the
+measured inset by hand, which the probe proves is available.
+
+The speculative change was **reverted rather than shipped** — a change that does
+not move the button is not a fix, and merging it would have made the next person
+believe this was handled.
+
+## Acceptance Criteria
+
+### Happy path
+
+- [ ] On a real iPhone, after typing a message, the Send button is reachable and
+      the request sends.
+- [ ] The confirmation is shown, and the ticket exists server-side.
+
+### Error paths
+
+- [ ] With the keyboard open and a failure to send, the error text is visible —
+      not hidden behind the keyboard the same way the button was.
+- [ ] An empty message is still refused, and the refusal is readable.
+
+### Edge cases
+
+- [ ] Works with a long message that scrolls the field.
+- [ ] Works with the largest Dynamic Type setting, where everything is taller.
+- [ ] Works in landscape, where the keyboard takes proportionally more height.
+- [ ] Works with an external/Bluetooth keyboard attached (no software keyboard).
+- [ ] Works with attachments listed, which push the button further down.
+
+### Performance
+
+- [ ] No layout thrash when the keyboard opens or closes.
+
+### Security
+
+- [ ] N/A — layout only. No change to what is sent.
+
+### UX
+
+- [ ] Nothing a person must press is ever behind the keyboard on this page.
+- [ ] The fix generalises: whatever mechanism is used is available to the other
+      text-entry screens rather than being special-cased here.
+
+### i18n
+
+- [ ] Verified in a language with longer labels (the button and the categories
+      grow), asserted on rendered text.
+
+### Observability
+
+- [ ] N/A.
+
+## BDD Scenarios
+
+**Scenario: somebody on an iPhone sends a support request**
+
+- **Given** somebody on an iPhone has typed their problem
+- **When** they look for the send button
+- **Then** they can see it and send the request
+
+**Scenario: the keyboard never hides what they must press**
+
+- **Given** the keyboard is open on the support page
+- **When** they scroll the page
+- **Then** every control stays reachable
+
+## Test Plan
+
+| Layer | What it proves |
+| --- | --- |
+| Device walk (real iPhone, Appium) | With the keyboard open, `support_send` reports `visible="true"` and a tap sends the request. This is the only layer that can prove it. |
+| Device walk (real Android) | The same journey still works, so the fix does not regress the platform that was fine. |
+| Guard | Every Compose screen that takes text input handles the keyboard inset by the agreed mechanism — the check that stops the 16th screen repeating this. |
+| Journey | The "I need help" journey ends in a sent request on BOTH platforms, not in a rendered form. |
+
+## Out of Scope
+
+- The other 14 screens with text input and no keyboard handling — see the
+  sweep in Notes. They need the same mechanism, but each needs its own device
+  verification and should not ride on this one.
+
+## Dependencies
+
+- None.
+
+## Risks & Mitigations
+
+| Risk | Mitigation |
+| --- | --- |
+| A fix is declared from a green build without a device walk — exactly how this shipped | The Test Plan makes the device walk the proving layer; no other layer can see it. |
+| `imePadding()` is added again by someone reading the sibling screens | This story records that both orderings were measured on the device and neither moved the button. |
+| Fixed only on the support page while 14 other screens stay broken | The guard AC, plus the sweep recorded below. |
+
+## Definition of Done
+
+- [ ] Merged to `develop`, all checks green.
+- [ ] A support request **sent from a real iPhone**, with the ticket id recorded.
+- [ ] The same journey re-walked on a real Android device.
+- [ ] `code-reviewer` 100% clean; `Reviewed-up-to:` recorded.
+
+## Notes
+
+- Found 2026-08-22 during the iOS device walk of SHY-0387 on #1940. The page
+  itself renders correctly: title, all six categories, the entry point's default
+  category pre-selected (`support_categoryother value='1'` from Settings), the
+  message field, the attachment control, and Send. Selecting a category works.
+  Only sending is impossible.
+- Sweep — Compose files under `shared/src/commonMain` that take text input and
+  do NOT reference `imePadding`, at the time of writing (15):
+  `core/ui/ReportMessageDialog.kt`, `feature/settings/AppSettingsScreen.kt`,
+  `feature/home/CreateRoomDialog.kt`, `feature/room/components/UserCardPopup.kt`,
+  `feature/room/components/ChatPanel.kt`, `feature/profile/CountryPickerDialog.kt`,
+  `feature/profile/ProfileScreen.kt`, `feature/messaging/NewMessageScreen.kt`,
+  `feature/messaging/ConversationListScreen.kt`,
+  `feature/messaging/ReportUserDialog.kt`, `feature/profile/ProfileSetupScreen.kt`,
+  `feature/messaging/GroupSettingsSheet.kt`, `feature/support/SupportPage.kt`,
+  `feature/messaging/GroupSetupScreen.kt`, `feature/suspension/SuspensionScreen.kt`.
+  Not all are necessarily broken — a centred dialog may reposition — but none of
+  them has been walked on an iPhone.
+- Every attempt was verified by a full rebuild and reinstall
+  (`scripts/ios/build-debug-dev.sh`, exit 0, "App installed") followed by a fresh
+  Appium session. Builds do ship: the probe appeared in the tree on the build
+  that added it, and the debug overlay tracked the API sha across deploys.
+- One correction worth keeping, because it nearly became a wrong finding: the
+  first two attempts were judged only on whether `support_send` moved,
+  **without scrolling afterwards**. With a shrunken viewport the button would
+  only become reachable after a scroll, so that judgement was unsound. It was
+  re-run with a scroll (attempt 3) and the button still did not move — the
+  conclusion holds, but it did not hold for the reason originally given.
+
+## FIXED — 2026-08-22, device-proven on both platforms
+
+**The cause, precisely.** `imePadding()` is `windowInsetsPadding(WindowInsets.ime)`,
+and `windowInsetsPadding` respects insets a parent has already **consumed**. The
+raw `WindowInsets.ime.getBottom()` read does not. Something above this Column
+consumes the IME inset, so the modifier applied exactly zero while the raw value
+was correct all along — which is why the probe read 960 and the button never
+moved. Padding by the raw value sidesteps the consumption:
+
+```kotlin
+val imeBottom = with(LocalDensity.current) { WindowInsets.ime.getBottom(this).toDp() }
+...
+    .padding(bottom = imeBottom)
+    .verticalScroll(rememberScrollState()),
+```
+
+**iPhone Air, iOS 27, against the dev backend (`api 30cd430`):**
+
+| Step | Before | After |
+| --- | --- | --- |
+| Keyboard closed | Send y=616, `visible=true` | Send y=616, `visible=true` |
+| Keyboard open (starts y=609) | Send y=616, `visible=false` | Send y=620, `visible=false` — viewport now shrunk |
+| One scroll | **y=616, unmoved** | **y=470, `visible=TRUE`** — above the keyboard |
+| Tap Send | unreachable | **"Thanks. We have your message and will look into it."** |
+
+That the button *moves at all* is the proof the inset is being applied — before
+the fix it read 616 with the keyboard open or closed, and scrolling changed
+nothing.
+
+The confirmation is not merely a screen: `SupportRepositoryImpl` treats a 2xx
+carrying a blank `ticketId` as a FAILURE, so that message can only appear if the
+server returned a real ticket id.
+
+**OnePlus CPH2653, Android 16, same build, same backend** — the padding runs on
+both platforms and Android already resizes its window, so the risk was
+double-counting. It does not: Send sat at y=2143–2311 with the keyboard closed,
+left the visible tree when the keyboard opened, and came back at y=1552–1720
+after **one** scroll — reachable, exactly as before the change.
+
+The Android send answered **"You already have a request open. We will reply to
+that one."** — the 409 path, because the iPhone had just raised one as the same
+persona (P-02, UID 50000010). Unplanned, and worth keeping: duplicate prevention
+works ACROSS devices, and it explains itself rather than showing a raw error.
+
+### What is still owed on this story
+
+- The other 14 text-input screens listed in the Notes. Each needs the same
+  treatment and its own device check; none has been walked on an iPhone.
+- A guard so the 16th screen cannot repeat this. The right shape is asserting
+  that every Compose screen taking text input handles the IME inset by the
+  agreed mechanism — worth writing once the mechanism is settled, since
+  `imePadding()` is demonstrably not it here.
+
+Reviewed-up-to: 8df33d1d69bb1b0cf04c690acfa2b2e24471fe68

@@ -1,6 +1,5 @@
 package com.shyden.shytalk.fake
 
-import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.PmLockCheckResult
@@ -26,6 +25,24 @@ class FakeUserRepository : UserRepository {
 
     val userFlagsFlow = MutableStateFlow(UserFlags())
 
+    /**
+     * Restore the seeded state — call between tests to stop state leaking.
+     *
+     * SHY-0474. This is a Koin SINGLETON and `ResetFakesRule` only reset the
+     * auth fake, so anything a test wrote here survived into every later test
+     * in the run. A cohort test writing "not-a-cohort" onto the seeded user
+     * made three private-messaging tests fail several classes later, which
+     * reads as a defect in messaging rather than as leakage from a test that
+     * had already finished.
+     */
+    fun reset() {
+        users.clear()
+        users["test-user-1"] = TestData.currentUser
+        users["test-user-2"] = TestData.otherUser
+        userFlagsFlow.value = UserFlags()
+        signedInUserId = "test-user-1"
+    }
+
     override suspend fun createOrUpdateUser(user: User): Resource<Unit> {
         users[user.uid] = user
         _userUpdates.tryEmit(user)
@@ -35,6 +52,32 @@ class FakeUserRepository : UserRepository {
     override suspend fun getUser(userId: String): Resource<User> {
         val user = users[userId] ?: return Resource.Error("User not found")
         return Resource.Success(user)
+    }
+
+    /**
+     * Viewers the profile owner has blocked. Empty by default, so the common
+     * case needs no setup and a test that cares about blocking has to say so.
+     */
+    val blockedFromViewing = mutableSetOf<String>()
+
+    /**
+     * Added when `getProfileForViewing` reached the interface (SHY-0348) and
+     * this fake was not updated with it, which stopped the whole androidTest
+     * source set from COMPILING — so every instrumented test silently stopped
+     * running rather than failing. Restored 2026-08-26 while fixing SHY-0466,
+     * whose own evidence is in this source set.
+     *
+     * Mirrors the real repository's three outcomes rather than collapsing them:
+     * a fake that cannot express "blocked" would let a caller that ignores the
+     * block case pass, which is a defect invented by the double rather than
+     * found by it.
+     */
+    override suspend fun getProfileForViewing(userId: String): Resource<UserRepository.ProfileAccess> {
+        if (userId in blockedFromViewing) {
+            return Resource.Success(UserRepository.ProfileAccess.BlockedByOwner)
+        }
+        val user = users[userId] ?: return Resource.Success(UserRepository.ProfileAccess.NotFound)
+        return Resource.Success(UserRepository.ProfileAccess.Visible(user))
     }
 
     override suspend fun userExists(userId: String): Resource<Boolean> = Resource.Success(users.containsKey(userId))
@@ -76,14 +119,14 @@ class FakeUserRepository : UserRepository {
 
     override suspend fun getBlockedUserIds(userId: String): Resource<Set<String>> = Resource.Success(emptySet())
 
-    override suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>> {
+    /** Who "me" is for [checkBlockedBy], mirroring the auth-derived subject on the server. */
+    var signedInUserId: String = "test-user-1"
+
+    override suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>> {
         val blockers =
             userIds
                 .filter { uid ->
-                    users[uid]?.blockedUserIds?.contains(targetUserId) == true
+                    users[uid]?.blockedUserIds?.contains(signedInUserId) == true
                 }.toSet()
         return Resource.Success(blockers)
     }
@@ -122,7 +165,8 @@ class FakeUserRepository : UserRepository {
         visitorId: String,
     ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> = Resource.Success(emptyList())
+    override suspend fun getStalkers(profileUserId: String): Resource<UserRepository.StalkerPage> =
+        Resource.Success(UserRepository.StalkerPage())
 
     override suspend fun markStalkersViewed(userId: String): Resource<Unit> = Resource.Success(Unit)
 

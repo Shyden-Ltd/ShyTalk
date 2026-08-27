@@ -255,7 +255,9 @@ jobs:
       - uses: ./.github/actions/setup-node
 
       - name: Install deploy tools
-        run: npm install -g firebase-tools
+        # Pinned (SHY-0226 unpinned-drift class; see deploy-dev.yml note —
+        # same proven-version pin, converged deliberately in the follow-up).
+        run: npm install -g firebase-tools@15.24.0
 
       - name: Set up SSH
         env:
@@ -447,7 +449,9 @@ jobs:
     # Tuned 2026-05-21 to 100 min. See deploy-dev.yml's distribute-ios
     # timeout comment for the full reasoning (gradle daemon collision was
     # the real cause of the apparent slowness, not insufficient minutes).
-    timeout-minutes: 100
+    # 2026-07-16 (SHY-0195): 100 -> 120 to absorb the new 20-min
+    # platform-install step cap — see deploy-dev.yml's matching note.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -512,16 +516,28 @@ jobs:
           ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
 
       - name: Install CocoaPods
+        # --deployment, matching deploy-dev: refuse a Podfile.lock that does not
+        # describe the committed Podfile rather than silently regenerating one.
+        # Plain `pod install` here would have MASKED the SHY-0305 breakage on
+        # prod while dev failed, which is the worst of both.
         run: |
           set -euo pipefail
           cd iosApp
-          pod install
+          pod install --deployment
 
       # Mirror of deploy-dev.yml's pre-xcodebuild daemon stop. See that file
       # for the full forensic explanation (run 26196249351 hang analysis).
       # Same gradle-daemon collision pattern would hit prod releases too.
       - name: Stop gradle daemon before xcodebuild
         run: ./gradlew --stop
+
+      # Ensure the iOS platform runtime exists — see deploy-dev.yml's
+      # matching step for the full rationale (runner image 0213.1 ships
+      # Xcode without it; SHY-0195 run 29478170583). Idempotency verified
+      # empirically (exit 0 in <1s when already installed) + step-capped.
+      - name: Ensure iOS platform runtime is installed
+        run: sudo xcodebuild -downloadPlatform iOS
+        timeout-minutes: 20
 
       # Step-level hang detector — see deploy-dev.yml's matching step for
       # the rationale. 50-min cap catches recurrence cheaply.
@@ -561,6 +577,7 @@ jobs:
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -showBuildTimingSummary \
             -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
@@ -865,7 +882,8 @@ jobs:
         run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --max-workers=1
 
       - name: Install CocoaPods
-        run: cd iosApp && pod install
+        # --deployment — see the note on the distribute-ios job above.
+        run: cd iosApp && pod install --deployment
 
       # Same gradle-daemon-collision prevention as distribute-ios — the
       # smoke-test xcodebuild invocation also triggers the

@@ -66,11 +66,24 @@ function isVideoUrl(url) {
     url.toLowerCase().includes("contenttype%3dvideo");
 }
 
+/**
+ * Render evidence thumbnails.
+ *
+ * Each entry is either a URL string, or `{ url, contentType }` when the caller
+ * already knows what the file is. The object form exists because an object URL
+ * (`blob:...`) carries no extension, so `isVideoUrl` cannot read a type out of
+ * it and every video would render as an image with no play badge (SHY-0449).
+ * Reports and Appeals pass CDN URLs and are unaffected.
+ */
 export function renderEvidence(evidenceUrls) {
   if (!evidenceUrls || evidenceUrls.length === 0) return "";
-  const thumbs = evidenceUrls.map(url => {
+  const thumbs = evidenceUrls.map(entry => {
+    const url = typeof entry === "string" ? entry : entry?.url;
+    if (!url) return "";
+    const declaredType = typeof entry === "string" ? "" : (entry?.contentType || "");
+    const isVideo = declaredType ? declaredType.startsWith("video/") : isVideoUrl(url);
     const escaped = escapeHtml(url);
-    if (isVideoUrl(url)) {
+    if (isVideo) {
       return `<div class="evidence-thumb" data-evidence-url="${escaped}" data-evidence-type="video">
         <video src="${escaped}" muted preload="metadata"></video>
         <span class="video-badge">&#9654;</span>

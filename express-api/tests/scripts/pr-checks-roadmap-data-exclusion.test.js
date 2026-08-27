@@ -5,7 +5,9 @@
  * paid ~45min of Playwright CI time even though the only "public/"
  * change was an auto-bump of public/roadmap-data.json by the
  * pre-commit hook .husky/pre-commit (it regenerates the file via
- * `node scripts/generate-roadmap-json.js` on every commit).
+ * `node scripts/generate-roadmap-json.js` on every commit). That hook call
+ * went in SHY-0066 and the script itself in SHY-0359; this is the historical
+ * root cause, not current behaviour.
  *
  * Root cause: pr-checks.yml's detect-changes step's case statement
  * had `public/*) WEB=true ;;` as a catch-all, so any commit that

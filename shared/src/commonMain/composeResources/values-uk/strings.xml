@@ -166,9 +166,9 @@
 
     <!-- Profile -->
     <!-- google-translated 2026-05-04 -->
-    <string name="connections">Зв\'язки</string>
+    <string name="connections">Зв'язки</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="display_name">Відображуване ім\'я</string>
+    <string name="display_name">Відображуване ім'я</string>
     <!-- google-translated 2026-05-04 -->
     <string name="dob_privacy_note">Потрібна ваша дата народження, але ви можете приховати свій вік у налаштуваннях конфіденційності.</string>
     <!-- google-translated 2026-05-04 -->
@@ -188,7 +188,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="following_list_private">Наступний список цього користувача є приватним</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="get_super_shy">Стань супер сором\'язливим</string>
+    <string name="get_super_shy">Стань супер сором'язливим</string>
     <!-- google-translated 2026-05-04 -->
     <string name="gift_wall">Подарункова стіна</string>
     <!-- google-translated 2026-05-04 -->
@@ -347,7 +347,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="owner">Власник</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="reason_optional">Причина (необов\'язково)</string>
+    <string name="reason_optional">Причина (необов'язково)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="reject">Відхиляти</string>
     <!-- google-translated 2026-05-04 -->
@@ -473,7 +473,7 @@
 
     <!-- Messaging -->
     <!-- google-translated 2026-05-04 -->
-    <string name="additional_details_optional">Додаткові відомості (необов\'язково)</string>
+    <string name="additional_details_optional">Додаткові відомості (необов'язково)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="all_admins_and_mods">Всі адміни та моди</string>
     <!-- google-translated 2026-05-04 -->
@@ -504,7 +504,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="description_label">опис</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="description_optional">Опис (необов\'язково)</string>
+    <string name="description_optional">Опис (необов'язково)</string>
     <!-- google-translated 2026-05-04 -->
     <string name="edit_history">Історія редагування</string>
     <!-- google-translated 2026-05-04 -->
@@ -694,7 +694,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Подробиці: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Повідомлення: \"%1$s\"</string>
+    <string name="report_message_prefix">Повідомлення: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Репортер: %1$s | Повідомлено: %2$s</string>
 
@@ -848,7 +848,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy">Супер сором’язливий</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="super_shy_for_life">Ти супер сором\'язливий на все життя!</string>
+    <string name="super_shy_for_life">Ти супер сором'язливий на все життя!</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_claim_backpack">Натисніть, щоб отримати — додано у ваш рюкзак</string>
     <!-- google-translated 2026-05-04 -->
@@ -943,6 +943,7 @@
     <string name="block_description">Вони не зможуть переглядати ваш профіль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Ви були заблоковані цим користувачем</string>
+    <string name="blocked_unblock_required">Користувач має розблокувати вас, перш ніж ви зможете переглянути його профіль.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Користувач у цій кімнаті заблокував вас. Ви можете мати обмежений досвід. Все одно ввійти?</string>
     <!-- google-translated 2026-05-04 -->
@@ -983,14 +984,12 @@
     <string name="closing">Закриття...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Підключення...</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Не вдалося зв'язатися із серверами ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Спробуйте: перевірте підключення до інтернету, вимкніть VPN, потім перезапустіть застосунок або пристрій.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk має проблеми з підключенням до наших серверів. Перевірте підключення до Інтернету та повторіть спробу.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Якщо вам потрібна допомога, пишіть на shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Якщо проблема не зникає, зверніться до shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_us">Зв\'яжіться з нами</string>
+    <string name="contact_us">Зв'яжіться з нами</string>
     <!-- google-translated 2026-05-04 -->
     <string name="shyden_ltd_brand">ShyTalk є брендом компанії Shyden Ltd (номер компанії 17110487), 71-75 Shelton Street, Covent Garden, London, WC2H 9JQ, Сполучене Королівство.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1015,8 +1014,8 @@
     <string name="denied">Відмовлено</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">опис</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Цей пристрій уже пов’язано з іншим обліковим записом.\nДозволено лише один обліковий запис на одному пристрої.\n\nЩоб отримати підтримку, зв’яжіться з shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Цей пристрій уже пов’язано з іншим обліковим записом.\nДозволено лише один обліковий запис на одному пристрої.\n\nПо підтримку перейдіть на shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Пристрій не підтримується</string>
     <!-- google-translated 2026-05-04 -->
@@ -1042,7 +1041,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="linked_accounts">Пов’язані облікові записи</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="linked">Пов\'язано</string>
+    <string name="linked">Пов'язано</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unlinked">Від’єднано</string>
     <!-- google-translated 2026-05-04 -->
@@ -1255,11 +1254,13 @@
     <!-- google-translated 2026-05-04 -->
     <string name="success_super_shy_activated">Super Shy активовано! +30 днів</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="super_shy_days">Супер сором\'язливий ✦ %1$dd</string>
+    <string name="super_shy_days">Супер сором'язливий ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Супер сором’язливий ✦ на все життя</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Для підтримки звертайтеся до shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">По допомогу перейдіть у Налаштування та виберіть «Зв’язатися з нами».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Якщо подати апеляцію тут не вдається, зв’яжіться з нами через shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Закінчується: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1272,10 +1273,6 @@
     <string name="suspension_reason">Причина: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Торкніться, щоб повернутися</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Технічні труднощі</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk зараз має технічні проблеми. Деякі функції можуть не працювати належним чином. Послуги будуть відновлені автоматично.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Неможливо підключитися</string>
     <!-- google-translated 2026-05-04 -->
@@ -1306,11 +1303,15 @@
     <string name="voice_chat_reimagined">Переосмислені голосові чати.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Голосовий чат тимчасово недоступний</string>
+    <string name="voice_chat_disconnected">Голосовий чат від'єднано</string>
+    <string name="voice_unavailable_can_still_chat">Ви все ще можете читати й писати</string>
+    <string name="voice_connecting">Підключення голосу...</string>
+    <string name="voice_unavailable_mic_blocked">Мікрофону потрібен голосовий чат, який зараз недоступний</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Гаманець · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Подальше порушення може призвести до призупинення дії вашого облікового запису.</string>
-    <string name="warning_acknowledge_failed">Не вдалося зняти попередження. Перевірте з\'єднання та повторіть спробу.</string>
+    <string name="warning_acknowledge_failed">Не вдалося зняти попередження. Перевірте з'єднання та повторіть спробу.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ваш обліковий запис переглянуто та винесено попередження.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1412,7 +1413,6 @@
     <string name="time_unit_millisecond">РС</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">Переосмислені голосові чати.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">УСІ (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1470,7 +1470,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Попередження ілюстрації</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Завантаження\u2026</string>
+    <string name="starting_screen_loading">Завантаження…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Безпека</string>
@@ -1573,7 +1573,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Введіть PIN-код, щоб продовжити</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Перевірка\u2026</string>
+    <string name="pin_verifying">Перевірка…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Неправильний PIN-код. Залишилося спроб: %1$d.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1599,7 +1599,7 @@
     <string name="biometric_start_failed">Не вдалося розпочати біометричну перевірку</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Вхід\u2026</string>
+    <string name="signing_in_loading">Вхід…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">тільки зараз</string>
@@ -1659,6 +1659,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Особисті повідомлення та Гача доступні лише користувачам 18 років або старшим. На основі дати народження у вашому обліковому записі ви ще не відповідаєте вимогам. Якщо ви вважаєте це помилкою, зверніться до підтримки — ми не можемо приймати документи, що посвідчують особу, для зміни вказаної дати народження.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Звʼязатися з підтримкою</string>
+    <string name="support_form_hint">Розкажіть, що сталося, і ми розберемося.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Як поскаржитися на людину</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Скарга з застосунку одразу потрапляє до команди модерації, яка може вжити заходів. Звернення до підтримки — ні.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Відкрийте їхній профіль і натисніть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">У кімнаті натисніть їхнє ім’я або фото, щоб відкрити картку, потім натисніть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Натисніть і утримуйте повідомлення — у кімнаті чи в приватному чаті — і виберіть «Поскаржитися».</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Спробували, і не вийшло?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Якщо поскаржитися не вдалося — вас заблокували, повідомлення зникло або щось не спрацювало — напишіть нам, і ми подамо скаргу за вас.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Натомість звернутися до підтримки</string>
+    <string name="support_form_send">Надіслати</string>
+    <string name="support_form_sent">Дякуємо. Ми отримали ваше повідомлення та розберемося.</string>
+    <string name="support_form_error_empty">Напишіть повідомлення перед надсиланням.</string>
+    <string name="support_form_error_too_long">Ваше повідомлення задовге. Скоротіть його та спробуйте ще раз.</string>
+    <string name="support_form_error_generic">Не вдалося надіслати повідомлення. Перевірте зʼєднання та спробуйте ще раз.</string>
+    <string name="support_form_error_attachment_failed">Не вдалося завантажити цей файл. Ви можете надіслати повідомлення без нього.</string>
+    <string name="support_form_error_attachment_too_many">Можна долучити не більше 10 файлів.</string>
+    <string name="support_form_error_attachment_type">Такий файл не можна долучити. Оберіть зображення або відео.</string>
+    <string name="support_category_label">Про що ваше звернення?</string>
+    <string name="support_category_account">Обліковий запис і вхід</string>
+    <string name="support_category_age">Вік і підтвердження</string>
+    <string name="support_category_payment">Монети, боби та покупки</string>
+    <string name="support_category_safety">Безпека та інший користувач</string>
+    <string name="support_category_bug">Щось не працює</string>
+    <string name="support_category_other">Інше</string>
+    <string name="support_attachments_label">Додайте знімок екрана або відео</string>
+    <string name="support_attachment_add">Додати файл</string>
+    <string name="support_attachment_remove">Видалити</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Закрити перегляд</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Відкрити цей файл</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Без попереднього перегляду</string>
     <string name="age_restriction_sub_eighteen_confirm">Звернутися до підтримки</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Скасувати</string>
@@ -1741,4 +1783,30 @@
     <string name="age_seg_age_up_welcome_pm">Ласкаво просимо — ваш обліковий запис перейшов у ширше коло ShyTalk.\n\nВідтепер ви почнете бачити більше людей у ​​Discovery та списках. Попередні зв’язки, які були впорядковані, коли ваш обліковий запис був у меншому колі, не можна відновити автоматично, але ви можете повторно додати будь-кого, за ким хочете стежити.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Персонал ShyTalk оновив дані вашого облікового запису. У результаті видимі вам люди та кімнати було звужено до меншого кола.\n\nЯкщо ви вважаєте, що це помилка, зверніться до служби підтримки, і ми її розглянемо.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">дякую Ми додали це до вашого вже відкритого запиту.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Повторне надсилання тієї самої проблеми не пришвидшує її. Другий запит на щось, про що ви вже нам сказали, йде в кінці черги, позаду всіх, хто очікує.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Це проблема, про яку я вже повідомляв</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Це нова проблема</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Ідіть назад</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">У вас уже відкритий 1 запит.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">У вас уже є %1$d відкритих запитів.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">і ще %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Це зображення завелике. Будь ласка, виберіть один розмір менше 10 МБ.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Це відео задовге. Будь ласка, виберіть один до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Ми не змогли перевірити, скільки це відео. Будь ласка, спробуйте інший.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">До 10 файлів. Зображення до 10 МБ, відео до 30 секунд.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

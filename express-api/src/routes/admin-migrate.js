@@ -8,7 +8,8 @@
  */
 
 const router = require('express').Router();
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore } = require('firebase-admin/firestore');
 const { db } = require('../utils/firebase');
 const { clearBanCache } = require('../utils/bans');
 const { requireAdmin } = require('../middleware/auth');
@@ -27,7 +28,6 @@ const TOP_LEVEL_COLLECTIONS = [
   'giftRankings',
   'broadcasts',
   'coinPackages',
-  'funFacts',
   'banners',
   'reports',
   'reportsArchive',
@@ -67,11 +67,25 @@ function getProdDb() {
     throw new Error('PROD_SERVICE_ACCOUNT_PATH env var not set');
   }
 
-  const prodApp = admin.initializeApp(
-    { credential: admin.credential.cert(require(prodSaPath)) },
-    'prod-readonly',
-  );
-  prodDb = prodApp.firestore();
+  // firebase-admin 14 removed `admin.credential` and the App object's
+  // `.firestore()` accessor; both now come from modular entry points.
+  let credential;
+  try {
+    credential = cert(require(prodSaPath));
+  } catch (cause) {
+    // Node's MODULE_NOT_FOUND and JSON-parse messages embed the ABSOLUTE PATH of
+    // the service-account file, and this error reaches the HTTP response body
+    // (see the catch at the bottom of this route). Name the variable to fix
+    // instead: it is all an operator needs, and it leaks nothing about where
+    // prod credentials live on disk. `cause` keeps the detail for a stack trace
+    // without putting it on the wire.
+    throw new Error('PROD_SERVICE_ACCOUNT_PATH does not point to a readable service-account JSON', {
+      cause,
+    });
+  }
+
+  const prodApp = initializeApp({ credential }, 'prod-readonly');
+  prodDb = getFirestore(prodApp);
   return prodDb;
 }
 

@@ -53,8 +53,8 @@ import com.shyden.shytalk.feature.suspension.SuspensionScreen
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.account_restricted
 import com.shyden.shytalk.resources.apple_sign_in_failed
+import com.shyden.shytalk.resources.connection_tips
 import com.shyden.shytalk.resources.connection_trouble
-import com.shyden.shytalk.resources.contact_support_hint
 import com.shyden.shytalk.resources.device_locked_description
 import com.shyden.shytalk.resources.google_sign_in_failed
 import com.shyden.shytalk.resources.ok
@@ -211,7 +211,7 @@ fun SignInScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = stringResource(Res.string.contact_support_hint),
+                    text = stringResource(Res.string.connection_tips),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -485,7 +485,18 @@ fun SignInScreen(
             // gate is somehow bypassed (Frida-style runtime patching) —
             // the inner check fails closed and never reaches Firebase
             // Auth with the persona password.
-            if (showPersonaPicker && BuildVariant.isPersonaPickerAvailable) {
+            // SHY-0416 — the credential check moved INSIDE the dialog. Gating the
+            // dialog itself on it is what made the button "do nothing": the tap
+            // set showPersonaPicker, and then nothing rendered. Every iOS dev
+            // build was in that state.
+            //
+            // The security property above is unchanged. It was never this line
+            // that enforced it: the row's own handler re-reads the password and
+            // fails closed, so a patched prod build still cannot reach Firebase
+            // Auth with a persona password — and on prod the BUTTON is hidden by
+            // isDevAffordancesVisible, so the dialog is unreachable regardless.
+            // What this line actually did was hide the diagnosis.
+            if (showPersonaPicker) {
                 AlertDialog(
                     onDismissRequest = { if (!isBusy) showPersonaPicker = false },
                     confirmButton = {},
@@ -506,57 +517,73 @@ fun SignInScreen(
                         // doesn't inherit MainActivity's semantics modifier.
                         // Without this, the j09 runner driver can't locate
                         // any row in the picker (2026-05-30 finding).
-                        LazyColumn(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 400.dp)
-                                    .exposeTestTagsToPlatformDumps()
-                                    .testTag("persona_picker_list"),
-                        ) {
-                            items(devPersonas, key = { it.id }) { persona ->
-                                PersonaPickerRow(
-                                    persona = persona,
-                                    enabled = !isBusy,
-                                    onClick = {
-                                        if (isBusy) return@PersonaPickerRow
-                                        val sharedPw = BuildVariant.localDevPersonasPassword
-                                        if (sharedPw.isNullOrEmpty()) {
-                                            logW(
-                                                "SignInScreen",
-                                                "Persona picker invoked but localDevPersonasPassword is empty",
-                                            )
-                                            return@PersonaPickerRow
-                                        }
-                                        showPersonaPicker = false
-                                        signingInProvider = "dev"
-                                        scope.launch {
-                                            try {
-                                                performDevSignIn(
-                                                    email = persona.email,
-                                                    password = sharedPw,
-                                                )
-                                                viewModel.resolveAfterExternalSignIn(
-                                                    "email",
-                                                    persona.email,
-                                                )
-                                            } catch (e: kotlinx.coroutines.CancellationException) {
-                                                throw e
-                                            } catch (e: Exception) {
+                        // SHY-0416 — the actionable empty state this comment has
+                        // promised since SHY-0131, and which was never written. A
+                        // build with no baked credential CANNOT sign anybody in,
+                        // and the row handler's silent `return` left the picker
+                        // looking merely unresponsive. EVERY iOS dev build was in
+                        // this state, because the iOS distribution job never
+                        // passed DEV_QA_PERSONAS_PASSWORD at all.
+                        if (!BuildVariant.isPersonaPickerAvailable) {
+                            Text(
+                                "This build has no test-persona credential, so signing in here " +
+                                    "cannot work. Rebuild with DEV_QA_PERSONAS_PASSWORD set, or " +
+                                    "use a local-flavour build.",
+                                modifier = Modifier.testTag("persona_picker_unavailable"),
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 400.dp)
+                                        .exposeTestTagsToPlatformDumps()
+                                        .testTag("persona_picker_list"),
+                            ) {
+                                items(devPersonas, key = { it.id }) { persona ->
+                                    PersonaPickerRow(
+                                        persona = persona,
+                                        enabled = !isBusy,
+                                        onClick = {
+                                            if (isBusy) return@PersonaPickerRow
+                                            val sharedPw = BuildVariant.localDevPersonasPassword
+                                            if (sharedPw.isNullOrEmpty()) {
                                                 logW(
                                                     "SignInScreen",
-                                                    "Persona sign-in failed for ${persona.id}",
-                                                    e,
+                                                    "Persona picker invoked but localDevPersonasPassword is empty",
                                                 )
-                                                snackbarHostState.showSnackbar(
-                                                    "Persona sign-in failed",
-                                                )
-                                            } finally {
-                                                signingInProvider = null
+                                                return@PersonaPickerRow
                                             }
-                                        }
-                                    },
-                                )
+                                            showPersonaPicker = false
+                                            signingInProvider = "dev"
+                                            scope.launch {
+                                                try {
+                                                    performDevSignIn(
+                                                        email = persona.email,
+                                                        password = sharedPw,
+                                                    )
+                                                    viewModel.resolveAfterExternalSignIn(
+                                                        "email",
+                                                        persona.email,
+                                                    )
+                                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                                    throw e
+                                                } catch (e: Exception) {
+                                                    logW(
+                                                        "SignInScreen",
+                                                        "Persona sign-in failed for ${persona.id}",
+                                                        e,
+                                                    )
+                                                    snackbarHostState.showSnackbar(
+                                                        "Persona sign-in failed",
+                                                    )
+                                                } finally {
+                                                    signingInProvider = null
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     },

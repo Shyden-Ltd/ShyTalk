@@ -30,6 +30,9 @@ const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
+const { checkUserBans } = require('../utils/bans');
+const { findPendingAppeal, createAppeal } = require('../utils/appeals');
+const { suspensionEndedFields } = require('../utils/suspension');
 const {
   mintClaimsMerging,
   deriveCohortFromUser,
@@ -40,6 +43,11 @@ const { requireSameCohort } = require('../middleware/sameCohort');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
+// SHY-0338 — cap on POST /users/batch. A follow page is 30 ids; 200 leaves
+// generous headroom while keeping the read amplification bounded.
+const MAX_BATCH_USER_IDS = 200;
+// SHY-0338 — stalker page size. Mirrors the limit the client already used.
+const MAX_STALKERS = 50;
 const MAX_IDENTIFIERS_PER_PROVIDER = 5;
 
 // UK OSA #17 PR 5 — Discovery + search: shared limits and field hygiene.
@@ -113,7 +121,22 @@ function shapeForViewer(callerUniqueId, callerCohort, data) {
   if (data.uniqueId === callerUniqueId) return null;
   if (effectiveCohort(data) !== callerCohort) return null;
   if (viewerIsBlocked(callerUniqueId, data)) return null;
-  return stripSensitiveFields(data);
+  const memberCohort = effectiveCohort(data);
+  stripSensitiveFields(data);
+  // SHY-0350 — `cohort` is stripped everywhere else and put BACK here.
+  //
+  // The clients keep a defence-in-depth cohort filter over these lists
+  // (`NewMessageViewModel` runs `filterSameCohortAs` on search results).
+  // Without the field every result reads as the 'minor' default and an adult's
+  // search filters itself to nothing — measured on-device 2026-08-19: the API
+  // returned a match, the screen said "No users found".
+  //
+  // It discloses nothing. The line three above this one guarantees every user
+  // returned is same-cohort as the caller, so the value is a constant they
+  // already know about themselves — and if that ever stopped holding, the
+  // client filter is what would catch it.
+  data.cohort = memberCohort;
+  return data;
 }
 
 /**
@@ -413,6 +436,51 @@ router.post('/users/sign-in', async (req, res) => {
       }
     }
 
+    // The same subtraction the suspension branch above makes, for the other
+    // standing (SHY-0461). This route is a standing-verdict channel, so
+    // `authMiddleware` no longer refuses a banned caller here — otherwise the
+    // app could never resolve its identity, never reach `/device-info`, and
+    // would show "cannot connect" instead of the ban screen.
+    //
+    // That exemption is only safe WITH this branch. Without it a banned caller
+    // would fall through to the `update()` below and take a refreshed
+    // `firebaseUid` plus a custom-claim grant on the way past — precisely the
+    // Audit M5 (Phase 2A) hazard the suspension branch exists to close.
+    //
+    // Not an extra round trip: the middleware used to perform this same lookup
+    // on this same request, and its per-uid cache is shared.
+    let ban;
+    try {
+      ban = await checkUserBans(uniqueId, req.ip);
+    } catch (banErr) {
+      // Fail CLOSED, and say why. A control that fails open is not a control,
+      // and falling through here would hand a banned caller the `update()`
+      // below — a refreshed firebaseUid and a custom-claim grant — during the
+      // exact outage that stopped us checking. The shape is the middleware's
+      // `rejectStandingUnavailable`: the credential was never the problem, and
+      // a client that already renders that code should not meet a bare 500.
+      log.error('users', 'Sign-in refused: ban lookup failed', {
+        uniqueId,
+        error: banErr.message,
+      });
+      return res.status(401).json({ error: 'Authentication failed', code: 'standing_unavailable' });
+    }
+    if (ban.isBanned) {
+      log.warn('users', 'Sign-in attempt by banned user', {
+        uniqueId,
+        provider,
+        banType: ban.banType,
+      });
+      return res.json({
+        found: true,
+        banned: true,
+        uniqueId,
+        banType: ban.banType,
+        reason: ban.reason,
+        expiresAt: ban.expiresAt,
+      });
+    }
+
     // Update firebaseUid to current project's UID + refresh lastSeenAt
     await db.doc(`users/${uniqueId}`).update({
       firebaseUid: req.auth.uid,
@@ -509,7 +577,12 @@ router.get('/users/search', async (req, res) => {
       if (!isSelf && viewerIsBlocked(req.auth.uniqueId, target)) {
         return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
       }
+      const targetCohort = effectiveCohort(target);
       stripSensitiveFields(target);
+      // Same reasoning as shapeForViewer: the exact-ID branch has already
+      // enforced same-cohort above, so returning `cohort` discloses nothing and
+      // the client's own filter needs it.
+      target.cohort = targetCohort;
       return res.json({ users: [target] });
     }
 
@@ -527,8 +600,251 @@ router.get('/users/search', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// POST /api/users/blocked-by — which of these people have blocked ME?
+// ═══════════════════════════════════════════════════════════════════
+//
+// Answers the room-join question "has anyone already in this room blocked me?"
+// (SHY-0351). The subject is ALWAYS the authenticated caller — it is never read
+// from the body — so this cannot be used to ask about anybody else.
+//
+// Why it is a server endpoint at all: the client used to ask Firestore directly
+// with `whereIn(documentId(), chunk)` on `users`, and could never get a truthful
+// answer. `/users/{uniqueId}` is cohort-gated, and a filtered query against a
+// content-gated rule is refused ALL-OR-NOTHING — so one member of the room in
+// the other cohort denied the whole chunk. Here the Admin SDK reads each
+// document directly, so a member the caller could not have queried is still
+// answered for.
+//
+// The comparison goes through `viewerIsBlocked`, which coerces BOTH sides with
+// String(). That matters: `blockedUserIds` genuinely holds two shapes — the app
+// writes strings via arrayUnion, while `PATCH /admin/users/:uniqueId` validates
+// only Array.isArray and writes numeric ids straight through. The client's old
+// `filterIsInstance<String>()` silently dropped the numeric ones.
+//
+// The response is a bare id list. It deliberately carries nothing else about the
+// members queried — not their block lists, not any other field.
+
+const BLOCKED_BY_MAX_IDS = 1000;
+
+router.post('/users/blocked-by', async (req, res) => {
+  try {
+    const callerUniqueId = req.auth?.uniqueId;
+    if (!callerUniqueId) {
+      return res.status(403).json({ error: 'No profile for this account' });
+    }
+
+    const { userIds } = req.body || {};
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ error: 'userIds must be an array' });
+    }
+    if (userIds.length > BLOCKED_BY_MAX_IDS) {
+      return res
+        .status(400)
+        .json({ error: `userIds must contain at most ${BLOCKED_BY_MAX_IDS} ids` });
+    }
+    if (userIds.length === 0) {
+      return res.json({ blockedBy: [] });
+    }
+
+    // Ids become document paths, so anything that is not a plain positive
+    // integer is refused outright rather than normalised into one.
+    const ids = userIds.map((id) => String(id));
+    if (!ids.every((id) => /^[1-9][0-9]*$/.test(id))) {
+      return res.status(400).json({ error: 'userIds must all be numeric user ids' });
+    }
+
+    // De-duplicate: a repeated id would otherwise cost an extra read and could
+    // appear twice in the result.
+    const uniqueIds = [...new Set(ids)];
+    const snapshots = await db.getAll(...uniqueIds.map((id) => db.doc(`users/${id}`)));
+
+    const blockedBy = snapshots
+      .filter((snap) => snap.exists && viewerIsBlocked(callerUniqueId, snap.data()))
+      .map((snap) => snap.id);
+
+    return res.json({ blockedBy });
+  } catch (err) {
+    log.error('users', 'POST /users/blocked-by failed', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // GET /api/users/:uniqueId — Get user profile
 // ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/users/:uniqueId/stalkers — who has been viewing you (SHY-0338)
+// ═══════════════════════════════════════════════════════════════════
+//
+// Stalkers could not be rescued by fixing the batch read, because it fails for
+// two further reasons of its own. `getStalkers()` ran an ORDERED query over
+// `users/{id}/stalkers`, and that rule's second clause reads `resource.data` —
+// the genuine "rules are not filters" case, refused whatever it contains. And a
+// stalker document carries no `cohort` field at all, so `cohortMatchesCaller()`
+// compared an adult caller's claim against the 'minor' default and never
+// matched, killing even a single-document read.
+//
+// Returns the visit records AND the visitor profiles in ONE response. The
+// client previously made two calls, and the second was the one that failed.
+router.get('/users/:uniqueId/stalkers', async (req, res) => {
+  try {
+    const target = String(req.params.uniqueId);
+    // Who is watching you is yours alone — no cohort gate, no existence-hiding
+    // 404 dance: either it is your list or you may not have it.
+    if (String(req.auth.uniqueId) !== target) {
+      return res.status(403).json({ error: 'Only the owner can view their stalkers' });
+    }
+
+    const snap = await db
+      .collection(`users/${target}/stalkers`)
+      .orderBy('lastVisitedAt', 'desc')
+      .limit(MAX_STALKERS)
+      .get();
+    if (snap.empty) return res.json({ stalkers: [], users: [] });
+
+    const entries = snap.docs.map((d) => ({
+      ...d.data(),
+      visitorId: String(d.data().visitorId ?? d.id),
+    }));
+    const visitorIds = [...new Set(entries.map((e) => e.visitorId))].filter((id) =>
+      /^[0-9]+$/.test(id),
+    );
+
+    const callerCohort = cohortFromClaim(req);
+    const userSnaps = visitorIds.length
+      ? await db.getAll(...visitorIds.map((id) => db.doc(`users/${id}`)))
+      : [];
+
+    const visible = new Map();
+    for (const userSnap of userSnaps) {
+      // A visit record outlives its user document after a deletion sweep.
+      // A nameless row is a worse answer than no row.
+      if (!userSnap.exists) continue;
+      const user = userSnap.data();
+      if (effectiveCohort(user) !== callerCohort) continue;
+
+      // DELIBERATELY NOT block-filtered, unlike /users/batch. If somebody has
+      // blocked you and is still opening your profile, that is precisely the
+      // fact this screen exists to tell you. Hiding them would turn a safety
+      // surface into a blind spot.
+      user.blockedUserIds = user.blockedUserIds || [];
+      user.followingIds = user.followingIds || [];
+      user.followerIds = user.followerIds || [];
+      const visitorCohort = effectiveCohort(user);
+      stripSensitiveFields(user);
+      // Same reasoning as POST /users/batch: every visitor returned here is
+      // same-cohort as the owner, so the value discloses nothing, and the
+      // client's defence-in-depth filter needs it to keep the list non-empty.
+      user.cohort = visitorCohort;
+      visible.set(String(user.uniqueId ?? userSnap.id), user);
+    }
+
+    const stalkers = entries
+      .filter((e) => visible.has(e.visitorId))
+      .map((e) => ({
+        visitorId: e.visitorId,
+        visitCount: e.visitCount ?? 0,
+        firstVisitedAt: e.firstVisitedAt ?? 0,
+        lastVisitedAt: e.lastVisitedAt ?? 0,
+      }));
+
+    res.json({ stalkers, users: [...visible.values()] });
+  } catch (err) {
+    log.error('users', 'GET /users/:uniqueId/stalkers failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/users/batch — resolve many profiles at once (SHY-0338)
+// ═══════════════════════════════════════════════════════════════════
+//
+// The follow lists used to read their members by querying Firestore straight
+// from the client — `whereIn(FieldPath.documentId(), chunk)` in chunks of 30.
+// `firestore.rules` gates a users read on `cohortMatchesCaller()`, and that
+// refusal is ALL-OR-NOTHING: one member of the chunk failing the gate denies
+// the WHOLE query and the other 29 readable users go with it. Since `cohort`
+// only arrived with UK OSA #17, a single older follower emptied a whole page,
+// and both clients swallowed the PERMISSION_DENIED into an empty list.
+//
+// The Admin SDK is not subject to rules, so the cohort decision moves to where
+// it can be made PER USER: drop the people this viewer may not see, return
+// everyone else. That is the entire difference between a working follow list
+// and a blank one.
+router.post('/users/batch', async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ error: 'ids (array) required' });
+    }
+    // Refuse rather than truncate. A truncated list is a list the caller
+    // believes is complete — the same silent-wrong-answer failure this
+    // endpoint exists to remove.
+    if (ids.length > MAX_BATCH_USER_IDS) {
+      return res.status(400).json({
+        error: `Batch size ${ids.length} exceeds maximum of ${MAX_BATCH_USER_IDS}`,
+      });
+    }
+
+    // Numeric uniqueIds only. A non-numeric id cannot address a user document,
+    // and letting one through would build a doc path out of caller input.
+    const wanted = [...new Set(ids.map(String))].filter((id) => /^[0-9]+$/.test(id));
+    if (wanted.length === 0) return res.json({ users: [] });
+
+    const callerId = String(req.auth.uniqueId);
+    const callerCohort = cohortFromClaim(req);
+
+    const snaps = await db.getAll(...wanted.map((id) => db.doc(`users/${id}`)));
+
+    const users = [];
+    for (const snap of snaps) {
+      // Absent simply means absent: no entry, no error, no existence signal.
+      if (!snap.exists) continue;
+      const user = snap.data();
+      const isSelf = String(user.uniqueId ?? snap.id) === callerId;
+
+      // Cross-cohort members are dropped INDIVIDUALLY. Self always passes —
+      // the caller's own profile is theirs to see, and a claim that has not
+      // finished propagating must not hide them from their own list.
+      if (!isSelf && effectiveCohort(user) !== callerCohort) continue;
+
+      // A user who has blocked the viewer is not shown to them. Mirrors the
+      // 403 on GET /users/:uniqueId, but as a drop: a follow list is a list,
+      // and one blocked member must not fail the other 29.
+      if (!isSelf && viewerIsBlocked(req.auth.uniqueId, user)) continue;
+
+      user.blockedUserIds = user.blockedUserIds || [];
+      user.followingIds = user.followingIds || [];
+      user.followerIds = user.followerIds || [];
+      const memberCohort = effectiveCohort(user);
+      stripSensitiveFields(user);
+      // `cohort` is stripped everywhere else, and put BACK here on purpose.
+      //
+      // The client keeps a defence-in-depth cohort filter over these lists
+      // (UK OSA #17 PR 12). Without this field every entry reads as the
+      // 'minor' default and an adult viewer's list filters itself to nothing —
+      // measured on-device 2026-08-18, "Loaded 7 followers, 5 following"
+      // followed by an empty screen.
+      //
+      // It discloses nothing. This endpoint only ever returns users whose
+      // cohort MATCHES the caller's, so the value is a constant the caller
+      // already knows about itself. And if this endpoint ever regressed and
+      // returned a cross-cohort user, the client filter would catch it —
+      // which is the entire point of keeping that filter alive.
+      user.cohort = memberCohort;
+      users.push(user);
+    }
+
+    res.json({ users });
+  } catch (err) {
+    log.error('users', 'POST /users/batch failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 router.get('/users/:uniqueId', async (req, res) => {
   try {
@@ -905,35 +1221,30 @@ router.post('/users/:uniqueId/appeal', async (req, res) => {
 
     const uniqueId = req.params.uniqueId;
 
-    // Idempotency check: if a pending appeal already exists, reject
-    // with 409. Without this, a user could spam the endpoint, creating
-    // unbounded suspensionAppeals docs (Spark quota burn) and admin
-    // noise. Audit H2 (Phase 2A).
-    const userSnap = await db.doc(`users/${uniqueId}`).get();
-    if (userSnap.exists) {
-      const userData = userSnap.data();
-      const currentStatus = userData.suspensionAppealStatus;
-      if (currentStatus === 'pending') {
-        return res.status(409).json({ error: 'Appeal already pending' });
-      }
+    // Idempotency check: if a pending appeal already exists, reject with 409.
+    // Without this, a user could spam the endpoint, creating unbounded
+    // suspensionAppeals docs (Spark quota burn) and admin noise.
+    // Audit H2 (Phase 2A).
+    //
+    // Asked of the COLLECTION, not of `users/{id}.suspensionAppealStatus`
+    // (SHY-0463). That flag is set here and cleared by only one of the three
+    // writers that end a suspension — the admin suspend and unsuspend routes
+    // both leave it alone — so gating on it meant one appeal in a lifetime:
+    // every later suspension, a new accusation entirely, was refused 409 for
+    // ever. Shared with `POST /api/appeals` so the two routes cannot disagree
+    // about what "already pending" means, which is how they came to.
+    const pending = await findPendingAppeal(uniqueId);
+    if (pending) {
+      log.info('users', 'Suspension appeal refused: one is already pending', {
+        uniqueId,
+        appealId: pending.id,
+      });
+      return res.status(409).json({ error: 'Appeal already pending' });
     }
 
     log.info('users', 'Suspension appeal submitted', { uniqueId });
 
-    await Promise.all([
-      db.doc(`suspensionAppeals/${generateId()}`).set(
-        {
-          uniqueId,
-          appealText: body.appealText,
-          status: 'pending',
-          createdAt: now(),
-        },
-        { merge: true },
-      ),
-      db.doc(`users/${uniqueId}`).update({
-        suspensionAppealStatus: 'pending',
-      }),
-    ]);
+    await createAppeal({ uniqueId, appealText: body.appealText });
 
     res.json({ success: true });
   } catch (err) {
@@ -967,14 +1278,10 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
 
     log.info('users', 'Lifting expired suspension', { uniqueId });
 
-    await db.doc(`users/${uniqueId}`).update({
-      isSuspended: false,
-      suspensionReason: null,
-      suspensionEndDate: null,
-      suspensionCanAppeal: true,
-      suspensionAppealStatus: null,
-      suspendedBy: null,
-    });
+    // `suspensionCanAppeal: true` is this route's own addition — an expired
+    // suspension leaves the account able to appeal a future one — so it is
+    // spread over the shared clear rather than replacing it.
+    await db.doc(`users/${uniqueId}`).update(suspensionEndedFields({ suspensionCanAppeal: true }));
 
     clearSuspensionCache(Number(uniqueId));
 

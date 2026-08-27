@@ -33,6 +33,7 @@
 
 const path = require('path');
 const { bootstrapAdbForward } = require('./android-cdp-helpers');
+const { makeWebSignIn } = require('./web-sign-in');
 
 const EDGE_CDP_SOCKET = 'com.microsoft.emmx_devtools_remote';
 
@@ -112,6 +113,9 @@ async function createMobileEdgeAndroidDriver({
     pageFor,
   };
 
+  // webSignIn — real Firebase auth, shared across every web driver.
+  driver.webSignIn = makeWebSignIn({ pageFor, baseURL, label: 'mobile-edge-android-driver' });
+
   driver.webRefreshRoomsList = async (name) => {
     try {
       const page = await pageFor(name);
@@ -167,7 +171,13 @@ async function createMobileEdgeAndroidDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
+const WEB_MOBILE_METHOD_NAMES = [
+  'webRefreshRoomsList',
+  'webUiDump',
+  'takeScreenshot',
+  // SHY-0328 — the step existed with no method behind it on any web driver.
+  'webSignIn',
+];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

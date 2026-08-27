@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -211,7 +212,13 @@ fun RoomSettingsSheet(
                         ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,
                         ),
-                    modifier = Modifier.fillMaxWidth().testTag("room_endRoomButton"),
+                    // ModalBottomSheet is its own Compose window; without this the
+                    // tag never reaches uiautomator (SHY-0096 / SHY-0456).
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("room_endRoomButton"),
                 ) {
                     Text(stringResource(Res.string.close_room))
                 }

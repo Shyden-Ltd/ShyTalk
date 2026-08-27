@@ -1,5 +1,6 @@
 package com.shyden.shytalk.navigation
 
+import com.shyden.shytalk.feature.support.SupportSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -61,21 +62,25 @@ class PlatformScreensTest {
         var backCalled = false
         var privacyCalled = false
         var securityCalled = false
+        var supportCalled = false
         var signOutCalled = false
         val params =
             AppSettingsScreenParams(
                 onNavigateBack = { backCalled = true },
                 onNavigateToPrivacyPolicy = { privacyCalled = true },
                 onNavigateToSecurity = { securityCalled = true },
+                onNavigateToSupport = { supportCalled = true },
                 onSignOut = { signOutCalled = true },
             )
         params.onNavigateBack()
         params.onNavigateToPrivacyPolicy()
         params.onNavigateToSecurity()
+        params.onNavigateToSupport(SupportSource.Settings)
         params.onSignOut()
         assertTrue(backCalled)
         assertTrue(privacyCalled)
         assertTrue(securityCalled)
+        assertTrue(supportCalled, "the route to support must actually invoke its callback")
         assertTrue(signOutCalled)
     }
 
@@ -86,6 +91,7 @@ class PlatformScreensTest {
                 onNavigateBack = {},
                 onNavigateToPrivacyPolicy = {},
                 onNavigateToSecurity = {},
+                onNavigateToSupport = {},
                 onSignOut = {},
             )
         // Default lambdas should be safe no-ops

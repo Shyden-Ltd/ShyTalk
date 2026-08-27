@@ -1,0 +1,149 @@
+---
+id: SHY-0448
+status: Draft
+owner: unassigned
+created: 2026-08-24
+priority: P2
+effort: S
+type: bug
+roadmap_ids: []
+mvp: false
+---
+
+# SHY-0448: The admin dashboard's JavaScript is never linted
+
+## User Story
+
+As **whoever maintains the admin dashboard**, I want its JavaScript held to the
+same standard as the API's, so that a mistake in the code that renders strangers'
+messages is caught before it is committed rather than after.
+
+## Why
+
+`lint-staged` covers three things:
+
+```json
+"express-api/**/*.js"   "*.feature"   "*.{kt,kts}"
+```
+
+`public/**` is in none of them. Every file under `public/admin/js/` — the tabs
+that render support tickets, reports, appeals and user records — is committed
+without ESLint or Prettier ever seeing it.
+
+That is the wrong surface to leave unchecked. These files take text written by
+members of the public and put it into `innerHTML`. The Support tab's own header
+comment says as much: *"precisely the shape of a stored-XSS problem if it is ever
+trusted."* The discipline that keeps it safe is currently entirely manual.
+
+It is also already costing formatting churn: `public/admin/js/tabs/support.js`
+and `public/admin/index.html` both failed `prettier --check` on 2026-08-24
+against edits made minutes earlier, because nothing had ever formatted them.
+
+## Why it is not a one-line fix
+
+Pointing the existing command at these files does not work:
+
+```
+$ npx --prefix express-api eslint --config express-api/eslint.config.mjs \
+    public/admin/js/tabs/support.js
+  26:1  error  Parsing error: 'import' and 'export' may appear only with 'sourceType: module'
+```
+
+`express-api/eslint.config.mjs` describes CommonJS files running in Node. These
+are ES modules running in a browser: different `sourceType`, different globals
+(`window`, `document`, `localStorage`), no `require`. They need their own block
+in the config, and turning it on will surface whatever has accumulated in files
+that have never been checked.
+
+## Acceptance Criteria
+
+### Happy path
+
+- [ ] `public/**/*.js` is linted and format-checked on commit, like every other
+      JavaScript in the repository.
+- [ ] The rules applied suit a browser ES module: `sourceType: module`, browser
+      globals, no Node globals.
+- [ ] CI fails on a lint error in these files, not only the local hook.
+
+### Error paths
+
+- [ ] A deliberate error in an admin tab fails the commit. Asserted by
+      introducing one, not by reading the config.
+
+### Edge cases
+
+- [ ] `public/js/core/*.js`, which Jest loads through a transform, is covered
+      too and does not break that transform.
+- [ ] Vendored or generated assets under `public/`, if any, are excluded
+      explicitly rather than by accident.
+- [ ] The existing `express-api/**` behaviour is unchanged.
+
+### Performance
+
+- [ ] No meaningful change to commit time.
+
+### Security
+
+- [ ] `no-unsanitized` or an equivalent `innerHTML` rule is considered
+      explicitly, and the decision recorded — this is the surface that renders
+      untrusted text.
+
+### UX
+
+- [ ] N/A.
+
+### i18n
+
+- [ ] N/A.
+
+### Observability
+
+- [ ] N/A.
+
+## BDD Scenarios
+
+**Scenario: A mistake is caught before it is committed**
+
+- **Given** an admin dashboard file with a lint error
+- **When** somebody commits it
+- **Then** the commit is refused, naming the file and the error
+
+**Scenario: Existing checks keep working**
+
+- **Given** a change to the API's JavaScript
+- **When** somebody commits it
+- **Then** it is checked exactly as it was before
+
+## Test Plan
+
+| Layer | What it proves |
+| --- | --- |
+| Config | A fixture file with a known error is reported; a clean one is not. |
+| Hook | Committing a deliberately broken admin tab fails. |
+| Regression | Every existing `public/**` file passes, or its fixes are in this ticket. |
+
+## Out of Scope
+
+- Rewriting the dashboard's rendering to stop using `innerHTML`. If the rule
+  above finds real problems, they are their own tickets.
+
+## Dependencies
+
+- None.
+
+## Risks & Mitigations
+
+| Risk | Mitigation |
+| --- | --- |
+| Turning it on surfaces a large backlog and the ticket stalls | Fix what it finds in this ticket; it is a small tree, and the alternative is leaving it unchecked indefinitely. |
+| Browser and Node rules fight each other in one config | Separate `files:` blocks, which is what flat config is for. |
+
+## Definition of Done
+
+- [ ] Merged to `develop`, all checks green.
+- [ ] A deliberately broken admin file fails a real commit.
+
+## Notes
+
+- Found on 2026-08-24 while adding the SHY-0438 conversion control to the
+  Support tab: the file could not be linted at all.

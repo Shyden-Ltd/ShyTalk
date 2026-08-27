@@ -151,26 +151,6 @@ test.describe('Admin Empty States', () => {
     }
   });
 
-  // ── Test 5: Fun Facts — empty state ──
-  test('fun facts tab shows content or appropriate empty state', async ({ page }) => {
-    await navigateToTab(page, 'Fun Facts');
-
-    // Wait for fun facts to load
-    await page.waitForTimeout(3_000);
-
-    // Check for fact cards or empty state
-    const factCards = page.locator('.fact-card');
-    const cardCount = await factCards.count();
-
-    if (cardCount === 0) {
-      // Verify add button exists even when empty
-      const addBtn = page.locator('#funfact-add-btn');
-      await expect(addBtn).toBeVisible();
-    } else {
-      expect(cardCount).toBeGreaterThan(0);
-    }
-  });
-
   // ── Test 6: Logs — impossible filter returns no results ──
   test('logs impossible filter shows no results message', async ({ page }) => {
     await navigateToTab(page, 'Logs');

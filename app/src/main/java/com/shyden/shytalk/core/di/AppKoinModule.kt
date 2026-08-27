@@ -42,8 +42,6 @@ import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.DeviceRepositoryImpl
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.EconomyRepositoryImpl
-import com.shyden.shytalk.data.repository.FunFactRepository
-import com.shyden.shytalk.data.repository.FunFactRepositoryImpl
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.GiftRepositoryImpl
 import com.shyden.shytalk.data.repository.IdentityRepository
@@ -65,17 +63,16 @@ import com.shyden.shytalk.data.repository.RoomRepositoryImpl
 import com.shyden.shytalk.data.repository.RtdbTypingRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepositoryImpl
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.StorageRepositoryImpl
+import com.shyden.shytalk.data.repository.SupportRepository
+import com.shyden.shytalk.data.repository.SupportRepositoryImpl
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TranslationRepositoryImpl
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.data.repository.UserRepositoryImpl
-import com.shyden.shytalk.feature.splash.BannerImagePreloader
-import com.shyden.shytalk.feature.splash.CoilBannerImagePreloader
-import com.shyden.shytalk.feature.splash.OkHttpWebContentPreloader
-import com.shyden.shytalk.feature.splash.WebContentPreloader
 import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.singleOf
@@ -137,13 +134,14 @@ val appModule =
         single { BillingService(androidContext()) }
 
         // Repositories
-        single<AuthRepository> { AuthRepositoryImpl(get(), BuildConfig.APPLICATION_ID, BuildConfig.EMAIL_LINK_DOMAIN) }
+        single<AuthRepository> { AuthRepositoryImpl(get(), get(), get(), BuildConfig.APPLICATION_ID, BuildConfig.EMAIL_LINK_DOMAIN) }
         singleOf(::UserRepositoryImpl) bind UserRepository::class
         singleOf(::RoomRepositoryImpl) bind RoomRepository::class
         singleOf(::MessageRepositoryImpl) bind MessageRepository::class
         singleOf(::SeatRequestRepositoryImpl) bind SeatRequestRepository::class
         single<StorageRepository> { StorageRepositoryImpl(get(), BuildConfig.WORKER_URL, get()) }
         singleOf(::AgeVerificationRepositoryImpl) bind AgeVerificationRepository::class
+        singleOf(::SupportRepositoryImpl) bind SupportRepository::class
         singleOf(::DeviceRepositoryImpl) bind DeviceRepository::class
         singleOf(::IdentityRepositoryImpl) bind IdentityRepository::class
         singleOf(::PrivateMessageRepositoryImpl) bind PrivateMessageRepository::class
@@ -153,7 +151,6 @@ val appModule =
         singleOf(::GiftRepositoryImpl) bind GiftRepository::class
         singleOf(::EconomyRepositoryImpl) bind EconomyRepository::class
         singleOf(::BannerRepositoryImpl) bind BannerRepository::class
-        single<FunFactRepository> { FunFactRepositoryImpl(get(), androidContext()) }
         singleOf(::TranslationRepositoryImpl) bind TranslationRepository::class
         single { StickerStorage(androidContext()) }
         singleOf(::OtpRepositoryImpl) bind OtpRepository::class
@@ -161,6 +158,8 @@ val appModule =
         singleOf(::BiometricRepositoryImpl) bind BiometricRepository::class
         single { SecureStorage(androidContext()) }
         single<AppLockRepository> { AppLockRepositoryImpl(get()) }
+        // SHY-0143 — shares the App-Lock's encrypted storage, under its own keys.
+        single { SessionCache(get()) }
         single { BiometricAuth(androidContext()) }
         single { CryptoKeyPair() }
 
@@ -170,6 +169,4 @@ val appModule =
         single<RoomLifecycleManager> { get<ActiveRoomManager>() }
 
         // Preloaders (Android-specific implementations)
-        single<BannerImagePreloader> { CoilBannerImagePreloader(androidContext()) }
-        single<WebContentPreloader> { OkHttpWebContentPreloader(get()) }
     }

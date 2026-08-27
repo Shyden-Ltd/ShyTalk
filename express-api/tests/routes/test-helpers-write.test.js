@@ -206,7 +206,6 @@ describe('POST /api/test/write/:collection', () => {
       'gifts',
       'conversations',
       'banners',
-      'funFacts',
       'reports',
       'suspensionAppeals',
       'alerts',

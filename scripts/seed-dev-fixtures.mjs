@@ -63,28 +63,6 @@ async function seed() {
   }
   console.log(`  Created ${gifts.length} gifts`);
 
-  // Fun facts
-  const funFacts = [
-    { id: 'ff1', text: 'Honey never spoils.', category: 'science' },
-    { id: 'ff2', text: 'Octopuses have three hearts.', category: 'animals' },
-    { id: 'ff3', text: 'Bananas are berries, but strawberries are not.', category: 'food' },
-    { id: 'ff4', text: 'There are over 7,000 languages spoken worldwide.', category: 'language' },
-    { id: 'ff5', text: 'Mandarin Chinese has the most native speakers of any language.', category: 'language' },
-    { id: 'ff6', text: 'The word "emoji" comes from Japanese: e (picture) + moji (character).', category: 'language' },
-    { id: 'ff7', text: 'Papua New Guinea has over 840 living languages — the most of any country.', category: 'language' },
-    { id: 'ff8', text: 'The shortest complete sentence in English is "I am."', category: 'language' },
-    { id: 'ff9', text: 'In Japan, bowing is a common greeting that shows respect.', category: 'culture' },
-    { id: 'ff10', text: 'In many Middle Eastern countries, it is polite to refuse a gift before accepting it.', category: 'culture' },
-    { id: 'ff11', text: 'Tipping is considered rude in Japan and South Korea.', category: 'culture' },
-    { id: 'ff12', text: 'In Thailand, the head is considered the most sacred part of the body.', category: 'culture' },
-    { id: 'ff13', text: 'Diwali, the festival of lights, is celebrated by over a billion people worldwide.', category: 'culture' },
-  ];
-
-  for (const f of funFacts) {
-    await db.doc(`funFacts/${f.id}`).set({ ...f, createdAt: Date.now() }, { merge: true });
-  }
-  console.log(`  Created ${funFacts.length} fun facts`);
-
   // Banner
   await db.doc('banners/dev_banner_1').set({
     id: 'dev_banner_1',

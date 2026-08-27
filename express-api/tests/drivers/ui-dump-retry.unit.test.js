@@ -177,3 +177,110 @@ describe('dumpWithRetry', () => {
     expect(r.lastErr).toBe('Error'); // String(new Error()) === 'Error'
   });
 });
+
+describe('the retry budget is TIME, not just attempts', () => {
+  /**
+   * The attempt count was sized for Android, where a failed dump exits
+   * immediately: "7×800ms ≈ 5.6s covers the observed ~4s cold-start settle".
+   * That assumption holds only while an ATTEMPT is cheap.
+   *
+   * On iOS an attempt is an HTTP call to WebDriverAgent, bounded at 20s. Eight
+   * of those is 166 seconds for one dump — which is what a ~312 SECOND stall in
+   * `signOutFlow` turned out to be, striking roughly once per matrix and landing
+   * on a different journey each run.
+   *
+   * A count cannot express "stop after this long", so the budget says so
+   * directly.
+   */
+  const { dumpWithRetry } = require('../../scripts/drivers/ui-dump-retry');
+
+  /** A clock the test controls, so no real time passes. */
+  function fakeClock() {
+    let now = 0;
+    return {
+      now: () => now,
+      advance: (ms) => {
+        now += ms;
+      },
+    };
+  }
+
+  test('stops once the deadline is spent, even with attempts left', async () => {
+    const clock = fakeClock();
+    let attempts = 0;
+    const result = await dumpWithRetry(
+      () => {
+        attempts += 1;
+        clock.advance(20000); // an attempt that times out
+        throw new Error('WDA did not answer');
+      },
+      {
+        maxAttempts: 8,
+        backoffMs: 0,
+        deadlineMs: 30000,
+        sleep: async () => {},
+        now: clock.now,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    // Two 20s attempts already exceed 30s; a third would be 60s of stalling.
+    expect(attempts).toBe(2);
+  });
+
+  test('cheap failures still get the full attempt budget', async () => {
+    // Android's case is unchanged: eight fast attempts inside the deadline.
+    const clock = fakeClock();
+    let attempts = 0;
+    const result = await dumpWithRetry(
+      () => {
+        attempts += 1;
+        clock.advance(5);
+        throw new Error('uiautomator busy');
+      },
+      { maxAttempts: 8, backoffMs: 0, deadlineMs: 30000, sleep: async () => {}, now: clock.now },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(attempts).toBe(8);
+  });
+
+  test('a success still returns immediately', async () => {
+    const clock = fakeClock();
+    const result = await dumpWithRetry(() => '<hierarchy/>', {
+      deadlineMs: 30000,
+      sleep: async () => {},
+      now: clock.now,
+    });
+    expect(result).toMatchObject({ ok: true, xml: '<hierarchy/>', attempts: 1 });
+  });
+
+  test('a late success inside the deadline is still taken', async () => {
+    const clock = fakeClock();
+    let attempts = 0;
+    const result = await dumpWithRetry(
+      () => {
+        attempts += 1;
+        clock.advance(1000);
+        if (attempts < 3) throw new Error('busy');
+        return '<hierarchy/>';
+      },
+      { maxAttempts: 8, backoffMs: 0, deadlineMs: 30000, sleep: async () => {}, now: clock.now },
+    );
+    expect(result).toMatchObject({ ok: true, attempts: 3 });
+  });
+
+  test('without a deadline it behaves exactly as before', async () => {
+    // The default must not change what any existing caller gets.
+    let attempts = 0;
+    const result = await dumpWithRetry(
+      () => {
+        attempts += 1;
+        throw new Error('busy');
+      },
+      { maxAttempts: 4, backoffMs: 0, sleep: async () => {} },
+    );
+    expect(result.ok).toBe(false);
+    expect(attempts).toBe(4);
+  });
+});

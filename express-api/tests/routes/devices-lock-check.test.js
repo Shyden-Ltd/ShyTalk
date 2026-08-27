@@ -553,7 +553,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
 
   test('the admin binding route honours the cap too (support tooling cannot flood an account)', async () => {
     await fillBindingsToCap('6010');
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90108', admin: true });
     const app = express();
     app.use(express.json());
     app.use('/api', authMiddleware);
@@ -574,7 +574,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     // to a different account costs THAT account a slot (reviewer R3-I2).
     await seedBinding('lck-someone-elses-phone', { uniqueId: '6098', boundAt: 1 });
     await fillBindingsToCap('6099');
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90109', admin: true });
     const app = express();
     app.use(express.json());
     app.use('/api', authMiddleware);
@@ -601,7 +601,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
       country: 'Sweden',
       asn: 'AS64500',
     });
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90110', admin: true });
     const app = express();
     app.use(express.json());
     app.use('/api', authMiddleware);
@@ -629,7 +629,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
         seedBinding(`lck-race-admin-${i}`, { uniqueId: '6021', boundAt: 1 }),
       ),
     );
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90111', admin: true });
     const app = express();
     app.use(express.json());
     app.use('/api', authMiddleware);
@@ -650,7 +650,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
   test('the admin route may still RE-SEED a binding that already exists at the cap', async () => {
     await fillBindingsToCap('6011');
     const existingId = 'lck-cap-6011-000'; // one of the capped bindings
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90112', admin: true });
     const app = express();
     app.use(express.json());
     app.use('/api', authMiddleware);

@@ -98,11 +98,13 @@ import com.shyden.shytalk.core.platform.PlatformProfilePhotoPicker
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.core.util.CohortGatedFeature
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.calculateAge
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.flagEmojiForCode
+import com.shyden.shytalk.core.util.isFeatureOffered
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.feature.shop.SuperShyBottomSheet
@@ -527,6 +529,17 @@ private fun ProfileContent(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // SHY-0348 — the operator's requirement is not just to stop the
+                // view but to say what would change it. "You have been blocked"
+                // alone leaves the reader with nothing to do.
+                Text(
+                    text = stringResource(Res.string.blocked_unblock_required),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.testTag("profile_blockedUnblockRequired"),
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedButton(
@@ -1139,27 +1152,32 @@ private fun ProfileContent(
                                 }
                             }
 
-                            // Wallet button
-                            Button(
-                                onClick = { onNavigateToWallet?.invoke() },
-                                modifier = Modifier.weight(1f).testTag("profile_walletButton"),
-                                colors =
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                    ),
-                                shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Icon(
-                                    Icons.Filled.AccountBalanceWallet,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    stringResource(Res.string.wallet_with_balance, formatBalance(user.shyCoins)),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                            // SHY-0459: spec j02 expects a minor not to be OFFERED the wallet.
+                            // The purchase surfaces behind it are already refused server-side;
+                            // this stops the app showing the door.
+                            if (isFeatureOffered(CohortGatedFeature.WALLET, user.cohort, user.cohortOverride)) {
+                                // Wallet button
+                                Button(
+                                    onClick = { onNavigateToWallet?.invoke() },
+                                    modifier = Modifier.weight(1f).testTag("profile_walletButton"),
+                                    colors =
+                                        ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.primary,
+                                        ),
+                                    shape = RoundedCornerShape(12.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        stringResource(Res.string.wallet_with_balance, formatBalance(user.shyCoins)),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
                             }
                         }
                     }

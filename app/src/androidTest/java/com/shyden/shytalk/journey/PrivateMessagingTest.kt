@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.shyden.shytalk.core.util.COHORT_ADULT
 import com.shyden.shytalk.util.ResetFakesRule
 import com.shyden.shytalk.util.ScreenshotRule
 import com.shyden.shytalk.util.launchMainScreen
@@ -28,7 +29,7 @@ class PrivateMessagingTest {
 
     @Test
     fun messagesTab_showsConversationList() {
-        composeTestRule.launchMainScreen()
+        composeTestRule.launchMainScreen(cohort = COHORT_ADULT)
         composeTestRule.waitForTag("main_messagesTab")
         composeTestRule.onNodeWithTag("main_messagesTab").performClick()
         // Wait for conversation data to load from ViewModel
@@ -37,7 +38,7 @@ class PrivateMessagingTest {
 
     @Test
     fun clickConversation_opensPrivateChat() {
-        composeTestRule.launchMainScreen()
+        composeTestRule.launchMainScreen(cohort = COHORT_ADULT)
         composeTestRule.waitForTag("main_messagesTab")
         composeTestRule.onNodeWithTag("main_messagesTab").performClick()
         composeTestRule.waitForText("OtherUser")
@@ -48,7 +49,7 @@ class PrivateMessagingTest {
 
     @Test
     fun privateChat_backButton_returnsToMessages() {
-        composeTestRule.launchMainScreen()
+        composeTestRule.launchMainScreen(cohort = COHORT_ADULT)
         composeTestRule.waitForTag("main_messagesTab")
         composeTestRule.onNodeWithTag("main_messagesTab").performClick()
         composeTestRule.waitForText("OtherUser")

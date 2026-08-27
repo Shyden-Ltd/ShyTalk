@@ -22,7 +22,6 @@ const TAGGED_COLLECTIONS = [
   'gifts',
   'conversations',
   'banners',
-  'funFacts',
   'reports',
   'suspensionAppeals',
   'alerts',

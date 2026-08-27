@@ -14,7 +14,9 @@ import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.toMap
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -95,39 +97,47 @@ class PrivateMessageRepositoryImpl(
             awaitClose { listener.remove() }
         }
 
+    /**
+     * SHY-0458 — through the API, never Firestore.
+     *
+     * Reading the document directly could not work, and had not for as long as
+     * the rule has existed: `firestore.rules:355` dereferences
+     * `resource.data.participantIds`, so a conversation that does not exist YET
+     * is a rules EVALUATION ERROR, not a miss —
+     *
+     *   GET /conversations/50000010_50000020 -> PERMISSION_DENIED
+     *     "evaluation error at L355:21 for 'get' @ L355, Null value error."
+     *
+     * That read was the FIRST thing this function did, so no conversation was
+     * ever created from the app, and `PrivateChatViewModel.sendMessage` then
+     * returned silently on the empty conversationId while the composable
+     * cleared the input. People watched their first message vanish.
+     *
+     * The server decides now — who may talk to whom is an authorization
+     * question, and those belong in the API (EPIC-0006).
+     */
     override suspend fun getOrCreateConversation(
         uid1: String,
         uid2: String,
     ): Resource<Conversation> =
         firebaseCall("Failed to get or create conversation") {
-            val conversationId = Conversation.generateId(uid1, uid2)
-            val docRef = firestore.document("conversations/$conversationId")
-            val doc = docRef.get().await()
-            if (doc.exists()) {
-                val data = doc.data ?: throw Exception("Conversation data is null")
-                Conversation.fromMap(data, conversationId)
-            } else {
-                val now = System.currentTimeMillis()
-                val data =
-                    mapOf(
-                        // SHY-0130 — participantIds are STRINGS (the canonical type:
-                        // model `List<String>`, rule `string(callerUniqueId()) in
-                        // resource.data.participantIds`, iOS, Express `.map(String)`).
-                        // The prior `toLongOrNull()` coercion wrote numbers, making
-                        // Android-created threads unreadable by the rule's string gate.
-                        "participantIds" to listOf(uid1, uid2).sorted(),
-                        "isGroup" to false,
-                        // SHY-0132 — new threads are never cross-cohort (creation rejects
-                        // cross-cohort pairs); stamp false so they match the segregation
-                        // filter `where('crossCohortAtMigration','==', false)`.
-                        "crossCohortAtMigration" to false,
-                        "createdAt" to now,
-                        "lastMessageAt" to now,
-                        "isClosed" to false,
-                    )
-                docRef.set(data).await()
-                Conversation.fromMap(data, conversationId)
+            // The API infers the caller from the token, so it needs only the
+            // OTHER party. Callers pass (me, them), but this picks the one that
+            // is not the signed-in user rather than trusting argument order.
+            val me = authRepository.currentUserId
+            val otherUserId =
+                when (me) {
+                    uid1 -> uid2
+                    uid2 -> uid1
+                    else -> uid2
+                }
+            val body = JSONObject().apply { put("otherUserId", otherUserId) }
+            val json = api.post("/api/conversations", body)
+            val conversationId = json.optString("id")
+            if (conversationId.isNullOrEmpty()) {
+                throw Exception("Conversation response had no id")
             }
+            Conversation.fromMap(json.toMap(), conversationId)
         }
 
     override suspend fun getConversationSettings(
@@ -752,22 +762,36 @@ class PrivateMessageRepositoryImpl(
 
     // ===== Search =====
 
+    // SHY-0350 — search goes through the API, because the rules refuse it here.
+    //
+    // This used to be a FILTERED Firestore query straight from the client.
+    // `firestore.rules:74` gates a users read on `cohortMatchesCaller()`, a
+    // condition on document CONTENT, and Firestore must decide a filtered
+    // query's permission from the QUERY ALONE — so it refused the whole thing.
+    // The user saw the refusal verbatim: "PERMISSION_DENIED: Null value error.
+    // for 'list' @ L74", on screen, in the search box.
+    //
+    // `GET /api/users/search` already did this properly — same-cohort filtered,
+    // sensitive fields stripped, caller excluded — and was simply never called.
     override suspend fun searchUsers(
         query: String,
         currentUserId: String,
     ): Resource<List<User>> =
         firebaseCall("Failed to search users") {
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .whereGreaterThanOrEqualTo("displayName", query)
-                    .whereLessThan("displayName", query + "\uf8ff")
-                    .get()
-                    .await()
-            snapshot.documents.mapNotNull { doc ->
-                val data = doc.data ?: return@mapNotNull null
-                if (doc.id == currentUserId) return@mapNotNull null
-                User.fromMap(data, doc.id)
+            val trimmed = query.trim()
+            if (trimmed.isEmpty()) {
+                emptyList()
+            } else {
+                val json = api.get("/api/users/search?q=" + encodeUrlQueryComponent(trimmed))
+                val arr = json.optJSONArray("users")
+                (0 until (arr?.length() ?: 0)).mapNotNull { i ->
+                    val obj = arr!!.getJSONObject(i)
+                    val uid = obj.optString("uniqueId")
+                    // The server already excludes the caller; belt and braces,
+                    // because a self-row in a "who do you want to message"
+                    // picker is a confusing thing to render.
+                    if (uid == currentUserId) null else User.fromMap(obj.toMap(), uid)
+                }
             }
         }
 

@@ -7,11 +7,12 @@
  * Android driver backed by `adb` (shell + uiautomator).
  *
  * Exposes the ctx.uiDriver methods that manual-qa-runner.js matchers
- * call for Android scenarios. The current implementation is a SCAFFOLD:
- * every method name from the matcher contract is wired to a stub that
- * returns false + logs a clear "not implemented" message. As scenarios
- * are exercised end-to-end, methods get real implementations one at a
- * time (input tap, uiautomator dump, am start, intent broadcast).
+ * call for Android scenarios. This is a REAL, fully-implemented adb /
+ * UIAutomator driver (~2.5k lines): every method name from the matcher
+ * contract is first registered with a fail-loud fallback (returns false
+ * + logs a clear "not implemented yet" message for any not-yet-mapped
+ * name), then the real implementations below override the mapped names
+ * (input tap, uiautomator dump, am start, intent broadcast).
  *
  * Wiring contract:
  *   - `createAndroidDriver({ serial })` selects which adb device to drive.
@@ -28,9 +29,8 @@
  *   - `adb shell am start -n pkg/.Activity`  — launches activity
  *   - `adb shell am broadcast -a ...`        — broadcasts intent
  *
- * The driver doesn't currently know which Activity each "screen"
- * corresponds to — that mapping needs to come from the app's
- * navigation registry. For now, methods log "not implemented" and the
+ * Where a "screen"→Activity mapping isn't yet wired, that method falls
+ * through to the fail-loud fallback (logs + returns false) and the
  * runner surfaces a finding listing the matcher and the missing call.
  */
 const { execSync } = require('child_process');
@@ -117,8 +117,9 @@ const PACKAGE_BY_TARGET = {
 /**
  * Method-name list the runner expects on ctx.uiDriver for Android
  * scenarios. Extracted by grepping `androidXxx:` patterns in
- * manual-qa-runner.js. Each name maps to a stub returning false +
- * log; real implementations replace stubs incrementally.
+ * manual-qa-runner.js. Each name is registered with the fail-loud
+ * fallback, then overridden below by its real implementation where one
+ * exists.
  */
 const ANDROID_METHOD_NAMES = [
   // Wake 86-106 vocabulary (matcher contract):
@@ -265,7 +266,18 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       console.error(
         `[android-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet (device=${serial})`,
       );
-      return false;
+      // THROW, do not return false (SHY-0330). Returning false made an
+      // unimplemented method indistinguishable from a working one: 98 step
+      // handlers discarded the verdict and reported PASS, so the whole
+      // missing-driver inventory was invisible in pass/fail terms and a run
+      // could log hundreds of these while "passing". A step that calls a
+      // method nobody has written has not performed the step.
+      const err = new Error(
+        `[android-driver] ${methodName} is NOT IMPLEMENTED (device=${serial}) — the step calling it cannot have happened. Implement it on this driver, or remove the step.`,
+      );
+      err.code = 'DRIVER_METHOD_NOT_IMPLEMENTED';
+      err.method = methodName;
+      throw err;
     };
   }
 
@@ -781,71 +793,6 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
-  // Wake 105 — `<Name>'s Android Admin UI shows the new report in
-  // the queue` (j11). Single-arg assertion that the admin queue
-  // contains at least one report. Foundation strategy combines two
-  // Compose testTags from the ReportReview screen:
-  //   - reportReview_list       — admin queue container (must be PRESENT)
-  //   - reportReview_emptyState — empty-list placeholder (must be ABSENT)
-  //
-  // Together these answer "the queue is non-empty", which is the
-  // closest foundation-layer interpretation of "shows the new
-  // report" without a `status="new"` testTag distinguishing
-  // freshly-filed from older reports. A future layer can add per-
-  // row inspection (e.g. via a `reportReview_row_${id}` parameterised
-  // testTag) to verify the SPECIFIC new report.
-  //
-  // Precedence: empty-state ALWAYS beats list-present. If both are
-  // in the dump (theoretically impossible per Compose but pinnable),
-  // the queue is considered empty and the assertion returns false.
-  driver.androidAdminShowsNewReportInQueue = async (_reviewer) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const listRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_list"[^>]*\/?>/;
-    if (!listRx.test(dump)) return false;
-
-    const emptyRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_emptyState"[^>]*\/?>/;
-    return !emptyRx.test(dump);
-  };
-
-  // Wake 92 — `<Name>'s Android Admin UI shows a table of recent
-  // <X>` (j12:24). Generic admin-table presence assertion. The noun
-  // arg can be 1-3 words per the matcher's `(\w+(?:\s+\w+){0,2})`
-  // capture (e.g. "reports", "user reports", "active user reports").
-  //
-  // Foundation strategy: a TABLE_TAGS map from canonical noun to
-  // Compose testTag. Currently only one entry exists:
-  //   - "reports" → reportReview_list (the admin queue list)
-  //
-  // Unmapped nouns return false — same FAIL-loud contract as
-  // INPUT_TAGS in androidDisablesInput (PR #737). Future Compose
-  // work would add testTags for transactions/audits/users/etc.
-  //
-  // Returns boolean. The runner contract also accepts an array of
-  // entries for richer assertion chains, but the foundation just
-  // asserts visibility — a future PR can extract entries when
-  // needed (e.g. for "each entry shows <fields>" follow-up steps).
-  // TABLE_TAGS values are expected to be alphanumeric + underscore
-  // only (Compose testTag convention). The defensive escape on `tag`
-  // before regex interpolation defends against future entries that
-  // might contain regex metacharacters (e.g. a hypothetical
-  // "user-reports" with a hyphen, or worse, "report_list+" with a
-  // `+`). Without the escape, the next entry could be a latent
-  // regex-injection point.
-  const TABLE_TAGS = { reports: 'reportReview_list' };
-  driver.androidAdminShowsTableOf = async (_viewer, noun) => {
-    if (!noun || !noun.trim()) return false;
-    const tag = TABLE_TAGS[noun.trim().toLowerCase()];
-    if (!tag) return false;
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
-    return tagRx.test(dump);
-  };
-
   // Two matchers (Wake 32-ish) delegate to this method:
   //   `<P> on Android searches "<X>" in <screen>` → screen-scoped
   //   `<P> on Android types "<X>" into the search field` → active-screen (null)
@@ -1226,81 +1173,6 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escOther}(?![\\w-])[^"]*"`,
     );
     return otherRx.test(dump);
-  };
-
-  // Wake 98 — `<Name>'s Android Admin UI shows N row for "<X>" with
-  // status "<Y>"` (j01/j04 admin-queue row presence). Driver
-  // receives `(viewer, count, targetId, status)`.
-  //
-  // Foundation strategy: TRIPLE composition (mirrors PR #747's
-  // androidShowsGiftFromSender):
-  //   1. reportReview_list testTag PRESENT (admin queue visible)
-  //   2. targetId text appears with symmetric word-boundary
-  //   3. status text appears with symmetric word-boundary
-  //
-  // The COUNT (typically 1) is journey-orchestrated and ignored
-  // at foundation — no per-row testTag exists for counting matching
-  // rows. A future PR could layer this with `reportReview_row_${id}`
-  // parameterised testTags.
-  //
-  // Cross-row pass-through (same as PR #747): if multiple rows
-  // are visible with targetId in row-A and status in row-B, the
-  // assertion passes. Journey orchestrator's responsibility to
-  // ensure single-row context.
-  driver.androidAdminShowsRowForWithStatus = async (_viewer, _count, targetId, status) => {
-    if (typeof targetId !== 'string' || !targetId.trim()) return false;
-    if (typeof status !== 'string' || !status.trim()) return false;
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-    // Step 1: admin queue visible
-
-    const listRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_list"[^>]*\/?>/;
-    if (!listRx.test(dump)) return false;
-    // Step 2: targetId appears with symmetric word-boundary
-    const escTarget = targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    const targetRx = new RegExp(
-      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
-    );
-    if (!targetRx.test(dump)) return false;
-    // Step 3: status appears with symmetric word-boundary
-    const escStatus = status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    const statusRx = new RegExp(
-      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escStatus}(?![\\w-])[^"]*"`,
-    );
-    return statusRx.test(dump);
-  };
-
-  // Wake 104 — `<Name>'s Android Admin UI shows N rows in the <X>
-  // table` (j12 — generic admin table row-count assertion). Driver
-  // receives `(viewer, count, tableName)`.
-  //
-  // Foundation strategy: same TABLE_TAGS lookup as PR #740's
-  // androidAdminShowsTableOf. Same TABLE_TAGS constant is
-  // intentionally redeclared in this closure for symmetry and
-  // future independent evolution. Currently one entry:
-  //   - "reports" → reportReview_list
-  //
-  // The COUNT is journey-orchestrated and ignored at foundation —
-  // no per-row testTag exists for counting matching rows. A future
-  // PR could layer this with `reportReview_row_${id}` parameterised
-  // testTags + a counter scan.
-  //
-  // Unmapped tableNames return false (FAIL-loud) — same scaffold-
-  // then-expand discipline as INPUT_TAGS (PR #737), TABLE_TAGS
-  // (PR #740), SEARCH_FIELD_TAGS (PR #741), PATH_TAGS (PR #744).
-  const ROW_COUNT_TABLE_TAGS = { reports: 'reportReview_list' };
-  driver.androidAdminShowsRowCountInTable = async (_viewer, _count, tableName) => {
-    if (typeof tableName !== 'string' || !tableName.trim()) return false;
-    const tag = ROW_COUNT_TABLE_TAGS[tableName.trim().toLowerCase()];
-    if (!tag) return false;
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
-    return tagRx.test(dump);
   };
 
   // Wake 100 — `<Name>'s Android UI shows the <noun> in the thread
@@ -2498,7 +2370,17 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // 'unknown'. Bounded loop (`maxIterations`, default 12) so a stuck system
   // dialog can't hang the driver. Shared by androidPersonaSignIn (Step 0b) +
   // androidSignOut.
-  async function advancePastLaunchGates(maxIterations = 12) {
+  /**
+   * @param maxIterations loop budget.
+   * @param clearLegalGate opt-IN. Only androidPersonaSignIn passes true.
+   *   androidSignOut deliberately does NOT: its contract is to fail loudly on a
+   *   fresh-install legal gate rather than tap through one ("sign-out cannot
+   *   clear a fresh-install gate"), and a test pins that. Sign-IN has the
+   *   opposite need — a freshly installed local build opens ON the gate, so
+   *   without clearing it every androidPersonaSignIn failed with
+   *   'could not tap "persona_picker_open"'.
+   */
+  async function advancePastLaunchGates(maxIterations = 12, clearLegalGate = false) {
     for (let i = 0; i < maxIterations; i++) {
       let dump;
       try {
@@ -2508,7 +2390,53 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       }
       const state = classifyAndroidAuthState(dump);
       if (state === 'splash') {
+        // SHY-0144 RETIRED the FunFact splash, so a current build never
+        // reaches here. This branch is kept DELIBERATELY, not by oversight:
+        // the runner also drives builds that predate the removal — an APK
+        // already on a phone, a TestFlight build, dev before its next deploy —
+        // and dropping it would fail the journey matrix against every one of
+        // them. It costs one comparison per launch-gate poll when no splash
+        // exists. Remove once a release containing SHY-0144 has shipped to
+        // every surface the matrix targets.
         await driver.androidTapByTag('splash_continueButton');
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      // Fresh-install legal gate. A newly-installed local build opens HERE, not
+      // on the persona picker, so every androidPersonaSignIn failed with
+      // 'could not tap "persona_picker_open"' — 109 of 221 findings in one
+      // corpus run. classifyAndroidAuthState already recognised the state
+      // (:92); nothing cleared it, and androidSignOut explicitly cannot
+      // ("sign-out cannot clear a fresh-install gate").
+      //
+      // Each checkbox is ticked ONLY if the dump says checked="false". Tapping
+      // one that is already ticked would UNtick it, and the loop would then
+      // oscillate until maxIterations without ever reaching Continue. This also
+      // honours the never-tap-a-label-speculatively rule: read the dump, tap
+      // only what is actually there and actually needs it, then re-read.
+      if (state === 'legal_gate' && clearLegalGate) {
+        const LEGAL_CHECKBOXES = [
+          'legal_acceptPrivacyCheckbox',
+          'legal_acceptTermsCheckbox',
+          'legal_acceptCommunityCheckbox',
+          'legal_acceptCyberBullyingCheckbox',
+        ];
+        let tapped = false;
+        for (const tag of LEGAL_CHECKBOXES) {
+          const node = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id/)?${tag}"[^>]*>`).exec(dump);
+          if (!node) continue; // not on this build's gate — skip, do not guess
+          if (/checked="true"/.test(node[0])) continue; // already accepted
+          await driver.androidTapByTag(tag);
+          tapped = true;
+          await new Promise((r) => setTimeout(r, 400));
+        }
+        if (tapped) {
+          // Re-read before Continue: the button enables off the checkbox state,
+          // and tapping it while still disabled looks identical to a failure.
+          await new Promise((r) => setTimeout(r, 600));
+          continue;
+        }
+        await driver.androidTapByTag('legal_continueButton');
         await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
@@ -2676,7 +2604,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // the Firebase session, so the app may relaunch signed-in (or on a
     // moderation warning gate) instead of the picker; if so, perform a real
     // in-app sign-out so the picker becomes reachable.
-    const launchState = await advancePastLaunchGates();
+    const launchState = await advancePastLaunchGates(12, true);
     if (launchState === 'signed_in' || launchState === 'warning') {
       await driver.androidSignOut();
     }

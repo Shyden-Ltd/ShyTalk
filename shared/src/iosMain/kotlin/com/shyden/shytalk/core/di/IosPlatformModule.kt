@@ -31,7 +31,6 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
-import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.IosAgeVerificationRepositoryImpl
@@ -40,7 +39,6 @@ import com.shyden.shytalk.data.repository.IosBannerRepositoryImpl
 import com.shyden.shytalk.data.repository.IosBiometricRepositoryImpl
 import com.shyden.shytalk.data.repository.IosDeviceRepositoryImpl
 import com.shyden.shytalk.data.repository.IosEconomyRepositoryImpl
-import com.shyden.shytalk.data.repository.IosFunFactRepositoryImpl
 import com.shyden.shytalk.data.repository.IosGiftRepositoryImpl
 import com.shyden.shytalk.data.repository.IosIdentityRepositoryImpl
 import com.shyden.shytalk.data.repository.IosMessageRepositoryImpl
@@ -52,6 +50,7 @@ import com.shyden.shytalk.data.repository.IosReportRepositoryImpl
 import com.shyden.shytalk.data.repository.IosRoomRepositoryImpl
 import com.shyden.shytalk.data.repository.IosSeatRequestRepositoryImpl
 import com.shyden.shytalk.data.repository.IosStorageRepositoryImpl
+import com.shyden.shytalk.data.repository.IosSupportRepositoryImpl
 import com.shyden.shytalk.data.repository.IosTranslationRepositoryImpl
 import com.shyden.shytalk.data.repository.IosUserRepositoryImpl
 import com.shyden.shytalk.data.repository.MessageRepository
@@ -62,12 +61,12 @@ import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
+import com.shyden.shytalk.data.repository.SessionCache
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
-import com.shyden.shytalk.feature.splash.BannerImagePreloader
-import com.shyden.shytalk.feature.splash.WebContentPreloader
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.auth
@@ -128,7 +127,13 @@ val iosPlatformModule =
                         "resolution that depends on `named(\"deviceId\")`",
                 )
         }
-        single(named("bypassDeviceChecks")) { true }
+        // Auth-stage device-check bypass — variant-resolved in Swift
+        // (AppEnvironment.resolve: .local → true, .dev/.release → false)
+        // and threaded through doInitKoin → BuildVariant. Defaults false
+        // (enforce) if never initialised. Was hardcoded `true` here for
+        // every build — TestFlight included — silently skipping the
+        // SHY-0170 device-lock and SHY-0149 ban checks on iOS.
+        single(named("bypassDeviceChecks")) { BuildVariant.bypassDeviceChecks }
 
         // Platform utilities (actual classes already exist in iosMain)
         single { StickerStorage() }
@@ -136,29 +141,31 @@ val iosPlatformModule =
         single { CryptoKeyPair() }
 
         // Repositories
-        single<AuthRepository> { IosAuthRepositoryImpl(get()) }
+        single<AuthRepository> { IosAuthRepositoryImpl(get(), get<SessionCache>(), get<IosApiClient>()) }
         single<UserRepository> { IosUserRepositoryImpl(get(), get()) }
         single<RoomRepository> { IosRoomRepositoryImpl(get(), get()) }
         single<MessageRepository> { IosMessageRepositoryImpl(get()) }
         single<SeatRequestRepository> { IosSeatRequestRepositoryImpl(get(), get()) }
         single<StorageRepository> { IosStorageRepositoryImpl(get()) }
         single<AgeVerificationRepository> { IosAgeVerificationRepositoryImpl(get()) }
+        single<SupportRepository> { IosSupportRepositoryImpl(get()) }
         single<DeviceRepository> { IosDeviceRepositoryImpl(get()) }
         single<IdentityRepository> { IosIdentityRepositoryImpl(get(), get()) }
         single<PrivateMessageRepository> { IosPrivateMessageRepositoryImpl(get(), get(), get()) }
         single<ReportRepository> { IosReportRepositoryImpl(get()) }
         single<TypingRepository> { IosTypingRepositoryImpl(get()) }
-        single<NotificationRepository> { IosNotificationRepositoryImpl(get(), get()) }
+        single<NotificationRepository> { IosNotificationRepositoryImpl(get()) }
         single<GiftRepository> { IosGiftRepositoryImpl(get()) }
         single<EconomyRepository> { IosEconomyRepositoryImpl(get(), get(), get()) }
         single<BannerRepository> { IosBannerRepositoryImpl(get()) }
-        single<FunFactRepository> { IosFunFactRepositoryImpl(get()) }
         single<TranslationRepository> { IosTranslationRepositoryImpl(get()) }
         single<OtpRepository> { IosOtpRepositoryImpl(get()) }
         single<PinRepository> { IosPinRepositoryImpl(get()) }
         single<BiometricRepository> { IosBiometricRepositoryImpl(get()) }
         single { SecureStorage() }
         single<AppLockRepository> { AppLockRepositoryImpl(get<SecureStorage>()) }
+        // SHY-0143 — shares the App-Lock's Keychain storage, under its own keys.
+        single { SessionCache(get<SecureStorage>()) }
 
         // Services
         single<TokenService> { IosTokenServiceImpl(get()) }
@@ -194,6 +201,4 @@ val iosPlatformModule =
         single { PushTokenManager(bridgeProvider = ::getPushBridge, notificationRepo = get()) }
 
         // Preloaders
-        single<BannerImagePreloader> { BannerImagePreloader { } }
-        single<WebContentPreloader> { WebContentPreloader { } }
     }

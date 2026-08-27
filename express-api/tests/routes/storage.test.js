@@ -268,6 +268,45 @@ describe('POST /api/storage/upload', () => {
     expect(r2.putObject).not.toHaveBeenCalled();
   });
 
+  test('a file over the 10 MB multer limit returns 413 JSON — not a 500 HTML page', async () => {
+    // SHY-0368. multer was wired as BARE middleware here, so LIMIT_FILE_SIZE
+    // propagated to Express's default error handler: a 500 with an HTML body.
+    // banners.js already wrapped multer and mapped this to 413; storage.js did
+    // not. Real multer, real supertest — no mock decides this.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.alloc(11 * 1024 * 1024, 0x61), {
+        filename: 'too-big.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(413);
+    // The body must be JSON an API client can read, not an HTML error page.
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.body.error).toMatch(/too large/i);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
+  test('a multer error that is NOT a size limit returns 400 JSON, not 500', async () => {
+    // The other half of the same wiring: any upload error must be answered by
+    // the route, never fall through to Express's default handler. Sending the
+    // file under an unexpected field name trips LIMIT_UNEXPECTED_FILE.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('wrongFieldName', Buffer.from('small'), {
+        filename: 'x.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
   test('policy violation (SVG) returns 400 — does NOT silently store original', async () => {
     // MIME-type allowlist already rejects SVG before compressImage is called,
     // but verify the layered defence: even if a future change loosens the
@@ -312,5 +351,137 @@ describe('POST /api/storage/upload', () => {
       expect.any(Buffer),
       'image/jpeg',
     );
+  });
+});
+
+// ─── The path the report flow actually sends ────────────────────
+
+describe('report evidence reaches the same route the client posts to', () => {
+  /**
+   * `submitUserReport` uploads with `path = "report_evidence"`.
+   *
+   * Every test covering that flow mocks `StorageRepository` and asserts the
+   * path STRING, against a fake that always succeeds. None of them reach this
+   * router, which is the only thing that decides whether the path is allowed —
+   * so the two halves could disagree indefinitely and every suite stayed green.
+   *
+   * The consequence is not a missing attachment. `submitUserReport` returns
+   * `EvidenceUploadFailed` and never calls `reportUser`, so a person reporting
+   * harassment WITH a screenshot files nothing at all.
+   */
+  test('the path the report flow sends is accepted', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'report_evidence')
+      .attach('file', Buffer.from('fake-image'), {
+        filename: 'evidence.png',
+        contentType: 'image/png',
+      });
+
+    expect(res.status).toBe(200);
+  });
+
+  test('a path nobody uses is still refused', async () => {
+    // The allowlist is still an allowlist -- this must not have been widened
+    // into "anything goes".
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'somewhere-nobody-declared')
+      .attach('file', Buffer.from('x'), { filename: 'x.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid upload path');
+  });
+});
+
+// ─── SHY-0420's rules, on the evidence path too ─────────────────
+
+describe('a file somebody hands us is scanned before staff open it', () => {
+  const scan = require('../../src/utils/attachment-scan');
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('report evidence is scanned', async () => {
+    const spy = jest.spyOn(scan, 'scanAttachment');
+    const app = createApp();
+    await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'report_evidence')
+      .attach('file', Buffer.from('x'), { filename: 'e.png', contentType: 'image/png' });
+
+    expect(spy).toHaveBeenCalled();
+  });
+
+  test('a file the scanner refuses is not returned to the caller', async () => {
+    jest
+      .spyOn(scan, 'scanAttachment')
+      .mockResolvedValue({ scanned: true, clean: false, reason: 'Eicar-Test-Signature' });
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'report_evidence')
+      .attach('file', Buffer.from('x'), { filename: 'e.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.url).toBeUndefined();
+  });
+
+  test('a file the scanner refuses is deleted rather than left in the bucket', async () => {
+    // Storing it and simply not returning the URL leaves the object behind,
+    // reachable by anybody who can guess or later obtain the key.
+    jest
+      .spyOn(scan, 'scanAttachment')
+      .mockResolvedValue({ scanned: true, clean: false, reason: 'Eicar-Test-Signature' });
+    const app = createApp();
+    await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'report_evidence')
+      .attach('file', Buffer.from('x'), { filename: 'e.png', contentType: 'image/png' });
+
+    expect(r2.deleteObject).toHaveBeenCalled();
+  });
+
+  test('the refusal says what happened without quoting the scanner at the person', async () => {
+    jest
+      .spyOn(scan, 'scanAttachment')
+      .mockResolvedValue({ scanned: true, clean: false, reason: 'Eicar-Test-Signature' });
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'report_evidence')
+      .attach('file', Buffer.from('x'), { filename: 'e.png', contentType: 'image/png' });
+
+    expect(res.body.error).toMatch(/could not be accepted/i);
+  });
+
+  test('a profile photo goes through the same check', async () => {
+    // Not only evidence. Every one of these files was uploaded by somebody we
+    // do not know, and staff open all of them.
+    const spy = jest.spyOn(scan, 'scanAttachment');
+    const app = createApp();
+    await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('x'), { filename: 'p.png', contentType: 'image/png' });
+
+    expect(spy).toHaveBeenCalled();
+  });
+
+  test('a clean file is returned as normal', async () => {
+    jest
+      .spyOn(scan, 'scanAttachment')
+      .mockResolvedValue({ scanned: true, clean: true, reason: null });
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'report_evidence')
+      .attach('file', Buffer.from('x'), { filename: 'e.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.url).toBeDefined();
   });
 });

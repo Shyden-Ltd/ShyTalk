@@ -934,11 +934,24 @@ describe('stripSensitiveFields — every protected field in one payload', () => 
       'deletionScheduledAt',
       'deletionReason',
       'deletionExecuteAt',
-      'cohort',
       'cohortOverride',
     ].forEach((field) => {
       expect(u[field]).toBeUndefined();
     });
+    // `cohort` is the ONE deliberate exception (SHY-0350). It is put back after
+    // the strip because the clients keep a defence-in-depth same-cohort filter
+    // over these lists, and without the field every result reads as the 'minor'
+    // default — an adult's search then filters itself to nothing. Measured
+    // on-device: the API returned a match and the screen said "No users found".
+    //
+    // Asserted as the security property rather than as mere presence: the route
+    // already refuses any user whose cohort differs from the caller's, so the
+    // only value that can ever come back is the caller's own. If that stopped
+    // holding, THIS is the assertion that fails.
+    expect(u.cohort).toBe('adult');
+    // `cohortOverride` stays stripped — it would disclose an admin override,
+    // which is a different fact from the cohort itself.
+    expect(u.cohortOverride).toBeUndefined();
     // providers preserved but identifiers stripped
     expect(u.providers).toEqual([{ provider: 'google' }, { provider: 'email' }]);
     // public fields preserved
@@ -947,7 +960,7 @@ describe('stripSensitiveFields — every protected field in one payload', () => 
     expect(u.lastSeenAt).toBe(2000);
   });
 
-  test('search numeric: cohort and cohortOverride stripped from response', async () => {
+  test('search numeric: cohortOverride stripped; cohort echoes the CALLER only', async () => {
     mockUserDoc(10000200, {
       uniqueId: 10000200,
       cohort: 'adult',
@@ -959,7 +972,10 @@ describe('stripSensitiveFields — every protected field in one payload', () => 
     const res = await request(app).get('/api/users/search?q=10000200');
 
     expect(res.status).toBe(200);
-    expect(res.body.users[0].cohort).toBeUndefined();
+    // See the discover test above for why `cohort` survives the strip (SHY-0350)
+    // and why this is the useful assertion: the route refuses a cross-cohort
+    // match outright, so the caller's own cohort is the only value reachable.
+    expect(res.body.users[0].cohort).toBe('adult');
     expect(res.body.users[0].cohortOverride).toBeUndefined();
   });
 

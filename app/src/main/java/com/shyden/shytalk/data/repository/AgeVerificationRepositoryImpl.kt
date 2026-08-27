@@ -3,18 +3,12 @@ package com.shyden.shytalk.data.repository
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.suspendCancellableCoroutine
-import okhttp3.Call
-import okhttp3.Callback
+import com.shyden.shytalk.data.remote.executeAsync
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 import org.json.JSONObject
-import java.io.IOException
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class AgeVerificationRepositoryImpl(
     private val api: WorkerApiClient,
@@ -74,21 +68,3 @@ class AgeVerificationRepositoryImpl(
             )
         }
 }
-
-private suspend fun Call.executeAsync(): Response =
-    suspendCancellableCoroutine { cont ->
-        cont.invokeOnCancellation { cancel() }
-        enqueue(
-            object : Callback {
-                override fun onFailure(
-                    call: Call,
-                    e: IOException,
-                ) = cont.resumeWithException(e)
-
-                override fun onResponse(
-                    call: Call,
-                    response: Response,
-                ) = cont.resume(response)
-            },
-        )
-    }

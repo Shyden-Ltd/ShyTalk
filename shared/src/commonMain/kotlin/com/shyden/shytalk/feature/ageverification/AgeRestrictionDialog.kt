@@ -24,7 +24,8 @@ import org.jetbrains.compose.resources.stringResource
  *
  * - [AgeRestrictionDialogState.NeedsVerification] → "Verify now" CTA
  *   that should route to the verification submit flow (PR 9).
- * - [AgeRestrictionDialogState.SubEighteen] → "Contact support" CTA.
+ * - [AgeRestrictionDialogState.SubEighteen] → explanation + a "Contact support"
+ *   CTA that opens the in-app support form (SHY-0385).
  *   The user CANNOT enter the verification flow until they age in.
  *
  * Renders nothing on [AgeRestrictionDialogState.Hidden] — the host
@@ -35,8 +36,8 @@ import org.jetbrains.compose.resources.stringResource
 fun AgeRestrictionDialog(
     state: AgeRestrictionDialogState,
     onDismiss: () -> Unit,
-    onVerifyNow: () -> Unit,
     onContactSupport: () -> Unit,
+    onVerifyNow: () -> Unit,
 ) {
     when (state) {
         AgeRestrictionDialogState.Hidden -> Unit
@@ -93,12 +94,21 @@ fun AgeRestrictionDialog(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 },
+                // SHY-0385: the control is back, and now it DOES something --
+                // it opens the in-app support form, which raises a ticket an
+                // admin actions in the dashboard.
+                //
+                // SHY-0384 removed it because every caller passed a dismiss for
+                // `onContactSupport`, making it behaviourally identical to
+                // Cancel while the body text told people to use it. The rule was
+                // never "no button"; it was "nothing inert".
+                //
+                // It does NOT call onDismiss here. The caller decides what to do
+                // with this dialog when the form opens, so the two are not
+                // silently coupled.
                 confirmButton = {
                     TextButton(
-                        onClick = {
-                            onDismiss()
-                            onContactSupport()
-                        },
+                        onClick = onContactSupport,
                         modifier = Modifier.testTag(TAG_SUB_EIGHTEEN_CONFIRM),
                     ) {
                         Text(stringResource(Res.string.age_restriction_sub_eighteen_confirm))

@@ -23,6 +23,8 @@ data class BuildVariantConfig(
     val buildVersion: String = "?",
     val deviceInfo: String = "?",
     val apiBaseUrl: String? = null,
+    val bypassDeviceChecks: Boolean = false,
+    val liveKitUrl: String? = null,
     val gitBranch: String = "?",
     val gitSha: String = "?",
     val gitDirty: Boolean = false,
@@ -157,6 +159,37 @@ object BuildVariant {
      * posting to a relative URL.
      */
     val apiBaseUrl: String? get() = holder.apiBaseUrl
+
+    /**
+     * Whether the auth-stage device checks (server-authoritative
+     * device-lock + ban application, SHY-0170/SHY-0149 —
+     * `AuthViewModel.resolveIdentityAndProceed`) are BYPASSED. Mirrors
+     * Android's per-flavor `BuildConfig.BYPASS_DEVICE_CHECKS` (local →
+     * true for emulator/E2E; dev + prod → false). Default `false` =
+     * fail-closed: a platform that never calls [initBypassDeviceChecks]
+     * gets ENFORCEMENT — bypass must be asked for explicitly, per build,
+     * so the pre-fix iOS state (DI hardcoding `true` for every build,
+     * TestFlight included) is no longer expressible by omission.
+     */
+    val bypassDeviceChecks: Boolean get() = holder.bypassDeviceChecks
+
+    /**
+     * Local LiveKit signalling URL for iOS (SHY-0275). `null` on dev/prod,
+     * where `express-api/src/routes/livekit.js` returns the region's URL in
+     * the token response.
+     *
+     * On `local` that route deliberately OMITS `url`, leaving the client to
+     * supply its own — Android does this from
+     * `BuildConfig.LIVEKIT_SERVER_URL`, and iOS had no counterpart at all, so
+     * `IosLiveKitVoiceService` took `response.url ?: ""` and handed the empty
+     * string to the bridge, which refused it before any network call. This is
+     * that missing counterpart, populated from Swift's
+     * `AppEnvironment.localLiveKitUrl`.
+     *
+     * Default `null` (not `""`) so a caller can tell "not configured" from
+     * "configured blank"; blank coerces to null in [initLiveKitUrl].
+     */
+    val liveKitUrl: String? get() = holder.liveKitUrl
 
     /**
      * Git branch the binary was built from (SHY-0205). Injected at
@@ -358,4 +391,53 @@ object BuildVariant {
     fun initApiBaseUrl(value: String?) {
         holder = holder.copy(apiBaseUrl = value?.takeIf { it.isNotBlank() })
     }
+
+    /**
+     * One-shot device-check-bypass initialiser. Called from
+     * `KoinHelper.doInitKoin(bypassDeviceChecks = ...)` with the
+     * variant-resolved value from Swift's `AppEnvironment.resolve`
+     * (`.local` → true; `.dev`/`.release` → false). See
+     * [bypassDeviceChecks] for the fail-closed rationale.
+     */
+    fun initBypassDeviceChecks(value: Boolean) {
+        holder = holder.copy(bypassDeviceChecks = value)
+    }
+
+    /**
+     * One-shot local LiveKit URL initialiser (SHY-0275). Called from
+     * `KoinHelper.doInitKoin(liveKitUrl = ...)`, itself called from Swift's
+     * `iOSApp.swift` with `AppEnvironment.localLiveKitUrl` on local builds and
+     * `nil` everywhere else. Blank coerces to null, so a build that stamps an
+     * empty setting behaves as "not configured" rather than producing a URL of
+     * `ws://:7880`. See [liveKitUrl].
+     */
+    fun initLiveKitUrl(value: String?) {
+        holder = holder.copy(liveKitUrl = value?.takeIf { it.isNotBlank() })
+    }
 }
+
+/**
+ * Which LiveKit URL should a client connect to? (SHY-0275)
+ *
+ * The server's answer wins when it gives one. On `local`,
+ * `express-api/src/routes/livekit.js` deliberately omits `url` from the token
+ * response, so the client falls back to its own build-time value — Android's
+ * `BuildConfig.LIVEKIT_SERVER_URL`, iOS's [BuildVariant.liveKitUrl].
+ *
+ * Lives here, in commonMain, rather than inline in `IosLiveKitVoiceService`
+ * because there is no `iosTest` source set: inline, the only thing pinning it
+ * was a structural check that the token `liveKitUrl` appeared somewhere in the
+ * file, which a swapped operand order (`fallback ?: response`) would satisfy
+ * while breaking voice for every dev and prod user.
+ *
+ * Returns `""` when neither is available — preserving the previous behaviour,
+ * where the bridge's own allow-list refuses the empty string before any
+ * network call rather than this throwing at a less useful moment.
+ */
+fun resolveVoiceServerUrl(
+    responseUrl: String?,
+    fallback: String?,
+): String =
+    responseUrl?.takeIf { it.isNotBlank() }
+        ?: fallback?.takeIf { it.isNotBlank() }
+        ?: ""

@@ -22,7 +22,7 @@
 require('dotenv').config();
 const admin = require('firebase-admin');
 admin.initializeApp();
-const db = admin.firestore();
+const db = require('firebase-admin/firestore').getFirestore();
 
 const SUSPECT_LIMIT = 5; // print up to this many sample rows per finding
 

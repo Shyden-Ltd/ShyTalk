@@ -1412,6 +1412,60 @@ class RoomViewModelTest {
             coVerify { roomRepository.toggleMute("room-1", 0, true) }
         }
 
+    /**
+     * SHY-0272. RoomScreen's `onToggleMic` used to wrap this call in
+     * `if (platformSettings.hasPermission(MICROPHONE)) { … }` with no else, so a
+     * denied-permission tap was swallowed whole — no request, no error, no state
+     * change, which is the operator's original report verbatim. The gate is gone
+     * and the lambda now delegates here unconditionally, which makes THIS the
+     * behaviour that has to be right. It was asserted nowhere.
+     */
+    @Test
+    fun `toggleSelfMute - rejects unmute when mic permission denied, and says so`() =
+        roomTest {
+            viewModel = createViewModel()
+            viewModel.onAudioPermissionResult(false) // denied, or revoked in Settings
+            val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+            seats["0"] = TestData.createTestSeat(userId = currentUserId, isMuted = true)
+            emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+            advanceUntilIdle()
+            connectionStateFlow.value = VoiceConnectionState.CONNECTED
+
+            viewModel.toggleSelfMute(0) // try to unmute without permission
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { roomRepository.toggleMute(any(), any(), any()) }
+            // The refusal must be SURFACED, not swallowed. uiState.error is what
+            // RoomScreen's LaunchedEffect turns into a snackbar.
+            assertEquals(
+                "Microphone permission required. Please grant it in Settings.",
+                viewModel.uiState.value.error,
+            )
+        }
+
+    /**
+     * The other half of the same defect: the old RoomScreen gate was also
+     * over-broad. It blocked BOTH directions, so a user without mic permission
+     * could not even mute themselves — and muting must always be allowed, since
+     * it needs no microphone access at all.
+     */
+    @Test
+    fun `toggleSelfMute - allows mute even when mic permission denied`() =
+        roomTest {
+            viewModel = createViewModel()
+            viewModel.onAudioPermissionResult(false)
+            val seats = TestData.createSeatsWithOwner(currentUserId)
+            emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
+            advanceUntilIdle()
+            connectionStateFlow.value = VoiceConnectionState.CONNECTED
+
+            viewModel.toggleSelfMute(0) // muting (isMuted=false→true)
+            advanceUntilIdle()
+
+            coVerify { roomRepository.toggleMute("room-1", 0, true) }
+            assertNull(viewModel.uiState.value.error)
+        }
+
     // ===== Re-entry Tests =====
 
     @Test
@@ -1491,7 +1545,7 @@ class RoomViewModelTest {
     // ===== Voice Error Surfacing =====
 
     @Test
-    fun `voice error from voice service sets isVoiceUnavailable and voiceErrorDetail`() =
+    fun `voice error from voice service records a reason, not the service's own words`() =
         roomTest {
             viewModel = createViewModel()
             emitRoomAsOwner()
@@ -1500,9 +1554,15 @@ class RoomViewModelTest {
             voiceErrorFlow.value = "Voice token error: connection refused"
             advanceUntilIdle()
 
-            // Voice errors show via the banner with diagnostic detail
+            // SHY-0466: the banner is driven by a value, not by the service's
+            // message. That message is English and technical, so it cannot be
+            // shown to a reader in Thai however well the app is translated —
+            // it belongs in the log. The state carries the REASON instead.
             assertTrue(viewModel.uiState.value.isVoiceUnavailable)
-            assertEquals("Voice token error: connection refused", viewModel.uiState.value.voiceErrorDetail)
+            assertEquals(
+                VoiceUnavailableReason.SERVICE_ERROR,
+                viewModel.uiState.value.voiceUnavailableReason,
+            )
             assertNull(viewModel.uiState.value.error)
             verify { voiceService.clearError() }
         }
@@ -4554,16 +4614,26 @@ class RoomViewModelTest {
             // Use advanceTimeBy(1) to process pending coroutines without advancing through the 10s delay
             advanceTimeBy(1)
 
-            // Before timeout: room should be blocked (hasJoined=true but isVoiceReady=false)
+            // SHY-0466: the room is NOT blocked while voice connects. Joined is
+            // what the screen renders on; voice not being ready is only a
+            // banner. `roomScreenContentFor` is where that is asserted.
             assertTrue(viewModel.uiState.value.hasJoined)
             assertFalse(viewModel.uiState.value.isVoiceReady)
+            assertFalse(viewModel.uiState.value.isVoiceUnavailable)
+            // What the screen shows is asserted in RoomScreenContentTest, over
+            // every voice state. Asserting it here as well would tie the claim
+            // to this fixture's emission order — its fake room flow opens with
+            // a null, whose handleRoomClosed write lands after the real room.
 
             // Advance past the 10s timeout
             advanceTimeBy(11_000L)
 
-            // After timeout: room should be unblocked with voice unavailable
+            // The watchdog now records WHY, which it never used to.
             assertTrue(viewModel.uiState.value.isVoiceReady)
-            assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+            assertEquals(
+                VoiceUnavailableReason.CONNECT_TIMED_OUT,
+                viewModel.uiState.value.voiceUnavailableReason,
+            )
         }
 
     @Test
@@ -4583,7 +4653,10 @@ class RoomViewModelTest {
 
             // Room should unblock immediately with voice unavailable
             assertTrue(viewModel.uiState.value.isVoiceReady)
-            assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+            assertEquals(
+                VoiceUnavailableReason.SERVICE_ERROR,
+                viewModel.uiState.value.voiceUnavailableReason,
+            )
         }
 
     @Test
@@ -4602,9 +4675,11 @@ class RoomViewModelTest {
             connectionStateFlow.value = VoiceConnectionState.CONNECTED
             advanceTimeBy(1)
 
-            // Banner should be gone
+            // Banner should be gone — and the reason with it, or the next
+            // failure would inherit this one's explanation (SHY-0466).
             assertTrue(viewModel.uiState.value.isVoiceReady)
             assertFalse(viewModel.uiState.value.isVoiceUnavailable)
+            assertNull(viewModel.uiState.value.voiceUnavailableReason)
         }
 
     @Test
@@ -4624,9 +4699,14 @@ class RoomViewModelTest {
             connectionStateFlow.value = VoiceConnectionState.DISCONNECTED
             advanceUntilIdle()
 
-            // Room stays visible but voice is marked unavailable
+            // Room stays visible but voice is marked unavailable — and losing a
+            // connection is NOT the same as never making one, so it must not
+            // borrow the timeout's wording (SHY-0466).
             assertTrue(viewModel.uiState.value.isVoiceReady)
-            assertTrue(viewModel.uiState.value.isVoiceUnavailable)
+            assertEquals(
+                VoiceUnavailableReason.CONNECTION_LOST,
+                viewModel.uiState.value.voiceUnavailableReason,
+            )
         }
 
     @Test
@@ -5167,7 +5247,7 @@ class RoomViewModelTest {
                     TestData.createTestUser(uid = ownerId, displayName = "Owner"),
                 )
             // Mock checkBlockedBy to return no conflicts so joinRoom() is called
-            coEvery { userRepository.checkBlockedBy(any(), any()) } returns Resource.Success(emptySet<String>())
+            coEvery { userRepository.checkBlockedBy(any()) } returns Resource.Success(emptySet<String>())
             roomFlow.value = room
             advanceUntilIdle()
 
@@ -5192,7 +5272,7 @@ class RoomViewModelTest {
                 Resource.Success(
                     TestData.createTestUser(uid = ownerId, displayName = "Owner"),
                 )
-            coEvery { userRepository.checkBlockedBy(any(), any()) } returns Resource.Success(emptySet<String>())
+            coEvery { userRepository.checkBlockedBy(any()) } returns Resource.Success(emptySet<String>())
             roomFlow.value = room
             advanceUntilIdle()
 

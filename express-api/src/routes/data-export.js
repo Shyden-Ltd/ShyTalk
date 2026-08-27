@@ -18,10 +18,27 @@ const { buildDataExportReadyEmail } = require('../utils/email-templates');
 
 const RATE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
 const EXPORT_EXPIRY_MS = 48 * 60 * 60 * 1000; // 48 hours
-if (!process.env.EXPORT_DOWNLOAD_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('EXPORT_DOWNLOAD_SECRET is required in production');
+/**
+ * Resolved LAZILY, per call — never at module load.
+ *
+ * SHY-0370, and the SECOND instance of the shape that caused the 2026-08-19 dev
+ * outage (SHY-0369 fixed the first, in `utils/mfa-remember.js`). `index.js`
+ * requires this route module, so a throw here happens DURING SERVER STARTUP:
+ * the process exits, pm2 crash-loops, and every endpoint returns 502 — including
+ * every endpoint that has nothing to do with data export.
+ *
+ * The guard is right and is kept: production must not fall back to a known
+ * development secret. Only its BLAST RADIUS changes — the failure is now scoped
+ * to the data-export calls that actually need the secret.
+ */
+function exportDownloadSecret() {
+  const configured = process.env.EXPORT_DOWNLOAD_SECRET;
+  if (configured) return configured;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('EXPORT_DOWNLOAD_SECRET is required in production');
+  }
+  return 'dev-export-secret';
 }
-const EXPORT_DOWNLOAD_SECRET = process.env.EXPORT_DOWNLOAD_SECRET || 'dev-export-secret';
 
 // ─── Helper: ownership check ────────────────────────────────────
 
@@ -36,7 +53,7 @@ function requireOwner(req, res) {
 
 function generateDownloadToken(uniqueId, expiresAt) {
   const data = `${uniqueId}:${expiresAt}`;
-  return node_crypto.createHmac('sha256', EXPORT_DOWNLOAD_SECRET).update(data).digest('hex');
+  return node_crypto.createHmac('sha256', exportDownloadSecret()).update(data).digest('hex');
 }
 
 function verifyDownloadToken(uniqueId, expiresAt, token) {
@@ -265,3 +282,7 @@ router.get('/users/:uniqueId/data-export/download', async (req, res) => {
 });
 
 module.exports = router;
+// Exported for tests only: the production-throw branch is unreachable through a
+// route (tests do not run with NODE_ENV=production), and it is the branch that
+// caused the 2026-08-19 outage, so it must be covered directly.
+module.exports.exportDownloadSecret = exportDownloadSecret;

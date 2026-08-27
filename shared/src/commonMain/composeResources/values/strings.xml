@@ -369,7 +369,7 @@
     <string name="report_reason_prefix">Reason: %1$s</string>
     <string name="report_type_prefix">Type: %1$s</string>
     <string name="report_details_prefix">Details: %1$s</string>
-    <string name="report_message_prefix">Message: \"%1$s\"</string>
+    <string name="report_message_prefix">Message: "%1$s"</string>
     <string name="report_reporter_reported">Reporter: %1$s | Reported: %2$s</string>
 
     <!-- Messaging - system message labels -->
@@ -488,7 +488,7 @@
     <string name="check_for_updates">Check for Updates</string>
     <string name="clear_cache_with_size">Clear Cache (%1$s)</string>
     <string name="up_to_date">Up to Date</string>
-    <string name="up_to_date_description">You&apos;re on the latest version.</string>
+    <string name="up_to_date_description">You're on the latest version.</string>
     <string name="update_available">Update Available</string>
     <string name="update_available_description">Version %1$s is available.</string>
     <string name="update_available_soft">A new version (%1$s) of ShyTalk is available.</string>
@@ -531,11 +531,11 @@
 
     <!-- Settings - Privacy page -->
     <string name="hide_following_list">Hide Following List</string>
-    <string name="hide_following_description">Others won&apos;t see who you follow. Followers are always visible.</string>
+    <string name="hide_following_description">Others won't see who you follow. Followers are always visible.</string>
     <string name="hide_online_status">Hide Online Status</string>
-    <string name="hide_online_status_description">Others won&apos;t see when you&apos;re online.</string>
+    <string name="hide_online_status_description">Others won't see when you're online.</string>
     <string name="hide_age">Hide Age</string>
-    <string name="hide_age_description">Others won&apos;t see your age on your profile.</string>
+    <string name="hide_age_description">Others won't see your age on your profile.</string>
     <string name="who_can_message_me">Who can message me</string>
     <string name="who_can_message_description">Control who can send you private messages.</string>
     <string name="everyone">Everyone</string>
@@ -562,10 +562,10 @@
     <string name="end">End</string>
     <string name="room_alerts">Room Alerts</string>
     <string name="self_destruct_countdown">Self-Destruct Countdown</string>
-    <string name="self_destruct_description">Play a voice announcement when a room&apos;s 5-minute self-destruct timer starts or stops.</string>
+    <string name="self_destruct_description">Play a voice announcement when a room's 5-minute self-destruct timer starts or stops.</string>
 
     <!-- Settings - Permissions page -->
-    <string name="notifications_permission_description">Receive alerts when you&apos;re in a live room in the background.</string>
+    <string name="notifications_permission_description">Receive alerts when you're in a live room in the background.</string>
     <string name="overlay_permission_description">Show a floating bubble when you leave a voice room, so you can quickly return.</string>
     <string name="microphone">Microphone</string>
     <string name="microphone_description">Required for voice chat in rooms.</string>
@@ -608,7 +608,7 @@
     <string name="description">Description</string>
     <string name="report_user_generic">Report User</string>
     <string name="block_confirm">Block %1$s?</string>
-    <string name="block_description">They won\'t be able to view your profile.</string>
+    <string name="block_description">They won't be able to view your profile.</string>
 
     <!-- Room block warnings -->
     <string name="banned_from_room">Banned from Room</string>
@@ -629,8 +629,8 @@
     <!-- Auth / Google Sign-In -->
     <string name="retrying">Retrying…</string>
     <string name="account_restricted">Account Restricted</string>
-    <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, contact shytalk.help@gmail.com</string>
-    <string name="contact_support_hint">If the problem persists, contact shytalk.help@gmail.com</string>
+    <string name="device_locked_description">This device is already linked to another account.\nOnly one account is allowed per device.\n\nFor support, visit shyden.co.uk</string>
+    <string name="connection_tips">Try this: check you're connected to the internet, turn off any VPN, then restart the app or your device.</string>
     <string name="sign_in_with_google">Sign in with Google</string>
     <string name="sign_in_with_apple">Sign in with Apple</string>
     <string name="sign_in_with_email">Sign in with Email</string>
@@ -654,10 +654,6 @@
     <string name="i_understand">I Understand</string>
     <string name="tap_to_return">Tap to return</string>
 
-    <!-- Degraded Mode -->
-    <string name="technical_difficulties">Technical Difficulties</string>
-    <string name="technical_difficulties_description">ShyTalk is currently experiencing technical difficulties. Some features may not work correctly. Services will be restored automatically.</string>
-    <string name="contact_support_help">If you need help, contact shytalk.help@gmail.com</string>
 
     <!-- Force Update -->
     <string name="update_required">Update Required</string>
@@ -678,16 +674,21 @@
 
     <!-- Connection / Loading states -->
     <string name="unable_to_connect">Unable to Connect</string>
-    <string name="connection_trouble">ShyTalk is having trouble reaching our servers. Please check your internet connection and try again.</string>
+    <string name="connection_trouble">We could not reach ShyTalk's servers.</string>
     <string name="voice_chat_reimagined">Voice chat rooms, reimagined.</string>
     <string name="profile_not_available">This profile is not available</string>
     <string name="blocked_by_user">You have been blocked by this user</string>
+    <string name="blocked_unblock_required">They need to unblock you before you can view their profile.</string>
     <string name="account_suspended_label">Account Suspended</string>
-    <string name="account_suspended_description">This user\'s account has been suspended.</string>
+    <string name="account_suspended_description">This user's account has been suspended.</string>
     <string name="closing">Closing...</string>
     <string name="connecting">Connecting...</string>
     <string name="voice_chat_unavailable">Voice chat is temporarily unavailable</string>
-    <string name="mic_permission_denied">Microphone permission denied. You won\'t be able to use voice chat.</string>
+    <string name="voice_chat_disconnected">Voice chat disconnected</string>
+    <string name="voice_unavailable_can_still_chat">You can still read and chat</string>
+    <string name="voice_connecting">Connecting voice...</string>
+    <string name="voice_unavailable_mic_blocked">The microphone needs voice chat, which is unavailable right now</string>
+    <string name="mic_permission_denied">Microphone permission denied. You won't be able to use voice chat.</string>
     <string name="replace_room_title">Close existing room?</string>
     <string name="replace_room_message">You already have an active room. Opening a new room will close your existing one. Do you want to continue?</string>
     <string name="replace_room_confirm">Close and create new</string>
@@ -697,7 +698,7 @@
     <string name="warning_reviewed">Your account has been reviewed and a warning has been issued.</string>
     <string name="warning_reviewed_for_reason">Your account has been reviewed for %1$s and a warning has been issued.</string>
     <string name="warning_consequence">Continued violations may result in suspension of your account.</string>
-    <string name="warning_acknowledge_failed">Couldn\'t clear your warning. Please check your connection and try again.</string>
+    <string name="warning_acknowledge_failed">Couldn't clear your warning. Please check your connection and try again.</string>
 
     <!-- Unsafe device -->
     <string name="device_not_supported">Device Not Supported</string>
@@ -722,7 +723,8 @@
     <string name="suspension_also_device_and_network_banned">Your device and network have also been banned.</string>
 
     <!-- Support -->
-    <string name="support_contact">For support, contact shytalk.help@gmail.com</string>
+    <string name="support_contact">For help, go to Settings and choose Contact us.</string>
+    <string name="suspension_support_contact">If you cannot appeal here, get in touch through shyden.co.uk</string>
 
     <!-- ViewModel error messages (localized via UiText) -->
     <string name="error_submit_appeal">Failed to submit appeal</string>
@@ -834,7 +836,6 @@
     <string name="time_unit_millisecond">MS</string>
 
     <!-- Run 5 strings -->
-    <string name="splash_tagline">Voice chat rooms, reimagined.</string>
     <string name="quantity_all">ALL (%1$d)</string>
     <string name="english_language">English</string>
     <string name="google_sign_in_failed">Google sign-in failed</string>
@@ -843,7 +844,7 @@
 
     <!-- PIN & Security -->
     <string name="enter_pin">Enter your PIN</string>
-    <string name="pin_mismatch">PINs don\'t match. Try again.</string>
+    <string name="pin_mismatch">PINs don't match. Try again.</string>
     <string name="pin_locked">Too many attempts. Try again in %1$d minutes.</string>
     <string name="pin_locked_reauth">Account locked. Please sign in again to reset your PIN.</string>
     <string name="reset_pin">Reset PIN</string>
@@ -857,7 +858,7 @@
     <string name="starting_screen_pre_launch_message">ShyTalk has not been released yet. To apply to test the application, contact Shyden. Testing is available for iOS and Android users.</string>
     <string name="starting_screen_dismiss">Continue</string>
     <string name="starting_screen_police_duck_description">Warning illustration</string>
-    <string name="starting_screen_loading">Loading\u2026</string>
+    <string name="starting_screen_loading">Loading…</string>
 
     <!-- Security Settings Screen -->
     <string name="security_title">Security</string>
@@ -915,7 +916,7 @@
     <!-- PIN Verify / Lock Screen -->
     <string name="pin_verify_title">Verify your identity</string>
     <string name="pin_verify_subtitle">Enter your PIN to continue</string>
-    <string name="pin_verifying">Verifying\u2026</string>
+    <string name="pin_verifying">Verifying…</string>
     <string name="pin_wrong_attempts">Wrong PIN. %1$d attempts remaining.</string>
     <string name="pin_account_locked">Account locked</string>
     <string name="pin_verify_failed">Verification failed</string>
@@ -929,7 +930,7 @@
     <string name="biometric_start_failed">Could not start biometric verification</string>
 
     <!-- Sign-in loading states -->
-    <string name="signing_in_loading">Signing in\u2026</string>
+    <string name="signing_in_loading">Signing in…</string>
 
     <!-- Date/Time (DateUtils) -->
     <string name="time_just_now">just now</string>
@@ -961,6 +962,50 @@
     <string name="age_restriction_sub_eighteen_title">Feature unavailable</string>
     <string name="age_restriction_sub_eighteen_body">Private messages and gacha are only available to users 18 or older. Based on the date of birth on your account, you are not yet eligible. If you believe this is wrong, please contact support — we cannot accept ID submissions to override the date of birth on file.</string>
     <string name="age_restriction_sub_eighteen_confirm">Contact support</string>
+    <string name="support_form_title">Contact support</string>
+    <string name="support_form_hint">Tell us what is wrong and we will look into it.</string>
+    <string name="report_guide_title">How to report someone</string>
+    <string name="report_guide_intro">Reporting from the app goes straight to our moderation team, who can act on it. A support request cannot.</string>
+    <string name="report_guide_step_profile">Open their profile and tap Report.</string>
+    <string name="report_guide_step_room_card">In a room, tap their name or picture to open their card, then tap Report.</string>
+    <string name="report_guide_step_message">Press and hold a message, in a room or a private chat, then choose Report.</string>
+    <string name="report_guide_stuck_title">Tried and could not?</string>
+    <string name="report_guide_stuck_body">If you could not report them — they blocked you, the message is gone, or something did not work — tell us and we will file the report for you.</string>
+    <string name="report_guide_stuck_action">Contact support instead</string>
+    <string name="support_form_send">Send</string>
+    <string name="support_form_character_count">%1$d / %2$d</string>
+    <string name="support_form_sent">Thanks. We have your message and will look into it.</string>
+    <string name="support_form_added">Thanks. We have added this to the request you already had open.</string>
+    <string name="support_open_requests_one">You already have 1 request open.</string>
+    <string name="support_open_requests_many">You already have %1$d requests open.</string>
+    <string name="support_open_requests_more">and %1$d more</string>
+    <string name="support_duplicate_reminder">Sending the same problem again does not make it faster. A second request for something you have already told us goes to the back of the queue, behind everyone else waiting.</string>
+    <string name="support_duplicate_same">It is the problem I already reported</string>
+    <string name="support_duplicate_new">It is a new problem</string>
+    <string name="support_duplicate_back">Go back</string>
+    <string name="support_form_error_empty">Please write a message before sending.</string>
+    <string name="support_form_error_too_long">Your message is too long. Please shorten it and try again.</string>
+    <string name="support_form_error_generic">We could not send your message. Please check your connection and try again.</string>
+    <string name="support_form_error_attachment_failed">We could not upload that file. You can send your message without it.</string>
+    <string name="support_form_error_image_too_large">That image is too large. Please choose one under 10 MB.</string>
+    <string name="support_form_error_video_too_long">That video is too long. Please choose one under 30 seconds.</string>
+    <string name="support_form_error_video_unreadable">We could not check how long that video is. Please try a different one.</string>
+    <string name="support_form_error_attachment_too_many">You can attach up to 10 files.</string>
+    <string name="support_form_error_attachment_type">That kind of file cannot be attached. Please choose an image or a video.</string>
+    <string name="support_category_label">What is this about?</string>
+    <string name="support_category_account">Account &amp; login</string>
+    <string name="support_category_age">Age &amp; verification</string>
+    <string name="support_category_payment">Coins, beans &amp; purchases</string>
+    <string name="support_category_safety">Safety &amp; another user</string>
+    <string name="support_category_bug">Something is broken</string>
+    <string name="support_category_other">Something else</string>
+    <string name="support_attachment_limits">Up to 10 files. Images up to 10 MB, videos up to 30 seconds.</string>
+    <string name="support_attachments_label">Add a screenshot or video</string>
+    <string name="support_attachment_add">Add file</string>
+    <string name="support_attachment_remove">Remove</string>
+    <string name="support_attachment_preview_close">Close preview</string>
+    <string name="support_attachment_preview_open">Open this file</string>
+    <string name="support_attachment_no_preview">No preview</string>
     <string name="age_restriction_dismiss">Cancel</string>
 
     <!-- Age verification submit flow (PR 9 of age-verification feature). PR 13 ships translations for the remaining 19 locales. -->
@@ -971,14 +1016,14 @@
     <string name="age_verif_step_method_title">Which document?</string>
     <string name="age_verif_step_method_body">Pick the type of ID you will submit. The DOB on the document must match the one on your account.</string>
     <string name="age_verif_method_passport">Passport</string>
-    <string name="age_verif_method_drivers_license">Driver\'s license</string>
+    <string name="age_verif_method_drivers_license">Driver's license</string>
     <string name="age_verif_method_national_id">National ID card</string>
     <string name="age_verif_step_image_title">Add the photo</string>
     <string name="age_verif_step_image_body">Choose a clear photo of the ID. Make sure the date of birth is fully readable.</string>
     <string name="age_verif_step_image_pick">Choose photo</string>
     <string name="age_verif_step_image_replace">Replace photo</string>
     <string name="age_verif_step_confirm_title">Ready to submit?</string>
-    <string name="age_verif_step_confirm_body">Once submitted, the photo is sent for review. You\'ll get a system message when a decision is recorded.</string>
+    <string name="age_verif_step_confirm_body">Once submitted, the photo is sent for review. You'll get a system message when a decision is recorded.</string>
     <string name="age_verif_field_method">ID type:</string>
     <string name="age_verif_field_photo">Photo:</string>
     <string name="age_verif_photo_attached">attached</string>
@@ -994,10 +1039,10 @@
     <string name="age_verif_test_env_warning">Upload any image — this is a test environment, real IDs are not required and not stored long-term.</string>
 
     <!-- UK OSA #17 PR 6: cohort-segregation relationship-removed system PM body. NOT REFERENCED by Kotlin/Swift code today — this entry is the canonical English source-of-truth for the copy that the Express migration script (express-api/scripts/migrate-segregation-relationships.js) currently hardcodes. PR 14 will add server-side locale awareness at PM-dispatch time and switch the migration to look this string up; the remaining 19 locale translations ship in PR 14 alongside that wiring. Copy is intentionally cohort-agnostic — "a recent change to how ShyTalk organises accounts" rather than "you are in different groups" — so the recipient cannot infer the counterparty's cohort. -->
-    <string name="age_seg_relationship_removed_pm">Your follow link with %1$s has been removed as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; it doesn\'t reflect anything either of you did, and the original link can\'t be restored from here.\n\nIf you don\'t recognise the name, this just means a past connection has been tidied up.</string>
+    <string name="age_seg_relationship_removed_pm">Your follow link with %1$s has been removed as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; it doesn't reflect anything either of you did, and the original link can't be restored from here.\n\nIf you don't recognise the name, this just means a past connection has been tidied up.</string>
 
     <!-- UK OSA #17 PR 7: cohort-segregation room-ejection system PM body. Sibling of age_seg_relationship_removed_pm — same English-only-in-this-PR contract; remaining 19 locales ship in PR 14 alongside server-side locale awareness. The %1$s placeholder is the (sanitised) room name. Copy reuses the load-bearing "a recent change to how ShyTalk organises accounts" phrase so the user-facing voice is consistent across PR 6 + PR 7 ejection paths. Cohort-agnostic by construction — see formatRoomEjectionPm test for the full denylist. -->
-    <string name="age_seg_room_removed_pm">You\'ve been removed from %1$s as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic and doesn\'t reflect anything you did. The room itself is fine; we just can\'t keep you in it under the new arrangement.\n\nYou can still create or join other rooms in your usual way.</string>
+    <string name="age_seg_room_removed_pm">You've been removed from %1$s as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic and doesn't reflect anything you did. The room itself is fine; we just can't keep you in it under the new arrangement.\n\nYou can still create or join other rooms in your usual way.</string>
 
     <!-- UK OSA #17 PR 12: cohort-segregation placeholder label used by Compose UI to render a generic "unavailable" tile when the cross-cohort filter (CrossCohortPolicy.PLACEHOLDER) drops an item from a list. English-only in this PR; remaining 19 locales ship in PR 14 with the locale-awareness sweep. Cohort-agnostic by construction — must never name "minor" / "adult" / age, since the placeholder is rendered to the OTHER cohort and would otherwise leak the dropped item's cohort. -->
     <string name="age_seg_unavailable">Unavailable</string>
@@ -1009,18 +1054,18 @@
     <string name="age_seg_room_unavailable">This room is unavailable.</string>
 
     <!-- UK OSA #17 PR 14: generic cross-cohort write-blocked toast surfaced for any same-cohort middleware rejection that doesn\'t have a more specific 404 cover (e.g., follow / gift / room join in flight when the viewer\'s cohort flips). Intentionally vague — does not reveal cohort boundary as the failure cause. -->
-    <string name="age_seg_cross_cohort_blocked_toast">This action isn\'t available for your account.</string>
+    <string name="age_seg_cross_cohort_blocked_toast">This action isn't available for your account.</string>
 
     <!-- UK OSA #17 PR 14: system PM dispatched when a cross-cohort 1:1 thread is hidden by the migration script (express-api/scripts/migrate-segregation-relationships.js line ~167). %1$s = sanitised counterparty display name. Same cohort-agnostic voice as age_seg_relationship_removed_pm — server-side locale lookup ships in a follow-up PR; this is the canonical English source-of-truth. -->
-    <string name="age_seg_thread_hidden_pm">Your thread with %1$s has been preserved but cannot continue, as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; nothing you sent before is lost. New messages can\'t be exchanged in this thread, but you can still start fresh conversations with people in your usual circle.</string>
+    <string name="age_seg_thread_hidden_pm">Your thread with %1$s has been preserved but cannot continue, as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; nothing you sent before is lost. New messages can't be exchanged in this thread, but you can still start fresh conversations with people in your usual circle.</string>
 
     <!-- UK OSA #17 PR 14: banner displayed inside a group conversation when the group has been frozen by the migration script for containing mixed-cohort members. Distinct from a PM — this is the in-conversation persistent banner shown to every remaining member. Brief, cohort-agnostic. -->
-    <string name="age_seg_group_frozen_banner">This group can\'t accept new members or messages following a recent change to how ShyTalk organises accounts.</string>
+    <string name="age_seg_group_frozen_banner">This group can't accept new members or messages following a recent change to how ShyTalk organises accounts.</string>
 
     <!-- UK OSA #17 PR 14: welcome system PM dispatched on the first sign-in after a user\'s minor→adult cohort flip (DOB-derived, lazy at sign-in via pm-lock-check.js). No reveal of WHY the cohort flipped — copy assumes the user knows their own birthday. -->
-    <string name="age_seg_age_up_welcome_pm">Welcome — your account has moved into the wider ShyTalk circle.\n\nYou\'ll start seeing more people in discovery and lists from now on. Previous connections that were tidied up while your account was in the smaller circle can\'t be restored automatically, but you can re-add anyone you\'d like to follow.</string>
+    <string name="age_seg_age_up_welcome_pm">Welcome — your account has moved into the wider ShyTalk circle.\n\nYou'll start seeing more people in discovery and lists from now on. Previous connections that were tidied up while your account was in the smaller circle can't be restored automatically, but you can re-add anyone you'd like to follow.</string>
 
     <!-- UK OSA #17 PR 14: system PM dispatched when an admin lowers a user\'s DOB through admin-age-verification.js and the resulting cohort flips downward (adult→minor). Distinct from age_up_welcome_pm — the user did not initiate this and may be surprised. Copy is plain-spoken about what changed (visibility scope) without naming "minor"; routes the user to support for disputes. -->
-    <string name="age_seg_age_down_admin_pm">Your account details have been updated by ShyTalk staff. As a result, the people and rooms visible to you have been narrowed to a smaller circle.\n\nIf you think this is a mistake, contact support and we\'ll review it.</string>
+    <string name="age_seg_age_down_admin_pm">Your account details have been updated by ShyTalk staff. As a result, the people and rooms visible to you have been narrowed to a smaller circle.\n\nIf you think this is a mistake, contact support and we'll review it.</string>
 
 </resources>

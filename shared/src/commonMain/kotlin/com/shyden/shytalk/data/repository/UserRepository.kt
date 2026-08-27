@@ -2,6 +2,7 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -11,6 +12,21 @@ data class UserFlags(
     val suspensionEndDate: Long? = null,
     val hasActiveWarning: Boolean = false,
     val warningReason: String? = null,
+    /**
+     * The caller's own cohort, carried on the SAME live listener as the
+     * suspension flags (SHY-0459).
+     *
+     * Not a separate fetch, because the surface a minor is offered has to
+     * follow a cohort that changes mid-session — an aged-up account, or an
+     * admin override — without a reinstall, which is that story's edge case.
+     *
+     * Defaults to minor: unknown is the most-restrictive answer everywhere
+     * else cohort is resolved (`effectiveCohort`, `cohortFromClaim`, the
+     * Firestore rules), and a surface that opens before the answer arrives is
+     * the same failure direction as SHY-0468.
+     */
+    val cohort: String = COHORT_MINOR,
+    val cohortOverride: String? = null,
 )
 
 interface UserRepository {
@@ -19,6 +35,35 @@ interface UserRepository {
     suspend fun createOrUpdateUser(user: User): Resource<Unit>
 
     suspend fun getUser(userId: String): Resource<User>
+
+    /**
+     * Why a viewer may or may not see somebody's profile — SHY-0348.
+     *
+     * Deliberately a TYPE and not a string. The block case has to be told apart
+     * from "not found" and from a network failure, and the only thing that ever
+     * reliably distinguishes them is the server's status code. Matching on an
+     * error message would work until somebody rewords it.
+     */
+    sealed class ProfileAccess {
+        data class Visible(
+            val user: User,
+        ) : ProfileAccess()
+
+        /** The owner has blocked this viewer. They must be unblocked first. */
+        data object BlockedByOwner : ProfileAccess()
+
+        /** No such user, or hidden for a reason the server will not disclose. */
+        data object NotFound : ProfileAccess()
+    }
+
+    /**
+     * Load somebody ELSE's profile, through the API so the block gate applies.
+     *
+     * `getUser` reads Firestore directly, which the rules allow for any
+     * same-cohort user — so a blocked viewer saw everything (SHY-0348). The
+     * server already refuses (`users.js`, 403), it was simply never asked.
+     */
+    suspend fun getProfileForViewing(userId: String): Resource<ProfileAccess>
 
     suspend fun userExists(userId: String): Resource<Boolean>
 
@@ -53,10 +98,21 @@ interface UserRepository {
 
     suspend fun getBlockedUserIds(userId: String): Resource<Set<String>>
 
-    suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>>
+    /**
+     * Which of [userIds] have blocked the SIGNED-IN user?
+     *
+     * The subject is always the caller — the server derives it from the auth
+     * token — so there is deliberately no parameter for it. A parameter that
+     * cannot change the answer would invite a caller to ask about somebody
+     * else and quietly receive an answer about themselves.
+     *
+     * Returns [Resource.Error] when the check could not be completed. That is
+     * NOT the same as an empty set, and callers must not conflate them: an
+     * empty set means "nobody here has blocked you", an error means "we do not
+     * know". (SHY-0351 — the old implementation returned the former for the
+     * latter, so the room-join warning could never fire.)
+     */
+    suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>>
 
     suspend fun followUser(
         currentUserId: String,
@@ -80,7 +136,25 @@ interface UserRepository {
         visitorId: String,
     ): Resource<Unit>
 
-    suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>>
+    /**
+     * One page of "who has been viewing me" — SHY-0338.
+     *
+     * Returns the visit records AND the visitors' profiles together. The
+     * caller used to fetch the records and then batch-fetch the profiles
+     * separately, and the second call was the one that failed: it queried
+     * Firestore directly, and `firestore.rules` refuses such a query
+     * ALL-OR-NOTHING when any one member fails the cohort gate. Both halves
+     * now come from `GET /api/users/:uniqueId/stalkers`, where the Admin SDK
+     * can drop individual visitors instead of refusing the list.
+     *
+     * Owner-only. Asking for somebody else's is refused by the server.
+     */
+    data class StalkerPage(
+        val visitors: List<ProfileVisitor> = emptyList(),
+        val users: List<User> = emptyList(),
+    )
+
+    suspend fun getStalkers(profileUserId: String): Resource<StalkerPage>
 
     suspend fun markStalkersViewed(userId: String): Resource<Unit>
 

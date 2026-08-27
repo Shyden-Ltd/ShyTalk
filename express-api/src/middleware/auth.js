@@ -172,6 +172,46 @@ async function checkSuspension(uniqueId) {
  * Express middleware: verifies Firebase ID token, resolves uniqueId,
  * checks suspension. Sets req.auth = { uid, uniqueId, token }.
  */
+/**
+ * Verify the caller's credential, or answer 401 `token_rejected` and return
+ * null. Both middlewares share this so they cannot drift apart -- they
+ * previously held byte-identical blocks, which is exactly how one of them gets
+ * a fix the other does not (SHY-0308).
+ *
+ * Returns the decoded token, or null when it has ALREADY answered the request.
+ * Callers must `return` on null; they must not fall through.
+ *
+ * @param {boolean} checkRevoked - strict routes pass true, so a revoked session
+ *   is refused here as the rejected credential it is.
+ */
+async function verifyCredentialOrReject(res, idToken, checkRevoked) {
+  try {
+    return await auth.verifyIdToken(idToken, checkRevoked);
+  } catch (err) {
+    log.error('auth', 'Authentication failed: token rejected', {
+      error: err.message,
+      firebaseCode: err.code,
+    });
+    res.status(401).json({ error: 'Authentication failed', code: 'token_rejected' });
+    return null;
+  }
+}
+
+/**
+ * Refuse a request whose credential was ACCEPTED but whose standing could not
+ * be established -- identity resolution, the suspension check, or the ban
+ * lookup failing. Refusing is correct (a control that fails open is not a
+ * control); the caller's credential was simply never the problem, and saying
+ * so is the difference this story exists for.
+ */
+function rejectStandingUnavailable(req, res, err) {
+  log.error('auth', 'Authentication failed: standing lookup failed', {
+    error: err.message,
+    path: req.path,
+  });
+  return res.status(401).json({ error: 'Authentication failed', code: 'standing_unavailable' });
+}
+
 async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -187,8 +227,16 @@ async function authMiddleware(req, res, next) {
     return next();
   }
 
+  // SHY-0308: the credential check is deliberately OUTSIDE the block below.
+  // A rejected token and a standing lookup that could not complete are
+  // different failures that happened to share one catch, one status and one
+  // string -- so a refusal could not be attributed to either. It cost a dig
+  // through a Playwright trace to learn that a suite failure reading
+  // "Expected 403, Received 401" had never reached the ban gate at all.
+  const decoded = await verifyCredentialOrReject(res, idToken, false);
+  if (!decoded) return undefined; // verifyCredentialOrReject already answered.
+
   try {
-    const decoded = await auth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
     // Resolve Firebase UID → stable uniqueId
@@ -244,12 +292,128 @@ async function authMiddleware(req, res, next) {
       }
     }
 
+    if (!hasResolvedIdentity(uniqueId) && !allowsMissingIdentity(req)) {
+      req.__authUid = uid;
+      return rejectMissingIdentity(req, res);
+    }
+
     req.auth = { uid, uniqueId, token: decoded };
     next();
   } catch (err) {
-    log.error('auth', 'Authentication failed', { error: err.message });
-    return res.status(401).json({ error: 'Authentication failed' });
+    return rejectStandingUnavailable(req, res, err);
   }
+}
+
+/**
+ * Routes that legitimately run before a `uniqueId` exists (SHY-0426).
+ *
+ * Everything else is refused when the account cannot be identified. This is
+ * the whole allowlist, kept short deliberately so it can be read and argued
+ * with — the alternative was a guard in each of 30 route files, which is 30
+ * chances to miss one and 30 more for every route added afterwards.
+ *
+ * Matched on METHOD and EXACT path: `GET /users` is a listing and has no
+ * business running without an identity, and `/users/50000010/appeal` must not
+ * inherit `/users`'s exemption by prefix.
+ */
+const PRE_IDENTITY_ROUTES = [
+  // Creates the account. There is no identity yet, by definition.
+  //
+  // NOT `standingExempt`: creating an account is an ACTION, not a verdict.
+  // With no identity to resolve, the standing gates match this caller by
+  // device and IP — which is exactly how a banned person is stopped from
+  // opening a fresh account on the banned handset. Exempting it would
+  // legalise ban evasion at the one route that performs it (SHY-0461).
+  { method: 'POST', path: '/users', standingExempt: false },
+  // May be what creates the document for a Firebase account that authenticated
+  // first. It is also the FIRST call the app makes, and it already answers
+  // `{ found, suspended }` without mutating — see `POST /users/sign-in`.
+  { method: 'POST', path: '/users/sign-in', standingExempt: true },
+  // Device binding, which runs in the SIGN-IN flow before any account exists —
+  // it is how the app learns whether this handset is already locked to
+  // somebody.
+  { method: 'POST', path: '/devices/lock-check', standingExempt: true },
+  // How the app LEARNS it is banned. Gating it would replace the ban screen
+  // with a generic error while enforcing nothing; it is a verdict channel, not
+  // an abuse-capable action.
+  { method: 'POST', path: '/device-info', standingExempt: true },
+  { method: 'GET', path: '/device-info', standingExempt: true },
+];
+
+/**
+ * Is this a real account identifier, or the absence of one?
+ *
+ * PRESENCE, deliberately — not `Number.isInteger`. The defect is that `null`
+ * collapses every unidentified caller into one "account" because
+ * `null === null`. That is what this refuses. Insisting on an integer would
+ * ALSO change an unrelated contract: the codebase is inconsistent about
+ * whether a uniqueId is a number or a string (the seeded personas use numbers,
+ * several suites use strings), so a type gate here would lock out real callers
+ * for a reason nobody asked about.
+ */
+function hasResolvedIdentity(uniqueId) {
+  if (uniqueId === null || uniqueId === undefined) return false;
+  if (typeof uniqueId === 'string') return uniqueId.trim() !== '';
+  return typeof uniqueId === 'number' ? Number.isFinite(uniqueId) : Boolean(uniqueId);
+}
+
+/** Fails CLOSED: an unrecognised request shape is not a way through. */
+function allowsMissingIdentity(req) {
+  const method = req?.method;
+  const path = req?.path;
+  if (typeof method !== 'string' || typeof path !== 'string') return false;
+  return PRE_IDENTITY_ROUTES.some((r) => r.method === method && r.path === path);
+}
+
+/**
+ * A route whose job is to TELL the caller what its standing is must not be
+ * gated on that standing (SHY-0461).
+ *
+ * The gate was circular. `POST /users/sign-in` is the FIRST call the app
+ * makes, and both standing gates refused it — so a suspended person could
+ * not resolve their identity, therefore never reached the user document they
+ * are in fact allowed to read, never reached the ban check, and was shown
+ * "cannot connect" with no reason and no appeal. A banned person hit the same
+ * wall, which put the ban screen out of reach on a cold sign-in too. Verified
+ * on the OnePlus; J11 pins it.
+ *
+ * Read off `PRE_IDENTITY_ROUTES` rather than a second hand-written list, so
+ * the two cannot drift and adding a pre-identity route forces one explicit
+ * decision — `standingExempt` — instead of silently inheriting either answer.
+ *
+ * Being pre-identity is NOT sufficient on its own: `POST /users` is in that
+ * table and is deliberately `standingExempt: false`, because it acts rather
+ * than reports and exempting it would legalise ban evasion.
+ *
+ * Matched on METHOD and EXACT path, exactly as `allowsMissingIdentity` is.
+ */
+function isStandingVerdictChannel(req) {
+  const method = req?.method;
+  const path = req?.path;
+  if (typeof method !== 'string' || typeof path !== 'string') return false;
+  return PRE_IDENTITY_ROUTES.some(
+    (r) => r.standingExempt && r.method === method && r.path === path,
+  );
+}
+
+/**
+ * Refuse a caller whose account could not be identified.
+ *
+ * A distinct code, not a generic 401: the credential was fine, and the client
+ * needs to tell "sign in again" from "your account is in a state we cannot
+ * resolve" — the second is a bug report, not a retry.
+ *
+ * Shared by both middlewares rather than written twice; byte-identical blocks
+ * in this file are exactly how one of them gets a fix the other does not
+ * (SHY-0308).
+ */
+function rejectMissingIdentity(req, res) {
+  log.warn('auth', 'Refused a caller with no resolved identity', {
+    uid: req.auth?.uid || req.__authUid,
+    method: req.method,
+    path: req.path,
+  });
+  res.status(403).json({ error: 'Your account could not be identified', code: 'no_identity' });
 }
 
 /**
@@ -258,6 +422,9 @@ async function authMiddleware(req, res, next) {
  */
 function isSuspensionExemptPath(req) {
   return (
+    // The standing-verdict channels. Without these a suspended person cannot
+    // discover that they are suspended, which is the whole of SHY-0461.
+    isStandingVerdictChannel(req) ||
     /^\/users\/[^/]+\/appeal$/.test(req.path) ||
     /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
     /^\/users\/[^/]+\/delete$/.test(req.path) ||
@@ -296,9 +463,13 @@ function isSuspensionExemptPath(req) {
  */
 function isBanExemptPath(req) {
   if (req.path === '/portal/me') return false;
-  return (
-    isSuspensionExemptPath(req) || req.path === '/device-info' || req.path === '/devices/lock-check'
-  );
+  // `/device-info` and `/devices/lock-check` used to be named again here.
+  // They are standing-verdict channels, so `isSuspensionExemptPath` now
+  // derives them from `PRE_IDENTITY_ROUTES` and this list would have been a
+  // second place for the same fact to be stated — and eventually disagreed
+  // with. The derived form is also method-exact, where the old string compare
+  // matched any verb on those paths.
+  return isSuspensionExemptPath(req);
 }
 
 /**
@@ -327,8 +498,18 @@ async function authMiddlewareStrict(req, res, next) {
     return next();
   }
 
+  // SHY-0308: the credential check is deliberately OUTSIDE the block below.
+  // A rejected token and a standing lookup that could not complete are
+  // different failures that happened to share one catch, one status and one
+  // string -- so a refusal could not be attributed to either. It cost a dig
+  // through a Playwright trace to learn that a suite failure reading
+  // "Expected 403, Received 401" had never reached the ban gate at all.
+  // `true` = check revocation, so `auth/id-token-revoked` lands here too: a
+  // revoked session IS a rejected credential.
+  const decoded = await verifyCredentialOrReject(res, idToken, true);
+  if (!decoded) return undefined; // verifyCredentialOrReject already answered.
+
   try {
-    const decoded = await auth.verifyIdToken(idToken, true);
     const uid = decoded.uid;
 
     // Resolve Firebase UID → stable uniqueId
@@ -338,6 +519,12 @@ async function authMiddlewareStrict(req, res, next) {
     const isSuspended = await checkSuspension(uniqueId);
 
     const isStrictSuspensionExempt =
+      // Same rule as the outer gate. No standing-verdict channel is mounted
+      // under STRICT today (it guards /portal/* and admin), so this term
+      // changes nothing now — it is here because the two gates diverging is
+      // the failure this file has already been bitten by (reviewer R5-C1),
+      // and one rule stated once cannot diverge from itself.
+      isStandingVerdictChannel(req) ||
       req.path === '/portal/me' ||
       req.path === '/portal/sign-out' ||
       /^\/users\/[^/]+\/appeal$/.test(req.path);
@@ -384,11 +571,15 @@ async function authMiddlewareStrict(req, res, next) {
       }
     }
 
+    if (!hasResolvedIdentity(uniqueId) && !allowsMissingIdentity(req)) {
+      req.__authUid = uid;
+      return rejectMissingIdentity(req, res);
+    }
+
     req.auth = { uid, uniqueId, token: decoded };
     next();
   } catch (err) {
-    log.error('auth', 'Authentication failed', { error: err.message });
-    return res.status(401).json({ error: 'Authentication failed' });
+    return rejectStandingUnavailable(req, res, err);
   }
 }
 
@@ -525,9 +716,16 @@ function updateUniqueIdCache(uid, uniqueId) {
 
 module.exports = {
   authMiddleware,
+  allowsMissingIdentity,
+  hasResolvedIdentity,
+  PRE_IDENTITY_ROUTES,
   authMiddlewareStrict,
   requireAdmin,
   isLiveAdmin,
+  // Exported for the SSE fan-out (SHY-0169): a stream is ONE request, so the
+  // middleware's suspension check runs once and then never again for the life
+  // of a long connection. The fan-out re-checks per delivery.
+  checkSuspension,
   clearSuspensionCache,
   clearUniqueIdCache,
   clearAdminClaimCache,

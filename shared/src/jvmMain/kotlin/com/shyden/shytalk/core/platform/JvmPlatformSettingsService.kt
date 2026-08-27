@@ -34,5 +34,7 @@ class JvmPlatformSettingsService : PlatformSettingsService {
 
     override fun canDrawOverlays(): Boolean = false
 
-    override fun hasPermission(permission: String): Boolean = false
+    // The JVM target exists for host-side tests and desktop tooling; it has no
+    // microphone or Bluetooth stack to consult, so nothing is granted.
+    override fun hasPermission(permission: AppPermission): Boolean = false
 }

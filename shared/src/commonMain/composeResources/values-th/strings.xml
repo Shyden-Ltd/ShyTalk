@@ -693,7 +693,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">รายละเอียด: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">ข้อความ: \"%1$s\"</string>
+    <string name="report_message_prefix">ข้อความ: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">ผู้รายงาน: %1$s | รายงานแล้ว: %2$s</string>
 
@@ -942,6 +942,7 @@
     <string name="block_description">พวกเขาจะไม่สามารถดูโปรไฟล์ของคุณได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">คุณถูกบล็อกโดยผู้ใช้รายนี้</string>
+    <string name="blocked_unblock_required">พวกเขาต้องเลิกบล็อกคุณก่อน คุณจึงจะดูโปรไฟล์ได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">ผู้ใช้ในห้องนี้บล็อกคุณ คุณอาจมีประสบการณ์ที่จำกัด เข้ารึยัง?</string>
     <!-- google-translated 2026-05-04 -->
@@ -982,12 +983,10 @@
     <string name="closing">กำลังปิด...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">กำลังเชื่อมต่อ...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk กำลังประสบปัญหาในการเข้าถึงเซิร์ฟเวอร์ของเรา โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของคุณแล้วลองอีกครั้ง</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">หากคุณต้องการความช่วยเหลือ โปรดติดต่อ shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">หากปัญหายังคงอยู่ โปรดติดต่อ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">เราไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ของ ShyTalk ได้</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">ลองทำแบบนี้: ตรวจสอบว่าคุณเชื่อมต่ออินเทอร์เน็ต ปิด VPN แล้วรีสตาร์ทแอปหรืออุปกรณ์ของคุณ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">ติดต่อเรา</string>
     <!-- google-translated 2026-05-04 -->
@@ -1014,8 +1013,8 @@
     <string name="denied">ถูกปฏิเสธ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">คำอธิบาย</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">อุปกรณ์นี้เชื่อมโยงกับบัญชีอื่นแล้ว\nอนุญาตให้มีหนึ่งบัญชีต่ออุปกรณ์เท่านั้น\n\nสำหรับการสนับสนุน โปรดติดต่อ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">อุปกรณ์นี้เชื่อมโยงกับบัญชีอื่นแล้ว\nอนุญาตให้มีหนึ่งบัญชีต่ออุปกรณ์เท่านั้น\n\nสำหรับการสนับสนุน ไปที่ shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">ไม่รองรับอุปกรณ์</string>
     <!-- google-translated 2026-05-04 -->
@@ -1257,8 +1256,10 @@
     <string name="super_shy_days">เขินสุดๆ ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">เขินสุดๆ ✦ ตลอดชีวิต</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">สำหรับการสนับสนุนโปรดติดต่อ shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">หากต้องการความช่วยเหลือ ไปที่การตั้งค่าแล้วเลือก ติดต่อเรา</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">หากคุณไม่สามารถยื่นอุทธรณ์ที่นี่ได้ ติดต่อเราผ่าน shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">สิ้นสุด: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1271,10 +1272,6 @@
     <string name="suspension_reason">เหตุผล: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">แตะเพื่อกลับ</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">ความยากลำบากทางเทคนิค</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ขณะนี้ ShyTalk กำลังประสบปัญหาทางเทคนิค คุณสมบัติบางอย่างอาจทำงานไม่ถูกต้อง บริการจะถูกกู้คืนโดยอัตโนมัติ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">ไม่สามารถเชื่อมต่อได้</string>
     <!-- google-translated 2026-05-04 -->
@@ -1305,6 +1302,10 @@
     <string name="voice_chat_reimagined">ห้องแชทด้วยเสียงโฉมใหม่</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">การแชทด้วยเสียงไม่สามารถใช้งานได้ชั่วคราว</string>
+    <string name="voice_chat_disconnected">แชทด้วยเสียงถูกตัดการเชื่อมต่อ</string>
+    <string name="voice_unavailable_can_still_chat">คุณยังอ่านและแชทได้</string>
+    <string name="voice_connecting">กำลังเชื่อมต่อเสียง...</string>
+    <string name="voice_unavailable_mic_blocked">ไมโครโฟนต้องใช้แชทด้วยเสียง ซึ่งขณะนี้ใช้งานไม่ได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">กระเป๋าเงิน · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1411,7 +1412,6 @@
     <string name="time_unit_millisecond">นางสาว</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">ห้องแชทด้วยเสียงโฉมใหม่</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">ทั้งหมด (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1469,7 +1469,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">ภาพประกอบคำเตือน</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">กำลังโหลด\u2026</string>
+    <string name="starting_screen_loading">กำลังโหลด…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">ความปลอดภัย</string>
@@ -1572,7 +1572,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">ป้อน PIN ของคุณเพื่อดำเนินการต่อ</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">กำลังยืนยัน\u2026</string>
+    <string name="pin_verifying">กำลังยืนยัน…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN ผิด เหลือความพยายามอีก %1$d ครั้ง</string>
     <!-- google-translated 2026-05-04 -->
@@ -1598,7 +1598,7 @@
     <string name="biometric_start_failed">ไม่สามารถเริ่มการยืนยันไบโอเมตริกซ์ได้</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">กำลังลงชื่อเข้าใช้\u2026</string>
+    <string name="signing_in_loading">กำลังลงชื่อเข้าใช้…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">แค่ตอนนี้</string>
@@ -1659,6 +1659,48 @@
     <string name="age_restriction_sub_eighteen_body">ข้อความส่วนตัวและกาชาให้บริการเฉพาะผู้ใช้ที่มีอายุ 18 ปีขึ้นไปเท่านั้น ตามวันเกิดในบัญชีของคุณ คุณยังไม่มีคุณสมบัติ หากคุณคิดว่านี่ไม่ถูกต้อง โปรดติดต่อฝ่ายสนับสนุน — เราไม่สามารถรับการส่งบัตรประจำตัวเพื่อเปลี่ยนวันเกิดที่บันทึกไว้ได้</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">ติดต่อฝ่ายสนับสนุน</string>
+    <string name="support_form_title">ติดต่อฝ่ายสนับสนุน</string>
+    <string name="support_form_hint">บอกเราว่าเกิดปัญหาอะไร แล้วเราจะตรวจสอบให้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">วิธีรายงานผู้ใช้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">การรายงานจากในแอปจะส่งตรงถึงทีมดูแลชุมชนที่สามารถดำเนินการได้ คำขอความช่วยเหลือทำแบบนั้นไม่ได้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">เปิดโปรไฟล์ของพวกเขาแล้วแตะ รายงาน</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">ในห้อง ให้แตะชื่อหรือรูปของพวกเขาเพื่อเปิดการ์ด แล้วแตะ รายงาน</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">กดค้างที่ข้อความ ไม่ว่าในห้องหรือแชทส่วนตัว แล้วเลือก รายงาน</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">ลองแล้วแต่ทำไม่ได้?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">ถ้าคุณรายงานพวกเขาไม่ได้ — พวกเขาบล็อกคุณ ข้อความหายไป หรือมีบางอย่างไม่ทำงาน — บอกเราแล้วเราจะยื่นรายงานให้คุณ</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">ติดต่อฝ่ายสนับสนุนแทน</string>
+    <string name="support_form_send">ส่ง</string>
+    <string name="support_form_sent">ขอบคุณ เราได้รับข้อความของคุณแล้วและจะตรวจสอบให้</string>
+    <string name="support_form_error_empty">กรุณาเขียนข้อความก่อนส่ง</string>
+    <string name="support_form_error_too_long">ข้อความของคุณยาวเกินไป กรุณาย่อแล้วลองใหม่</string>
+    <string name="support_form_error_generic">เราไม่สามารถส่งข้อความของคุณได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่</string>
+    <string name="support_form_error_attachment_failed">เราไม่สามารถอัปโหลดไฟล์นั้นได้ คุณสามารถส่งข้อความโดยไม่มีไฟล์ได้</string>
+    <string name="support_form_error_attachment_too_many">คุณแนบไฟล์ได้สูงสุด 10 ไฟล์</string>
+    <string name="support_form_error_attachment_type">ไม่สามารถแนบไฟล์ประเภทนี้ได้ กรุณาเลือกรูปภาพหรือวิดีโอ</string>
+    <string name="support_category_label">เรื่องนี้เกี่ยวกับอะไร</string>
+    <string name="support_category_account">บัญชีและการเข้าสู่ระบบ</string>
+    <string name="support_category_age">อายุและการยืนยัน</string>
+    <string name="support_category_payment">เหรียญ ถั่ว และการซื้อ</string>
+    <string name="support_category_safety">ความปลอดภัยและผู้ใช้อื่น</string>
+    <string name="support_category_bug">มีบางอย่างใช้งานไม่ได้</string>
+    <string name="support_category_other">เรื่องอื่น ๆ</string>
+    <string name="support_attachments_label">เพิ่มภาพหน้าจอหรือวิดีโอ</string>
+    <string name="support_attachment_add">เพิ่มไฟล์</string>
+    <string name="support_attachment_remove">ลบออก</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">ปิดตัวอย่าง</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">เปิดไฟล์นี้</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">ไม่มีตัวอย่าง</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">ยกเลิก</string>
 
@@ -1740,4 +1782,30 @@
     <string name="age_seg_age_up_welcome_pm">ยินดีต้อนรับ — บัญชีของคุณได้ย้ายเข้าสู่แวดวง ShyTalk ที่กว้างขึ้นแล้ว\n\nคุณจะเริ่มเห็นผู้คนมากขึ้นในการค้นพบและรายการนับจากนี้เป็นต้นไป การเชื่อมต่อก่อนหน้านี้ที่จัดระเบียบในขณะที่บัญชีของคุณอยู่ในวงกลมเล็ก ๆ จะไม่สามารถเรียกคืนได้โดยอัตโนมัติ แต่คุณสามารถเพิ่มใครก็ได้ที่คุณต้องการติดตามอีกครั้ง</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">รายละเอียดบัญชีของคุณได้รับการอัปเดตโดยเจ้าหน้าที่ของ ShyTalk ด้วยเหตุนี้ ผู้คนและห้องที่คุณมองเห็นจึงถูกจำกัดให้เหลือวงกลมเล็กลง\n\nหากคุณคิดว่านี่เป็นข้อผิดพลาด โปรดติดต่อฝ่ายสนับสนุนแล้วเราจะตรวจสอบ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">ขอบคุณ. เราได้เพิ่มสิ่งนี้ลงในคำขอที่คุณได้เปิดไว้แล้ว</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">การส่งปัญหาเดิมอีกครั้งไม่ได้ทำให้เร็วขึ้น คำขอครั้งที่สองสำหรับสิ่งที่คุณบอกเราไปแล้วจะต้องไปที่หลังคิว ตามหลังคนอื่นๆ ที่รออยู่</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">มันเป็นปัญหาที่ฉันรายงานไปแล้ว</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">มันเป็นปัญหาใหม่</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">กลับไป</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">คุณมีคำขอที่เปิดอยู่แล้ว 1 รายการ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">คุณมีคำขอที่เปิดอยู่ %1$d รายการแล้ว</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">และอีก %1$d</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">รูปภาพนั้นใหญ่เกินไป โปรดเลือกหนึ่งรายการที่มีขนาดต่ำกว่า 10 MB</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">วิดีโอนั้นยาวเกินไป โปรดเลือกหนึ่งอันที่ยาวน้อยกว่า 30 วินาที</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">เราไม่สามารถตรวจสอบได้ว่าวิดีโอนั้นยาวแค่ไหน โปรดลองอันอื่น</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">มากถึง 10 ไฟล์ รูปภาพสูงสุด 10 MB วิดีโอสูงสุด 30 วินาที</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

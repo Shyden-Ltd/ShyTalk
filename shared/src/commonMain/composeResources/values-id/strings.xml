@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Detail: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Pesan: \"%1$s\"</string>
+    <string name="report_message_prefix">Pesan: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Pelapor: %1$s | Dilaporkan: %2$s</string>
 
@@ -743,7 +743,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="day_sat">Duduk</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="day_streak">%1$hari berturut-turut</string>
+    <string name="day_streak">%1$d hari berturut-turut</string>
     <!-- google-translated 2026-05-04 -->
     <string name="day_sun">Matahari</string>
     <!-- google-translated 2026-05-04 -->
@@ -944,6 +944,7 @@
     <string name="block_description">Mereka tidak akan dapat melihat profil Anda.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Anda telah diblokir oleh pengguna ini</string>
+    <string name="blocked_unblock_required">Mereka harus membuka blokir Anda sebelum Anda dapat melihat profilnya.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Seorang pengguna di ruangan ini telah memblokir Anda. Anda mungkin memiliki pengalaman terbatas. Tetap masuk?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">Penutupan...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Menghubungkan...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk mengalami kesulitan menjangkau server kami. Silakan periksa koneksi internet Anda dan coba lagi.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Jika Anda memerlukan bantuan, hubungi Shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Jika masalah terus berlanjut, hubungi Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">Kami tidak dapat menghubungi server ShyTalk.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Coba ini: pastikan kamu terhubung ke internet, matikan VPN, lalu mulai ulang aplikasi atau perangkatmu.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Hubungi kami</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">Ditolak</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Keterangan</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Perangkat ini sudah tertaut ke akun lain.\nHanya satu akun yang diperbolehkan per perangkat.\n\nUntuk dukungan, hubungi Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Perangkat ini sudah tertaut ke akun lain.\nHanya satu akun yang diperbolehkan per perangkat.\n\nUntuk dukungan, kunjungi shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Perangkat Tidak Didukung</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">Sangat Pemalu ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Sangat Pemalu ✦ Seumur Hidup</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Untuk dukungan, hubungi Shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Untuk bantuan, buka Pengaturan lalu pilih Hubungi kami.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Jika kamu tidak bisa mengajukan banding di sini, hubungi kami lewat shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Berakhir: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">Alasan: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Ketuk untuk kembali</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Kesulitan Teknis</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk saat ini mengalami kesulitan teknis. Beberapa fitur mungkin tidak berfungsi dengan benar. Layanan akan dipulihkan secara otomatis.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Tidak Dapat Terhubung</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">Ruang obrolan suara, ditata ulang.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Obrolan suara untuk sementara tidak tersedia</string>
+    <string name="voice_chat_disconnected">Obrolan suara terputus</string>
+    <string name="voice_unavailable_can_still_chat">Kamu masih bisa membaca dan mengobrol</string>
+    <string name="voice_connecting">Menghubungkan suara...</string>
+    <string name="voice_unavailable_mic_blocked">Mikrofon memerlukan obrolan suara, yang saat ini tidak tersedia</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Dompet · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1413,7 +1414,6 @@
     <string name="time_unit_millisecond">MS</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">Ruang obrolan suara, ditata ulang.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">SEMUA (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Ilustrasi peringatan</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Memuat\u2026</string>
+    <string name="starting_screen_loading">Memuat…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Keamanan</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Masukkan PIN Anda untuk melanjutkan</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Memverifikasi\u2026</string>
+    <string name="pin_verifying">Memverifikasi…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN salah. %1$d percobaan tersisa.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Tidak dapat memulai verifikasi biometrik</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Masuk\u2026</string>
+    <string name="signing_in_loading">Masuk…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">baru saja</string>
@@ -1661,6 +1661,48 @@
     <string name="age_restriction_sub_eighteen_body">Pesan pribadi dan gacha hanya tersedia untuk pengguna berusia 18 tahun atau lebih. Berdasarkan tanggal lahir di akun Anda, Anda belum memenuhi syarat. Jika Anda yakin ini salah, harap hubungi dukungan — kami tidak dapat menerima kartu identitas untuk mengubah tanggal lahir yang tercatat.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">Hubungi dukungan</string>
+    <string name="support_form_title">Hubungi dukungan</string>
+    <string name="support_form_hint">Ceritakan masalahnya dan kami akan menindaklanjuti.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Cara melaporkan seseorang</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Laporan dari aplikasi langsung sampai ke tim moderasi kami, yang bisa menindaklanjutinya. Permintaan dukungan tidak bisa.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Buka profil mereka lalu ketuk Laporkan.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Di dalam room, ketuk nama atau foto mereka untuk membuka kartunya, lalu ketuk Laporkan.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Tekan dan tahan sebuah pesan, di room atau obrolan pribadi, lalu pilih Laporkan.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Sudah coba tapi tidak bisa?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Kalau kamu tidak bisa melaporkan mereka — mereka memblokirmu, pesannya sudah hilang, atau ada yang tidak berfungsi — beri tahu kami dan kami akan membuat laporannya untukmu.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Hubungi dukungan saja</string>
+    <string name="support_form_send">Kirim</string>
+    <string name="support_form_sent">Terima kasih. Pesan Anda sudah kami terima dan akan kami tindak lanjuti.</string>
+    <string name="support_form_error_empty">Silakan tulis pesan sebelum mengirim.</string>
+    <string name="support_form_error_too_long">Pesan Anda terlalu panjang. Persingkat lalu coba lagi.</string>
+    <string name="support_form_error_generic">Kami tidak dapat mengirim pesan Anda. Periksa koneksi Anda lalu coba lagi.</string>
+    <string name="support_form_error_attachment_failed">Kami tidak dapat mengunggah file itu. Anda tetap bisa mengirim pesan tanpa file tersebut.</string>
+    <string name="support_form_error_attachment_too_many">Anda dapat melampirkan maksimal 10 file.</string>
+    <string name="support_form_error_attachment_type">Jenis file itu tidak dapat dilampirkan. Pilih gambar atau video.</string>
+    <string name="support_category_label">Ini tentang apa?</string>
+    <string name="support_category_account">Akun &amp; masuk</string>
+    <string name="support_category_age">Usia &amp; verifikasi</string>
+    <string name="support_category_payment">Koin, kacang &amp; pembelian</string>
+    <string name="support_category_safety">Keamanan &amp; pengguna lain</string>
+    <string name="support_category_bug">Ada yang rusak</string>
+    <string name="support_category_other">Hal lain</string>
+    <string name="support_attachments_label">Tambahkan tangkapan layar atau video</string>
+    <string name="support_attachment_add">Tambah file</string>
+    <string name="support_attachment_remove">Hapus</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Tutup pratinjau</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Buka berkas ini</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Tidak ada pratinjau</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Batal</string>
 
@@ -1742,4 +1784,30 @@
     <string name="age_seg_age_up_welcome_pm">Selamat datang — akun Anda telah berpindah ke lingkaran ShyTalk yang lebih luas.\n\nAnda akan mulai melihat lebih banyak orang dalam penemuan dan daftar mulai sekarang. Koneksi sebelumnya yang dirapikan saat akun Anda berada di lingkaran yang lebih kecil tidak dapat dipulihkan secara otomatis, namun Anda dapat menambahkan kembali siapa pun yang ingin Anda ikuti.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Detail akun Anda telah diperbarui oleh staf ShyTalk. Akibatnya, orang dan ruangan yang terlihat oleh Anda telah dipersempit menjadi lingkaran yang lebih kecil.\n\nJika menurut Anda ini adalah kesalahan, hubungi dukungan dan kami akan meninjaunya.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Terima kasih. Kami telah menambahkan ini ke permintaan yang sudah Anda buka.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Mengirimkan masalah yang sama lagi tidak membuatnya lebih cepat. Permintaan kedua untuk sesuatu yang telah Anda sampaikan kepada kami akan ditempatkan di antrian paling belakang, di belakang semua orang yang menunggu.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Ini adalah masalah yang sudah saya laporkan</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Ini adalah masalah baru</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Kembali</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">Anda sudah memiliki 1 permintaan yang terbuka.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Anda sudah membuka %1$d permintaan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">dan %1$d lainnya</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Gambar itu terlalu besar. Silakan pilih satu di bawah 10 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Video itu terlalu panjang. Silakan pilih salah satu yang berdurasi kurang dari 30 detik.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">Kami tidak dapat memeriksa berapa durasi video tersebut. Silakan coba yang lain.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Hingga 10 file. Gambar hingga 10 MB, video hingga 30 detik.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

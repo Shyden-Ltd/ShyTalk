@@ -3,23 +3,17 @@ package com.shyden.shytalk.data.repository
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
-import kotlinx.coroutines.suspendCancellableCoroutine
+import com.shyden.shytalk.data.remote.executeAsync
 import kotlinx.coroutines.tasks.await
-import okhttp3.Call
-import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
 import org.json.JSONObject
-import java.io.IOException
-import java.net.URLEncoder
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 private const val R2_PUBLIC_BASE = "https://images.shytalk.shyden.co.uk"
 
@@ -89,7 +83,7 @@ class StorageRepositoryImpl(
                     ?.getIdToken(false)
                     ?.await()
                     ?.token ?: return
-            val encodedKey = URLEncoder.encode(key, "UTF-8")
+            val encodedKey = encodeUrlQueryComponent(key)
             httpClient
                 .newCall(
                     Request
@@ -105,21 +99,3 @@ class StorageRepositoryImpl(
         }
     }
 }
-
-private suspend fun Call.executeAsync(): Response =
-    suspendCancellableCoroutine { cont ->
-        cont.invokeOnCancellation { cancel() }
-        enqueue(
-            object : Callback {
-                override fun onFailure(
-                    call: Call,
-                    e: IOException,
-                ) = cont.resumeWithException(e)
-
-                override fun onResponse(
-                    call: Call,
-                    response: Response,
-                ) = cont.resume(response)
-            },
-        )
-    }

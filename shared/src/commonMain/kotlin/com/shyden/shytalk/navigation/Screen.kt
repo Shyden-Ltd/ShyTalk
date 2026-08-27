@@ -42,7 +42,16 @@ sealed class Screen(
 
     data object LegalAcceptance : Screen("legal_acceptance")
 
-    data object ReportReview : Screen("report_review")
+    /**
+     * Contacting support — SHY-0387.
+     *
+     * Carries only WHERE somebody came from. The category and the context an
+     * admin sees are derived from it by `SupportSource`, so the route stays a
+     * single readable token and the mapping stays testable.
+     */
+    data object Support : Screen("support/{source}") {
+        fun createRoute(source: String) = "support/$source"
+    }
 
     data object GroupChat : Screen("group_chat/{conversationId}") {
         fun createRoute(conversationId: String) = "group_chat/$conversationId"
@@ -53,8 +62,6 @@ sealed class Screen(
     data object GroupSetup : Screen("group_setup/{selectedIds}") {
         fun createRoute(selectedIds: String) = "group_setup/$selectedIds"
     }
-
-    data object Splash : Screen("splash")
 
     data object Warning : Screen("warning")
 
@@ -73,6 +80,27 @@ sealed class Screen(
     data object EmailSignIn : Screen("email_sign_in")
 
     data object Lock : Screen("lock")
+
+    /**
+     * SHY-0143 — ban destinations reachable BEFORE the route decision.
+     *
+     * The ban UI used to exist only inside `SignInScreen`, driven by
+     * `AuthUiState.isDeviceBanned/isNetworkBanned`. That was sufficient while
+     * every session started at sign-in, but SHY-0187's optimistic cold start
+     * routes a restored session straight to [Main] — so the only surface that
+     * could render a ban became unreachable exactly when a banned user
+     * returns. These are top-level destinations so the ban can be shown
+     * without the user passing through, or even seeing, the login screen.
+     *
+     * Two variants rather than one parameterised screen because they are
+     * different facts with different copy and different appeal routes: a
+     * device ban follows the hardware, a network ban follows the IP / subnet /
+     * ASN (which is also how VPNs are blocked, and is far more likely to catch
+     * an innocent bystander on shared infrastructure).
+     */
+    data object BanDevice : Screen("ban_device")
+
+    data object BanNetwork : Screen("ban_network")
 
     data object PinSetup : Screen("pin_setup")
 

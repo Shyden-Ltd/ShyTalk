@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">Details: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">Bericht: \"%1$s\"</string>
+    <string name="report_message_prefix">Bericht: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">Verslaggever: %1$s | Gerapporteerd: %2$s</string>
 
@@ -944,6 +944,7 @@
     <string name="block_description">Ze kunnen uw profiel niet bekijken.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">Je bent geblokkeerd door deze gebruiker</string>
+    <string name="blocked_unblock_required">Zij moeten je deblokkeren voordat je hun profiel kunt bekijken.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">Een gebruiker in deze kamer heeft je geblokkeerd. Het kan zijn dat u een beperkte ervaring heeft. Toch binnenkomen?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">Sluiten...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">Verbinden...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk heeft problemen met het bereiken van onze servers. Controleer uw internetverbinding en probeer het opnieuw.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">Als je hulp nodig hebt, neem dan contact op met shytalk.help@gmail.com</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">Als het probleem zich blijft voordoen, neem dan contact op met shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">We konden de servers van ShyTalk niet bereiken.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">Probeer dit: controleer je internetverbinding, schakel VPN uit en start de app of je apparaat opnieuw.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">Neem contact met ons op</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">Geweigerd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">Beschrijving</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">Dit apparaat is al aan een ander account gekoppeld.\nEr is slechts één account per apparaat toegestaan.\n\nNeem voor ondersteuning contact op met verlegentalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">Dit apparaat is al aan een ander account gekoppeld.\nEr is slechts één account per apparaat toegestaan.\n\nGa voor ondersteuning naar shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">Apparaat niet ondersteund</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">Superverlegen ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">Super verlegen ✦ Levenslang</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">Neem voor ondersteuning contact op met shytalk.help@gmail.com</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">Ga voor hulp naar Instellingen en kies Contact.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">Kun je hier geen bezwaar maken? Neem contact op via shyden.co.uk</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">Eindigt: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">Reden: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">Tik om terug te keren</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">Technische problemen</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk ondervindt momenteel technische problemen. Sommige functies werken mogelijk niet correct. Services worden automatisch hersteld.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">Kan geen verbinding maken</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">Voicechatrooms, opnieuw uitgevonden.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">Voicechat is tijdelijk niet beschikbaar</string>
+    <string name="voice_chat_disconnected">Spraakchat verbroken</string>
+    <string name="voice_unavailable_can_still_chat">Je kunt nog steeds lezen en chatten</string>
+    <string name="voice_connecting">Spraak verbinden...</string>
+    <string name="voice_unavailable_mic_blocked">De microfoon heeft spraakchat nodig, en die is nu niet beschikbaar</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">Portemonnee · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1413,7 +1414,6 @@
     <string name="time_unit_millisecond">MEVROUW</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">Voicechatrooms, opnieuw uitgevonden.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">ALLES (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">Waarschuwingsillustratie</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">Laden\u2026</string>
+    <string name="starting_screen_loading">Laden…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">Beveiliging</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">Voer uw pincode in om door te gaan</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">Verifiëren\u2026</string>
+    <string name="pin_verifying">Verifiëren…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">Verkeerde pincode. %1$d pogingen resterend.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">Kan biometrische verificatie niet starten</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">Aanmelden\u2026</string>
+    <string name="signing_in_loading">Aanmelden…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">zojuist</string>
@@ -1660,6 +1660,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">Privéberichten en gacha zijn alleen beschikbaar voor gebruikers van 18 jaar of ouder. Op basis van de geboortedatum in je account voldoe je nog niet aan de eisen. Als je denkt dat dit onjuist is, neem dan contact op met support — we kunnen geen ID-documenten accepteren om de geregistreerde geboortedatum te overschrijven.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">Contact opnemen met support</string>
+    <string name="support_form_hint">Vertel ons wat er mis is, dan kijken we ernaar.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">Iemand melden</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">Een melding vanuit de app komt rechtstreeks bij ons moderatieteam terecht, dat kan optreden. Een supportverzoek niet.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">Open hun profiel en tik op Melden.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">Tik in een room op hun naam of foto om hun kaart te openen en tik dan op Melden.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">Houd een bericht ingedrukt, in een room of een privéchat, en kies Melden.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">Geprobeerd en het lukte niet?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">Kon je ze niet melden — ze hebben je geblokkeerd, het bericht is weg, of er ging iets mis — laat het ons weten en wij dienen de melding voor je in.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">Neem in plaats daarvan contact op met support</string>
+    <string name="support_form_send">Verzenden</string>
+    <string name="support_form_sent">Bedankt. We hebben je bericht ontvangen en kijken ernaar.</string>
+    <string name="support_form_error_empty">Schrijf een bericht voordat je verzendt.</string>
+    <string name="support_form_error_too_long">Je bericht is te lang. Maak het korter en probeer het opnieuw.</string>
+    <string name="support_form_error_generic">We konden je bericht niet verzenden. Controleer je verbinding en probeer het opnieuw.</string>
+    <string name="support_form_error_attachment_failed">We konden dat bestand niet uploaden. Je kunt je bericht ook zonder versturen.</string>
+    <string name="support_form_error_attachment_too_many">Je kunt maximaal 10 bestanden toevoegen.</string>
+    <string name="support_form_error_attachment_type">Dit soort bestand kan niet worden toegevoegd. Kies een afbeelding of video.</string>
+    <string name="support_category_label">Waar gaat het over?</string>
+    <string name="support_category_account">Account &amp; inloggen</string>
+    <string name="support_category_age">Leeftijd &amp; verificatie</string>
+    <string name="support_category_payment">Munten, bonen &amp; aankopen</string>
+    <string name="support_category_safety">Veiligheid &amp; andere gebruikers</string>
+    <string name="support_category_bug">Er werkt iets niet</string>
+    <string name="support_category_other">Iets anders</string>
+    <string name="support_attachments_label">Voeg een screenshot of video toe</string>
+    <string name="support_attachment_add">Bestand toevoegen</string>
+    <string name="support_attachment_remove">Verwijderen</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">Voorbeeld sluiten</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">Dit bestand openen</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">Geen voorbeeld</string>
     <string name="age_restriction_sub_eighteen_confirm">Contact opnemen met support</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">Annuleren</string>
@@ -1742,4 +1784,30 @@
     <string name="age_seg_age_up_welcome_pm">Welkom: je account is in de bredere ShyTalk-kring terechtgekomen.\n\nVanaf nu zul je meer mensen in ontdekkingen en lijsten zien. Eerdere verbindingen die zijn hersteld terwijl uw account zich in de kleinere kring bevond, kunnen niet automatisch worden hersteld, maar u kunt wel iedereen die u wilt volgen opnieuw toevoegen.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Uw accountgegevens zijn bijgewerkt door medewerkers van ShyTalk. Als gevolg hiervan zijn de voor u zichtbare mensen en kamers beperkt tot een kleinere kring.\n\nAls u denkt dat dit een vergissing is, neem dan contact op met de ondersteuning, zodat we dit kunnen beoordelen.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">Bedankt. Wij hebben dit toegevoegd aan het verzoek dat u al open had staan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">Hetzelfde probleem opnieuw versturen maakt het niet sneller. Een tweede verzoek voor iets dat u ons al heeft verteld, komt achter in de rij te staan, achter alle anderen die wachten.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">Het is het probleem dat ik al gemeld heb</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">Het is een nieuw probleem</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">Ga terug</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">U heeft al 1 aanvraag openstaan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">Je hebt al %1$d verzoeken openstaan.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">en %1$d meer</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">Dat beeld is te groot. Kies er een van minder dan 10 MB.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">Dat filmpje is te lang. Kies er een van minder dan 30 seconden.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">We konden niet controleren hoe lang die video is. Probeer een andere.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">Maximaal 10 bestanden. Afbeeldingen tot 10 MB, video's tot 30 seconden.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

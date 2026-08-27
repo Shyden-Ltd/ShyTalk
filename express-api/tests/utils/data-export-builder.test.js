@@ -459,6 +459,34 @@ describe('buildDataExport', () => {
     expect(result.failedSections).toContain('appeals');
   });
 
+  test('a failed support-ticket query is a recorded section, not a silent gap', async () => {
+    // SHY-0421. An export that quietly omits a category of somebody's personal
+    // data is a wrong answer given with confidence, and they have no way to
+    // know it is incomplete. A failure has to be visible in the export itself,
+    // the same way reports and appeals failures already are.
+    mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+    queryDocs.mockResolvedValue([]);
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockImplementation((path) => {
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get:
+          path === 'supportTickets'
+            ? jest.fn().mockRejectedValue(new Error('Support error'))
+            : mockCollectionGet,
+      };
+      return chain;
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('supportTickets');
+  });
+
   test('handles identity query error gracefully', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,

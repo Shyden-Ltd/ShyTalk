@@ -21,7 +21,11 @@ const mockTransactionGet = jest.fn();
 const mockTransactionSet = jest.fn();
 const mockTransactionUpdate = jest.fn();
 
-const mockCollectionQuery = jest.fn().mockResolvedValue({ empty: true, docs: [] });
+// `size` matters: `bans.js` pages with `if (snap.size < LIMIT) break`, and
+// a snapshot without it compares `undefined < LIMIT` — false, not an error —
+// so the loop runs on and dereferences `docs[-1]`. A real empty snapshot
+// carries `size: 0`; a mock that omits it invents a failure (SHY-0461).
+const mockCollectionQuery = jest.fn().mockResolvedValue({ empty: true, size: 0, docs: [] });
 
 const mockSetCustomUserClaims = jest.fn().mockResolvedValue();
 
@@ -33,14 +37,21 @@ jest.mock('../../src/utils/firebase', () => ({
       set: (...args) => mockDocSet(path, ...args),
       update: (...args) => mockDocUpdate(path, ...args),
     })),
-    collection: jest.fn((collectionPath) => ({
-      where: jest.fn(() => ({
-        limit: jest.fn(() => ({
-          get: () => mockCollectionQuery(collectionPath),
-        })),
+    collection: jest.fn((collectionPath) => {
+      // Chainable. `POST /users/sign-in` reaches `checkUserBans` since
+      // SHY-0461 (it must answer a banned caller rather than be refused for
+      // being one), and that issues multi-`where` queries. A one-level mock
+      // returned undefined from the second `.where()`, so the route threw and
+      // answered 500 — a mock too shallow to express the call, not a defect.
+      const chain = {
+        where: jest.fn(() => chain),
+        orderBy: jest.fn(() => chain),
+        limit: jest.fn(() => chain),
+        startAfter: jest.fn(() => chain),
         get: () => mockCollectionQuery(collectionPath),
-      })),
-    })),
+      };
+      return chain;
+    }),
     runTransaction: jest.fn(async (fn) => {
       return fn({
         get: (ref) => mockTransactionGet(ref._path),
@@ -91,7 +102,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockDocGet.mockResolvedValue({ exists: false });
   mockTransactionGet.mockResolvedValue({ exists: false });
-  mockCollectionQuery.mockResolvedValue({ empty: true, docs: [] });
+  mockCollectionQuery.mockResolvedValue({ empty: true, size: 0, docs: [] });
 });
 
 // ─── App setup ───────────────────────────────────────────────────

@@ -75,6 +75,7 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.isKeyboardVisible
 import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
+import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.SpeakingGreen
@@ -96,7 +97,13 @@ fun PrivateChatScreen(
     onPickImages: (() -> Unit)? = null,
     onPickStickerImage: (() -> Unit)? = null,
     onNavigateToRoom: ((String) -> Unit)? = null,
-    onNavigateToAgeVerification: () -> Unit = {},
+    // Deliberately NOT defaulted (SHY-0268) — see RoomScreen for the rationale.
+    // Every host of this screen renders the 18+ wall, so every host must be
+    // able to route its "Verify now" CTA somewhere real.
+    onNavigateToAgeVerification: () -> Unit,
+    // Non-defaulted for the same reason (SHY-0387): the wall here offers support
+    // to anybody too young to verify, and that offer must lead somewhere.
+    onNavigateToSupport: (SupportSource) -> Unit,
     activeRoomId: String? = null,
     activeRoomName: String? = null,
     conversationId: String? = null,
@@ -1012,11 +1019,16 @@ fun PrivateChatScreen(
     // (TAG_NEEDS_VERIFICATION_CONFIRM etc.). NeedsVerification routes to
     // the submit screen; SubEighteen offers contact-support (no entry
     // into the verification flow — they need to age in).
+    // SHY-0385: same support route as the room. See RoomScreen for the reasoning
+    // about closing the age dialog first rather than stacking two.
     com.shyden.shytalk.feature.ageverification.AgeRestrictionDialog(
         state = ageRestrictionDialogState,
         onDismiss = { viewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
-        onContactSupport = { viewModel.dismissAgeRestrictionDialog() },
+        onContactSupport = {
+            viewModel.dismissAgeRestrictionDialog()
+            onNavigateToSupport(SupportSource.PrivateMessageAgeWall)
+        },
     )
 }
 

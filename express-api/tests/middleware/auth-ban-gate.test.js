@@ -46,7 +46,7 @@ const express = require('express');
 const request = require('supertest');
 const { db } = require('../../src/utils/firebase');
 const { assertEmulatorReachable, clearPrefixed } = require('../helpers/firebase-emulator');
-const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
+const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
 const authModule = require('../../src/middleware/auth');
 const { authMiddleware, authMiddlewareStrict, clearBanCache } = authModule;
 const { BINDINGS_SCAN_LIMIT } = require('../../src/utils/bans');
@@ -282,7 +282,11 @@ describe('device bans are enforced per-request, from any client', () => {
     await floodBindings('5016');
 
     const res = await probeAs(caller).expect(401);
-    expect(res.body).toEqual({ error: 'Authentication failed' });
+    // SHY-0308: named, so this REAL truncation is distinguishable from a bad
+    // credential. This is the mock-free half of the contract the posture unit
+    // test states -- an actual Firestore read that cannot complete, not a
+    // rejected promise standing in for one.
+    expect(res.body).toEqual({ error: 'Authentication failed', code: 'standing_unavailable' });
   });
 
   test('…but that caller keeps their appeal and data-export rights (fail-closed ≠ rightless)', async () => {
@@ -432,7 +436,7 @@ describe('a ban issued mid-session bites on the very next request', () => {
 
     await probeAs(caller).expect(200); // signed in, acting freely (and now cached as unbanned)
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90101', admin: true });
     await request(createRouterApp(adminBansRouter))
       .post('/api/admin/bans/device')
       .set(admin.headers)
@@ -648,7 +652,7 @@ describe('each admin ban mutation reaches the gate on the next request', () => {
     const caller = await mintRealUser({ uniqueId: '5090' });
     await probeAs(caller, { xff: EDGE_IP }).expect(200); // caches "clean" + the ban list
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90102', admin: true });
     await adminPost(admin, '/api/admin/bans/network', {
       type: 'ip',
       value: EDGE_IP,
@@ -663,7 +667,7 @@ describe('each admin ban mutation reaches the gate on the next request', () => {
     await seedDeviceBan('abg-dev-unban-1', { linkedUniqueId: '5091' });
     await probeAs(caller).expect(403); // caches "banned"
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90103', admin: true });
     await request(createRouterApp(adminBansRouter))
       .delete('/api/admin/bans/device/abg-dev-unban-1')
       .set(admin.headers)
@@ -677,7 +681,7 @@ describe('each admin ban mutation reaches the gate on the next request', () => {
     await seedNetworkBan('abg-nb-unban-1', { value: EDGE_IP });
     await probeAs(caller, { xff: EDGE_IP }).expect(403);
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90104', admin: true });
     await request(createRouterApp(adminBansRouter))
       .delete('/api/admin/bans/network/abg-nb-unban-1')
       .set(admin.headers)
@@ -692,7 +696,7 @@ describe('each admin ban mutation reaches the gate on the next request', () => {
     await seedNetworkBan('abg-nb-unban-all-1', { value: EDGE_IP, linkedUniqueId: '5093' });
     await probeAs(caller, { xff: EDGE_IP }).expect(403);
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90105', admin: true });
     await adminPost(admin, '/api/admin/bans/unban-all/5093', {});
 
     await probeAs(caller, { xff: EDGE_IP }).expect(200);
@@ -741,7 +745,7 @@ describe('binding a device re-evaluates the caller’s standing on the next requ
     await seedDeviceBan('abg-dev-hw-banned-3', { reason: 'hardware ban' });
     await probeAs(caller).expect(403); // caches "banned"
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90106', admin: true });
     await request(createRouterApp(adminDevicesRouter))
       .delete('/api/admin/devices/abg-dev-hw-banned-3')
       .set(admin.headers)
@@ -755,7 +759,7 @@ describe('binding a device re-evaluates the caller’s standing on the next requ
     await seedDeviceBan('abg-dev-hw-banned-4', { reason: 'hardware ban' });
     await probeAs(caller).expect(200); // caches "clean"
 
-    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const admin = await mintRealUser({ uniqueId: '90107', admin: true });
     await request(createRouterApp(adminDevicesRouter))
       .post('/api/admin/devices')
       .set(admin.headers)

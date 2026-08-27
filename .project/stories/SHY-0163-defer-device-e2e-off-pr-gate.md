@@ -1,6 +1,6 @@
 ---
 id: SHY-0163
-status: In Review
+status: Done
 owner: claude
 created: 2026-07-07
 priority: P0
@@ -9,6 +9,7 @@ type: infra
 roadmap_ids: []
 public: false
 mvp: true
+released_in: v0.98.0
 ---
 
 # SHY-0163: Defer device E2E off the per-PR gate (MVP-sprint CI model)

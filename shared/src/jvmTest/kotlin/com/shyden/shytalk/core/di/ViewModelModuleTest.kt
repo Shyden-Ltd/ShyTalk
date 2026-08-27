@@ -16,7 +16,6 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
-import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.MessageRepository
@@ -28,11 +27,11 @@ import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
+import com.shyden.shytalk.data.repository.SupportCategory
+import com.shyden.shytalk.data.repository.SupportRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.TypingRepository
 import com.shyden.shytalk.data.repository.UserRepository
-import com.shyden.shytalk.feature.splash.BannerImagePreloader
-import com.shyden.shytalk.feature.splash.WebContentPreloader
 import org.koin.core.annotation.KoinExperimentalAPI
 import org.koin.test.verify.verify
 import kotlin.test.Test
@@ -55,6 +54,7 @@ class ViewModelModuleTest {
                     SeatRequestRepository::class,
                     StorageRepository::class,
                     AgeVerificationRepository::class,
+                    SupportRepository::class,
                     DeviceRepository::class,
                     IdentityRepository::class,
                     PrivateMessageRepository::class,
@@ -64,7 +64,6 @@ class ViewModelModuleTest {
                     GiftRepository::class,
                     EconomyRepository::class,
                     BannerRepository::class,
-                    FunFactRepository::class,
                     TranslationRepository::class,
                     OtpRepository::class,
                     PinRepository::class,
@@ -82,11 +81,13 @@ class ViewModelModuleTest {
                     CryptoKeyPair::class,
                     // Platform-specific implementations
                     RoomLifecycleManager::class,
-                    BannerImagePreloader::class,
-                    WebContentPreloader::class,
                     // Named qualifiers (String for deviceId, Boolean for bypassDeviceChecks)
                     String::class,
                     Boolean::class,
+                    // Supplied by the CALLER via parametersOf, not by the graph:
+                    // SupportFormViewModel's category and originating context.
+                    SupportCategory::class,
+                    Map::class,
                 ),
         )
     }

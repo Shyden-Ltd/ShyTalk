@@ -42,7 +42,22 @@ jobs:
   sonarcloud:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # SHY-0355 — 15 was not enough and cancelled the job mid-analysis.
+    #
+    # `PR Gate` treats a `cancelled` dependency as a failure, so the pull
+    # request showed every check passing — including SonarCloud's OWN external
+    # `SonarCloud Code Analysis` result — while the gate was red. That reads as
+    # "Sonar found something", so the natural response was to re-run, which cost
+    # another fifteen minutes and failed the same way.
+    #
+    # Measured on PR #1812: two runs cancelled at 15m18s and 15m03s against the
+    # 15m budget, while a SUCCESSFUL run of the same job took 9m37s. So the old
+    # budget left about five minutes of headroom and any queueing or cache miss
+    # spent it. Same shape as SHY-0329 on the driver-checks job.
+    #
+    # Pinned by express-api/tests/scripts/sonarcloud-timeout.test.js, which
+    # reads THIS file so the value cannot drift from what CI runs.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -111,6 +126,8 @@ jobs:
           done
           echo "::error::MinIO/Mailpit did not become ready within 60s"
           exit 1
+
+      - uses: ./.github/actions/install-ffmpeg
 
       - name: Run Express API tests with coverage
         # `--experimental-vm-modules` lets Jest resolve dynamic `import()`

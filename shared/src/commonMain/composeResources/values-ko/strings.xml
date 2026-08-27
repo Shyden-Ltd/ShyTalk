@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">세부정보: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">메시지: \"%1$s\"</string>
+    <string name="report_message_prefix">메시지: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">기자: %1$s | 보고됨: %2$s</string>
 
@@ -743,7 +743,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="day_sat">앉았다</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="day_streak">%1$일 연속</string>
+    <string name="day_streak">%1$d일 연속</string>
     <!-- google-translated 2026-05-04 -->
     <string name="day_sun">해</string>
     <!-- google-translated 2026-05-04 -->
@@ -944,6 +944,7 @@
     <string name="block_description">그들은 귀하의 프로필을 볼 수 없습니다.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">이 사용자에 의해 귀하가 차단되었습니다.</string>
+    <string name="blocked_unblock_required">프로필을 보려면 상대방이 먼저 차단을 해제해야 합니다.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">이 방의 사용자가 당신을 차단했습니다. 경험이 제한적일 수 있습니다. 그래도 들어가시겠어요?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">폐쇄...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">연결 중...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk가 서버에 연결하는 데 문제가 있습니다. 인터넷 연결을 확인하고 다시 시도해 주세요.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">도움이 필요하시면 Shytalk.help@gmail.com으로 연락주세요.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">문제가 지속되는 경우,shytalk.help@gmail.com으로 문의하세요.</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">ShyTalk 서버에 연결할 수 없습니다.</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">이렇게 해 보세요: 인터넷 연결을 확인하고 VPN을 끈 다음 앱이나 기기를 다시 시작하세요.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">문의하기</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">거부됨</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">설명</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">이 기기는 이미 다른 계정에 연결되어 있습니다.\n기기당 하나의 계정만 허용됩니다.\n\n지원을 받으려면 Shytalk.help@gmail.com에 문의하세요.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">이 기기는 이미 다른 계정에 연결되어 있습니다.\n기기당 하나의 계정만 허용됩니다.\n\n지원이 필요하시면 shyden.co.uk 를 방문해 주세요</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">지원되지 않는 장치</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">엄청 부끄러워요 ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">슈퍼 샤이 ✦ 평생</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">지원을 받으려면 Shytalk.help@gmail.com으로 문의하세요.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">도움이 필요하시면 설정에서 "문의하기"를 선택하세요.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">여기에서 이의를 제기할 수 없다면 shyden.co.uk 를 통해 연락해 주세요</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">종료: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">이유: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">돌아가려면 탭하세요.</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">기술적인 어려움</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk는 현재 기술적인 문제를 겪고 있습니다. 일부 기능이 제대로 작동하지 않을 수 있습니다. 서비스가 자동으로 복원됩니다.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">연결할 수 없습니다</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">새롭게 디자인된 음성 채팅방.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">음성 채팅을 일시적으로 사용할 수 없습니다.</string>
+    <string name="voice_chat_disconnected">음성 채팅 연결이 끊겼습니다</string>
+    <string name="voice_unavailable_can_still_chat">읽기와 채팅은 계속할 수 있습니다</string>
+    <string name="voice_connecting">음성 연결 중...</string>
+    <string name="voice_unavailable_mic_blocked">마이크를 사용하려면 음성 채팅이 필요하지만 지금은 사용할 수 없습니다</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">지갑 · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1413,7 +1414,6 @@
     <string name="time_unit_millisecond">MS</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">새롭게 디자인된 음성 채팅방.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">모두(%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">경고 그림</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">로드 중\u2026</string>
+    <string name="starting_screen_loading">로드 중…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">보안</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">계속하려면 PIN을 입력하세요.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">확인 중\u2026</string>
+    <string name="pin_verifying">확인 중…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">PIN이 잘못되었습니다. %1$d회 시도 남았습니다.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1660,6 +1660,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">개인 메시지와 가챠는 18세 이상 사용자만 이용할 수 있습니다. 계정에 등록된 생년월일을 기준으로 아직 이용 자격이 없습니다. 잘못된 경우 고객 지원에 문의해 주세요. 등록된 생년월일을 변경하기 위한 신분증 제출은 받지 않습니다.</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">고객지원 문의</string>
+    <string name="support_form_hint">무엇이 문제인지 알려주시면 확인하겠습니다.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">다른 사람을 신고하는 방법</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">앱에서 신고하면 조치를 취할 수 있는 운영팀에 바로 전달됩니다. 고객지원 요청으로는 전달되지 않습니다.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">상대방 프로필을 열고 신고를 누르세요.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">방에서는 이름이나 사진을 눌러 카드를 연 다음 신고를 누르세요.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">방이나 개인 채팅에서 메시지를 길게 누른 다음 신고를 선택하세요.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">시도했는데 안 되나요?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">신고할 수 없었다면 — 상대가 차단했거나, 메시지가 사라졌거나, 무언가 작동하지 않았다면 — 알려 주세요. 저희가 대신 신고를 접수하겠습니다.</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">대신 고객지원에 문의하기</string>
+    <string name="support_form_send">보내기</string>
+    <string name="support_form_sent">감사합니다. 메시지를 받았으며 확인하겠습니다.</string>
+    <string name="support_form_error_empty">보내기 전에 메시지를 입력해 주세요.</string>
+    <string name="support_form_error_too_long">메시지가 너무 깁니다. 줄인 후 다시 시도해 주세요.</string>
+    <string name="support_form_error_generic">메시지를 보내지 못했습니다. 연결을 확인한 후 다시 시도해 주세요.</string>
+    <string name="support_form_error_attachment_failed">파일을 업로드하지 못했습니다. 파일 없이 메시지를 보낼 수 있습니다.</string>
+    <string name="support_form_error_attachment_too_many">파일은 최대 10개까지 첨부할 수 있습니다.</string>
+    <string name="support_form_error_attachment_type">이 형식의 파일은 첨부할 수 없습니다. 이미지나 동영상을 선택해 주세요.</string>
+    <string name="support_category_label">어떤 내용인가요?</string>
+    <string name="support_category_account">계정 및 로그인</string>
+    <string name="support_category_age">나이 및 인증</string>
+    <string name="support_category_payment">코인, 콩 및 결제</string>
+    <string name="support_category_safety">안전 및 다른 사용자</string>
+    <string name="support_category_bug">무언가 작동하지 않음</string>
+    <string name="support_category_other">기타</string>
+    <string name="support_attachments_label">스크린샷 또는 동영상 추가</string>
+    <string name="support_attachment_add">파일 추가</string>
+    <string name="support_attachment_remove">제거</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">미리보기 닫기</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">이 파일 열기</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">미리보기 없음</string>
     <string name="age_restriction_sub_eighteen_confirm">고객 지원 문의</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">취소</string>
@@ -1742,4 +1784,30 @@
     <string name="age_seg_age_up_welcome_pm">환영합니다. 귀하의 계정이 더 넓은 ShyTalk 서클로 ​​이동했습니다.\n\n이제부터 검색 및 목록에서 더 많은 사람들을 볼 수 있습니다. 귀하의 계정이 더 작은 서클에 있는 동안 정리된 이전 연결은 자동으로 복원될 수 없지만 팔로우하려는 사람을 다시 추가할 수 있습니다.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">귀하의 계정 세부 정보가 ShyTalk 직원에 의해 업데이트되었습니다. 결과적으로 귀하에게 표시되는 사람과 방은 더 작은 원으로 좁혀졌습니다.\n\n이것이 실수라고 생각하시면 지원팀에 문의하시면 검토해 드리겠습니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">감사해요. 이미 열려 있는 요청에 이 내용을 추가했습니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">동일한 문제를 다시 보내도 속도가 빨라지지는 않습니다. 이미 말씀하신 내용에 대한 두 번째 요청은 대기 중인 다른 모든 사람의 뒤를 이어 대기열 맨 뒤로 이동됩니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">이미 보고한 문제입니다</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">새로운 문제입니다</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">돌아가기</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">이미 1개의 요청이 열려 있습니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">이미 %1$d개의 요청이 열려 있습니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">외 %1$d개</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">이미지가 너무 큽니다. 10MB 미만을 선택하세요.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">동영상이 너무 깁니다. 30초 미만을 선택해주세요.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">해당 영상의 길이를 확인할 수 없습니다. 다른 것을 시도해 보세요.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">최대 10개 파일. 이미지는 최대 10MB, 비디오는 최대 30초입니다.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

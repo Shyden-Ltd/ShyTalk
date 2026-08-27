@@ -1,0 +1,37 @@
+name: 'Install ffmpeg'
+description: >-
+  Install the ffmpeg/ffprobe binaries the journey screen-recorder tests need.
+  Use before ANY step that runs the express-api Jest suite, whole or in part.
+
+runs:
+  using: 'composite'
+  steps:
+    # apt is hardened FIRST. These workflows do not otherwise touch apt, so
+    # this is their only `apt-get update` — and an unbounded one is exactly
+    # the stall that action exists to prevent.
+    - uses: ./.github/actions/harden-apt
+    - name: Install ffmpeg
+      shell: bash
+      run: |
+        set -euo pipefail
+        # WHY THIS EXISTS — SHY-0451, 2026-08-24.
+        #
+        # journey-screen-recorder's `assertPlayable` tests run REAL ffmpeg
+        # against REAL recordings: a header-only file, a truncated one, one
+        # with no video stream. They are real on purpose — every one of those
+        # defects is something a fake would report as fine, and the recorder
+        # shipped a settled-screen artefact and a SIGKILL artefact before
+        # these tests existed.
+        #
+        # The runner image has no ffmpeg, so all five FAILED TO RUN rather
+        # than failing an assertion — in three separate workflows, because
+        # three of them run this suite. Fixing one was not fixing it.
+        #
+        # apt installs to /usr/bin, already one of the driver's
+        # BINARY_SEARCH_PATHS, so nothing else changes.
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends ffmpeg
+        # Proven present, not assumed: a silent no-op here would send the
+        # suite back to "failed to run" with a green install step above it.
+        ffmpeg -version | head -1
+        ffprobe -version | head -1

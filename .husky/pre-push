@@ -35,6 +35,7 @@ done
 # diffs. Removed cleanly; the workflow handles regen server-side under
 # App-signed commits (ruleset 12613584 bypass_actors). Operator-authorised
 # in SHY-0066 AskUserQuestion at 2026-06-09 ~11:30 BST.
+# (SHY-0359 later deleted that script outright — the path above is historical).
 
 # Load .env if SONAR_TOKEN not already set
 if [ -z "$SONAR_TOKEN" ] && [ -f ".env" ]; then
@@ -128,6 +129,21 @@ if [ "$HAS_WORKFLOW_CHANGES" = "true" ] && command -v actionlint >/dev/null 2>&1
     exit 1
   fi
   echo "  ✓ actionlint passed"
+
+  # SHY-0298 R1/I3. actionlint above reads `.github/workflows/**` ONLY, but
+  # this whole block TRIGGERS on `.github/actions/` too — so changing an
+  # action.yml printed "actionlint passed" having checked nothing in the
+  # changed file. That is worse than no check: it is a check that lies.
+  if command -v shellcheck >/dev/null 2>&1; then
+    echo "  → composite-action shell (shellcheck)..."
+    if ! bash scripts/check-action-shell.sh; then
+      echo ""
+      echo "✗ composite-action shell has shellcheck findings — push blocked"
+      exit 1
+    fi
+  else
+    echo "  ! shellcheck not installed — composite-action shell NOT checked (CI will)"
+  fi
 fi
 
 # Skip SonarCloud for workflow-only changes. Include public/ so changes

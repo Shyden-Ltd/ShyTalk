@@ -695,7 +695,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="report_details_prefix">विवरण: %1$s</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="report_message_prefix">संदेश: \"%1$s\"</string>
+    <string name="report_message_prefix">संदेश: "%1$s"</string>
     <!-- google-translated 2026-05-04 -->
     <string name="report_reporter_reported">रिपोर्टर: %1$s | रिपोर्ट: %2$s</string>
 
@@ -944,6 +944,7 @@
     <string name="block_description">वे आपकी प्रोफ़ाइल नहीं देख पाएंगे.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user">आपको इस उपयोगकर्ता द्वारा ब्लॉक कर दिया गया है</string>
+    <string name="blocked_unblock_required">आपको उनका प्रोफ़ाइल देखने के लिए पहले उन्हें आपको अनब्लॉक करना होगा।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="blocked_by_user_in_room_description">इस कमरे में एक उपयोगकर्ता ने आपको ब्लॉक कर दिया है. आपके पास सीमित अनुभव हो सकता है. फिर भी दर्ज करें?</string>
     <!-- google-translated 2026-05-04 -->
@@ -984,12 +985,10 @@
     <string name="closing">समापन...</string>
     <!-- google-translated 2026-05-04 -->
     <string name="connecting">कनेक्ट हो रहा है...</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="connection_trouble">ShyTalk को हमारे सर्वर तक पहुंचने में परेशानी हो रही है। अपने इंटरनेट कनेक्शन की जाँच करें और पुन: प्रयास करें।</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_help">यदि आपको सहायता चाहिए, तो shytalk.help@gmail.com पर संपर्क करें</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="contact_support_hint">यदि समस्या बनी रहती है, तो shytalk.help@gmail.com पर संपर्क करें</string>
+    <!-- claude-translated 2026-08-22 -->
+    <string name="connection_trouble">हम ShyTalk के सर्वर तक नहीं पहुँच सके।</string>
+    <!-- claude-translated 2026-08-25 -->
+    <string name="connection_tips">यह आज़माएँ: देखें कि आप इंटरनेट से जुड़े हैं, कोई भी VPN बंद करें, फिर ऐप या अपना डिवाइस दोबारा चालू करें।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="contact_us">हमसे संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->
@@ -1016,8 +1015,8 @@
     <string name="denied">अस्वीकृत</string>
     <!-- google-translated 2026-05-04 -->
     <string name="description">विवरण</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="device_locked_description">यह डिवाइस पहले से ही किसी अन्य खाते से लिंक है।\nप्रति डिवाइस केवल एक खाते की अनुमति है।\n\nसहायता के लिए, Shytalk.help@gmail.com से संपर्क करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="device_locked_description">यह डिवाइस पहले से ही किसी अन्य खाते से लिंक है।\nप्रति डिवाइस केवल एक खाते की अनुमति है।\n\nसहायता के लिए shyden.co.uk पर जाएँ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="device_not_supported">उपकरण समर्थित नहीं</string>
     <!-- google-translated 2026-05-04 -->
@@ -1259,8 +1258,10 @@
     <string name="super_shy_days">बहुत शर्मीला ✦ %1$dd</string>
     <!-- google-translated 2026-05-04 -->
     <string name="super_shy_lifetime">सुपर शर्मीले ✦ लाइफटाइम</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="support_contact">सहायता के लिए, shytalk.help@gmail.com पर संपर्क करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_contact">सहायता के लिए, सेटिंग्स में जाएँ और "संपर्क करें" चुनें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="suspension_support_contact">यदि आप यहाँ अपील नहीं कर सकते, तो shyden.co.uk के ज़रिए संपर्क करें</string>
     <!-- google-translated 2026-05-04 -->
     <string name="suspension_ends_at">समाप्त: %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1273,10 +1274,6 @@
     <string name="suspension_reason">कारण: %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="tap_to_return">वापस लौटने के लिए टैप करें</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties">तकनीकी कठिनाई</string>
-    <!-- google-translated 2026-05-04 -->
-    <string name="technical_difficulties_description">ShyTalk वर्तमान में तकनीकी कठिनाइयों का सामना कर रहा है। कुछ सुविधाएं संभवतः ठीक से न कार्य करें। सेवाएं स्वचालित रूप से बहाल हो जाएंगी.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="unable_to_connect">कनेक्ट करने में असमर्थ</string>
     <!-- google-translated 2026-05-04 -->
@@ -1307,6 +1304,10 @@
     <string name="voice_chat_reimagined">वॉइस चैट रूम की फिर से कल्पना की गई।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="voice_chat_unavailable">वॉइस चैट अस्थायी रूप से अनुपलब्ध है</string>
+    <string name="voice_chat_disconnected">वॉइस चैट डिस्कनेक्ट हो गया</string>
+    <string name="voice_unavailable_can_still_chat">आप अब भी पढ़ और चैट कर सकते हैं</string>
+    <string name="voice_connecting">वॉइस कनेक्ट हो रहा है...</string>
+    <string name="voice_unavailable_mic_blocked">माइक्रोफ़ोन के लिए वॉइस चैट ज़रूरी है, जो अभी उपलब्ध नहीं है</string>
     <!-- google-translated 2026-05-04 -->
     <string name="wallet_with_balance">बटुआ · %1$s</string>
     <!-- google-translated 2026-05-04 -->
@@ -1413,7 +1414,6 @@
     <string name="time_unit_millisecond">एमएस</string>
 
     <!-- google-translated 2026-05-04 -->
-    <string name="splash_tagline">वॉइस चैट रूम की फिर से कल्पना की गई।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="quantity_all">सभी (%1$d)</string>
     <!-- google-translated 2026-05-04 -->
@@ -1471,7 +1471,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="starting_screen_police_duck_description">चेतावनी चित्रण</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="starting_screen_loading">लोड हो रहा है\u2026</string>
+    <string name="starting_screen_loading">लोड हो रहा है…</string>
     <!-- Security -->
     <!-- google-translated 2026-05-04 -->
     <string name="security_title">सुरक्षा</string>
@@ -1574,7 +1574,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="pin_verify_subtitle">जारी रखने के लिए अपना पिन दर्ज करें</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="pin_verifying">सत्यापन किया जा रहा है\u2026</string>
+    <string name="pin_verifying">सत्यापन किया जा रहा है…</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pin_wrong_attempts">ग़लत पिन. %1$d प्रयास शेष हैं.</string>
     <!-- google-translated 2026-05-04 -->
@@ -1600,7 +1600,7 @@
     <string name="biometric_start_failed">बायोमेट्रिक सत्यापन प्रारंभ नहीं हो सका</string>
     <!-- Auth loading -->
     <!-- google-translated 2026-05-04 -->
-    <string name="signing_in_loading">साइन इन हो रहा है\u2026</string>
+    <string name="signing_in_loading">साइन इन हो रहा है…</string>
     <!-- Time -->
     <!-- google-translated 2026-05-04 -->
     <string name="time_just_now">बस अब</string>
@@ -1660,6 +1660,48 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_body">निजी संदेश और गैचा केवल 18 वर्ष या उससे अधिक आयु के उपयोगकर्ताओं के लिए उपलब्ध हैं। आपके खाते में दर्ज जन्मतिथि के आधार पर, आप अभी तक पात्र नहीं हैं। यदि आपको लगता है कि यह गलत है, तो कृपया सहायता से संपर्क करें — हम दर्ज की गई जन्मतिथि को बदलने के लिए पहचान पत्र स्वीकार नहीं कर सकते।</string>
     <!-- translated 2026-06-01 -->
+    <string name="support_form_title">सहायता से संपर्क करें</string>
+    <string name="support_form_hint">हमें बताएं कि क्या गलत है, हम इसे देखेंगे।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_title">किसी की रिपोर्ट कैसे करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_intro">ऐप से की गई रिपोर्ट सीधे हमारी मॉडरेशन टीम तक जाती है, जो कार्रवाई कर सकती है। सहायता अनुरोध ऐसा नहीं कर सकता।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_profile">उनकी प्रोफ़ाइल खोलें और रिपोर्ट पर टैप करें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_room_card">किसी रूम में, उनका नाम या फ़ोटो टैप करके उनका कार्ड खोलें, फिर रिपोर्ट पर टैप करें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_step_message">रूम या निजी चैट में किसी संदेश को दबाकर रखें, फिर रिपोर्ट चुनें।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_title">कोशिश की और नहीं कर पाए?</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_body">अगर आप उनकी रिपोर्ट नहीं कर पाए — उन्होंने आपको ब्लॉक कर दिया, संदेश हट गया, या कुछ काम नहीं किया — तो हमें बताइए और हम आपकी ओर से रिपोर्ट दर्ज कर देंगे।</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="report_guide_stuck_action">इसके बजाय सहायता से संपर्क करें</string>
+    <string name="support_form_send">भेजें</string>
+    <string name="support_form_sent">धन्यवाद। हमें आपका संदेश मिल गया है और हम इसे देखेंगे।</string>
+    <string name="support_form_error_empty">भेजने से पहले कृपया एक संदेश लिखें।</string>
+    <string name="support_form_error_too_long">आपका संदेश बहुत लंबा है। कृपया इसे छोटा करके फिर से प्रयास करें।</string>
+    <string name="support_form_error_generic">हम आपका संदेश नहीं भेज सके। कृपया अपना कनेक्शन जांचें और फिर से प्रयास करें।</string>
+    <string name="support_form_error_attachment_failed">हम वह फ़ाइल अपलोड नहीं कर सके। आप उसके बिना अपना संदेश भेज सकते हैं।</string>
+    <string name="support_form_error_attachment_too_many">आप अधिकतम 10 फ़ाइलें जोड़ सकते हैं।</string>
+    <string name="support_form_error_attachment_type">इस प्रकार की फ़ाइल नहीं जोड़ी जा सकती। कृपया कोई चित्र या वीडियो चुनें।</string>
+    <string name="support_category_label">यह किस बारे में है?</string>
+    <string name="support_category_account">खाता और लॉगिन</string>
+    <string name="support_category_age">आयु और सत्यापन</string>
+    <string name="support_category_payment">सिक्के, बीन्स और खरीदारी</string>
+    <string name="support_category_safety">सुरक्षा और कोई अन्य व्यक्ति</string>
+    <string name="support_category_bug">कुछ काम नहीं कर रहा</string>
+    <string name="support_category_other">कुछ और</string>
+    <string name="support_attachments_label">स्क्रीनशॉट या वीडियो जोड़ें</string>
+    <string name="support_attachment_add">फ़ाइल जोड़ें</string>
+    <string name="support_attachment_remove">हटाएँ</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_close">पूर्वावलोकन बंद करें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_preview_open">यह फ़ाइल खोलें</string>
+    <!-- claude-translated 2026-08-24 -->
+    <string name="support_attachment_no_preview">कोई पूर्वावलोकन नहीं</string>
     <string name="age_restriction_sub_eighteen_confirm">सहायता से संपर्क करें</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_dismiss">रद्द करें</string>
@@ -1742,4 +1784,30 @@
     <string name="age_seg_age_up_welcome_pm">स्वागत है - आपका खाता व्यापक ShyTalk सर्कल में चला गया है।\n\nअब से आप खोज और सूचियों में अधिक लोगों को देखना शुरू कर देंगे। पिछले कनेक्शन जो आपके खाते के छोटे सर्कल में होने के दौरान साफ-सुथरे हो गए थे, उन्हें स्वचालित रूप से बहाल नहीं किया जा सकता है, लेकिन आप जिसे भी फॉलो करना चाहें उसे दोबारा जोड़ सकते हैं।</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">आपके खाते का विवरण ShyTalk स्टाफ द्वारा अपडेट कर दिया गया है। परिणामस्वरूप, आपको दिखाई देने वाले लोगों और कमरों को एक छोटे दायरे में सीमित कर दिया गया है।\n\nयदि आपको लगता है कि यह एक गलती है, तो सहायता से संपर्क करें और हम इसकी समीक्षा करेंगे।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_added">धन्यवाद। हमने इसे आपके पहले से खुले अनुरोध में जोड़ दिया है।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_reminder">उसी समस्या को दोबारा भेजने से इसमें तेजी नहीं आएगी। किसी चीज़ के लिए दूसरा अनुरोध जो आप हमें पहले ही बता चुके हैं, कतार में सबसे पीछे, प्रतीक्षा कर रहे सभी लोगों के पीछे जाता है।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_same">यह वह समस्या है जिसके बारे में मैं पहले ही रिपोर्ट कर चुका हूँ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_new">यह एक नई समस्या है</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_duplicate_back">वापस जाओ</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_one">आपके पास पहले से ही 1 अनुरोध खुला है.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_many">आपके पास पहले से ही %1$d अनुरोध खुले हैं।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_open_requests_more">और %1$d अधिक</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_image_too_large">वह छवि बहुत बड़ी है. कृपया 10 एमबी से कम का एक चुनें।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_too_long">वह वीडियो बहुत लंबा है. कृपया 30 सेकंड से कम का एक चुनें।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_error_video_unreadable">हम यह जांच नहीं कर सके कि वह वीडियो कितना लंबा है। कृपया कोई दूसरा प्रयास करें.</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_attachment_limits">10 फ़ाइलों तक. 10 एमबी तक की छवियाँ, 30 सेकंड तक के वीडियो।</string>
+    <!-- google-translated 2026-08-22 -->
+    <string name="support_form_character_count">%1$d / %2$d</string>
 </resources>

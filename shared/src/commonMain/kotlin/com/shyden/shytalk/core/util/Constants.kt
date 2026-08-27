@@ -70,7 +70,6 @@ object Constants {
     const val COMPANY_NAME = "Shyden Ltd"
     const val COMPANY_NUMBER = "17110487"
     const val COMPANY_ADDRESS = "71-75 Shelton Street, Covent Garden, London, WC2H 9JQ"
-    const val CONTACT_EMAIL = "shytalk.help@gmail.com"
 
     // Legal pages (Cloudflare Pages)
     const val LEGAL_BASE_URL = "https://shytalk.shyden.co.uk"

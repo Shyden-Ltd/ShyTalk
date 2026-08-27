@@ -2,16 +2,17 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.core.util.recoverListenerErrors
 import com.shyden.shytalk.data.firestore.dataMap
+import com.shyden.shytalk.data.remote.ApiException
 import com.shyden.shytalk.data.remote.IosApiClient
-import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.DocumentSnapshot
-import dev.gitlive.firebase.firestore.FieldPath
 import dev.gitlive.firebase.firestore.FieldValue
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
@@ -31,12 +32,44 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlinx.serialization.json.longOrNull
 
 private const val TAG = "UserRepository"
+
+// SHY-0338 — ids per POST /api/users/batch request. The server refuses more
+// than 200 rather than truncating, so stay comfortably inside it.
+private const val BATCH_USER_PAGE = 100
+
+/**
+ * A `JsonElement` as the plain Kotlin value `User.fromMap` / `ProfileVisitor
+ * .fromMap` expect — the same shapes Firestore's `dataMap()` produces, so the
+ * models are unchanged by the move off direct Firestore reads.
+ *
+ * `JsonNull` must be matched BEFORE `JsonPrimitive`: it is a subtype, and
+ * testing the general case first would turn every null into the string "null".
+ */
+private fun jsonToAny(el: JsonElement): Any? =
+    when {
+        el is JsonNull -> null
+
+        el is JsonPrimitive ->
+            when {
+                el.isString -> el.content
+                else -> el.booleanOrNull ?: el.longOrNull ?: el.doubleOrNull ?: el.content
+            }
+
+        el is JsonArray -> el.map { jsonToAny(it) }
+
+        el is JsonObject -> jsonToMap(el)
+
+        else -> null
+    }
+
+private fun jsonToMap(obj: JsonObject): Map<String, Any?> = obj.mapValues { jsonToAny(it.value) }
 
 class IosUserRepositoryImpl(
     private val api: IosApiClient,
@@ -66,6 +99,28 @@ class IosUserRepositoryImpl(
 
     // ── Read methods ────────────────────────────────────────────────
 
+    // SHY-0348 — see the Android twin. Somebody ELSE's profile goes through the
+    // API so the server's block gate applies; the status code is what tells
+    // "blocked" apart from "gone" and from a transport failure.
+    override suspend fun getProfileForViewing(userId: String): Resource<UserRepository.ProfileAccess> =
+        firebaseCall("Failed to load profile") {
+            try {
+                val json = api.get("/api/users/$userId")
+                UserRepository.ProfileAccess.Visible(
+                    User.fromMap(
+                        jsonToMap(json),
+                        json["uniqueId"]?.jsonPrimitive?.content ?: userId,
+                    ),
+                )
+            } catch (e: ApiException) {
+                when (e.statusCode) {
+                    403 -> UserRepository.ProfileAccess.BlockedByOwner
+                    404 -> UserRepository.ProfileAccess.NotFound
+                    else -> throw e
+                }
+            }
+        }
+
     override suspend fun getUser(userId: String): Resource<User> =
         firebaseCall("Failed to get user") {
             val doc = firestore.collection("users").document(userId).get()
@@ -89,41 +144,68 @@ class IosUserRepositoryImpl(
                 ?.toSet() ?: emptySet()
         }
 
+    // SHY-0338 — batch profile read, via the API rather than Firestore.
+    //
+    // This used to be `where { FieldPath.documentId inArray chunk }` straight
+    // from the client. `firestore.rules` gates a users read on
+    // `cohortMatchesCaller()`, and that refusal is ALL-OR-NOTHING: one member
+    // of the chunk failing the gate denies the WHOLE query and the other 29
+    // readable users go with it. `cohort` arrived with UK OSA #17, so a single
+    // older follower emptied a whole page — and the `catch` below returned
+    // `emptyList()`, so the screen showed a blank list with no error.
+    //
+    // `POST /api/users/batch` filters PER USER instead. The catch is gone on
+    // purpose: a failure must reach the caller as `Resource.Error`, not
+    // masquerade as "you follow nobody".
+    //
+
+    // Decode a `users` array from an API response.
+    //
+    // `uniqueId` is the document id, and the rest of the app keys users by
+    // `User.uid` — `FollowListViewModel` looks members up with
+    // `allUsers[followerId]`. Getting this wrong would produce an empty list
+    // again, from a completely different cause, so it is done in ONE place.
+    //
+    private fun usersFromArray(el: JsonElement?): List<User> =
+        (el as? JsonArray).orEmpty().mapNotNull { entry ->
+            (entry as? JsonObject)?.let { obj ->
+                User.fromMap(jsonToMap(obj), obj["uniqueId"]?.jsonPrimitive?.content ?: "")
+            }
+        }
+
     override suspend fun getUsers(userIds: List<String>): Resource<List<User>> {
         if (userIds.isEmpty()) return Resource.Success(emptyList())
         return firebaseCall("Failed to get users") {
-            userIds.chunked(30).flatMap { chunk ->
-                try {
-                    val snapshot =
-                        firestore
-                            .collection("users")
-                            .where { FieldPath.documentId inArray chunk }
-                            .get()
-                    snapshot.documents.map { doc -> docToUser(doc, doc.id) }
-                } catch (e: Exception) {
-                    logW(TAG, "Failed to batch-load ${chunk.size} users")
-                    emptyList()
-                }
+            userIds.chunked(BATCH_USER_PAGE).flatMap { chunk ->
+                val body = JsonObject(mapOf("ids" to JsonArray(chunk.map { JsonPrimitive(it) })))
+                usersFromArray(api.post("/api/users/batch", body)["users"])
             }
         }
     }
 
-    override suspend fun getStalkers(profileUserId: String): Resource<List<ProfileVisitor>> =
+    // SHY-0338 — the stalker page, via the API rather than Firestore.
+    //
+    // The old ordered subcollection query was refused outright: the rule's
+    // second clause reads `resource.data`, which the engine cannot evaluate for
+    // a query. A stalker document also carries no `cohort` field, so an adult
+    // caller failed the gate even on a single-document read. Two independent
+    // reasons this list was always empty — and the `catch` returned `null` per
+    // document, so nothing said so.
+    //
+    // The server now returns the visits AND the visitors' profiles in one
+    // response, so the second round trip that used to fail is gone with it.
+    //
+    override suspend fun getStalkers(profileUserId: String): Resource<UserRepository.StalkerPage> =
         firebaseCall("Failed to load stalkers") {
-            val snapshot =
-                firestore
-                    .collection("users/$profileUserId/stalkers")
-                    .orderBy("lastVisitedAt", Direction.DESCENDING)
-                    .limit(50)
-                    .get()
-            snapshot.documents.mapNotNull { doc ->
-                try {
-                    val data = doc.dataMap()
-                    ProfileVisitor.fromMap(data)
-                } catch (e: Exception) {
-                    null
-                }
-            }
+            val json = api.get("/api/users/$profileUserId/stalkers")
+            val visits = json["stalkers"] as? JsonArray
+            UserRepository.StalkerPage(
+                visitors =
+                    visits.orEmpty().mapNotNull { el ->
+                        (el as? JsonObject)?.let { ProfileVisitor.fromMap(jsonToMap(it)) }
+                    },
+                users = usersFromArray(json["users"]),
+            )
         }
 
     override suspend fun getAliases(userId: String): Resource<Map<String, String>> =
@@ -143,33 +225,15 @@ class IosUserRepositoryImpl(
             data["warningReason"] as? String
         }
 
-    override suspend fun checkBlockedBy(
-        userIds: List<String>,
-        targetUserId: String,
-    ): Resource<Set<String>> {
+    override suspend fun checkBlockedBy(userIds: List<String>): Resource<Set<String>> {
         if (userIds.isEmpty()) return Resource.Success(emptySet())
         return firebaseCall("Failed to check blocks") {
-            userIds
-                .chunked(30)
-                .flatMap { chunk ->
-                    try {
-                        val snapshot =
-                            firestore
-                                .collection("users")
-                                .where { FieldPath.documentId inArray chunk }
-                                .get()
-                        snapshot.documents.mapNotNull { doc ->
-                            val data = doc.dataMap()
-                            val blockedIds =
-                                (data["blockedUserIds"] as? List<*>)
-                                    ?.filterIsInstance<String>() ?: emptyList()
-                            if (targetUserId in blockedIds) doc.id else null
-                        }
-                    } catch (e: Exception) {
-                        logW(TAG, "Failed to batch-check blocks for ${chunk.size} users")
-                        emptyList()
-                    }
-                }.toSet()
+            val body = JsonObject(mapOf("userIds" to JsonArray(userIds.map { JsonPrimitive(it) })))
+            val response = api.post("/api/users/blocked-by", body)
+            (response["blockedBy"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.content }
+                ?.toSet()
+                ?: emptySet()
         }
     }
 
@@ -188,6 +252,11 @@ class IosUserRepositoryImpl(
                     suspensionEndDate = (data["suspensionEndDate"] as? Number)?.toLong(),
                     hasActiveWarning = data["hasActiveWarning"] as? Boolean ?: false,
                     warningReason = data["warningReason"] as? String,
+                    // SHY-0459: the twin of the Android reader. A cohort read on
+                    // one platform and not the other is how the two surfaces
+                    // drift apart without anybody noticing.
+                    cohort = data["cohort"] as? String ?: COHORT_MINOR,
+                    cohortOverride = data["cohortOverride"] as? String,
                 )
             }
             // SHY-0185: a `.snapshots` listener error (rules denial / network
