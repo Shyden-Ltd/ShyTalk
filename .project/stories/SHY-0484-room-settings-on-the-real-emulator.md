@@ -103,6 +103,33 @@ as a value rather than as "missing".
 | Unit (`*.unit.test.js`) | Each route answers 500 when the transaction throws. |
 | Mutation | Removing the owner check, and dropping the trim, each fail the suite. |
 
+## Outcome
+
+`room-settings.test.js` — **18 tests, zero doubles**.
+`room-settings-errors.unit.test.js` — 2. **19 → 20**.
+`room-mutations.test.js` drops **819 → 671 lines, 110 → 96 doubles**.
+
+Running total across SHY-0481/0482/0483/0484:
+**1922 → 671 lines, 181 → 96 doubles.**
+
+### Mutation-tested
+
+| Mutation | Result |
+| --- | --- |
+| Drop the trim on rename | **2 fail** |
+| `!req.body?.requireApproval` — treat `false` as missing | **2 fail** |
+
+The second is the classic falsy bug, and it would mean **nobody could ever
+disable approval**. It is caught only because the assertion reads the stored
+value: a recorded `{ requireApproval: false }` looks identical whether it was
+applied or ignored.
+
+### One behaviour gained coverage
+
+A name **exactly at the 50-character limit** is accepted. Pinned in characters,
+so the limit cannot quietly become a byte limit — which would reject shorter
+names in most of our locales.
+
 ## Out of Scope
 
 - owner-away / owner-returned / close, `disconnect-user` (RTDB presence,
