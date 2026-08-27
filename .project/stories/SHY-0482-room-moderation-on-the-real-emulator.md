@@ -111,6 +111,35 @@ probe a room's state by comparing error codes.
 | Route (real emulator) | Gate ordering, by using inputs that would otherwise succeed. |
 | Mutation | Removing the kick role check fails the suite. |
 
+## Outcome
+
+`room-moderation.test.js` — **29 tests, zero doubles**.
+`room-mutations.test.js` drops **1420 → 1064 lines, 162 → 136 doubles**.
+
+Running total for the file across SHY-0481 and this: **1922 → 1064 lines,
+181 → 136 doubles**.
+
+### Mutation-tested
+
+| Mutation | Result |
+| --- | --- |
+| Neuter the kick role check | **3 fail** |
+| Let anyone force-mute | **4 fail** |
+| **Reintroduce SHY-0272** — route self-mute back through the moderator gate | **3 fail** |
+
+The last is the one worth having. SHY-0272 shipped to a real device — *"the mic
+is stuck open and cannot be muted"* — because **nothing covered self-mute**. It
+cannot come back silently now.
+
+### Assertions that got stronger
+
+| Was | Now |
+| --- | --- |
+| `bannedUserIds: { __arrayUnion: ['99'] }` — a marker object | the person really is in `bannedUserIds` and really out of `participantIds` |
+| `Object.keys(update).some(k => k.startsWith('seats.'))` is false | every seat compared **equal** to what it was |
+| `hostIds: { __arrayUnion: ['99'] }` | resolved for real, and the existing host still there exactly once |
+| `expect(mockTxnUpdate).not.toHaveBeenCalled()` | the whole room document read back **unchanged** |
+
 ## Out of Scope
 
 - `disconnect-user`, which reads RTDB presence — the umbrella sequences that
