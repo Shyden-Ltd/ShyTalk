@@ -1,822 +1,329 @@
+/**
+ * The rooms write routes, against REAL Firestore and RTDB.
+ *
+ *   POST /api/rooms/:roomId/invites/send
+ *   POST /api/rooms/:roomId/seat-requests
+ *
+ * ─── What changed, and why it mattered (SHY-0480) ───────────────────────────
+ *
+ * This file used to replace Firestore, RTDB and messaging wholesale — 94
+ * doubles. The count understates it: `db.doc()` ignored its path and returned
+ * the SAME stub for every document, so no assertion here could tell the room
+ * from the invitee from the inviter. "The room was updated" meant "some
+ * document's update function was called".
+ *
+ * Now the documents are real and every write assertion reads Firestore back, so
+ * a route that did nothing fails.
+ *
+ * ─── The split ──────────────────────────────────────────────────────────────
+ *
+ * The FCM behaviours — push payloads, invalid-token cleanup, the "Someone" and
+ * "a room" display-name fallbacks, and what happens when a send fails — moved to
+ * `rooms-fcm.unit.test.js`. There is no local FCM emulator, so they are genuine
+ * units, and `*.unit.test.js` is the location the no-new-stubs ratchet
+ * (EPIC-0003) reserves for exactly that. The two induced failures (a document
+ * fetch throwing, an RTDB write failing) went with them: real Firestore will not
+ * produce those on demand.
+ *
+ * That is what lets THIS file reach zero doubles instead of sitting in the
+ * baseline forever for the sake of a dozen tests that were never route tests.
+ */
+
+// Set BEFORE requiring src/utils/firebase: outside 'local' it demands
+// FIREBASE_DATABASE_URL and calls process.exit(1) at module load.
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
+
 const express = require('express');
 const request = require('supertest');
 
-// ─── Firebase mock ───────────────────────────────────────────────
-
-const mockDocGet = jest.fn();
-const mockDocUpdate = jest.fn().mockResolvedValue();
-const mockDocSet = jest.fn().mockResolvedValue();
-const mockCollectionGet = jest.fn();
-const mockRtdbSet = jest.fn().mockResolvedValue();
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    doc: jest.fn(() => ({
-      get: mockDocGet,
-      update: mockDocUpdate,
-      set: mockDocSet,
-    })),
-    collection: jest.fn(() => ({
-      where: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: mockCollectionGet,
-          })),
-        })),
-      })),
-    })),
-  },
-  rtdb: {
-    ref: jest.fn(() => ({
-      set: mockRtdbSet,
-    })),
-  },
-  messaging: {
-    sendEachForMulticast: jest.fn().mockResolvedValue({ responses: [] }),
-  },
-  FieldValue: {
-    arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
-  },
-}));
-
-jest.mock('../../src/utils/helpers', () => ({
-  generateId: () => 'req-123',
-  now: () => 1709913600000,
-}));
-
-const mockSendFcmToTokens = jest.fn().mockResolvedValue([]);
-const mockCleanupInvalidTokens = jest.fn().mockResolvedValue();
-
-jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: (...args) => mockSendFcmToTokens(...args),
-  cleanupInvalidTokens: (...args) => mockCleanupInvalidTokens(...args),
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
-const log = require('../../src/utils/log');
-
-beforeEach(() => {
-  jest.clearAllMocks();
-});
-
-// ─── App setup ───────────────────────────────────────────────────
-
+const { db, rtdb } = require('../../src/utils/firebase');
+const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
 const roomsRouter = require('../../src/routes/rooms');
 
-function createApp(uniqueId = 'user-A') {
+// Per-file id range: no seeded persona, no other suite (SHY-0464).
+const CALLER = 64600001;
+const INVITEE = 64600002;
+const OWNER = 64600003;
+const OTHER = 64600004;
+const ACTORS = [CALLER, INVITEE, OWNER, OTHER];
+
+const ROOM = 'shy0480-room';
+const MAX_USER_NAME_LENGTH = 50;
+
+const roomDoc = () => db.doc(`rooms/${ROOM}`);
+const seatRequestsCol = () => db.collection(`rooms/${ROOM}/seatRequests`);
+
+const pendingInvites = async () => {
+  const snap = await roomDoc().get();
+  return snap.exists ? snap.data().pendingInvites || {} : null;
+};
+
+const seatRequests = async () => (await seatRequestsCol().get()).docs.map((d) => d.data());
+
+async function clearSeatRequests() {
+  const snap = await seatRequestsCol().get();
+  await Promise.all(snap.docs.map((d) => d.ref.delete()));
+}
+
+function createApp(uniqueId = String(CALLER)) {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.auth = { uid: 'firebase-uid', uniqueId };
+    req.auth = { uid: `rt-uid-${uniqueId}`, uniqueId, token: { cohort: 'adult' } };
     next();
   });
-  // Mount at /api — same as production index.js
+  // Mounted at /api — same as production index.js.
   app.use('/api', roomsRouter);
   return app;
 }
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeAll(assertEmulatorReachable);
+
+beforeEach(async () => {
+  await clearSeatRequests();
+  await Promise.all([
+    roomDoc().set({ name: 'Test Room', ownerId: String(OWNER), pendingInvites: {} }),
+    // Same cohort throughout: the cross-cohort gate is SHY-0479's subject, and
+    // a mismatch here would refuse every request for the wrong reason.
+    ...ACTORS.map((id) => db.doc(`users/${id}`).set({ uniqueId: id, cohort: 'adult' })),
+  ]);
+});
+
+afterAll(async () => {
+  await clearSeatRequests();
+  await Promise.all([roomDoc().delete(), ...ACTORS.map((id) => db.doc(`users/${id}`).delete())]);
+  await rtdb
+    .ref(`rooms/${ROOM}`)
+    .remove()
+    .catch(() => {});
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/rooms/:roomId/invites/send
+// ═══════════════════════════════════════════════════════════════════
 
 describe('POST /api/rooms/:roomId/invites/send', () => {
   test('route is reachable (no double /api prefix)', async () => {
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        name: 'Test Room',
-        pendingInvites: {},
-      }),
-    });
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE), invitedBy: String(CALLER) });
 
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' });
-
-    // Should NOT be 404 (which would mean route doesn't match)
+    // A 404 here would mean the route did not match at all.
     expect(res.status).not.toBe(404);
     expect(res.status).toBe(200);
   });
 
   test('returns 400 when userId is missing', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ invitedBy: 'user-A' })
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ invitedBy: String(CALLER) })
       .expect(400);
+    expect(await pendingInvites()).toEqual({});
   });
 
   test('returns 400 when invitedBy is missing', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B' })
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE) })
       .expect(400);
+    expect(await pendingInvites()).toEqual({});
   });
 
   test('returns 404 when room does not exist', async () => {
-    mockDocGet.mockResolvedValue({ exists: false });
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
+    await roomDoc().delete();
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE), invitedBy: String(CALLER) })
       .expect(404);
   });
 
   test('returns 403 when invitedBy is spoofed (does not match auth)', async () => {
-    const app = createApp('real-user');
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'impersonated-user' });
+    const res = await request(createApp(String(CALLER)))
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE), invitedBy: String(OTHER) });
 
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/another user/i);
+    // Refused BEFORE any write.
+    expect(await pendingInvites()).toEqual({});
   });
 
   test('merges into existing pendingInvites on room doc', async () => {
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        name: 'Room',
-        pendingInvites: { 'existing-user': { invitedBy: 'someone', invitedAt: 1000 } },
-      }),
+    await roomDoc().set({
+      name: 'Room',
+      ownerId: String(OWNER),
+      pendingInvites: { [String(OTHER)]: { invitedBy: String(OWNER), invitedAt: 1000 } },
     });
 
-    const app = createApp('user-A');
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE), invitedBy: String(CALLER) })
       .expect(200);
 
-    // pendingInvites should include both the existing and new invite
-    const updateCall = mockDocUpdate.mock.calls[0];
-    expect(updateCall[0].pendingInvites['existing-user']).toBeDefined();
-    expect(updateCall[0].pendingInvites['user-B']).toBeDefined();
+    // Both invites present in the REAL document — a merge, not a replace.
+    const invites = await pendingInvites();
+    expect(Object.keys(invites).sort()).toEqual([String(OTHER), String(INVITEE)].sort());
+    expect(invites[String(OTHER)].invitedBy).toBe(String(OWNER));
+    expect(invites[String(INVITEE)].invitedBy).toBe(String(CALLER));
   });
 
-  // --- FCM invite path (lines 63-89) ---
+  test('missing invitee returns 404 (existence-hiding) — no invite write', async () => {
+    await db.doc(`users/${INVITEE}`).delete();
 
-  test('sends FCM push to invitee with tokens', async () => {
-    // First call: room doc, second: invitee doc, third: inviter doc
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Cool Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['token-1', 'token-2'] }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ displayName: 'Alice' }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' });
-
-    expect(res.status).toBe(200);
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['token-1', 'token-2'],
-      expect.objectContaining({
-        type: 'ROOM_INVITE',
-        roomId: 'room-1',
-        roomName: 'Cool Room',
-        invitedBy: 'user-A',
-        inviterName: 'Alice',
-      }),
-      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
-    );
-  });
-
-  test('cleans up invalid tokens after FCM send', async () => {
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['good-token', 'bad-token'] }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ displayName: 'Bob' }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue(['bad-token']);
-
-    const app = createApp('user-A');
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
-      .expect(200);
-
-    expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['bad-token'], 'user-B');
-  });
-
-  test('skips FCM when invitee has no tokens', async () => {
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: [] }),
-      });
-
-    const app = createApp('user-A');
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
-      .expect(200);
-
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
-  });
-
-  test('missing invitee returns 404 (PR 4 existence-hiding) — no FCM, no invite write', async () => {
-    // Pre-PR 4 this was a silent 200 + "skip FCM" — the missing-target
-    // signal leaks invitee existence to the caller. PR 4 enforces the
-    // cross-cohort middleware's existence-hiding contract: missing
-    // target user → 404 `{ error: 'Not found' }`, no side effects.
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({ exists: false });
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' });
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE), invitedBy: String(CALLER) });
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'Not found' });
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
-    expect(mockDocUpdate).not.toHaveBeenCalled();
+    expect(await pendingInvites()).toEqual({});
   });
 
-  test('uses "Someone" when inviter displayName is missing', async () => {
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({}), // No displayName
-      });
+  test('the room event is broadcast on the happy path', async () => {
+    // The RTDB write is how clients learn the room changed. It was previously
+    // asserted only as "a stub was called"; here it is read back.
+    await rtdb
+      .ref(`rooms/${ROOM}/events/lastEvent`)
+      .remove()
+      .catch(() => {});
 
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('user-A');
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/invites/send`)
+      .send({ userId: String(INVITEE), invitedBy: String(CALLER) })
       .expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['tok-1'],
-      expect.objectContaining({ inviterName: 'Someone' }),
-      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
-    );
-  });
-
-  test('uses "Someone" when inviter doc does not exist', async () => {
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      })
-      .mockResolvedValueOnce({
-        exists: false,
-      });
-
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('user-A');
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
-      .expect(200);
-
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['tok-1'],
-      expect.objectContaining({ inviterName: 'Someone' }),
-      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
-    );
-  });
-
-  test('uses "a room" when room name is missing', async () => {
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ pendingInvites: {} }), // No name
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ displayName: 'Alice' }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('user-A');
-    await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
-      .expect(200);
-
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['tok-1'],
-      expect.objectContaining({ roomName: 'a room' }),
-      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
-    );
-  });
-
-  test('logs error and still returns 200 when FCM push fails', async () => {
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ name: 'Room', pendingInvites: {} }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ displayName: 'Alice' }),
-      });
-
-    mockSendFcmToTokens.mockRejectedValue(new Error('FCM service down'));
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(log.error).toHaveBeenCalledWith(
-      'rooms',
-      'Failed to send invite FCM',
-      expect.objectContaining({ error: 'FCM service down' }),
-    );
-  });
-
-  // --- RTDB broadcast error (line 28) ---
-
-  test('logs error when RTDB broadcast fails', async () => {
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ name: 'Room', pendingInvites: {} }),
-    });
-
-    mockRtdbSet.mockRejectedValue(new Error('RTDB write failed'));
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' });
-
-    // Should still succeed (broadcast failure is non-fatal)
-    expect(res.status).toBe(200);
-    expect(log.error).toHaveBeenCalledWith(
-      'rooms',
-      'Failed to write RTDB event',
-      expect.objectContaining({ error: 'RTDB write failed' }),
-    );
-  });
-
-  // --- Top-level catch block (lines 94-95) ---
-
-  test('returns 500 when room doc fetch throws', async () => {
-    mockDocGet.mockRejectedValue(new Error('Firestore down'));
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' });
-
-    expect(res.status).toBe(500);
-    expect(res.body.error).toBe('Internal server error');
-    expect(log.error).toHaveBeenCalledWith(
-      'rooms',
-      'Send invite failed',
-      expect.objectContaining({ error: 'Firestore down' }),
-    );
+    const snap = await rtdb.ref(`rooms/${ROOM}/events/lastEvent`).once('value');
+    expect(snap.val()).toMatchObject({ type: 'room_updated' });
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════
+// POST /api/rooms/:roomId/seat-requests
+// ═══════════════════════════════════════════════════════════════════
+
 describe('POST /api/rooms/:roomId/seat-requests', () => {
   test('route is reachable (no double /api prefix)', async () => {
-    // No existing pending request
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    // Room doc for FCM push
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        ownerId: 'owner-1',
-        name: 'Test Room',
-      }),
-    });
-
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: 2 });
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ userName: 'Alice', seatIndex: 1 });
 
     expect(res.status).not.toBe(404);
     expect(res.status).toBe(200);
-    expect(res.body.requestId).toBeDefined();
   });
 
-  test('returns 400 when seatIndex is missing', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice' })
+  // Every rejected form of seatIndex, asserted against the real route AND
+  // against Firestore: a 400 that still wrote a request would be worse than
+  // no validation at all.
+  test.each([
+    ['missing', {}],
+    ['a string', { seatIndex: '3' }],
+    ['negative', { seatIndex: -1 }],
+    ['above the maximum (20)', { seatIndex: 21 }],
+    ['a float', { seatIndex: 1.5 }],
+    ['null', { seatIndex: null }],
+  ])('returns 400 when seatIndex is %s', async (_label, body) => {
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ userName: 'Alice', ...body })
       .expect(400);
+    expect(await seatRequests()).toHaveLength(0);
   });
 
-  test('returns 400 when seatIndex is a string', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: 'abc' })
-      .expect(400);
-  });
-
-  test('returns 400 when seatIndex is negative', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: -1 })
-      .expect(400);
-  });
-
-  test('returns 400 when seatIndex exceeds max (20)', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: 21 })
-      .expect(400);
-  });
-
-  test('returns 400 when seatIndex is a float', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: 2.5 })
-      .expect(400);
-  });
-
-  test('returns 400 when seatIndex is null', async () => {
-    const app = createApp();
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: null })
-      .expect(400);
-  });
-
-  test('accepts seatIndex 0 (boundary)', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-    });
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: 0 });
+  test.each([0, 20])('accepts seatIndex %i (boundary)', async (seatIndex) => {
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ userName: 'Alice', seatIndex });
 
     expect(res.status).toBe(200);
-  });
-
-  test('accepts seatIndex 20 (max boundary)', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-    });
-
-    const app = createApp('user-A');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Alice', seatIndex: 20 });
-
-    expect(res.status).toBe(200);
+    // The boundary value survived into storage, not merely past validation.
+    expect(await seatRequests()).toEqual([expect.objectContaining({ seatIndex })]);
   });
 
   test('truncates userName exceeding max length', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ ownerId: 'owner-1', name: 'Test Room' }),
-    });
-
-    const app = createApp('requester-1');
     const longName = 'A'.repeat(100);
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
       .send({ userName: longName, seatIndex: 2 })
       .expect(200);
 
-    // The userName written to Firestore should be truncated to 50 chars
-    const setCall = mockDocSet.mock.calls[0];
-    expect(setCall[0].userName.length).toBe(50);
+    // Truncation is only real if Firestore holds the short one.
+    const [stored] = await seatRequests();
+    expect(stored.userName).toHaveLength(MAX_USER_NAME_LENGTH);
+    expect(stored.userName).toBe('A'.repeat(MAX_USER_NAME_LENGTH));
   });
 
   test('updates existing pending request instead of creating new one', async () => {
-    mockCollectionGet.mockResolvedValue({
-      empty: false,
-      docs: [{ id: 'existing-req-1' }],
-    });
-
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
+    const first = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
       .send({ userName: 'Alice', seatIndex: 3 })
       .expect(200);
 
-    expect(res.body.requestId).toBe('existing-req-1');
-    expect(mockDocUpdate).toHaveBeenCalled();
-  });
-
-  // --- FCM seat request path (lines 162-177) ---
-
-  test('sends FCM push to room owner when creating new seat request', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    // First call: room doc (for FCM), second call: owner doc
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Fun Room' }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['owner-token-1'] }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('requester-1');
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 3 })
+    const second = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ userName: 'Alice', seatIndex: 7 })
       .expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['owner-token-1'],
-      expect.objectContaining({
-        type: 'SEAT_REQUEST',
-        roomId: 'room-1',
-        roomName: 'Fun Room',
-        requesterId: 'requester-1',
-        requesterName: 'Bob',
-        seatIndex: '3',
-      }),
-      { senderUniqueId: 'requester-1', recipientUniqueId: 'owner-1' },
-    );
+    // Same request, moved — not a second one. Asserted by counting real
+    // documents, which the previous stub could not do.
+    expect(second.body.requestId).toBe(first.body.requestId);
+    const stored = await seatRequests();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ seatIndex: 7, status: 'PENDING' });
   });
 
-  test('cleans up invalid tokens after seat request FCM send', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['good', 'bad'] }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue(['bad']);
-
-    const app = createApp('requester-1');
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 })
+  test('a new request is stored with the full contract', async () => {
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ userName: 'Alice', seatIndex: 4 })
       .expect(200);
 
-    expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['bad'], 'owner-1');
-  });
-
-  test('rooms without ownerId are refused (404) — PR 4 cohort-resolution requirement', async () => {
-    // Pre-PR 4: silently allowed (created seat-request, skipped FCM).
-    // Post-PR 4: cohort gate requires a resolvable owner; refuse rather
-    // than fall through to the Firestore rules backstop. Code-review C3.
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({ name: 'Ownerless Room' }), // No ownerId
+    const created = await db.doc(`rooms/${ROOM}/seatRequests/${res.body.requestId}`).get();
+    expect(created.exists).toBe(true);
+    expect(created.data()).toMatchObject({
+      requestId: res.body.requestId,
+      userId: String(CALLER),
+      userName: 'Alice',
+      seatIndex: 4,
+      status: 'PENDING',
+      resolvedBy: null,
+      resolvedAt: null,
     });
+  });
 
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 });
+  test('rooms without ownerId are refused (404) — cohort cannot be resolved', async () => {
+    await roomDoc().set({ name: 'Anonymous Room' });
+
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ seatIndex: 3 });
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'Room not found' });
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
-    expect(mockDocSet).not.toHaveBeenCalled();
+    expect(await seatRequests()).toHaveLength(0);
   });
 
-  test('skips FCM when owner has no tokens', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+  test('missing owner doc returns 404 (existence-hiding)', async () => {
+    await db.doc(`users/${OWNER}`).delete();
 
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: [] }),
-      });
-
-    const app = createApp('requester-1');
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 })
-      .expect(200);
-
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
-  });
-
-  test('missing owner doc returns 404 (PR 4 existence-hiding)', async () => {
-    // Pre-PR 4: silently created seat-request, skipped FCM, returned
-    // 200. Post-PR 4: middleware sees null target → 404 existence-
-    // hiding. Seat-request never created.
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-      })
-      .mockResolvedValueOnce({ exists: false });
-
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 });
+    const res = await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ seatIndex: 3 });
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: 'Not found' });
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
-    expect(mockDocSet).not.toHaveBeenCalled();
+    expect(await seatRequests()).toHaveLength(0);
   });
 
   test('missing room doc returns 404 up front (no seat-request created)', async () => {
-    // Pre-PR 4: handler created the seat-request, then discovered no
-    // room in the FCM block and silently 200'd. Post-PR 4: room fetch
-    // is hoisted; missing room → 404 before any side effects.
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-    mockDocGet.mockResolvedValue({ exists: false });
+    await roomDoc().delete();
 
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 });
-
-    expect(res.status).toBe(404);
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
-    expect(mockDocSet).not.toHaveBeenCalled();
-  });
-
-  test('uses "a room" as roomName fallback in seat request FCM', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1' }), // No name
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('requester-1');
-    await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 })
-      .expect(200);
-
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['tok-1'],
-      expect.objectContaining({ roomName: 'a room' }),
-      { senderUniqueId: 'requester-1', recipientUniqueId: 'owner-1' },
-    );
-  });
-
-  test('uses empty string as requesterName when userName is not provided', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      });
-
-    mockSendFcmToTokens.mockResolvedValue([]);
-
-    const app = createApp('requester-1');
-    await request(app).post('/api/rooms/room-1/seat-requests').send({ seatIndex: 1 }).expect(200);
-
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['tok-1'],
-      expect.objectContaining({ requesterName: '' }),
-      { senderUniqueId: 'requester-1', recipientUniqueId: 'owner-1' },
-    );
-  });
-
-  test('logs error and still returns 200 when seat request FCM fails', async () => {
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-      })
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ fcmTokens: ['tok-1'] }),
-      });
-
-    mockSendFcmToTokens.mockRejectedValue(new Error('FCM unavailable'));
-
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 });
-
-    expect(res.status).toBe(200);
-    expect(log.error).toHaveBeenCalledWith(
-      'rooms',
-      'Failed to send seat request FCM',
-      expect.objectContaining({ error: 'FCM unavailable' }),
-    );
-  });
-
-  // --- Top-level catch block (lines 186-193) ---
-
-  test('returns 500 when seat request creation throws', async () => {
-    // PR 4 hoisted the room+owner fetches to the top — pre-stage them
-    // here so execution reaches the collection lookup that throws.
-    mockDocGet
-      .mockResolvedValueOnce({
-        exists: true,
-        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
-      })
-      .mockResolvedValueOnce({ exists: true, data: () => ({}) });
-    mockCollectionGet.mockRejectedValue(new Error('Firestore timeout'));
-
-    const app = createApp('requester-1');
-    const res = await request(app)
-      .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 });
-
-    expect(res.status).toBe(500);
-    expect(res.body.error).toBe('Internal server error');
-    expect(log.error).toHaveBeenCalledWith(
-      'rooms',
-      'Create seat request failed',
-      expect.objectContaining({ error: 'Firestore timeout' }),
-    );
+    await request(createApp())
+      .post(`/api/rooms/${ROOM}/seat-requests`)
+      .send({ seatIndex: 3 })
+      .expect(404);
+    expect(await seatRequests()).toHaveLength(0);
   });
 });
