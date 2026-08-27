@@ -1,13 +1,13 @@
 {
   "_meta": {
-    "epicCount": 10,
-    "generatedAt": "2026-08-13T12:24:49.824Z",
+    "epicCount": 12,
+    "generatedAt": "2026-08-27T13:44:40.561Z",
     "generatedFrom": ".project/stories/",
     "schemaVersion": 2,
     "shyCount": 4
   },
   "currentlyWorkingOn": [],
-  "lastUpdated": "2026-08-13T12:24:49.824Z",
+  "lastUpdated": "2026-08-27T13:44:40.561Z",
   "phases": [
     {
       "features": [
