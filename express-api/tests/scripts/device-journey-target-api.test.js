@@ -22,7 +22,23 @@ const path = require('node:path');
 
 const REPO_ROOT = path.join(__dirname, '..', '..', '..');
 const RUNNER = path.join(REPO_ROOT, 'express-api', 'scripts', 'device-journey-runner.js');
-const { resolveTargetApi, TARGETS } = require(RUNNER);
+const { resolveTargetApi, TARGETS, devFirebaseKey, DEV_GOOGLE_SERVICES } = require(RUNNER);
+
+/**
+ * A stand-in key, so the dev tests do not depend on a gitignored file.
+ *
+ * `app/src/dev/google-services.json` is written from a secret and matched by a
+ * recursive gitignore glob, so it is present on a machine that can build the
+ * dev APK and absent in CI. The first cut of these tests read it directly and
+ * passed locally while failing CI with ENOENT — the exact shape of defect this
+ * story is about, committed by its own test.
+ */
+const FAKE_KEY = 'AIzaTestKeyNotARealCredential';
+const devEnv = (extra = {}) => ({
+  PERSONAS_PASSWORD: 'x',
+  DEV_FIREBASE_API_KEY: FAKE_KEY,
+  ...extra,
+});
 
 /** The dev API base, read from the file the dev APK is built from. */
 const devBaseFromGradle = () => {
@@ -35,12 +51,6 @@ const devBaseFromGradle = () => {
   const dev = all.filter((u) => u.includes('dev-api'));
   if (dev.length !== 1) throw new Error(`expected exactly one dev API base, found ${dev.length}`);
   return dev[0];
-};
-
-/** The dev Firebase client key, read from the dev flavour's google-services.json. */
-const devKeyFromGoogleServices = () => {
-  const p = path.join(REPO_ROOT, 'app', 'src', 'dev', 'google-services.json');
-  return JSON.parse(fs.readFileSync(p, 'utf8')).client[0].api_key[0].current_key;
 };
 
 describe('the resolver exists and is pure', () => {
@@ -71,7 +81,7 @@ describe('local is unchanged', () => {
 });
 
 describe('dev questions dev', () => {
-  const dev = () => resolveTargetApi('dev', { PERSONAS_PASSWORD: 'x' });
+  const dev = () => resolveTargetApi('dev', devEnv());
 
   test('the API base is the DEV api, not localhost', () => {
     // The defect, stated directly.
@@ -91,30 +101,36 @@ describe('dev questions dev', () => {
     expect(dev().authUrl).not.toContain('key=demo');
   });
 
-  test('the auth key is the SAME one the dev APK is built with', () => {
-    expect(dev().authUrl).toContain(devKeyFromGoogleServices());
+  test('the key comes from the environment when one is given', () => {
+    expect(dev().authUrl).toContain(FAKE_KEY);
   });
 });
 
 describe('a dev run without credentials refuses', () => {
   test('it throws rather than falling back to anything', () => {
     // Falling back is what made the defect silent. There is no safe default.
-    expect(() => resolveTargetApi('dev', {})).toThrow();
+    expect(() => resolveTargetApi('dev', { DEV_FIREBASE_API_KEY: FAKE_KEY })).toThrow();
   });
 
   test('the refusal names the variable the operator must set', () => {
-    expect(() => resolveTargetApi('dev', {})).toThrow(/PERSONAS_PASSWORD/);
+    expect(() => resolveTargetApi('dev', { DEV_FIREBASE_API_KEY: FAKE_KEY })).toThrow(
+      /PERSONAS_PASSWORD/,
+    );
   });
 
   test('the refusal says where the value lives', () => {
-    expect(() => resolveTargetApi('dev', {})).toThrow(/dev-personas-credentials/);
+    expect(() => resolveTargetApi('dev', { DEV_FIREBASE_API_KEY: FAKE_KEY })).toThrow(
+      /dev-personas-credentials/,
+    );
   });
 
   test('an empty password is missing, not a password', () => {
-    expect(() => resolveTargetApi('dev', { PERSONAS_PASSWORD: '' })).toThrow(/PERSONAS_PASSWORD/);
-    expect(() => resolveTargetApi('dev', { PERSONAS_PASSWORD: '   ' })).toThrow(
-      /PERSONAS_PASSWORD/,
-    );
+    expect(() =>
+      resolveTargetApi('dev', { DEV_FIREBASE_API_KEY: FAKE_KEY, PERSONAS_PASSWORD: '' }),
+    ).toThrow(/PERSONAS_PASSWORD/);
+    expect(() =>
+      resolveTargetApi('dev', { DEV_FIREBASE_API_KEY: FAKE_KEY, PERSONAS_PASSWORD: '   ' }),
+    ).toThrow(/PERSONAS_PASSWORD/);
   });
 });
 
@@ -123,7 +139,7 @@ describe('the password never reaches the output', () => {
     // The run header prints the target. A password that reaches a log reaches
     // CI output, a screenshot, and an evidence page.
     const planted = 'pw-must-not-appear-9f3c1a';
-    const r = resolveTargetApi('dev', { PERSONAS_PASSWORD: planted });
+    const r = resolveTargetApi('dev', devEnv({ PERSONAS_PASSWORD: planted }));
     expect(r.password).toBe(planted);
     expect(JSON.stringify(r.describe ?? r.summary ?? '')).not.toContain(planted);
   });
@@ -160,5 +176,40 @@ describe('no target-blind constant survives in the runner', () => {
       .map((line, i) => ({ line: line.trim(), n: i + 1 }))
       .filter(({ line }) => /^const\s+(API_BASE_URL|AUTH_EMU_URL)\s*=/.test(line));
     expect({ offenders }).toEqual({ offenders: [] });
+  });
+});
+
+describe('the dev key has two sources, and neither is a silent default', () => {
+  test('the environment wins when it is set', () => {
+    expect(devFirebaseKey({ DEV_FIREBASE_API_KEY: FAKE_KEY })).toBe(FAKE_KEY);
+  });
+
+  test('a blank environment value is not a value', () => {
+    // Otherwise an unset CI secret expands to '' and becomes the key, and the
+    // sign-in fails somewhere far away from the cause.
+    const present = fs.existsSync(DEV_GOOGLE_SERVICES);
+    if (present) {
+      expect(devFirebaseKey({ DEV_FIREBASE_API_KEY: '  ' })).not.toBe('  ');
+    } else {
+      expect(() => devFirebaseKey({ DEV_FIREBASE_API_KEY: '  ' })).toThrow(/DEV_FIREBASE_API_KEY/);
+    }
+  });
+
+  test('with no environment value it falls back to the APK config, or says why it cannot', () => {
+    // Both branches assert. The file is gitignored, so which branch runs is a
+    // property of the machine, not of the code — and a test that quietly did
+    // nothing on one of them would be the defect this story is about.
+    const present = fs.existsSync(DEV_GOOGLE_SERVICES);
+    if (present) {
+      const fromFile = JSON.parse(fs.readFileSync(DEV_GOOGLE_SERVICES, 'utf8')).client[0].api_key[0]
+        .current_key;
+      expect(devFirebaseKey({})).toBe(fromFile);
+      // The seam: on a machine that can build the dev APK, the runner and the
+      // app must agree about which Firebase project they are talking to.
+      expect(resolveTargetApi('dev', { PERSONAS_PASSWORD: 'x' }).authUrl).toContain(fromFile);
+    } else {
+      expect(() => devFirebaseKey({})).toThrow(/DEV_FIREBASE_API_KEY/);
+      expect(() => devFirebaseKey({})).toThrow(/google-services\.json/);
+    }
   });
 });

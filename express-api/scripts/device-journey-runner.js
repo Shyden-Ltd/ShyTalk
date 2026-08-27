@@ -146,11 +146,44 @@ function devApiBaseFromGradle() {
   return found[0];
 }
 
-/** The dev flavour's Firebase client key, from the config the dev APK ships. */
-function devFirebaseKey() {
-  const file = path.join(REPO_ROOT_DIR, 'app', 'src', 'dev', 'google-services.json');
-  const key = JSON.parse(fs.readFileSync(file, 'utf8'))?.client?.[0]?.api_key?.[0]?.current_key;
-  if (!key) throw new Error(`Could not read the dev Firebase client key from ${file}`);
+/** Where the dev flavour's Firebase config lives on a machine that can build it. */
+const DEV_GOOGLE_SERVICES = path.join(REPO_ROOT_DIR, 'app', 'src', 'dev', 'google-services.json');
+
+/**
+ * The dev flavour's Firebase client key.
+ *
+ * Two sources, in order, because the file has two different truths about
+ * whether it exists:
+ *
+ *   1. `DEV_FIREBASE_API_KEY` — the name deploy-dev.yml's smoke job already
+ *      uses. This is the only source available in CI.
+ *   2. `app/src/dev/google-services.json` — what the dev APK is actually built
+ *      from, and the reason a developer machine needs no configuration at all.
+ *
+ * The file is gitignored -- a recursive glob on `google-services.json` -- and
+ * written from a secret, so it is present wherever the dev APK can be built
+ * and absent
+ * wherever it cannot. Reading it unconditionally is what made the first cut of
+ * SHY-0473 pass on this Mac and fail in CI with ENOENT.
+ *
+ * Not a silent fallback: with neither source, this throws and names both.
+ */
+function devFirebaseKey(env = process.env) {
+  const fromEnv = env.DEV_FIREBASE_API_KEY;
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+
+  if (!fs.existsSync(DEV_GOOGLE_SERVICES)) {
+    throw new Error(
+      `No dev Firebase client key. Set DEV_FIREBASE_API_KEY, or provide ` +
+        `${DEV_GOOGLE_SERVICES} (gitignored; written from a secret, and present ` +
+        'wherever the dev APK can be built).',
+    );
+  }
+  const key = JSON.parse(fs.readFileSync(DEV_GOOGLE_SERVICES, 'utf8'))?.client?.[0]?.api_key?.[0]
+    ?.current_key;
+  if (!key) {
+    throw new Error(`Could not read the dev Firebase client key from ${DEV_GOOGLE_SERVICES}`);
+  }
   return key;
 }
 
@@ -197,8 +230,10 @@ const TARGETS = {
     get apiBaseUrl() {
       return devApiBaseFromGradle();
     },
-    get authUrl() {
-      return `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${devFirebaseKey()}`;
+    // A function, not a getter: the key can come from the environment, and a
+    // getter has no way to be told which environment is meant.
+    authUrlFor(env) {
+      return `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${devFirebaseKey(env)}`;
     },
     // Generated per-environment by provision-test-personas.js. There is no
     // default, and that is the point: a dev run without it must refuse rather
@@ -1892,7 +1927,8 @@ function resolveTargetApi(target, env = process.env) {
     password = raw;
   }
 
-  const { apiBaseUrl, authUrl } = cfg;
+  const { apiBaseUrl } = cfg;
+  const authUrl = cfg.authUrlFor ? cfg.authUrlFor(env) : cfg.authUrl;
   return {
     apiBaseUrl,
     authUrl,
@@ -4352,6 +4388,8 @@ module.exports = {
   MAX_OPEN_TICKETS_LISTED,
   getIdToken,
   resolveTargetApi,
+  devFirebaseKey,
+  DEV_GOOGLE_SERVICES,
   setActiveApi,
   TARGETS,
 };
