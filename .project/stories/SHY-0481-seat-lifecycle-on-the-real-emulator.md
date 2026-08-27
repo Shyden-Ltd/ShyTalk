@@ -118,6 +118,37 @@ remainder stays honest about still having them.
 | Route (real emulator, concurrency) | Two real transactions racing for one seat — exactly one wins. |
 | Mutation | Removing the seat-taken guard fails the suite. |
 
+## Outcome
+
+`room-seats.test.js` — **41 tests, zero doubles**. `room-seats-errors.unit.test.js`
+— 4. **43 → 45**, and `room-mutations.test.js` drops 1922 → 1419 lines and
+181 → 162 doubles.
+
+### The case the old harness could not write
+
+    two callers racing for one seat — exactly one wins
+
+Two requests in flight against the same real seat, resolved by a real Firestore
+transaction. The previous harness called its callback once with a fixed
+snapshot, so `409 SEAT_TAKEN` was asserted against a stub that had been *told*
+the seat was taken. Removing the guard from the route now fails **3 tests**,
+including this one.
+
+Other assertions that got stronger:
+
+| Was | Now |
+| --- | --- |
+| `expect(mockTxnUpdate).not.toHaveBeenCalled()` | the whole room document read back and compared **unchanged** |
+| a move checked as two separate recorded fields | both ends asserted in **one** document state |
+| `'pendingInvites.20': { __delete: true }` — an intention | `pendingInvites` really is `{}` |
+| `arrayUnion` recorded as a marker object | resolved for real, and shown not to duplicate an existing member |
+
+### A docstring counted as a double
+
+The first draft quoted the `runTransaction` stub it had replaced, to explain
+what changed — and the ratchet, which matches its patterns as **text**, counted
+the quotation. Reworded. Quoting the thing you removed counts as still having it.
+
 ## Out of Scope
 
 - The remaining 14 route groups in `room-mutations.test.js` — moderation, room
