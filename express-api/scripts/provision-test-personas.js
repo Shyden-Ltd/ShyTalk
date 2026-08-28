@@ -45,6 +45,15 @@
 const dobMs = (iso) => new Date(iso + 'T00:00:00Z').getTime();
 
 /**
+ * Personas whose moderation state this run cleared (SHY-0489).
+ *
+ * Module-scoped so the summary can name them. A re-seed that clears nothing is
+ * the normal case; a run that clears several is telling you a journey is
+ * leaving state behind, which is worth seeing rather than inferring.
+ */
+const moderationCleared = [];
+
+/**
  * Persona registry. Source of truth: _personas.md.
  *
  * Schema:
@@ -402,6 +411,30 @@ function buildUserDoc(p, fbUid, opts = {}) {
     seedSource: 'automation',
     seedRunAt: now,
     createdAt: existingCreatedAt || now,
+    // Moderation state is RESET, not merely left alone (SHY-0489).
+    //
+    // The upsert is `set(..., { merge: true })`, so any field this doc omits
+    // SURVIVES. Moderation state was omitted, which meant a persona warned or
+    // suspended by a journey stayed that way through every later re-seed:
+    // seeding looked like it restored the fixture and did not.
+    //
+    // 2026-08-28 — `host@shytalk.dev` carried a warning from an old moderation
+    // walk. The app persists the session and the nav graph routes a warned user
+    // to the warning screen on launch, so that ONE persona's leftover state put
+    // the warning screen in front of EVERY journey's persona picker and blocked
+    // the whole dev matrix.
+    //
+    // Blanket-clearing is correct here, and was checked rather than assumed: no
+    // journey expects a persona to START warned or suspended. The suspension
+    // journeys create the state themselves via /api/admin/users/:id/suspend and
+    // lift it afterwards, and one even guards "not suspended; nothing to lift".
+    //
+    // Scope is the seeded persona registry, which exists to be reset. This is
+    // not a moderation-bypass tool: a real account is never in this list.
+    hasActiveWarning: false,
+    warningReason: null,
+    isSuspended: false,
+    suspensionEndDate: null,
     ...(p.extra || {}),
   };
   return doc;
@@ -488,6 +521,23 @@ async function upsertPersona(p, ctx) {
   for (const stale of ['followingCount', 'followerCount']) {
     if (existing.exists && Object.prototype.hasOwnProperty.call(existing.data(), stale)) {
       doc[stale] = FieldValue.delete();
+    }
+  }
+
+  // Say when moderation state was actually cleared (SHY-0489). A silent reset
+  // is how somebody spends an hour wondering why the matrix is blocked; a
+  // surprising number here is the signal that a journey is leaving state behind.
+  if (existing.exists) {
+    const prior = existing.data();
+    if (prior.hasActiveWarning || prior.isSuspended) {
+      const was = [
+        prior.hasActiveWarning ? 'warning' : null,
+        prior.isSuspended ? 'suspended' : null,
+      ]
+        .filter(Boolean)
+        .join(' + ');
+      console.log(`  [moderation] cleared ${was} on ${p.email} (${p.uniqueId})`);
+      moderationCleared.push(p.email);
     }
   }
 
@@ -581,6 +631,11 @@ if (require.main === module) {
     }
     console.log('Applying social graph...');
     await applySocialGraph(buildSocialGraphWrites(personas), ctx);
+    console.log(
+      'PROVISION_MODERATION_CLEARED count=' +
+        moderationCleared.length +
+        (moderationCleared.length ? ' (' + moderationCleared.join(', ') + ')' : ''),
+    );
     console.log('PROVISION_ALL_OK count=' + personas.length);
     // firebase-admin keeps the event loop alive via idle HTTP/2 keep-alive
     // connections and metric-export timers. Force-exit so callers that

@@ -1,6 +1,6 @@
 ---
 id: SHY-0489
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-28
 priority: P1
@@ -113,6 +113,37 @@ shared fixture that can be written by a test and not restored by its seeder.
 
 - [ ] Moderation fields are part of the persona upsert.
 - [ ] A warned persona is clean after a re-seed, proven on dev.
+
+## The open decision, closed
+
+This was filed Draft because *"what is a persona's known state"* deserved one
+deliberate answer rather than an assumption — specifically whether any persona
+should be seeded warned or suspended on purpose, which would make a blanket
+clear wrong.
+
+**Checked, not assumed.** No journey expects a persona to START in a moderation
+state: the suspension journeys create it themselves via
+`/api/admin/users/:id/suspend` and lift it afterwards, and one even guards
+*"not suspended; nothing to lift"*. A test pins that no persona is seeded with
+moderation state in its `extra`, so if one ever is, the assumption fails loudly.
+
+And the reset is a **default, not a ceiling** — `extra` is spread after it, so a
+persona deliberately seeded into a state would still win. That is tested too.
+
+## Outcome
+
+Four fields join the upsert: `hasActiveWarning`, `warningReason`, `isSuspended`,
+`suspensionEndDate`. Presence is the property that matters — the upsert is
+`set(..., { merge: true })`, so `undefined` would write nothing and leave the
+stale value exactly where it was. A test asserts the keys are present, not
+merely falsy.
+
+The seeder now also **reports** what it cleared, per persona and as a summary
+line. A run that clears nothing is normal; a run that clears several is telling
+you a journey is leaving state behind, and that is worth seeing rather than
+inferring an hour later.
+
+**Mutation-tested:** removing the four fields fails 2 of the 5 tests.
 
 ## Notes
 
