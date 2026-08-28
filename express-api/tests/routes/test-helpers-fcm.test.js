@@ -35,6 +35,9 @@ jest.mock('../../src/utils/log', () => ({
 const mockGetFcmCaptures = jest.fn();
 const mockClearFcmCaptures = jest.fn();
 jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
   getFcmCaptures: (...args) => mockGetFcmCaptures(...args),
   clearFcmCaptures: (...args) => mockClearFcmCaptures(...args),
 }));

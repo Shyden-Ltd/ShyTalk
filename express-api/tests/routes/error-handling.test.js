@@ -187,6 +187,9 @@ describe('reports: POST /api/reports returns 500 on Firestore error', () => {
     }));
 
     jest.mock('../../src/utils/fcm', () => ({
+      sendPushToUser: jest.fn().mockResolvedValue(),
+      sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+      cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
       sendFcmToTokens: jest.fn().mockResolvedValue([]),
     }));
 
@@ -364,6 +367,9 @@ describe('rooms: POST /api/rooms/:roomId/seat-requests returns 500 on Firestore 
     }));
 
     jest.mock('../../src/utils/fcm', () => ({
+      sendPushToUser: jest.fn().mockResolvedValue(),
+      sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+      cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
       sendFcmToTokens: jest.fn().mockResolvedValue([]),
       cleanupInvalidTokens: jest.fn().mockResolvedValue(),
     }));
@@ -444,6 +450,9 @@ describe('conversations: POST /api/conversations/:id/messages returns 500 on Fir
     }));
 
     jest.mock('../../src/utils/fcm', () => ({
+      sendPushToUser: jest.fn().mockResolvedValue(),
+      sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+      cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
       sendFcmToTokens: jest.fn().mockResolvedValue([]),
       cleanupInvalidTokens: jest.fn().mockResolvedValue(),
     }));

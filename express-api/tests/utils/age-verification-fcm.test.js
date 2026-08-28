@@ -9,6 +9,7 @@
 const mockSendFcmToIdentifiers = jest.fn();
 const mockCleanupInvalidIdentifiers = jest.fn().mockResolvedValue();
 jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
   sendFcmToIdentifiers: (...args) => mockSendFcmToIdentifiers(...args),
   cleanupInvalidIdentifiers: (...args) => mockCleanupInvalidIdentifiers(...args),
 }));

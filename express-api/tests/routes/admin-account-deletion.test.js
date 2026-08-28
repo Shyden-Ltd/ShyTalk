@@ -109,9 +109,11 @@ jest.mock('../../src/utils/email-templates', () => ({
   })),
 }));
 
-const mockSendFcmToTokens = jest.fn().mockResolvedValue([]);
+const mockSendPushToUser = jest.fn().mockResolvedValue();
 jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: (...args) => mockSendFcmToTokens(...args),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
+  sendPushToUser: (...args) => mockSendPushToUser(...args),
   cleanupInvalidTokens: jest.fn().mockResolvedValue(),
 }));
 
@@ -308,13 +310,14 @@ describe('POST /api/user/:uniqueId/delete (admin)', () => {
     const app = createApp();
     await request(app).post('/api/user/10000001/delete').send({}).expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['token-1'],
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      '10000001',
       expect.objectContaining({
         notification: expect.objectContaining({
           title: expect.stringContaining('Deletion'),
         }),
       }),
+      expect.objectContaining({ userData: expect.objectContaining({ fcmTokens: ['token-1'] }) }),
     );
   });
 

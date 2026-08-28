@@ -60,6 +60,9 @@ jest.mock('../../src/utils/gcs', () => ({
   computeDisplayScore: jest.fn((score) => score),
 }));
 jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
   sendFcmToTokens: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('../../src/routes/admin-users', () => ({
