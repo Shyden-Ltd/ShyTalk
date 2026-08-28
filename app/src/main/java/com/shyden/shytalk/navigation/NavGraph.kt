@@ -45,12 +45,12 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.google.firebase.messaging.FirebaseMessaging
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.crop.CropContract
 import com.shyden.shytalk.core.crop.CropInput
+import com.shyden.shytalk.core.push.AndroidPushIdentifiers
 import com.shyden.shytalk.core.push.notifyPushPermissionPrompted
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.BiometricAuth
@@ -105,7 +105,6 @@ import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
@@ -407,8 +406,8 @@ fun NavGraph(
                 LaunchedEffect(Unit) {
                     val userId = authRepository.currentUserId ?: return@LaunchedEffect
                     try {
-                        val token = FirebaseMessaging.getInstance().token.await()
-                        notificationRepository.saveFcmToken(userId, token)
+                        val identifier = AndroidPushIdentifiers.current(context)
+                        notificationRepository.savePushIdentifier(userId, identifier)
                     } catch (e: Exception) {
                         Log.w("NavGraph", "FCM token save failed — will retry on next launch", e)
                     }
@@ -724,6 +723,9 @@ fun NavGraph(
             composable(Screen.Settings.route) {
                 val settingsNotificationRepo: NotificationRepository = koinInject()
                 val settingsScope = rememberCoroutineScope()
+                // SHY-0244: needed to read the manifest flag that decides which
+                // registration model this build speaks.
+                val settingsContext = LocalContext.current
 
                 AppSettingsScreen(
                     onNavigateBack = { navController.safePopBackStack() },
@@ -749,8 +751,8 @@ fun NavGraph(
                         if (signOutUserId != null) {
                             settingsScope.launch {
                                 try {
-                                    val token = FirebaseMessaging.getInstance().token.await()
-                                    settingsNotificationRepo.removeFcmToken(signOutUserId, token)
+                                    val identifier = AndroidPushIdentifiers.current(settingsContext)
+                                    settingsNotificationRepo.removePushIdentifier(signOutUserId, identifier)
                                 } catch (e: Exception) {
                                     Log.w("NavGraph", "FCM token removal failed on sign-out", e)
                                 }

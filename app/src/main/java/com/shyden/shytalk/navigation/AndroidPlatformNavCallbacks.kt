@@ -4,12 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
-import com.google.firebase.messaging.FirebaseMessaging
+import com.shyden.shytalk.core.push.AndroidPushIdentifiers
 import com.shyden.shytalk.data.remote.PmSyncService
 import com.shyden.shytalk.data.repository.NotificationRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 /**
  * Android implementation of [PlatformNavCallbacks].
@@ -35,8 +34,8 @@ class AndroidPlatformNavCallbacks(
     override fun saveFcmToken(userId: String) {
         scope.launch {
             try {
-                val token = FirebaseMessaging.getInstance().token.await()
-                notificationRepository.saveFcmToken(userId, token)
+                val identifier = AndroidPushIdentifiers.current(context)
+                notificationRepository.savePushIdentifier(userId, identifier)
             } catch (e: Exception) {
                 Log.w(TAG, "FCM token save failed — will retry on next launch", e)
             }
@@ -46,8 +45,8 @@ class AndroidPlatformNavCallbacks(
     override fun removeFcmToken(userId: String) {
         scope.launch {
             try {
-                val token = FirebaseMessaging.getInstance().token.await()
-                notificationRepository.removeFcmToken(userId, token)
+                val identifier = AndroidPushIdentifiers.current(context)
+                notificationRepository.removePushIdentifier(userId, identifier)
             } catch (e: Exception) {
                 Log.w(TAG, "FCM token removal failed on sign-out", e)
             }

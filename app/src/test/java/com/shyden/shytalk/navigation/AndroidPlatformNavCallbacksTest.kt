@@ -157,15 +157,15 @@ class AndroidPlatformNavCallbacksTest {
      * FCM tests need real Firebase, so these are no-ops.
      */
     private class FakeNotificationRepository : com.shyden.shytalk.data.repository.NotificationRepository {
-        override suspend fun saveFcmToken(
+        override suspend fun savePushIdentifier(
             userId: String,
-            token: String,
+            identifier: com.shyden.shytalk.core.push.PushIdentifier,
         ) = com.shyden.shytalk.core.util.Resource
             .Success(Unit)
 
-        override suspend fun removeFcmToken(
+        override suspend fun removePushIdentifier(
             userId: String,
-            token: String,
+            identifier: com.shyden.shytalk.core.push.PushIdentifier,
         ) = com.shyden.shytalk.core.util.Resource
             .Success(Unit)
 
