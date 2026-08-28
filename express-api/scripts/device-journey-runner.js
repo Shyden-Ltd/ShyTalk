@@ -2100,6 +2100,49 @@ async function apiCall(method, pathStr, { token, body } = {}) {
   return { status: r.status, body: parsed };
 }
 
+/**
+ * The id of a product this TARGET can actually sell (SHY-0490).
+ *
+ * The purchase assertions used to post a hardcoded `local_100_coins`, which
+ * exists in the local seed and nowhere else — so on dev the route correctly
+ * answered 404 and the journey failed with `first purchase expected 200; got
+ * 404`. The route was fine; the fixture was target-blind. Same shape as
+ * SHY-0473, one layer up: a constant baked into a runner that has a `--target`.
+ *
+ * Resolved from the target's OWN catalogue rather than replaced with a second
+ * constant, so it cannot drift: local sells `local_100_coins`, dev sells
+ * `coins_100` and five others, and neither is written down here.
+ *
+ * Cached per run — the catalogue does not change mid-walk, and a purchase
+ * journey should not pay for the lookup twice.
+ */
+let cachedProductId = null;
+async function purchasableProductId(token) {
+  if (cachedProductId) return cachedProductId;
+  const res = await apiCall('GET', '/api/coin-packages', { token });
+  if (res.status !== 200) {
+    throw new Error(
+      `cannot resolve a purchasable product: GET /api/coin-packages -> ${res.status}`,
+    );
+  }
+  const body = res.body;
+  const items = Array.isArray(body)
+    ? body
+    : body?.packages || body?.coinPackages || body?.data || [];
+  const first = items.find((p) => p?.isActive !== false && p?.productId);
+  if (!first) {
+    // Refuse rather than invent one. A target with an empty catalogue cannot
+    // answer this question, and saying so beats a 404 that reads like a broken
+    // route.
+    throw new Error(
+      `this target sells nothing: /api/coin-packages returned ${items.length} package(s), ` +
+        'none of them active with a productId',
+    );
+  }
+  cachedProductId = first.productId;
+  return cachedProductId;
+}
+
 // --------------------------------------------------------------------------
 // Journey definitions
 // --------------------------------------------------------------------------
@@ -3729,12 +3772,15 @@ const J05 = {
         const purchaseToken = `jr-iap-${Date.now()}`;
         const r = await apiCall('POST', '/api/economy/purchase', {
           token,
-          body: { productId: 'local_100_coins', purchaseToken },
+          body: { productId: await purchasableProductId(token), purchaseToken },
         });
         if (r.status !== 200) {
           throw new Error(`purchase expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
         }
-        return `POST /economy/purchase {local_100_coins} → 200 ${JSON.stringify(r.body).slice(0, 100)}`;
+        return (
+          `POST /economy/purchase {${await purchasableProductId(token)}} → 200 ` +
+          JSON.stringify(r.body).slice(0, 100)
+        );
       },
     );
     let credited = before;
@@ -3811,14 +3857,15 @@ const J06 = {
     });
     await reporter.step(device, 'API: receipt replay rejected (409)', async () => {
       const dupToken = `jr-replay-${Date.now()}`;
+      const productId = await purchasableProductId(token);
       const first = await apiCall('POST', '/api/economy/purchase', {
         token,
-        body: { productId: 'local_100_coins', purchaseToken: dupToken },
+        body: { productId, purchaseToken: dupToken },
       });
       if (first.status !== 200) throw new Error(`first purchase expected 200; got ${first.status}`);
       const replay = await apiCall('POST', '/api/economy/purchase', {
         token,
-        body: { productId: 'local_100_coins', purchaseToken: dupToken },
+        body: { productId, purchaseToken: dupToken },
       });
       if (replay.status !== 409) {
         throw new Error(
