@@ -1,6 +1,6 @@
 ---
 id: SHY-0490
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-28
 priority: P2
@@ -111,6 +111,28 @@ same class, one layer up, in the test DATA.
 
 - [ ] J06 passes on both targets.
 - [ ] No product id constant remains in the runner.
+
+## Outcome
+
+The product id is resolved from **the target's own catalogue** — `GET
+/api/coin-packages`, first active package — rather than replaced with a second
+constant. So it cannot drift: local sells `local_100_coins`, dev sells
+`coins_100` and five others, and neither is written in the runner.
+
+A target whose catalogue is empty **refuses** with *"this target sells nothing"*
+rather than inventing a product, so an empty catalogue never again looks like a
+broken route. Cached per run — the catalogue does not change mid-walk.
+
+The deliberate unknown-product assertion still posts
+`definitely_not_a_real_pack` and still expects 404. That one is supposed to be
+missing.
+
+### Proven on both targets
+
+| Target | Result |
+| --- | --- |
+| local | **15/15**, J06 included |
+| dev | **J06 PASSES, 7 steps** — previously `first purchase expected 200; got 404` |
 
 ## Notes
 

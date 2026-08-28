@@ -116,6 +116,25 @@ Not yet proven — which is why this is Draft and P2 rather than a fix.
 - [ ] Three consecutive clean dev runs.
 - [ ] A missing picker still fails.
 
+## Sightings
+
+Filed to be **counted**, not chased on one occurrence. So far:
+
+| Run | Journey | Symptom |
+| --- | --- | --- |
+| 2026-08-28 first full dev matrix | J-ALICE | `persona_picker_open` not found |
+| 2026-08-28 after SHY-0490 | J-ALICE | same |
+| 2026-08-28 after SHY-0490 | J-MARCUS | the debug overlay is not showing an account id |
+
+Three sightings across two runs, always on dev and never on local, and always in
+the sign-in preamble rather than in a journey's own assertions. J-MARCUS's is a
+second face of the same thing: the overlay has no account id yet because sign-in
+has not settled.
+
+That pattern — preamble only, dev only — fits the documented sign-out round trip
+being slower off loopback, and it is no longer a single sighting. **This is now
+worth fixing rather than watching.**
+
 ## Notes
 
 One occurrence so far. Filed to be counted rather than fixed on a single
