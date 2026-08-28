@@ -284,3 +284,37 @@ Not "important eventually" — it is the next thing to pick up, for five reasons
   2. **The server needs no flag day.** `sendEachForMulticast` accepts `tokens`
      and `fids` in one call, so a fleet mid-rollover is addressable in a single
      dispatch. Only the CLIENTS are one-way doors, and only per build.
+
+- **2026-08-28 ~19:20 UTC — DEV DEVICE PROOF, Android.** Merged to `develop`
+  (#2081), deployed, then proven on the OnePlus against real dev Firebase.
+
+  | Step | Evidence |
+  | --- | --- |
+  | The build carries the flag | `aapt2 dump xmltree` on the dev APK: `firebase_messaging_installation_id_enabled` `value=true` |
+  | The device registers under the V1 model | `onRegistered` fired on a real device against real dev Firebase |
+  | The identifier reaches the backend | `50000010` → `fcmInstallationIds=['d79NouUmT-KeCnEcX2Msyp']`, `fcmTokens=None` — a real FID, right field, **no token** |
+  | The server addresses it | DM Theo(50000060) → Alice(50000010), both adults, `POST …/messages` → 200 |
+  | **FCM delivers to the phone** | `GCM: broadcast intent callback … act=com.google.android.c2dm.intent.RECEIVE … pkg=com.shyden.shytalk.dev` |
+
+  The `result=CANCELLED` on that broadcast is the ordered-broadcast callback,
+  because the app had been force-stopped to prove background delivery. The
+  message reached the device; that is the claim.
+
+  Journey matrix on dev after the migration: **7/8**, up from the 6/8 baseline
+  earlier the same day. The single failure is J-ALICE's persona-picker miss,
+  tracked as SHY-0491 and unrelated.
+
+  **One false trail worth recording.** The first dev matrix run scored 1/8, all
+  seven failures identical — "the persona picker did not open". Uniform failure
+  is build/environment, never seven defects, and the screenshot said so in
+  words: *"This build has no test-persona credential… Rebuild with
+  DEV_QA_PERSONAS_PASSWORD set."* I had built the APK without that variable.
+  The DUMP could not have told me — a Compose dialog is its own window, so it
+  showed only `android:id/content`. Rebuilt with the credential: 7/8.
+
+- **Still outstanding for this story:** the same proof on a real iPhone. The
+  TestFlight leg of the deploy was still uploading when the Android proof
+  completed. Also filed: **SHY-0494** — four accounts on this one device all
+  hold the same installation ID, among them a minor and an admin, which is the
+  cross-account leak this story's own edge-case AC names. Not caused by this
+  change (tokens were equally device-scoped) but surfaced by it.
