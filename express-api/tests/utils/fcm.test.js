@@ -1,5 +1,6 @@
 const mockSendEachForMulticast = jest.fn();
 const mockDocUpdate = jest.fn().mockResolvedValue();
+const mockDocGet = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
   messaging: {
@@ -8,6 +9,7 @@ jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: jest.fn(() => ({
       update: mockDocUpdate,
+      get: mockDocGet,
     })),
   },
   FieldValue: {
@@ -15,8 +17,10 @@ jest.mock('../../src/utils/firebase', () => ({
   },
 }));
 
+const log = require('../../src/utils/log');
 const {
   sendFcmToIdentifiers,
+  sendPushToUser,
   sendFcmToTokens,
   cleanupInvalidTokens,
   getFcmCaptures,
@@ -251,5 +255,103 @@ describe('SHY-0244: dispatching to installation IDs', () => {
 
     expect(result).toEqual({ invalidTokens: [], invalidFids: [] });
     expect(mockSendEachForMulticast).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * SHY-0244 — one place that knows how to push to a user.
+ *
+ * Ten call sites repeated "read the identifiers, dispatch, reap". Migrating
+ * them one at a time would have been ten chances to miss one, and the audit
+ * done while writing this found that FOUR of them already discarded the
+ * invalid list entirely (`users.js`, `admin-users.js`, and both sites in
+ * `suggestions.js`) -- so dead identifiers accumulated there forever, which
+ * the story's error-path AC forbids.
+ *
+ * Consolidating makes the identifier source unforgeable and the reap
+ * automatic: a caller cannot forget a step it no longer performs.
+ */
+describe('SHY-0244: sendPushToUser', () => {
+  const userDoc = (data) => ({ exists: true, data: () => data });
+
+  beforeEach(() => {
+    mockSendEachForMulticast.mockResolvedValue({ responses: [] });
+  });
+
+  test('sends to BOTH stored identifier fields in one dispatch', async () => {
+    mockDocGet.mockResolvedValue(userDoc({ fcmTokens: ['tok-1'], fcmInstallationIds: ['fid-1'] }));
+    mockSendEachForMulticast.mockResolvedValue({
+      responses: [{ success: true }, { success: true }],
+    });
+
+    await sendPushToUser(4001, { type: 'TEST' });
+
+    expect(mockSendEachForMulticast).toHaveBeenCalledTimes(1);
+    expect(mockSendEachForMulticast).toHaveBeenCalledWith({
+      tokens: ['tok-1'],
+      fids: ['fid-1'],
+      data: { type: 'TEST' },
+    });
+  });
+
+  test('a dead token is removed from fcmTokens', async () => {
+    mockDocGet.mockResolvedValue(userDoc({ fcmTokens: ['dead'], fcmInstallationIds: [] }));
+    mockSendEachForMulticast.mockResolvedValue({
+      responses: [{ error: { code: 'messaging/registration-token-not-registered' } }],
+    });
+
+    await sendPushToUser(4001, { type: 'TEST' });
+
+    expect(mockDocUpdate).toHaveBeenCalledWith({ fcmTokens: 'arrayRemove(dead)' });
+  });
+
+  test('a dead fid is removed from fcmInstallationIds, NOT from fcmTokens', async () => {
+    // The field the reap targets is the whole reason the two are stored
+    // apart. Removing a fid from fcmTokens would be a no-op that leaves the
+    // dead entry in place forever.
+    mockDocGet.mockResolvedValue(userDoc({ fcmTokens: [], fcmInstallationIds: ['dead'] }));
+    mockSendEachForMulticast.mockResolvedValue({
+      responses: [{ error: { code: 'messaging/registration-token-not-registered' } }],
+    });
+
+    await sendPushToUser(4001, { type: 'TEST' });
+
+    expect(mockDocUpdate).toHaveBeenCalledWith({ fcmInstallationIds: 'arrayRemove(dead)' });
+  });
+
+  test('a user with no identifiers logs LOUDLY instead of succeeding quietly', async () => {
+    // Observability AC. A dispatch that reaches nobody and returns success is
+    // indistinguishable from a delivered push, which is how a push outage runs
+    // undetected.
+    const warn = jest.spyOn(log, 'warn').mockImplementation(() => {});
+    mockDocGet.mockResolvedValue(userDoc({ fcmTokens: [], fcmInstallationIds: [] }));
+
+    await sendPushToUser(4001, { type: 'TEST' });
+
+    expect(mockSendEachForMulticast).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    expect(String(warn.mock.calls[0])).toMatch(/4001/);
+    warn.mockRestore();
+  });
+
+  test('a missing user does not throw -- the caller is mid-notification', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => undefined });
+
+    await expect(sendPushToUser(4001, { type: 'TEST' })).resolves.toBeUndefined();
+    expect(mockSendEachForMulticast).not.toHaveBeenCalled();
+  });
+
+  test('pre-read user data skips the second Firestore read', async () => {
+    // Callers that already hold the doc (suggestions.js loops over users)
+    // should not pay for a re-read just to use the safe path.
+    mockSendEachForMulticast.mockResolvedValue({ responses: [{ success: true }] });
+
+    await sendPushToUser(4001, { type: 'TEST' }, { userData: { fcmTokens: ['tok-1'] } });
+
+    expect(mockDocGet).not.toHaveBeenCalled();
+    expect(mockSendEachForMulticast).toHaveBeenCalledWith({
+      tokens: ['tok-1'],
+      data: { type: 'TEST' },
+    });
   });
 });

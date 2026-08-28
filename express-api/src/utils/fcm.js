@@ -207,6 +207,76 @@ async function sendFcmToTokens(tokens, data, opts = {}) {
 }
 
 /**
+ * Remove rejected identifiers from the fields they actually came from.
+ *
+ * SHY-0244. Tokens live in `fcmTokens` and installation IDs in
+ * `fcmInstallationIds`, so each is reaped from its own array. Removing a fid
+ * from `fcmTokens` would be a silent no-op that leaves the dead entry in place
+ * forever.
+ */
+async function cleanupInvalidIdentifiers({ invalidTokens = [], invalidFids = [] } = {}, userId) {
+  if (!userId) return;
+  if (invalidTokens.length === 0 && invalidFids.length === 0) return;
+  if (process.env.NODE_ENV === 'local') return;
+
+  const update = {};
+  if (invalidTokens.length > 0) update.fcmTokens = FieldValue.arrayRemove(...invalidTokens);
+  if (invalidFids.length > 0) {
+    update.fcmInstallationIds = FieldValue.arrayRemove(...invalidFids);
+  }
+
+  try {
+    await db.doc(`users/${userId}`).update(update);
+  } catch (err) {
+    log.error('fcm', 'Failed to clean invalid identifiers', { userId, error: err.message });
+  }
+}
+
+/**
+ * Push to one user: read their identifiers, dispatch once, reap what bounced.
+ *
+ * SHY-0244. This exists because ten call sites each repeated that sequence by
+ * hand, and four of them silently skipped the reap -- `users.js`,
+ * `admin-users.js` and both sites in `suggestions.js` discarded the invalid
+ * list, so dead identifiers accumulated there indefinitely. A caller cannot
+ * forget a step it no longer performs.
+ *
+ * `opts.userData` lets a caller that already holds the user document avoid a
+ * second read; everything else is identical.
+ */
+async function sendPushToUser(userId, data, { userData, senderUniqueId, recipientUniqueId } = {}) {
+  let user = userData;
+  if (!user) {
+    const snap = await db.doc(`users/${userId}`).get();
+    if (!snap || !snap.exists) {
+      log.warn('fcm', `push requested for user ${userId} but no user document exists`);
+      return;
+    }
+    user = snap.data() || {};
+  }
+
+  const tokens = Array.isArray(user.fcmTokens) ? user.fcmTokens : [];
+  const fids = Array.isArray(user.fcmInstallationIds) ? user.fcmInstallationIds : [];
+
+  if (tokens.length === 0 && fids.length === 0) {
+    // Loud on purpose. A dispatch that reaches nobody and returns success is
+    // indistinguishable from a delivered push, which is how a push outage runs
+    // undetected on a surface that carries moderation notices.
+    log.warn('fcm', `no push identifiers stored for user ${userId} — notification reached nobody`, {
+      type: data?.type,
+    });
+    return;
+  }
+
+  const invalid = await sendFcmToIdentifiers({ tokens, fids }, data, {
+    senderUniqueId,
+    recipientUniqueId,
+  });
+
+  await cleanupInvalidIdentifiers(invalid, userId);
+}
+
+/**
  * Remove invalid FCM tokens from a user's doc using arrayRemove.
  */
 async function cleanupInvalidTokens(invalidTokens, userId) {
@@ -236,7 +306,9 @@ function clearFcmCaptures() {
 }
 
 module.exports = {
+  sendPushToUser,
   sendFcmToIdentifiers,
+  cleanupInvalidIdentifiers,
   sendFcmToTokens,
   cleanupInvalidTokens,
   getFcmCaptures,
