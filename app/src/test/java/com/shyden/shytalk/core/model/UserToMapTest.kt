@@ -47,6 +47,10 @@ private val EXPECTED_USER_MAP_KEYS =
         "suspendedBy",
         "suspensionAppealStatus",
         "fcmTokens",
+        // SHY-0244: the V1 push registration model. Kept apart from fcmTokens
+        // because the server cannot tell the two identifier kinds apart by
+        // shape and must know which field to address and reap.
+        "fcmInstallationIds",
         "pmNotificationsEnabled",
         "pmPrivacy",
         "pmSoundEnabled",
@@ -351,6 +355,7 @@ class UserToMapTest {
                 suspendedBy = "admin-1",
                 suspensionAppealStatus = "pending",
                 fcmTokens = listOf("token-1", "token-2"),
+                fcmInstallationIds = listOf("fid-1"),
                 pmNotificationsEnabled = false,
                 pmPrivacy = PmPrivacy.FOLLOWERS_ONLY,
                 pmSoundEnabled = false,
