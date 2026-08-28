@@ -1,6 +1,6 @@
 ---
 id: SHY-0244
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-25
 priority: P1
@@ -172,11 +172,33 @@ Not "important eventually" — it is the next thing to pick up, for five reasons
 
   **This re-orders the dependency sweep:** #1520 stops being "just another major bump to defer" and becomes the enabling step for this story. It should land before (or as the opening move of) SHY-0244, and must NOT be closed as stale.
 - Real Android device + real iPhone over USB, and dev Firebase, for delivery proof.
-- iOS parity: the Apple SDK's own deprecation timeline for `MessagingDelegate.messaging(_:didReceiveRegistrationToken:)` must be confirmed, since Android and iOS have to land together under the tri-platform policy. **Still open** — the client side is not yet settled the way the server side now is.
+- ~~iOS parity: the Apple SDK's own deprecation timeline must be confirmed.~~
+  **SETTLED 2026-08-28, and favourably.** Read from the shipped header at tag
+  `12.18.0` (released 2026-08-19), not from the docs. The Apple SDK has now
+  shipped the same V1 model:
+
+  | 12.14.0 (our pin) | 12.18.0 (current) |
+  | --- | --- |
+  | no FID API at all | `register(completion:)` |
+  | — | `messaging(_:didReceiveRegistration:)` → `installationId` |
+  | — | `messaging(_:didUnregister:)` |
+  | — | `messagingInstallationIdUnregistered` notification |
+  | `didReceiveRegistrationToken` **not deprecated** (zero markers in the whole header) | deprecated: *"Use messaging(\_:didReceiveRegistration:) instead."* |
+
+  So the tri-platform policy is satisfiable: **bump the pod 12.14.0 → 12.18.0**
+  and both clients have the same model. This was the story's last open
+  dependency.
 
 ## Risks & Mitigations
 
 - **Risk: push silently stops for some users after the flag flip** — the worst outcome, because a missing notification is invisible to the sender. **Mitigation:** delivery is proven on real devices in dev before merge, the upgrade path is tested from an already-registered install, and zero-identifier dispatch logs loudly instead of succeeding quietly.
+- **The SERVER does not need a flag day.** `sendEachForMulticast` in
+  firebase-admin 14.2.0 accepts `tokens` **and** `fids` in the same call —
+  its own docs say *"If both `tokens` and `fids` are provided, `tokens` are
+  processed first, followed by `fids`."* So the backend can address old-model
+  and new-model devices simultaneously while clients roll over. The manifest
+  flag makes the **Android app** a one-way door per build; the backend does not
+  inherit that constraint, which is what makes a staged rollout safe.
 - **Risk: the manifest flag makes this a one-way door per app instance** — `getToken()` starts throwing once it is set. **Mitigation:** treat rollback as a code revert plus flag removal, and verify a downgrade path on a real device before merge rather than discovering it during an incident.
 - ~~**Risk: Admin SDK cannot target FIDs the way multicast targets tokens.**~~ **RETIRED 2026-07-25** — verified against firebase-admin 14.1.0's shipped types: `FidMessage`/`FidMulticastMessage` exist and are the like-for-like replacement. The residual risk moved to the dependency: this story now hard-depends on the `firebase-admin` 14 bump (#1520) landing.
 - **Risk: Android and iOS drift apart mid-migration**, leaving one platform on each model. **Mitigation:** tri-platform policy — they ship together or not at all.
@@ -202,3 +224,15 @@ Not "important eventually" — it is the next thing to pick up, for five reasons
 - **2026-07-25 ~14:45 WIB — the story's one blocking unknown is CLOSED, favourably.** Settled by diffing the shipped `lib/messaging/*.d.ts` of `firebase-admin` 13.10.0 (installed) against 14.1.0 (`npm pack`), rather than trusting docs. v13 has **no** installation-ID targeting of any kind — `Message = TokenMessage | TopicMessage | ConditionMessage`. v14.1.0 adds `FidMessage { fid: string }` and `FidMulticastMessage { fids: string[] }`, deprecates `TokenMessage` in favour of `FidMessage`, and gives the existing `MulticastMessage` an optional `fids?` alongside its now-deprecated `tokens`.
 
   Consequences: (a) the server migration is a field swap on the same call — `sendEachForMulticast({ tokens })` → `sendEachForMulticast({ fids })`; (b) **`firebase-admin` 14 (#1520) is now a hard prerequisite**, not a deferrable major bump, and must not be closed as stale; (c) the "STOP and escalate if FID targeting is unavailable" branch of this story is dead — no operator decision is needed on that point. The iOS-side deprecation timeline remains the one genuinely open question.
+
+- **2026-08-28 ~08:10 UTC** — Picked up. Re-validated every prerequisite at
+  pickup rather than trusting the notes above, and two of them had moved:
+
+  1. **firebase-admin is 14.2.0 installed** (package.json `^14.1.0`), and the
+     shipped types carry `FidMessage`, `FidMulticastMessage` and a
+     `sendEachForMulticast` that takes both fields. The hard prerequisite is met.
+  2. **iOS parity is no longer open** — see Dependencies. 12.18.0 shipped the
+     V1 model; our pin at 12.14.0 predates it.
+  3. Both real devices are attached: OnePlus `3b402284` and an iPhone Air.
+
+  Nothing blocks the story now.
