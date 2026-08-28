@@ -55,7 +55,14 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
                         .get()
                 val userId = authRepo.currentUserId
                 if (userId.isNullOrEmpty()) {
-                    Log.d(TAG, "onNewToken: no authenticated user — token will be saved on next login")
+                    // Named for the CALLER, not for the callback this used to
+                    // live in. A message naming a function that no longer
+                    // exists reads as a stale build, which is a false trail.
+                    Log.d(
+                        TAG,
+                        "register(${identifier.kind}): no authenticated user — " +
+                            "the identifier is cached and saved on next login",
+                    )
                     return@launch
                 }
                 val notificationRepo: NotificationRepository =
@@ -64,7 +71,7 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
                         .get()
                 notificationRepo.savePushIdentifier(userId, identifier)
             } catch (e: Exception) {
-                Log.w(TAG, "FCM token save failed — will retry on next app launch", e)
+                Log.w(TAG, "push identifier save failed — will retry on next app launch", e)
             }
         }
     }
