@@ -633,6 +633,9 @@ class Reporter {
     fs.mkdirSync(this.runDir, { recursive: true });
     this.meta = { ...meta, runId: this.runId, startedAt: new Date().toISOString() };
     this.journeys = [];
+    // Journeys that could not be asserted on this target (SHY-0488). Kept
+    // separate from passes and failures, because a skip is neither.
+    this.skipped = [];
     this.current = null;
     this.shotCounter = 0;
     // Read on EVERY step, so it lives on the reporter rather than being
@@ -656,6 +659,17 @@ class Reporter {
     console.log(
       `--- ${this.current.id}: ${icon} (${(this.current.durationMs / 1000).toFixed(1)}s)`,
     );
+    // PRINT the reason, do not merely record it (SHY-0488).
+    //
+    // This used to store `error` on the journey and show only the icon, so a
+    // journey that failed AFTER its steps -- the touch-the-UI guard, most
+    // often -- printed four green steps and then `✗ FAIL` with no reason
+    // anywhere on screen. The reason was in report.json, which is not where
+    // somebody watching a run is looking. Diagnosing one such failure cost
+    // about an hour that this line would have saved.
+    if (status !== 'pass' && this.current.error) {
+      console.log(`    ↳ ${this.current.error}`);
+    }
     this.current = null;
   }
 
@@ -736,8 +750,13 @@ class Reporter {
 
     console.log('\n========================================');
     console.log(
-      `  RESULT: ${passed}/${this.journeys.length} journeys passed${failed ? `, ${failed} FAILED` : ''}`,
+      `  RESULT: ${passed}/${this.journeys.length} journeys passed${failed ? `, ${failed} FAILED` : ''}` +
+        (this.skipped.length ? `, ${this.skipped.length} SKIPPED` : ''),
     );
+    if (this.skipped.length) {
+      // Named, so nobody has to infer which ones from a count.
+      console.log(`  Skipped (not assertable on this target): ${this.skipped.join(', ')}`);
+    }
     if (dumpCost.count > 0) {
       const wall = Date.now() - Date.parse(this.meta.startedAt);
       console.log(
@@ -1886,6 +1905,88 @@ function personasLookSeeded(docs) {
 
 const arrayContains = (v, needle) => Array.isArray(v) && v.includes(needle);
 
+/**
+ * Read the state a journey just changed, however THIS TARGET can (SHY-0488).
+ *
+ * The runner used to hold `ctx.db` — firebase-admin against the emulator — and
+ * `initDb` returned **null** for anything but `local`. Every DB assertion was
+ * wrapped in `if (ctx.db)`, so on dev they all silently skipped. The core-set
+ * journeys are mostly those assertions, so they ran their sign-in preamble and
+ * nothing else, and SHY-0457's guard then failed them for never touching the
+ * device. The dev leg was not flaky; it was unfinishable by construction.
+ *
+ * So state reads go through whatever that target HAS:
+ *
+ *   local — the Firestore emulator, unchanged.
+ *   dev   — the product's own API, with a persona token SHY-0473 already mints.
+ *
+ * The API is the better instrument on dev, not merely the available one: it
+ * asserts the surface a real client reads, and needs no service-account
+ * credential on the machine.
+ */
+function makeStateReader(target) {
+  if (target === 'local') {
+    const db = initDb(target);
+    return {
+      label: 'Firestore emulator',
+      db,
+      canReadUserField: () => true,
+      getUser: (uniqueId) => dbGet(db, `users/${uniqueId}`),
+      waitUserField: (uniqueId, field, predicate, timeoutMs = 8000) =>
+        dbWaitField(db, `users/${uniqueId}`, field, predicate, timeoutMs),
+    };
+  }
+
+  // One admin token per run, minted lazily — journeys that never assert state
+  // should not pay for it, and a mint failure should surface on the assertion
+  // that needed it rather than at start-up.
+  let adminToken = null;
+  const asAdmin = async () => {
+    if (!adminToken) adminToken = await getIdToken('admin@shytalk.dev');
+    return adminToken;
+  };
+
+  const getUser = async (uniqueId) => {
+    const res = await apiCall('GET', `/api/users/${uniqueId}`, { token: await asAdmin() });
+    if (res.status === 404) return null;
+    if (res.status !== 200) {
+      throw new Error(`GET /api/users/${uniqueId} -> ${res.status} ${JSON.stringify(res.body)}`);
+    }
+    return res.body?.user ?? res.body;
+  };
+
+  return {
+    label: 'product API',
+    db: null,
+    /**
+     * `GET /api/users/:id` deliberately strips cohort — the route's own comment
+     * says "Strip admin-only / PII / deletion / cohort fields". That is a
+     * safeguarding decision, not a gap, so cohort is UNANSWERABLE here rather
+     * than merely missing. Saying so lets a journey skip that one assertion
+     * out loud instead of timing out on `undefined`.
+     */
+    canReadUserField: (field) => field !== 'cohort' && field !== 'cohortOverride',
+    getUser,
+    async waitUserField(uniqueId, field, predicate, timeoutMs = 8000) {
+      // Condition-based, like its emulator twin: exits the moment the value
+      // arrives, and reports the LAST value seen rather than "timed out".
+      const deadline = Date.now() + timeoutMs;
+      let last = '(user missing)';
+      for (;;) {
+        const data = await getUser(uniqueId);
+        if (data) last = data[field];
+        if (data && predicate(data[field])) return last;
+        if (Date.now() + 500 >= deadline) break;
+        await sleep(500);
+      }
+      throw new Error(
+        `users/${uniqueId}.${field} never satisfied the check within ${timeoutMs}ms ` +
+          `(last seen: ${JSON.stringify(last)}, read via the ${'product API'})`,
+      );
+    },
+  };
+}
+
 // --------------------------------------------------------------------------
 // Server/API assertions (local: Auth emulator + express-api on localhost)
 // --------------------------------------------------------------------------
@@ -2214,17 +2315,18 @@ function personaJourney(id, title, email, uid, cohort) {
         return `profile renders; wallet ${expectWallet ? 'shown' : 'hidden'}, as a ${cohort} should see`;
       });
 
-      if (ctx.db && uid) {
-        await reporter.step(device, `DB users/${uid} cohort=${cohort}`, async () => {
-          const got = await dbWaitField(
-            ctx.db,
-            `users/${uid}`,
-            'cohort',
-            (v) => v === cohort,
-            6000,
-          );
-          return `Firestore users/${uid}.cohort = "${got}"`;
+      if (uid && ctx.state.canReadUserField('cohort')) {
+        await reporter.step(device, `State users/${uid} cohort=${cohort}`, async () => {
+          const got = await ctx.state.waitUserField(uid, 'cohort', (v) => v === cohort, 6000);
+          return `users/${uid}.cohort = "${got}" (via the ${ctx.state.label})`;
         });
+      } else if (uid) {
+        // Not a silent skip: the surrounding UI steps are what prove the cohort
+        // behaviourally here, and they still run.
+        console.log(
+          `  ⊘ users/${uid}.cohort not assertable via the ${ctx.state.label} ` +
+            `(the profile route strips cohort by design) — the UI assertions carry it`,
+        );
       }
     },
   };
@@ -2245,11 +2347,16 @@ const J02 = {
   title: 'j02 — minor (Marcus P-04): UI renders + server-enforced cross-cohort gate',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'minor-power@shytalk.dev');
-    if (ctx.db) {
-      await reporter.step(device, 'DB users/60000010 cohort=minor', async () => {
-        const v = await dbWaitField(ctx.db, 'users/60000010', 'cohort', (x) => x === 'minor', 6000);
-        return `Firestore cohort = "${v}"`;
+    if (ctx.state.canReadUserField('cohort')) {
+      await reporter.step(device, 'State users/60000010 cohort=minor', async () => {
+        const v = await ctx.state.waitUserField('60000010', 'cohort', (x) => x === 'minor', 6000);
+        return `cohort = "${v}" (via the ${ctx.state.label})`;
       });
+    } else {
+      console.log(
+        `  ⊘ users/60000010.cohort not assertable via the ${ctx.state.label} ` +
+          '(the profile route strips cohort by design) — the minor-UI steps below carry it',
+      );
     }
     await reporter.step(device, 'Minor profile renders, without the wallet', async () => {
       // This step used to REQUIRE profile_walletButton, one step before the
@@ -2289,7 +2396,7 @@ const J02 = {
       return 'minor UI hides the gated features';
     });
     // The server-side restriction, which DOES hold.
-    if (ctx.db) {
+    {
       await reporter.step(
         device,
         'API: minor→adult follow blocked (cross-cohort 404)',
@@ -2307,12 +2414,12 @@ const J02 = {
           return `POST /users/60000010/follow {target: Alice} → 404 "${res.body?.error ?? res.status}" (OSA gate)`;
         },
       );
-      await reporter.step(device, 'DB: minor did NOT follow the adult', async () => {
-        const data = await dbGet(ctx.db, 'users/60000010');
+      await reporter.step(device, 'State: minor did NOT follow the adult', async () => {
+        const data = await ctx.state.getUser('60000010');
         if (arrayContains(data?.followingIds, 50000010)) {
           throw new Error('users/60000010.followingIds wrongly contains adult 50000010');
         }
-        return 'followingIds excludes 50000010 — cross-cohort write blocked';
+        return `followingIds excludes 50000010 — cross-cohort write blocked (via the ${ctx.state.label})`;
       });
     }
   },
@@ -2329,7 +2436,6 @@ const J08 = {
   title: 'j08 — cross-cohort wall: an adult cannot reach a minor, on the phone',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-prober@shytalk.dev');
-    if (!ctx.db) return;
 
     const vexa = 50000040;
     const marcus = 60000010;
@@ -2425,9 +2531,9 @@ const J08 = {
       return 'profile → 404 (existence-hiding)';
     });
 
-    await reporter.step(device, 'DB: Vexa did not end up following the minor', async () => {
-      const snap = await ctx.db.doc(`users/${vexa}`).get();
-      const following = snap.data()?.followingIds || [];
+    await reporter.step(device, 'State: Vexa did not end up following the minor', async () => {
+      const data = await ctx.state.getUser(vexa);
+      const following = data?.followingIds || [];
       if (following.map(String).includes(String(marcus))) {
         throw new Error(`users/${vexa}.followingIds contains the minor ${marcus}`);
       }
@@ -2442,13 +2548,15 @@ const J08 = {
 // override is cleared at the end so re-runs are idempotent.
 const J04 = {
   id: 'J04',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   kind: 'api-contract',
   title:
     'j04 — API contract: cohort-override is staff-only — regular member rejected (422), ' +
     'staff allowed + audited (no app UI exists for cohort override; back-office only)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
-    if (!ctx.db) return;
     const hayato = 50000030;
     let gToken;
     await reporter.step(device, 'Mint Greta admin token (isAdmin claim)', async () => {
@@ -2483,13 +2591,13 @@ const J04 = {
       });
       if (r.status !== 200)
         throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
-      const v = await dbWaitField(
-        ctx.db,
-        `users/${selma}`,
-        'cohortOverride',
-        (x) => x === 'minor',
-        6000,
-      );
+      if (!ctx.state.canReadUserField('cohortOverride')) {
+        throw new Error(
+          `cohortOverride is not readable via the ${ctx.state.label} (stripped by design); ` +
+            'this assertion is local-only',
+        );
+      }
+      const v = await ctx.state.waitUserField(selma, 'cohortOverride', (x) => x === 'minor', 6000);
       const snap = await ctx.db
         .collection('adminAuditLog')
         .where('targetUserId', '==', String(selma))
@@ -2527,11 +2635,13 @@ const J04 = {
 // in-app screen is unreachable (SHY-0460).
 const J11 = {
   id: 'J11',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   kind: 'ui',
   title: 'j11 — moderation: Nora reports a message, Raul appeals his suspension',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'victim@shytalk.dev');
-    if (!ctx.db) return;
 
     const nora = 50000051;
     const raul = 50000050;
@@ -2557,14 +2667,14 @@ const J11 = {
       // NEXT run then cannot even create the thread — every request he makes
       // answers 403. The second failure hides the first, which is the whole
       // reason state is cleared on the way IN.
-      const before = await dbGet(ctx.db, `users/${raul}`);
+      const before = await ctx.state.getUser(raul);
       if (!before?.isSuspended) return 'not suspended; nothing to lift';
       const r = await apiCall('POST', `/api/admin/users/${raul}/unsuspend`, {
         token: gretaToken,
         body: { reason: 'journey-runner: clearing state left by an earlier run' },
       });
       if (r.status !== 200) throw new Error(`could not lift the old suspension: ${r.status}`);
-      await dbWaitField(ctx.db, `users/${raul}`, 'isSuspended', (v) => v !== true, 8000);
+      await ctx.state.waitUserField(raul, 'isSuspended', (v) => v !== true, 8000);
       const stale = await ctx.db.collection('suspensionAppeals').where('userId', '==', raul).get();
       for (const a of stale.docs) await a.ref.delete();
       return `lifted a leftover suspension (+${stale.size} stale appeal(s))`;
@@ -2669,7 +2779,7 @@ const J11 = {
     });
 
     await reporter.step(device, "DB: Nora's report is recorded against Raul", async () => {
-      const raulDoc = await dbGet(ctx.db, `users/${raul}`);
+      const raulDoc = await ctx.state.getUser(raul);
       if (!raulDoc?.firebaseUid) throw new Error('could not read Raul firebaseUid');
       await dbWaitQuery(
         () =>
@@ -2801,11 +2911,13 @@ const J11 = {
 // bubble that renders without persisting is just as broken as the reverse.
 const J07 = {
   id: 'J07',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   kind: 'ui',
   title: 'j07 — social: Alice messages Lena on the phone and reads her reply',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
-    if (!ctx.db) return;
 
     const alice = 50000010;
     const lena = 50000020;
@@ -2988,6 +3100,9 @@ const J07 = {
 // boundary on the admin endpoints — read-only, no mutations.
 const J12 = {
   id: 'J12',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   // There is no app UI to drive, and now nothing pretending there might be.
   // ReportReviewScreen was registered in both nav graphs while nothing
   // navigated to it anywhere in the repo; SHY-0460 removed it, along with the
@@ -3000,7 +3115,6 @@ const J12 = {
     '(no reachable app UI; the queues live in the web admin console)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'admin@shytalk.dev');
-    if (!ctx.db) return;
     let gretaToken;
     let aliceToken;
     await reporter.step(device, 'Mint admin (Greta) + non-admin (Alice) tokens', async () => {
@@ -3199,6 +3313,9 @@ async function resolveStaleJourneyTickets(ctx, { ownerId, keepTicketId }) {
 
 const J38 = {
   id: 'J38',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   kind: 'ui',
   title: 'j38 — a second support request is warned about, never refused (SHY-0396)',
   async run(device, reporter, ctx) {
@@ -3290,7 +3407,6 @@ const J38 = {
     // anyway -- it compares the account on the device against the account the
     // server bound the seeded ticket to.
     await signInAs(device, reporter, ctx, ctx.supportPersona);
-    if (!ctx.db) return;
 
     await reporter.step(device, 'The phone is signed in as the account we seeded', async () => {
       // Distinct from signInAs's check, which compares the device against the
@@ -3590,11 +3706,13 @@ const J39 = {
 // 409 replay guard (receiptId = sha256(purchaseToken)).
 const J05 = {
   id: 'J05',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   kind: 'ui',
   title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
-    if (!ctx.db) return;
     const alice = 50000010;
     let token;
     let before = 0;
@@ -3677,7 +3795,6 @@ const J06 = {
     '(no app UI offers either case)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev');
-    if (!ctx.db) return;
     let token;
     await reporter.step(device, 'Mint Alice token', async () => {
       token = await getIdToken('adult-power@shytalk.dev');
@@ -3730,11 +3847,13 @@ const J06 = {
 // OWNER_AWAY | CLOSED — there is no OPEN).
 const J09 = {
   id: 'J09',
+  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
+  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
+  requiresLocalState: true,
   kind: 'ui',
   title: 'j09 — room lifecycle: create → mic on → mic off → close (Theo)',
   async run(device, reporter, ctx) {
     await signInAs(device, reporter, ctx, 'host@shytalk.dev');
-    if (!ctx.db) return;
 
     const theo = 50000060;
     // Unique per run so a re-run never matches a room a previous run left.
@@ -4194,13 +4313,15 @@ async function main() {
       console.log(`adb reverse set for ports: ${cfg.reversePorts.join(', ')}`);
   }
 
-  const db = initDb(opts.target);
-  if (db) console.log('Firestore assertions: ON (local emulator)');
+  const state = makeStateReader(opts.target);
+  const db = state.db;
+  console.log(`State assertions: ON (via the ${state.label})`);
   const ctx = {
     ...cfg,
     apkAbs,
     reset: opts.reset,
     db,
+    state,
     supportPersona: SUPPORT_PERSONA_BY_PLATFORM[opts.platform],
   };
   // Checked ONCE, before the first tap. Losing the seed mid-session used to
@@ -4256,6 +4377,21 @@ async function main() {
 
   try {
     for (const j of journeys) {
+      // SHY-0488 — a journey that CANNOT be asserted on this target is skipped
+      // out loud, rather than left to run its sign-in preamble and then fail
+      // SHY-0457's touch-the-UI guard with a message about the wrong thing.
+      //
+      // A skip is NOT a pass. It is counted and printed separately, because
+      // "absent from the failure list" must never read as "verified".
+      if (j.requiresLocalState && !ctx.state.db) {
+        console.log(
+          `--- ${j.id}: ⊘ SKIPPED — reads Firestore collections directly, which the ` +
+            `${ctx.state.label} cannot answer on this target`,
+        );
+        reporter.skipped.push(j.id);
+        continue;
+      }
+
       reporter.startJourney(j.id, j.title);
       try {
         await j.run(device, reporter, ctx);
