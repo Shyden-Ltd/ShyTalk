@@ -189,3 +189,103 @@ describe('SHY-0127 Gate 1 — wired into the required PR Gate aggregation', () =
     expect(yml).toContain('"${{ needs.pre-merge-gate.result }}"');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// SHY-0486 — a running-log append on an In Progress story
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * An umbrella deliberately sits at `In Progress` while its slices land, and its
+ * running log is where they are recorded. The gate used to refuse ANY edit to
+ * it, so the only ways to record progress were to lie about the status or to
+ * keep the record somewhere the story does not point at.
+ *
+ * The carve-out is defined by what did NOT change — frontmatter and Acceptance
+ * Criteria byte-identical — which is the strict direction: far harder to smuggle
+ * an AC edit past an equality check on the whole section than past a rule about
+ * where a diff hunk sits.
+ */
+const inProgressStory = (body) =>
+  `---\nid: SHY-0999\nstatus: In Progress\nowner: claude\ncreated: 2026-06-18\n` +
+  `priority: P1\neffort: S\ntype: infra\nroadmap_ids: []\npr:\n---\n\n` +
+  `# SHY-0999: umbrella\n\n## Acceptance Criteria\n\n- [ ] the one thing\n\n` +
+  `## Notes (running log)\n${body}\n`;
+
+const storyPath = (dir) => path.join(dir, '.project/stories/SHY-0999-x.md');
+
+describe('SHY-0486 — an In Progress story may record its own running log', () => {
+  test('a body-only change is allowed', () => {
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(storyPath(d), inProgressStory('- first slice landed')),
+      (d) =>
+        fs.writeFileSync(
+          storyPath(d),
+          inProgressStory('- first slice landed\n- second slice landed'),
+        ),
+    );
+    expect(run(dir).code).toBe(0);
+  });
+
+  test('changing the Acceptance Criteria is still REFUSED', () => {
+    // The protection the gate exists for. Implementation must not merge against
+    // a story nobody has marked ready.
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(storyPath(d), inProgressStory('- log')),
+      (d) =>
+        fs.writeFileSync(
+          storyPath(d),
+          inProgressStory('- log').replace('- [ ] the one thing', '- [ ] something else entirely'),
+        ),
+    );
+    const { code, stderr } = run(dir);
+    expect(code).toBe(1);
+    expect(stderr).toMatch(/Acceptance Criteria/);
+  });
+
+  test('changing the frontmatter is still REFUSED', () => {
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(storyPath(d), inProgressStory('- log')),
+      (d) =>
+        fs.writeFileSync(
+          storyPath(d),
+          inProgressStory('- log').replace('priority: P1', 'priority: P0'),
+        ),
+    );
+    const { code, stderr } = run(dir);
+    expect(code).toBe(1);
+    expect(stderr).toMatch(/frontmatter/);
+  });
+
+  test('the refusal tells you NOT to flip the status', () => {
+    // The obvious way past this gate is to lie about the status, and the board
+    // is downstream of that. The message has to say so.
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(storyPath(d), inProgressStory('- log')),
+      (d) =>
+        fs.writeFileSync(
+          storyPath(d),
+          inProgressStory('- log').replace('priority: P1', 'priority: P0'),
+        ),
+    );
+    expect(run(dir).stderr).toMatch(/Do NOT flip the status/i);
+  });
+
+  test('a NEWLY ADDED In Progress story is still refused — the exemption is modify-only', () => {
+    const dir = makeRepo((d) => fs.writeFileSync(storyPath(d), inProgressStory('- log')));
+    expect(run(dir).code).toBe(1);
+  });
+
+  test('an In Progress story with no base version is refused rather than assumed clean', () => {
+    // A rename produces a head file with no content at `base` under that path.
+    // Unreadable base must not read as "nothing changed".
+    const dir = makeRepoBase(
+      (d) =>
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0998-y.md'), inProgressStory('- log')),
+      (d) => {
+        fs.rmSync(path.join(d, '.project/stories/SHY-0998-y.md'));
+        fs.writeFileSync(storyPath(d), inProgressStory('- log'));
+      },
+    );
+    expect(run(dir).code).toBe(1);
+  });
+});

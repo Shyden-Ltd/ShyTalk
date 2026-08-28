@@ -27,6 +27,46 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const ALLOWED = new Set(['In Review', 'Done', 'Cancelled']);
+
+/**
+ * The two parts of a story an In Progress edit may NOT touch (SHY-0486).
+ *
+ * An umbrella deliberately sits at `In Progress` while its slices land, and its
+ * running log is the place that records them. This gate refused any edit to it,
+ * so the only ways to record progress were to lie about the status or to keep
+ * the record somewhere the story does not point at. Neither is acceptable.
+ *
+ * So a body-only change to an In Progress story is allowed, and "body-only" is
+ * defined by what did NOT change: the frontmatter and the Acceptance Criteria
+ * must be byte-identical to the base. That is deliberately the strict
+ * direction — it is far harder to smuggle an AC edit past an equality check on
+ * the whole section than past a rule about where a diff hunk sits.
+ *
+ * What the gate was built to stop is unchanged: implementation cannot merge
+ * against a story nobody has marked ready, because touching the ACs or the
+ * status still fails.
+ */
+function frontmatterOf(text) {
+  const m = text.match(/^---\n([\s\S]*?)\n---/);
+  return m ? m[1] : null;
+}
+
+function acceptanceCriteriaOf(text) {
+  const start = text.indexOf('\n## Acceptance Criteria');
+  if (start === -1) return null;
+  const rest = text.slice(start + 1);
+  const next = rest.search(/\n## (?!#)/);
+  return next === -1 ? rest : rest.slice(0, next);
+}
+
+/** The file as it was at `ref`, or null when it did not exist there. */
+function fileAt(ref, file) {
+  try {
+    return execFileSync('git', ['show', `${ref}:${file}`], { encoding: 'utf8', maxBuffer: 32e6 });
+  } catch {
+    return null;
+  }
+}
 const STORY_RE = /\.project\/stories\/SHY-\d{4}-[^/]+\.md$/;
 
 function fail(msg) {
@@ -84,6 +124,29 @@ function main() {
     const status = match ? match[1] : '(no status: field)';
     if (ALLOWED.has(status)) {
       process.stdout.write(`pre-merge-gate: ${file} status "${status}" OK\n`);
+    } else if (status === 'In Progress' && code === 'M') {
+      // SHY-0486 — a running-log append on a story that is deliberately open.
+      const beforeText = fileAt(base, file);
+      const fmSame =
+        beforeText !== null && frontmatterOf(beforeText) === frontmatterOf(content);
+      const acSame =
+        beforeText !== null &&
+        acceptanceCriteriaOf(beforeText) === acceptanceCriteriaOf(content);
+      if (fmSame && acSame) {
+        process.stdout.write(
+          `pre-merge-gate: ${file} is In Progress, but the change is body-only ` +
+            '(frontmatter and Acceptance Criteria unchanged) — running-log exemption OK\n',
+        );
+      } else {
+        const what = !fmSame ? 'frontmatter' : 'Acceptance Criteria';
+        fail(
+          `pre-merge-gate: ${file} is "In Progress" and this PR changes its ${what}. ` +
+            'Only a body-only change (a running-log append) is allowed while a story is ' +
+            'In Progress. Do NOT flip the status to get past this — move the story to ' +
+            '"In Review" only when it genuinely is.',
+        );
+        bad += 1;
+      }
     } else if (code === 'A' && status === 'Draft') {
       // SHY-0131 — filing a brand-new story is legitimately Draft (not yet
       // picked up for implementation). The exemption is ADD-only: a MODIFIED or

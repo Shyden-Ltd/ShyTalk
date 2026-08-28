@@ -109,6 +109,32 @@ The operator reported: *"I tried out the dev app yesterday and I still can't cre
 - Judgment-merge per slice. Each slice → In Review → Done on its release cut.
 
 ## Notes (running log)
+- **2026-08-28 — the express scope is COMPLETE.** `room-mutations.test.js` is
+  deleted; every one of its 170 tests migrated. Across SHY-0479 → SHY-0492 the
+  three files that carried 303 doubles at pickup are all at **zero**, and the
+  no-stubs baseline fell **615 → 606** paths.
+
+  The last slice (SHY-0492) was unblocked by **cancelling SHY-0103**: the RTDB
+  presence rules bug it described had already been fixed by SHY-0270 and is live
+  on dev, proven by probing the deployed rules with a real token — a permit and
+  two deny probes. This story's own sequencing note ("against SHY-0103") was
+  therefore stale, and had been for months.
+
+  What the migrations caught that the doubles structurally could not:
+
+  - a **real two-caller race** for one seat (the fake `runTransaction` called its
+    callback once with a fixed snapshot);
+  - reintroducing **SHY-0272** — nobody can mute their own microphone — fails 3
+    tests;
+  - the **presence fail-safe**: `isUserPresent` returns true on error, so a
+    database blip cannot be read as somebody having left. Failing open would let
+    anyone be evicted during an outage;
+  - the classic falsy bug `!req.body?.requireApproval`, which would mean nobody
+    could ever *disable* room approval.
+
+  **Remaining for this umbrella:** the Android device ACs (RoomCreation /
+  RoomBrowsing / GroupChat on the real gauntlet) and the operator's original
+  room-creation report. The express half is done.
 - **2026-06-17 — created Draft (P0, first migration after the keystone).** Sequenced first because it surfaces the operator's reproducible room-creation failure — the canonical evidence for "no more faking". Likely BLOCKING → pivot-fix TDD-first; ties to SHY-0102/0103 (operator rules-deploy checkpoint required). XL → sub-split at pickup.
 - **2026-06-17 ~15:40 BST — PICKED UP (Draft→In Progress) as the area UMBRELLA; DECOMPOSED into just-in-time child SHYs.** Pickup-fitness review (Explore map of the express surface) surfaced two corrections to the Draft's premise and three operator decisions:
   - **Correction A — express tests use the Admin SDK, which BYPASSES security rules.** So the express route-test migration (Admin SDK → emulator) **cannot reproduce SHY-0102/0103** (those are *client-side* rule denials). The express slices drain the in-process doubles; the rule bugs are reproduced on a different surface.
