@@ -1,6 +1,6 @@
 ---
 id: SHY-0471
-status: Draft
+status: Cancelled
 owner: unassigned
 created: 2026-08-27
 priority: P2
@@ -18,6 +18,53 @@ epic: EPIC-0003
 As **whoever updates dependencies**, I want the Firebase BOM to be updatable,
 so that the Android SDKs stop being pinned two months behind by a migration
 nobody has scoped.
+
+## CANCELLED — duplicate of SHY-0244
+
+I filed this on 2026-08-27 **without checking for an existing ticket**, which is
+my own standing rule. **SHY-0244** — *"Migrate push from FCM registration tokens
+to V1 Installation-ID registration"*, filed 2026-07-25, P1 — is the canonical
+story, and a better one: it carries a full architecture inventory (every producer
+and consumer, Android and iOS and server) that this one does not.
+
+`gradle/libs.versions.toml` even says so at the pin: *"HELD at 34.14.1 — do NOT
+raise until SHY-0244 lands."*
+
+### What re-validating produced, before the duplicate was spotted
+
+Worth keeping, because two of the three findings **de-risk SHY-0244**:
+
+1. **The blocker is real and current.** Bumping to 34.15.0 fails with six
+   `-Werror` deprecation errors across `ShyTalkMessagingService.kt`,
+   `AndroidPlatformNavCallbacks.kt` and `NavGraph.kt`. Reproduced locally.
+
+2. **`onRegistered` really does deliver a FID**, confirmed from the SDK source:
+   *"provides the unique Firebase Installation ID (FID), which should be used to
+   target this app instance for direct-send messaging"*, gated on the
+   `firebase_messaging_installation_id_enabled` manifest flag.
+
+3. **No data migration is required.** The Admin SDK docs are explicit: *"the
+   token field **accepts FIDs during migration**"*. So the server's existing
+   `sendEachForMulticast({ tokens })` keeps working while devices re-register
+   and upload FIDs into the same field — there is no atomic client/server flip,
+   and stored values migrate naturally. SHY-0244 already reached the same
+   conclusion independently and identifies `sendEachForMulticast({ fids })` as
+   the eventual end state.
+
+4. **SHY-0244's hard prerequisite is SATISFIED.** It records *"firebase-admin 14
+   (#1520) is now a hard prerequisite"*. **#1520 is merged** and `express-api`
+   is on `^14.1.0`. That story is actionable now.
+
+5. A clean client shape exists: the three `getInstance().token.await()` sites can
+   read the FID directly via `FirebaseInstallations.getInstance().id` — a
+   non-deprecated `Task<String>` — rather than plumbing the `onRegistered`
+   callback out to each call site.
+
+### Consequence
+
+**#1519** (the Dependabot bump) stays open, correctly: it cannot merge until
+SHY-0244 lands. There are **zero open Dependabot alerts**, so nothing is exposed
+by waiting — this is a version bump, not a security fix.
 
 ## Why
 
