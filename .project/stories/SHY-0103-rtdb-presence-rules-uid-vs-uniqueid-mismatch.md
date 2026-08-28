@@ -1,6 +1,6 @@
 ---
 id: SHY-0103
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-06-15
 priority: P1
@@ -37,6 +37,48 @@ The presence node is **correctly** keyed by the Firestore `uniqueId` (`RtdbPrese
 `auth.uid` is the **Firebase Auth uid** — a *different identity namespace* from the Firestore `uniqueId` (CLAUDE.md: "Two identity namespaces exist for every user"). So `presence/50000010` (uniqueId) is compared against the caller's Firebase Auth uid (a different string) → never equal → `PERMISSION_DENIED`. The rest of the app already uses the custom claim for this exact purpose — `firestore.rules` checks `request.auth.token.uniqueId` — but the RTDB rules were never migrated to that model and still check the raw `auth.uid`.
 
 Because this is a **rules-vs-code namespace mismatch** (not data-dependent), it is independent of OkHttp (RTDB uses its own websocket transport; reproduces on OkHttp 4) and is expected to affect **every environment whose deployed RTDB rules match `database.rules.json`** — making it a likely core-feature (voice rooms) breakage, hence P1.
+
+## CANCELLED — already fixed by SHY-0270, and proven live on dev
+
+Re-validated at pickup on 2026-08-28 under the AFK-week authority to take this
+story. **The bug it describes no longer exists.**
+
+`database.rules.json` now reads:
+
+```json
+"$userId": { ".write": "auth != null && auth.token.uniqueId + '' === $userId" }
+```
+
+— the custom-claim check this story asked for, landed by **SHY-0270** *("Voice
+rooms close themselves seconds after opening", #1689)*, which was diagnosing the
+same symptom from the other end.
+
+### Proven against DEPLOYED dev, not just the file
+
+The repo being right says nothing about what dev is running, so the deployed
+rules were probed directly over the RTDB REST API with a real persona token:
+
+| Probe | Expected | Got |
+| --- | --- | --- |
+| Write `presence/50000010` as the holder of `uniqueId` 50000010 | permitted | **HTTP 200** |
+| Write `presence/60000010` as somebody else | denied | **HTTP 401 Permission denied** |
+| Write `presence/50000010` unauthenticated | denied | **HTTP 401 Permission denied** |
+
+Both negative controls matter: a rule that simply permitted everything would
+also have returned 200 on the first probe.
+
+### The `ownerLeft` half was never wrong
+
+This story also cites `setValue at /ownerLeft/{roomId} failed`. That rule checks
+`auth.uid` — and the app writes the **Firebase uid** there
+(`IosRtdbServices.kt`: `ownerLeftRef.setValue(ownerFuid)`), so the namespaces
+match. Those denials were collateral from the presence failure tearing the room
+down, not a second mismatch.
+
+### Consequence for SHY-0113
+
+The umbrella sequences its `owner-away` and `disconnect-user` express groups
+"against SHY-0103". **That gate is now lifted** — there is nothing to wait for.
 
 ## Acceptance Criteria
 
