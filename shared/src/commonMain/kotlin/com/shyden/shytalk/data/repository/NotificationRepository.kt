@@ -1,16 +1,25 @@
 package com.shyden.shytalk.data.repository
 
+import com.shyden.shytalk.core.push.PushIdentifier
 import com.shyden.shytalk.core.util.Resource
 
 interface NotificationRepository {
-    suspend fun saveFcmToken(
+    /**
+     * Register this device for push (SHY-0244).
+     *
+     * Takes the identifier AND its kind so the backend stores it in the right
+     * field. A bare string here would let a Firebase Installation ID be filed
+     * as a registration token, which fails on send and is then reaped —
+     * silently ending push for that device.
+     */
+    suspend fun savePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit>
 
-    suspend fun removeFcmToken(
+    suspend fun removePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit>
 
     suspend fun setPmNotificationsEnabled(

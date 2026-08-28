@@ -12,6 +12,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/** Shorthand: a legacy registration-token identifier. */
+private fun tok(value: String) = PushIdentifier(value, PushIdentifierKind.REGISTRATION_TOKEN)
+
+/** Shorthand: a V1 Firebase Installation ID. */
+private fun fid(value: String) = PushIdentifier(value, PushIdentifierKind.INSTALLATION_ID)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class PushTokenManagerTest {
     private fun makeManager(
@@ -42,28 +48,28 @@ class PushTokenManagerTest {
     @Test
     fun syncToken_skipsWhenCurrentEqualsLastRegistered() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = "token-A")
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = tok("token-A"))
             val repo = FakeNotificationRepository()
             makeManager(bridge, repo).syncToken("user-1")
             assertEquals(0, repo.saveCalls.size, "Idempotent — no repo call when token already registered")
-            assertEquals("token-A", bridge.lastRegistered)
+            assertEquals(tok("token-A"), bridge.lastRegistered)
         }
 
     @Test
     fun syncToken_postsAndCachesOnSuccess() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = null)
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = null)
             val repo = FakeNotificationRepository()
             makeManager(bridge, repo).syncToken("user-1")
             assertEquals(1, repo.saveCalls.size)
-            assertEquals("user-1" to "token-A", repo.saveCalls.first())
-            assertEquals("token-A", bridge.lastRegistered)
+            assertEquals("user-1" to tok("token-A"), repo.saveCalls.first())
+            assertEquals(tok("token-A"), bridge.lastRegistered)
         }
 
     @Test
     fun syncToken_postsButDoesNotCacheOnFailure() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = null)
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = null)
             val repo = FakeNotificationRepository(saveResult = Resource.Error("backend down"))
             makeManager(bridge, repo).syncToken("user-1")
             assertEquals(1, repo.saveCalls.size)
@@ -73,12 +79,12 @@ class PushTokenManagerTest {
     @Test
     fun syncToken_replacesExistingRegisteredTokenOnRotation() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-NEW", lastRegistered = "token-OLD")
+            val bridge = FakeBridge(currentToken = tok("token-NEW"), lastRegistered = tok("token-OLD"))
             val repo = FakeNotificationRepository()
             makeManager(bridge, repo).syncToken("user-1")
             assertEquals(1, repo.saveCalls.size)
-            assertEquals("user-1" to "token-NEW", repo.saveCalls.first())
-            assertEquals("token-NEW", bridge.lastRegistered)
+            assertEquals("user-1" to tok("token-NEW"), repo.saveCalls.first())
+            assertEquals(tok("token-NEW"), bridge.lastRegistered)
         }
 
     // ── clearToken behaviour ────────────────────────────────────────────
@@ -94,7 +100,7 @@ class PushTokenManagerTest {
     @Test
     fun clearToken_doesNothingWhenLastRegisteredIsNull() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = null)
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = null)
             val repo = FakeNotificationRepository()
             makeManager(bridge, repo).clearToken("user-1")
             assertEquals(0, repo.removeCalls.size)
@@ -103,23 +109,23 @@ class PushTokenManagerTest {
     @Test
     fun clearToken_postsAndClearsOnSuccess() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = "token-A")
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = tok("token-A"))
             val repo = FakeNotificationRepository()
             makeManager(bridge, repo).clearToken("user-1")
             assertEquals(1, repo.removeCalls.size)
-            assertEquals("user-1" to "token-A", repo.removeCalls.first())
+            assertEquals("user-1" to tok("token-A"), repo.removeCalls.first())
             assertNull(bridge.lastRegistered)
         }
 
     @Test
     fun clearToken_keepsCacheOnFailure() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = "token-A")
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = tok("token-A"))
             val repo = FakeNotificationRepository(removeResult = Resource.Error("backend down"))
             makeManager(bridge, repo).clearToken("user-1")
             assertEquals(1, repo.removeCalls.size)
             assertEquals(
-                "token-A",
+                tok("token-A"),
                 bridge.lastRegistered,
                 "Cache stays so a later remove still has the value to delete",
             )
@@ -130,11 +136,11 @@ class PushTokenManagerTest {
         runTest {
             // Live token has rotated since the registered one was saved.
             // Sign-out should remove what was actually registered, not whatever is current.
-            val bridge = FakeBridge(currentToken = "token-NEW", lastRegistered = "token-OLD")
+            val bridge = FakeBridge(currentToken = tok("token-NEW"), lastRegistered = tok("token-OLD"))
             val repo = FakeNotificationRepository()
             makeManager(bridge, repo).clearToken("user-1")
             assertEquals(1, repo.removeCalls.size)
-            assertEquals("user-1" to "token-OLD", repo.removeCalls.first())
+            assertEquals("user-1" to tok("token-OLD"), repo.removeCalls.first())
             assertNull(bridge.lastRegistered)
         }
 
@@ -148,7 +154,7 @@ class PushTokenManagerTest {
             // these would interleave: clearToken would read lastRegisteredToken=null
             // before A's save completes, return early, and userA's token would
             // remain registered indefinitely.
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = null)
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = null)
             val repo = SlowNotificationRepository(perCallDelayMs = 50)
             val manager = makeManager(bridge, repo)
 
@@ -157,7 +163,7 @@ class PushTokenManagerTest {
                 launch { manager.clearToken("user-A") }
                 launch {
                     // Token rotates between sign-out and sign-in.
-                    bridge.currentToken = "token-B"
+                    bridge.currentToken = tok("token-B")
                     manager.syncToken("user-B")
                 }
             }
@@ -165,10 +171,10 @@ class PushTokenManagerTest {
             // With the Mutex, operations execute strictly in launch order.
             assertEquals(2, repo.saveCalls.size, "Two saves: A then B")
             assertEquals(1, repo.removeCalls.size, "One remove for A")
-            assertEquals("user-A" to "token-A", repo.saveCalls[0])
-            assertEquals("user-A" to "token-A", repo.removeCalls[0])
-            assertEquals("user-B" to "token-B", repo.saveCalls[1])
-            assertEquals("token-B", bridge.lastRegistered)
+            assertEquals("user-A" to tok("token-A"), repo.saveCalls[0])
+            assertEquals("user-A" to tok("token-A"), repo.removeCalls[0])
+            assertEquals("user-B" to tok("token-B"), repo.saveCalls[1])
+            assertEquals(tok("token-B"), bridge.lastRegistered)
 
             assertEquals(
                 listOf(
@@ -181,10 +187,58 @@ class PushTokenManagerTest {
             )
         }
 
+    // ── SHY-0244: the installation-ID model ─────────────────────────────
+
+    /**
+     * A migrated device registers an installation ID, and the KIND has to
+     * survive the trip. If it were dropped the backend would file the value as
+     * a registration token, addressing it would fail, and the reaper would
+     * delete it — ending push for that device with nothing reporting a fault.
+     */
+    @Test
+    fun syncToken_forwardsTheInstallationIdKind() =
+        runTest {
+            val bridge = FakeBridge(currentToken = fid("fid-A"), lastRegistered = null)
+            val repo = FakeNotificationRepository()
+            makeManager(bridge, repo).syncToken("user-1")
+            assertEquals(1, repo.saveCalls.size)
+            assertEquals("user-1" to fid("fid-A"), repo.saveCalls.first())
+            assertEquals(fid("fid-A"), bridge.lastRegistered)
+        }
+
+    /**
+     * The same string under two models is two different registrations. Only
+     * comparing values would treat an upgrade as "already registered" and
+     * never tell the backend the model changed.
+     */
+    @Test
+    fun syncToken_treatsAChangeOfKindAsAChange() =
+        runTest {
+            val bridge = FakeBridge(currentToken = fid("same-value"), lastRegistered = tok("same-value"))
+            val repo = FakeNotificationRepository()
+            makeManager(bridge, repo).syncToken("user-1")
+            assertEquals(1, repo.saveCalls.size, "A model change must be re-registered")
+            assertEquals("user-1" to fid("same-value"), repo.saveCalls.first())
+        }
+
+    @Test
+    fun clearToken_removesTheInstallationIdItRegistered() =
+        runTest {
+            // Sign-out has to clear the identifier under the model it was
+            // stored with, or the next person on this device receives the
+            // previous user's notifications.
+            val bridge = FakeBridge(currentToken = fid("fid-A"), lastRegistered = fid("fid-A"))
+            val repo = FakeNotificationRepository()
+            makeManager(bridge, repo).clearToken("user-1")
+            assertEquals(1, repo.removeCalls.size)
+            assertEquals("user-1" to fid("fid-A"), repo.removeCalls.first())
+            assertNull(bridge.lastRegistered)
+        }
+
     @Test
     fun mutex_doesNotDeadlockOnSequentialCalls() =
         runTest {
-            val bridge = FakeBridge(currentToken = "token-A", lastRegistered = null)
+            val bridge = FakeBridge(currentToken = tok("token-A"), lastRegistered = null)
             val repo = FakeNotificationRepository()
             val manager = makeManager(bridge, repo)
             manager.syncToken("user-1")
@@ -197,15 +251,15 @@ class PushTokenManagerTest {
 // ── Test fakes ──────────────────────────────────────────────────────────
 
 private class FakeBridge(
-    var currentToken: String?,
-    var lastRegistered: String?,
+    var currentToken: PushIdentifier?,
+    var lastRegistered: PushIdentifier?,
 ) : PushTokenBridge {
-    override fun currentFcmToken(): String? = currentToken
+    override fun currentPushIdentifier(): PushIdentifier? = currentToken
 
-    override fun lastRegisteredToken(): String? = lastRegistered
+    override fun lastRegisteredIdentifier(): PushIdentifier? = lastRegistered
 
-    override fun setLastRegisteredToken(token: String?) {
-        lastRegistered = token
+    override fun setLastRegisteredIdentifier(identifier: PushIdentifier?) {
+        lastRegistered = identifier
     }
 }
 
@@ -213,22 +267,22 @@ private class FakeNotificationRepository(
     private val saveResult: Resource<Unit> = Resource.Success(Unit),
     private val removeResult: Resource<Unit> = Resource.Success(Unit),
 ) : NotificationRepository {
-    val saveCalls = mutableListOf<Pair<String, String>>()
-    val removeCalls = mutableListOf<Pair<String, String>>()
+    val saveCalls = mutableListOf<Pair<String, PushIdentifier>>()
+    val removeCalls = mutableListOf<Pair<String, PushIdentifier>>()
 
-    override suspend fun saveFcmToken(
+    override suspend fun savePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> {
-        saveCalls.add(userId to token)
+        saveCalls.add(userId to identifier)
         return saveResult
     }
 
-    override suspend fun removeFcmToken(
+    override suspend fun removePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> {
-        removeCalls.add(userId to token)
+        removeCalls.add(userId to identifier)
         return removeResult
     }
 
@@ -243,27 +297,27 @@ private class FakeNotificationRepository(
 private class SlowNotificationRepository(
     private val perCallDelayMs: Long,
 ) : NotificationRepository {
-    val saveCalls = mutableListOf<Pair<String, String>>()
-    val removeCalls = mutableListOf<Pair<String, String>>()
+    val saveCalls = mutableListOf<Pair<String, PushIdentifier>>()
+    val removeCalls = mutableListOf<Pair<String, PushIdentifier>>()
     val callLog = mutableListOf<String>()
 
-    override suspend fun saveFcmToken(
+    override suspend fun savePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> {
-        callLog.add("save($userId, $token)")
+        callLog.add("save($userId, ${identifier.value})")
         delay(perCallDelayMs)
-        saveCalls.add(userId to token)
+        saveCalls.add(userId to identifier)
         return Resource.Success(Unit)
     }
 
-    override suspend fun removeFcmToken(
+    override suspend fun removePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> {
-        callLog.add("remove($userId, $token)")
+        callLog.add("remove($userId, ${identifier.value})")
         delay(perCallDelayMs)
-        removeCalls.add(userId to token)
+        removeCalls.add(userId to identifier)
         return Resource.Success(Unit)
     }
 
