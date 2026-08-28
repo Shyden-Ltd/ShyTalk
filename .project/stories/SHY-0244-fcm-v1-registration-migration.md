@@ -1,6 +1,6 @@
 ---
 id: SHY-0244
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-25
 priority: P1
@@ -236,3 +236,51 @@ Not "important eventually" — it is the next thing to pick up, for five reasons
   3. Both real devices are attached: OnePlus `3b402284` and an iPhone Air.
 
   Nothing blocks the story now.
+
+- **2026-08-28 ~17:20 UTC** — Implementation complete; proof split by what is
+  actually provable where.
+
+  **Proven pre-merge, LOCALLY, against the real stack** (real HTTP, real auth
+  emulator, real Express, real Firestore — nothing mocked):
+
+  | Claim | Evidence |
+  | --- | --- |
+  | An installation ID registers | `POST /api/notifications/token {"installationId":…}` → 200 |
+  | A token still registers | same route, `{"token":…}` → 200 |
+  | Sending both is refused | → 400 *"send exactly one of token or installationId, not both"* |
+  | Each lands in its OWN store | `users/50000060` → `fcmTokens=["tok-proof-0244"]`, `fcmInstallationIds=["fid-proof-0244"]`, neither crossed |
+  | Android build carries the flag | `aapt2 dump xmltree` on the built APK: `firebase_messaging_installation_id_enabled` `value=true` |
+  | `-Werror` clean at BOM 34.18.0 | `:app:compileDevDebugKotlin` green, zero suppressions |
+
+  Suites: express **527 suites / 15,686 tests**; `:app:testDevDebugUnitTest` +
+  `:shared:jvmTest` + `detekt` green; iOS build succeeds with no new warnings.
+  Every new branch mutation-tested (13 mutations across dispatch, the per-user
+  helper, the registration endpoint and the manifest guard — all caught).
+
+  **NOT provable pre-merge, and why.** Two hard blocks, both environmental
+  rather than product defects:
+
+  1. `fcm.js` short-circuits when `NODE_ENV=local` — it captures the payload
+     instead of contacting FCM. **No local run can deliver a real push**, on
+     any device, under either model.
+  2. The `local` flavour builds against the **demo-shytalk** project. A
+     Firebase Installation ID is minted by the real Installations service, so a
+     demo project cannot produce one. Confirmed on the OnePlus: the app runs,
+     but App Check and Installations both fail against the demo project.
+
+  So the client half has to be proven on **dev**, from `develop`, after deploy
+  — which is the standing rule anyway (pre-merge is local; dev testing only
+  from develop after a deploy). That is what `develop` is for. Remaining, to
+  run immediately after the deploy: fresh install on the OnePlus and on the
+  iPhone, sign in, confirm `fcmInstallationIds` populates, and confirm a
+  message, a room invite and a moderation notice each arrive as a real push on
+  both devices. **Not promoted to `main` until that is green.**
+
+- **2026-08-28 — two findings worth carrying beyond this story.**
+  1. **iOS Firebase via CocoaPods is being retired.** `pod update` warns that
+     FirebaseCore is deprecated in favour of Swift Package Manager and that
+     **no new CocoaPods versions ship after October 2026**. Our other iOS deps
+     are already on SwiftPM. This needs its own story before that date.
+  2. **The server needs no flag day.** `sendEachForMulticast` accepts `tokens`
+     and `fids` in one call, so a fleet mid-rollover is addressable in a single
+     dispatch. Only the CLIENTS are one-way doors, and only per build.
