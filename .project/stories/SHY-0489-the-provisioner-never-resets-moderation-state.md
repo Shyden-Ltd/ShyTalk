@@ -145,6 +145,25 @@ inferring an hour later.
 
 **Mutation-tested:** removing the four fields fails 2 of the 5 tests.
 
+## Live proof on dev
+
+Run 2026-08-28, after the fix merged. `host@shytalk.dev` (50000060) was warned
+**on purpose** through the real admin route, then re-seeded:
+
+```
+POST /api/user/50000060/warn                       -> HTTP 200
+  BEFORE re-seed: hasActiveWarning=True  reason="SHY-0489 live proof …"
+
+Seed Dev Personas (run 33144010991)                -> success
+  [moderation] cleared warning on host@shytalk.dev (50000060)
+  PROVISION_MODERATION_CLEARED count=1 (host@shytalk.dev)
+
+  AFTER re-seed:  hasActiveWarning=False  warningReason=None  isSuspended=False
+```
+
+Both halves matter: the state really was set before (so the clear had something
+to do), and the seeder **named what it cleared** rather than doing it silently.
+
 ## Notes
 
 Filed **Draft**: the fix is small, but "what is a persona's known state" is worth
