@@ -28,7 +28,7 @@ const log = require('../utils/log');
 const { clearSuspensionCache, updateUniqueIdCache } = require('../middleware/auth');
 const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
-const { sendFcmToTokens } = require('../utils/fcm');
+const { sendPushToUser } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
 const { checkUserBans } = require('../utils/bans');
 const { findPendingAppeal, createAppeal } = require('../utils/appeals');
@@ -1592,7 +1592,7 @@ router.post('/users/:uniqueId/record-visit', async (req, res) => {
 });
 
 /** Send email and push notification for scheduled account deletion. */
-async function sendDeletionNotifications(user, executeAt) {
+async function sendDeletionNotifications(uniqueId, user, executeAt) {
   const deleteDate = new Date(executeAt).toISOString().split('T')[0];
   if (user.email) {
     try {
@@ -1602,17 +1602,19 @@ async function sendDeletionNotifications(user, executeAt) {
       log.error('users', 'Failed to send deletion email', { error: emailErr.message });
     }
   }
-  if (user.fcmTokens && user.fcmTokens.length > 0) {
-    try {
-      await sendFcmToTokens(user.fcmTokens, {
+  try {
+    await sendPushToUser(
+      uniqueId,
+      {
         notification: {
           title: 'Account Deletion Scheduled',
           body: `Your account will be deleted on ${deleteDate}. Sign in to cancel.`,
         },
-      });
-    } catch (fcmErr) {
-      log.error('users', 'Failed to send deletion push', { error: fcmErr.message });
-    }
+      },
+      { userData: user },
+    );
+  } catch (fcmErr) {
+    log.error('users', 'Failed to send deletion push', { error: fcmErr.message });
   }
 }
 
@@ -1693,7 +1695,7 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
     }
 
     // Send deletion notifications (best-effort)
-    await sendDeletionNotifications(user, executeAt);
+    await sendDeletionNotifications(uniqueId, user, executeAt);
 
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({

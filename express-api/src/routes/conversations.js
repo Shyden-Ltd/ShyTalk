@@ -8,7 +8,7 @@
 const router = require('express').Router();
 const { db, rtdb, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
-const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
+const { sendPushToUser } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
 const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
 const { isLiveAdmin, checkSuspension } = require('../middleware/auth');
@@ -182,13 +182,11 @@ async function sendMessageNotifications(
         showPreview: String(showPreview),
       };
 
-      const invalidTokens = await sendFcmToTokens(user.fcmTokens, data, {
+      await sendPushToUser(recipientId, data, {
+        userData: user,
         senderUniqueId: senderId,
         recipientUniqueId: recipientId,
       });
-      if (invalidTokens.length > 0) {
-        await cleanupInvalidTokens(invalidTokens, recipientId);
-      }
     }
   } catch (err) {
     log.error('conversations', 'Failed to send message notifications', {

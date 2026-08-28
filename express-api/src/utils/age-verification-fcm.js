@@ -23,22 +23,26 @@
  */
 
 const { db } = require('./firebase');
-const { sendFcmToTokens, cleanupInvalidTokens } = require('./fcm');
+const { sendFcmToIdentifiers, cleanupInvalidIdentifiers } = require('./fcm');
 const log = require('./log');
 
 async function loadFcmTokens(targetUserId) {
   const snap = await db.doc(`users/${targetUserId}`).get();
-  if (!snap.exists) return { tokens: [], userExists: false };
-  const tokens = snap.data().fcmTokens;
+  if (!snap.exists) return { tokens: [], fids: [], userExists: false };
+  const data = snap.data() || {};
+  // SHY-0244: a device registered under either model must be reachable, so
+  // both stores are read. A device that has migrated appears ONLY in
+  // fcmInstallationIds, and reading just fcmTokens would silently skip it.
   return {
-    tokens: Array.isArray(tokens) ? tokens : [],
+    tokens: Array.isArray(data.fcmTokens) ? data.fcmTokens : [],
+    fids: Array.isArray(data.fcmInstallationIds) ? data.fcmInstallationIds : [],
     userExists: true,
   };
 }
 
 async function sendOutcomePush(targetUserId, data) {
   try {
-    const { tokens, userExists } = await loadFcmTokens(targetUserId);
+    const { tokens, fids, userExists } = await loadFcmTokens(targetUserId);
     if (!userExists) {
       log.warn('age-verification-fcm', 'Target user missing — skipping push', {
         targetUserId,
@@ -46,17 +50,17 @@ async function sendOutcomePush(targetUserId, data) {
       });
       return false;
     }
-    if (tokens.length === 0) return true; // not a failure — no devices
-    const invalid = await sendFcmToTokens(tokens, data);
-    if (invalid.length > 0) {
+    if (tokens.length === 0 && fids.length === 0) return true; // not a failure — no devices
+    const invalid = await sendFcmToIdentifiers({ tokens, fids }, data);
+    if (invalid.invalidTokens.length > 0 || invalid.invalidFids.length > 0) {
       // Best-effort cleanup of stale tokens — pruning failures here
       // shouldn't block the decision flow, but they MUST surface in
       // logs so ops can spot a Firestore-permission regression that
       // would otherwise let stale tokens accumulate forever.
-      cleanupInvalidTokens(invalid, targetUserId).catch((cleanupErr) => {
+      cleanupInvalidIdentifiers(invalid, targetUserId).catch((cleanupErr) => {
         log.warn('age-verification-fcm', 'Stale-token cleanup failed', {
           targetUserId,
-          invalidCount: invalid.length,
+          invalidCount: invalid.invalidTokens.length + invalid.invalidFids.length,
           error: cleanupErr?.message,
           code: cleanupErr?.code,
         });

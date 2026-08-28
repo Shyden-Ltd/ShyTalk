@@ -45,7 +45,7 @@ const log = require('../utils/log');
 const { sanitise, sanitiseTitle } = require('../utils/text-sanitiser');
 const { similarity } = require('../utils/similarity');
 const { sendSystemPm } = require('../utils/system-pm');
-const { sendFcmToTokens } = require('../utils/fcm');
+const { sendPushToUser } = require('../utils/fcm');
 const { notifyRoadmapSubscribers } = require('../utils/roadmap-notify');
 const {
   VALID_TAGS,
@@ -523,18 +523,12 @@ router.post('/suggestions', async (req, res) => {
     (async () => {
       try {
         // Push notification
-        const userDoc = await db.doc(`users/${req.auth.uniqueId}`).get();
-        if (userDoc.exists) {
-          const tokens = userDoc.data().fcmTokens || [];
-          if (tokens.length > 0) {
-            await sendFcmToTokens(tokens, {
-              type: 'suggestion_submitted',
-              title: 'Suggestion submitted',
-              body: `Your suggestion "${title}" has been submitted for review.`,
-              suggestionId: id,
-            });
-          }
-        }
+        await sendPushToUser(req.auth.uniqueId, {
+          type: 'suggestion_submitted',
+          title: 'Suggestion submitted',
+          body: `Your suggestion "${title}" has been submitted for review.`,
+          suggestionId: id,
+        });
         // System message
         await sendSystemPm(
           String(req.auth.uniqueId),
@@ -904,18 +898,11 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
     const failedUids = [];
     for (const uid of uidsToNotify) {
       try {
-        const userDoc = await db.doc(`users/${uid}`).get();
-        if (userDoc.exists) {
-          const userData = userDoc.data();
-          const tokens = userData.fcmTokens || [];
-          if (tokens.length > 0) {
-            await sendFcmToTokens(tokens, {
-              title: `Suggestion ${eventType}`,
-              body: suggestionData.title || 'A suggestion you follow has been updated',
-              ...extraData,
-            });
-          }
-        }
+        await sendPushToUser(uid, {
+          title: `Suggestion ${eventType}`,
+          body: suggestionData.title || 'A suggestion you follow has been updated',
+          ...extraData,
+        });
         await sendSystemPm(uid, {
           type: `suggestion_${eventType}`,
           title: suggestionData.title,
