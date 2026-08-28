@@ -442,6 +442,57 @@ class UserTest {
         assertEquals(emptyList(), user.fcmTokens)
     }
 
+    // ── fcmInstallationIds parsing (SHY-0244) ───────────────────────
+
+    /**
+     * Firebase replaced the registration-token model with one keyed on the
+     * Firebase Installation ID. The two coexist while the fleet upgrades, so
+     * the model carries both rather than repurposing fcmTokens: a mixed list
+     * would leave the server guessing which kind each entry is, and it cannot
+     * tell them apart by shape.
+     */
+    @Test
+    fun `fromMap parses fcmInstallationIds`() {
+        val map = mapOf<String, Any?>("fcmInstallationIds" to listOf("fid1", "fid2"))
+        val user = User.fromMap(map, "u1")
+        assertEquals(listOf("fid1", "fid2"), user.fcmInstallationIds)
+    }
+
+    @Test
+    fun `fromMap handles missing fcmInstallationIds`() {
+        val user = User.fromMap(emptyMap(), "u1")
+        assertEquals(emptyList(), user.fcmInstallationIds)
+    }
+
+    @Test
+    fun `fromMap keeps the two identifier stores separate`() {
+        // The whole point of a second field. If a fid ever landed in fcmTokens
+        // the server would address it as a token, the send would fail, and the
+        // reaper would delete it -- so the device would go permanently dark.
+        val map =
+            mapOf<String, Any?>(
+                "fcmTokens" to listOf("token1"),
+                "fcmInstallationIds" to listOf("fid1"),
+            )
+        val user = User.fromMap(map, "u1")
+        assertEquals(listOf("token1"), user.fcmTokens)
+        assertEquals(listOf("fid1"), user.fcmInstallationIds)
+    }
+
+    @Test
+    fun `toMap round-trips fcmInstallationIds`() {
+        val user = User(uniqueId = 1, fcmInstallationIds = listOf("fid1"))
+        val restored = User.fromMap(user.toMap(), "u1")
+        assertEquals(listOf("fid1"), restored.fcmInstallationIds)
+    }
+
+    @Test
+    fun `fromMap ignores non-string entries in fcmInstallationIds`() {
+        val map = mapOf<String, Any?>("fcmInstallationIds" to listOf("fid1", 42, null))
+        val user = User.fromMap(map, "u1")
+        assertEquals(listOf("fid1"), user.fcmInstallationIds)
+    }
+
     // ── Number type handling ────────────────────────────────────────
 
     @Test

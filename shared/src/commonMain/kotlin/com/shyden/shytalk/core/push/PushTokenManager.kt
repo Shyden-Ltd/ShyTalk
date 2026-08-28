@@ -15,18 +15,18 @@ class PushTokenManager(
     suspend fun syncToken(userId: String) {
         mutex.withLock {
             val bridge = bridgeProvider() ?: return
-            val current = bridge.currentFcmToken() ?: return
-            if (bridge.lastRegisteredToken() == current) return
-            when (val result = notificationRepo.saveFcmToken(userId, current)) {
-                is Resource.Success -> bridge.setLastRegisteredToken(current)
+            val current = bridge.currentPushIdentifier() ?: return
+            if (bridge.lastRegisteredIdentifier() == current) return
+            when (val result = notificationRepo.savePushIdentifier(userId, current)) {
+                is Resource.Success -> bridge.setLastRegisteredIdentifier(current)
 
                 is Resource.Error -> {
-                    // Don't update lastRegisteredToken — a later trigger (sign-in,
+                    // Don't update lastRegisteredIdentifier — a later trigger (sign-in,
                     // foreground retry) will re-attempt with the same currentToken.
                     // logE so backend / network failures surface in telemetry —
                     // a silent swallow here would hide a class of "user mysteriously
                     // stops receiving notifications" bugs.
-                    logE(TAG, "saveFcmToken failed for userId=$userId: ${result.message}")
+                    logE(TAG, "savePushIdentifier failed for userId=$userId: ${result.message}")
                 }
 
                 is Resource.Loading -> Unit // suspending fn — Loading is not emitted by repo impl
@@ -37,15 +37,15 @@ class PushTokenManager(
     suspend fun clearToken(userId: String) {
         mutex.withLock {
             val bridge = bridgeProvider() ?: return
-            val last = bridge.lastRegisteredToken() ?: return
-            when (val result = notificationRepo.removeFcmToken(userId, last)) {
-                is Resource.Success -> bridge.setLastRegisteredToken(null)
+            val last = bridge.lastRegisteredIdentifier() ?: return
+            when (val result = notificationRepo.removePushIdentifier(userId, last)) {
+                is Resource.Success -> bridge.setLastRegisteredIdentifier(null)
 
                 is Resource.Error -> {
-                    // Keep lastRegisteredToken so a later sign-in cycle won't
+                    // Keep lastRegisteredIdentifier so a later sign-in cycle won't
                     // accidentally re-register the same token under the wrong user
                     // (and the next remove attempt still has the value to delete).
-                    logE(TAG, "removeFcmToken failed for userId=$userId: ${result.message}")
+                    logE(TAG, "removePushIdentifier failed for userId=$userId: ${result.message}")
                 }
 
                 is Resource.Loading -> Unit

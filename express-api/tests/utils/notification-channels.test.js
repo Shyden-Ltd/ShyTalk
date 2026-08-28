@@ -15,6 +15,9 @@ jest.mock('../../src/utils/email', () => ({
 }));
 
 jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
   sendFcmToTokens: (...args) => mockSendFcmToTokens(...args),
 }));
 

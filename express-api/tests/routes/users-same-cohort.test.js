@@ -92,7 +92,12 @@ jest.mock('../../src/utils/block-check', () => ({
 
 jest.mock('../../src/utils/email', () => ({ sendEmail: jest.fn() }));
 jest.mock('../../src/utils/email-templates', () => ({ buildDeletionScheduledEmail: jest.fn() }));
-jest.mock('../../src/utils/fcm', () => ({ sendFcmToTokens: jest.fn() }));
+jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
+  sendFcmToTokens: jest.fn(),
+}));
 
 const { getDoc } = require('../../src/utils/firestore-helpers');
 const { _resetAuditDedup } = require('../../src/middleware/sameCohort');

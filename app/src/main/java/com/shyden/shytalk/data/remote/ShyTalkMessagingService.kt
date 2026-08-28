@@ -11,6 +11,9 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.shyden.shytalk.MainActivity
 import com.shyden.shytalk.R
+import com.shyden.shytalk.core.push.AndroidPushIdentifiers
+import com.shyden.shytalk.core.push.PushIdentifier
+import com.shyden.shytalk.core.push.PushIdentifierKind
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.data.repository.NotificationRepository
@@ -20,9 +23,29 @@ import kotlinx.coroutines.launch
 private const val TAG = "FCMService"
 
 class ShyTalkMessagingService : FirebaseMessagingService() {
+    /**
+     * SHY-0244 — the V1 registration model.
+     *
+     * The token-model callback `onNewToken` is NOT implemented alongside this
+     * one. It is deprecated in messaging 25.1.0, and overriding it fails the
+     * build under `-Werror`; silencing that with a suppression is exactly what
+     * this story set out not to do. So Android speaks the installation-ID
+     * model only, and the manifest flag must stay set — which
+     * [AndroidPushIdentifiers.installationIdEnabled] asserts rather than
+     * assumes.
+     *
+     * (iOS keeps both paths because implementing its deprecated delegate costs
+     * no warning there, so a rollback is a plist flip. On Android a rollback is
+     * a revert, as this story originally assumed.)
+     */
+    override fun onRegistered(installationId: String) {
+        super.onRegistered(installationId)
+        register(PushIdentifier(installationId, PushIdentifierKind.INSTALLATION_ID))
+    }
+
     @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-    override fun onNewToken(token: String) {
-        super.onNewToken(token)
+    private fun register(identifier: PushIdentifier) {
+        AndroidPushIdentifiers.cache(applicationContext, identifier)
         @Suppress("GlobalCoroutineUsage")
         kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
             try {
@@ -39,7 +62,7 @@ class ShyTalkMessagingService : FirebaseMessagingService() {
                     org.koin.core.context.GlobalContext
                         .get()
                         .get()
-                notificationRepo.saveFcmToken(userId, token)
+                notificationRepo.savePushIdentifier(userId, identifier)
             } catch (e: Exception) {
                 Log.w(TAG, "FCM token save failed — will retry on next app launch", e)
             }

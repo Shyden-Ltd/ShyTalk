@@ -1,6 +1,7 @@
 package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.model.Banner
+import com.shyden.shytalk.core.push.PushIdentifier
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
@@ -97,20 +98,30 @@ class IosDeviceRepositoryImpl(
 class IosNotificationRepositoryImpl(
     private val api: IosApiClient,
 ) : NotificationRepository {
-    override suspend fun saveFcmToken(
+    /**
+     * SHY-0244 — the body names the model, so the backend files the value in
+     * the right store. The two identifier kinds are opaque strings the server
+     * cannot tell apart, so the client is the only place that knows.
+     */
+    private fun body(identifier: PushIdentifier): JsonObject {
+        val field = if (identifier.isInstallationId) "installationId" else "token"
+        return JsonObject(mapOf(field to JsonPrimitive(identifier.value)))
+    }
+
+    override suspend fun savePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> =
-        firebaseCall("Failed to save FCM token") {
-            api.post("/api/notifications/token", JsonObject(mapOf("token" to JsonPrimitive(token))))
+        firebaseCall("Failed to save push identifier") {
+            api.post("/api/notifications/token", body(identifier))
         }
 
-    override suspend fun removeFcmToken(
+    override suspend fun removePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> =
-        firebaseCall("Failed to remove FCM token") {
-            api.delete("/api/notifications/token", JsonObject(mapOf("token" to JsonPrimitive(token))))
+        firebaseCall("Failed to remove push identifier") {
+            api.delete("/api/notifications/token", body(identifier))
         }
 
     override suspend fun setPmNotificationsEnabled(

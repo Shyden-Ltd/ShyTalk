@@ -8,7 +8,7 @@
 const router = require('express').Router();
 const { db, rtdb } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
-const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
+const { sendPushToUser } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
 const log = require('../utils/log');
 
@@ -70,29 +70,26 @@ router.post('/rooms/:roomId/invites/send', async (req, res) => {
     // Send FCM push to invitee
     try {
       const inviterSnap = await db.doc(`users/${body.invitedBy}`).get();
-      const tokens = inviteeDoc?.fcmTokens || [];
-      if (tokens.length > 0) {
-        const roomName = room.name || 'a room';
-        const inviterName = inviterSnap.exists
-          ? inviterSnap.data().displayName || 'Someone'
-          : 'Someone';
+      const roomName = room.name || 'a room';
+      const inviterName = inviterSnap.exists
+        ? inviterSnap.data().displayName || 'Someone'
+        : 'Someone';
 
-        const invalidTokens = await sendFcmToTokens(
-          tokens,
-          {
-            type: 'ROOM_INVITE',
-            roomId,
-            roomName,
-            invitedBy: body.invitedBy,
-            inviterName,
-          },
-          { senderUniqueId: body.invitedBy, recipientUniqueId: inviteeId },
-        );
-
-        if (invalidTokens.length > 0) {
-          await cleanupInvalidTokens(invalidTokens, inviteeId);
-        }
-      }
+      await sendPushToUser(
+        inviteeId,
+        {
+          type: 'ROOM_INVITE',
+          roomId,
+          roomName,
+          invitedBy: body.invitedBy,
+          inviterName,
+        },
+        {
+          userData: inviteeDoc,
+          senderUniqueId: body.invitedBy,
+          recipientUniqueId: inviteeId,
+        },
+      );
     } catch (err) {
       log.error('rooms', 'Failed to send invite FCM', { roomId, inviteeId, error: err.message });
     }
@@ -181,25 +178,22 @@ router.post('/rooms/:roomId/seat-requests', async (req, res) => {
     // Send FCM push to room owner (reusing the up-front fetched docs)
     try {
       if (room?.ownerId) {
-        const tokens = ownerDoc?.fcmTokens || [];
-        if (tokens.length > 0) {
-          const invalidTokens = await sendFcmToTokens(
-            tokens,
-            {
-              type: 'SEAT_REQUEST',
-              roomId,
-              roomName: room.name || 'a room',
-              requesterId: uniqueId,
-              requesterName: userName || '',
-              seatIndex: String(seatIndex),
-            },
-            { senderUniqueId: uniqueId, recipientUniqueId: room.ownerId },
-          );
-
-          if (invalidTokens.length > 0) {
-            await cleanupInvalidTokens(invalidTokens, room.ownerId);
-          }
-        }
+        await sendPushToUser(
+          room.ownerId,
+          {
+            type: 'SEAT_REQUEST',
+            roomId,
+            roomName: room.name || 'a room',
+            requesterId: uniqueId,
+            requesterName: userName || '',
+            seatIndex: String(seatIndex),
+          },
+          {
+            userData: ownerDoc,
+            senderUniqueId: uniqueId,
+            recipientUniqueId: room.ownerId,
+          },
+        );
       }
     } catch (err) {
       log.error('rooms', 'Failed to send seat request FCM', {

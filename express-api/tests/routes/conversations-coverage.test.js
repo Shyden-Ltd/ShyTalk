@@ -73,12 +73,12 @@ jest.mock('../../src/utils/helpers', () => ({
   now: () => 1709913600000,
 }));
 
-const mockSendFcmToTokens = jest.fn().mockResolvedValue([]);
-const mockCleanupInvalidTokens = jest.fn().mockResolvedValue();
+const mockSendPushToUser = jest.fn().mockResolvedValue();
 
 jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: (...args) => mockSendFcmToTokens(...args),
-  cleanupInvalidTokens: (...args) => mockCleanupInvalidTokens(...args),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
+  sendPushToUser: (...args) => mockSendPushToUser(...args),
 }));
 
 jest.mock('../../src/utils/log', () => ({
@@ -95,7 +95,7 @@ beforeEach(() => {
   mockDocSet.mockResolvedValue();
   mockDocUpdate.mockResolvedValue();
   mockRtdbSet.mockResolvedValue();
-  mockSendFcmToTokens.mockResolvedValue([]);
+  mockSendPushToUser.mockResolvedValue();
   // PR 4: cross-cohort middleware fetches the other 1:1 participant.
   // Default to empty-but-existing user doc so the gate evaluates
   // 'minor' vs 'minor' (fail-closed) and allows the request.
@@ -311,7 +311,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
     // FCM should NOT have been called for user-B
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 
   test('skips notification when conversation is muted (line 109)', async () => {
@@ -350,7 +350,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 
   test('skips notification when user has no FCM tokens (line 113)', async () => {
@@ -381,10 +381,10 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
     // sendFcmToTokens should not have been called
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 
-  test('cleans up invalid FCM tokens (lines 127-129)', async () => {
+  test('threads both identities so the cohort filter can fire', async () => {
     let getAllCallCount = 0;
     mockGetAll.mockImplementation((...refs) => {
       getAllCallCount++;
@@ -405,9 +405,6 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       return Promise.resolve(refs.map(() => ({ exists: false })));
     });
 
-    // FCM returns one invalid token
-    mockSendFcmToTokens.mockResolvedValue(['token-invalid']);
-
     const app = createApp('user-A');
     const res = await request(app)
       .post('/api/conversations/conv-1/messages')
@@ -416,17 +413,23 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
 
-    expect(mockSendFcmToTokens).toHaveBeenCalled();
+    expect(mockSendPushToUser).toHaveBeenCalled();
     // UK OSA #17 PR 11 — the DM push must thread sender + recipient
     // identities so the FCM dispatcher's cohort filter can fire as a
     // last line of defence. Asserting the shape here pins the contract
     // against future refactors that might drop the third argument.
-    const fcmCall = mockSendFcmToTokens.mock.calls[0];
-    expect(fcmCall[2]).toEqual({
-      senderUniqueId: 'user-A',
-      recipientUniqueId: 'user-B',
-    });
-    expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['token-invalid'], expect.any(String));
+    //
+    // SHY-0244 added userData so the helper reuses the document this route
+    // already read. Reaping the identifiers FCM rejects also moved inside the
+    // helper, and is proven against BOTH stores in tests/utils/fcm.test.js.
+    const fcmCall = mockSendPushToUser.mock.calls[0];
+    expect(fcmCall[0]).toBe('user-B');
+    expect(fcmCall[2]).toEqual(
+      expect.objectContaining({
+        senderUniqueId: 'user-A',
+        recipientUniqueId: 'user-B',
+      }),
+    );
   });
 
   test('skips user when user doc does not exist (line 80/90)', async () => {
@@ -450,7 +453,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 
   test('handles DND with start <= end (same-day window, line 100-101)', async () => {
@@ -486,7 +489,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
     // User is in DND, so no FCM call
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 
   test('handles DND with start > end (overnight window, line 102-103)', async () => {
@@ -524,7 +527,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     expect(res.status).toBe(200);
     await jest.advanceTimersByTimeAsync(50);
     // User is in overnight DND (22:00-06:00, current=23:00), so no FCM call
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
 
     jest.useRealTimers();
   });
@@ -818,8 +821,8 @@ describe('POST /api/conversations/:id/messages — reply and optional fields', (
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
     // Check FCM was called with group name in senderName
-    if (mockSendFcmToTokens.mock.calls.length > 0) {
-      const data = mockSendFcmToTokens.mock.calls[0][1];
+    if (mockSendPushToUser.mock.calls.length > 0) {
+      const data = mockSendPushToUser.mock.calls[0][1];
       expect(data.senderName).toContain('Best Friends');
       expect(data.isGroup).toBe('true');
     }

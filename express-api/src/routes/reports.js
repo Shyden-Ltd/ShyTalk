@@ -24,7 +24,7 @@ const { requireAdmin, clearSuspensionCache, resolveUniqueId } = require('../midd
 const { sendSystemPm } = require('../utils/system-pm');
 const { computeDisplayScore } = require('../utils/gcs');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
-const { sendFcmToTokens } = require('../utils/fcm');
+const { sendFcmToIdentifiers } = require('../utils/fcm');
 const log = require('../utils/log');
 const { findPendingAppeal, createAppeal } = require('../utils/appeals');
 const { suspensionEndedFields, SUSPENSION_STARTED_RESET } = require('../utils/suspension');
@@ -87,10 +87,16 @@ function safeFireAndForget(opThunk, onError) {
  * Remove invalid FCM tokens from admin user docs in Firestore.
  * For each invalid token, finds which admin user doc contains it and removes it.
  */
-async function cleanupInvalidAdminTokens(invalidTokens, adminUsers) {
-  if (!invalidTokens || invalidTokens.length === 0) return;
+async function cleanupInvalidAdminTokens(
+  { invalidTokens = [], invalidFids = [] } = {},
+  adminUsers,
+) {
+  if (invalidTokens.length === 0 && invalidFids.length === 0) return;
 
-  const invalidSet = new Set(invalidTokens);
+  // SHY-0244: each kind is pruned from its own field. A fid filtered out of
+  // fcmTokens would match nothing and leave the dead entry in place forever.
+  const invalidTokenSet = new Set(invalidTokens);
+  const invalidFidSet = new Set(invalidFids);
 
   for (let i = 0; i < adminUsers.length; i += 500) {
     const chunk = adminUsers.slice(i, i + 500);
@@ -98,10 +104,17 @@ async function cleanupInvalidAdminTokens(invalidTokens, adminUsers) {
     let hasWrites = false;
 
     for (const u of chunk) {
-      if (!Array.isArray(u.fcmTokens)) continue;
-      const filtered = u.fcmTokens.filter((t) => !invalidSet.has(t));
-      if (filtered.length !== u.fcmTokens.length) {
-        batch.set(db.doc(`users/${u.id}`), { fcmTokens: filtered }, { merge: true });
+      const update = {};
+      if (Array.isArray(u.fcmTokens)) {
+        const filtered = u.fcmTokens.filter((t) => !invalidTokenSet.has(t));
+        if (filtered.length !== u.fcmTokens.length) update.fcmTokens = filtered;
+      }
+      if (Array.isArray(u.fcmInstallationIds)) {
+        const filtered = u.fcmInstallationIds.filter((f) => !invalidFidSet.has(f));
+        if (filtered.length !== u.fcmInstallationIds.length) update.fcmInstallationIds = filtered;
+      }
+      if (Object.keys(update).length > 0) {
+        batch.set(db.doc(`users/${u.id}`), update, { merge: true });
         hasWrites = true;
       }
     }
@@ -225,17 +238,19 @@ router.post('/reports', async (req, res) => {
       try {
         const adminUsers = await queryDocs(db.collection('users').where('userType', '==', 'ADMIN'));
         const tokens = [];
+        const fids = [];
         for (const u of adminUsers) {
           if (Array.isArray(u.fcmTokens)) tokens.push(...u.fcmTokens);
+          if (Array.isArray(u.fcmInstallationIds)) fids.push(...u.fcmInstallationIds);
         }
-        if (tokens.length > 0) {
+        if (tokens.length > 0 || fids.length > 0) {
           const data = {
             type: 'ADMIN_NEW_REPORT',
             reportId,
             reason,
             reportedUserName: reportedUserName || 'Unknown',
           };
-          const invalid = await sendFcmToTokens(tokens, data);
+          const invalid = await sendFcmToIdentifiers({ tokens, fids }, data);
           await cleanupInvalidAdminTokens(invalid, adminUsers);
         }
       } catch (err) {

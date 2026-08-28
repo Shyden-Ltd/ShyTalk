@@ -37,7 +37,7 @@ const log = require('../utils/log');
 const { suspensionEndedFields, SUSPENSION_STARTED_RESET } = require('../utils/suspension');
 const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
-const { sendFcmToTokens } = require('../utils/fcm');
+const { sendPushToUser } = require('../utils/fcm');
 
 // Length caps for admin-supplied free-form text. Bounded inputs prevent
 // a compromised or careless admin from blowing out per-user warning
@@ -1727,18 +1727,20 @@ router.post('/user/:uniqueId/delete', async (req, res) => {
     }
 
     // Send push notification
-    if (user.fcmTokens && user.fcmTokens.length > 0) {
-      try {
-        const deleteDate = new Date(executeAt).toISOString().split('T')[0];
-        await sendFcmToTokens(user.fcmTokens, {
+    try {
+      const deleteDate = new Date(executeAt).toISOString().split('T')[0];
+      await sendPushToUser(
+        uniqueId,
+        {
           notification: {
             title: 'Account Deletion Scheduled',
             body: `Your account will be deleted on ${deleteDate}. Sign in to cancel.`,
           },
-        });
-      } catch (fcmErr) {
-        log.error('admin-users', 'Failed to send deletion push', { error: fcmErr.message });
-      }
+        },
+        { userData: user },
+      );
+    } catch (fcmErr) {
+      log.error('admin-users', 'Failed to send deletion push', { error: fcmErr.message });
     }
 
     // Audit log

@@ -345,3 +345,96 @@ describe('PATCH /api/notifications/settings — error paths', () => {
     });
   });
 });
+
+/**
+ * SHY-0244 — registering a Firebase Installation ID.
+ *
+ * After the manifest flag flips, a client produces an installation ID instead
+ * of a registration token. Both models exist in the fleet at once, so this
+ * endpoint accepts either and stores each in its own field.
+ *
+ * The client says WHICH it is sending. The alternative — inferring it from the
+ * string's shape — would put a user's reachability on a format guess, and the
+ * two are not reliably distinguishable.
+ */
+describe('SHY-0244: POST /api/notifications/token with an installation ID', () => {
+  test('an installationId is stored in fcmInstallationIds, not fcmTokens', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/notifications/token')
+      .send({ installationId: 'fid-abc' });
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith({
+      fcmInstallationIds: 'arrayUnion(fid-abc)',
+    });
+  });
+
+  test('a token still goes to fcmTokens', async () => {
+    // The old model has to keep working: a device that has not upgraded is
+    // still a device somebody is holding.
+    const app = createApp();
+    const res = await request(app).post('/api/notifications/token').send({ token: 'tok-abc' });
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith({ fcmTokens: 'arrayUnion(tok-abc)' });
+  });
+
+  test('sending BOTH is refused rather than guessed at', async () => {
+    // A client that sends both has a bug. Picking one silently would store an
+    // identifier under the wrong model and make the device unreachable in a
+    // way nothing reports.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/notifications/token')
+      .send({ token: 'tok-abc', installationId: 'fid-abc' });
+
+    expect(res.status).toBe(400);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('an installationId that is not a string is refused', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/notifications/token').send({ installationId: 12345 });
+
+    expect(res.status).toBe(400);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+
+  test('an over-long installationId is refused', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/notifications/token')
+      .send({ installationId: 'f'.repeat(501) });
+
+    expect(res.status).toBe(400);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('SHY-0244: DELETE /api/notifications/token with an installation ID', () => {
+  test('an installationId is removed from fcmInstallationIds', async () => {
+    // Sign-out has to clear the identifier from the field it was stored in, or
+    // the next person to sign in on this device receives the previous user's
+    // notifications -- a safety defect on a minors-facing app.
+    const app = createApp();
+    const res = await request(app)
+      .delete('/api/notifications/token')
+      .send({ installationId: 'fid-abc' });
+
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith({
+      fcmInstallationIds: 'arrayRemove(fid-abc)',
+    });
+  });
+
+  test('sending BOTH is refused', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .delete('/api/notifications/token')
+      .send({ token: 'tok-abc', installationId: 'fid-abc' });
+
+    expect(res.status).toBe(400);
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+  });
+});

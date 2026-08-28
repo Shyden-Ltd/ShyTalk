@@ -1,5 +1,6 @@
 package com.shyden.shytalk.data.repository
 
+import com.shyden.shytalk.core.push.PushIdentifier
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
@@ -8,30 +9,30 @@ import org.json.JSONObject
 class NotificationRepositoryImpl(
     private val api: WorkerApiClient,
 ) : NotificationRepository {
-    override suspend fun saveFcmToken(
-        userId: String,
-        token: String,
-    ): Resource<Unit> =
-        firebaseCall<Unit>("Failed to save FCM token") {
-            api.post(
-                "/api/notifications/token",
-                JSONObject().apply {
-                    put("token", token)
-                },
-            )
+    /**
+     * SHY-0244 — the body names the model so the backend files the value in
+     * the right store. Both kinds are opaque strings the server cannot tell
+     * apart, so the client is the only place that knows which this is.
+     */
+    private fun body(identifier: PushIdentifier) =
+        JSONObject().apply {
+            put(if (identifier.isInstallationId) "installationId" else "token", identifier.value)
         }
 
-    override suspend fun removeFcmToken(
+    override suspend fun savePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> =
-        firebaseCall<Unit>("Failed to remove FCM token") {
-            api.delete(
-                "/api/notifications/token",
-                JSONObject().apply {
-                    put("token", token)
-                },
-            )
+        firebaseCall<Unit>("Failed to save push identifier") {
+            api.post("/api/notifications/token", body(identifier))
+        }
+
+    override suspend fun removePushIdentifier(
+        userId: String,
+        identifier: PushIdentifier,
+    ): Resource<Unit> =
+        firebaseCall<Unit>("Failed to remove push identifier") {
+            api.delete("/api/notifications/token", body(identifier))
         }
 
     // Routed through the Express API (PATCH /api/notifications/settings)

@@ -66,7 +66,9 @@ jest.mock('../../src/utils/gcs', () => ({
   computeDisplayScore: jest.fn((score) => score),
 }));
 jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: jest.fn().mockResolvedValue([]),
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('../../src/routes/admin-users', () => ({
   createWarning: jest.fn().mockResolvedValue(),
@@ -111,7 +113,7 @@ function createUserApp({ uid = 'user-firebase-uid', uniqueId = 'user-123' } = {}
 // =================================================================
 describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
   let app, getDoc, queryDocs;
-  const { sendFcmToTokens } = require('../../src/utils/fcm');
+  const { sendFcmToIdentifiers } = require('../../src/utils/fcm');
 
   beforeEach(() => {
     app = createUserApp();
@@ -130,14 +132,14 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       { id: 'a1', fcmTokens: ['t1', 't2'] },
       { id: 'a2', fcmTokens: ['t3'] },
     ]);
-    sendFcmToTokens.mockResolvedValueOnce([]);
+    sendFcmToIdentifiers.mockResolvedValueOnce({ invalidTokens: [], invalidFids: [] });
     const res = await request(app)
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).toHaveBeenCalledWith(
-      ['t1', 't2', 't3'],
+    expect(sendFcmToIdentifiers).toHaveBeenCalledWith(
+      { tokens: ['t1', 't2', 't3'], fids: [] },
       expect.objectContaining({ type: 'ADMIN_NEW_REPORT' }),
     );
   });
@@ -148,7 +150,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       { id: 'a1', fcmTokens: ['valid', 'invalid'] },
       { id: 'a2', fcmTokens: ['ok'] },
     ]);
-    sendFcmToTokens.mockResolvedValueOnce(['invalid']);
+    sendFcmToIdentifiers.mockResolvedValueOnce({ invalidTokens: ['invalid'], invalidFids: [] });
     const res = await request(app)
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
@@ -161,7 +163,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
   it('skips cleanup when no invalid tokens', async () => {
     getDoc.mockResolvedValueOnce({ id: 'user-123', displayName: 'Reporter', uniqueId: 'user-123' });
     queryDocs.mockResolvedValueOnce([{ id: 'a1', fcmTokens: ['t1'] }]);
-    sendFcmToTokens.mockResolvedValueOnce([]);
+    sendFcmToIdentifiers.mockResolvedValueOnce({ invalidTokens: [], invalidFids: [] });
     const res = await request(app)
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
@@ -178,7 +180,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).not.toHaveBeenCalled();
+    expect(sendFcmToIdentifiers).not.toHaveBeenCalled();
   });
 
   it('skips non-array fcmTokens', async () => {
@@ -187,13 +189,16 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       { id: 'a1', fcmTokens: 'str' },
       { id: 'a2', fcmTokens: ['valid'] },
     ]);
-    sendFcmToTokens.mockResolvedValueOnce([]);
+    sendFcmToIdentifiers.mockResolvedValueOnce({ invalidTokens: [], invalidFids: [] });
     const res = await request(app)
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).toHaveBeenCalledWith(['valid'], expect.any(Object));
+    expect(sendFcmToIdentifiers).toHaveBeenCalledWith(
+      { tokens: ['valid'], fids: [] },
+      expect.any(Object),
+    );
   });
 
   it('logs error when FCM fails', async () => {
@@ -211,14 +216,14 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
   it('uses Unknown when reportedUserName not provided', async () => {
     getDoc.mockResolvedValueOnce({ id: 'user-123', displayName: 'Reporter', uniqueId: 'user-123' });
     queryDocs.mockResolvedValueOnce([{ id: 'a1', fcmTokens: ['t1'] }]);
-    sendFcmToTokens.mockResolvedValueOnce([]);
+    sendFcmToIdentifiers.mockResolvedValueOnce({ invalidTokens: [], invalidFids: [] });
     const res = await request(app)
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).toHaveBeenCalledWith(
-      ['t1'],
+    expect(sendFcmToIdentifiers).toHaveBeenCalledWith(
+      { tokens: ['t1'], fids: [] },
       expect.objectContaining({ reportedUserName: 'Unknown' }),
     );
   });

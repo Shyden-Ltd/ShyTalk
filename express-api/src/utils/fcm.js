@@ -90,8 +90,40 @@ async function isCrossCohortDispatch(senderUniqueId, recipientUniqueId) {
  * the UK OSA #17 PR 11 cohort filter — when both are provided and
  * distinct, cross-cohort pairs are silently dropped at dispatch.
  */
-async function sendFcmToTokens(tokens, data, { senderUniqueId, recipientUniqueId } = {}) {
-  if (!tokens || tokens.length === 0) return [];
+const INVALID_IDENTIFIER_CODES = new Set([
+  'messaging/invalid-registration-token',
+  'messaging/registration-token-not-registered',
+  'messaging/sender-id-mismatch',
+  'messaging/invalid-argument',
+]);
+
+/**
+ * Send a data-only FCM message to a user's devices, whichever registration
+ * model each of them speaks.
+ *
+ * SHY-0244. Firebase Messaging deprecated the registration-token model in
+ * favour of registering by Firebase Installation ID. On the CLIENT the two are
+ * mutually exclusive -- a manifest flag switches the whole app instance -- so a
+ * given build speaks one or the other, and a fleet mid-rollover speaks both.
+ *
+ * The server has no such constraint. firebase-admin 14 accepts `tokens` and
+ * `fids` in the same `sendEachForMulticast` call, so both populations are
+ * reached in ONE dispatch and no flag day is needed here.
+ *
+ * Returns `{ invalidTokens, invalidFids }` SEPARATELY, because a rejected
+ * entry has to be removed from the array it actually came from. Guessing which
+ * kind an identifier was by looking at its shape would decide who receives a
+ * moderation notice on a string format.
+ */
+async function sendFcmToIdentifiers(
+  { tokens = [], fids = [] } = {},
+  data,
+  { senderUniqueId, recipientUniqueId } = {},
+) {
+  const tokenList = tokens || [];
+  const fidList = fids || [];
+  const empty = { invalidTokens: [], invalidFids: [] };
+  if (tokenList.length === 0 && fidList.length === 0) return empty;
 
   if (
     senderUniqueId !== undefined &&
@@ -102,45 +134,146 @@ async function sendFcmToTokens(tokens, data, { senderUniqueId, recipientUniqueId
     (await isCrossCohortDispatch(senderUniqueId, recipientUniqueId))
   ) {
     // Silent drop. No local-mode capture (cross-cohort drops must not
-    // pollute integration-test buffers — tests assert "no payload"
+    // pollute integration-test buffers -- tests assert "no payload"
     // means "no payload", not "captured but flagged").
-    return [];
+    return empty;
   }
 
   if (process.env.NODE_ENV === 'local') {
-    captureLocal(tokens, data);
-    log.info('fcm', `[FCM-LOCAL] Would send to ${tokens.length} tokens: ${data?.title}`);
-    return [];
+    captureLocal([...tokenList, ...fidList], data);
+    log.info(
+      'fcm',
+      `[FCM-LOCAL] Would send to ${tokenList.length} tokens + ${fidList.length} fids: ${data?.title}`,
+    );
+    return empty;
   }
 
   const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
 
-  const result = await messaging.sendEachForMulticast({
-    tokens,
-    data: stringData,
-  });
+  // Empty arrays are OMITTED rather than sent. `{ tokens: [] }` is a different
+  // request from one with no `tokens` key at all, and a plausible argument
+  // error.
+  const message = { data: stringData };
+  if (tokenList.length > 0) message.tokens = tokenList;
+  if (fidList.length > 0) message.fids = fidList;
+
+  const result = await messaging.sendEachForMulticast(message);
+
+  // The SDK processes tokens first, then fids, and `responses` follows that
+  // order. Reading the mapping backwards would reap a LIVE device and keep the
+  // dead one -- invisibly, since a reap has no symptom until somebody stops
+  // receiving notifications.
+  const ordered = [
+    ...tokenList.map((value) => ({ value, kind: 'token' })),
+    ...fidList.map((value) => ({ value, kind: 'fid' })),
+  ];
 
   const invalidTokens = [];
+  const invalidFids = [];
   result.responses.forEach((resp, i) => {
-    if (resp.error) {
-      const code = resp.error.code;
-      if (
-        code === 'messaging/invalid-registration-token' ||
-        code === 'messaging/registration-token-not-registered' ||
-        code === 'messaging/sender-id-mismatch' ||
-        code === 'messaging/invalid-argument'
-      ) {
-        invalidTokens.push(tokens[i]);
-      } else {
-        log.warn('fcm', `FCM send failed for token index ${i}`, {
-          code,
-          message: resp.error.message,
-        });
-      }
+    if (!resp.error) return;
+    const code = resp.error.code;
+    const entry = ordered[i];
+    if (!entry) {
+      // More responses than identifiers sent: the mapping assumption this
+      // function rests on has been broken by the SDK. Reaping on a mapping we
+      // no longer trust could delete live devices, so nothing is reaped.
+      log.warn('fcm', `FCM returned response ${i} with no identifier sent for it`, { code });
+      return;
+    }
+    if (INVALID_IDENTIFIER_CODES.has(code)) {
+      if (entry.kind === 'token') invalidTokens.push(entry.value);
+      else invalidFids.push(entry.value);
+    } else {
+      log.warn('fcm', `FCM send failed for ${entry.kind} index ${i}`, {
+        code,
+        message: resp.error.message,
+      });
     }
   });
 
+  return { invalidTokens, invalidFids };
+}
+
+/**
+ * Token-only dispatch, kept for the callers that have not moved yet.
+ *
+ * Returns the bare invalid-token list its callers already expect, so this stays
+ * a drop-in. New call sites should use `sendFcmToIdentifiers`.
+ */
+async function sendFcmToTokens(tokens, data, opts = {}) {
+  const { invalidTokens } = await sendFcmToIdentifiers({ tokens: tokens || [] }, data, opts);
   return invalidTokens;
+}
+
+/**
+ * Remove rejected identifiers from the fields they actually came from.
+ *
+ * SHY-0244. Tokens live in `fcmTokens` and installation IDs in
+ * `fcmInstallationIds`, so each is reaped from its own array. Removing a fid
+ * from `fcmTokens` would be a silent no-op that leaves the dead entry in place
+ * forever.
+ */
+async function cleanupInvalidIdentifiers({ invalidTokens = [], invalidFids = [] } = {}, userId) {
+  if (!userId) return;
+  if (invalidTokens.length === 0 && invalidFids.length === 0) return;
+  if (process.env.NODE_ENV === 'local') return;
+
+  const update = {};
+  if (invalidTokens.length > 0) update.fcmTokens = FieldValue.arrayRemove(...invalidTokens);
+  if (invalidFids.length > 0) {
+    update.fcmInstallationIds = FieldValue.arrayRemove(...invalidFids);
+  }
+
+  try {
+    await db.doc(`users/${userId}`).update(update);
+  } catch (err) {
+    log.error('fcm', 'Failed to clean invalid identifiers', { userId, error: err.message });
+  }
+}
+
+/**
+ * Push to one user: read their identifiers, dispatch once, reap what bounced.
+ *
+ * SHY-0244. This exists because ten call sites each repeated that sequence by
+ * hand, and four of them silently skipped the reap -- `users.js`,
+ * `admin-users.js` and both sites in `suggestions.js` discarded the invalid
+ * list, so dead identifiers accumulated there indefinitely. A caller cannot
+ * forget a step it no longer performs.
+ *
+ * `opts.userData` lets a caller that already holds the user document avoid a
+ * second read; everything else is identical.
+ */
+async function sendPushToUser(userId, data, { userData, senderUniqueId, recipientUniqueId } = {}) {
+  let user = userData;
+  if (!user) {
+    const snap = await db.doc(`users/${userId}`).get();
+    if (!snap || !snap.exists) {
+      log.warn('fcm', `push requested for user ${userId} but no user document exists`);
+      return;
+    }
+    user = snap.data() || {};
+  }
+
+  const tokens = Array.isArray(user.fcmTokens) ? user.fcmTokens : [];
+  const fids = Array.isArray(user.fcmInstallationIds) ? user.fcmInstallationIds : [];
+
+  if (tokens.length === 0 && fids.length === 0) {
+    // Loud on purpose. A dispatch that reaches nobody and returns success is
+    // indistinguishable from a delivered push, which is how a push outage runs
+    // undetected on a surface that carries moderation notices.
+    log.warn('fcm', `no push identifiers stored for user ${userId} — notification reached nobody`, {
+      type: data?.type,
+    });
+    return;
+  }
+
+  const invalid = await sendFcmToIdentifiers({ tokens, fids }, data, {
+    senderUniqueId,
+    recipientUniqueId,
+  });
+
+  await cleanupInvalidIdentifiers(invalid, userId);
 }
 
 /**
@@ -173,6 +306,9 @@ function clearFcmCaptures() {
 }
 
 module.exports = {
+  sendPushToUser,
+  sendFcmToIdentifiers,
+  cleanupInvalidIdentifiers,
   sendFcmToTokens,
   cleanupInvalidTokens,
   getFcmCaptures,

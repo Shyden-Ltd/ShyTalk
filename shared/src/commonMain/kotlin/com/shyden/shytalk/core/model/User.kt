@@ -48,6 +48,18 @@ data class User(
     val suspensionAppealStatus: String? = null,
     // Private messaging
     val fcmTokens: List<String> = emptyList(),
+    /**
+     * Firebase Installation IDs — the V1 push registration model (SHY-0244).
+     *
+     * Kept apart from [fcmTokens] rather than mixed into it. The server cannot
+     * tell the two kinds apart by shape, so a mixed list would leave it
+     * guessing how to address each entry; a fid addressed as a token fails,
+     * and the reaper then deletes it, leaving that device permanently dark.
+     *
+     * Both stores are populated across a fleet mid-upgrade: a device speaks
+     * one model or the other, decided by a manifest flag at build time.
+     */
+    val fcmInstallationIds: List<String> = emptyList(),
     val pmNotificationsEnabled: Boolean = true,
     val pmPrivacy: PmPrivacy = PmPrivacy.EVERYONE,
     val pmSoundEnabled: Boolean = true,
@@ -197,6 +209,7 @@ data class User(
             "suspendedBy" to suspendedBy,
             "suspensionAppealStatus" to suspensionAppealStatus,
             "fcmTokens" to fcmTokens,
+            "fcmInstallationIds" to fcmInstallationIds,
             "pmNotificationsEnabled" to pmNotificationsEnabled,
             "pmPrivacy" to pmPrivacy.name,
             "pmSoundEnabled" to pmSoundEnabled,
@@ -293,6 +306,9 @@ data class User(
                 suspensionAppealStatus = map["suspensionAppealStatus"] as? String,
                 fcmTokens =
                     (map["fcmTokens"] as? List<*>)
+                        ?.filterIsInstance<String>() ?: emptyList(),
+                fcmInstallationIds =
+                    (map["fcmInstallationIds"] as? List<*>)
                         ?.filterIsInstance<String>() ?: emptyList(),
                 pmNotificationsEnabled = map["pmNotificationsEnabled"].asBool(true),
                 pmPrivacy =

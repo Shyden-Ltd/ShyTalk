@@ -82,6 +82,9 @@ jest.mock('../../src/middleware/auth', () => ({
 }));
 
 jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
   sendFcmToTokens: jest.fn().mockResolvedValue([]),
   cleanupInvalidTokens: jest.fn().mockResolvedValue(),
 }));

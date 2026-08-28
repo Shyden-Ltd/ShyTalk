@@ -109,9 +109,11 @@ jest.mock('../../src/utils/email-templates', () => ({
   })),
 }));
 
-const mockSendFcmToTokens = jest.fn().mockResolvedValue([]);
+const mockSendPushToUser = jest.fn().mockResolvedValue();
 jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: (...args) => mockSendFcmToTokens(...args),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
+  sendPushToUser: (...args) => mockSendPushToUser(...args),
   cleanupInvalidTokens: jest.fn().mockResolvedValue(),
 }));
 
@@ -220,7 +222,7 @@ describe('POST /api/users/:uniqueId/delete', () => {
     expect(mockSendEmail).toHaveBeenCalled();
 
     // Should send push notification
-    expect(mockSendFcmToTokens).toHaveBeenCalled();
+    expect(mockSendPushToUser).toHaveBeenCalled();
   });
 
   test('returns 403 when not the owner', async () => {
@@ -388,10 +390,10 @@ describe('POST /api/users/:uniqueId/delete', () => {
 
     expect(mockSendEmail).not.toHaveBeenCalled();
     // Push notification should still be sent
-    expect(mockSendFcmToTokens).toHaveBeenCalled();
+    expect(mockSendPushToUser).toHaveBeenCalled();
   });
 
-  test('does not send push when user has no FCM tokens', async () => {
+  test('a user with no devices is still handed to the helper, which decides', async () => {
     mockDocGet.mockImplementation((path) => {
       if (path.startsWith('users/'))
         return Promise.resolve(mockUserDoc(10000001, { fcmTokens: [] }));
@@ -402,7 +404,16 @@ describe('POST /api/users/:uniqueId/delete', () => {
 
     await request(app).post('/api/users/10000001/delete').send({ pin: '123456' }).expect(200);
 
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    // SHY-0244: the route hands the user to sendPushToUser rather than reading
+    // fcmTokens and deciding for itself. Deciding here is what made a migrated
+    // device -- present only in fcmInstallationIds -- look like no device at
+    // all. The helper reads both stores and logs loudly when nobody is
+    // reachable (tests/utils/fcm.test.js).
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      '10000001',
+      expect.any(Object),
+      expect.objectContaining({ userData: expect.objectContaining({ fcmTokens: [] }) }),
+    );
   });
 
   test('writes audit log entry', async () => {

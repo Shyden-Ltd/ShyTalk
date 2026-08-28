@@ -88,6 +88,9 @@ jest.mock('../../src/utils/system-pm', () => ({
 }));
 
 jest.mock('../../src/utils/fcm', () => ({
+  sendPushToUser: jest.fn().mockResolvedValue(),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
   sendFcmToTokens: jest.fn().mockResolvedValue([]),
 }));
 

@@ -33,12 +33,12 @@ process.env.NODE_ENV = 'local';
 const express = require('express');
 const request = require('supertest');
 
-const mockSendFcmToTokens = jest.fn().mockResolvedValue([]);
-const mockCleanupInvalidTokens = jest.fn().mockResolvedValue();
+const mockSendPushToUser = jest.fn().mockResolvedValue();
 
 jest.mock('../../src/utils/fcm', () => ({
-  sendFcmToTokens: (...args) => mockSendFcmToTokens(...args),
-  cleanupInvalidTokens: (...args) => mockCleanupInvalidTokens(...args),
+  sendFcmToIdentifiers: jest.fn().mockResolvedValue({ invalidTokens: [], invalidFids: [] }),
+  cleanupInvalidIdentifiers: jest.fn().mockResolvedValue(),
+  sendPushToUser: (...args) => mockSendPushToUser(...args),
 }));
 
 const { db, rtdb } = require('../../src/utils/firebase');
@@ -86,8 +86,7 @@ beforeAll(assertEmulatorReachable);
 
 beforeEach(async () => {
   jest.clearAllMocks();
-  mockSendFcmToTokens.mockResolvedValue([]);
-  mockCleanupInvalidTokens.mockResolvedValue();
+  mockSendPushToUser.mockResolvedValue();
   await clearSeatRequests();
   await Promise.all([
     roomDoc().set({ name: 'Cool Room', ownerId: String(OWNER), pendingInvites: {} }),
@@ -114,8 +113,8 @@ describe('invite push', () => {
   test('sends FCM to the invitee with their tokens', async () => {
     await sendInvite().expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['token-1', 'token-2'],
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      String(INVITEE),
       expect.objectContaining({
         type: 'ROOM_INVITE',
         roomId: ROOM,
@@ -123,24 +122,44 @@ describe('invite push', () => {
         invitedBy: String(CALLER),
         inviterName: 'Alice',
       }),
-      { senderUniqueId: String(CALLER), recipientUniqueId: String(INVITEE) },
+      expect.objectContaining({
+        senderUniqueId: String(CALLER),
+        recipientUniqueId: String(INVITEE),
+        userData: expect.objectContaining({ fcmTokens: ['token-1', 'token-2'] }),
+      }),
     );
   });
 
-  test('cleans up the tokens FCM reports invalid', async () => {
-    mockSendFcmToTokens.mockResolvedValue(['token-2']);
-
+  // SHY-0244: reaping moved INSIDE sendPushToUser, so a caller can no longer
+  // forget it. The reap itself is proven in tests/utils/fcm.test.js against
+  // both identifier stores; asserting it again here would only be re-testing
+  // the helper through a double of the helper.
+  test('the invitee is addressed by id, so the push reaches whichever store they are in', async () => {
     await sendInvite().expect(200);
 
-    expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['token-2'], String(INVITEE));
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      String(INVITEE),
+      expect.any(Object),
+      expect.any(Object),
+    );
   });
 
-  test('skips FCM when the invitee has no tokens', async () => {
+  // SHY-0244: the route no longer inspects the identifier lists -- it hands the
+  // invitee to sendPushToUser, which reads BOTH stores. Deciding "no devices"
+  // in the route was what made a migrated device (present only in
+  // fcmInstallationIds) look like no device at all.
+  test('an invitee with no devices is still handed to the helper, which decides', async () => {
     await db.doc(`users/${INVITEE}`).set({ uniqueId: INVITEE, cohort: 'adult' });
 
     await sendInvite().expect(200);
 
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      String(INVITEE),
+      expect.any(Object),
+      expect.objectContaining({
+        userData: expect.not.objectContaining({ fcmTokens: expect.anything() }),
+      }),
+    );
   });
 
   test('falls back to "Someone" when the inviter has no displayName', async () => {
@@ -148,7 +167,7 @@ describe('invite push', () => {
 
     await sendInvite().expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ inviterName: 'Someone' }),
       expect.anything(),
@@ -162,7 +181,7 @@ describe('invite push', () => {
 
     await sendInvite().expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ inviterName: 'Someone' }),
       expect.anything(),
@@ -174,7 +193,7 @@ describe('invite push', () => {
 
     await sendInvite().expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ roomName: 'a room' }),
       expect.anything(),
@@ -182,7 +201,7 @@ describe('invite push', () => {
   });
 
   test('a failing push does not fail the invite', async () => {
-    mockSendFcmToTokens.mockRejectedValue(new Error('FCM unavailable'));
+    mockSendPushToUser.mockRejectedValue(new Error('FCM unavailable'));
 
     await sendInvite().expect(200);
 
@@ -199,7 +218,7 @@ describe('invite push', () => {
 
     await sendInvite().expect(404);
 
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 });
 
@@ -211,8 +230,8 @@ describe('seat-request push', () => {
   test('sends FCM to the room owner on a new request', async () => {
     await requestSeat().expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
-      ['owner-token'],
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      String(OWNER),
       expect.objectContaining({
         type: 'SEAT_REQUEST',
         roomId: ROOM,
@@ -221,24 +240,29 @@ describe('seat-request push', () => {
         requesterName: 'Bob',
         seatIndex: '3',
       }),
-      { senderUniqueId: String(CALLER), recipientUniqueId: String(OWNER) },
+      expect.objectContaining({
+        senderUniqueId: String(CALLER),
+        recipientUniqueId: String(OWNER),
+        userData: expect.objectContaining({ fcmTokens: ['owner-token'] }),
+      }),
     );
   });
 
-  test('cleans up the tokens FCM reports invalid', async () => {
-    mockSendFcmToTokens.mockResolvedValue(['owner-token']);
-
-    await requestSeat().expect(200);
-
-    expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['owner-token'], String(OWNER));
-  });
-
-  test('skips FCM when the owner has no tokens', async () => {
+  // SHY-0244: reaping moved inside sendPushToUser and is proven against both
+  // identifier stores in tests/utils/fcm.test.js. Re-asserting it here would
+  // be testing the helper through a double of the helper.
+  test('an owner with no devices is still handed to the helper, which decides', async () => {
     await db.doc(`users/${OWNER}`).set({ uniqueId: OWNER, cohort: 'adult' });
 
     await requestSeat().expect(200);
 
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
+      String(OWNER),
+      expect.objectContaining({ type: 'SEAT_REQUEST' }),
+      expect.objectContaining({
+        userData: expect.not.objectContaining({ fcmTokens: expect.anything() }),
+      }),
+    );
   });
 
   test('falls back to "a room" when the room has no name', async () => {
@@ -246,7 +270,7 @@ describe('seat-request push', () => {
 
     await requestSeat().expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ roomName: 'a room' }),
       expect.anything(),
@@ -256,7 +280,7 @@ describe('seat-request push', () => {
   test('requesterName is an empty string when no userName is given', async () => {
     await requestSeat({ seatIndex: 3 }).expect(200);
 
-    expect(mockSendFcmToTokens).toHaveBeenCalledWith(
+    expect(mockSendPushToUser).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ requesterName: '' }),
       expect.anything(),
@@ -264,7 +288,7 @@ describe('seat-request push', () => {
   });
 
   test('a failing push does not fail the seat request', async () => {
-    mockSendFcmToTokens.mockRejectedValue(new Error('FCM unavailable'));
+    mockSendPushToUser.mockRejectedValue(new Error('FCM unavailable'));
 
     await requestSeat().expect(200);
 
@@ -281,7 +305,7 @@ describe('seat-request push', () => {
 
     await requestSeat().expect(404);
 
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
     expect(await seatRequests()).toHaveLength(0);
   });
 });
