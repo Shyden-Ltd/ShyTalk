@@ -1,6 +1,6 @@
 ---
 id: SHY-0486
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-28
 priority: P2
@@ -124,6 +124,25 @@ of a story that is deliberately still open**.
 
 - [ ] An `In Progress` running-log append can merge.
 - [ ] An `In Progress` AC change still cannot.
+
+## Outcome
+
+Allowed: a **body-only** change to an In Progress story. Defined by what did NOT
+change — the frontmatter and the Acceptance Criteria must be byte-identical to
+the base — which is deliberately the strict direction. It is far harder to
+smuggle an AC edit past an equality check on a whole section than past a rule
+about where a diff hunk sits.
+
+Refused, exactly as before: touching the ACs, touching the frontmatter, and a
+newly ADDED In Progress story. The message names which of the two changed, and
+says **not** to flip the status, because that is the obvious way past a gate and
+the board is downstream of it.
+
+Six tests, including two that pin the refusals and one that pins an unreadable
+base version being refused rather than read as "nothing changed".
+
+This PR uses the carve-out on its first outing: SHY-0113's running log is
+updated in the same change.
 
 ## Notes
 
