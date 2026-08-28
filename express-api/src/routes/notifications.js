@@ -1,8 +1,8 @@
 /**
  * Notification routes — FCM token management and notification settings.
  *
- * POST   /api/notifications/token    -> Save FCM token
- * DELETE /api/notifications/token    -> Remove FCM token
+ * POST   /api/notifications/token    -> Save an FCM token or installation ID
+ * DELETE /api/notifications/token    -> Remove an FCM token or installation ID
  * PATCH  /api/notifications/settings -> Update notification settings
  */
 
@@ -11,15 +11,50 @@ const { db, FieldValue } = require('../utils/firebase');
 const log = require('../utils/log');
 
 // -- Save FCM token --
+/**
+ * Work out which registration model the client is speaking.
+ *
+ * SHY-0244. Firebase replaced the registration-token model with one keyed on
+ * the Firebase Installation ID, and the two coexist across a fleet that
+ * upgrades over time. The CLIENT declares which it is sending; the shape of
+ * the string is never inspected. Guessing would put a user's reachability on a
+ * format heuristic, and would store the identifier under the wrong model with
+ * no symptom until their notifications quietly stopped.
+ *
+ * Returns `{ field, value }`, or `{ error }` with the 400 message.
+ */
+function identifierFrom(body) {
+  const token = body?.token;
+  const installationId = body?.installationId;
+  const hasToken = token !== undefined && token !== null;
+  const hasFid = installationId !== undefined && installationId !== null;
+
+  if (hasToken && hasFid) {
+    // A client sending both has a bug. Picking one silently would be a
+    // coin-flip on whether that device ever receives another notification.
+    return { error: 'send exactly one of token or installationId, not both' };
+  }
+  if (!hasToken && !hasFid) {
+    return { error: 'token must be a non-empty string' };
+  }
+
+  const value = hasToken ? token : installationId;
+  const field = hasToken ? 'fcmTokens' : 'fcmInstallationIds';
+  const name = hasToken ? 'token' : 'installationId';
+  if (typeof value !== 'string' || value.length === 0 || value.length > 500) {
+    return { error: `${name} must be a non-empty string` };
+  }
+  return { field, value };
+}
+
 router.post('/notifications/token', async (req, res) => {
   try {
-    if (!req.body?.token || typeof req.body.token !== 'string' || req.body.token.length > 500) {
-      return res.status(400).json({ error: 'token must be a non-empty string' });
-    }
+    const identifier = identifierFrom(req.body);
+    if (identifier.error) return res.status(400).json({ error: identifier.error });
 
     const uniqueId = req.auth.uniqueId;
     await db.doc(`users/${uniqueId}`).update({
-      fcmTokens: FieldValue.arrayUnion(req.body.token),
+      [identifier.field]: FieldValue.arrayUnion(identifier.value),
     });
 
     return res.json({ success: true });
@@ -32,13 +67,12 @@ router.post('/notifications/token', async (req, res) => {
 // -- Remove FCM token --
 router.delete('/notifications/token', async (req, res) => {
   try {
-    if (!req.body?.token || typeof req.body.token !== 'string' || req.body.token.length > 500) {
-      return res.status(400).json({ error: 'token must be a non-empty string' });
-    }
+    const identifier = identifierFrom(req.body);
+    if (identifier.error) return res.status(400).json({ error: identifier.error });
 
     const uniqueId = req.auth.uniqueId;
     await db.doc(`users/${uniqueId}`).update({
-      fcmTokens: FieldValue.arrayRemove(req.body.token),
+      [identifier.field]: FieldValue.arrayRemove(identifier.value),
     });
 
     return res.json({ success: true });
