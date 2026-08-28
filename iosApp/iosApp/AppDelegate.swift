@@ -26,6 +26,11 @@ import shared
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate, PushTokenBridge, PushPermissionBridge, AppCheckBridge {
     static let currentTokenKey = "shytalk.fcm.currentToken"
     static let lastRegisteredTokenKey = "shytalk.fcm.lastRegisteredToken"
+    /// SHY-0244. Which registration model each cached value belongs to.
+    /// Absent means a value cached by a pre-migration build, which is always a
+    /// registration token — that default is what makes the upgrade seamless.
+    static let currentKindKey = "shytalk.fcm.currentKind"
+    static let lastRegisteredKindKey = "shytalk.fcm.lastRegisteredKind"
 
     func application(
         _ application: UIApplication,
@@ -172,27 +177,72 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// `trySync*` helper, which itself handles the Koin-not-ready case gracefully.
     /// This three-layer save (here + sign-in path + foreground retry) closes the
     /// gap where rotation between sign-in and foreground would otherwise be missed.
+    ///
+    /// SHY-0244 keeps this alongside `didReceiveRegistration` deliberately. With
+    /// `FirebaseMessagingInstallationIdEnabled` set this never fires -- but every
+    /// path that chooses a model asks the SDK (`isInstallationIdEnabled`) rather
+    /// than assuming, so clearing the flag makes the app fall back to the token
+    /// model with no code change. That turns a one-way door into a two-way one:
+    /// rolling back becomes flipping a plist key rather than shipping a revert.
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        UserDefaults.standard.set(token, forKey: AppDelegate.currentTokenKey)
+        cacheCurrent(token, kind: .registrationToken)
         IosPushBridgeKt.trySyncFcmTokenForCurrentUser()
+    }
+
+    /// SHY-0244 — the V1 registration model. Fires instead of
+    /// `didReceiveRegistrationToken` once `FirebaseMessagingInstallationIdEnabled`
+    /// is YES in Info.plist. The two are mutually exclusive: with the flag set,
+    /// every token operation fails by design, so only one of these ever runs.
+    func messaging(_ messaging: Messaging, didReceiveRegistration installationId: String?) {
+        guard let fid = installationId else { return }
+        cacheCurrent(fid, kind: .installationId)
+        IosPushBridgeKt.trySyncFcmTokenForCurrentUser()
+    }
+
+    /// This app instance is no longer registered. Clearing the cache stops the
+    /// sync loop re-posting an identifier FCM has already discarded.
+    func messaging(_ messaging: Messaging, didUnregister installationId: String) {
+        UserDefaults.standard.removeObject(forKey: AppDelegate.currentTokenKey)
+        UserDefaults.standard.removeObject(forKey: AppDelegate.currentKindKey)
     }
 
     // MARK: PushTokenBridge (called from Kotlin via Objective-C interop)
 
-    func currentFcmToken() -> String? {
-        UserDefaults.standard.string(forKey: AppDelegate.currentTokenKey)
+    private func cacheCurrent(_ value: String, kind: PushIdentifierKind) {
+        UserDefaults.standard.set(value, forKey: AppDelegate.currentTokenKey)
+        UserDefaults.standard.set(kind.name, forKey: AppDelegate.currentKindKey)
     }
 
-    func lastRegisteredToken() -> String? {
-        UserDefaults.standard.string(forKey: AppDelegate.lastRegisteredTokenKey)
+    /// Reads a cached identifier and the model it belongs to.
+    ///
+    /// A missing kind means the value was written by a build from before the
+    /// migration, which could only have been a registration token. Defaulting
+    /// that way is what lets an upgraded install keep working without a gap.
+    private func identifier(valueKey: String, kindKey: String) -> PushIdentifier? {
+        guard let value = UserDefaults.standard.string(forKey: valueKey) else { return nil }
+        let stored = UserDefaults.standard.string(forKey: kindKey)
+        let kind: PushIdentifierKind = stored == PushIdentifierKind.installationId.name
+            ? .installationId
+            : .registrationToken
+        return PushIdentifier(value: value, kind: kind)
     }
 
-    func setLastRegisteredToken(token: String?) {
-        if let token = token {
-            UserDefaults.standard.set(token, forKey: AppDelegate.lastRegisteredTokenKey)
+    func currentPushIdentifier() -> PushIdentifier? {
+        identifier(valueKey: AppDelegate.currentTokenKey, kindKey: AppDelegate.currentKindKey)
+    }
+
+    func lastRegisteredIdentifier() -> PushIdentifier? {
+        identifier(valueKey: AppDelegate.lastRegisteredTokenKey, kindKey: AppDelegate.lastRegisteredKindKey)
+    }
+
+    func setLastRegisteredIdentifier(identifier: PushIdentifier?) {
+        if let identifier = identifier {
+            UserDefaults.standard.set(identifier.value, forKey: AppDelegate.lastRegisteredTokenKey)
+            UserDefaults.standard.set(identifier.kind.name, forKey: AppDelegate.lastRegisteredKindKey)
         } else {
             UserDefaults.standard.removeObject(forKey: AppDelegate.lastRegisteredTokenKey)
+            UserDefaults.standard.removeObject(forKey: AppDelegate.lastRegisteredKindKey)
         }
     }
 
@@ -207,6 +257,33 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // 2) Foreground token-sync retry: covers FCM rotation while suspended
         //    AND any save that was deferred by a cold-start Koin race.
         IosPushBridgeKt.trySyncFcmTokenForCurrentUser()
+        // 3) SHY-0244: re-attempt registration if it failed earlier (no network
+        //    at launch, APNs not yet ready). Without this a first-launch failure
+        //    would leave the device unreachable until the app was killed and
+        //    relaunched -- and nothing would say so.
+        ensureRegisteredForPush()
+    }
+
+    /// Register this app instance for push under the V1 installation-ID model.
+    ///
+    /// SHY-0244. Guarded on the SDK's own `isInstallationIdEnabled` rather than
+    /// on a constant, so the Info.plist flag and this call path cannot disagree:
+    /// with the flag off `register()` is not the right call, and with it on the
+    /// token APIs fail by design. Asking the SDK which model is live is the only
+    /// answer that stays true if the flag is ever changed.
+    ///
+    /// Idempotent -- the SDK also calls this once per app start when auto-init
+    /// is enabled, and a redundant call simply re-delivers the same FID.
+    private func ensureRegisteredForPush() {
+        guard Messaging.messaging().isInstallationIdEnabled else { return }
+        Messaging.messaging().register { error in
+            if let error = error {
+                // Logged, not surfaced: the user can keep using the app. A
+                // silent swallow here would hide the "notifications mysteriously
+                // stopped" bug class entirely.
+                NSLog("[ShyTalk] SHY-0244 push registration failed: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Query the OS notification settings, map to the shared
