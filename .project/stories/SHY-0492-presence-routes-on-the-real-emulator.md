@@ -111,6 +111,39 @@ probing the deployed rules. The gate is lifted.
 | Unit (`*.unit.test.js`) | The fail-safe when the presence read throws. |
 | Mutation | Removing the presence check, and flipping the fail-safe, each fail. |
 
+## Outcome
+
+**`room-mutations.test.js` is gone.** All 24 remaining tests migrated with exact
+parity — 20 against real Firestore and real RTDB, 4 induced failures in the unit
+file. The no-stubs baseline drops **609 → 606** paths.
+
+**That completes the SHY-0113 umbrella's express scope**: 1922 lines and 181
+doubles at the start of this run, now zero.
+
+### Mutation-tested
+
+| Mutation | Result |
+| --- | --- |
+| Presence always reports ABSENT | **2 fail** |
+| **Flip the fail-safe** — an unreadable presence reads as absent | **2 fail** |
+
+The second is the one worth having. `isUserPresent` returns **true** on error, so
+a database blip can never be mistaken for somebody having left; failing open
+would let anyone be evicted during an outage. **A mocked read could never have
+tested that** — the mock decided both the question and the answer.
+
+### Two assertions became behavioural
+
+| Was | Now |
+| --- | --- |
+| `expect(mockRtdbGet).not.toHaveBeenCalled()` — the owner path skips presence | the owner succeeds **while their presence node exists**, so a route that started checking would fail |
+| `expect(rtdb.ref).toHaveBeenCalledWith('rooms/x/presence/1')` | somebody **else** is present while the owner is absent — a route reading the wrong node would refuse |
+
+And the foreign-write pin — `expect(db.doc).toHaveBeenCalledWith('users/99')`,
+needed only because the stub returned the same object for every path — became a
+direct question: the evicted user's `currentRoomId` is null and the caller's is
+untouched.
+
 ## Out of Scope
 
 - The dev target for these journeys. `disconnect-user` reads collections the
