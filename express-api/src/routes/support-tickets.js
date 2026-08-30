@@ -722,7 +722,15 @@ router.get('/support-tickets', async (req, res) => {
 
     let query = db.collection(COLLECTION);
     if (status) query = query.where('status', '==', status);
-    if (userId) query = query.where('userId', '==', String(userId));
+    if (userId) {
+      // Compared as a NUMBER when it is one. Tickets store `userId: uniqueId`,
+      // an integer, and mine/open compares against the raw uniqueId --
+      // so coercing to a string matches nothing, silently, returning an empty
+      // list that reads exactly like "this person has no tickets".
+      const asNumber = Number(userId);
+      const value = Number.isInteger(asNumber) && String(asNumber) === userId ? asNumber : userId;
+      query = query.where('userId', '==', value);
+    }
 
     // SHY-0495: the ORDER is dropped when filtering by user, on purpose.
     //
