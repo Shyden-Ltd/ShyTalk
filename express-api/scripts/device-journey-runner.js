@@ -1503,6 +1503,23 @@ async function openPersonaPicker(device, timeoutMs = 8000) {
   // front of it, hiding the real reason the first attempt failed.
   if (pickerIsOpen(await dump(device))) return;
   for (let attempt = 1; ; attempt++) {
+    // SHY-0491: wait for the button to EXIST before tapping it. Tapping blind
+    // threw "tap target #persona_picker_open not found on screen" whenever the
+    // app had not finished navigating to SignIn -- which is what J-ALICE hit on
+    // every dev matrix run. Sign-out is a network round trip: on loopback it
+    // lands inside the walk's own latency, on dev's real network it does not.
+    //
+    // The retry loop below looks like it covers this and does not. It breaks
+    // out precisely when the button is ABSENT, which is right for a swallowed
+    // tap and wrong for a screen that has not arrived yet.
+    try {
+      await waitForId(device, 'persona_picker_open', Math.max(0, deadline - Date.now()));
+    } catch (e) {
+      last = e;
+      // It may have opened on its own while we waited (a queued tap landing).
+      if (pickerIsOpen(await dump(device))) return;
+      break;
+    }
     await tapId(device, 'persona_picker_open');
     try {
       // Short per-attempt window. The picker opens in ~500ms when the screen is
@@ -1519,7 +1536,8 @@ async function openPersonaPicker(device, timeoutMs = 8000) {
     }
   }
   throw new Error(
-    `the persona picker did not open after ${timeoutMs}ms of trying: ${last?.message ?? 'unknown'}`,
+    `the persona picker did not open after ${timeoutMs}ms of trying ` +
+      `(#persona_picker_open): ${last?.message ?? 'unknown'}`,
   );
 }
 
