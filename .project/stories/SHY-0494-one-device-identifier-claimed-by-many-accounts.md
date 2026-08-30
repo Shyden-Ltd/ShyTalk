@@ -197,3 +197,20 @@ the failure is a safety one.
 - **Residue cleared on dev** the same day: all four accounts had
   `d79NouUmT-KeCnEcX2Msyp` removed via `DELETE /api/notifications/token`, so the
   cross-account state no longer exists there.
+
+- **2026-08-30 — DEVICE-PROVEN on dev.** Deployed, rebuilt the dev APK and ran
+  the full Android matrix on the OnePlus, which signs in and out as several
+  personas in sequence — the exact motion that produced the residue.
+
+  | | Accounts left holding the device's identifier |
+  | --- | --- |
+  | Before the fix | **4** — Alice (adult), Vexa (adult), **Marcus (minor)**, **Greta (admin)** |
+  | After the fix | **1** — Alice, the persona still signed in when the run ended |
+
+  One is the correct answer: a device belongs to whoever is signed in on it. A
+  minor and an admin no longer claim a phone they signed out of.
+
+  (The identifier value differs between the runs because the app was
+  reinstalled; an FID is per app instance.)
+
+  Matrix result: **8/8 on dev**, the first fully green dev run.
