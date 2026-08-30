@@ -34,9 +34,10 @@ class SignOutCoordinatorTest {
             val log = mutableListOf<String>()
             val bridge = RecordingBridge(fid("fid-A"), fid("fid-A"))
             val repo = RecordingRepository(log)
-            val coordinator = SignOutCoordinator(PushTokenManager({ bridge }, repo))
+            val coordinator = SignOutCoordinator()
+            val mgr = PushTokenManager({ bridge }, repo)
 
-            coordinator.signOut("user-1") { log.add("auth-signed-out") }
+            coordinator.signOut("user-1", { mgr.clearToken(it) }) { log.add("auth-signed-out") }
 
             assertEquals(listOf("remove(user-1)", "auth-signed-out"), log)
         }
@@ -50,9 +51,10 @@ class SignOutCoordinatorTest {
             val log = mutableListOf<String>()
             val bridge = RecordingBridge(fid("fid-A"), fid("fid-A"))
             val repo = HangingRepository()
-            val coordinator = SignOutCoordinator(PushTokenManager({ bridge }, repo), timeoutMs = 50)
+            val coordinator = SignOutCoordinator(timeoutMs = 50)
+            val mgr = PushTokenManager({ bridge }, repo)
 
-            coordinator.signOut("user-1") { log.add("auth-signed-out") }
+            coordinator.signOut("user-1", { mgr.clearToken(it) }) { log.add("auth-signed-out") }
 
             assertEquals(listOf("auth-signed-out"), log)
         }
@@ -63,9 +65,10 @@ class SignOutCoordinatorTest {
             val log = mutableListOf<String>()
             val bridge = RecordingBridge(fid("fid-A"), fid("fid-A"))
             val repo = FailingRepository()
-            val coordinator = SignOutCoordinator(PushTokenManager({ bridge }, repo))
+            val coordinator = SignOutCoordinator()
+            val mgr = PushTokenManager({ bridge }, repo)
 
-            coordinator.signOut("user-1") { log.add("auth-signed-out") }
+            coordinator.signOut("user-1", { mgr.clearToken(it) }) { log.add("auth-signed-out") }
 
             assertTrue(log.contains("auth-signed-out"))
         }
@@ -75,9 +78,10 @@ class SignOutCoordinatorTest {
         runTest {
             val log = mutableListOf<String>()
             val bridge = RecordingBridge(fid("fid-A"), fid("fid-A"))
-            val coordinator = SignOutCoordinator(PushTokenManager({ bridge }, RecordingRepository(log)))
+            val coordinator = SignOutCoordinator()
+            val mgr = PushTokenManager({ bridge }, RecordingRepository(log))
 
-            coordinator.signOut(null) { log.add("auth-signed-out") }
+            coordinator.signOut(null, { mgr.clearToken(it) }) { log.add("auth-signed-out") }
 
             assertEquals(listOf("auth-signed-out"), log)
         }
@@ -89,9 +93,10 @@ class SignOutCoordinatorTest {
             // next account signing in on this phone re-registers the SAME
             // identifier and both accounts then claim the device.
             val bridge = RecordingBridge(fid("fid-A"), fid("fid-A"))
-            val coordinator = SignOutCoordinator(PushTokenManager({ bridge }, RecordingRepository(mutableListOf())))
+            val coordinator = SignOutCoordinator()
+            val mgr = PushTokenManager({ bridge }, RecordingRepository(mutableListOf()))
 
-            coordinator.signOut("user-1") {}
+            coordinator.signOut("user-1", { mgr.clearToken(it) }) {}
 
             assertEquals(null, bridge.lastRegistered)
         }

@@ -51,6 +51,7 @@ import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.crop.CropContract
 import com.shyden.shytalk.core.crop.CropInput
 import com.shyden.shytalk.core.push.AndroidPushIdentifiers
+import com.shyden.shytalk.core.push.SignOutCoordinator
 import com.shyden.shytalk.core.push.notifyPushPermissionPrompted
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.BiometricAuth
@@ -726,6 +727,10 @@ fun NavGraph(
                 // SHY-0244: needed to read the manifest flag that decides which
                 // registration model this build speaks.
                 val settingsContext = LocalContext.current
+                // SHY-0494: settingsScope dies with this screen, so the release
+                // must not run on it. Remembered here at the NavGraph level.
+                val navGraphScope = rememberCoroutineScope()
+                val signOutCoordinator = remember { SignOutCoordinator() }
 
                 AppSettingsScreen(
                     onNavigateBack = { navController.safePopBackStack() },
@@ -746,28 +751,32 @@ fun NavGraph(
                         navController.navigate(Screen.Support.createRoute(source.wireValue))
                     },
                     onSignOut = {
-                        // Remove FCM token before signing out
                         val signOutUserId = authRepository.currentUserId
-                        if (signOutUserId != null) {
-                            settingsScope.launch {
-                                try {
+                        // SHY-0494: the release used to run on settingsScope,
+                        // which this navigation destroys, and it raced the auth
+                        // teardown two lines below for the credential that
+                        // authorises it. Both failures are silent, and the
+                        // residue is a phone still registered to somebody who
+                        // signed out. navGraphScope survives the navigation.
+                        navGraphScope.launch {
+                            signOutCoordinator.signOut(
+                                userId = signOutUserId,
+                                releaseIdentifier = { id ->
                                     val identifier = AndroidPushIdentifiers.current(settingsContext)
-                                    settingsNotificationRepo.removePushIdentifier(signOutUserId, identifier)
+                                    settingsNotificationRepo.removePushIdentifier(id, identifier)
+                                },
+                            ) {
+                                try {
+                                    val ctx = navController.context
+                                    ctx.stopService(Intent(ctx, PmSyncService::class.java))
                                 } catch (e: Exception) {
-                                    Log.w("NavGraph", "FCM token removal failed on sign-out", e)
+                                    Log.d("NavGraph", "PM sync service stop failed", e)
                                 }
+                                onSignOut()
                             }
-                        }
-                        // Stop PM sync service
-                        try {
-                            val ctx = navController.context
-                            ctx.stopService(Intent(ctx, PmSyncService::class.java))
-                        } catch (e: Exception) {
-                            Log.d("NavGraph", "PM sync service stop failed", e)
-                        }
-                        onSignOut()
-                        navController.navigate(Screen.SignIn.route) {
-                            popUpTo(Screen.Main.route) { inclusive = true }
+                            navController.navigate(Screen.SignIn.route) {
+                                popUpTo(Screen.Main.route) { inclusive = true }
+                            }
                         }
                     },
                 )

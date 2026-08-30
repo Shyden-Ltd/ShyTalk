@@ -21,9 +21,12 @@ import kotlinx.coroutines.withTimeoutOrNull
  * A push identifier names the app INSTANCE, not the person, so every account
  * that signs in on a phone registers the same value. Releasing it on the way
  * out is the only thing that stops them accumulating.
+ *
+ * Takes the release as a lambda rather than a dependency: the two platforms
+ * reach their push layer differently (iOS through PushTokenManager, Android
+ * through its own callbacks), and this policy should not have to know which.
  */
 class SignOutCoordinator(
-    private val pushTokenManager: PushTokenManager,
     private val timeoutMs: Long = DEFAULT_TIMEOUT_MS,
 ) {
     /**
@@ -37,10 +40,11 @@ class SignOutCoordinator(
      */
     suspend fun signOut(
         userId: String?,
+        releaseIdentifier: suspend (String) -> Unit,
         signOut: suspend () -> Unit,
     ) {
         if (!userId.isNullOrEmpty()) {
-            val released = withTimeoutOrNull(timeoutMs) { pushTokenManager.clearToken(userId) }
+            val released = withTimeoutOrNull(timeoutMs) { releaseIdentifier(userId) }
             if (released == null) {
                 // Loud on purpose: this is the state in which the next person
                 // to sign in on this device shares its notifications with the

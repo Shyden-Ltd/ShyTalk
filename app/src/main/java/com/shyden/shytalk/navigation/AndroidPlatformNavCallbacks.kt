@@ -42,14 +42,14 @@ class AndroidPlatformNavCallbacks(
         }
     }
 
-    override fun removeFcmToken(userId: String) {
-        scope.launch {
-            try {
-                val identifier = AndroidPushIdentifiers.current(context)
-                notificationRepository.removePushIdentifier(userId, identifier)
-            } catch (e: Exception) {
-                Log.w(TAG, "FCM token removal failed on sign-out", e)
-            }
+    override suspend fun removeFcmToken(userId: String) {
+        // No scope.launch: the caller awaits this so the release finishes while
+        // the credential authorising it is still valid (SHY-0494).
+        try {
+            val identifier = AndroidPushIdentifiers.current(context)
+            notificationRepository.removePushIdentifier(userId, identifier)
+        } catch (e: Exception) {
+            Log.w(TAG, "push identifier release failed on sign-out", e)
         }
     }
 

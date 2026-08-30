@@ -47,13 +47,13 @@ class IosPlatformNavCallbacks : PlatformNavCallbacks {
         }
     }
 
-    override fun removeFcmToken(userId: String) {
-        scope.launch {
-            try {
-                pushTokenManager.clearToken(userId)
-            } catch (e: Exception) {
-                logW("IosPlatformNavCallbacks", "removeFcmToken failed: ${e.message}")
-            }
+    override suspend fun removeFcmToken(userId: String) {
+        // Awaited by the caller (SHY-0494) rather than launched, so the release
+        // completes before auth is torn down.
+        try {
+            pushTokenManager.clearToken(userId)
+        } catch (e: Exception) {
+            logW("IosPlatformNavCallbacks", "removeFcmToken failed: ${e.message}")
         }
     }
 

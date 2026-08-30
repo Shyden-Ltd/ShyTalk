@@ -1,6 +1,6 @@
 ---
 id: SHY-0494
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-28
 priority: P1
@@ -150,3 +150,50 @@ the failure is a safety one.
   Not caused by SHY-0244 — device-scoped identifiers behave the same way under
   the token model — but surfaced by it, and named directly by SHY-0244's own
   edge-case AC.
+
+- **2026-08-30 — reproduced first, and the leading hypothesis was WRONG.**
+
+  The story guessed the journey runner's debug `signInAs` was bypassing the
+  sign-out that removes the identifier. It is not. `signOutFlow` in the runner
+  drives the **real UI**: profile tab → settings → Sign Out → confirm. No debug
+  bypass anywhere. So this is product behaviour, and the story was right to
+  demand a reproduction before a fix.
+
+  **Root cause: ordering, not the removal code.** `onSignOut` fired the removal
+  into a coroutine scope and then, synchronously, tore down auth and navigated
+  away. The removal lost two races at once:
+
+  1. its scope (`rememberCoroutineScope()` **inside** the settings composable)
+     was cancelled by the very navigation sign-out triggers; and
+  2. the credential authorising the request was revoked before it landed.
+
+  Both are silent — removal is best-effort and logged — so the only symptom is
+  somebody receiving a stranger's notifications.
+
+  **Two implementations, one concern.** iOS routed sign-out through
+  `PushTokenManager.clearToken`; Android had its own duplicate in
+  `AndroidPlatformNavCallbacks` and never registered `PushTokenManager` at all.
+  Both were fire-and-forget, so both leaked.
+
+  ### The fix
+
+  - `PlatformNavCallbacks.removeFcmToken` is now **`suspend`**. As a plain
+    function, every caller could fire it and move on; suspending makes "await
+    this before signing out" the only way to call it. The compiler immediately
+    flagged the real call site — the silent race became a build error.
+  - `SignOutCoordinator` holds the policy: release, **then** sign out, with a
+    bounded wait so a dead network cannot trap somebody in the app. It takes
+    the release as a lambda, so it needs no DI and does not care that the two
+    platforms reach their push layer differently.
+  - Both sign-out sites now run on a scope remembered at the **NavGraph** level,
+    which survives the navigation, rather than the settings screen's own.
+
+  Tests pin the **order**, not the call — asserting "removal was called" would
+  have passed against the broken code, which called it too. Three mutations
+  (sign out first; skip the release; drop the timeout) all caught.
+
+  Gate: `:app:testDevDebugUnitTest` + `:shared:jvmTest` + `:shared:compileKotlinIosArm64` + `detekt` green.
+
+- **Residue cleared on dev** the same day: all four accounts had
+  `d79NouUmT-KeCnEcX2Msyp` removed via `DELETE /api/notifications/token`, so the
+  cross-account state no longer exists there.
