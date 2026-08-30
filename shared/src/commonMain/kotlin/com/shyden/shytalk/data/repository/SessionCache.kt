@@ -1,6 +1,7 @@
 package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.util.SecureStorage
+import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logW
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -271,8 +272,12 @@ class SessionCache(
      * storage is shared with `AppLockRepositoryImpl`, and wiping it would take
      * the user's PIN credential with it — turning sign-out into "forget this
      * device" and stranding the user at re-registration.
+     *
+     * SHY-0497: logged, because this and the session read are the two ends of
+     * a race the device log could say nothing about before.
      */
     fun clear() {
+        logD(TAG, "clear: dropping any cached session")
         storage.remove(KEY_SESSION)
         // The three-key format this replaced (SHY-0143, pre-I6). Removed here
         // so an upgrade over a populated cache cannot leave the old keys on
