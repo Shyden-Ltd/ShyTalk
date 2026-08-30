@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import com.shyden.shytalk.feature.auth.AppleSignInCancelledException
@@ -189,6 +190,12 @@ class AuthRepositoryImpl(
         }
 
     override suspend fun signOut() {
+        // SHY-0497: the app has been observed back on Home AFTER sign-out
+        // reached the sign-in screen, and nothing in the log said so -- there
+        // was no sign-out logging at all. Diagnosing a race needs both ends of
+        // it timestamped.
+        val signingOut = resolvedUniqueId
+        logD("AuthRepository", "signOut: starting for uniqueId=$signingOut")
         resolvedUniqueId = null
         resolvedDisplayName = null
         resolvedCohort = null
@@ -208,6 +215,10 @@ class AuthRepositoryImpl(
         // a later refactor of the setters. Costs one no-op storage remove.
         sessionCache.clear()
         auth.signOut()
+        logD(
+            "AuthRepository",
+            "signOut: complete for uniqueId=$signingOut; firebase user=${auth.currentUser?.uid}",
+        )
     }
 
     override suspend fun refreshIdToken(): Resource<Unit> =
