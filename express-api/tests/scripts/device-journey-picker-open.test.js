@@ -157,3 +157,67 @@ describe('SHY-0491: a SignIn screen that arrives late', () => {
     await expect(openPersonaPicker(neverArrives, 300)).rejects.toThrow(/persona_picker_open/);
   });
 });
+
+/**
+ * SHY-0495 — a modal that arrives AFTER SignIn is reached.
+ *
+ * `reachSignIn` clears overlays as it advances, and reported success. One step
+ * later `openPersonaPicker` saw nothing but `android:id/content` and gave up
+ * after five seconds.
+ *
+ * The daily-reward calendar is a Compose dialog, so it owns its own window and
+ * the dump shows only the content root — the walk is blind to everything
+ * behind it. It is DATE-TRIGGERED, which is why the matrix was 8/8 on
+ * 2026-08-28 and this failed on 2026-08-30 with a 500-coin reward showing.
+ *
+ * `openPersonaPicker` took a bare dump, so it never ran the overlay handlers
+ * that `advanceUntil` runs. Waiting for a control is not enough when something
+ * can arrive and cover it.
+ */
+function rewardCalendarThenSignIn() {
+  let taps = 0;
+  let dismissed = false;
+  const MODAL =
+    '<hierarchy>' +
+    '<node resource-id="android:id/content" bounds="[0,0][440,1600]" />' +
+    '<node text="Claim Today\'s Reward" class="android.widget.Button" bounds="[120,1200][380,1270]" enabled="true" />' +
+    '<node text="Later" class="android.widget.Button" bounds="[40,1200][110,1270]" enabled="true" />' +
+    '</hierarchy>';
+  const SIGN_IN =
+    '<hierarchy>' +
+    '<node resource-id="persona_picker_open" class="android.widget.Button" ' +
+    'text="Sign in as test persona" bounds="[40,900][400,980]" enabled="true" />' +
+    '</hierarchy>';
+  const PICKER =
+    '<hierarchy>' +
+    '<node resource-id="persona_picker_list" class="android.widget.ScrollView" ' +
+    'text="" bounds="[0,200][440,1400]" enabled="true" />' +
+    '</hierarchy>';
+  return {
+    kind: 'android',
+    async dumpXml() {
+      // The modal STAYS until something dismisses it. A double that lets it
+      // fade on its own would pass against the broken code, which is what a
+      // first version of this test did.
+      if (!dismissed) return MODAL;
+      return taps > 0 ? PICKER : SIGN_IN;
+    },
+    tap(x, y) {
+      // A tap inside the modal's button row is the dismissal.
+      if (!dismissed && y >= 1200 && y <= 1270) {
+        dismissed = true;
+        return;
+      }
+      taps += 1;
+    },
+    size: () => ({ w: 440, h: 1600 }),
+  };
+}
+
+describe('SHY-0495: a modal covering the SignIn screen', () => {
+  test('the reward calendar is dismissed and the picker still opens', async () => {
+    // Nothing here is broken. A date-triggered dialog arrived after SignIn was
+    // reached, which is a thing that will keep happening.
+    await expect(openPersonaPicker(rewardCalendarThenSignIn(), 8000)).resolves.toBeUndefined();
+  });
+});
