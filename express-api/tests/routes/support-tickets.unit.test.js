@@ -1035,6 +1035,28 @@ describe('SHY-0495: GET /api/support-tickets?userId=', () => {
 
   const lastChain = () => db.collection.mock.results.at(-1).value;
 
+  test('compares userId as a NUMBER when it is one', async () => {
+    // Tickets store `userId: uniqueId`, which is an integer, and mine/open
+    // compares against the raw uniqueId. Coercing the query value to a string
+    // matches nothing at all -- and matches it silently, returning an empty
+    // list that reads exactly like "this person has no tickets".
+    mockQueryDocs.mockResolvedValueOnce([]);
+    await request(createApp({ admin: true }))
+      .get('/api/support-tickets?userId=50000010')
+      .expect(200);
+
+    expect(lastChain().where.mock.calls).toContainEqual(['userId', '==', 50000010]);
+  });
+
+  test('still compares as a string when the id is not numeric', async () => {
+    mockQueryDocs.mockResolvedValueOnce([]);
+    await request(createApp({ admin: true }))
+      .get('/api/support-tickets?userId=abc123')
+      .expect(200);
+
+    expect(lastChain().where.mock.calls).toContainEqual(['userId', '==', 'abc123']);
+  });
+
   test('filters by userId', async () => {
     mockQueryDocs.mockResolvedValueOnce([{ id: 't1', userId: '50000010' }]);
     const res = await request(createApp({ admin: true })).get(
@@ -1042,7 +1064,7 @@ describe('SHY-0495: GET /api/support-tickets?userId=', () => {
     );
 
     expect(res.status).toBe(200);
-    expect(lastChain().where.mock.calls).toContainEqual(['userId', '==', '50000010']);
+    expect(lastChain().where.mock.calls).toContainEqual(['userId', '==', 50000010]);
   });
 
   test('does NOT order when filtering by user, because that needs an index we do not have', async () => {
@@ -1075,7 +1097,7 @@ describe('SHY-0495: GET /api/support-tickets?userId=', () => {
       .expect(200);
 
     const calls = lastChain().where.mock.calls;
-    expect(calls).toContainEqual(['userId', '==', '50000010']);
+    expect(calls).toContainEqual(['userId', '==', 50000010]);
     expect(calls).toContainEqual(['status', '==', 'open']);
   });
 
