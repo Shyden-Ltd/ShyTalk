@@ -87,3 +87,73 @@ describe('openPersonaPicker', () => {
     await expect(openPersonaPicker(device, 1200)).rejects.toThrow(/picker/i);
   });
 });
+
+/**
+ * SHY-0491 — the picker button has to EXIST before it is tapped.
+ *
+ * `openPersonaPicker` tapped `persona_picker_open` immediately. If the app had
+ * not finished navigating to SignIn yet, the button was not on screen and
+ * `tapId` threw "tap target #persona_picker_open not found on screen" — the
+ * exact failure J-ALICE produced on every dev matrix run.
+ *
+ * The retry loop looks like it covers this, but it does not: after a failed
+ * attempt it breaks out precisely when the button is absent (line "the button
+ * is still there, so the tap was swallowed"). That guard is right for a
+ * swallowed tap and wrong for a screen that has not arrived, and the FIRST tap
+ * never had a wait at all.
+ *
+ * Why dev and not local: sign-out is a network round trip. On loopback it
+ * finishes inside the walk's own latency; on dev's real network it does not.
+ * The runner already documents this exact race for the iPhone and raised a
+ * timeout for it — this is the same race, one screen earlier.
+ */
+function screenArrivingLate({ blankDumps = 3 } = {}) {
+  let dumps = 0;
+  let taps = 0;
+  const BLANK =
+    '<hierarchy><node resource-id="android:id/content" bounds="[0,0][440,1600]" /></hierarchy>';
+  const SIGN_IN =
+    '<hierarchy>' +
+    '<node resource-id="persona_picker_open" class="android.widget.Button" ' +
+    'text="Sign in as test persona" bounds="[40,900][400,980]" enabled="true" />' +
+    '</hierarchy>';
+  const PICKER =
+    '<hierarchy>' +
+    '<node resource-id="persona_picker_list" class="android.widget.ScrollView" ' +
+    'text="" bounds="[0,200][440,1400]" enabled="true" />' +
+    '</hierarchy>';
+  return {
+    kind: 'android',
+    async dumpXml() {
+      dumps += 1;
+      if (dumps <= blankDumps) return BLANK; // still navigating away from the old screen
+      return taps > 0 ? PICKER : SIGN_IN;
+    },
+    tap() {
+      taps += 1;
+    },
+    size: () => ({ w: 440, h: 1600 }),
+  };
+}
+
+describe('SHY-0491: a SignIn screen that arrives late', () => {
+  test('the picker still opens when the screen has not landed yet', async () => {
+    // Nothing about this phone is broken. It is mid-navigation, exactly as it
+    // is on dev after a sign-out that took longer than loopback.
+    await expect(openPersonaPicker(screenArrivingLate(), 8000)).resolves.toBeUndefined();
+  });
+
+  test('a screen that NEVER arrives still fails, and says the button never appeared', async () => {
+    // The other half: waiting must not become waiting forever, and the message
+    // has to name what was missing or the next person debugs the wrong thing.
+    const neverArrives = {
+      kind: 'android',
+      async dumpXml() {
+        return '<hierarchy><node resource-id="android:id/content" bounds="[0,0][440,1600]" /></hierarchy>';
+      },
+      tap() {},
+      size: () => ({ w: 440, h: 1600 }),
+    };
+    await expect(openPersonaPicker(neverArrives, 300)).rejects.toThrow(/persona_picker_open/);
+  });
+});
