@@ -899,6 +899,23 @@ describe('buildMessage edge cases', () => {
  * logged, and the first symptom is somebody saying messages stopped arriving.
  */
 describe('SHY-0496: reachability counts BOTH identifier stores', () => {
+  /**
+   * Waits for a CONDITION rather than a duration.
+   *
+   * The notification dispatch is fire-and-forget, so the response returns
+   * before it runs. A fixed sleep would be either flaky or slow, and the
+   * SHY-0245 ratchet forbids new ones — rightly: a sleep waits on the clock,
+   * not on the thing being asserted.
+   */
+  const waitUntil = async (predicate, what, timeoutMs = 2000) => {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (predicate()) return true;
+      if (Date.now() > deadline) return false;
+      await new Promise((r) => setImmediate(r));
+    }
+  };
+
   beforeEach(() => {
     // Same setup as the notification-edge-cases block: without a conversation
     // the caller is a participant of, the route answers 403 and never reaches
@@ -940,9 +957,7 @@ describe('SHY-0496: reachability counts BOTH identifier stores', () => {
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-
-    expect(mockSendPushToUser).toHaveBeenCalled();
+    expect(await waitUntil(() => mockSendPushToUser.mock.calls.length > 0, 'the push')).toBe(true);
   });
 
   test('a recipient with neither store is still NOT notified', async () => {
@@ -973,8 +988,14 @@ describe('SHY-0496: reachability counts BOTH identifier stores', () => {
       .post('/api/conversations/conv-1/messages')
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' })
       .expect(200);
-    await new Promise((r) => setTimeout(r, 100));
 
+    // Anchored on a POSITIVE settled state first: the recipient documents were
+    // read, so the notification path actually ran. Asserting the absence
+    // without that would pass trivially, before the dispatch could have
+    // happened at all.
+    expect(await waitUntil(() => mockGetAll.mock.calls.length > 0, 'the recipient read')).toBe(
+      true,
+    );
     expect(mockSendPushToUser).not.toHaveBeenCalled();
   });
 });
