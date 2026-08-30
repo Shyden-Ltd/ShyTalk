@@ -16,8 +16,15 @@ interface PlatformNavCallbacks {
     /** Save the platform push token (FCM on Android, APNs on iOS) for the given user. */
     fun saveFcmToken(userId: String)
 
-    /** Remove the push token for the given user (called on sign-out). */
-    fun removeFcmToken(userId: String)
+    /**
+     * Releases this device's push registration for [userId], on sign-out.
+     *
+     * SHY-0494: `suspend` on purpose. As a plain function every caller fired it
+     * into a scope and moved on, so it raced the navigation that cancelled that
+     * scope AND the auth teardown that revoked its credential. Suspending makes
+     * "await this before signing out" the only way to call it.
+     */
+    suspend fun removeFcmToken(userId: String)
 
     // ── Background services ──
 

@@ -1,5 +1,6 @@
 package com.shyden.shytalk.navigation
 
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,7 +32,7 @@ class PlatformNavCallbacksTest {
             fcmTokensSaved.add(userId)
         }
 
-        override fun removeFcmToken(userId: String) {
+        override suspend fun removeFcmToken(userId: String) {
             fcmTokensRemoved.add(userId)
         }
 
@@ -91,11 +92,14 @@ class PlatformNavCallbacksTest {
     }
 
     @Test
-    fun `removeFcmToken records userId`() {
-        val cb = RecordingCallbacks()
-        cb.removeFcmToken("user-456")
-        assertEquals(listOf("user-456"), cb.fcmTokensRemoved)
-    }
+    fun `removeFcmToken records userId`() =
+        runTest {
+            // SHY-0494 made this suspend so callers must AWAIT the release
+            // instead of firing it into a scope that sign-out then cancels.
+            val cb = RecordingCallbacks()
+            cb.removeFcmToken("user-456")
+            assertEquals(listOf("user-456"), cb.fcmTokensRemoved)
+        }
 
     @Test
     fun `startMessageSyncService sets flag`() {

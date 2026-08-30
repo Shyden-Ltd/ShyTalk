@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.QaContext
+import com.shyden.shytalk.core.push.SignOutCoordinator
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.BiometricAuth
@@ -205,6 +206,10 @@ fun SharedNavGraph(
         // user exactly where they are. iOS proved a caller-supplied lambda
         // cannot be trusted with that — it passed one that navigated away.
         val banSignOutScope = rememberCoroutineScope()
+        // SHY-0494: orders "release the push identifier" before "tear down
+        // auth", with a bounded wait so a dead network cannot trap somebody in
+        // the app. Unit-tested in SignOutCoordinatorTest.
+        val signOutCoordinator = remember { SignOutCoordinator() }
         val signOutAndStay: () -> Unit =
             remember(authRepository, banSignOutScope) {
                 {
@@ -647,13 +652,22 @@ fun SharedNavGraph(
                         },
                         onSignOut = {
                             val signOutUserId = authRepository.currentUserId
-                            if (signOutUserId != null) {
-                                platformCallbacks.removeFcmToken(signOutUserId)
-                            }
-                            platformCallbacks.stopMessageSyncService()
-                            onSignOut()
-                            navController.navigate(Screen.SignIn.route) {
-                                popUpTo(Screen.Main.route) { inclusive = true }
+                            // SHY-0494: released on banSignOutScope, which is
+                            // remembered at the NavGraph level and therefore
+                            // SURVIVES this navigation. The settings screen's own
+                            // scope does not — that is what cancelled the release
+                            // before it could reach the backend.
+                            banSignOutScope.launch {
+                                signOutCoordinator.signOut(
+                                    userId = signOutUserId,
+                                    releaseIdentifier = { platformCallbacks.removeFcmToken(it) },
+                                ) {
+                                    platformCallbacks.stopMessageSyncService()
+                                    onSignOut()
+                                }
+                                navController.navigate(Screen.SignIn.route) {
+                                    popUpTo(Screen.Main.route) { inclusive = true }
+                                }
                             }
                         },
                     ),
