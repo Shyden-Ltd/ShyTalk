@@ -1513,7 +1513,17 @@ async function openPersonaPicker(device, timeoutMs = 8000) {
     // out precisely when the button is ABSENT, which is right for a swallowed
     // tap and wrong for a screen that has not arrived yet.
     try {
-      await waitForId(device, 'persona_picker_open', Math.max(0, deadline - Date.now()));
+      // SHY-0495: advance rather than merely wait. A bare wait is blind to a
+      // modal that arrives AFTER SignIn was reached -- the daily-reward
+      // calendar is a Compose dialog, so it owns its own window and the dump
+      // shows nothing but `android:id/content`. It is date-triggered, which is
+      // why a matrix that was 8/8 on one day failed on another with a 500-coin
+      // reward on screen.
+      //
+      // `reachSignIn` runs the same overlay handlers `advanceUntil` uses, so
+      // the dialog is dismissed instead of stared at, and no handler is
+      // duplicated here.
+      await reachSignIn(device, Math.max(0, deadline - Date.now()));
     } catch (e) {
       last = e;
       // It may have opened on its own while we waited (a queued tap landing).
@@ -3769,7 +3779,6 @@ const J05 = {
   id: 'J05',
   // Reads Firestore COLLECTIONS (and cleans up after itself), which the
   // product API cannot answer. Skipped, loudly, off local (SHY-0488).
-  requiresLocalState: true,
   kind: 'ui',
   title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
   async run(device, reporter, ctx) {
@@ -3779,7 +3788,10 @@ const J05 = {
     let before = 0;
     await reporter.step(device, 'Mint Alice token + read starting coins', async () => {
       token = await getIdToken('adult-power@shytalk.dev');
-      const d = await dbGet(ctx.db, `users/${alice}`);
+      // SHY-0495: through the state reader, which works on BOTH targets --
+      // Firestore on local, the product API on dev. Reading the database
+      // directly is why this journey could only ever run locally.
+      const d = await ctx.state.getUser(alice);
       before = typeof d?.shyCoins === 'number' ? d.shyCoins : 0;
       return `starting shyCoins=${before}`;
     });
@@ -3803,9 +3815,8 @@ const J05 = {
     );
     let credited = before;
     await reporter.step(device, 'DB: Alice shyCoins increased', async () => {
-      credited = await dbWaitField(
-        ctx.db,
-        `users/${alice}`,
+      credited = await ctx.state.waitUserField(
+        alice,
         'shyCoins',
         (v) => typeof v === 'number' && v > before,
         6000,
