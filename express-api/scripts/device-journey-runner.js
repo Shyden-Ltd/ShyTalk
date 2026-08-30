@@ -3401,9 +3401,6 @@ async function resolveStaleJourneyTickets({ ownerId, keepTicketId }) {
 
 const J38 = {
   id: 'J38',
-  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
-  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
-  requiresLocalState: true,
   kind: 'ui',
   title: 'j38 — a second support request is warned about, never refused (SHY-0396)',
   async run(device, reporter, ctx) {
@@ -3430,8 +3427,15 @@ const J38 = {
       // Which account the server bound it to. The device is checked against
       // this below -- a walk that asserts on one account's screen while seeding
       // another account's data proves nothing at all.
-      const doc = await dbGet(ctx.db, `supportTickets/${seededTicketId}`);
-      seededUserId = doc?.userId;
+      // SHY-0495: through the API, so this works on dev too. The by-id read
+      // is admin-or-owner; the runner already holds an admin token.
+      const seeded = await apiCall('GET', `/api/support-tickets/${seededTicketId}`, {
+        token: await getIdToken(ADMIN_PERSONA),
+      });
+      if (seeded.status !== 200) {
+        throw new Error(`could not read the seeded ticket ${seededTicketId}: ${seeded.status}`);
+      }
+      seededUserId = seeded.body?.ticket?.userId;
 
       // Clear what earlier runs left behind, now that the owner is known.
       //
@@ -3635,19 +3639,34 @@ const J38 = {
       // somebody has that many open the length cannot grow -- and an assertion
       // on it reports "the second request was refused" for a request that was
       // raised perfectly. A display cap is not a fact about how many exist.
+      // SHY-0495: listed through the API rather than queried from Firestore.
+      // `?userId=` returns ALL of that person's open tickets -- not the capped
+      // display list -- so the match on her words happens here rather than
+      // needing a message index nobody would want in production.
+      const adminToken = await getIdToken(ADMIN_PERSONA);
+      // Reuses dbWaitQuery by handing it a snapshot-SHAPED result, so the
+      // bounded-poll semantics and the "found nothing within Nms" message are
+      // the same ones every other wait in this file uses.
       const snap = await dbWaitQuery(
-        () =>
-          ctx.db
-            .collection('supportTickets')
-            .where('userId', '==', seededUserId)
-            .where('message', '==', typed)
-            .get(),
+        async () => {
+          const listed = await apiCall(
+            'GET',
+            `/api/support-tickets?userId=${seededUserId}&status=open`,
+            { token: adminToken },
+          );
+          const found =
+            listed.status === 200
+              ? (listed.body?.tickets ?? []).find((t) => t.message === typed)
+              : undefined;
+          return { empty: !found, docs: found ? [found] : [] };
+        },
         { what: 'a ticket carrying the words she typed' },
       ).catch(() => null);
       if (!snap || snap.empty) {
         throw new Error('no ticket carries the words she typed; the request never arrived');
       }
-      const raisedId = snap.docs[0].id;
+      const raised = snap.docs[0];
+      const raisedId = raised.id ?? raised.ticketId;
       if (raisedId === seededTicketId) {
         throw new Error('her words landed on the ticket she already had, not a new one');
       }
@@ -3676,8 +3695,16 @@ const J38 = {
         // Asserted in the DATABASE, not on screen. The confirmation is one
         // sentence and could be shown while the words went nowhere -- which is
         // precisely the failure this journey exists to catch.
-        const doc = await dbGet(ctx.db, `supportTickets/${ticketId}`);
-        const added = (doc?.messages ?? []).map((m) => m.message);
+        // SHY-0495: read through the API so this works on dev. Still the
+        // stored ticket rather than the screen -- the point of the assertion
+        // is that the words actually landed, not that a confirmation appeared.
+        const read = await apiCall('GET', `/api/support-tickets/${ticketId}`, {
+          token: await getIdToken(ADMIN_PERSONA),
+        });
+        if (read.status !== 200) {
+          throw new Error(`could not read ticket ${ticketId}: ${read.status}`);
+        }
+        const added = (read.body?.ticket?.messages ?? []).map((m) => m.message);
         if (!added.includes(followUp)) {
           throw new Error(
             `ticket ${ticketId} carries ${JSON.stringify(added)}; her follow-up is not among them`,
