@@ -681,9 +681,29 @@ router.get('/support-tickets', async (req, res) => {
       });
     }
 
+    const userId = req.query.userId;
+    if (userId !== undefined && (typeof userId !== 'string' || userId.trim() === '')) {
+      return res.status(400).json({ error: 'userId must be a non-empty string' });
+    }
+
     let query = db.collection(COLLECTION);
     if (status) query = query.where('status', '==', status);
-    const tickets = await queryDocs(query.orderBy('createdAt', 'desc').limit(200));
+    if (userId) query = query.where('userId', '==', String(userId));
+
+    // SHY-0495: the ORDER is dropped when filtering by user, on purpose.
+    //
+    // `where('userId') + orderBy('createdAt')` needs a COMPOSITE index, and
+    // supportTickets has none defined -- so it would pass against the emulator
+    // and fail at runtime on dev, which is the worst place to find out.
+    // Multiple equality filters are served from single-field indexes, so the
+    // filtered query needs no new index.
+    //
+    // Nothing is lost: unordered is what "all of this person's tickets" wants.
+    // The unfiltered list keeps its newest-first window, which is what a
+    // triage queue wants.
+    if (!userId) query = query.orderBy('createdAt', 'desc');
+
+    const tickets = await queryDocs(query.limit(200));
 
     res.json({ tickets });
   } catch (err) {

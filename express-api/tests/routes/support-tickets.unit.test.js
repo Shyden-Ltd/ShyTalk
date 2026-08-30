@@ -1014,3 +1014,75 @@ describe('POST /api/support-tickets — the limits are enforced on the SERVER', 
     expect(res.body.error).toMatch(/could not be checked/i);
   });
 });
+
+/**
+ * SHY-0495 — listing ONE user's tickets.
+ *
+ * `GET /api/support-tickets` returns the 200 newest open tickets across
+ * everybody and offers no per-user filter, and `mine/open` is capped at five
+ * with no ordering. Neither can answer "all of this user's open tickets", which
+ * is what a support agent looking at one person needs — and what J12 and J38
+ * need before they can stop reading Firestore directly and run on dev.
+ *
+ * The `userId` path deliberately drops the `orderBy`. `where('userId') +
+ * orderBy('createdAt')` requires a COMPOSITE index, and `supportTickets` has
+ * none defined — so it would work against the emulator and fail at runtime on
+ * dev. Multiple equality filters are served from single-field indexes, so the
+ * filtered query needs no new index at all.
+ */
+describe('SHY-0495: GET /api/support-tickets?userId=', () => {
+  const { db } = require('../../src/utils/firebase');
+
+  const lastChain = () => db.collection.mock.results.at(-1).value;
+
+  test('filters by userId', async () => {
+    mockQueryDocs.mockResolvedValueOnce([{ id: 't1', userId: '50000010' }]);
+    const res = await request(createApp({ admin: true })).get(
+      '/api/support-tickets?userId=50000010',
+    );
+
+    expect(res.status).toBe(200);
+    expect(lastChain().where.mock.calls).toContainEqual(['userId', '==', '50000010']);
+  });
+
+  test('does NOT order when filtering by user, because that needs an index we do not have', async () => {
+    // Pinning the REASON, not the shape. If somebody adds the orderBy back for
+    // tidiness, this query starts failing on dev only — the emulator will not
+    // tell them.
+    mockQueryDocs.mockResolvedValueOnce([]);
+    await request(createApp({ admin: true }))
+      .get('/api/support-tickets?userId=50000010')
+      .expect(200);
+
+    expect(lastChain().orderBy).not.toHaveBeenCalled();
+  });
+
+  test('still orders when NOT filtering by user', async () => {
+    // The unfiltered list keeps its newest-first window; only the filtered
+    // path changes.
+    mockQueryDocs.mockResolvedValueOnce([]);
+    await request(createApp({ admin: true }))
+      .get('/api/support-tickets')
+      .expect(200);
+
+    expect(lastChain().orderBy).toHaveBeenCalledWith('createdAt', 'desc');
+  });
+
+  test('combines with status', async () => {
+    mockQueryDocs.mockResolvedValueOnce([]);
+    await request(createApp({ admin: true }))
+      .get('/api/support-tickets?userId=50000010&status=open')
+      .expect(200);
+
+    const calls = lastChain().where.mock.calls;
+    expect(calls).toContainEqual(['userId', '==', '50000010']);
+    expect(calls).toContainEqual(['status', '==', 'open']);
+  });
+
+  test('is still admin-only', async () => {
+    // A per-user filter makes this endpoint far more useful to somebody
+    // fishing, so the gate matters more than it did.
+    const res = await request(createApp()).get('/api/support-tickets?userId=50000010');
+    expect(res.status).toBe(403);
+  });
+});
