@@ -1112,6 +1112,21 @@ describe('SHY-0495: GET /api/support-tickets/:id', () => {
     expect(res.body.ticket).toMatchObject({ id: 't1', userId: '50000010' });
   });
 
+  test('getDoc is called with a PATH, which is what it takes', async () => {
+    // This is why the first version 500'd on dev while every test passed:
+    // getDoc(path) builds its own db.doc(), and I handed it a
+    // DocumentReference. The suite mocks getDoc, so it never exercised the
+    // real call shape -- a double cannot tell you that you called it wrongly.
+    // Asserting the ARGUMENT is the only thing that can.
+    mockGetDoc.mockResolvedValueOnce({ id: 't1', userId: '50000010' });
+
+    await request(createApp({ admin: true }))
+      .get('/api/support-tickets/t1')
+      .expect(200);
+
+    expect(mockGetDoc).toHaveBeenCalledWith('supportTickets/t1');
+  });
+
   test('the owner can read their own ticket', async () => {
     mockGetDoc.mockResolvedValueOnce({ id: 't1', userId: '10000001', message: 'hello' });
 

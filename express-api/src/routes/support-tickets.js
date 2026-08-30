@@ -564,7 +564,7 @@ router.get('/support-tickets/:id', async (req, res) => {
   try {
     if (requireIdentity(req, res)) return;
 
-    const ticket = await getDoc(db.doc(`${COLLECTION}/${req.params.id}`));
+    const ticket = await getDoc(`${COLLECTION}/${req.params.id}`);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
     const isOwner = String(ticket.userId) === String(req.auth.uniqueId);
