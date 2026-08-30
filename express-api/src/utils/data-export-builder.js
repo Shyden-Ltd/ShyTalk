@@ -39,6 +39,9 @@ const STRIP_FIELDS = [
   'pinLockoutCount',
   'firebaseUid',
   'fcmTokens',
+  // SHY-0496: same secret, second field. A GDPR export goes to the person it
+  // describes, but a device address does not belong in a downloadable file.
+  'fcmInstallationIds',
   'dataExportR2Key',
   'dataExportStatus',
   'dataExportExpiresAt',

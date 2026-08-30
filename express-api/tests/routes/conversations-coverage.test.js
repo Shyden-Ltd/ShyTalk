@@ -886,3 +886,95 @@ describe('buildMessage edge cases', () => {
     });
   });
 });
+
+/**
+ * SHY-0496 — a migrated device must still be considered reachable.
+ *
+ * `shouldNotifyRecipient` asked only `user.fcmTokens?.length`. After SHY-0244 a
+ * migrated device appears ONLY in `fcmInstallationIds`, so that check returned
+ * false for every upgraded user and their DM notifications stopped.
+ *
+ * The failure is silent in the worst way: "should not notify" and "notified
+ * successfully" are indistinguishable downstream. Nothing errors, nothing is
+ * logged, and the first symptom is somebody saying messages stopped arriving.
+ */
+describe('SHY-0496: reachability counts BOTH identifier stores', () => {
+  beforeEach(() => {
+    // Same setup as the notification-edge-cases block: without a conversation
+    // the caller is a participant of, the route answers 403 and never reaches
+    // the reachability check this describe is about.
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        participantIds: ['user-A', 'user-B'],
+        isGroup: false,
+      }),
+    });
+  });
+
+  test('a recipient with only installation IDs is still notified', async () => {
+    let getAllCalls = 0;
+    mockGetAll.mockImplementation((...refs) => {
+      getAllCalls++;
+      if (getAllCalls === 1) {
+        return Promise.resolve(
+          refs.map(() => ({
+            exists: true,
+            id: 'user-B',
+            data: () => ({
+              pmNotificationsEnabled: true,
+              dndEnabled: false,
+              // No fcmTokens at all — this device has migrated.
+              fcmInstallationIds: ['fid-only'],
+              pmNotificationPreview: true,
+            }),
+          })),
+        );
+      }
+      return Promise.resolve(refs.map(() => ({ exists: false })));
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app)
+      .post('/api/conversations/conv-1/messages')
+      .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
+
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockSendPushToUser).toHaveBeenCalled();
+  });
+
+  test('a recipient with neither store is still NOT notified', async () => {
+    // The other direction. Widening the check must not make everybody
+    // "reachable" — a dispatch to nobody is the thing that looks like success.
+    let getAllCalls = 0;
+    mockGetAll.mockImplementation((...refs) => {
+      getAllCalls++;
+      if (getAllCalls === 1) {
+        return Promise.resolve(
+          refs.map(() => ({
+            exists: true,
+            id: 'user-B',
+            data: () => ({
+              pmNotificationsEnabled: true,
+              dndEnabled: false,
+              fcmTokens: [],
+              fcmInstallationIds: [],
+            }),
+          })),
+        );
+      }
+      return Promise.resolve(refs.map(() => ({ exists: false })));
+    });
+
+    const app = createApp('user-A');
+    await request(app)
+      .post('/api/conversations/conv-1/messages')
+      .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' })
+      .expect(200);
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mockSendPushToUser).not.toHaveBeenCalled();
+  });
+});
