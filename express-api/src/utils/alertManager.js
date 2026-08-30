@@ -90,6 +90,24 @@ function createAlertManager(db, messaging) {
           } else if (typeof userData.fcmToken === 'string' && userData.fcmToken) {
             tokens.push(userData.fcmToken);
           }
+          // SHY-0496: installation IDs are addressed by the same send() call,
+          // through `fid` rather than `token`. Gathering only tokens meant an
+          // operational alert never reached a migrated device.
+          const fids = Array.isArray(userData.fcmInstallationIds)
+            ? userData.fcmInstallationIds
+            : [];
+
+          for (const fid of fids) {
+            try {
+              await messaging.send({
+                notification: { title, body: message },
+                fid,
+              });
+            } catch {
+              // Swallowed for the same reason as the token loop below: FCM
+              // delivery is best-effort and must never disrupt alerting.
+            }
+          }
 
           for (const token of tokens) {
             try {

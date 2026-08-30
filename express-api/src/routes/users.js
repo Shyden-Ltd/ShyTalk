@@ -86,6 +86,11 @@ function stripSensitiveFields(user) {
   delete user.hasNewWarning;
   delete user.pinHash;
   delete user.fcmTokens;
+  // SHY-0496: the installation ID replaced the token and is the same kind of
+  // secret -- a device address. Anyone holding one can be sent a notification.
+  // It has to be stripped everywhere the token is, or SHY-0244 quietly undid
+  // this line by introducing a second field beside it.
+  delete user.fcmInstallationIds;
   delete user.firebaseUid;
   delete user.email;
   delete user.dateOfBirth;
@@ -328,6 +333,7 @@ router.post('/users', async (req, res) => {
         followingIds: [],
         followerIds: [],
         fcmTokens: [],
+        fcmInstallationIds: [],
         aliases: {},
         language: language || 'en',
         stalkerCount: 0,

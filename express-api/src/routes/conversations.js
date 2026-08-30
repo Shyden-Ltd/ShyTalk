@@ -124,7 +124,12 @@ function shouldNotifyRecipient(user, settings) {
   if (user.pmNotificationsEnabled === false) return false;
   if (isInDndPeriod(user)) return false;
   if (settings?.isMuted) return false;
-  if (!user.fcmTokens || user.fcmTokens.length === 0) return false;
+  // SHY-0496: a migrated device appears ONLY in fcmInstallationIds. Checking
+  // fcmTokens alone made this return false for every upgraded user, so their
+  // DM notifications stopped -- silently, because "should not notify" is
+  // indistinguishable from "notified successfully" downstream.
+  const reachable = (user.fcmTokens?.length ?? 0) > 0 || (user.fcmInstallationIds?.length ?? 0) > 0;
+  if (!reachable) return false;
   return true;
 }
 

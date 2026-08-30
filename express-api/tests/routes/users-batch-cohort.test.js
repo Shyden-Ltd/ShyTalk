@@ -60,6 +60,7 @@ function seedUser(uniqueId, { cohort = 'adult', ...extra } = {}) {
     email: `user${uniqueId}@example.test`,
     pinHash: 'should-never-be-returned',
     fcmTokens: ['tok-should-never-be-returned'],
+    fcmInstallationIds: ['fid-should-never-be-returned'],
     dateOfBirth: Date.UTC(1990, 0, 1),
     followerIds: [],
     followingIds: [],
@@ -144,6 +145,9 @@ describe('POST /api/users/batch — the follow-list read', () => {
     for (const u of res.body.users) {
       expect(u).not.toHaveProperty('pinHash');
       expect(u).not.toHaveProperty('fcmTokens');
+      // SHY-0496: the installation ID is the same kind of secret as the token
+      // it replaced -- a device address. Anyone holding it can be targeted.
+      expect(u).not.toHaveProperty('fcmInstallationIds');
       expect(u).not.toHaveProperty('email');
       expect(u).not.toHaveProperty('firebaseUid');
       expect(u).not.toHaveProperty('dateOfBirth');

@@ -55,6 +55,7 @@ function seedUser(uniqueId, { cohort = 'adult', name, ...extra } = {}) {
     email: `u${uniqueId}@example.test`,
     pinHash: 'never-returned',
     fcmTokens: ['never-returned'],
+    fcmInstallationIds: ['fid-never-returned'],
     dateOfBirth: Date.UTC(1990, 0, 1),
     blockedUserIds: [],
     cohort,
@@ -126,6 +127,7 @@ describe('GET /api/users/search', () => {
     for (const u of res.body.users) {
       expect(u).not.toHaveProperty('pinHash');
       expect(u).not.toHaveProperty('fcmTokens');
+      expect(u).not.toHaveProperty('fcmInstallationIds');
       expect(u).not.toHaveProperty('email');
       expect(u).not.toHaveProperty('firebaseUid');
       expect(u).not.toHaveProperty('dateOfBirth');
