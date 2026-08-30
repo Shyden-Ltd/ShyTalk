@@ -26,7 +26,7 @@ const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 const { getDoc, queryDocs } = require('../utils/firestore-helpers');
 const { generateId, now } = require('../utils/helpers');
-const { requireAdmin, resolveUniqueId } = require('../middleware/auth');
+const { isLiveAdmin, requireAdmin, resolveUniqueId } = require('../middleware/auth');
 const {
   REPORT_ORIGIN,
   ReportDocumentError,
@@ -545,6 +545,40 @@ router.get('/support-tickets/mine/open', async (req, res) => {
  * Without this the text has nowhere to go and would simply be dropped, which is
  * the worst outcome for somebody who has already had to ask twice.
  */
+// ─── Read one ticket (owner or admin) ───────────────────────────
+
+/**
+ * SHY-0495. There was no by-id read at all: the list is admin-only, `mine/open`
+ * lists the caller's, and PATCH mutates — nothing returned a single ticket. A
+ * support agent opening one, and a person following up on their own, both need
+ * this.
+ *
+ * Declared AFTER `/support-tickets/mine/open` on purpose: `:id` would otherwise
+ * match the literal "mine" and swallow that route.
+ *
+ * Somebody else's ticket answers 404, not 403. A 403 confirms the ticket
+ * exists, and a support ticket can be ABOUT the person reading it, so existence
+ * itself is worth hiding — the same existence-hiding the cohort gate uses.
+ */
+router.get('/support-tickets/:id', async (req, res) => {
+  try {
+    if (requireIdentity(req, res)) return;
+
+    const ticket = await getDoc(db.doc(`${COLLECTION}/${req.params.id}`));
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+    const isOwner = String(ticket.userId) === String(req.auth.uniqueId);
+    if (!isOwner && !(await isLiveAdmin(req.auth.uid))) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    res.json({ ticket });
+  } catch (err) {
+    log.error('support-tickets', 'GET /api/support-tickets/:id failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/support-tickets/:id/messages', writeLimiter, async (req, res) => {
   try {
     if (requireIdentity(req, res)) return;
