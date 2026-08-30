@@ -1,5 +1,6 @@
 package com.shyden.shytalk.navigation
 
+import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.data.repository.BanStatus
 import kotlinx.coroutines.CancellationException
 
@@ -108,6 +109,22 @@ class ColdStartSequencer(
                 hasResolvedUser = state.hasResolvedUser,
             )
 
+        // SHY-0497: the inputs AND the verdict, on one line.
+        //
+        // The app has been seen on Home immediately after a sign-out that
+        // completed cleanly (firebase user=null), and the activity is recreated
+        // at that moment because it declares no configChanges. Which branch
+        // below sends it to Main is the open question, and it cannot be
+        // answered from the outside -- every one of these values is read here
+        // and nowhere else.
+        logD(
+            COLD_START_TAG,
+            "decision: destination=$destination deviceBanned=${bans.deviceBanned} " +
+                "networkBanned=${bans.networkBanned} storedCredential=${state.hasStoredCredential} " +
+                "appLock=${state.isAppLockEnabled} lockRequired=${state.isLockRequired} " +
+                "authenticated=${state.isAuthenticated} resolvedUser=${state.hasResolvedUser}",
+        )
+
         // Anything that is not Main renders no cohort-scoped data, so there is
         // nothing to gate and no token worth refreshing. Returning early keeps
         // a banned start from touching the network at all.
@@ -116,12 +133,14 @@ class ColdStartSequencer(
         // GATE 2 — the cohort claim must be CURRENT before a single
         // cohort-scoped read is issued.
         if (refreshToken()) {
+            logD(COLD_START_TAG, "token refreshed; staying on Main")
             cohortVerified = true
             startCohortScopedReads()
             return Screen.Main
         }
 
         // The refresh failed, and WHY decides everything.
+        logD(COLD_START_TAG, "token refresh FAILED; sessionAlive=${isSessionAlive()}")
         if (!isSessionAlive()) {
             // Firebase dropped the local user, so the refresh token really is
             // expired or revoked. The claim can never be confirmed and the
@@ -136,9 +155,16 @@ class ColdStartSequencer(
         // session alone, and issue nothing: `cohortVerified` stays false, so the
         // graphs hold their cohort-scoped subscription until a later refresh
         // confirms the claim.
+        // SHY-0497 candidate: this is the only path that returns Main without a
+        // live auth confirmation, and it does so on purpose -- signing out on a
+        // transport blip is what turned "rotate the phone in airplane mode"
+        // into "you are logged out".
+        logD(COLD_START_TAG, "refresh failed but session alive; rendering Main unverified")
         return Screen.Main
     }
 }
+
+private const val COLD_START_TAG = "ColdStartSequencer"
 
 /**
  * The outcome of the pre-routing ban check.
