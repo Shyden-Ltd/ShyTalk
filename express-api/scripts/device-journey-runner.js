@@ -1493,7 +1493,33 @@ async function waitForText(device, sub, timeoutMs = 8000) {
  * `persona_picker_list` exists only while the sheet is open
  * (SignInScreen.kt), so it answers the question actually being asked.
  */
-async function openPersonaPicker(device, timeoutMs = 8000) {
+/**
+ * How long `openPersonaPicker` may spend reaching an open picker.
+ *
+ * Sized from arithmetic, not a guess. Clearing a dialog on dev is
+ * dump -> tap -> settle -> dump, and one screen read there costs ~2.2s, so a
+ * single dismissal is ~7s on its own. Two dialogs can queue -- the daily-reward
+ * calendar and the overlay-bubble prompt both appear after sign-in -- and the
+ * picker still has to open afterwards.
+ *
+ * 8000ms was sized for a SETTLED screen where the picker opens in ~500ms. It
+ * left reachSignIn 5.4s: two reads and no dismissal, and J12 failed on dev with
+ * "Display over other apps" showing and a handler for it going unused.
+ */
+const PICKER_OPEN_TIMEOUT_MS = 30000;
+
+// The budget has to fit CLEARING something, not just waiting.
+//
+// SHY-0495: 8000ms was sized for a settled screen, where the picker opens in
+// ~500ms. It cannot absorb a dialog. On dev a single screen read costs ~2.2s,
+// and dismissing one is dump → tap → settle → dump — so an 8s budget left
+// `reachSignIn` 5.4s, which bought two reads and no dismissal. J12 failed with
+// the "Display over other apps" prompt on screen and a handler for it sitting
+// right there, unused for want of time.
+//
+// Same shape as the iPhone sign-out timeout already raised from 12s to 45s in
+// this file: a wait sized against loopback, met with a real network.
+async function openPersonaPicker(device, timeoutMs = PICKER_OPEN_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
   let last;
   // Already open is already done. The retry loop in `signInAs` calls this again
@@ -4535,6 +4561,7 @@ if (require.main === module) {
 // housekeeping script that authenticates differently from the runs it exists
 // to unblock.
 module.exports = {
+  PICKER_OPEN_TIMEOUT_MS,
   // The Android backend, exported so the two journey backends can be compared
   // against each other without a phone (SHY-0446).
   AndroidJourneyDevice: Device,

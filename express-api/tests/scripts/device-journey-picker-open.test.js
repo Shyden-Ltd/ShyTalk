@@ -221,3 +221,36 @@ describe('SHY-0495: a modal covering the SignIn screen', () => {
     await expect(openPersonaPicker(rewardCalendarThenSignIn(), 8000)).resolves.toBeUndefined();
   });
 });
+
+/**
+ * SHY-0495 — the budget must fit CLEARING a dialog, not just waiting.
+ *
+ * An earlier version of this file tried to prove that with a fake phone. It
+ * did not: the double polls in memory, so it finished inside any budget and
+ * passed identically at 8000ms and 30000ms. A test that cannot fail proves
+ * nothing, so it is gone.
+ *
+ * What is actually assertable is the NUMBER and the arithmetic behind it.
+ * Clearing a dialog on dev is dump → tap → settle → dump, and one screen read
+ * there costs ~2.2s — about 7s for a single dismissal. 8000ms left
+ * `reachSignIn` 5.4s, which bought two reads and no dismissal, and J12 failed
+ * with "Display over other apps" on screen and a handler for it going unused.
+ */
+describe('SHY-0495: the picker budget', () => {
+  const { PICKER_OPEN_TIMEOUT_MS } = require('../../scripts/device-journey-runner');
+
+  test('is large enough to clear two queued dialogs and still open the picker', () => {
+    const DEV_SCREEN_READ_MS = 2200;
+    const READS_PER_DISMISSAL = 3; // see, tap, confirm gone
+    const QUEUED_DIALOGS = 2; // daily-reward calendar, overlay-bubble prompt
+    const floor = DEV_SCREEN_READ_MS * READS_PER_DISMISSAL * QUEUED_DIALOGS;
+
+    expect(PICKER_OPEN_TIMEOUT_MS).toBeGreaterThanOrEqual(floor);
+  });
+
+  test('is not so large that a genuinely stuck screen hangs the matrix', () => {
+    // The other direction. A budget nobody bounds turns one broken journey
+    // into a matrix that never finishes.
+    expect(PICKER_OPEN_TIMEOUT_MS).toBeLessThanOrEqual(60000);
+  });
+});
