@@ -1086,3 +1086,61 @@ describe('SHY-0495: GET /api/support-tickets?userId=', () => {
     expect(res.status).toBe(403);
   });
 });
+
+/**
+ * SHY-0495 — reading ONE ticket.
+ *
+ * There was no by-id read at all: `GET /api/support-tickets` lists, `mine/open`
+ * lists the caller's, and `PATCH /:id` mutates — but nothing returns a single
+ * ticket. J38 therefore read `supportTickets/{id}` straight from Firestore to
+ * learn which account the server bound its seeded ticket to, which is why it
+ * could only run locally.
+ *
+ * It is also a gap a real client has: a support agent opening a ticket, and a
+ * person following up on their own, both need exactly this.
+ *
+ * Ownership matters more here than on the list. The list is admin-only; a
+ * by-id read is the natural place for somebody to try another person's id.
+ */
+describe('SHY-0495: GET /api/support-tickets/:id', () => {
+  test('an admin can read any ticket', async () => {
+    mockGetDoc.mockResolvedValueOnce({ id: 't1', userId: '50000010', message: 'hello' });
+
+    const res = await request(createApp({ admin: true })).get('/api/support-tickets/t1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ticket).toMatchObject({ id: 't1', userId: '50000010' });
+  });
+
+  test('the owner can read their own ticket', async () => {
+    mockGetDoc.mockResolvedValueOnce({ id: 't1', userId: '10000001', message: 'hello' });
+
+    const res = await request(createApp({ uniqueId: 10000001 })).get('/api/support-tickets/t1');
+
+    expect(res.status).toBe(200);
+    expect(res.body.ticket).toMatchObject({ id: 't1' });
+  });
+
+  test("somebody else's ticket is 404, not 403", async () => {
+    // The shared beforeEach makes every caller a live admin, which would hide
+    // exactly the case under test.
+    mockIsLiveAdmin.mockResolvedValue(false);
+    // 403 would confirm the ticket exists. A support ticket can be about the
+    // person reading it, so existence itself is worth hiding -- the same
+    // existence-hiding the cohort gate uses.
+    mockGetDoc.mockResolvedValueOnce({ id: 't1', userId: '50000010', message: 'private' });
+
+    const res = await request(createApp({ uniqueId: 10000001 })).get('/api/support-tickets/t1');
+
+    expect(res.status).toBe(404);
+    expect(JSON.stringify(res.body)).not.toContain('private');
+  });
+
+  test('a missing ticket is 404', async () => {
+    mockGetDoc.mockResolvedValueOnce(null);
+
+    const res = await request(createApp({ admin: true })).get('/api/support-tickets/nope');
+
+    expect(res.status).toBe(404);
+  });
+});
