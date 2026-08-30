@@ -1,6 +1,6 @@
 ---
 id: SHY-0491
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-28
 priority: P2
@@ -121,3 +121,32 @@ Not yet proven — which is why this is Draft and P2 rather than a fix.
 One occurrence so far. Filed to be counted rather than fixed on a single
 sighting — if it does not recur across the next few dev runs, it should be
 cancelled rather than chased.
+
+- **2026-08-30 — root cause found, and it is not the sign-out timeout.**
+
+  The story guessed a slow sign-out on dev left the app mid-navigation, which
+  is *half* right — but the defect is that `openPersonaPicker` never waited for
+  the button at all:
+
+  ```js
+  for (let attempt = 1; ; attempt++) {
+    await tapId(device, 'persona_picker_open');   // no wait, ever
+  ```
+
+  `tapId` throws `tap target #persona_picker_open not found on screen` when the
+  control is absent, which is verbatim what J-ALICE reported.
+
+  The retry loop *looks* like it covers this. It does not: after a failed
+  attempt it breaks out **precisely when the button is absent**. That guard is
+  correct for a swallowed tap and wrong for a screen that has not arrived yet,
+  so the one case it needed to survive is the one it exits on.
+
+  **Why dev and never local:** sign-out is a network round trip. On loopback it
+  completes inside the walk's own latency; on dev's real network it does not.
+  The runner already documents this exact race for the iPhone and raised a
+  timeout for it — this is the same race, one screen earlier.
+
+  Fixed by waiting for `persona_picker_open` to exist before each tap, bounded
+  by the same deadline. Reproduced first in a unit test with a phone that is
+  mid-navigation rather than broken; it failed with the production message.
+  Mutation-tested: removing the wait re-fails that test.
