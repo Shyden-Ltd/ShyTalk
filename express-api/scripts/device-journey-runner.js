@@ -3171,9 +3171,6 @@ const J07 = {
 // boundary on the admin endpoints — read-only, no mutations.
 const J12 = {
   id: 'J12',
-  // Reads Firestore COLLECTIONS (and cleans up after itself), which the
-  // product API cannot answer. Skipped, loudly, off local (SHY-0488).
-  requiresLocalState: true,
   // There is no app UI to drive, and now nothing pretending there might be.
   // ReportReviewScreen was registered in both nav graphs while nothing
   // navigated to it anywhere in the repo; SHY-0460 removed it, along with the
@@ -3337,38 +3334,32 @@ function staleJourneyTickets(tickets, { ownerId, keepTicketId }) {
  * A failure here throws. Cleanup that silently does nothing brings the
  * accumulation straight back, with a green report over it.
  */
-async function resolveStaleJourneyTickets(ctx, { ownerId, keepTicketId }) {
-  // Listed straight from Firestore, resolved through the API.
+async function resolveStaleJourneyTickets({ ownerId, keepTicketId }) {
+  // Listed AND resolved through the API (SHY-0495).
   //
-  // That split is deliberate. The API is the authorization layer and every
-  // MUTATION goes through it -- these tickets are closed by the same admin
-  // PATCH a real admin uses. The LIST is a read, and this runner already
-  // reads Firestore directly for every one of its assertions, because a test
-  // wants ground truth rather than the view of the thing it is testing.
+  // This used to read Firestore directly, because no endpoint could express
+  // "all of this user's open tickets": `GET /api/support-tickets` returned the
+  // 200 newest across everybody with no per-user filter, so older leftovers sat
+  // outside the window -- one pass resolved 1 of 8 and the next found none,
+  // since resolving one ticket advances a 200-wide window by one. `mine/open`
+  // could not either, capped at five with no ordering.
   //
-  // It has to be read this way, not from `GET /api/support-tickets`. That
-  // endpoint returns the 200 NEWEST open tickets across EVERYBODY and offers
-  // no per-user filter. Measured against the real database: 320 open, 117 of
-  // them belonging to one other account, so Alice's older leftovers sat
-  // outside the window entirely. One pass resolved 1 of 8 and the next found
-  // none -- because resolving one ticket advances a 200-wide window by one.
-  // Looping cannot fix an endpoint that cannot express the question.
-  //
-  // `mine/open` cannot either: capped at five, no ordering, so Firestore
-  // returns the same five ids for ever. Five hand-raised tickets at the front
-  // would stall the sweep on them permanently.
-  const snap = await ctx.db
-    .collection('supportTickets')
-    .where('userId', '==', ownerId)
-    .where('status', '==', 'open')
-    .get();
-
-  const stale = staleJourneyTickets(
-    snap.docs.map((d) => ({ ...d.data(), id: d.id })),
-    { ownerId, keepTicketId },
-  );
-
+  // The endpoint now takes `userId`, which is what a support agent looking at
+  // one person needs as much as this sweep does. That removed the last direct
+  // read here, so the journey runs on dev instead of being skipped.
   const adminToken = await getIdToken(ADMIN_PERSONA);
+  const listed = await apiCall('GET', `/api/support-tickets?userId=${ownerId}&status=open`, {
+    token: adminToken,
+  });
+  if (listed.status !== 200) {
+    throw new Error(
+      `could not list ${ownerId}'s open tickets: ${listed.status} ${JSON.stringify(listed.body).slice(0, 120)}`,
+    );
+  }
+  const tickets = listed.body?.tickets ?? [];
+
+  const stale = staleJourneyTickets(tickets, { ownerId, keepTicketId });
+
   const resolved = [];
   for (const t of stale) {
     const id = t.id ?? t.ticketId;
@@ -3427,7 +3418,7 @@ const J38 = {
       // Resolved through the ADMIN endpoint, not written to Firestore: a
       // test that reaches around the API stops testing the API. Reads stay
       // direct, because ground truth is what an assertion wants.
-      const swept = await resolveStaleJourneyTickets(ctx, {
+      const swept = await resolveStaleJourneyTickets({
         ownerId: seededUserId,
         keepTicketId: seededTicketId,
       });
