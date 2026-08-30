@@ -3769,7 +3769,6 @@ const J05 = {
   id: 'J05',
   // Reads Firestore COLLECTIONS (and cleans up after itself), which the
   // product API cannot answer. Skipped, loudly, off local (SHY-0488).
-  requiresLocalState: true,
   kind: 'ui',
   title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
   async run(device, reporter, ctx) {
@@ -3779,7 +3778,10 @@ const J05 = {
     let before = 0;
     await reporter.step(device, 'Mint Alice token + read starting coins', async () => {
       token = await getIdToken('adult-power@shytalk.dev');
-      const d = await dbGet(ctx.db, `users/${alice}`);
+      // SHY-0495: through the state reader, which works on BOTH targets --
+      // Firestore on local, the product API on dev. Reading the database
+      // directly is why this journey could only ever run locally.
+      const d = await ctx.state.getUser(alice);
       before = typeof d?.shyCoins === 'number' ? d.shyCoins : 0;
       return `starting shyCoins=${before}`;
     });
@@ -3803,9 +3805,8 @@ const J05 = {
     );
     let credited = before;
     await reporter.step(device, 'DB: Alice shyCoins increased', async () => {
-      credited = await dbWaitField(
-        ctx.db,
-        `users/${alice}`,
+      credited = await ctx.state.waitUserField(
+        alice,
         'shyCoins',
         (v) => typeof v === 'number' && v > before,
         6000,
