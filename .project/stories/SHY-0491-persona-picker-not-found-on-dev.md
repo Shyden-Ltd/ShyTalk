@@ -150,3 +150,15 @@ cancelled rather than chased.
   by the same deadline. Reproduced first in a unit test with a phone that is
   mid-navigation rather than broken; it failed with the production message.
   Mutation-tested: removing the wait re-fails that test.
+
+- **2026-08-30 — DEVICE-PROVEN on dev.** J-ALICE's `Pick persona
+  adult-power@shytalk.dev` step, which failed on every previous dev run with
+  `tap target #persona_picker_open not found on screen`, **passed**.
+
+  The run also shows the trigger plainly: `Reach SignIn (for
+  adult-power@shytalk.dev) ... ✓ (60.4s)`. Sixty seconds for a sign-out is
+  exactly the window in which the old code tapped a button that was not yet on
+  screen.
+
+  Matrix result: **8/8 on dev** — up from 6/8, then 7/8. First fully green dev
+  run.
