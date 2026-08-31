@@ -413,7 +413,7 @@ dependencies {
     androidTestImplementation("io.insert-koin:koin-test:4.2.2")
     androidTestImplementation("io.insert-koin:koin-test-junit4:4.2.2")
     androidTestImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation("androidx.navigation:navigation-testing:2.9.8")
+    androidTestImplementation("androidx.navigation:navigation-testing:2.10.0")
     androidTestImplementation(libs.allure.kotlin.android)
     androidTestImplementation(libs.allure.kotlin.junit4)
     androidTestImplementation(libs.cucumber.android)
