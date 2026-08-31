@@ -404,7 +404,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     // Provides real org.json.JSONObject impl (the Android SDK version is a stub in JVM unit tests)
-    testImplementation("org.json:json:20260522")
+    testImplementation("org.json:json:20260814")
     testImplementation("com.squareup.okhttp3:okhttp:5.4.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
