@@ -7,7 +7,7 @@ coreKtx = "1.19.0"
 lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 appcompat = "1.7.1"
-navigationCompose = "2.9.8"
+navigationCompose = "2.10.0"
 #
 # 34.15.0 pulls firebase-messaging 25.1.0, which deprecates getToken(),
 # deleteToken() and onNewToken() together in favour of V1 Installation-ID
