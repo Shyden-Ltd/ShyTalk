@@ -272,7 +272,8 @@ router.get('/users/:uniqueId/data-export/download', async (req, res) => {
       'Content-Disposition',
       `attachment; filename="shytalk-data-export-${uniqueId}.zip"`,
     );
-    r2Obj.Body.pipe(res);
+    // SHY-0501: a cancelled zip download must not leak its storage socket.
+    r2.pipeToResponse(r2Obj.Body, res);
   } catch (err) {
     log.error('data-export', 'Failed to download export', {
       error: err.message,
