@@ -63,28 +63,47 @@ class RemoteImageFallbackGuardTest {
     private val plainRemoteImage = Regex("""^\s*RemoteImage\($""")
 
     /**
-     * Whether the branch opened at [ifLine] has an `else`.
+     * Whether the branch opened at [ifLine] is paired with a plain
+     * [RemoteImage] while its other side draws something chosen.
      *
-     * This is what separates the defect from its look-alike. The defect is
-     * "you chose what to draw when the URL is empty and left the FAILED case
-     * generic" — it needs a chosen alternative to be inconsistent WITH.
+     * Three shapes, because the twelve sites used three and a rule covering
+     * only one is a rule that protects a third of them. A mutation test found
+     * this: reverting [UserAvatar] left an earlier version of this guard
+     * perfectly green, because [UserAvatar] used the guard-clause form and the
+     * rule only knew about `if/else`.
      *
+     * What is NOT an offender: a url branch with no alternative at all.
      * `PrivateMessageBubble` asks
-     * `if (type == STICKER && !stickerUrl.isNullOrEmpty())` with no else: an
-     * absent sticker URL means the message is not a sticker, not that something
-     * else should be drawn. Flagging it would be asking for a fallback that
-     * should not exist.
+     * `if (type == STICKER && !stickerUrl.isNullOrEmpty())` with no else and no
+     * return — an absent sticker URL means the message is not a sticker, not
+     * that something else should be drawn. The defect needs a chosen
+     * alternative for the failed case to be inconsistent WITH.
      */
-    private fun hasElseBranch(
+    private fun pairedWithRemoteImage(
         lines: List<String>,
         ifLine: Int,
     ): Boolean {
         val indent = lines[ifLine].takeWhile { it == ' ' }
-        for (i in ifLine + 1 until lines.size) {
-            if (lines[i] == "$indent} else {") return true
-            if (lines[i] == "$indent}") return false
+        val close =
+            (ifLine + 1 until lines.size).firstOrNull {
+                lines[it] == "$indent}" || lines[it] == "$indent} else {"
+            } ?: return false
+        val thenOpensImage = plainRemoteImage.containsMatchIn(lines[ifLine + 1])
+
+        if (lines[close] == "$indent} else {") {
+            // Shapes 1 and 2: the image is on exactly one side, the chosen
+            // fallback on the other. Which side it is does not matter.
+            val elseOpensImage =
+                close + 1 < lines.size && plainRemoteImage.containsMatchIn(lines[close + 1])
+            return thenOpensImage != elseOpensImage
         }
-        return false
+
+        // Shape 3, the guard clause: draw the fallback, return, and the image
+        // follows the branch rather than sitting inside an else.
+        val returnsEarly = (ifLine + 1 until close).any { lines[it].trim() == "return" }
+        val next =
+            (close + 1 until lines.size).firstOrNull { lines[it].isNotBlank() } ?: return false
+        return !thenOpensImage && returnsEarly && plainRemoteImage.containsMatchIn(lines[next])
     }
 
     private fun kotlinSources() =
@@ -150,20 +169,56 @@ class RemoteImageFallbackGuardTest {
         assertTrue(urlBranch.containsMatchIn(tappableCover[0]))
         assertTrue(!plainRemoteImage.containsMatchIn(tappableCover[1]))
 
-        // And a url branch with NO else is not this defect either: there is no
-        // chosen alternative for the failed case to be inconsistent with.
+        // And a url branch with NO alternative is not this defect either.
         val stickerOrNothing =
             listOf(
                 "        if (message.type == STICKER && !message.stickerUrl.isNullOrEmpty()) {",
                 "            RemoteImage(",
                 "            )",
                 "        }",
+                "        val next = 1",
             )
         assertTrue(urlBranch.containsMatchIn(stickerOrNothing[0]))
-        assertTrue(plainRemoteImage.containsMatchIn(stickerOrNothing[1]))
-        assertTrue("a branch with no else must not be flagged", !hasElseBranch(stickerOrNothing, 0))
-        // RemoteImageWithFallback is the fix, never the offence.
-        assertTrue(!plainRemoteImage.containsMatchIn("        RemoteImageWithFallback("))
+        assertTrue(
+            "a branch with no alternative must not be flagged",
+            !pairedWithRemoteImage(stickerOrNothing, 0),
+        )
+    }
+
+    @Test
+    fun `all three shapes the twelve sites used are recognised`() {
+        // A rule that knew only if-else passed while UserAvatar was reverted.
+        val ifElse =
+            listOf(
+                "    if (gift.iconUrl.isNotBlank()) {",
+                "        RemoteImage(",
+                "        )",
+                "    } else {",
+                "        InitialsCircle()",
+                "    }",
+            )
+        val elseFirst =
+            listOf(
+                "    if (photoUrl == null) {",
+                "        AvatarFallback()",
+                "    } else {",
+                "        RemoteImage(",
+                "        )",
+                "    }",
+            )
+        val guardClause =
+            listOf(
+                "    if (photoUrl.isNullOrBlank()) {",
+                "        AvatarFallback()",
+                "        return",
+                "    }",
+                "    RemoteImage(",
+                "    )",
+            )
+        listOf("if-else" to ifElse, "else-first" to elseFirst, "guard-clause" to guardClause)
+            .forEach { (name, shape) ->
+                assertTrue("$name shape not recognised", pairedWithRemoteImage(shape, 0))
+            }
     }
 
     @Test
@@ -192,8 +247,7 @@ class RemoteImageFallbackGuardTest {
                         .filter { i ->
                             urlBranch.containsMatchIn(lines[i]) &&
                                 i + 1 < lines.size &&
-                                plainRemoteImage.containsMatchIn(lines[i + 1]) &&
-                                hasElseBranch(lines, i)
+                                pairedWithRemoteImage(lines, i)
                         }.map { "${file.relativeTo(repoRoot).path}:${it + 1}" }
                 }.sorted()
 
