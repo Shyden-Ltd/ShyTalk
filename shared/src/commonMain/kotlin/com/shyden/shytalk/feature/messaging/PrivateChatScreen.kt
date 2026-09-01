@@ -981,11 +981,16 @@ fun PrivateChatScreen(
             onDismissRequest = { showImageViewer = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            FullscreenImageViewer(
-                imageUrls = urls,
-                initialIndex = idx,
-                onDismiss = { showImageViewer = null },
-            )
+            // SHY-0462: `Dialog` takes no `modifier`, and FullscreenImageViewer
+            // does not accept one either, so the semantics go on a wrapper. The
+            // dialog is full-bleed, so a Box around it changes no layout.
+            Box(modifier = Modifier.exposeTestTagsToPlatformDumps()) {
+                FullscreenImageViewer(
+                    imageUrls = urls,
+                    initialIndex = idx,
+                    onDismiss = { showImageViewer = null },
+                )
+            }
         }
     }
 

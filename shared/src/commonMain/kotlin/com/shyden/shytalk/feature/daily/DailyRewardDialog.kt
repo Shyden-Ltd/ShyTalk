@@ -414,7 +414,7 @@ fun DailyRewardCelebrationDialog(
             Text(
                 text = "\uD83C\uDF89",
                 fontSize = 40.sp,
-                modifier = Modifier.graphicsLayer(scaleX = scale, scaleY = scale),
+                modifier = Modifier.exposeTestTagsToPlatformDumps().graphicsLayer(scaleX = scale, scaleY = scale),
             )
         },
         title = {

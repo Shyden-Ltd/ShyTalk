@@ -362,6 +362,9 @@ fun RoomScreen(
     // Show kicked dialog
     if (uiState.wasKicked) {
         AlertDialog(
+            // SHY-0462: own Compose window; tags inside are invisible
+            // to uiautomator without this.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = {},
             title = { Text(stringResource(Res.string.removed_from_room)) },
             text = {

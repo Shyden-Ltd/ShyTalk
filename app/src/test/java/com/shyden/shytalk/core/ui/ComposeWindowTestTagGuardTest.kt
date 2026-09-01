@@ -36,10 +36,19 @@ class ComposeWindowTestTagGuardTest {
     private val windowOpeners =
         Regex("""\b(AlertDialog|ModalBottomSheet|DropdownMenu|Popup|Dialog)\s*\(""")
 
+    private val exposureCalls = Regex("""exposeTestTagsToPlatformDumps\s*\(""")
+
     private fun kotlinSources() =
         roots.flatMap { root ->
-            if (!root.isDirectory) emptyList() else root.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+            if (!root.isDirectory) {
+                emptyList()
+            } else {
+                root.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+            }
         }
+
+    /** Source lines with imports removed — an import is a mention, not a call. */
+    private fun body(src: String) = src.lines().filterNot { it.trimStart().startsWith("import ") }
 
     @Test
     fun `the scan actually reaches the source tree`() {
@@ -61,18 +70,30 @@ class ComposeWindowTestTagGuardTest {
             kotlinSources()
                 .filter { file ->
                     val src = file.readText()
-                    windowOpeners.containsMatchIn(src) &&
-                        src.contains("testTag(") &&
-                        !src.contains("exposeTestTagsToPlatformDumps")
+                    if (!src.contains("testTag(")) return@filter false
+
+                    // Counts CALLS, one per window — not mentions.
+                    //
+                    // The first version of this test asked
+                    // `src.contains("exposeTestTagsToPlatformDumps")`, and the
+                    // IMPORT LINE satisfies that on its own. A file that imported
+                    // the helper and never called it passed. Mutation testing is
+                    // what found it: removing the modifier from HomeScreen left
+                    // this guard green.
+                    val lines = body(src)
+                    val windows = lines.sumOf { windowOpeners.findAll(it).count() }
+                    val exposures = lines.sumOf { exposureCalls.findAll(it).count() }
+                    windows > 0 && exposures < windows
                 }.map { it.relativeTo(repoRoot).path }
                 .sorted()
 
         assertTrue(
-            "These files open a Compose window and tag controls inside it, but never call " +
-                "Modifier.exposeTestTagsToPlatformDumps(). Every testTag in them is invisible to " +
-                "uiautomator, so a device journey sees `android:id/content` and nothing else — " +
-                "the controls are on screen and the tree says the window is empty.\n" +
-                "Apply the modifier to the window's root content:\n" +
+            "These files open a Compose window and tag controls inside it, but do not call " +
+                "Modifier.exposeTestTagsToPlatformDumps() once per window. Every testTag in an " +
+                "unexposed window is invisible to uiautomator, so a device journey sees " +
+                "`android:id/content` and nothing else — the controls are on screen and the tree " +
+                "says the window is empty.\n" +
+                "Apply the modifier to each window (or, for `Dialog`, to its content root):\n" +
                 offenders.joinToString("\n") { "  $it" },
             offenders.isEmpty(),
         )
