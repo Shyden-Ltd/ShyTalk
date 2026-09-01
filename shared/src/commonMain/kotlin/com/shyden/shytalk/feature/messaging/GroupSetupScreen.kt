@@ -60,10 +60,11 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
@@ -131,7 +132,7 @@ fun GroupSetupScreen(
                         },
             ) {
                 if (uiState.groupPhotoBytes != null) {
-                    AsyncImage(
+                    RemoteImage(
                         model = uiState.groupPhotoBytes,
                         contentDescription = stringResource(Res.string.group),
                         modifier = Modifier.fillMaxSize(),
@@ -248,30 +249,12 @@ fun GroupSetupScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val photoUrl = user.photoUrl
-                    if (photoUrl != null) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = user.displayName,
-                            modifier =
-                                Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.padding(8.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
+                    UserAvatar(
+                        photoUrl = photoUrl,
+                        displayName = user.displayName,
+                        size = 40.dp,
+                        iconPadding = 8.dp,
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = user.displayName,

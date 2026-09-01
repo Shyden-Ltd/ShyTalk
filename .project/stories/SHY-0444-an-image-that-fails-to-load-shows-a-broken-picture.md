@@ -1,6 +1,6 @@
 ---
 id: SHY-0444
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-23
 priority: P2
@@ -170,3 +170,27 @@ is what a real person on a train sees.
   call sites is a real piece of work, and landing it unreviewed beside five
   unrelated fixes, immediately before a device run, would make both harder to
   judge.
+## Notes (running log)
+
+- **2026-09-01** — Fixed as a class, not a screen.
+
+  The 41 call sites turned out to be remarkably uniform — `model`,
+  `contentDescription`, `modifier`, `contentScale`, and one `alpha`. Nothing
+  passed `error`, `placeholder` or `fallback`. That made a drop-in wrapper
+  possible, so the migration is a rename rather than 41 bespoke edits: **25
+  files, every call site**.
+
+  `RemoteImage` defaults to a quiet surface tint filling the image bounds —
+  deliberately reading as "nothing here yet" rather than as an error, and the
+  same painter for loading and failure, because a distinct loading treatment
+  that flashes on every fast load is worse than none. A caller with something
+  better passes `error`.
+
+  A guard keeps call site 42 from going back to the raw one, and it anchors its
+  own exemption: if `RemoteImage.kt` is renamed or stops calling `AsyncImage`,
+  the guard fails rather than silently protecting nothing.
+
+  **Still owed:** passing the gift wall's initials circle as `error`, so its
+  failed-load and blank-URL states match exactly — the specific thing the
+  operator saw. The generic quiet state is already a large improvement on a
+  broken-image glyph, but it is not yet the designed one for that screen.

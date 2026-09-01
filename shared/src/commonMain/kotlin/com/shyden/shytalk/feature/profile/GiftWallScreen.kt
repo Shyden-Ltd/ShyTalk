@@ -42,8 +42,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -215,7 +215,7 @@ private fun GiftWallItem(
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (gift.iconUrl.isNotBlank()) {
-                AsyncImage(
+                RemoteImage(
                     model = gift.iconUrl,
                     contentDescription = gift.name,
                     modifier =

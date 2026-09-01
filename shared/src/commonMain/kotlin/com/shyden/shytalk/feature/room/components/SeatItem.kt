@@ -51,11 +51,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
@@ -192,7 +192,7 @@ fun SeatItem(
                 ) {
                     val photoUrl = user?.photoUrl
                     if (seat.state == SeatState.OCCUPIED && photoUrl != null) {
-                        AsyncImage(
+                        RemoteImage(
                             model = photoUrl,
                             contentDescription = user.displayName,
                             modifier =

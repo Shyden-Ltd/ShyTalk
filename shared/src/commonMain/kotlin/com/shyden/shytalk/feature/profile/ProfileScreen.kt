@@ -42,7 +42,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Star
@@ -90,14 +89,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.platform.PlatformImagePicker
 import com.shyden.shytalk.core.platform.PlatformProfilePhotoPicker
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.CohortGatedFeature
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.calculateAge
@@ -430,7 +430,7 @@ fun ProfileScreen(
                         .clickable { fullscreenPhotoUrl = null },
                 contentAlignment = Alignment.Center,
             ) {
-                AsyncImage(
+                RemoteImage(
                     model = url,
                     contentDescription = stringResource(Res.string.full_screen_photo),
                     modifier = Modifier.fillMaxWidth(),
@@ -643,7 +643,7 @@ private fun ProfileContent(
                         ),
             ) {
                 if (coverUrl != null) {
-                    AsyncImage(
+                    RemoteImage(
                         model = coverUrl,
                         contentDescription = stringResource(Res.string.cover_photo),
                         modifier = Modifier.fillMaxSize(),
@@ -813,37 +813,12 @@ private fun ProfileContent(
                             ),
                 ) {
                     val photoUrl = user.photoUrl
-                    if (photoUrl != null) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = stringResource(Res.string.profile_photo),
-                            modifier =
-                                Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape)
-                                    .then(
-                                        if (!uiState.isEditing && activeRoomId == null) {
-                                            Modifier.clickable { onTapPhoto(photoUrl) }
-                                        } else {
-                                            Modifier
-                                        },
-                                    ),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(100.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = stringResource(Res.string.profile_photo),
-                                modifier = Modifier.padding(24.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
+                    UserAvatar(
+                        photoUrl = photoUrl,
+                        displayName = stringResource(Res.string.profile_photo),
+                        size = 100.dp,
+                        iconPadding = 24.dp,
+                    )
 
                     // Voice room indicator overlay
                     if (activeRoomId != null) {
@@ -1414,7 +1389,7 @@ private fun BackpackItemCell(
     ) {
         Box(contentAlignment = Alignment.TopEnd) {
             if (gift.iconUrl.isNotBlank()) {
-                AsyncImage(
+                RemoteImage(
                     model = gift.iconUrl,
                     contentDescription = gift.name,
                     modifier =

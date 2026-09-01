@@ -32,9 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftEvent
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.play_effect
 import org.jetbrains.compose.resources.stringResource
@@ -82,7 +82,7 @@ fun GiftPreviewPopup(
             ) {
                 // Large gift icon
                 if (gift.iconUrl.isNotBlank()) {
-                    AsyncImage(
+                    RemoteImage(
                         model = gift.iconUrl,
                         contentDescription = gift.name,
                         modifier =

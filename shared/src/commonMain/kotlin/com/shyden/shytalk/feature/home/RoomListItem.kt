@@ -27,11 +27,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -124,7 +124,7 @@ fun RoomListItem(
                         contentAlignment = Alignment.Center,
                     ) {
                         if (photoUrl != null) {
-                            AsyncImage(
+                            RemoteImage(
                                 model = photoUrl,
                                 contentDescription = user.displayName,
                                 modifier = Modifier.fillMaxSize(),

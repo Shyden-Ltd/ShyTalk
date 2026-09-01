@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RemoveCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -30,7 +28,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -44,17 +41,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -328,30 +323,12 @@ private fun MembersTab(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val photoUrl = user.photoUrl
-                    if (photoUrl != null) {
-                        AsyncImage(
-                            model = photoUrl,
-                            contentDescription = user.displayName,
-                            modifier =
-                                Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.padding(8.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
+                    UserAvatar(
+                        photoUrl = photoUrl,
+                        displayName = user.displayName,
+                        size = 40.dp,
+                        iconPadding = 8.dp,
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

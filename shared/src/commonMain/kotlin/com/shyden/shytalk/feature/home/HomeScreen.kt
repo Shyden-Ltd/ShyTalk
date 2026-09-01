@@ -32,12 +32,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.push.PushPermissionState
 import com.shyden.shytalk.core.push.PushPermissionStore
 import com.shyden.shytalk.core.ui.PushPermissionDeniedBanner
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -109,7 +109,7 @@ fun RoomListContent(
                                     key = banner.id,
                                     onClick = { onBannerAction(banner) },
                                     content = {
-                                        AsyncImage(
+                                        RemoteImage(
                                             model = banner.imageUrl,
                                             contentDescription = banner.title,
                                             modifier =

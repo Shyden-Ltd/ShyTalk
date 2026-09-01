@@ -34,8 +34,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.platform.PlatformSettingsService
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.police_duck
 import com.shyden.shytalk.resources.starting_screen_dismiss
@@ -86,7 +86,7 @@ fun StartingScreenComposable(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (backgroundImagePath != null) {
-                AsyncImage(
+                RemoteImage(
                     model = backgroundImagePath,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),

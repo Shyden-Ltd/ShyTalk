@@ -22,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -41,15 +40,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -117,35 +114,12 @@ fun UserCardPopup(
             // --- Avatar ---
             Box {
                 val photoUrl = user.photoUrl
-                if (photoUrl != null) {
-                    AsyncImage(
-                        model = photoUrl,
-                        contentDescription = user.displayName,
-                        modifier =
-                            Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .border(
-                                    3.dp,
-                                    MaterialTheme.colorScheme.primary,
-                                    CircleShape,
-                                ),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
-                    Surface(
-                        modifier = Modifier.size(100.dp),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                    ) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = user.displayName,
-                            modifier = Modifier.padding(20.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        )
-                    }
-                }
+                UserAvatar(
+                    photoUrl = photoUrl,
+                    displayName = user.displayName,
+                    size = 100.dp,
+                    iconPadding = 20.dp,
+                )
 
                 if (user.nationality != null) {
                     FlagBadge(

@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -56,20 +55,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.ui.ReportMessageDialog
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
@@ -258,30 +255,12 @@ fun PrivateChatScreen(
                         ) {
                             // Avatar
                             val photoUrl = otherUser?.photoUrl
-                            if (photoUrl != null) {
-                                AsyncImage(
-                                    model = photoUrl,
-                                    contentDescription = otherUser.displayName,
-                                    modifier =
-                                        Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape),
-                                    contentScale = ContentScale.Crop,
-                                )
-                            } else {
-                                Surface(
-                                    modifier = Modifier.size(36.dp),
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                ) {
-                                    Icon(
-                                        Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.padding(8.dp),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    )
-                                }
-                            }
+                            UserAvatar(
+                                photoUrl = photoUrl,
+                                displayName = otherUser?.displayName,
+                                size = 36.dp,
+                                iconPadding = 8.dp,
+                            )
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 val resolvedName =
