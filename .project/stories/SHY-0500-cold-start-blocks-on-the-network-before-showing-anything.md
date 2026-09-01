@@ -1,6 +1,6 @@
 ---
 id: SHY-0500
-status: Draft
+status: In Review
 owner: claude
 created: 2026-09-01
 priority: P1
@@ -168,3 +168,11 @@ it does not — and it is currently answered after the same two round trips.
 - Filed 2026-09-01 from the operator's direct report. SHY-0143 is Done and
   claimed this; the launch path shows it is not delivered, which is why this is
   filed as a defect against the epic rather than as new scope.
+- 2026-09-01 — **Android delivered.** `immediateDestination()` does no I/O and is drawn at once; `confirm()` runs behind it and returns Stay or Redirect. The gate ORDER is unchanged — bans resolve before the session is touched, and the cohort claim is refreshed before any cohort-scoped read, so the SHY-0132/0137 boundary does not move. What changed is when the person sees something, not what is enforced.
+- 2026-09-01 — **Operator decision on the one trade-off:** the room-list shell is drawn before the ban verdict returns. It carries none of the person's data because `cohortVerified` still gates every read, so a banned device sees an empty shell for the length of one ban round trip and is then ejected. Chosen over blocking, 2026-09-01, against EPIC-0004's original "no room-list shell flashes first" wording.
+- 2026-09-01 — **A dead session now says so.** `SESSION_EXPIRED` reaches the sign-in screen as *"Your session has ended. Please sign in again."* rather than depositing somebody there with no explanation. An OFFLINE device is untouched — a transport failure is not a sign-out.
+- 2026-09-01 — Two source pins caught real things while this was written: a second `startCohortScopedReads` call site, and the sequencer no longer consuming the shared resolver. Both fixed properly rather than by relaxing the pin — `run()` now delegates to the new pair, and bans are mapped by `resolveColdStartDestination` so "a ban beats every other input" still has one definition.
+- 2026-09-01 — **OWED: iOS.** `MainViewController` still calls `run()`, which delegates to the same pair and is therefore correct, but does not get the instant draw. Device proof is owed on both phones.
+- 2026-09-01 — Gate: `:app:testDevDebugUnitTest` 2271/0, `:shared:jvmTest` 1756/0, `compileKotlinIosArm64` green, `detekt` + `ktlintCheck` clean. 12 new tests assert both halves — that the immediate decision touches nothing, and that the confirmation still enforces every gate.
+
+Reviewed-up-to: afd502187d7
