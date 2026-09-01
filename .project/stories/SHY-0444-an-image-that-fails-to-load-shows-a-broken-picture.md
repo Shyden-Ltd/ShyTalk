@@ -63,15 +63,15 @@ is what a real person on a train sees.
 
 ### Happy path
 
-- [ ] An image that loads renders exactly as it does today.
+- [x] An image that loads renders exactly as it does today.
 
 ### Error paths
 
-- [ ] An image that FAILS to load renders the same considered placeholder as an
+- [x] An image that FAILS to load renders the same considered placeholder as an
       image that was never there.
-- [ ] A gift whose icon fails to load shows its initials circle, identical to a
+- [x] A gift whose icon fails to load shows its initials circle, identical to a
       gift with no icon at all.
-- [ ] No screen shows a broken-picture glyph, an empty gap where art belongs,
+- [x] No screen shows a broken-picture glyph, an empty gap where art belongs,
       or a stretched default.
 
 ### Edge cases
@@ -82,33 +82,37 @@ is what a real person on a train sees.
       image.
 - [ ] Holds when object storage is down but the API is up — the local stack's
       normal half-configured state, and a real production partial outage.
-- [ ] A slow load shows the placeholder rather than a blank box, and swaps to
+- [x] A slow load shows the placeholder rather than a blank box, and swaps to
       the image when it arrives.
 
 ### Performance
 
-- [ ] No extra network work. The placeholder is drawn, not fetched.
+- [x] No extra network work. The placeholder is drawn, not fetched.
 
 ### Security
 
-- [ ] No change.
+- [x] No change.
 
 ### UX
 
-- [ ] Placeholders are on-brand and consistent, not a per-screen invention. A
+- [x] Placeholders are on-brand and consistent, not a per-screen invention. A
       person should not be able to tell which engineer wrote which screen.
-- [ ] The placeholder carries the same `contentDescription` as the image it
+- [x] The placeholder carries the same `contentDescription` as the image it
       stands in for, so a screen reader is not left with nothing.
 
 ### i18n
 
-- [ ] Any placeholder that carries text uses translated copy in all five MVP
+- [x] Any placeholder that carries text uses translated copy in all five MVP
       locales.
 
 ### Observability
 
 - [ ] Image load failures are counted, so we learn whether real people hit this
-      and on which surfaces. We currently cannot tell.
+      and on which surfaces. We currently cannot tell. **NOT met — moved to
+      SHY-0498.** The mobile clients have no path to the server at all:
+      `logW`/`logE` reach logcat and NSLog, and `POST /api/logs` is used only
+      by the web client. Meeting this means building that pipeline, with a cap
+      so an outage cannot spend the day's log quota on image failures.
 
 ## BDD Scenarios
 
@@ -194,3 +198,11 @@ is what a real person on a train sees.
   failed-load and blank-URL states match exactly — the specific thing the
   operator saw. The generic quiet state is already a large improvement on a
   broken-image glyph, but it is not yet the designed one for that screen.
+- 2026-09-01 — **The other half.** The first PR (#2122) shipped `RemoteImage` and stopped every screen falling through to Coil's broken-image state. It did **not** do what three documents said it did: `RemoteImage`'s KDoc, `UserAvatar`'s KDoc and `RemoteImageGuardTest`'s own failure message all stated the gift wall passed its initials circle as `error`. None was true. Three documents asserting a behaviour is not a test of it.
+- 2026-09-01 — **Twelve screens** answered "there is no picture" with something considered and left "the picture did not arrive" to the generic tint. `RemoteImageWithFallback` composes the screen's own fallback UNDERNEATH and makes the image transparent whenever it has nothing to show, so empty URL, dead URL, outage and slow connection reveal the same thing and cannot drift — there is only one of them. Swept: UserAvatar, GiftWallScreen, GiftPreviewPopup, ProfileScreen (x2), BackpackSheet (x2), MessageBubble (x2), LuckySpinOverlay (x2), LuckySpinSummaryPopup, RoomListItem, SeatItem.
+- 2026-09-01 — **The guard found more than the sweep did.** By hand: seven. By shape: twelve. And a mutation — reverting `UserAvatar` — showed the first guard was green while covering only one of the three shapes in use; it now covers if/else, else-first and the guard-clause form, each pinned literally. Two look-alikes are excluded and also pinned: a branch deciding whether a cover is *tappable*, and `PrivateMessageBubble`'s sticker branch, which has no alternative at all.
+- 2026-09-01 — **Observability is NOT met and is not ticked.** Filed as SHY-0498. The mobile clients have no route to the server: `logW`/`logE` write to logcat and NSLog, and `POST /api/logs` is used only by `public/js/logger.js`. It also carries a real trap — an outage would spend the client's daily log quota on image failures — so it needs designing, not appending.
+- 2026-09-01 — **Device verification deferred**, and the four runtime edge criteria stay unticked accordingly: offline from launch, connection dropping mid-load, a 404 or an HTML response, and object storage down. The iPhone leg is blocked on a Settings toggle no CLI can set.
+- 2026-09-01 — Gate: `:app:testDevDebugUnitTest` 2271/0, `:shared:jvmTest` 1744/0, `:app:compileDevDebugAndroidTestKotlin` green, `:shared:compileKotlinIosArm64` green, `detekt` + `ktlintCheck` clean.
+
+Reviewed-up-to: f9ae093de88
