@@ -73,17 +73,11 @@ function getEffective() {
 }
 
 function getWheelCount() {
-  return getEffective().filter(
-    (g) => g.coinValue > 0 && g.showOnWheel !== false,
-  ).length;
+  return getEffective().filter((g) => g.coinValue > 0 && g.showOnWheel !== false).length;
 }
 
 function getChangeCount() {
-  return (
-    Object.keys(pendingEdits).length +
-    pendingDeletes.size +
-    pendingAdds.length
-  );
+  return Object.keys(pendingEdits).length + pendingDeletes.size + pendingAdds.length;
 }
 
 function updatePendingUI() {
@@ -98,10 +92,7 @@ function updatePendingUI() {
   const effective = getEffective();
   const wheelEl = $('#wheel-count');
   wheelEl.textContent = `(${wheelCount}/16 on wheel)`;
-  wheelEl.style.color =
-    wheelCount === 16
-      ? 'var(--success, #4caf50)'
-      : 'var(--danger, #f44336)';
+  wheelEl.style.color = wheelCount === 16 ? 'var(--success, #4caf50)' : 'var(--danger, #f44336)';
   wheelEl.style.fontWeight = wheelCount === 16 ? 'normal' : 'bold';
   wheelEl.title = `Gacha wheel has 16 slots. Currently ${wheelCount} qualifying.`;
   $('#gifts-count').textContent = `${effective.length} gifts`;
@@ -143,23 +134,16 @@ function renderTable() {
           const field = inp.dataset.field;
           let newVal;
           if (inp.type === 'checkbox') newVal = inp.checked;
-          else if (inp.type === 'number')
-            newVal = Number(inp.value) || 0;
+          else if (inp.type === 'number') newVal = Number(inp.value) || 0;
           else newVal = inp.value;
           let origVal = gift[field];
           if (origVal === undefined || origVal === null) {
-            origVal =
-              inp.type === 'checkbox'
-                ? true
-                : inp.type === 'number'
-                  ? 0
-                  : '';
+            origVal = inp.type === 'checkbox' ? true : inp.type === 'number' ? 0 : '';
           }
           if (!pendingEdits[gift.id]) pendingEdits[gift.id] = {};
           if (newVal === origVal) {
             delete pendingEdits[gift.id][field];
-            if (Object.keys(pendingEdits[gift.id]).length === 0)
-              delete pendingEdits[gift.id];
+            if (Object.keys(pendingEdits[gift.id]).length === 0) delete pendingEdits[gift.id];
           } else {
             pendingEdits[gift.id][field] = newVal;
           }
@@ -194,8 +178,7 @@ function renderTable() {
       const handler = () => {
         const field = inp.dataset.field;
         if (inp.type === 'checkbox') add[field] = inp.checked;
-        else if (inp.type === 'number')
-          add[field] = Number(inp.value) || 0;
+        else if (inp.type === 'number') add[field] = Number(inp.value) || 0;
         else add[field] = inp.value;
         updatePendingUI();
       };
@@ -220,9 +203,7 @@ function renderTable() {
   }
   for (const btn of tbody.querySelectorAll('.gift-remove-btn')) {
     btn.addEventListener('click', () => {
-      pendingAdds = pendingAdds.filter(
-        (a) => a.tempId !== btn.dataset.tempId,
-      );
+      pendingAdds = pendingAdds.filter((a) => a.tempId !== btn.dataset.tempId);
       renderTable();
     });
   }
@@ -286,12 +267,7 @@ function showConfirmation() {
         .map(([field, newVal]) => {
           let origVal = orig[field];
           if (origVal === undefined || origVal === null) {
-            origVal =
-              typeof newVal === 'boolean'
-                ? true
-                : typeof newVal === 'number'
-                  ? 0
-                  : '';
+            origVal = typeof newVal === 'boolean' ? true : typeof newVal === 'number' ? 0 : '';
           }
           return `${field}: ${origVal}\u2192${newVal}`;
         })
@@ -336,19 +312,11 @@ async function applyChanges() {
       await apiCall('DELETE', `/api/gifts/${giftId}`);
     }
 
-    showToast(
-      `${getChangeCount()} changes applied successfully`,
-      'success',
-    );
+    showToast(`${getChangeCount()} changes applied successfully`, 'success');
     $('#gift-confirm-overlay').classList.remove('visible');
     load();
   } catch (err) {
-    showToast(
-      'Apply failed: ' +
-        err.message +
-        ' \u2014 pending changes kept for retry',
-      'error',
-    );
+    showToast('Apply failed: ' + err.message + ' \u2014 pending changes kept for retry', 'error');
   } finally {
     submitBtn.disabled = false;
     cancelBtn.disabled = false;

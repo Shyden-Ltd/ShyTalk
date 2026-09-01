@@ -41,8 +41,7 @@ function isoToLocal(iso) {
 function showListLoader(listEl, label) {
   listEl.textContent = '';
   const wrapper = document.createElement('div');
-  wrapper.style.cssText =
-    'text-align:center;padding:32px;color:var(--text2);';
+  wrapper.style.cssText = 'text-align:center;padding:32px;color:var(--text2);';
   const spinner = document.createElement('div');
   spinner.style.cssText =
     'display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;';
@@ -74,18 +73,12 @@ export function init() {
   actionType.addEventListener('change', onActionTypeChange);
   fileInput.addEventListener('change', onFileChange);
 
-  document
-    .getElementById('banner-add-btn')
-    .addEventListener('click', () => openDialog(null));
-  document
-    .getElementById('banner-dialog-cancel')
-    .addEventListener('click', closeDialog);
+  document.getElementById('banner-add-btn').addEventListener('click', () => openDialog(null));
+  document.getElementById('banner-dialog-cancel').addEventListener('click', closeDialog);
   dialogOverlay.addEventListener('click', (e) => {
     if (e.target === dialogOverlay) closeDialog();
   });
-  document
-    .getElementById('banner-dialog-save')
-    .addEventListener('click', saveDialog);
+  document.getElementById('banner-dialog-save').addEventListener('click', saveDialog);
 }
 
 export function activate() {
@@ -136,10 +129,7 @@ function onFileChange() {
 }
 
 async function loadBanners() {
-  showListLoader(
-    document.getElementById('banners-list'),
-    'Loading banners...',
-  );
+  showListLoader(document.getElementById('banners-list'), 'Loading banners...');
   try {
     const raw = await apiCall('GET', '/api/admin/banners');
     bannersData = raw.map((b) => ({
@@ -164,10 +154,8 @@ function renderList() {
   if (bannersData.length === 0) {
     list.textContent = '';
     const p = document.createElement('p');
-    p.style.cssText =
-      'color:var(--text2);text-align:center;padding:32px;';
-    p.textContent =
-      'No banners yet. Click "+ Add Banner" to create one.';
+    p.style.cssText = 'color:var(--text2);text-align:center;padding:32px;';
+    p.textContent = 'No banners yet. Click "+ Add Banner" to create one.';
     list.appendChild(p);
     return;
   }
@@ -196,24 +184,21 @@ function renderList() {
     const img = document.createElement('img');
     img.src = sanitizeImageUrl(b.image_url);
     img.alt = '';
-    img.style.cssText =
-      'width:120px;height:68px;object-fit:cover;border-radius:6px;flex-shrink:0;';
+    img.style.cssText = 'width:120px;height:68px;object-fit:cover;border-radius:6px;flex-shrink:0;';
     card.appendChild(img);
 
     const info = document.createElement('div');
     info.style.cssText = 'flex:1;min-width:0;';
 
     const titleRow = document.createElement('div');
-    titleRow.style.cssText =
-      'display:flex;align-items:center;gap:8px;margin-bottom:4px;';
+    titleRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:4px;';
     const titleEl = document.createElement('strong');
     titleEl.style.fontSize = '14px';
     titleEl.textContent = b.title || '(No title)';
     titleRow.appendChild(titleEl);
 
     const badge = document.createElement('span');
-    badge.style.cssText =
-      'padding:2px 8px;border-radius:4px;font-size:11px;color:#fff;';
+    badge.style.cssText = 'padding:2px 8px;border-radius:4px;font-size:11px;color:#fff;';
     if (!b.is_active) {
       badge.style.background = 'var(--danger)';
       badge.textContent = 'Inactive';
@@ -245,18 +230,11 @@ function renderList() {
     info.appendChild(actionLine);
 
     const scheduleParts = [];
-    if (b.start_date)
-      scheduleParts.push(
-        'From: ' + new Date(b.start_date).toLocaleString(),
-      );
-    if (b.end_date)
-      scheduleParts.push(
-        'Until: ' + new Date(b.end_date).toLocaleString(),
-      );
+    if (b.start_date) scheduleParts.push('From: ' + new Date(b.start_date).toLocaleString());
+    if (b.end_date) scheduleParts.push('Until: ' + new Date(b.end_date).toLocaleString());
     if (scheduleParts.length) {
       const schedLine = document.createElement('div');
-      schedLine.style.cssText =
-        'font-size:11px;color:var(--text2);margin-top:2px;';
+      schedLine.style.cssText = 'font-size:11px;color:var(--text2);margin-top:2px;';
       schedLine.textContent = scheduleParts.join(' \u2014 ');
       info.appendChild(schedLine);
     }
@@ -314,9 +292,7 @@ function setupDragAndDrop() {
     });
     card.addEventListener('dragend', () => {
       card.style.opacity = '1';
-      document
-        .querySelectorAll('.banner-card')
-        .forEach((c) => (c.style.borderTop = ''));
+      document.querySelectorAll('.banner-card').forEach((c) => (c.style.borderTop = ''));
     });
     card.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -364,9 +340,7 @@ function openDialog(banner) {
   } else {
     actionValueInput.value = banner?.action_value || '';
   }
-  startDate.value = banner?.start_date
-    ? isoToLocal(banner.start_date)
-    : '';
+  startDate.value = banner?.start_date ? isoToLocal(banner.start_date) : '';
   endDate.value = banner?.end_date ? isoToLocal(banner.end_date) : '';
   activeCheck.checked = banner ? !!banner.is_active : true;
   fileInput.value = '';
@@ -399,11 +373,7 @@ async function saveDialog() {
     if (fileInput.files.length > 0) {
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
-      const uploadResult = await apiCall(
-        'POST',
-        '/api/admin/banners/upload',
-        formData,
-      );
+      const uploadResult = await apiCall('POST', '/api/admin/banners/upload', formData);
       imageUrl = uploadResult.imageUrl || uploadResult.image_url;
     }
 
@@ -414,32 +384,20 @@ async function saveDialog() {
 
     const at = actionType.value;
     const av =
-      at === 'SCREEN'
-        ? screenSelect.value
-        : at === 'NONE'
-          ? null
-          : actionValueInput.value || null;
+      at === 'SCREEN' ? screenSelect.value : at === 'NONE' ? null : actionValueInput.value || null;
 
     const payload = {
       title: titleInput.value || null,
       image_url: imageUrl,
       action_type: at,
       action_value: av,
-      start_date: startDate.value
-        ? new Date(startDate.value).getTime()
-        : null,
-      end_date: endDate.value
-        ? new Date(endDate.value).getTime()
-        : null,
+      start_date: startDate.value ? new Date(startDate.value).getTime() : null,
+      end_date: endDate.value ? new Date(endDate.value).getTime() : null,
       is_active: activeCheck.checked,
     };
 
     if (editingBannerId) {
-      await apiCall(
-        'PUT',
-        `/api/admin/banners/${editingBannerId}`,
-        payload,
-      );
+      await apiCall('PUT', `/api/admin/banners/${editingBannerId}`, payload);
       showToast('Banner updated');
     } else {
       await apiCall('POST', '/api/admin/banners', payload);

@@ -31,23 +31,19 @@ export function init() {
     }
   });
 
-  document
-    .getElementById('add-screen-btn')
-    .addEventListener('click', addScreen);
+  document.getElementById('add-screen-btn').addEventListener('click', addScreen);
 
-  document
-    .getElementById('deleted-screens-header')
-    .addEventListener('click', () => {
-      const list = document.getElementById('deleted-screens-list');
-      const arrow = document.getElementById('deleted-screens-arrow');
-      if (list.style.display === 'none') {
-        list.style.display = 'block';
-        arrow.style.transform = 'rotate(90deg)';
-      } else {
-        list.style.display = 'none';
-        arrow.style.transform = 'rotate(0deg)';
-      }
-    });
+  document.getElementById('deleted-screens-header').addEventListener('click', () => {
+    const list = document.getElementById('deleted-screens-list');
+    const arrow = document.getElementById('deleted-screens-arrow');
+    if (list.style.display === 'none') {
+      list.style.display = 'block';
+      arrow.style.transform = 'rotate(90deg)';
+    } else {
+      list.style.display = 'none';
+      arrow.style.transform = 'rotate(0deg)';
+    }
+  });
 }
 
 export function activate() {
@@ -142,7 +138,8 @@ function updatePreview(card) {
     content.appendChild(overlayEl);
   }
   const inner = document.createElement('div');
-  inner.style.cssText = 'position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px;width:100%;';
+  inner.style.cssText =
+    'position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px;width:100%;';
 
   const appIcon = document.createElement('img');
   appIcon.src = 'assets/app-icon.webp';
@@ -174,7 +171,8 @@ function updatePreview(card) {
 
   if (dismissable) {
     const btn = document.createElement('button');
-    btn.style.cssText = 'margin-top:12px;padding:8px 24px;border-radius:8px;background:#007AFF;color:white;border:none;font-size:13px;';
+    btn.style.cssText =
+      'margin-top:12px;padding:8px 24px;border-radius:8px;background:#007AFF;color:white;border:none;font-size:13px;';
     btn.textContent = 'Continue';
     inner.appendChild(btn);
   }
@@ -184,9 +182,7 @@ function updatePreview(card) {
 
 async function uploadBackgroundImage(card, file) {
   const formArea = card.querySelector('.screen-card-form');
-  const inputs = formArea.querySelectorAll(
-    'input, select, textarea, button',
-  );
+  const inputs = formArea.querySelectorAll('input, select, textarea, button');
   for (const inp of inputs) inp.disabled = true;
   const overlay = document.createElement('div');
   overlay.className = 'upload-overlay';
@@ -237,10 +233,7 @@ function setupDeviceSearchPicker(card) {
     resultsDiv.innerHTML =
       '<div style="padding:10px;color:var(--text2);font-size:13px;">Searching...</div>';
     try {
-      const result = await apiCall(
-        'GET',
-        '/api/admin/devices?q=' + encodeURIComponent(q),
-      );
+      const result = await apiCall('GET', '/api/admin/devices?q=' + encodeURIComponent(q));
       const devList = Array.isArray(result)
         ? result
         : result && result.devices
@@ -309,9 +302,9 @@ function setupNetworkPicker(card) {
 }
 
 function getDeviceIdsFromChips(card) {
-  return Array.from(
-    card.querySelectorAll('.allowlist-device-chips .allowlist-chip'),
-  ).map((c) => c.getAttribute('data-value'));
+  return Array.from(card.querySelectorAll('.allowlist-device-chips .allowlist-chip')).map((c) =>
+    c.getAttribute('data-value'),
+  );
 }
 
 function addDeviceChip(card, deviceId) {
@@ -390,12 +383,7 @@ function renderAllowlistChips(card) {
 
 // ── Screen Card Rendering ──────────────────────────────────────────
 
-function renderScreenCard(
-  screenId,
-  screen,
-  enabledNonDismissableIds,
-  isLocal,
-) {
+function renderScreenCard(screenId, screen, enabledNonDismissableIds, isLocal) {
   const card = document.createElement('div');
   card.className = 'screen-card';
   card.setAttribute('data-screen-id', screenId);
@@ -403,27 +391,21 @@ function renderScreenCard(
   const startDateLocal = screen.startDate
     ? new Date(screen.startDate).toISOString().slice(0, 16)
     : '';
-  const endDateLocal = screen.endDate
-    ? new Date(screen.endDate).toISOString().slice(0, 16)
-    : '';
+  const endDateLocal = screen.endDate ? new Date(screen.endDate).toISOString().slice(0, 16) : '';
   const lastModifiedBy = screen.lastModifiedBy || 'unknown';
   const lastModifiedAt = screen.lastModifiedAt
     ? new Date(screen.lastModifiedAt).toLocaleString()
     : 'unknown';
   const bgFit = screen.backgroundImageFit || 'cover';
-  const otherNonDismissable = enabledNonDismissableIds.filter(
-    (id) => id !== screenId,
-  );
-  const dismissableDisabled =
-    otherNonDismissable.length > 0 && screen.enabled;
+  const otherNonDismissable = enabledNonDismissableIds.filter((id) => id !== screenId);
+  const dismissableDisabled = otherNonDismissable.length > 0 && screen.enabled;
   const dismissableTooltip = dismissableDisabled
     ? 'Another enabled screen is already non-dismissable'
     : '';
   const statusBadge = getStatusBadge(screen);
   const inputStyle =
     'width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:inherit;';
-  const labelStyle =
-    'display:block;margin-bottom:4px;font-size:13px;color:var(--text2);';
+  const labelStyle = 'display:block;margin-bottom:4px;font-size:13px;color:var(--text2);';
   const checkboxLabelStyle =
     'display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text);cursor:pointer;';
   const frequencyOnce = screen.frequency === 'once';
@@ -505,8 +487,7 @@ function renderScreenCard(
 
   // Background image upload
   card.querySelector('.bg-image-file').addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0])
-      uploadBackgroundImage(card, e.target.files[0]);
+    if (e.target.files && e.target.files[0]) uploadBackgroundImage(card, e.target.files[0]);
   });
 
   // Remove background image
@@ -532,12 +513,8 @@ function renderScreenCard(
   renderAllowlistChips(card);
 
   // Save/Delete
-  card
-    .querySelector('.save-screen-btn')
-    .addEventListener('click', () => saveScreen(screenId));
-  card
-    .querySelector('.delete-screen-btn')
-    .addEventListener('click', () => deleteScreen(screenId));
+  card.querySelector('.save-screen-btn').addEventListener('click', () => saveScreen(screenId));
+  card.querySelector('.delete-screen-btn').addEventListener('click', () => deleteScreen(screenId));
 
   updatePreview(card);
   return card;
@@ -572,9 +549,7 @@ function buildScreenCardHtml(
     '<div><label style="' +
     checkboxLabelStyle +
     '" ' +
-    (dismissableTooltip
-      ? 'title="' + escapeHtml(dismissableTooltip) + '"'
-      : '') +
+    (dismissableTooltip ? 'title="' + escapeHtml(dismissableTooltip) + '"' : '') +
     '><input type="checkbox" class="dismissable-toggle" ' +
     (screen.dismissable ? 'checked' : '') +
     (dismissableDisabled ? ' disabled' : '') +
@@ -618,9 +593,7 @@ function buildScreenCardHtml(
     '">Image Type</label><select class="image-type-select" style="' +
     inputStyle +
     '"><option value="none"' +
-    (!screen.imageType || screen.imageType === 'none'
-      ? ' selected'
-      : '') +
+    (!screen.imageType || screen.imageType === 'none' ? ' selected' : '') +
     '>None</option><option value="police_duck"' +
     (screen.imageType === 'police_duck' ? ' selected' : '') +
     '>Police Duck</option></select></div>' +
@@ -639,14 +612,14 @@ function buildScreenCardHtml(
     // `src=""`. escapeHtml alone prevents HTML injection but doesn't
     // reject `javascript:` schemes; reusing the existing helper keeps
     // the URL-sanitization contract centralized.
-    ((() => {
+    (() => {
       const safe = sanitizeImageUrl(screen.backgroundImage);
       return safe
         ? '<img src="' +
-          escapeHtml(safe) +
-          '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />'
+            escapeHtml(safe) +
+            '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />'
         : '';
-    })()) +
+    })() +
     '</div>' +
     '<div><label style="' +
     labelStyle +
@@ -690,9 +663,7 @@ function buildScreenCardHtml(
     inputStyle +
     'resize:vertical;font-family:monospace;font-size:12px;display:none;">' +
     escapeHtml(
-      screen.allowlist && screen.allowlist.deviceIds
-        ? screen.allowlist.deviceIds.join('\n')
-        : '',
+      screen.allowlist && screen.allowlist.deviceIds ? screen.allowlist.deviceIds.join('\n') : '',
     ) +
     '</textarea>' +
     '</div>' +
@@ -707,9 +678,7 @@ function buildScreenCardHtml(
     inputStyle +
     'resize:vertical;font-family:monospace;font-size:12px;display:none;">' +
     escapeHtml(
-      screen.allowlist && screen.allowlist.networks
-        ? screen.allowlist.networks.join('\n')
-        : '',
+      screen.allowlist && screen.allowlist.networks ? screen.allowlist.networks.join('\n') : '',
     ) +
     '</textarea>' +
     '</div>' +
@@ -735,12 +704,9 @@ function renderDeletedScreenCard(screenId, screen) {
   card.className = 'screen-card deleted-screen-card';
   card.setAttribute('data-screen-id', screenId);
   card.setAttribute('data-deleted', 'true');
-  const deletedAt = screen.deletedAt
-    ? new Date(screen.deletedAt).toLocaleString()
-    : 'unknown';
+  const deletedAt = screen.deletedAt ? new Date(screen.deletedAt).toLocaleString() : 'unknown';
   const deletedBy = screen.deletedBy || 'unknown';
-  card.style.cssText =
-    'opacity:0.55;filter:grayscale(0.6);pointer-events:auto;';
+  card.style.cssText = 'opacity:0.55;filter:grayscale(0.6);pointer-events:auto;';
   card.innerHTML = `
     <div style="padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
@@ -758,58 +724,40 @@ function renderDeletedScreenCard(screenId, screen) {
       </div>
     </div>`;
 
-  card
-    .querySelector('.restore-screen-btn')
-    .addEventListener('click', async function () {
-      if (this.disabled) return;
-      this.disabled = true;
-      try {
-        await apiCall(
-          'POST',
-          '/api/config/startingScreens/' +
-            encodeURIComponent(screenId) +
-            '/restore',
-        );
-        showToast('Screen restored');
-        load();
-      } catch (err) {
-        showToast('Failed to restore: ' + err.message, 'error');
-      } finally {
-        this.disabled = false;
-      }
-    });
+  card.querySelector('.restore-screen-btn').addEventListener('click', async function () {
+    if (this.disabled) return;
+    this.disabled = true;
+    try {
+      await apiCall(
+        'POST',
+        '/api/config/startingScreens/' + encodeURIComponent(screenId) + '/restore',
+      );
+      showToast('Screen restored');
+      load();
+    } catch (err) {
+      showToast('Failed to restore: ' + err.message, 'error');
+    } finally {
+      this.disabled = false;
+    }
+  });
 
-  card
-    .querySelector('.permanent-delete-btn')
-    .addEventListener('click', async function () {
-      if (this.disabled) return;
-      if (
-        !confirm(
-          'Permanently delete screen "' +
-            screenId +
-            '"? This cannot be undone.',
-        )
-      )
-        return;
-      this.disabled = true;
-      try {
-        await apiCall(
-          'DELETE',
-          '/api/config/startingScreens/' +
-            encodeURIComponent(screenId) +
-            '?permanent=true',
-        );
-        showToast('Screen permanently deleted');
-        load();
-      } catch (err) {
-        showToast(
-          'Failed to permanently delete: ' + err.message,
-          'error',
-        );
-      } finally {
-        this.disabled = false;
-      }
-    });
+  card.querySelector('.permanent-delete-btn').addEventListener('click', async function () {
+    if (this.disabled) return;
+    if (!confirm('Permanently delete screen "' + screenId + '"? This cannot be undone.')) return;
+    this.disabled = true;
+    try {
+      await apiCall(
+        'DELETE',
+        '/api/config/startingScreens/' + encodeURIComponent(screenId) + '?permanent=true',
+      );
+      showToast('Screen permanently deleted');
+      load();
+    } catch (err) {
+      showToast('Failed to permanently delete: ' + err.message, 'error');
+    } finally {
+      this.disabled = false;
+    }
+  });
 
   return card;
 }
@@ -818,15 +766,9 @@ function renderDeletedScreenCard(screenId, screen) {
 
 function renderScreenCards(data) {
   screensList.innerHTML = '';
-  const deletedScreensList = document.getElementById(
-    'deleted-screens-list',
-  );
-  const deletedScreensSection = document.getElementById(
-    'deleted-screens-section',
-  );
-  const deletedScreensTitle = document.getElementById(
-    'deleted-screens-title',
-  );
+  const deletedScreensList = document.getElementById('deleted-screens-list');
+  const deletedScreensSection = document.getElementById('deleted-screens-section');
+  const deletedScreensTitle = document.getElementById('deleted-screens-title');
   deletedScreensList.innerHTML = '';
 
   const activeScreens = {};
@@ -843,26 +785,18 @@ function renderScreenCards(data) {
   }
 
   for (const sid in activeScreens) {
-    renderScreenCard(
-      sid,
-      activeScreens[sid],
-      enabledNonDismissableIds,
-      false,
-    );
+    renderScreenCard(sid, activeScreens[sid], enabledNonDismissableIds, false);
   }
 
   const deletedCount = Object.keys(deletedScreens).length;
   if (deletedCount > 0) {
     deletedScreensSection.style.display = 'block';
-    deletedScreensTitle.textContent =
-      'Deleted Screens (' + deletedCount + ')';
+    deletedScreensTitle.textContent = 'Deleted Screens (' + deletedCount + ')';
     deletedScreensList.style.display = 'block';
     const arrow = document.getElementById('deleted-screens-arrow');
     if (arrow) arrow.style.transform = 'rotate(90deg)';
     for (const did in deletedScreens) {
-      deletedScreensList.appendChild(
-        renderDeletedScreenCard(did, deletedScreens[did]),
-      );
+      deletedScreensList.appendChild(renderDeletedScreenCard(did, deletedScreens[did]));
     }
   } else {
     deletedScreensSection.style.display = 'none';
@@ -873,27 +807,17 @@ function renderScreenCards(data) {
 
 async function load() {
   try {
-    const data = await apiCall(
-      'GET',
-      '/api/config/startingScreens/admin',
-    );
-    const activeCount = Object.keys(data).filter(
-      (id) => !data[id].deleted,
-    ).length;
+    const data = await apiCall('GET', '/api/config/startingScreens/admin');
+    const activeCount = Object.keys(data).filter((id) => !data[id].deleted).length;
     emptyEl.style.display = activeCount === 0 ? 'block' : 'none';
     renderScreenCards(data);
   } catch (err) {
-    showToast(
-      'Failed to load starting screens: ' + err.message,
-      'error',
-    );
+    showToast('Failed to load starting screens: ' + err.message, 'error');
   }
 }
 
 async function saveScreen(screenId) {
-  const card = document.querySelector(
-    '[data-screen-id="' + screenId + '"]',
-  );
+  const card = document.querySelector('[data-screen-id="' + screenId + '"]');
   if (!card) return;
 
   const title = card.querySelector('.title-input').value;
@@ -911,9 +835,7 @@ async function saveScreen(screenId) {
   const screenData = {
     enabled: card.querySelector('.enabled-toggle').checked,
     dismissable: card.querySelector('.dismissable-toggle').checked,
-    frequency: card.querySelector('.frequency-select').checked
-      ? 'once'
-      : 'every_launch',
+    frequency: card.querySelector('.frequency-select').checked ? 'once' : 'every_launch',
     template: card.querySelector('.template-select').value,
     title: title,
     message: message,
@@ -921,8 +843,7 @@ async function saveScreen(screenId) {
       card.querySelector('.image-type-select').value === 'none'
         ? null
         : card.querySelector('.image-type-select').value || null,
-    backgroundImage:
-      card.querySelector('.bg-image-key').value || null,
+    backgroundImage: card.querySelector('.bg-image-key').value || null,
     startDate: card.querySelector('.start-date').value
       ? new Date(card.querySelector('.start-date').value).toISOString()
       : null,
@@ -964,11 +885,7 @@ async function saveScreen(screenId) {
 }
 
 function addScreen() {
-  const screenId =
-    'screen-' +
-    Date.now() +
-    '-' +
-    Math.random().toString(36).slice(2, 6);
+  const screenId = 'screen-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
   const localScreen = {
     enabled: false,
     dismissable: true,
@@ -986,52 +903,26 @@ function addScreen() {
     lastModifiedAt: new Date().toISOString(),
   };
   const enabledNonDismissableIds = [];
-  screensList
-    .querySelectorAll('[data-screen-id]')
-    .forEach((c) => {
-      const et = c.querySelector('.enabled-toggle');
-      const dt = c.querySelector('.dismissable-toggle');
-      if (et && et.checked && dt && !dt.checked)
-        enabledNonDismissableIds.push(
-          c.getAttribute('data-screen-id'),
-        );
-    });
-  renderScreenCard(
-    screenId,
-    localScreen,
-    enabledNonDismissableIds,
-    true,
-  );
+  screensList.querySelectorAll('[data-screen-id]').forEach((c) => {
+    const et = c.querySelector('.enabled-toggle');
+    const dt = c.querySelector('.dismissable-toggle');
+    if (et && et.checked && dt && !dt.checked)
+      enabledNonDismissableIds.push(c.getAttribute('data-screen-id'));
+  });
+  renderScreenCard(screenId, localScreen, enabledNonDismissableIds, true);
   emptyEl.style.display = 'none';
   hasUnsavedChanges = true;
-  showToast(
-    'New screen added. Fill in the details and click Save.',
-    'info',
-  );
+  showToast('New screen added. Fill in the details and click Save.', 'info');
 }
 
 async function deleteScreen(screenId) {
-  if (
-    !confirm(
-      'Delete screen "' +
-        screenId +
-        '"? It will be moved to Deleted Screens.',
-    )
-  )
-    return;
+  if (!confirm('Delete screen "' + screenId + '"? It will be moved to Deleted Screens.')) return;
 
-  const card = document.querySelector(
-    '[data-screen-id="' + screenId + '"]',
-  );
-  const deleteBtn = card
-    ? card.querySelector('.delete-screen-btn')
-    : null;
+  const card = document.querySelector('[data-screen-id="' + screenId + '"]');
+  const deleteBtn = card ? card.querySelector('.delete-screen-btn') : null;
   if (deleteBtn) deleteBtn.disabled = true;
   try {
-    await apiCall(
-      'DELETE',
-      '/api/config/startingScreens/' + encodeURIComponent(screenId),
-    );
+    await apiCall('DELETE', '/api/config/startingScreens/' + encodeURIComponent(screenId));
     showToast('Screen moved to deleted');
     hasUnsavedChanges = false;
     load();

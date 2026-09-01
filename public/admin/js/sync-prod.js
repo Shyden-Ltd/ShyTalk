@@ -58,7 +58,10 @@ export function init(deps) {
   document.getElementById('sync-mute').addEventListener('click', () => {
     syncMuted = !syncMuted;
     document.getElementById('sync-mute').textContent = syncMuted ? 'Unmute' : 'Mute';
-    if (syncMuted) { stopSyncBeep(); stopSyncTransfer(); }
+    if (syncMuted) {
+      stopSyncBeep();
+      stopSyncTransfer();
+    }
   });
 
   document.getElementById('sync-proceed').addEventListener('click', handleSyncProceed);
@@ -102,8 +105,14 @@ function startSyncBeep() {
 }
 
 function stopSyncBeep() {
-  if (syncBeepInterval) { clearInterval(syncBeepInterval); syncBeepInterval = null; }
-  if (syncBeepCtx) { syncBeepCtx.close(); syncBeepCtx = null; }
+  if (syncBeepInterval) {
+    clearInterval(syncBeepInterval);
+    syncBeepInterval = null;
+  }
+  if (syncBeepCtx) {
+    syncBeepCtx.close();
+    syncBeepCtx = null;
+  }
 }
 
 // ── Web Audio: data transfer sound (execution phase) ──────────────
@@ -148,10 +157,15 @@ function startSyncTransfer() {
 }
 
 function stopSyncTransfer() {
-  if (syncTransferInterval) { clearInterval(syncTransferInterval); syncTransferInterval = null; }
+  if (syncTransferInterval) {
+    clearInterval(syncTransferInterval);
+    syncTransferInterval = null;
+  }
   if (syncTransferCtx) {
     setTimeout(() => {
-      try { syncTransferCtx.close(); } catch (_) {}
+      try {
+        syncTransferCtx.close();
+      } catch (_) {}
       syncTransferCtx = null;
     }, 200);
   }
@@ -164,9 +178,8 @@ function updateSyncBar(completed, total) {
   document.getElementById('sync-bar-fill').style.width = pct + '%';
   document.getElementById('sync-bar-pct').textContent = pct + '%';
   const labels = ['Syncing...', 'Copying data...', 'Transferring records...', 'Downloading...'];
-  document.getElementById('sync-bar-text').textContent = completed < total
-    ? labels[completed % labels.length]
-    : 'Complete';
+  document.getElementById('sync-bar-text').textContent =
+    completed < total ? labels[completed % labels.length] : 'Complete';
 }
 
 function openSyncOverlay() {
@@ -174,7 +187,8 @@ function openSyncOverlay() {
   const overlay = document.getElementById('sync-overlay');
   document.getElementById('sync-step-label').textContent = 'Step 1 of 3';
   document.getElementById('sync-title').textContent = 'Sync from Production?';
-  document.getElementById('sync-desc').textContent = 'This will wipe ALL dev Firestore data and replace it with a complete copy of production data. Users, rooms, conversations, gifts, economy config, banners, and all subcollections will be overwritten. This cannot be undone.';
+  document.getElementById('sync-desc').textContent =
+    'This will wipe ALL dev Firestore data and replace it with a complete copy of production data. Users, rooms, conversations, gifts, economy config, banners, and all subcollections will be overwritten. This cannot be undone.';
   document.getElementById('sync-input-wrap').style.display = 'none';
   document.getElementById('sync-confirm-input').value = '';
   document.getElementById('sync-btn-row').style.display = 'flex';
@@ -183,7 +197,9 @@ function openSyncOverlay() {
   proceedBtn.disabled = false;
   proceedBtn.style.display = '';
   document.getElementById('sync-progress').classList.remove('visible');
-  for (const el of document.querySelectorAll('#sync-progress .step')) { el.className = 'step'; }
+  for (const el of document.querySelectorAll('#sync-progress .step')) {
+    el.className = 'step';
+  }
   overlay.classList.add('visible');
   startSyncBeep();
 }
@@ -214,13 +230,16 @@ async function handleSyncProceed() {
   // the "this will overwrite everything" warning. Cleared next tick.
   if (syncStepLock) return;
   syncStepLock = true;
-  setTimeout(() => { syncStepLock = false; }, 0);
+  setTimeout(() => {
+    syncStepLock = false;
+  }, 0);
 
   if (syncStep === 1) {
     syncStep = 2;
     document.getElementById('sync-step-label').textContent = 'Step 2 of 3';
     document.getElementById('sync-title').textContent = 'This will overwrite everything';
-    document.getElementById('sync-desc').textContent = 'Every document in dev Firestore will be deleted first, then replaced with production data. All users, rooms, messages, gifts, economy settings, and configurations will be overwritten.';
+    document.getElementById('sync-desc').textContent =
+      'Every document in dev Firestore will be deleted first, then replaced with production data. All users, rooms, messages, gifts, economy settings, and configurations will be overwritten.';
     proceedBtn.textContent = 'Continue to final step';
     return;
   }
@@ -271,7 +290,8 @@ async function executeSyncFromProd() {
   document.getElementById('sync-input-wrap').style.display = 'none';
   document.getElementById('sync-step-label').textContent = 'SYNCING';
   document.getElementById('sync-title').textContent = 'Copying production data';
-  document.getElementById('sync-desc').textContent = 'Do not close this page. This may take a while.';
+  document.getElementById('sync-desc').textContent =
+    'Do not close this page. This may take a while.';
   document.getElementById('sync-progress').classList.add('visible');
   updateSyncBar(0, 4);
 
@@ -297,7 +317,7 @@ async function executeSyncFromProd() {
     const token = await _getToken();
     const resp = await fetch(`${_apiBase}/api/admin/migrate-prod-data`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Migration failed');
@@ -314,7 +334,7 @@ async function executeSyncFromProd() {
     const hasErrors = data.errors && data.errors.length > 0;
     if (hasErrors) {
       for (const e of data.errors) {
-        const phaseMap = { 'delete': 0, 'copy': 2 };
+        const phaseMap = { delete: 0, copy: 2 };
         const idx = (phaseMap[e.phase] || 0) + (e.collection.includes('/') ? 0 : 1);
         if (phases[idx]) {
           document.getElementById(phases[idx].id).className = 'step failed';
@@ -325,9 +345,14 @@ async function executeSyncFromProd() {
     syncExecuting = false;
     overlay.classList.remove('locked');
     stopSyncTransfer();
-    document.getElementById('sync-step-label').textContent = hasErrors ? `Done with ${data.errors.length} error(s)` : 'Complete';
-    document.getElementById('sync-title').textContent = hasErrors ? 'Sync completed with errors' : 'Sync complete!';
-    document.getElementById('sync-desc').textContent = `Deleted ${data.totalDeleted} dev documents, copied ${data.totalCopied} prod documents.`;
+    document.getElementById('sync-step-label').textContent = hasErrors
+      ? `Done with ${data.errors.length} error(s)`
+      : 'Complete';
+    document.getElementById('sync-title').textContent = hasErrors
+      ? 'Sync completed with errors'
+      : 'Sync complete!';
+    document.getElementById('sync-desc').textContent =
+      `Deleted ${data.totalDeleted} dev documents, copied ${data.totalCopied} prod documents.`;
     document.getElementById('sync-btn-row').style.display = 'flex';
     document.getElementById('sync-proceed').style.display = 'none';
     document.getElementById('sync-cancel').textContent = 'Close';

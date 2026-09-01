@@ -64,9 +64,9 @@ export function init(deps) {
   _initialised = true;
 
   // Wire match-question radios
-  document.querySelectorAll('input[name="age-verif-match"]').forEach((r) =>
-    r.addEventListener('change', onMatchChange),
-  );
+  document
+    .querySelectorAll('input[name="age-verif-match"]')
+    .forEach((r) => r.addEventListener('change', onMatchChange));
 
   // Wire decision buttons
   $('age-verif-approve-btn')?.addEventListener('click', onApprove);
@@ -227,7 +227,8 @@ async function onApprove() {
 async function onReject(branch) {
   const id = currentSubmissionId();
   if (!id) return;
-  const reasonEl = branch === 'no' ? $('age-verif-reject-reason-no') : $('age-verif-reject-reason-yes');
+  const reasonEl =
+    branch === 'no' ? $('age-verif-reject-reason-no') : $('age-verif-reject-reason-yes');
   const reason = (reasonEl?.value || '').trim();
   if (!reason) {
     showToast('Rejection reason is required.', 'error');
@@ -263,7 +264,12 @@ async function onModifyDob() {
     showToast('Invalid date.', 'error');
     return;
   }
-  if (!confirm('Update the user\'s DOB to the value above? Their access is unlocked or kept locked automatically.')) return;
+  if (
+    !confirm(
+      "Update the user's DOB to the value above? Their access is unlocked or kept locked automatically.",
+    )
+  )
+    return;
   try {
     await apiCall('POST', `/api/admin/age-verification/${id}/modify-dob`, {
       newDob: newDobMs,

@@ -20,14 +20,18 @@
   // ─── Environment-aware API base ──────────────────────────────
 
   // Use config.js API_BASE if available, otherwise detect from hostname
+  // The single line is load-bearing, not a style choice — see the URL guard in
+  // .husky/pre-commit. Wrapped, the two remote branches read as hardcoded URLs
+  // even though the localhost branch is right above them.
   // eslint-disable-next-line -- localhost fallback is the first branch of the ternary
+  // prettier-ignore
   var API_BASE = (window.PORTAL_CONFIG && window.PORTAL_CONFIG.API_BASE) ? window.PORTAL_CONFIG.API_BASE : (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:3000' : location.hostname.includes('dev') ? 'https://dev-api.shytalk.shyden.co.uk' : 'https://api.shytalk.shyden.co.uk';
 
   // ─── State ───────────────────────────────────────────────────
 
   var auth = null;
   var db = null;
-  var currentProfile = null;    // portal/me response
+  var currentProfile = null; // portal/me response
   var currentUniqueId = null;
   var unsubSnapshot = null;
   var sessionStartTime = Date.now();
@@ -62,8 +66,11 @@
     if (window.ShyTalkLanguage && typeof window.ShyTalkLanguage.get === 'function') {
       return window.ShyTalkLanguage.get();
     }
-    try { return localStorage.getItem('shytalk_language') || 'en'; }
-    catch (_e) { return 'en'; }
+    try {
+      return localStorage.getItem('shytalk_language') || 'en';
+    } catch (_e) {
+      return 'en';
+    }
   }
   function t(key) {
     var T = window.PORTAL_T || {};
@@ -142,7 +149,7 @@
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
+        Authorization: 'Bearer ' + token,
       },
     };
     if (options.body) {
@@ -255,7 +262,9 @@
 
       if (res.status === 403) {
         // TOTP required — check if enrolled or needs enrollment
-        var errorBody = await res.json().catch(function () { return {}; });
+        var errorBody = await res.json().catch(function () {
+          return {};
+        });
         var errorMsg = errorBody.error || '';
 
         if (errorMsg === 'MFA required' || errorMsg === 'Re-verify TOTP') {
@@ -304,7 +313,9 @@
       }
 
       // Check if password user needs TOTP enrollment
-      var providers = (user.providerData || []).map(function (p) { return p.providerId; });
+      var providers = (user.providerData || []).map(function (p) {
+        return p.providerId;
+      });
       var isPasswordUser = providers.indexOf('password') !== -1;
       if (isPasswordUser && currentProfile.totpEnrolled === false) {
         // Needs enrollment — start setup
@@ -324,7 +335,6 @@
       } else {
         handleRoute();
       }
-
     } catch (err) {
       console.error('Auth state handling failed:', err);
       showMessageModal('Error', 'Something went wrong. Please try again.');
@@ -344,7 +354,11 @@
       await auth.signInWithEmailAndPassword(email, password);
     } catch (err) {
       var message = 'Sign-in failed. Please check your credentials.';
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-credential'
+      ) {
         message = 'Invalid email or password.';
       } else if (err.code === 'auth/too-many-requests') {
         message = 'Too many sign-in attempts. Please try again later.';
@@ -374,7 +388,10 @@
       try {
         await auth.signInWithPopup(provider);
       } catch (popupErr) {
-        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
+        if (
+          popupErr.code === 'auth/popup-blocked' ||
+          popupErr.code === 'auth/cancelled-popup-request'
+        ) {
           // Fallback to redirect
           sessionStorage.setItem('portal_target_hash', location.hash.slice(1) || 'dashboard');
           await auth.signInWithRedirect(provider);
@@ -402,7 +419,10 @@
       try {
         await auth.signInWithPopup(provider);
       } catch (popupErr) {
-        if (popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request') {
+        if (
+          popupErr.code === 'auth/popup-blocked' ||
+          popupErr.code === 'auth/cancelled-popup-request'
+        ) {
           sessionStorage.setItem('portal_target_hash', location.hash.slice(1) || 'dashboard');
           await auth.signInWithRedirect(provider);
         } else if (popupErr.code !== 'auth/popup-closed-by-user') {
@@ -451,7 +471,9 @@
       }
 
       if (!res.ok) {
-        var errBody = await res.json().catch(function () { return {}; });
+        var errBody = await res.json().catch(function () {
+          return {};
+        });
         showMessageModal('Error', errBody.error || 'Failed to start TOTP setup.');
         showSection('login-section');
         return;
@@ -481,7 +503,6 @@
       hideError('enroll-error');
       $('enroll-code').value = '';
       $('enroll-code').focus();
-
     } catch (err) {
       console.error('TOTP setup failed:', err);
       showMessageModal('Error', 'Failed to start TOTP setup. Please try again.');
@@ -498,7 +519,9 @@
       });
 
       if (!res.ok) {
-        var errBody = await res.json().catch(function () { return {}; });
+        var errBody = await res.json().catch(function () {
+          return {};
+        });
         showSection('enroll-section');
 
         if (res.status === 429) {
@@ -526,9 +549,11 @@
         // Token refresh might not have propagated yet — sign out and re-login
         await signOut();
         showSection('login-section');
-        showMessageModal('Setup Complete', 'Two-factor authentication enabled. Please sign in again.');
+        showMessageModal(
+          'Setup Complete',
+          'Two-factor authentication enabled. Please sign in again.',
+        );
       }
-
     } catch (err) {
       console.error('TOTP confirm failed:', err);
       showSection('enroll-section');
@@ -553,13 +578,16 @@
       });
 
       if (!res.ok) {
-        var errBody = await res.json().catch(function () { return {}; });
+        var errBody = await res.json().catch(function () {
+          return {};
+        });
         showSection('totp-section');
         totpFailures++;
 
         if (res.status === 401) {
           showError('totp-error', errBody.error || 'Invalid code. Please try again.');
-          var delay = totpFailures >= 3 ? Math.min(5000 * Math.pow(2, totpFailures - 3), 30000) : 5000;
+          var delay =
+            totpFailures >= 3 ? Math.min(5000 * Math.pow(2, totpFailures - 3), 30000) : 5000;
           disableButton($('totp-verify-btn'), delay);
         } else if (res.status === 429) {
           showError('totp-error', 'Too many attempts. Please wait and try again.');
@@ -588,7 +616,6 @@
         showSection('totp-section');
         showError('totp-error', 'Session verification failed. Please try again.');
       }
-
     } catch (err) {
       console.error('TOTP verify failed:', err);
       showSection('totp-section');
@@ -607,7 +634,9 @@
       });
 
       if (!res.ok) {
-        var errBody = await res.json().catch(function () { return {}; });
+        var errBody = await res.json().catch(function () {
+          return {};
+        });
         showError('recovery-error', errBody.error || 'Failed to send recovery code.');
         return;
       }
@@ -622,7 +651,6 @@
         msgEl.hidden = false;
       }
       $('recovery-code').focus();
-
     } catch (err) {
       console.error('Recovery send failed:', err);
       showError('recovery-error', 'Failed to send recovery code. Please try again.');
@@ -637,7 +665,9 @@
         body: JSON.stringify({ email: email, code: code }),
       });
 
-      var body = await res.json().catch(function () { return {}; });
+      var body = await res.json().catch(function () {
+        return {};
+      });
 
       if (!res.ok) {
         if (res.status === 429) {
@@ -649,7 +679,10 @@
       }
 
       // Success — store message and redirect to login
-      sessionStorage.setItem('portal_recovery_success', body.message || 'Authenticator removed. Sign in and set up a new one.');
+      sessionStorage.setItem(
+        'portal_recovery_success',
+        body.message || 'Authenticator removed. Sign in and set up a new one.',
+      );
 
       // Sign out if currently signed in, then go to login
       if (auth && auth.currentUser) {
@@ -660,7 +693,6 @@
       var msg = sessionStorage.getItem('portal_recovery_success');
       sessionStorage.removeItem('portal_recovery_success');
       showMessageModal('Recovery Complete', msg);
-
     } catch (err) {
       console.error('Recovery verify failed:', err);
       showError('recovery-error', 'Something went wrong. Please try again.');
@@ -743,7 +775,8 @@
     if (welcomeEl) {
       // Note: textContent assignment auto-escapes — escapeHtml here is
       // belt-and-braces but not strictly necessary (textContent is safe).
-      welcomeEl.textContent = t('dashboard_welcome') + ', ' + (profile.displayName || t('default_user_name'));
+      welcomeEl.textContent =
+        t('dashboard_welcome') + ', ' + (profile.displayName || t('default_user_name'));
     }
 
     // Panel cards (admin-only panels)
@@ -760,9 +793,9 @@
         adminCard.className = 'dashboard-card';
         adminCard.innerHTML =
           '<div class="dashboard-card-icon" aria-hidden="true">' +
-            '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-              '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
-            '</svg>' +
+          '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>' +
+          '</svg>' +
           '</div>' +
           '<span class="dashboard-card-label">Admin Panel</span>';
         panelsGrid.appendChild(adminCard);
@@ -803,10 +836,10 @@
     var typeEl = $('profile-user-type');
     if (typeEl) {
       var typeMap = {
-        'MEMBER': 'Member',
-        'VIP': 'VIP',
-        'MOD': 'Moderator',
-        'ADMIN': 'Administrator',
+        MEMBER: 'Member',
+        VIP: 'VIP',
+        MOD: 'Moderator',
+        ADMIN: 'Administrator',
       };
       typeEl.textContent = typeMap[profile.userType] || profile.userType || '--';
     }
@@ -816,7 +849,9 @@
     var user = auth.currentUser;
     if (!user) return;
 
-    var providers = (user.providerData || []).map(function (p) { return p.providerId; });
+    var providers = (user.providerData || []).map(function (p) {
+      return p.providerId;
+    });
     var isPasswordUser = providers.indexOf('password') !== -1;
 
     // Password card — only for password users
@@ -852,7 +887,7 @@
     if (providersList) {
       providersList.innerHTML = '';
       var providerNames = {
-        'password': 'Email & Password',
+        password: 'Email & Password',
         'google.com': 'Google',
         'apple.com': 'Apple',
       };
@@ -890,23 +925,32 @@
     cleanupSnapshot();
 
     try {
-      unsubSnapshot = db.doc('users/' + uniqueId).onSnapshot(function (doc) {
-        var data = doc.data();
-        if (data && data.roleChanged) {
-          var roleChangedMs = typeof data.roleChanged.toMillis === 'function'
-            ? data.roleChanged.toMillis()
-            : (data.roleChanged instanceof Date ? data.roleChanged.getTime() : 0);
+      unsubSnapshot = db.doc('users/' + uniqueId).onSnapshot(
+        function (doc) {
+          var data = doc.data();
+          if (data && data.roleChanged) {
+            var roleChangedMs =
+              typeof data.roleChanged.toMillis === 'function'
+                ? data.roleChanged.toMillis()
+                : data.roleChanged instanceof Date
+                  ? data.roleChanged.getTime()
+                  : 0;
 
-          if (roleChangedMs > sessionStartTime) {
-            signOut().then(function () {
-              showMessageModal('Session Ended', 'Your account permissions have changed. Please sign in again.');
-            });
+            if (roleChangedMs > sessionStartTime) {
+              signOut().then(function () {
+                showMessageModal(
+                  'Session Ended',
+                  'Your account permissions have changed. Please sign in again.',
+                );
+              });
+            }
           }
-        }
-      }, function (err) {
-        console.error('Snapshot listener error:', err);
-        cleanupSnapshot();
-      });
+        },
+        function (err) {
+          console.error('Snapshot listener error:', err);
+          cleanupSnapshot();
+        },
+      );
     } catch (err) {
       console.error('Failed to set up role listener:', err);
     }
@@ -923,7 +967,12 @@
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && unsubSnapshot) {
       cleanupSnapshot();
-    } else if (!document.hidden && currentUniqueId && currentProfile && !currentProfile.isSuspended) {
+    } else if (
+      !document.hidden &&
+      currentUniqueId &&
+      currentProfile &&
+      !currentProfile.isSuspended
+    ) {
       setupRoleListener(currentUniqueId);
     }
   });
@@ -938,7 +987,9 @@
         return;
       }
 
-      var providers = (user.providerData || []).map(function (p) { return p.providerId; });
+      var providers = (user.providerData || []).map(function (p) {
+        return p.providerId;
+      });
       var isPasswordUser = providers.indexOf('password') !== -1;
 
       if (!isPasswordUser) {
@@ -954,9 +1005,14 @@
           return;
         }
 
-        user.reauthenticateWithPopup(provider)
-          .then(function () { resolve(); })
-          .catch(function (err) { reject(err); });
+        user
+          .reauthenticateWithPopup(provider)
+          .then(function () {
+            resolve();
+          })
+          .catch(function (err) {
+            reject(err);
+          });
         return;
       }
 
@@ -988,7 +1044,10 @@
 
     try {
       await firebase.auth().sendPasswordResetEmail(user.email);
-      showMessageModal('Password Reset', 'A password reset email has been sent to ' + escapeHtml(user.email) + '.');
+      showMessageModal(
+        'Password Reset',
+        'A password reset email has been sent to ' + escapeHtml(user.email) + '.',
+      );
     } catch (err) {
       console.error('Password reset failed:', err);
       showMessageModal('Error', 'Failed to send password reset email. Please try again.');
@@ -1017,7 +1076,9 @@
         });
 
         if (!res.ok) {
-          var errBody = await res.json().catch(function () { return {}; });
+          var errBody = await res.json().catch(function () {
+            return {};
+          });
           showMessageModal('Error', errBody.error || 'Failed to reset 2FA.');
           // Re-render the current section
           if (currentProfile) {
@@ -1030,8 +1091,10 @@
         // Success — sign out and re-login
         await signOut();
         showSection('login-section');
-        showMessageModal('2FA Reset', 'Two-factor authentication has been removed. Please sign in and set up a new authenticator.');
-
+        showMessageModal(
+          '2FA Reset',
+          'Two-factor authentication has been removed. Please sign in and set up a new authenticator.',
+        );
       } catch (err) {
         if (err && err.code === 'auth/popup-closed-by-user') return;
         console.error('2FA reset failed:', err);
@@ -1050,7 +1113,9 @@
     var user = auth.currentUser;
     if (!user) return;
 
-    var providers = (user.providerData || []).map(function (p) { return p.providerId; });
+    var providers = (user.providerData || []).map(function (p) {
+      return p.providerId;
+    });
     var isPasswordUser = providers.indexOf('password') !== -1;
 
     try {
@@ -1070,7 +1135,9 @@
         });
 
         if (!res.ok) {
-          var errBody = await res.json().catch(function () { return {}; });
+          var errBody = await res.json().catch(function () {
+            return {};
+          });
           showMessageModal('Error', errBody.error || 'Failed to revoke sessions.');
           if (currentProfile) {
             renderDashboard(currentProfile);
@@ -1085,7 +1152,9 @@
           method: 'POST',
         });
         if (!resOAuth.ok) {
-          var errBodyOAuth = await resOAuth.json().catch(function () { return {}; });
+          var errBodyOAuth = await resOAuth.json().catch(function () {
+            return {};
+          });
           showMessageModal('Error', errBodyOAuth.error || 'Failed to revoke sessions.');
           if (currentProfile) {
             renderDashboard(currentProfile);
@@ -1098,8 +1167,10 @@
       // Sign out locally
       await signOut();
       showSection('login-section');
-      showMessageModal('Sessions Revoked', 'All sessions have been signed out. Please sign in again.');
-
+      showMessageModal(
+        'Sessions Revoked',
+        'All sessions have been signed out. Please sign in again.',
+      );
     } catch (err) {
       if (err && err.code === 'auth/popup-closed-by-user') return;
       console.error('Revoke all sessions failed:', err);
@@ -1111,14 +1182,24 @@
   }
 
   async function handleDataExport() {
-    showMessageModal('Data Export', 'Data export is coming soon. Please contact support at support@shytalk.dev for a copy of your data.');
+    showMessageModal(
+      'Data Export',
+      'Data export is coming soon. Please contact support at support@shytalk.dev for a copy of your data.',
+    );
   }
 
   async function handleDeleteAccount() {
-    if (!confirm('Are you sure you want to permanently delete your account? This action cannot be undone.')) {
+    if (
+      !confirm(
+        'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      )
+    ) {
       return;
     }
-    showMessageModal('Account Deletion', 'Account deletion is coming soon. Please contact support at support@shytalk.dev to request account deletion.');
+    showMessageModal(
+      'Account Deletion',
+      'Account deletion is coming soon. Please contact support at support@shytalk.dev to request account deletion.',
+    );
   }
 
   // ─── Event Listeners ────────────────────────────────────────
@@ -1224,15 +1305,18 @@
       copyBtn.addEventListener('click', function () {
         var key = $('enroll-manual-key');
         if (key && key.value) {
-          navigator.clipboard.writeText(key.value).then(function () {
-            copyBtn.textContent = t('copy_feedback_copied');
-            setTimeout(function () {
-              copyBtn.textContent = t('enroll_copy');
-            }, 2000);
-          }).catch(function () {
-            // Fallback: select the input
-            key.select();
-          });
+          navigator.clipboard
+            .writeText(key.value)
+            .then(function () {
+              copyBtn.textContent = t('copy_feedback_copied');
+              setTimeout(function () {
+                copyBtn.textContent = t('enroll_copy');
+              }, 2000);
+            })
+            .catch(function () {
+              // Fallback: select the input
+              key.select();
+            });
         }
       });
     }
@@ -1326,7 +1410,10 @@
     var appealBtn = $('suspended-appeal-btn');
     if (appealBtn) {
       appealBtn.addEventListener('click', function () {
-        showMessageModal('Submit an Appeal', 'To appeal your suspension, please contact support at support@shytalk.dev with your account details.');
+        showMessageModal(
+          'Submit an Appeal',
+          'To appeal your suspension, please contact support at support@shytalk.dev with your account details.',
+        );
       });
     }
 
@@ -1352,7 +1439,10 @@
     var bannedAppealBtn = $('banned-appeal-btn');
     if (bannedAppealBtn) {
       bannedAppealBtn.addEventListener('click', function () {
-        showMessageModal('Submit an Appeal', 'To appeal your ban, please contact support at support@shytalk.dev with your account details.');
+        showMessageModal(
+          'Submit an Appeal',
+          'To appeal your ban, please contact support at support@shytalk.dev with your account details.',
+        );
       });
     }
 

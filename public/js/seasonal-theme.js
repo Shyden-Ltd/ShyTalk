@@ -12,8 +12,15 @@
  * When no event is active, this script does nothing — defaults remain.
  */
 
-function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function cssColor(v) { return /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : null; }
+function esc(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+}
+function cssColor(v) {
+  return /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : null;
+}
 
 function injectKeyframes() {
   if (document.getElementById('seasonal-keyframes')) return;
@@ -37,7 +44,7 @@ function injectKeyframes() {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-    const active = events.find(e => today >= e.startDate && today < e.endDate);
+    const active = events.find((e) => today >= e.startDate && today < e.endDate);
     if (!active) return;
 
     // Override CSS custom properties with seasonal theme
@@ -67,7 +74,12 @@ function injectKeyframes() {
     // Check with and without .html extension (some servers strip it).
     const path = window.location.pathname;
     const eventPath = active.pageUrl;
-    if (path === eventPath || path === eventPath.replace('.html', '') || path + '.html' === eventPath) return;
+    if (
+      path === eventPath ||
+      path === eventPath.replace('.html', '') ||
+      path + '.html' === eventPath
+    )
+      return;
 
     // Inject animation keyframes once
     injectKeyframes();
@@ -106,7 +118,7 @@ function injectLandingCard(event, container) {
     <span class="seasonal-card-emoji" aria-hidden="true">\u{1FAB7}</span>
     <span class="seasonal-card-body">
       <span class="seasonal-card-title">${esc(event.name)}</span>
-      <span class="seasonal-card-subtitle">${esc(event.ribbonText || "Learn more")} \u2192</span>
+      <span class="seasonal-card-subtitle">${esc(event.ribbonText || 'Learn more')} \u2192</span>
     </span>
   `;
 
@@ -136,7 +148,8 @@ function injectLandingCard(event, container) {
   });
 
   const emoji = card.querySelector('.seasonal-card-emoji');
-  emoji.style.cssText = 'font-size: 1.8rem; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(212,160,23,0.4));';
+  emoji.style.cssText =
+    'font-size: 1.8rem; flex-shrink: 0; filter: drop-shadow(0 0 8px rgba(212,160,23,0.4));';
 
   const body = card.querySelector('.seasonal-card-body');
   body.style.cssText = 'display: flex; flex-direction: column; gap: 2px; text-align: left;';
@@ -199,8 +212,12 @@ function injectBottomBanner(event) {
     justify-content: center;
     transition: filter 0.2s;
   `;
-  link.addEventListener('mouseenter', () => { link.style.filter = 'brightness(1.1)'; });
-  link.addEventListener('mouseleave', () => { link.style.filter = ''; });
+  link.addEventListener('mouseenter', () => {
+    link.style.filter = 'brightness(1.1)';
+  });
+  link.addEventListener('mouseleave', () => {
+    link.style.filter = '';
+  });
 
   const emoji = banner.querySelector('.seasonal-bottom-emoji');
   emoji.style.cssText = 'font-size: 1.2rem;';

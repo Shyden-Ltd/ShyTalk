@@ -39,7 +39,12 @@
   var STORAGE_KEY = 'shytalk_language';
 
   function isSupported(code) {
-    return !!code && LANGUAGES.some(function (l) { return l.code === code; });
+    return (
+      !!code &&
+      LANGUAGES.some(function (l) {
+        return l.code === code;
+      })
+    );
   }
 
   function getLanguage() {
@@ -117,33 +122,33 @@
   // and this guard avoids a CSP violation. Pages without strict CSP
   // (legal pages, homepage, roadmap) keep the inline-injection path.
   if (!document.querySelector('link[data-language-selector-styles]')) {
-  var style = document.createElement('style');
-  style.textContent = [
-    '.stl-lang-btn{position:fixed;bottom:20px;left:20px;z-index:9999;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(30,28,40,.85);backdrop-filter:blur(8px);color:#d0bcff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;box-shadow:0 2px 12px rgba(0,0,0,.3)}',
-    '.stl-lang-btn:hover{transform:scale(1.1);box-shadow:0 4px 20px rgba(103,80,164,.4)}',
-    '.stl-lang-btn:focus-visible{outline:2px solid #d0bcff;outline-offset:3px}',
-    '.stl-lang-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}',
-    '.stl-lang-overlay.open{opacity:1;pointer-events:auto}',
-    '.stl-lang-modal{background:#1c1a24;border:1px solid #3a3550;border-radius:16px;width:90%;max-width:400px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.5)}',
-    '.stl-lang-header{padding:16px 20px 12px;border-bottom:1px solid #3a3550}',
-    '.stl-lang-header h2{margin:0 0 12px;font-size:1.1rem;color:#e8e0f0;font-weight:600}',
-    '.stl-lang-search{width:100%;padding:10px 14px;border:1px solid #3a3550;border-radius:10px;background:#0f0d15;color:#e8e0f0;font-size:.95rem;outline:none}',
-    '.stl-lang-search:focus{border-color:#6750a4}',
-    '.stl-lang-search::placeholder{color:#6b6480}',
-    '.stl-lang-list{overflow-y:auto;padding:8px 0;flex:1}',
-    '.stl-lang-item{display:flex;align-items:center;gap:12px;padding:12px 20px;cursor:pointer;transition:background .15s;color:#e8e0f0;font-size:.95rem;border:none;background:none;width:100%;text-align:left}',
-    '.stl-lang-item:hover,.stl-lang-item:focus-visible{background:rgba(103,80,164,.15)}',
-    '.stl-lang-item:focus-visible{outline:2px solid #d0bcff;outline-offset:-2px}',
-    '.stl-lang-item.active{background:rgba(103,80,164,.25)}',
-    '.stl-lang-item .native{color:#d0bcff;font-weight:600;min-width:80px}',
-    '.stl-lang-item .name{color:#a89ec0}',
-    '.stl-lang-item .check{margin-left:auto;color:#66bb6a;font-size:1.1rem;visibility:hidden}',
-    '.stl-lang-item.active .check{visibility:visible}',
-    '.stl-lang-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#a89ec0;font-size:1.4rem;cursor:pointer;padding:4px 8px;border-radius:8px}',
-    '.stl-lang-close:hover{color:#e8e0f0;background:rgba(255,255,255,.1)}',
-    '.stl-lang-close:focus-visible{outline:2px solid #d0bcff}',
-  ].join('\n');
-  document.head.appendChild(style);
+    var style = document.createElement('style');
+    style.textContent = [
+      '.stl-lang-btn{position:fixed;bottom:20px;left:20px;z-index:9999;width:44px;height:44px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:rgba(30,28,40,.85);backdrop-filter:blur(8px);color:#d0bcff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s,box-shadow .2s;box-shadow:0 2px 12px rgba(0,0,0,.3)}',
+      '.stl-lang-btn:hover{transform:scale(1.1);box-shadow:0 4px 20px rgba(103,80,164,.4)}',
+      '.stl-lang-btn:focus-visible{outline:2px solid #d0bcff;outline-offset:3px}',
+      '.stl-lang-overlay{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}',
+      '.stl-lang-overlay.open{opacity:1;pointer-events:auto}',
+      '.stl-lang-modal{background:#1c1a24;border:1px solid #3a3550;border-radius:16px;width:90%;max-width:400px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.5)}',
+      '.stl-lang-header{padding:16px 20px 12px;border-bottom:1px solid #3a3550}',
+      '.stl-lang-header h2{margin:0 0 12px;font-size:1.1rem;color:#e8e0f0;font-weight:600}',
+      '.stl-lang-search{width:100%;padding:10px 14px;border:1px solid #3a3550;border-radius:10px;background:#0f0d15;color:#e8e0f0;font-size:.95rem;outline:none}',
+      '.stl-lang-search:focus{border-color:#6750a4}',
+      '.stl-lang-search::placeholder{color:#6b6480}',
+      '.stl-lang-list{overflow-y:auto;padding:8px 0;flex:1}',
+      '.stl-lang-item{display:flex;align-items:center;gap:12px;padding:12px 20px;cursor:pointer;transition:background .15s;color:#e8e0f0;font-size:.95rem;border:none;background:none;width:100%;text-align:left}',
+      '.stl-lang-item:hover,.stl-lang-item:focus-visible{background:rgba(103,80,164,.15)}',
+      '.stl-lang-item:focus-visible{outline:2px solid #d0bcff;outline-offset:-2px}',
+      '.stl-lang-item.active{background:rgba(103,80,164,.25)}',
+      '.stl-lang-item .native{color:#d0bcff;font-weight:600;min-width:80px}',
+      '.stl-lang-item .name{color:#a89ec0}',
+      '.stl-lang-item .check{margin-left:auto;color:#66bb6a;font-size:1.1rem;visibility:hidden}',
+      '.stl-lang-item.active .check{visibility:visible}',
+      '.stl-lang-close{position:absolute;top:12px;right:12px;background:none;border:none;color:#a89ec0;font-size:1.4rem;cursor:pointer;padding:4px 8px;border-radius:8px}',
+      '.stl-lang-close:hover{color:#e8e0f0;background:rgba(255,255,255,.1)}',
+      '.stl-lang-close:focus-visible{outline:2px solid #d0bcff}',
+    ].join('\n');
+    document.head.appendChild(style);
   }
 
   // ── Inject button ──
@@ -190,11 +195,22 @@
     var q = (filter || '').toLowerCase();
     var html = '';
     LANGUAGES.forEach(function (lang) {
-      if (q && lang.name.toLowerCase().indexOf(q) === -1 &&
-          lang.native.toLowerCase().indexOf(q) === -1 &&
-          lang.code.indexOf(q) === -1) return;
+      if (
+        q &&
+        lang.name.toLowerCase().indexOf(q) === -1 &&
+        lang.native.toLowerCase().indexOf(q) === -1 &&
+        lang.code.indexOf(q) === -1
+      )
+        return;
       var active = lang.code === current ? ' active' : '';
-      html += '<button class="stl-lang-item' + active + '" role="option" aria-selected="' + (lang.code === current) + '" data-lang="' + lang.code + '">';
+      html +=
+        '<button class="stl-lang-item' +
+        active +
+        '" role="option" aria-selected="' +
+        (lang.code === current) +
+        '" data-lang="' +
+        lang.code +
+        '">';
       html += '<span class="native">' + lang.native + '</span>';
       html += '<span class="name">' + lang.name + '</span>';
       html += '<span class="check" aria-hidden="true">&#10003;</span>';
@@ -207,12 +223,20 @@
     // shared-header pages do, but keep the fallback for safety).
     var emptyMsg = 'No languages found';
     try {
-      var lt = (typeof LEGAL_T !== 'undefined') ? LEGAL_T : null;
-      if (lt && lt.footer && lt.footer[getLanguage()] && lt.footer[getLanguage()].lang_empty_state) {
+      var lt = typeof LEGAL_T !== 'undefined' ? LEGAL_T : null;
+      if (
+        lt &&
+        lt.footer &&
+        lt.footer[getLanguage()] &&
+        lt.footer[getLanguage()].lang_empty_state
+      ) {
         emptyMsg = lt.footer[getLanguage()].lang_empty_state;
       }
-    } catch (_e) { /* ignore */ }
-    listEl.innerHTML = html || '<div style="padding:20px;color:#6b6480;text-align:center">' + emptyMsg + '</div>';
+    } catch (_e) {
+      /* ignore */
+    }
+    listEl.innerHTML =
+      html || '<div style="padding:20px;color:#6b6480;text-align:center">' + emptyMsg + '</div>';
   }
 
   function openModal() {

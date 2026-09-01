@@ -75,14 +75,9 @@ async function load(append) {
   params.set('page', String(state.page));
 
   try {
-    const data = await apiCall(
-      'GET',
-      `/api/admin/audit-log?${params.toString()}`,
-    );
+    const data = await apiCall('GET', `/api/admin/audit-log?${params.toString()}`);
     const entries = data.entries || [];
-    state.lastEntries = append
-      ? state.lastEntries.concat(entries)
-      : entries;
+    state.lastEntries = append ? state.lastEntries.concat(entries) : entries;
 
     if (entries.length === 0 && !append) {
       tbody.textContent = '';
@@ -113,35 +108,20 @@ function buildRow(entry) {
     return td;
   };
   tr.appendChild(
-    mk(
-      'audit-admin-name',
-      entry.adminName || entry.adminUid || entry.adminId || 'Unknown',
-    ),
+    mk('audit-admin-name', entry.adminName || entry.adminUid || entry.adminId || 'Unknown'),
   );
-  tr.appendChild(
-    mk('audit-action', entry.actionType || entry.action || ''),
-  );
+  tr.appendChild(mk('audit-action', entry.actionType || entry.action || ''));
   tr.appendChild(mk('audit-target-type', entry.targetType || ''));
-  const tdTarget = mk(
-    'audit-target',
-    entry.target || entry.targetId || '',
-  );
+  const tdTarget = mk('audit-target', entry.target || entry.targetId || '');
   tdTarget.style.fontFamily = 'monospace';
   tdTarget.style.fontSize = '11px';
   tr.appendChild(tdTarget);
-  const ts = entry.timestamp
-    ? new Date(entry.timestamp).toLocaleString()
-    : '';
+  const ts = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : '';
   const tdTs = mk('audit-timestamp', ts);
-  tdTs.setAttribute(
-    'data-timestamp',
-    entry.timestamp ? String(entry.timestamp) : '',
-  );
+  tdTs.setAttribute('data-timestamp', entry.timestamp ? String(entry.timestamp) : '');
   tr.appendChild(tdTs);
   const detailsText =
-    typeof entry.details === 'object'
-      ? JSON.stringify(entry.details)
-      : entry.details || '';
+    typeof entry.details === 'object' ? JSON.stringify(entry.details) : entry.details || '';
   const tdDetails = mk('audit-details', detailsText);
   tdDetails.style.maxWidth = '240px';
   tdDetails.style.overflow = 'hidden';
@@ -160,9 +140,7 @@ function exportCsv() {
       e.actionType || e.action || '',
       e.target || e.targetId || '',
       e.timestamp ? new Date(e.timestamp).toISOString() : '',
-      typeof e.details === 'object'
-        ? JSON.stringify(e.details)
-        : e.details || '',
+      typeof e.details === 'object' ? JSON.stringify(e.details) : e.details || '',
     ].map((f) => '"' + String(f).replace(/"/g, '""') + '"');
     return fields.join(',');
   });
@@ -171,8 +149,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download =
-    'audit-log-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.download = 'audit-log-' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

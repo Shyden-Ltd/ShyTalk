@@ -75,16 +75,20 @@
     if (isAuthenticated) {
       var avatarHtml = avatarUrl
         ? '<img src="' + escapeHtml(avatarUrl) + '" alt="" class="sh-avatar" />'
-        : '<span class="sh-avatar sh-avatar--fallback">' + escapeHtml(displayName ? displayName.charAt(0).toUpperCase() : '?') + '</span>';
+        : '<span class="sh-avatar sh-avatar--fallback">' +
+          escapeHtml(displayName ? displayName.charAt(0).toUpperCase() : '?') +
+          '</span>';
 
       rightHtml =
         '<div class="sh-user" data-testid="header-user-info">' +
-          avatarHtml +
-          '<span class="sh-user-name">' + escapeHtml(displayName || 'User') + '</span>' +
-          '<svg class="sh-chevron" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>' +
+        avatarHtml +
+        '<span class="sh-user-name">' +
+        escapeHtml(displayName || 'User') +
+        '</span>' +
+        '<svg class="sh-chevron" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>' +
         '</div>' +
         '<div class="sh-dropdown" data-testid="header-dropdown">' +
-          '<button class="sh-dropdown-item" data-testid="header-signout-btn" data-i18n="signOut">Sign Out</button>' +
+        '<button class="sh-dropdown-item" data-testid="header-signout-btn" data-i18n="signOut">Sign Out</button>' +
         '</div>';
     } else if (isAuthStatePending()) {
       // Withhold the control rather than assert something untrue. The
@@ -99,10 +103,12 @@
 
     var html =
       '<header class="sh-header" role="banner" data-testid="shared-header">' +
-        '<div class="sh-header-inner">' +
-          '<a href="/" class="sh-logo" data-testid="header-logo">ShyTalk</a>' +
-          '<div class="sh-right">' + rightHtml + '</div>' +
-        '</div>' +
+      '<div class="sh-header-inner">' +
+      '<a href="/" class="sh-logo" data-testid="header-logo">ShyTalk</a>' +
+      '<div class="sh-right">' +
+      rightHtml +
+      '</div>' +
+      '</div>' +
       '</header>';
 
     document.body.insertAdjacentHTML('afterbegin', html);
@@ -161,9 +167,11 @@
     // already ran during DOMContentLoaded BEFORE shared-header injected
     // its DOM, so it had no buttons to translate.
     if (typeof window.applyLanguage === 'function') {
-      var savedLang = (window.ShyTalkLanguage && typeof window.ShyTalkLanguage.get === 'function')
-        ? window.ShyTalkLanguage.get()
-        : ((typeof localStorage !== 'undefined' && localStorage.getItem('shytalk_language')) || null);
+      var savedLang =
+        window.ShyTalkLanguage && typeof window.ShyTalkLanguage.get === 'function'
+          ? window.ShyTalkLanguage.get()
+          : (typeof localStorage !== 'undefined' && localStorage.getItem('shytalk_language')) ||
+            null;
       if (savedLang) window.applyLanguage(savedLang);
     }
   }
@@ -181,145 +189,145 @@
     style.id = 'sh-header-styles';
     style.textContent =
       '.sh-header {' +
-        'background: var(--surface, #1a1d27);' +
-        'border-bottom: 1px solid var(--border, #2a2e3a);' +
-        'padding: 0 24px;' +
-        'position: relative;' +
-        'z-index: 100;' +
+      'background: var(--surface, #1a1d27);' +
+      'border-bottom: 1px solid var(--border, #2a2e3a);' +
+      'padding: 0 24px;' +
+      'position: relative;' +
+      'z-index: 100;' +
       '}' +
       '.sh-header-inner {' +
-        'max-width: 960px;' +
-        'margin: 0 auto;' +
-        'display: flex;' +
-        'align-items: center;' +
-        'justify-content: space-between;' +
-        'min-height: 56px;' +
+      'max-width: 960px;' +
+      'margin: 0 auto;' +
+      'display: flex;' +
+      'align-items: center;' +
+      'justify-content: space-between;' +
+      'min-height: 56px;' +
       '}' +
       '.sh-logo {' +
-        'font-size: 1.4rem;' +
-        'font-weight: 800;' +
-        'letter-spacing: 0.04em;' +
-        'background: linear-gradient(135deg, var(--primary, #7c5cfc) 0%, var(--primary-glow, #9b82ff) 100%);' +
-        '-webkit-background-clip: text;' +
-        '-webkit-text-fill-color: transparent;' +
-        'background-clip: text;' +
-        'text-decoration: none;' +
-        'min-height: 44px;' +
-        'min-width: 44px;' +
-        'display: inline-flex;' +
-        'align-items: center;' +
+      'font-size: 1.4rem;' +
+      'font-weight: 800;' +
+      'letter-spacing: 0.04em;' +
+      'background: linear-gradient(135deg, var(--primary, #7c5cfc) 0%, var(--primary-glow, #9b82ff) 100%);' +
+      '-webkit-background-clip: text;' +
+      '-webkit-text-fill-color: transparent;' +
+      'background-clip: text;' +
+      'text-decoration: none;' +
+      'min-height: 44px;' +
+      'min-width: 44px;' +
+      'display: inline-flex;' +
+      'align-items: center;' +
       '}' +
       '.sh-logo:focus-visible {' +
-        'outline: 2px solid var(--primary, #7c5cfc);' +
-        'outline-offset: 4px;' +
-        'border-radius: 4px;' +
+      'outline: 2px solid var(--primary, #7c5cfc);' +
+      'outline-offset: 4px;' +
+      'border-radius: 4px;' +
       '}' +
       '.sh-right {' +
-        'display: flex;' +
-        'align-items: center;' +
-        'gap: 12px;' +
-        'position: relative;' +
+      'display: flex;' +
+      'align-items: center;' +
+      'gap: 12px;' +
+      'position: relative;' +
       '}' +
       // SHY-0148: the pending placeholder reserves the same footprint the
       // real control will take, so the header does not shift when the sign-in
       // state resolves. Invisible, not merely transparent-coloured.
       '.sh-auth-pending {' +
-        'display: inline-block;' +
-        'min-height: 40px;' +
-        'min-width: 88px;' +
+      'display: inline-block;' +
+      'min-height: 40px;' +
+      'min-width: 88px;' +
       '}' +
       '.sh-signin-btn {' +
-        'padding: 8px 20px;' +
-        'background: var(--primary, #7c5cfc);' +
-        'color: #fff;' +
-        'border: none;' +
-        'border-radius: 999px;' +
-        'font-family: inherit;' +
-        'font-size: 0.85rem;' +
-        'font-weight: 600;' +
-        'cursor: pointer;' +
-        'min-height: 40px;' +
-        'transition: background 0.2s, transform 0.2s;' +
+      'padding: 8px 20px;' +
+      'background: var(--primary, #7c5cfc);' +
+      'color: #fff;' +
+      'border: none;' +
+      'border-radius: 999px;' +
+      'font-family: inherit;' +
+      'font-size: 0.85rem;' +
+      'font-weight: 600;' +
+      'cursor: pointer;' +
+      'min-height: 40px;' +
+      'transition: background 0.2s, transform 0.2s;' +
       '}' +
       '.sh-signin-btn:hover {' +
-        'background: var(--primary-glow, #9b82ff);' +
-        'transform: translateY(-1px);' +
+      'background: var(--primary-glow, #9b82ff);' +
+      'transform: translateY(-1px);' +
       '}' +
       '.sh-signin-btn:focus-visible {' +
-        'outline: 2px solid var(--primary-glow, #9b82ff);' +
-        'outline-offset: 3px;' +
+      'outline: 2px solid var(--primary-glow, #9b82ff);' +
+      'outline-offset: 3px;' +
       '}' +
       '.sh-user {' +
-        'display: flex;' +
-        'align-items: center;' +
-        'gap: 8px;' +
-        'cursor: pointer;' +
-        'padding: 6px 12px;' +
-        'border-radius: 999px;' +
-        'transition: background 0.2s;' +
+      'display: flex;' +
+      'align-items: center;' +
+      'gap: 8px;' +
+      'cursor: pointer;' +
+      'padding: 6px 12px;' +
+      'border-radius: 999px;' +
+      'transition: background 0.2s;' +
       '}' +
       '.sh-user:hover {' +
-        'background: rgba(255,255,255,0.06);' +
+      'background: rgba(255,255,255,0.06);' +
       '}' +
       '.sh-avatar {' +
-        'width: 32px;' +
-        'height: 32px;' +
-        'border-radius: 50%;' +
-        'object-fit: cover;' +
+      'width: 32px;' +
+      'height: 32px;' +
+      'border-radius: 50%;' +
+      'object-fit: cover;' +
       '}' +
       '.sh-avatar--fallback {' +
-        'display: flex;' +
-        'align-items: center;' +
-        'justify-content: center;' +
-        'background: var(--primary, #7c5cfc);' +
-        'color: #fff;' +
-        'font-weight: 700;' +
-        'font-size: 0.85rem;' +
+      'display: flex;' +
+      'align-items: center;' +
+      'justify-content: center;' +
+      'background: var(--primary, #7c5cfc);' +
+      'color: #fff;' +
+      'font-weight: 700;' +
+      'font-size: 0.85rem;' +
       '}' +
       '.sh-user-name {' +
-        'font-size: 0.85rem;' +
-        'font-weight: 500;' +
-        'color: var(--text, #e0e0e0);' +
+      'font-size: 0.85rem;' +
+      'font-weight: 500;' +
+      'color: var(--text, #e0e0e0);' +
       '}' +
       '.sh-chevron {' +
-        'color: var(--text-secondary, #8b8fa3);' +
-        'transition: transform 0.2s;' +
+      'color: var(--text-secondary, #8b8fa3);' +
+      'transition: transform 0.2s;' +
       '}' +
       '.sh-dropdown {' +
-        'display: none;' +
-        'position: absolute;' +
-        'top: 100%;' +
-        'right: 0;' +
-        'margin-top: 4px;' +
-        'background: var(--surface, #1a1d27);' +
-        'border: 1px solid var(--border, #2a2e3a);' +
-        'border-radius: 8px;' +
-        'box-shadow: 0 8px 32px rgba(0,0,0,0.4);' +
-        'min-width: 160px;' +
-        'z-index: 200;' +
-        'overflow: hidden;' +
+      'display: none;' +
+      'position: absolute;' +
+      'top: 100%;' +
+      'right: 0;' +
+      'margin-top: 4px;' +
+      'background: var(--surface, #1a1d27);' +
+      'border: 1px solid var(--border, #2a2e3a);' +
+      'border-radius: 8px;' +
+      'box-shadow: 0 8px 32px rgba(0,0,0,0.4);' +
+      'min-width: 160px;' +
+      'z-index: 200;' +
+      'overflow: hidden;' +
       '}' +
       '.sh-dropdown--open {' +
-        'display: block;' +
+      'display: block;' +
       '}' +
       '.sh-dropdown-item {' +
-        'display: block;' +
-        'width: 100%;' +
-        'padding: 12px 16px;' +
-        'background: none;' +
-        'border: none;' +
-        'color: var(--text, #e0e0e0);' +
-        'font-family: inherit;' +
-        'font-size: 0.85rem;' +
-        'text-align: left;' +
-        'cursor: pointer;' +
+      'display: block;' +
+      'width: 100%;' +
+      'padding: 12px 16px;' +
+      'background: none;' +
+      'border: none;' +
+      'color: var(--text, #e0e0e0);' +
+      'font-family: inherit;' +
+      'font-size: 0.85rem;' +
+      'text-align: left;' +
+      'cursor: pointer;' +
       '}' +
       '.sh-dropdown-item:hover {' +
-        'background: rgba(255,255,255,0.06);' +
+      'background: rgba(255,255,255,0.06);' +
       '}' +
       '@media (max-width: 640px) {' +
-        '.sh-header { padding: 0 16px; }' +
-        '.sh-user-name { display: none; }' +
+      '.sh-header { padding: 0 16px; }' +
+      '.sh-user-name { display: none; }' +
       '}';
     document.head.appendChild(style);
   }

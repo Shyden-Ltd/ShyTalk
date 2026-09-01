@@ -50,7 +50,10 @@ export function init(deps) {
   document.getElementById('nuclear-mute').addEventListener('click', () => {
     soundMuted = !soundMuted;
     document.getElementById('nuclear-mute').textContent = soundMuted ? 'Unmute' : 'Mute';
-    if (soundMuted) { stopBeep(); stopSiren(); }
+    if (soundMuted) {
+      stopBeep();
+      stopSiren();
+    }
   });
 
   document.getElementById('nuclear-proceed').addEventListener('click', handleNuclearProceed);
@@ -96,8 +99,14 @@ function startBeep() {
 }
 
 function stopBeep() {
-  if (beepInterval) { clearInterval(beepInterval); beepInterval = null; }
-  if (beepCtx) { beepCtx.close(); beepCtx = null; }
+  if (beepInterval) {
+    clearInterval(beepInterval);
+    beepInterval = null;
+  }
+  if (beepCtx) {
+    beepCtx.close();
+    beepCtx = null;
+  }
 }
 
 // ── Web Audio: siren (execution phase) ────────────────────────────
@@ -151,12 +160,21 @@ function stopSiren() {
   sirenGain.gain.setValueAtTime(sirenGain.gain.value, t);
   sirenGain.gain.linearRampToValueAtTime(0, t + 1.5);
   setTimeout(() => {
-    try { sirenOsc1.stop(); } catch (_) {}
-    try { sirenOsc2.stop(); } catch (_) {}
-    try { sirenLfo.stop(); } catch (_) {}
+    try {
+      sirenOsc1.stop();
+    } catch (_) {}
+    try {
+      sirenOsc2.stop();
+    } catch (_) {}
+    try {
+      sirenLfo.stop();
+    } catch (_) {}
     sirenCtx.close();
-    sirenCtx = null; sirenGain = null;
-    sirenOsc1 = null; sirenOsc2 = null; sirenLfo = null;
+    sirenCtx = null;
+    sirenGain = null;
+    sirenOsc1 = null;
+    sirenOsc2 = null;
+    sirenLfo = null;
   }, 1600);
 }
 
@@ -181,14 +199,17 @@ function startParticles() {
     p.className = 'nuke-particle';
     p.style.left = Math.random() * 100 + '%';
     p.style.background = particleColors[Math.floor(Math.random() * particleColors.length)];
-    p.style.animationDuration = (0.8 + Math.random() * 0.8) + 's';
+    p.style.animationDuration = 0.8 + Math.random() * 0.8 + 's';
     container.appendChild(p);
     setTimeout(() => p.remove(), 1600);
   }, 80);
 }
 
 function stopParticles() {
-  if (particleInterval) { clearInterval(particleInterval); particleInterval = null; }
+  if (particleInterval) {
+    clearInterval(particleInterval);
+    particleInterval = null;
+  }
 }
 
 // ── Progress bar ──────────────────────────────────────────────────
@@ -198,13 +219,17 @@ function updateNukeBar(completed, total) {
   document.getElementById('nuke-bar-fill').style.width = pct + '%';
   document.getElementById('nuke-bar-pct').textContent = pct + '%';
   const labels = [
-    'Destroying...', 'Wiping data...', 'Purging records...',
-    'Clearing storage...', 'Emptying vaults...', 'Scorching earth...',
-    'Obliterating...', 'Annihilating...',
+    'Destroying...',
+    'Wiping data...',
+    'Purging records...',
+    'Clearing storage...',
+    'Emptying vaults...',
+    'Scorching earth...',
+    'Obliterating...',
+    'Annihilating...',
   ];
-  document.getElementById('nuke-bar-text').textContent = completed < total
-    ? labels[completed % labels.length]
-    : 'Complete';
+  document.getElementById('nuke-bar-text').textContent =
+    completed < total ? labels[completed % labels.length] : 'Complete';
 }
 
 // ── Overlay ───────────────────────────────────────────────────────
@@ -220,7 +245,8 @@ function openOverlay() {
   const overlay = document.getElementById('nuclear-overlay');
   document.getElementById('nuclear-step-label').textContent = 'Step 1 of 3';
   document.getElementById('nuclear-title').textContent = 'Are you absolutely sure?';
-  document.getElementById('nuclear-desc').textContent = 'This will run ALL 16 maintenance actions and permanently delete system messages, reports, warnings, orphaned files, backpacks, gift walls, coins, beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs for every user. This cannot be undone.';
+  document.getElementById('nuclear-desc').textContent =
+    'This will run ALL 16 maintenance actions and permanently delete system messages, reports, warnings, orphaned files, backpacks, gift walls, coins, beans, spin history, Super Shy, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs for every user. This cannot be undone.';
   document.getElementById('nuclear-input-wrap').style.display = 'none';
   document.getElementById('nuclear-confirm-input').value = '';
   document.getElementById('nuclear-btn-row').style.display = 'flex';
@@ -263,13 +289,16 @@ async function handleNuclearProceed() {
   // macrotask as click 1. Cleared on next tick.
   if (nuclearStepLock) return;
   nuclearStepLock = true;
-  setTimeout(() => { nuclearStepLock = false; }, 0);
+  setTimeout(() => {
+    nuclearStepLock = false;
+  }, 0);
 
   if (step === 1) {
     step = 2;
     document.getElementById('nuclear-step-label').textContent = 'Step 2 of 3';
     document.getElementById('nuclear-title').textContent = 'This is your last warning';
-    document.getElementById('nuclear-desc').textContent = 'Every user will lose their coins, beans, backpack items, gift wall, spin history, and warnings. All reports, system messages, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs will be deleted. Orphaned files will be purged.';
+    document.getElementById('nuclear-desc').textContent =
+      'Every user will lose their coins, beans, backpack items, gift wall, spin history, and warnings. All reports, system messages, appeals, private messages, group chats, closed rooms, broadcasts, and audit logs will be deleted. Orphaned files will be purged.';
     proceedBtn.textContent = 'Continue to final step';
     return;
   }
@@ -277,7 +306,10 @@ async function handleNuclearProceed() {
     step = 3;
     document.getElementById('nuclear-step-label').textContent = 'Step 3 of 3';
     document.getElementById('nuclear-title').textContent = 'Type to confirm';
-    document.getElementById('nuclear-desc').innerHTML = 'Type <strong style="color:#e74c3c;font-family:monospace">' + CONFIRM_PHRASE + '</strong> exactly to proceed.';
+    document.getElementById('nuclear-desc').innerHTML =
+      'Type <strong style="color:#e74c3c;font-family:monospace">' +
+      CONFIRM_PHRASE +
+      '</strong> exactly to proceed.';
     document.getElementById('nuclear-input-wrap').style.display = 'block';
     confirmInput.value = '';
     confirmInput.focus();
@@ -334,7 +366,7 @@ async function executeNuclearReset() {
   try {
     const backupResp = await fetch(`${_apiBase}/api/admin/backups/trigger`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${await _getToken()}` },
+      headers: { Authorization: `Bearer ${await _getToken()}` },
     });
     if (!backupResp.ok) throw new Error('Backup request failed');
   } catch (backupErr) {
@@ -356,7 +388,12 @@ async function executeNuclearReset() {
     { id: 'np-reports', endpoint: 'all-reports', label: 'Reports' },
     { id: 'np-warnings', endpoint: 'all-warnings', label: 'Warnings' },
     { id: 'np-appeals', endpoint: 'all-appeals', label: 'Appeals' },
-    { id: 'np-storage', endpoint: 'orphaned-storage', label: 'Orphaned storage', body: { folders: ['pm_images/', 'stickers/', 'report_evidence/'] } },
+    {
+      id: 'np-storage',
+      endpoint: 'orphaned-storage',
+      label: 'Orphaned storage',
+      body: { folders: ['pm_images/', 'stickers/', 'report_evidence/'] },
+    },
     { id: 'np-backpacks', endpoint: 'all-backpacks', label: 'Backpacks' },
     { id: 'np-giftwalls', endpoint: 'all-giftwalls', label: 'Gift walls' },
     { id: 'np-coins', endpoint: 'all-coins', label: 'Coins' },
@@ -386,12 +423,16 @@ async function executeNuclearReset() {
       stepEl.className = 'step running';
       stepEl.innerHTML = '&#9679; ' + escapeHtml(action.label) + '...';
     }
-    document.getElementById('nuclear-step-label').textContent = `${completed + 1}/${actions.length}: ${action.label}...`;
+    document.getElementById('nuclear-step-label').textContent =
+      `${completed + 1}/${actions.length}: ${action.label}...`;
     try {
       // Refresh token per-action — see top of run() for rationale.
       const resp = await fetch(`${_apiBase}/api/cleanup/${action.endpoint}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${await _getToken()}`, 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${await _getToken()}`,
+          'Content-Type': 'application/json',
+        },
         body: action.body ? JSON.stringify(action.body) : undefined,
       });
       const data = await resp.json();
@@ -404,7 +445,8 @@ async function executeNuclearReset() {
     } catch (err) {
       if (stepEl) {
         stepEl.className = 'step failed';
-        stepEl.innerHTML = '&#10007; ' + escapeHtml(action.label) + ' \u2014 ' + escapeHtml(err.message);
+        stepEl.innerHTML =
+          '&#10007; ' + escapeHtml(action.label) + ' \u2014 ' + escapeHtml(err.message);
       }
       results.push(`${action.label}: FAILED (${err.message})`);
       failed++;
@@ -420,8 +462,12 @@ async function executeNuclearReset() {
   stopSirenLights();
   stopParticles();
 
-  document.getElementById('nuclear-step-label').textContent = failed ? `Completed with ${failed} error(s)` : 'Complete';
-  document.getElementById('nuclear-title').textContent = failed ? 'Some actions failed' : 'All done';
+  document.getElementById('nuclear-step-label').textContent = failed
+    ? `Completed with ${failed} error(s)`
+    : 'Complete';
+  document.getElementById('nuclear-title').textContent = failed
+    ? 'Some actions failed'
+    : 'All done';
   document.getElementById('nuclear-desc').textContent = failed
     ? `${actions.length - failed} of ${actions.length} actions succeeded. Check the results below.`
     : `All ${actions.length} maintenance actions completed successfully.`;
