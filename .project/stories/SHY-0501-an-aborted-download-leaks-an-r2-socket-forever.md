@@ -1,6 +1,6 @@
 ---
 id: SHY-0501
-status: Draft
+status: In Review
 owner: claude
 created: 2026-09-01
 priority: P1
@@ -163,3 +163,9 @@ Two independent faults, and either alone would have been survivable:
 - Found 2026-09-01 while investigating `admin-backups` and `admin-banners`
   failing on `develop`. The operator asked for the local stack to be fixed; the
   local stack was fine, and the defect it exposed is in shipped code.
+- 2026-09-01 — **Proved by fixing it.** With the fix in place the API was restarted and `GET /api/admin/backups` returned **200 in 3.1s** where it had hung indefinitely, and both previously-failing specs went green: **20 passed**. The full Playwright chromium suite then passed at **1430**, which is what had been blocking every push from this machine.
+- 2026-09-01 — Measured against `develop` with the same command: **49 failures before, 40 after** — nine fixed, none introduced. The 36 remaining suites fail identically on `develop` (a Jest ESM config issue in `data-export-builder`) and are not this.
+- 2026-09-01 — `data-export`'s r2 double gained `pipeToResponse` as the **real** implementation via `requireActual`, not a stand-in that merely pipes: streaming is precisely what that route does, and a weaker double would have passed while the destroy-on-disconnect behaviour went untested through the route path.
+- 2026-09-01 — Note for whoever reads the logs: a leaked socket is invisible until the fiftieth. Nothing is slow, nothing errors, and then storage stops entirely. The `requestTimeout` added here is what turns the next occurrence of anything similar into a logged failure instead of silence.
+
+Reviewed-up-to: 80747f8ba1a
