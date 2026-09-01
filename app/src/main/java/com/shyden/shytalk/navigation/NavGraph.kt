@@ -126,6 +126,12 @@ fun NavGraph(
     onEmailLinkConsumed: () -> Unit = {},
     onSignOut: () -> Unit,
     /**
+     * SHY-0500 — non-null when the background cold-start confirmation found the
+     * stored session dead, so the sign-in screen can say why the person is here
+     * rather than leaving them to guess.
+     */
+    launchRedirect: LaunchRedirectReason? = null,
+    /**
      * SHY-0143. Android normally renders `BanScreen` ABOVE this NavHost, so
      * these routes are belt-and-braces — but `initialRoute` can legitimately
      * hold `ban_device`/`ban_network`, and a NavHost whose start destination
@@ -311,6 +317,7 @@ fun NavGraph(
 
             composable(Screen.SignIn.route) {
                 SignInScreen(
+                    sessionExpired = launchRedirect == LaunchRedirectReason.SESSION_EXPIRED,
                     pendingEmailLink = pendingEmailLink,
                     onEmailLinkConsumed = onEmailLinkConsumed,
                     onNavigateToEmail = {

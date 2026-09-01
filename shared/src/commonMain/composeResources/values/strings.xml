@@ -476,6 +476,8 @@
 
     <!-- Auth -->
     <string name="sign_in">Sign In</string>
+    <!-- SHY-0500: shown when a stored session turns out to be expired or revoked. -->
+    <string name="session_expired_sign_in_again">Your session has ended. Please sign in again.</string>
     <string name="verification_code">Verification Code</string>
     <string name="continue_with_google">Continue with Google</string>
 

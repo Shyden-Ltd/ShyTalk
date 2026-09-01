@@ -74,7 +74,9 @@ import com.shyden.shytalk.feature.starting.StartingScreenComposable
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.BanState
+import com.shyden.shytalk.navigation.ColdStartConfirmation
 import com.shyden.shytalk.navigation.ColdStartSequencer
+import com.shyden.shytalk.navigation.LaunchRedirectReason
 import com.shyden.shytalk.navigation.LaunchState
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
@@ -229,6 +231,13 @@ class MainActivity : AppCompatActivity() {
                         // mount before then.
                         var initialRoute by remember { mutableStateOf<String?>(null) }
 
+                        // SHY-0500 — set when the background confirmation finds
+                        // the stored session is dead. Hoisted to here because the
+                        // pre-routing effect runs before `navController` exists,
+                        // and the person has to be TOLD to sign in again rather
+                        // than silently deposited on the sign-in screen.
+                        var launchRedirect by remember { mutableStateOf<LaunchRedirectReason?>(null) }
+
                         // SHY-0143 — gates the background cohort reconcile,
                         // which is only worth running once the claim has been
                         // confirmed fresh. NOT the nav graph's user-flag
@@ -342,45 +351,6 @@ class MainActivity : AppCompatActivity() {
                             // awaited before `checkComplete`, which is what keeps
                             // any content from rendering ahead of the verdict.
                             val banDeferred = async { deviceRepository.checkBanStatus(deviceId) }
-
-                            when (val result = appConfigService.getLatestVersionInfo()) {
-                                is Resource.Success -> {
-                                    val (minVersionCode, latestVersionCode, latestVersionName) = result.data
-                                    updateRequired = appConfigService.currentVersionCode < minVersionCode
-                                    if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
-                                        softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
-                                    }
-                                }
-
-                                is Resource.Error -> {
-                                    updateRequired = false
-                                }
-
-                                is Resource.Loading -> { /* wait */ }
-                            }
-                            when (val healthResult = appConfigService.checkBackendHealth()) {
-                                is Resource.Success -> {
-                                    backendDegraded = healthResult.data.status == "degraded"
-                                }
-
-                                else -> {}
-                            }
-                            // SHY-0143 — the whole cold-start sequence, in one
-                            // shared object both platforms run.
-                            //
-                            // The two orderings that carry the security are
-                            // enforced by ColdStartSequencer rather than by the
-                            // order these lines happen to appear in:
-                            //   1. bans are known BEFORE the destination is
-                            //      chosen, and
-                            //   2. the cohort claim is refreshed BEFORE any
-                            //      cohort-scoped read is issued.
-                            //
-                            // `startCohortScopedReads` is a no-op here because
-                            // in Compose that event IS the NavHost mounting, and
-                            // the NavHost cannot mount until `checkComplete`
-                            // below — which happens after `run()` returns. The
-                            // ordering is therefore structural, not conventional.
                             val sequencer =
                                 ColdStartSequencer(
                                     // Awaits the deferred started above, so the
@@ -422,18 +392,85 @@ class MainActivity : AppCompatActivity() {
                                         )
                                     },
                                 )
-                            val destination = sequencer.run()
+
+                            // SHY-0500 — DRAW FIRST, confirm behind it.
+                            //
+                            // Whether a session exists is a LOCAL question, so it is
+                            // answered here with no I/O and rendered immediately. What
+                            // used to happen instead: the version check, the health
+                            // check, the ban round trip and a token refresh were all
+                            // awaited before ANY destination was chosen, and the
+                            // `!checkComplete` spinner covered the lot. On a slow
+                            // connection that is a loading screen; on a dead one it is a
+                            // loading screen for the length of a timeout. EPIC-0004
+                            // exists to remove exactly that.
+                            //
+                            // Everything below still runs, and `confirm()` may correct
+                            // this screen — to a ban, or back to sign-in with a reason.
+                            // Nothing of the person's own renders in the meantime:
+                            // cohort-scoped reads wait for the refreshed claim.
+                            initialRoute = sequencer.immediateDestination().route
+                            checkComplete = true
+
+                            when (val result = appConfigService.getLatestVersionInfo()) {
+                                is Resource.Success -> {
+                                    val (minVersionCode, latestVersionCode, latestVersionName) = result.data
+                                    updateRequired = appConfigService.currentVersionCode < minVersionCode
+                                    if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
+                                        softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
+                                    }
+                                }
+
+                                is Resource.Error -> {
+                                    updateRequired = false
+                                }
+
+                                is Resource.Loading -> { /* wait */ }
+                            }
+                            when (val healthResult = appConfigService.checkBackendHealth()) {
+                                is Resource.Success -> {
+                                    backendDegraded = healthResult.data.status == "degraded"
+                                }
+
+                                else -> {}
+                            }
+                            // SHY-0143 — the whole cold-start sequence, in one
+                            // shared object both platforms run.
+                            //
+                            // The two orderings that carry the security are
+                            // enforced by ColdStartSequencer rather than by the
+                            // order these lines happen to appear in:
+                            //   1. bans are known BEFORE the destination is
+                            //      chosen, and
+                            //   2. the cohort claim is refreshed BEFORE any
+                            //      cohort-scoped read is issued.
+                            //
+                            // `startCohortScopedReads` is a no-op here because
+                            // in Compose that event IS the NavHost mounting, and
+                            // the NavHost cannot mount until `checkComplete`
+                            // below — which happens after `run()` returns. The
+                            // ordering is therefore structural, not conventional.
+                            val confirmation = sequencer.confirm()
+                            when (confirmation) {
+                                is ColdStartConfirmation.Stay -> Unit
+
+                                is ColdStartConfirmation.Redirect -> {
+                                    // A ban is rendered above the NavHost by the
+                                    // `coldStartBan` branch; a dead session has to move
+                                    // the graph, and carries the reason so the person is
+                                    // told to sign in again rather than just deposited.
+                                    if (confirmation.screen == Screen.SignIn) {
+                                        launchRedirect = confirmation.reason
+                                    }
+                                }
+                            }
                             coldStartBan = sequencer.lastBan
                             cohortVerified = sequencer.cohortVerified
-                            initialRoute = destination.route
                             logI(
                                 TAG,
-                                "Cold-launch destination: ${destination.route} " +
-                                    "(lockGated=${destination == Screen.Lock}, " +
-                                    "banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
+                                "Cold-launch: drew $initialRoute, confirmation=$confirmation " +
+                                    "(banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
                             )
-
-                            checkComplete = true
 
                             // SHY-0143 I5 — the cohort reconcile, AFTER the
                             // shell is released and deliberately not awaited.
@@ -809,9 +846,20 @@ class MainActivity : AppCompatActivity() {
                                 // the spinner, and mounting a NavHost with no start
                                 // destination would crash.
                                 initialRoute?.let { route ->
+                                    // SHY-0500 — the background confirmation found
+                                    // the stored session dead. The shell was drawn
+                                    // optimistically, so the correction happens here.
+                                    LaunchedEffect(launchRedirect) {
+                                        if (launchRedirect != null) {
+                                            navController.navigate(Screen.SignIn.route) {
+                                                popUpTo(0) { inclusive = true }
+                                            }
+                                        }
+                                    }
                                     NavGraph(
                                         navController = navController,
                                         startDestination = route,
+                                        launchRedirect = launchRedirect,
                                         coldStartBan = coldStartBan,
                                         isBackendDegraded = backendDegraded,
                                         pendingEmailLink = pendingEmailLink,
