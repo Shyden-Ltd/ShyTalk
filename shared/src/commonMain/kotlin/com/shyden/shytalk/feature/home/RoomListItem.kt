@@ -31,7 +31,7 @@ import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -123,14 +123,14 @@ fun RoomListItem(
                                 .height(140.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (photoUrl != null) {
-                            RemoteImage(
-                                model = photoUrl,
-                                contentDescription = user.displayName,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                            )
-                        } else {
+                        // The fallback is composed UNDER the image, so an absent one
+                        // and one that never arrived show the same thing (SHY-0444).
+                        RemoteImageWithFallback(
+                            model = photoUrl,
+                            contentDescription = user.displayName,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        ) {
                             Box(
                                 modifier =
                                     Modifier

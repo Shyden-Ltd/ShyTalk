@@ -65,7 +65,7 @@ import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.shop.CoinPackageCard
@@ -1061,17 +1061,17 @@ private fun InlineSpinHistory(
                                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                         giftNames.take(10).forEach { name ->
                                             val url = iconLookup[name]
-                                            if (url != null && url.isNotBlank()) {
-                                                RemoteImage(
-                                                    model = url,
-                                                    contentDescription = name,
-                                                    modifier =
-                                                        Modifier
-                                                            .size(22.dp)
-                                                            .clip(CircleShape),
-                                                    contentScale = ContentScale.Crop,
-                                                )
-                                            } else {
+                                            // The fallback is composed UNDER the image, so an absent one
+                                            // and one that never arrived show the same thing (SHY-0444).
+                                            RemoteImageWithFallback(
+                                                model = url,
+                                                contentDescription = name,
+                                                modifier =
+                                                    Modifier
+                                                        .size(22.dp)
+                                                        .clip(CircleShape),
+                                                contentScale = ContentScale.Crop,
+                                            ) {
                                                 Text(giftEmoji(name), fontSize = 14.sp)
                                             }
                                         }
@@ -1198,13 +1198,13 @@ private fun InlinePrizeCatalog(
                                         verticalArrangement = Arrangement.Center,
                                         modifier = Modifier.fillMaxSize(),
                                     ) {
-                                        if (gift.iconUrl.isNotBlank()) {
-                                            RemoteImage(
-                                                model = gift.iconUrl,
-                                                contentDescription = gift.name,
-                                                modifier = Modifier.size(36.dp),
-                                            )
-                                        } else {
+                                        // The fallback is composed UNDER the image, so an absent one
+                                        // and one that never arrived show the same thing (SHY-0444).
+                                        RemoteImageWithFallback(
+                                            model = gift.iconUrl,
+                                            contentDescription = gift.name,
+                                            modifier = Modifier.size(36.dp),
+                                        ) {
                                             Text(giftEmoji(gift.name), fontSize = 24.sp)
                                         }
                                         Text(

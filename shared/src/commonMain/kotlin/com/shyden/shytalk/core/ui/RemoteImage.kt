@@ -1,8 +1,11 @@
 package com.shyden.shytalk.core.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.DefaultAlpha
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.painter.Painter
@@ -27,9 +30,11 @@ import coil3.compose.AsyncImage
  * to the person holding the phone and should look identical on screen.
  *
  * The default here is deliberately quiet: a filled surface tint in the image's
- * own bounds, which reads as "nothing here yet" rather than as an error. A
- * caller with something better to show passes [error] — the gift wall passes
- * its initials circle.
+ * own bounds, which reads as "nothing here yet" rather than as an error.
+ *
+ * A caller with something better to show — the gift wall's initials circle, an
+ * avatar's person icon — cannot express it as a [Painter], because those are
+ * composables. Those callers use [RemoteImageWithFallback] instead.
  */
 @Composable
 fun RemoteImage(
@@ -55,4 +60,64 @@ fun RemoteImage(
         fallback = error ?: quiet,
         alpha = alpha,
     )
+}
+
+/**
+ * Drawn nothing. Lets whatever sits behind the image show through.
+ *
+ * Distinct from simply passing `null`, which [RemoteImage] reads as "use the
+ * quiet default" — an opaque tint that would hide the fallback underneath.
+ */
+private val Nothing: Painter = ColorPainter(Color.Transparent)
+
+/**
+ * A remote image drawn OVER the screen's own answer to "there is no picture".
+ *
+ * SHY-0444. Eight screens already had a good empty state — the gift wall's
+ * tinted initials circle, [UserAvatar]'s person icon — reached through
+ * `if (iconUrl.isNotBlank())`. All eight left the FAILED-load case to
+ * [RemoteImage]'s generic tint, so a gift with no icon and a gift whose icon
+ * 404'd looked like two different things. To the person holding the phone they
+ * are the same thing.
+ *
+ * The obvious fix — pass the initials circle as [RemoteImage]'s `error` — is
+ * not available: that slot is a [Painter] and these fallbacks are composables.
+ * Re-drawing each one as a painter would mean two implementations of the same
+ * circle, kept in step by hand.
+ *
+ * So the fallback is composed UNDERNEATH and the image is transparent whenever
+ * it has nothing to show. Empty URL, dead URL, CDN outage and slow connection
+ * all reveal the same thing, and they cannot drift apart because there is only
+ * one of them. When the image arrives it simply covers it.
+ *
+ * [modifier] goes on the enclosing box, so a `.clip(CircleShape)` or `.size()`
+ * shapes the fallback and the image alike — another way the two states cannot
+ * diverge.
+ */
+@Composable
+fun RemoteImageWithFallback(
+    model: Any?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit,
+    alpha: Float = DefaultAlpha,
+    fallback: @Composable () -> Unit,
+) {
+    // A blank URL is not a request worth making. Handing Coil null sends it
+    // straight to its `fallback` slot, which is transparent here — so an empty
+    // URL and a dead one take the same path, rather than two paths that agree.
+    val request = if (model is String && model.isBlank()) null else model
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        fallback()
+        AsyncImage(
+            model = request,
+            contentDescription = contentDescription,
+            modifier = Modifier.matchParentSize(),
+            contentScale = contentScale,
+            error = Nothing,
+            placeholder = Nothing,
+            fallback = Nothing,
+            alpha = alpha,
+        )
+    }
 }

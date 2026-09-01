@@ -60,7 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.resources.*
@@ -410,23 +410,23 @@ private fun RecipientAvatar(
                 .clickable(onClick = onClick),
     ) {
         val photoUrl = user.photoUrl
-        if (photoUrl != null) {
-            RemoteImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .align(Alignment.TopCenter)
-                        .clip(CircleShape)
-                        .border(
-                            width = 2.dp,
-                            color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
-                            shape = CircleShape,
-                        ),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
+        // The fallback is composed UNDER the image, so an absent one
+        // and one that never arrived show the same thing (SHY-0444).
+        RemoteImageWithFallback(
+            model = photoUrl,
+            contentDescription = user.displayName,
+            modifier =
+                Modifier
+                    .size(40.dp)
+                    .align(Alignment.TopCenter)
+                    .clip(CircleShape)
+                    .border(
+                        width = 2.dp,
+                        color = if (isSelected) CyanAccent else MaterialTheme.colorScheme.outlineVariant,
+                        shape = CircleShape,
+                    ),
+            contentScale = ContentScale.Crop,
+        ) {
             Box(
                 modifier =
                     Modifier
@@ -980,14 +980,14 @@ fun GiftIcon(
     gift: Gift,
     size: Int,
 ) {
-    if (gift.iconUrl.isNotBlank()) {
-        RemoteImage(
-            model = gift.iconUrl,
-            contentDescription = gift.name,
-            modifier = Modifier.size(size.dp).clip(CircleShape),
-            contentScale = ContentScale.Crop,
-        )
-    } else {
+    // The fallback is composed UNDER the image, so an absent one
+    // and one that never arrived show the same thing (SHY-0444).
+    RemoteImageWithFallback(
+        model = gift.iconUrl,
+        contentDescription = gift.name,
+        modifier = Modifier.size(size.dp).clip(CircleShape),
+        contentScale = ContentScale.Crop,
+    ) {
         Box(
             modifier =
                 Modifier
