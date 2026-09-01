@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -43,14 +42,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
 import com.shyden.shytalk.resources.*
@@ -294,30 +292,10 @@ private fun FollowUserRow(
     ) {
         // Avatar
         val photoUrl = user.photoUrl
-        if (photoUrl != null) {
-            RemoteImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.padding(12.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+        UserAvatar(
+            photoUrl = photoUrl,
+            displayName = user.displayName,
+        )
 
         // Name
         Column(modifier = Modifier.weight(1f)) {
@@ -432,30 +410,10 @@ private fun StalkerUserRow(
     ) {
         // Avatar
         val photoUrl = user?.photoUrl
-        if (photoUrl != null) {
-            RemoteImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.padding(12.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+        UserAvatar(
+            photoUrl = photoUrl,
+            displayName = user?.displayName,
+        )
 
         // Name and visit count
         Column(modifier = Modifier.weight(1f)) {

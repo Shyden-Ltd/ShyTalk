@@ -64,6 +64,7 @@ import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
@@ -248,30 +249,12 @@ fun GroupSetupScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val photoUrl = user.photoUrl
-                    if (photoUrl != null) {
-                        RemoteImage(
-                            model = photoUrl,
-                            contentDescription = user.displayName,
-                            modifier =
-                                Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.padding(8.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
+                    UserAvatar(
+                        photoUrl = photoUrl,
+                        displayName = user.displayName,
+                        size = 40.dp,
+                        iconPadding = 8.dp,
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = user.displayName,

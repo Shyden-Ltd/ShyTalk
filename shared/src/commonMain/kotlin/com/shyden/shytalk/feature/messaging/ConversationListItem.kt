@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.NotificationsOff
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
@@ -33,6 +32,7 @@ import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
@@ -98,30 +98,12 @@ fun ConversationListItem(
             }
         } else {
             val photoUrl = otherUser?.photoUrl
-            if (photoUrl != null) {
-                RemoteImage(
-                    model = photoUrl,
-                    contentDescription = otherUser.displayName,
-                    modifier =
-                        Modifier
-                            .size(52.dp)
-                            .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Surface(
-                    modifier = Modifier.size(52.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.padding(14.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
+            UserAvatar(
+                photoUrl = photoUrl,
+                displayName = otherUser?.displayName,
+                size = 52.dp,
+                iconPadding = 14.dp,
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))

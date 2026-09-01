@@ -12,13 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,15 +28,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -201,30 +197,12 @@ private fun ParticipantRow(
         // Avatar with nationality flag
         Box(contentAlignment = Alignment.Center) {
             val photoUrl = participant.user.photoUrl
-            if (photoUrl != null) {
-                RemoteImage(
-                    model = photoUrl,
-                    contentDescription = participant.user.displayName,
-                    modifier =
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                ) {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.padding(8.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
-                }
-            }
+            UserAvatar(
+                photoUrl = photoUrl,
+                displayName = participant.user.displayName,
+                size = 40.dp,
+                iconPadding = 8.dp,
+            )
             val nationality = participant.user.nationality
             if (nationality != null) {
                 Box(

@@ -42,7 +42,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material.icons.filled.Star
@@ -98,6 +97,7 @@ import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.ui.SuperShyGold
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.CohortGatedFeature
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.calculateAge
@@ -813,37 +813,12 @@ private fun ProfileContent(
                             ),
                 ) {
                     val photoUrl = user.photoUrl
-                    if (photoUrl != null) {
-                        RemoteImage(
-                            model = photoUrl,
-                            contentDescription = stringResource(Res.string.profile_photo),
-                            modifier =
-                                Modifier
-                                    .size(100.dp)
-                                    .clip(CircleShape)
-                                    .then(
-                                        if (!uiState.isEditing && activeRoomId == null) {
-                                            Modifier.clickable { onTapPhoto(photoUrl) }
-                                        } else {
-                                            Modifier
-                                        },
-                                    ),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(100.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                        ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = stringResource(Res.string.profile_photo),
-                                modifier = Modifier.padding(24.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
+                    UserAvatar(
+                        photoUrl = photoUrl,
+                        displayName = stringResource(Res.string.profile_photo),
+                        size = 100.dp,
+                        iconPadding = 24.dp,
+                    )
 
                     // Voice room indicator overlay
                     if (activeRoomId != null) {

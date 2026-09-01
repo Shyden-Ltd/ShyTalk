@@ -16,13 +16,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -35,7 +33,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -44,15 +41,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -288,35 +283,11 @@ private fun RecentUserAvatar(
         modifier = Modifier.clickable(onClick = onClick),
     ) {
         val photoUrl = user.photoUrl
-        if (photoUrl != null) {
-            RemoteImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color =
-                    if (isSelected) {
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    } else {
-                        MaterialTheme.colorScheme.primaryContainer
-                    },
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.padding(10.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+        UserAvatar(
+            photoUrl = photoUrl,
+            displayName = user.displayName,
+            iconPadding = 10.dp,
+        )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = user.displayName.split(" ").first(),
@@ -348,30 +319,12 @@ private fun UserSelectionRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val photoUrl = user.photoUrl
-        if (photoUrl != null) {
-            RemoteImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.padding(8.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+        UserAvatar(
+            photoUrl = photoUrl,
+            displayName = user.displayName,
+            size = 40.dp,
+            iconPadding = 8.dp,
+        )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = user.displayName,

@@ -45,7 +45,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,7 +64,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -77,8 +75,8 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.platform.AppPermission
 import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.platform.SettingsType
-import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.ui.UserAvatar
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.feature.support.SupportSource
@@ -766,30 +764,12 @@ private fun BlockedUserRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val photoUrl = user.photoUrl
-        if (photoUrl != null) {
-            RemoteImage(
-                model = photoUrl,
-                contentDescription = user.displayName,
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-            ) {
-                Icon(
-                    Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.padding(10.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+        UserAvatar(
+            photoUrl = photoUrl,
+            displayName = user.displayName,
+            size = 40.dp,
+            iconPadding = 10.dp,
+        )
 
         Text(
             text = user.displayName.ifEmpty { stringResource(Res.string.unknown) },
