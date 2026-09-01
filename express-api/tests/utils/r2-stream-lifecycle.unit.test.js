@@ -24,7 +24,7 @@
  */
 
 const { PassThrough, Writable } = require('node:stream');
-const { EventEmitter } = require('node:events');
+const { EventEmitter, once } = require('node:events');
 
 const { pipeToResponse } = require('../../src/utils/r2');
 
@@ -78,7 +78,9 @@ describe('pipeToResponse', () => {
     pipeToResponse(body, res);
 
     body.end('all of it');
-    await new Promise((r) => setTimeout(r, 10));
+    // Awaits the real event rather than a duration: the thing we care about is
+    // that the response FINISHED, and a fixed sleep is either flaky or slow.
+    await once(res, 'finish');
     const destroyedBeforeClose = body.destroyed;
 
     res.emit('close');
