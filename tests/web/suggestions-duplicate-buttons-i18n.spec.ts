@@ -53,8 +53,8 @@ test.describe('Suggestions-board duplicate-detection buttons i18n', () => {
     expect(src, 'should not contain hardcoded "Yes, this is what I meant"').not.toContain('Yes, this is what I meant');
     expect(src, 'should not contain hardcoded "No, my idea is different"').not.toContain('No, my idea is different');
     // Sanity: confirms we DID swap to sgT
-    expect(src, 'should now use sgT("duplicate_match")').toContain('sgT("duplicate_match")');
-    expect(src, 'should now use sgT("duplicate_different")').toContain('sgT("duplicate_different")');
+    expect(src, 'should now use sgT("duplicate_match")').toMatch(/sgT\(['"]duplicate_match['"]\)/);
+    expect(src, 'should now use sgT("duplicate_different")').toMatch(/sgT\(['"]duplicate_different['"]\)/);
   });
 
   test('Korean locale: sgT returns Hangul for both keys', async ({ page }) => {

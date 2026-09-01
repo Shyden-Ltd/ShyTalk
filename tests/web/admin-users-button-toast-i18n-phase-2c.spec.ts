@@ -45,18 +45,18 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Searching...', /textContent\s*=\s*"Searching\.\.\."/],
-      ['Search reset', /searchBtnEl\.textContent\s*=\s*"Search"/],
-      ['Show (email toggle)', /emailToggle\.textContent\s*=\s*"Show"/],
-      ['Hide (email toggle)', /emailToggle\.textContent\s*=\s*"Hide"/],
-      ['Saving… (email)', /text\.textContent\s*=\s*"Saving…"/],
-      ['Undo link', /undoLink\.textContent\s*=\s*"Undo"/],
-      ['Display name empty toast', /showToast\("Display name cannot be empty"/],
-      ['Undo successful toast', /showToast\("Undo successful"\)/],
-      ['Already in list toast', /showToast\("Already in list"/],
-      ['Loading...', /ld\.textContent\s*=\s*"Loading\.\.\."/],
-      ['No warnings', /ed\.textContent\s*=\s*"No warnings"/],
-      ['Revoke button', /rb\.textContent\s*=\s*"Revoke"/],
+      ['Searching...', /textContent\s*=\s*['"]Searching\.\.\.['"]/],
+      ['Search reset', /searchBtnEl\.textContent\s*=\s*['"]Search['"]/],
+      ['Show (email toggle)', /emailToggle\.textContent\s*=\s*['"]Show['"]/],
+      ['Hide (email toggle)', /emailToggle\.textContent\s*=\s*['"]Hide['"]/],
+      ['Saving… (email)', /text\.textContent\s*=\s*['"]Saving…['"]/],
+      ['Undo link', /undoLink\.textContent\s*=\s*['"]Undo['"]/],
+      ['Display name empty toast', /showToast\(['"]Display name cannot be empty['"]/],
+      ['Undo successful toast', /showToast\(['"]Undo successful['"]\)/],
+      ['Already in list toast', /showToast\(['"]Already in list['"]/],
+      ['Loading...', /ld\.textContent\s*=\s*['"]Loading\.\.\.['"]/],
+      ['No warnings', /ed\.textContent\s*=\s*['"]No warnings['"]/],
+      ['Revoke button', /rb\.textContent\s*=\s*['"]Revoke['"]/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -66,7 +66,7 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     const allKeys = [...PHASE_2C_NEW_KEYS, 'btn_search', 'msg_loading'];
     for (const key of allKeys) {
       expect(src, `users.js should call tAdmin("${key}")`).toMatch(
-        new RegExp(`window\\.tAdmin\\("${key}"\\)`),
+        new RegExp(`window\\.tAdmin\\(['"]${key}['"]\\)`),
       );
     }
   });

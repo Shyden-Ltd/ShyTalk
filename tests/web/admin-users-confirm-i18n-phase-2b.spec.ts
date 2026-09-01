@@ -51,13 +51,13 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Revoke this warning', /confirm\("Revoke this warning\? \+"/],
-      ['Revoke biometric', /confirm\("Revoke biometric key for device "/],
-      ['Issue a warning', /confirm\("Issue a warning for /],
-      ['Failed to schedule deletion', /alert\("Failed to schedule deletion: "/],
-      ['Failed to cancel deletion', /alert\("Failed to cancel deletion: "/],
-      ['Ban IP', /confirm\("Ban IP "/],
-      ['Suspend identity graph (interpolated)', /confirm\("Suspend identity graph for this user \("/],
+      ['Revoke this warning', /confirm\(['"]Revoke this warning\? \+['"]/],
+      ['Revoke biometric', /confirm\(['"]Revoke biometric key for device ['"]/],
+      ['Issue a warning', /confirm\(['"]Issue a warning for /],
+      ['Failed to schedule deletion', /alert\(['"]Failed to schedule deletion: ['"]/],
+      ['Failed to cancel deletion', /alert\(['"]Failed to cancel deletion: ['"]/],
+      ['Ban IP', /confirm\(['"]Ban IP ['"]/],
+      ['Suspend identity graph (interpolated)', /confirm\(['"]Suspend identity graph for this user \(['"]/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -65,7 +65,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
 
     for (const key of PHASE_2B_KEYS) {
       expect(src, `users.js should call tAdminFmt("${key}", ...)`).toMatch(
-        new RegExp(`window\\.tAdminFmt\\("${key}"`),
+        new RegExp(`window\\.tAdminFmt\\(['"]${key}['"]`),
       );
     }
   });

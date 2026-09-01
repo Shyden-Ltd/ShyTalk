@@ -45,14 +45,14 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
     const hardcodedNames = ['Pending', 'Accepted', 'Planned', 'Completed', 'Rejected'];
     for (const name of hardcodedNames) {
       expect(arrSrc, `STATUS_OPTIONS should not hardcode "${name}"`).not.toMatch(
-        new RegExp(`label:\\s*"${name}"`),
+        new RegExp(`label:\\s*['"]${name}['"]`),
       );
     }
 
     // Sanity: verify the new sgT()-driven form is present for each key.
     for (const key of STATUS_KEYS) {
       expect(arrSrc, `STATUS_OPTIONS should use sgT("${key}")`).toMatch(
-        new RegExp(`label:\\s*sgT\\("${key}"\\)`),
+        new RegExp(`label:\\s*sgT\\(['"]${key}['"]\\)`),
       );
     }
   });

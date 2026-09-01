@@ -51,12 +51,12 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
 
     // Negative assertions: hardcoded English literals are gone
     const hardcoded: Array<[string, RegExp]> = [
-      ['Reset PIN lockout', /confirm\("Reset PIN lockout for this user\?"\)/],
-      ['Unsuspend this user', /confirm\("Unsuspend this user\?/],
-      ['Reset GCS', /confirm\("Reset this user's GCS/],
-      ['Schedule deletion', /confirm\("Are you sure you want to schedule/],
-      ['Account deletion scheduled', /alert\("Account deletion scheduled\."\)/],
-      ['Cancel deletion', /confirm\("Cancel the scheduled account deletion\?"\)/],
+      ['Reset PIN lockout', /confirm\(['"]Reset PIN lockout for this user\?['"]\)/],
+      ['Unsuspend this user', /confirm\(['"]Unsuspend this user\?/],
+      ['Reset GCS', /confirm\(['"]Reset this user's GCS/],
+      ['Schedule deletion', /confirm\(['"]Are you sure you want to schedule/],
+      ['Account deletion scheduled', /alert\(['"]Account deletion scheduled\.['"]\)/],
+      ['Cancel deletion', /confirm\(['"]Cancel the scheduled account deletion\?['"]\)/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -65,7 +65,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     // Positive assertions: tAdmin call is wired for each
     for (const key of ADMIN_KEYS) {
       expect(src, `users.js should call tAdmin("${key}")`).toMatch(
-        new RegExp(`window\\.tAdmin\\("${key}"\\)`),
+        new RegExp(`window\\.tAdmin\\(['"]${key}['"]\\)`),
       );
     }
   });

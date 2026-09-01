@@ -44,13 +44,13 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['IP banned', /,\s*"IP banned"\)/],
-      ['Identity graph suspended', /showToast\("Identity graph suspended"/],
-      ['Identity graph unsuspended', /showToast\("Identity graph unsuspended"/],
-      ['Enter reason for account deletion prompt', /prompt\("Enter reason for account deletion/],
-      ['Reason optional prompt', /prompt\("Reason \(optional\):"\)/],
+      ['IP banned', /,\s*['"]IP banned['"]\)/],
+      ['Identity graph suspended', /showToast\(['"]Identity graph suspended['"]/],
+      ['Identity graph unsuspended', /showToast\(['"]Identity graph unsuspended['"]/],
+      ['Enter reason for account deletion prompt', /prompt\(['"]Enter reason for account deletion/],
+      ['Reason optional prompt', /prompt\(['"]Reason \(optional\):['"]\)/],
       ['Device: biometric label (literal HTML)', /<strong>Device:<\/strong>/],
-      ['Registered: biometric label', /">Registered: /],
+      ['Registered: biometric label', /['"]>Registered: /],
       ['ban call(s) failed segment', /\$\{rejected\.length\}\/\$\{devices\.length\} ban call/],
       ['PMs failed segment', /\$\{aggregatePmFailed\}\/\$\{aggregatePmTotal\} PMs failed/],
     ];
@@ -60,11 +60,11 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
 
     for (const key of PHASE_2H_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
     // prompt_ban_reason is used at ≥2 sites (ban-all-devices + ban-IP)
-    const banReasonMatches = src.match(/tAdmin\("prompt_ban_reason"\)/g) || [];
+    const banReasonMatches = src.match(/tAdmin\(['"]prompt_ban_reason['"]\)/g) || [];
     expect(banReasonMatches.length, 'prompt_ban_reason should be ≥2x').toBeGreaterThanOrEqual(2);
   });
 

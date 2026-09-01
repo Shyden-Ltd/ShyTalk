@@ -56,7 +56,7 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
     // Every new key should be referenced by a sgT() call.
     for (const key of TOAST_KEYS) {
       expect(src, `suggestions-board.js should call sgT("${key}")`).toMatch(
-        new RegExp(`sgT\\("${key}"\\)`),
+        new RegExp(`sgT\\(['"]${key}['"]\\)`),
       );
     }
 
@@ -65,18 +65,18 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
     // KEY literal but not the ENGLISH literal, so these checks are
     // robust).
     const hardcodedFails: Array<[string, RegExp]> = [
-      ['Vote failed: in showToast', /showToast\("Vote failed:/],
-      ['Redirecting in showToast', /showToast\("Redirecting to existing suggestion"\)/],
-      ['Submitting... in textContent', /textContent\s*=\s*"Submitting\.\.\."/],
-      ['Topic not allowed in showToast', /showToast\("This topic is not allowed:/],
-      ['Submit reset in textContent', /submitBtn\.textContent\s*=\s*"Submit"/],
-      ['Suggestion submitted toast', /showToast\("Suggestion submitted!/],
-      ['Failed to submit in showToast', /showToast\("Failed to submit:/],
-      ['Posting... in textContent', /btn\.textContent\s*=\s*"Posting\.\.\."/],
-      ['Comment posted in showToast', /showToast\("Comment posted"\)/],
-      ['Failed to post in showToast', /"Failed to post comment:/],
-      ['Post reset in textContent', /btn\.textContent\s*=\s*"Post"/],
-      ['Unknown error string', /"Unknown error"/],
+      ['Vote failed: in showToast', /showToast\(['"]Vote failed:/],
+      ['Redirecting in showToast', /showToast\(['"]Redirecting to existing suggestion['"]\)/],
+      ['Submitting... in textContent', /textContent\s*=\s*['"]Submitting\.\.\.['"]/],
+      ['Topic not allowed in showToast', /showToast\(['"]This topic is not allowed:/],
+      ['Submit reset in textContent', /submitBtn\.textContent\s*=\s*['"]Submit['"]/],
+      ['Suggestion submitted toast', /showToast\(['"]Suggestion submitted!/],
+      ['Failed to submit in showToast', /showToast\(['"]Failed to submit:/],
+      ['Posting... in textContent', /btn\.textContent\s*=\s*['"]Posting\.\.\.['"]/],
+      ['Comment posted in showToast', /showToast\(['"]Comment posted['"]\)/],
+      ['Failed to post in showToast', /['"]Failed to post comment:/],
+      ['Post reset in textContent', /btn\.textContent\s*=\s*['"]Post['"]/],
+      ['Unknown error string', /['"]Unknown error['"]/],
     ];
     for (const [name, re] of hardcodedFails) {
       expect(src, `Should not contain hardcoded: ${name}`).not.toMatch(re);

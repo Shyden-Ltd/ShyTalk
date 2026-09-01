@@ -30,7 +30,10 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
     // The old format strings should be gone.
-    expect(src, 'should not return hardcoded "just now"').not.toContain('"just now"');
+    // Quote-agnostic on purpose: public/ is Prettier-formatted as of SHY-0448,
+    // and a negative assertion pinned to one quote style stops being able to
+    // fail — it passes forever while protecting nothing.
+    expect(src, 'should not return hardcoded "just now"').not.toMatch(/['"]just now['"]/);
     expect(src, 'should not return hardcoded "m ago"').not.toMatch(/return\s+\w+\s*\+\s*"m ago"/);
     expect(src, 'should not return hardcoded "h ago"').not.toMatch(/return\s+\w+\s*\+\s*"h ago"/);
     expect(src, 'should not return hardcoded "d ago"').not.toMatch(/return\s+\w+\s*\+\s*"d ago"/);
