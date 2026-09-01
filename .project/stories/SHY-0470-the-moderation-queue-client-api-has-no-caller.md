@@ -1,7 +1,7 @@
 ---
 id: SHY-0470
-status: Draft
-owner: unassigned
+status: In Review
+owner: claude
 created: 2026-08-27
 priority: P3
 effort: S
