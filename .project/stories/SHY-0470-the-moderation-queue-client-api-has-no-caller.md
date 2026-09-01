@@ -139,3 +139,8 @@ ticket rather than a deletion:
   somebody re-derived that nothing calls these.
 - P3: nothing is broken and nothing is exposed. It is tidiness with a decision
   attached.
+- 2026-09-01 — **Built, reviewed and pushed** on `story/SHY-0470-remove-the-uncalled-moderation-queue-api` (base `develop`), PR #2124. Premise re-proved before acting: no production caller in any source set, and the web admin console reaches moderation through the Express endpoints directly (`public/admin/js/tabs/reports.js`), never through the client repository — so the endpoints are untouched and console moderation is unaffected. Followed the orphan chain to its end per the AC: both methods, `ReportJsonParser` + `ResolveReportOutcome`, the `Report` model, `TestData.createTestReport`, `FakeReportRepository.reports`, and 9 + all `ReportJsonParserTest` cases. **831 deletions, 5 insertions.**
+- 2026-09-01 — **The Risks section was right.** `androidTest` was already un-compilable on `origin/develop` (verified against that baseline): the SHY-0244 push-identifier migration renamed `saveFcmToken`/`removeFcmToken` and left `FakeNotificationRepository` overriding methods that no longer exist. The AC requires that source set to compile, so it is repaired here. Because this is the **second** occurrence (SHY-0466 was the first) and a story note did not prevent it, `:app:compileDevDebugAndroidTestKotlin` was **added to the gradle gate in `pr-checks.yml`** — a CI gate addition, stated plainly; nothing was loosened.
+- 2026-09-01 — Gate: `:app:testDevDebugUnitTest` 2262/0, `:shared:jvmTest` 1744/0, `:app:compileDevDebugAndroidTestKotlin` green (red on develop), `:shared:compileKotlinIosArm64` green, `detekt` + `ktlintCheck` clean.
+
+Reviewed-up-to: 5d16f19b9b1
