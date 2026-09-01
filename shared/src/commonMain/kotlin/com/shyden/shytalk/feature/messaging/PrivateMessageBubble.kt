@@ -545,7 +545,10 @@ fun PrivateMessageBubble(
                     onDismissRequest = { showReactionPicker = false },
                     properties = PopupProperties(focusable = true),
                 ) {
+                    // SHY-0462: a Popup is its own Compose window and takes no
+                    // `modifier`, so the semantics ride on its content instead.
                     ReactionPicker(
+                        modifier = Modifier.exposeTestTagsToPlatformDumps(),
                         onReact = { emoji ->
                             showReactionPicker = false
                             onToggleReaction(emoji)

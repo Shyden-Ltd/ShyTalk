@@ -57,6 +57,7 @@ import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.ui.StyledDisplayName
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.components.FlagBadge
@@ -240,6 +241,10 @@ fun SeatItem(
 
             // Context menu (only leave seat for current user)
             DropdownMenu(
+                // SHY-0462: this is its own Compose window, so testTags inside it do not
+                // reach uiautomator without this — the dump shows android:id/content
+                // and nothing else while the controls are plainly on screen.
+                modifier = Modifier.exposeTestTagsToPlatformDumps(),
                 expanded = showMenu,
                 onDismissRequest = { showMenu = false },
             ) {

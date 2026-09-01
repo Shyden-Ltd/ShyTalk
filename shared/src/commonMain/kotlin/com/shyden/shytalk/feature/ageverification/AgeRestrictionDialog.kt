@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.age_restriction_dismiss
 import com.shyden.shytalk.resources.age_restriction_needs_verification_body
@@ -44,6 +45,10 @@ fun AgeRestrictionDialog(
 
         AgeRestrictionDialogState.NeedsVerification -> {
             AlertDialog(
+                // SHY-0462: this is its own Compose window, so testTags inside it do not
+                // reach uiautomator without this — the dump shows android:id/content
+                // and nothing else while the controls are plainly on screen.
+                modifier = Modifier.exposeTestTagsToPlatformDumps(),
                 onDismissRequest = onDismiss,
                 title = {
                     Text(
@@ -81,6 +86,10 @@ fun AgeRestrictionDialog(
 
         AgeRestrictionDialogState.SubEighteen -> {
             AlertDialog(
+                // SHY-0462: this is its own Compose window, so testTags inside it do not
+                // reach uiautomator without this — the dump shows android:id/content
+                // and nothing else while the controls are plainly on screen.
+                modifier = Modifier.exposeTestTagsToPlatformDumps(),
                 onDismissRequest = onDismiss,
                 title = {
                     Text(

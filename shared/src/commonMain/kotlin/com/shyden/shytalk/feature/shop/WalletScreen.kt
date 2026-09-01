@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -306,6 +307,10 @@ private fun BeansTab(
     confirmAmount?.let { amount ->
         val coins = if (amount >= 2_000) (amount * 1.1).toLong() else amount
         AlertDialog(
+            // SHY-0462: this is its own Compose window, so testTags inside it do not
+            // reach uiautomator without this — the dump shows android:id/content
+            // and nothing else while the controls are plainly on screen.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { confirmAmount = null },
             title = { Text(stringResource(Res.string.confirm_redemption)) },
             text = {

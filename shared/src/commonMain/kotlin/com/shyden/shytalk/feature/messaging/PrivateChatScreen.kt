@@ -75,6 +75,7 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
 import com.shyden.shytalk.core.util.isKeyboardVisible
 import com.shyden.shytalk.core.util.rememberRelativeTimeStrings
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.feature.support.SupportSource
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -329,6 +330,10 @@ fun PrivateChatScreen(
                                 Icon(Icons.Default.MoreVert, contentDescription = null)
                             }
                             DropdownMenu(
+                                // SHY-0462: this is its own Compose window, so testTags inside it do not
+                                // reach uiautomator without this — the dump shows android:id/content
+                                // and nothing else while the controls are plainly on screen.
+                                modifier = Modifier.exposeTestTagsToPlatformDumps(),
                                 expanded = showOverflowMenu,
                                 onDismissRequest = { showOverflowMenu = false },
                             ) {
@@ -976,11 +981,16 @@ fun PrivateChatScreen(
             onDismissRequest = { showImageViewer = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            FullscreenImageViewer(
-                imageUrls = urls,
-                initialIndex = idx,
-                onDismiss = { showImageViewer = null },
-            )
+            // SHY-0462: `Dialog` takes no `modifier`, and FullscreenImageViewer
+            // does not accept one either, so the semantics go on a wrapper. The
+            // dialog is full-bleed, so a Box around it changes no layout.
+            Box(modifier = Modifier.exposeTestTagsToPlatformDumps()) {
+                FullscreenImageViewer(
+                    imageUrls = urls,
+                    initialIndex = idx,
+                    onDismiss = { showImageViewer = null },
+                )
+            }
         }
     }
 

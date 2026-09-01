@@ -243,6 +243,9 @@ fun AppSettingsScreen(
     // Sign Out confirmation dialog
     if (showSignOutDialog) {
         AlertDialog(
+            // SHY-0462: own Compose window; tags inside are invisible
+            // to uiautomator without this.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { showSignOutDialog = false },
             title = { Text(stringResource(Res.string.sign_out)) },
             text = { Text(stringResource(Res.string.sign_out_confirm)) },
@@ -289,7 +292,7 @@ fun AppSettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.clearCache() },
-                    modifier = Modifier.testTag("settings_clearCacheConfirmButton"),
+                    modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_clearCacheConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.clear))
                 }
@@ -314,7 +317,7 @@ fun AppSettingsScreen(
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.resetCacheCleared() },
-                    modifier = Modifier.testTag("settings_cacheClearedOkButton"),
+                    modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_cacheClearedOkButton"),
                 ) {
                     Text(stringResource(Res.string.ok))
                 }
@@ -326,6 +329,9 @@ fun AppSettingsScreen(
     uiState.updateCheckResult?.let { result ->
         var openStoreFailed by remember(result) { mutableStateOf(false) }
         AlertDialog(
+            // SHY-0462: own Compose window; tags inside are invisible
+            // to uiautomator without this.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { viewModel.dismissUpdateResult() },
             title = {
                 Text(
@@ -551,7 +557,7 @@ private fun SettingsMainPage(
             title = { Text(stringResource(Res.string.language)) },
             text = {
                 Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    modifier = Modifier.exposeTestTagsToPlatformDumps().verticalScroll(rememberScrollState()),
                 ) {
                     SUPPORTED_LANGUAGES.forEach { (code, name) ->
                         Row(
@@ -728,7 +734,7 @@ private fun BlockedUsersPage(
                         onUnblockUser(user.uid)
                         showUnblockDialog = null
                     },
-                    modifier = Modifier.testTag("settings_unblockConfirmButton"),
+                    modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_unblockConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.unblock))
                 }
@@ -957,7 +963,7 @@ private fun AccountPage(
                         showPinVerification = true
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                    modifier = Modifier.testTag("settings_deleteAccountConfirmButton"),
+                    modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_deleteAccountConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.delete_account))
                 }
@@ -976,6 +982,9 @@ private fun AccountPage(
     if (showPinVerification) {
         var pinInput by remember { mutableStateOf("") }
         AlertDialog(
+            // SHY-0462: own Compose window; tags inside are invisible
+            // to uiautomator without this.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { showPinVerification = false },
             title = { Text(stringResource(Res.string.delete_account_pin_required)) },
             text = {
@@ -1132,7 +1141,7 @@ private fun LinkedAccountsPage(
                         onUnlinkProvider(provider.type, provider.identifier)
                         showUnlinkDialog = null
                     },
-                    modifier = Modifier.testTag("settings_unlinkProviderConfirmButton"),
+                    modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_unlinkProviderConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.unlink), color = MaterialTheme.colorScheme.error)
                 }
@@ -1487,7 +1496,7 @@ private fun NotificationsPage(
                                     onSetDndStartMinute(startState.minute)
                                     showStartTimePicker = false
                                 },
-                                modifier = Modifier.testTag("settings_dndStartConfirmButton"),
+                                modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_dndStartConfirmButton"),
                             ) { Text(stringResource(Res.string.ok)) }
                         },
                         dismissButton = {
@@ -1516,7 +1525,7 @@ private fun NotificationsPage(
                                     onSetDndEndMinute(endState.minute)
                                     showEndTimePicker = false
                                 },
-                                modifier = Modifier.testTag("settings_dndEndConfirmButton"),
+                                modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("settings_dndEndConfirmButton"),
                             ) { Text(stringResource(Res.string.ok)) }
                         },
                         dismissButton = {

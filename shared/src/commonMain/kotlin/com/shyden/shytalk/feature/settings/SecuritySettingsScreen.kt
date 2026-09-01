@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.feature.auth.PinVerifyDialog
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.StringResource
@@ -121,6 +122,10 @@ fun SecuritySettingsScreen(
                     trailingContent = {
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                         DropdownMenu(
+                            // SHY-0462: this is its own Compose window, so testTags inside it do not
+                            // reach uiautomator without this — the dump shows android:id/content
+                            // and nothing else while the controls are plainly on screen.
+                            modifier = Modifier.exposeTestTagsToPlatformDumps(),
                             expanded = showTimeoutMenu,
                             onDismissRequest = { showTimeoutMenu = false },
                         ) {

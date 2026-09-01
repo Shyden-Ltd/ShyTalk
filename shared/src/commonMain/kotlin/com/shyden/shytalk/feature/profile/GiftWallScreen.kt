@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -138,7 +139,12 @@ fun GiftWallContent(
         val wallEntry = state.wallEntries.find { it.giftId == selectedId }
 
         if (gift != null) {
-            ModalBottomSheet(onDismissRequest = onDismissDetails) {
+            ModalBottomSheet(
+                onDismissRequest = onDismissDetails,
+                // SHY-0462: its own Compose window; tags inside it do not reach
+                // uiautomator without this.
+                modifier = Modifier.exposeTestTagsToPlatformDumps(),
+            ) {
                 Column(
                     modifier = Modifier.padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,

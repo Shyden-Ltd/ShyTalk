@@ -65,6 +65,7 @@ import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -485,6 +486,9 @@ fun PermissionLevelSelector(
             DropdownMenu(
                 expanded = expanded,
                 onDismissRequest = { expanded = false },
+                // SHY-0462: its own Compose window; without this the entries
+                // inside are invisible to uiautomator.
+                modifier = Modifier.exposeTestTagsToPlatformDumps(),
             ) {
                 GroupPermissions.PermissionLevel.entries.forEach { level ->
                     DropdownMenuItem(
