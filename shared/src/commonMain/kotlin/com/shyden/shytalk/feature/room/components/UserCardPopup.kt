@@ -47,8 +47,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.resources.*
@@ -118,7 +118,7 @@ fun UserCardPopup(
             Box {
                 val photoUrl = user.photoUrl
                 if (photoUrl != null) {
-                    AsyncImage(
+                    RemoteImage(
                         model = photoUrl,
                         contentDescription = user.displayName,
                         modifier =

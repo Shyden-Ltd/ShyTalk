@@ -40,8 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GachaGift
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -257,7 +257,7 @@ private fun WinCard(
             modifier = Modifier.fillMaxSize(),
         ) {
             if (win.iconUrl.isNotBlank()) {
-                AsyncImage(
+                RemoteImage(
                     model = win.iconUrl,
                     contentDescription = win.giftName,
                     modifier = Modifier.size(28.dp),

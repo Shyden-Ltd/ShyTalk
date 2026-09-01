@@ -57,10 +57,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.resources.*
@@ -411,7 +411,7 @@ private fun RecipientAvatar(
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
                 modifier =
@@ -981,7 +981,7 @@ fun GiftIcon(
     size: Int,
 ) {
     if (gift.iconUrl.isNotBlank()) {
-        AsyncImage(
+        RemoteImage(
             model = gift.iconUrl,
             contentDescription = gift.name,
             modifier = Modifier.size(size.dp).clip(CircleShape),

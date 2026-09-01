@@ -37,7 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -132,7 +132,7 @@ fun ReportUserDialog(
                         ) {
                             itemsIndexed(evidenceItems) { index, bytes ->
                                 Box(modifier = Modifier.size(72.dp)) {
-                                    AsyncImage(
+                                    RemoteImage(
                                         model = bytes,
                                         contentDescription = "Evidence photo ${index + 1}",
                                         modifier =

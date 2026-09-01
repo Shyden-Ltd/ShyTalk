@@ -36,8 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.feature.room.RoomClosedSummary
 import com.shyden.shytalk.resources.*
@@ -217,7 +217,7 @@ private fun UserChip(
     borderColor: Color,
 ) {
     Box(contentAlignment = Alignment.Center) {
-        AsyncImage(
+        RemoteImage(
             model = user.photoUrl,
             contentDescription = user.displayName,
             modifier =

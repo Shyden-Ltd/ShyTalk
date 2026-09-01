@@ -64,9 +64,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.model.PrivateMessage
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.ReportMessageDialog
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
@@ -259,7 +259,7 @@ fun PrivateChatScreen(
                             // Avatar
                             val photoUrl = otherUser?.photoUrl
                             if (photoUrl != null) {
-                                AsyncImage(
+                                RemoteImage(
                                     model = photoUrl,
                                     contentDescription = otherUser.displayName,
                                     modifier =

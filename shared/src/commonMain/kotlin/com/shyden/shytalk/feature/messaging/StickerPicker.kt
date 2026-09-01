@@ -34,10 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -113,7 +113,7 @@ fun StickerPicker(
                     }
                 }
                 items(stickers, key = { it.id }) { sticker ->
-                    AsyncImage(
+                    RemoteImage(
                         model =
                             ImageRequest
                                 .Builder(LocalPlatformContext.current)

@@ -90,11 +90,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.platform.PlatformImagePicker
 import com.shyden.shytalk.core.platform.PlatformProfilePhotoPicker
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.ui.SuperShyGold
@@ -430,7 +430,7 @@ fun ProfileScreen(
                         .clickable { fullscreenPhotoUrl = null },
                 contentAlignment = Alignment.Center,
             ) {
-                AsyncImage(
+                RemoteImage(
                     model = url,
                     contentDescription = stringResource(Res.string.full_screen_photo),
                     modifier = Modifier.fillMaxWidth(),
@@ -643,7 +643,7 @@ private fun ProfileContent(
                         ),
             ) {
                 if (coverUrl != null) {
-                    AsyncImage(
+                    RemoteImage(
                         model = coverUrl,
                         contentDescription = stringResource(Res.string.cover_photo),
                         modifier = Modifier.fillMaxSize(),
@@ -814,7 +814,7 @@ private fun ProfileContent(
                 ) {
                     val photoUrl = user.photoUrl
                     if (photoUrl != null) {
-                        AsyncImage(
+                        RemoteImage(
                             model = photoUrl,
                             contentDescription = stringResource(Res.string.profile_photo),
                             modifier =
@@ -1414,7 +1414,7 @@ private fun BackpackItemCell(
     ) {
         Box(contentAlignment = Alignment.TopEnd) {
             if (gift.iconUrl.isNotBlank()) {
-                AsyncImage(
+                RemoteImage(
                     model = gift.iconUrl,
                     contentDescription = gift.name,
                     modifier =

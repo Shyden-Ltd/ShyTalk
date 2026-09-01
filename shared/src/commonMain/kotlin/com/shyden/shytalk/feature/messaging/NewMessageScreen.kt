@@ -50,8 +50,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -289,7 +289,7 @@ private fun RecentUserAvatar(
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
                 modifier =
@@ -349,7 +349,7 @@ private fun UserSelectionRow(
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
                 modifier =

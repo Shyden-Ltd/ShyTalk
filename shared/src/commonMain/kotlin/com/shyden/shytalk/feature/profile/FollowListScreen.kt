@@ -46,9 +46,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.formatRelativeTime
@@ -295,7 +295,7 @@ private fun FollowUserRow(
         // Avatar
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
                 modifier =
@@ -433,7 +433,7 @@ private fun StalkerUserRow(
         // Avatar
         val photoUrl = user?.photoUrl
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
                 modifier =

@@ -48,13 +48,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Conversation
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
 import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -329,7 +329,7 @@ private fun MembersTab(
                 ) {
                     val photoUrl = user.photoUrl
                     if (photoUrl != null) {
-                        AsyncImage(
+                        RemoteImage(
                             model = photoUrl,
                             contentDescription = user.displayName,
                             modifier =

@@ -48,7 +48,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -56,6 +55,7 @@ import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.PrivateMessageType
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SendStatus
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.formatRelativeTime
@@ -336,7 +336,7 @@ fun PrivateMessageBubble(
 
                     // Sticker
                     if (message.type == PrivateMessageType.STICKER && !message.stickerUrl.isNullOrEmpty()) {
-                        AsyncImage(
+                        RemoteImage(
                             model =
                                 ImageRequest
                                     .Builder(LocalPlatformContext.current)
@@ -668,7 +668,7 @@ private fun LocalImageGrid(
 ) {
     when (localImageData.size) {
         1 -> {
-            AsyncImage(
+            RemoteImage(
                 model = localImageData[0],
                 contentDescription = stringResource(Res.string.image),
                 modifier =
@@ -690,7 +690,7 @@ private fun LocalImageGrid(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 localImageData.forEach { data ->
-                    AsyncImage(
+                    RemoteImage(
                         model = data,
                         contentDescription = stringResource(Res.string.image),
                         modifier =
@@ -716,7 +716,7 @@ private fun LocalImageGrid(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         row.forEach { data ->
-                            AsyncImage(
+                            RemoteImage(
                                 model = data,
                                 contentDescription = stringResource(Res.string.image),
                                 modifier =
@@ -750,7 +750,7 @@ private fun ImageGrid(
 ) {
     when (imageUrls.size) {
         1 -> {
-            AsyncImage(
+            RemoteImage(
                 model = imageUrls[0],
                 contentDescription = stringResource(Res.string.image),
                 modifier =
@@ -772,7 +772,7 @@ private fun ImageGrid(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 imageUrls.forEachIndexed { index, url ->
-                    AsyncImage(
+                    RemoteImage(
                         model = url,
                         contentDescription = stringResource(Res.string.image),
                         modifier =
@@ -800,7 +800,7 @@ private fun ImageGrid(
                     ) {
                         row.forEachIndexed { colIndex, url ->
                             val globalIndex = rowIndex * 2 + colIndex
-                            AsyncImage(
+                            RemoteImage(
                                 model = url,
                                 contentDescription = stringResource(Res.string.image),
                                 modifier =

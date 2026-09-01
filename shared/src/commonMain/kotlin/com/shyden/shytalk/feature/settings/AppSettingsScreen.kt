@@ -69,7 +69,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.effects.PlatformBackHandler
 import com.shyden.shytalk.core.model.LinkedProvider
 import com.shyden.shytalk.core.model.PmPrivacy
@@ -78,6 +77,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.platform.AppPermission
 import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.platform.SettingsType
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
@@ -767,7 +767,7 @@ private fun BlockedUserRow(
     ) {
         val photoUrl = user.photoUrl
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = user.displayName,
                 modifier =

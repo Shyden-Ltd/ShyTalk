@@ -60,9 +60,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.GroupPermissions
 import com.shyden.shytalk.core.model.GroupRole
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
@@ -131,7 +131,7 @@ fun GroupSetupScreen(
                         },
             ) {
                 if (uiState.groupPhotoBytes != null) {
-                    AsyncImage(
+                    RemoteImage(
                         model = uiState.groupPhotoBytes,
                         contentDescription = stringResource(Res.string.group),
                         modifier = Modifier.fillMaxSize(),
@@ -249,7 +249,7 @@ fun GroupSetupScreen(
                 ) {
                     val photoUrl = user.photoUrl
                     if (photoUrl != null) {
-                        AsyncImage(
+                        RemoteImage(
                             model = photoUrl,
                             contentDescription = user.displayName,
                             modifier =

@@ -34,10 +34,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.resources.*
@@ -202,7 +202,7 @@ private fun ParticipantRow(
         Box(contentAlignment = Alignment.Center) {
             val photoUrl = participant.user.photoUrl
             if (photoUrl != null) {
-                AsyncImage(
+                RemoteImage(
                     model = photoUrl,
                     contentDescription = participant.user.displayName,
                     modifier =

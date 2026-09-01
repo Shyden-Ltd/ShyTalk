@@ -35,11 +35,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -64,7 +64,7 @@ private fun UserAvatar(
 ) {
     Box(contentAlignment = Alignment.Center) {
         if (photoUrl != null) {
-            AsyncImage(
+            RemoteImage(
                 model = photoUrl,
                 contentDescription = displayName,
                 modifier =
@@ -312,7 +312,7 @@ fun MessageBubble(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (message.giftIconUrl.isNotEmpty()) {
-                    AsyncImage(
+                    RemoteImage(
                         model = message.giftIconUrl,
                         contentDescription = null,
                         modifier =

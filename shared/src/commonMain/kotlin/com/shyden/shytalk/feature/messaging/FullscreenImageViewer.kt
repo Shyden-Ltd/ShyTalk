@@ -18,7 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.close
 import com.shyden.shytalk.resources.image_number
@@ -47,7 +47,7 @@ fun FullscreenImageViewer(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
         ) { page ->
-            AsyncImage(
+            RemoteImage(
                 model = imageUrls[page],
                 contentDescription = stringResource(Res.string.image_number, page + 1),
                 modifier = Modifier.fillMaxSize(),

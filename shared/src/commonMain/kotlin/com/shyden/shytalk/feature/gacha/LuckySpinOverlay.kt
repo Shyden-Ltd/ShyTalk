@@ -60,12 +60,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.audio.GachaSoundPlayer
 import com.shyden.shytalk.core.model.CoinPackage
 import com.shyden.shytalk.core.model.GachaGift
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.Transaction
+import com.shyden.shytalk.core.ui.RemoteImage
 import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.feature.shop.CoinPackageCard
@@ -1062,7 +1062,7 @@ private fun InlineSpinHistory(
                                         giftNames.take(10).forEach { name ->
                                             val url = iconLookup[name]
                                             if (url != null && url.isNotBlank()) {
-                                                AsyncImage(
+                                                RemoteImage(
                                                     model = url,
                                                     contentDescription = name,
                                                     modifier =
@@ -1199,7 +1199,7 @@ private fun InlinePrizeCatalog(
                                         modifier = Modifier.fillMaxSize(),
                                     ) {
                                         if (gift.iconUrl.isNotBlank()) {
-                                            AsyncImage(
+                                            RemoteImage(
                                                 model = gift.iconUrl,
                                                 contentDescription = gift.name,
                                                 modifier = Modifier.size(36.dp),
