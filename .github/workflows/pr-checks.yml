@@ -262,6 +262,7 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
       app_changed: ${{ needs.detect-changes.outputs.app_changed == 'true' }}
       backend_changed: ${{ needs.detect-changes.outputs.backend_changed == 'true' }}
+      web_changed: ${{ needs.detect-changes.outputs.web_changed == 'true' }}
       # Thread PR body through for the SHY-0035 large-file lint's
       # [allow-large-file: <path>] escape-hatch marker. Explicit input
       # is more robust than relying on `github.event.pull_request.body`
