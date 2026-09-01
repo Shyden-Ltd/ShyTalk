@@ -142,6 +142,9 @@ jobs:
       # debt (jest.mock / Fake*Repository / page.route) may only SHRINK.
       # Fails on any NEW double not in scripts/no-stubs-baseline.json, or a
       # stale baseline entry left behind by a migration.
+      - name: public/ JavaScript is linted (SHY-0448 ratchet)
+        run: node scripts/check-public-js-lint.js
+
       - name: No NEW in-process test doubles (EPIC-0003 ratchet)
         run: node scripts/check-no-new-stubs.js
 

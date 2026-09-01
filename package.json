@@ -18,6 +18,9 @@
     "*.{kt,kts}": [
       "ktlint --relative",
       "bash .claude/hooks/check-kmp-compat.sh"
+    ],
+    "public/**/*.js": [
+      "npx --prefix express-api eslint --config public/eslint.config.mjs"
     ]
   },
   "devDependencies": {
