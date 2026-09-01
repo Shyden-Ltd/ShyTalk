@@ -297,7 +297,14 @@ jobs:
           keystore-base64: ${{ secrets.KEYSTORE_BASE64 }}
           fallback-debug: 'true'
 
-      - name: Run unit tests, detekt, and build devRelease APK
+      # `:app:compileDevDebugAndroidTestKotlin` is here on purpose (SHY-0470).
+      # The androidTest source set is otherwise compiled ONLY by e2e-tests.yml,
+      # which runs only on PRs into main — so a rename that leaves a test double
+      # behind stays invisible until promotion. That has now happened twice:
+      # SHY-0466, and again when the SHY-0244 push-identifier migration left
+      # FakeNotificationRepository overriding methods that no longer existed.
+      # Compiling it costs seconds and closes the window for good.
+      - name: Run unit tests, compile androidTest, detekt, and build devRelease APK
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'android' }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL || 'wss://placeholder.livekit.cloud' }}
@@ -309,7 +316,7 @@ jobs:
           # isPersonaPickerAvailable returns false). See app/build.gradle.kts
           # line 105 for the buildConfigField wiring.
           DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
-        run: ./gradlew testDevDebugUnitTest :shared:jvmTest :shared:testAndroidHostTest detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
+        run: ./gradlew testDevDebugUnitTest :shared:jvmTest :shared:testAndroidHostTest :app:compileDevDebugAndroidTestKotlin detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
 
       # Also build the local-flavor APK so AFK operators / automation
       # can install it on test devices without needing a local Firebase

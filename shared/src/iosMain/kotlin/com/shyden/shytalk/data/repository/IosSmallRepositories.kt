@@ -217,25 +217,6 @@ class IosReportRepositoryImpl(
             }
             api.post("/api/reports", JsonObject(fields))
         }
-
-    override suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.core.model.Report>> =
-        firebaseCall("Failed to load reports") {
-            val arr = api.getArray("/api/reports")
-            arr.map { element -> parseReportFromApi(element.jsonObject) }
-        }
-
-    override suspend fun resolveReport(
-        reportId: String,
-        action: String,
-    ): Resource<ResolveReportOutcome> =
-        firebaseCall("Failed to resolve report") {
-            val response =
-                api.post(
-                    "/api/reports/$reportId/resolve",
-                    JsonObject(mapOf("action" to JsonPrimitive(action))),
-                )
-            parseResolveReportOutcome(response)
-        }
 }
 
 // ── TranslationRepository ───────────────────────────────────────

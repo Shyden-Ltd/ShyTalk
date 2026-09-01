@@ -1,17 +1,18 @@
 package com.shyden.shytalk.fake
 
+import com.shyden.shytalk.core.push.PushIdentifier
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.NotificationRepository
 
 class FakeNotificationRepository : NotificationRepository {
-    override suspend fun saveFcmToken(
+    override suspend fun savePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun removeFcmToken(
+    override suspend fun removePushIdentifier(
         userId: String,
-        token: String,
+        identifier: PushIdentifier,
     ): Resource<Unit> = Resource.Success(Unit)
 
     override suspend fun setPmNotificationsEnabled(
