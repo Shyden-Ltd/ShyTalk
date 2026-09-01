@@ -27,8 +27,9 @@ import androidx.compose.ui.unit.dp
  *
  * The failure state matters as much as the empty one. A person with a picture
  * that will not load and a person with no picture look identical to whoever is
- * holding the phone, so they look identical here: [RemoteImage] draws this same
- * circle when the load fails.
+ * holding the phone, so they look identical here — the circle is composed
+ * beneath the image via [RemoteImageWithFallback], and an empty URL, a dead one
+ * and a slow one all simply leave it showing.
  */
 @Composable
 fun UserAvatar(
@@ -38,26 +39,22 @@ fun UserAvatar(
     size: Dp = 48.dp,
     iconPadding: Dp = 12.dp,
 ) {
-    if (photoUrl.isNullOrBlank()) {
-        AvatarFallback(modifier = modifier, size = size, iconPadding = iconPadding)
-        return
-    }
-    RemoteImage(
+    RemoteImageWithFallback(
         model = photoUrl,
         contentDescription = displayName,
         modifier = modifier.size(size).clip(CircleShape),
         contentScale = ContentScale.Crop,
+        fallback = { AvatarFallback(size = size, iconPadding = iconPadding) },
     )
 }
 
 @Composable
 private fun AvatarFallback(
-    modifier: Modifier,
     size: Dp,
     iconPadding: Dp,
 ) {
     Surface(
-        modifier = modifier.size(size),
+        modifier = Modifier.size(size),
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer,
     ) {

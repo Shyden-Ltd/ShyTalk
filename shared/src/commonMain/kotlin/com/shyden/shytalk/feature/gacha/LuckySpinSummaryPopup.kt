@@ -41,7 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.model.GachaGift
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -256,13 +256,13 @@ private fun WinCard(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxSize(),
         ) {
-            if (win.iconUrl.isNotBlank()) {
-                RemoteImage(
-                    model = win.iconUrl,
-                    contentDescription = win.giftName,
-                    modifier = Modifier.size(28.dp),
-                )
-            } else {
+            // The fallback is composed UNDER the image, so an absent one
+            // and one that never arrived show the same thing (SHY-0444).
+            RemoteImageWithFallback(
+                model = win.iconUrl,
+                contentDescription = win.giftName,
+                modifier = Modifier.size(28.dp),
+            ) {
                 Text(
                     text = giftEmoji(win.giftName),
                     fontSize = 20.sp,

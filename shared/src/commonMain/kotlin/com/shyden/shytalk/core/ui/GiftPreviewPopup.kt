@@ -34,7 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftEvent
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.play_effect
 import org.jetbrains.compose.resources.stringResource
@@ -81,17 +81,17 @@ fun GiftPreviewPopup(
                 modifier = Modifier.padding(24.dp),
             ) {
                 // Large gift icon
-                if (gift.iconUrl.isNotBlank()) {
-                    RemoteImage(
-                        model = gift.iconUrl,
-                        contentDescription = gift.name,
-                        modifier =
-                            Modifier
-                                .size(96.dp)
-                                .clip(CircleShape),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
+                // The fallback is composed UNDER the image, so an absent one
+                // and one that never arrived show the same thing (SHY-0444).
+                RemoteImageWithFallback(
+                    model = gift.iconUrl,
+                    contentDescription = gift.name,
+                    modifier =
+                        Modifier
+                            .size(96.dp)
+                            .clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                ) {
                     Surface(
                         modifier = Modifier.size(96.dp),
                         shape = CircleShape,

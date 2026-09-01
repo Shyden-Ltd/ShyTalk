@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.model.Gift
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -214,19 +214,20 @@ private fun GiftWallItem(
                 .padding(4.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            if (gift.iconUrl.isNotBlank()) {
-                RemoteImage(
-                    model = gift.iconUrl,
-                    contentDescription = gift.name,
-                    modifier =
-                        Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .then(if (!isLit) Modifier.background(Color.Gray.copy(alpha = 0.3f)) else Modifier),
-                    contentScale = ContentScale.Crop,
-                    alpha = if (isLit) 1f else 0.4f,
-                )
-            } else {
+            // The initials circle is composed UNDER the icon, so a gift
+            // with no icon and a gift whose icon never arrived show the
+            // same thing — which is what they are (SHY-0444).
+            RemoteImageWithFallback(
+                model = gift.iconUrl,
+                contentDescription = gift.name,
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .then(if (!isLit) Modifier.background(Color.Gray.copy(alpha = 0.3f)) else Modifier),
+                contentScale = ContentScale.Crop,
+                alpha = if (isLit) 1f else 0.4f,
+            ) {
                 Box(
                     modifier =
                         Modifier

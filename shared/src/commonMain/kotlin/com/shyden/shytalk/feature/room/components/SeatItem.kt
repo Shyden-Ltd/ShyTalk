@@ -55,7 +55,7 @@ import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
-import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
@@ -191,17 +191,17 @@ fun SeatItem(
                         },
                 ) {
                     val photoUrl = user?.photoUrl
-                    if (seat.state == SeatState.OCCUPIED && photoUrl != null) {
-                        RemoteImage(
-                            model = photoUrl,
-                            contentDescription = user.displayName,
-                            modifier =
-                                Modifier
-                                    .size(seatSize)
-                                    .clip(CircleShape),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
+                    // The fallback is composed UNDER the image, so an absent one
+                    // and one that never arrived show the same thing (SHY-0444).
+                    RemoteImageWithFallback(
+                        model = photoUrl,
+                        contentDescription = user?.displayName,
+                        modifier =
+                            Modifier
+                                .size(seatSize)
+                                .clip(CircleShape),
+                        contentScale = ContentScale.Crop,
+                    ) {
                         Icon(
                             imageVector =
                                 if (seat.state == SeatState.OCCUPIED) {

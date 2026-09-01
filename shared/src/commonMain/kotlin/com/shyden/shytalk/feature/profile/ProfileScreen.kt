@@ -94,6 +94,7 @@ import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.platform.PlatformImagePicker
 import com.shyden.shytalk.core.platform.PlatformProfilePhotoPicker
 import com.shyden.shytalk.core.ui.RemoteImage
+import com.shyden.shytalk.core.ui.RemoteImageWithFallback
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.ui.SuperShyGold
@@ -642,14 +643,14 @@ private fun ProfileContent(
                             },
                         ),
             ) {
-                if (coverUrl != null) {
-                    RemoteImage(
-                        model = coverUrl,
-                        contentDescription = stringResource(Res.string.cover_photo),
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-                } else {
+                // The fallback is composed UNDER the image, so an absent one
+                // and one that never arrived show the same thing (SHY-0444).
+                RemoteImageWithFallback(
+                    model = coverUrl,
+                    contentDescription = stringResource(Res.string.cover_photo),
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                ) {
                     Box(
                         modifier =
                             Modifier
@@ -1388,17 +1389,17 @@ private fun BackpackItemCell(
                 .padding(8.dp),
     ) {
         Box(contentAlignment = Alignment.TopEnd) {
-            if (gift.iconUrl.isNotBlank()) {
-                RemoteImage(
-                    model = gift.iconUrl,
-                    contentDescription = gift.name,
-                    modifier =
-                        Modifier
-                            .size(40.dp)
-                            .clip(CircleShape),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
+            // The fallback is composed UNDER the image, so an absent one
+            // and one that never arrived show the same thing (SHY-0444).
+            RemoteImageWithFallback(
+                model = gift.iconUrl,
+                contentDescription = gift.name,
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                contentScale = ContentScale.Crop,
+            ) {
                 Surface(
                     modifier = Modifier.size(40.dp),
                     shape = CircleShape,
