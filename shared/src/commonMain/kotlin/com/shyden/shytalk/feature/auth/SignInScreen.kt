@@ -44,6 +44,7 @@ import com.shyden.shytalk.core.DevPersona
 import com.shyden.shytalk.core.devPersonas
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.SecureStorage
+import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.core.util.rememberPlatformActivity
 import com.shyden.shytalk.feature.auth.components.AppleSignInButton
@@ -103,8 +104,20 @@ fun SignInScreen(
 
     val isBanned = uiState.isDeviceBanned || uiState.isNetworkBanned
 
+    // SHY-0497: this is where the sign-in screen leaves for Home, and it leaves
+    // on OBSERVING `isAuthenticated` rather than on a fresh sign-in event. The
+    // app has been seen bouncing from sign-in straight back to Home right after
+    // a sign-out that completed cleanly, which is what that distinction would
+    // produce. Logged so the next run says whether this fires, and with what.
     LaunchedEffect(uiState.isAuthenticated, uiState.isSuspended, uiState.isBackendUnreachable, isBanned) {
+        logD(
+            "SignInScreen",
+            "auth gate: authenticated=${uiState.isAuthenticated} suspended=${uiState.isSuspended} " +
+                "backendUnreachable=${uiState.isBackendUnreachable} banned=$isBanned " +
+                "hasProfile=${uiState.hasProfile} hasDOB=${uiState.hasDOB}",
+        )
         if (uiState.isAuthenticated && !uiState.isSuspended && !uiState.isBackendUnreachable && !isBanned) {
+            logD("SignInScreen", "auth gate: LEAVING for Main")
             onAuthSuccess(uiState.hasProfile, uiState.hasDOB, uiState.needsLegalAcceptance)
         }
     }
