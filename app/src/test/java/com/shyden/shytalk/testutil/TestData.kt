@@ -16,7 +16,6 @@ import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.PrivateMessageType
 import com.shyden.shytalk.core.model.ProfileVisitor
-import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.model.SeatRequest
@@ -371,30 +370,6 @@ object TestData {
         newStreak = newStreak,
         isMilestone = isMilestone,
         newBalance = newBalance,
-    )
-
-    fun createTestReport(
-        reportId: String = "report-1",
-        reporterId: String = "reporter-1",
-        reporterName: String = "Reporter",
-        reportedUserId: String = "reported-1",
-        reportedUserName: String = "Reported User",
-        reason: String = "Spam",
-        description: String = "Spamming messages",
-        type: String = "message",
-        status: String = "pending",
-        timestamp: Long = BASE_TIMESTAMP,
-    ) = Report(
-        reportId = reportId,
-        reporterId = reporterId,
-        reporterName = reporterName,
-        reportedUserId = reportedUserId,
-        reportedUserName = reportedUserName,
-        reason = reason,
-        description = description,
-        type = type,
-        status = status,
-        timestamp = timestamp,
     )
 
     fun createTestGiftSender(

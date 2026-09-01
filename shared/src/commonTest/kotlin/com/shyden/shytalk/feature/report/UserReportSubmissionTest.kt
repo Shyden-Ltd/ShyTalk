@@ -1,6 +1,5 @@
 package com.shyden.shytalk.feature.report
 
-import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.ReportRepository
@@ -442,17 +441,6 @@ private class RecordingReportRepository(
         reason: String,
         description: String,
     ): Resource<Unit> = Resource.Success(Unit)
-
-    override suspend fun getPendingReports(): Resource<List<Report>> = Resource.Success(emptyList())
-
-    override suspend fun resolveReport(
-        reportId: String,
-        action: String,
-    ): Resource<com.shyden.shytalk.data.repository.ResolveReportOutcome> =
-        Resource.Success(
-            com.shyden.shytalk.data.repository
-                .ResolveReportOutcome(),
-        )
 }
 
 private class RecordingStorageRepository(

@@ -1,13 +1,9 @@
 package com.shyden.shytalk.fake
 
-import com.shyden.shytalk.core.model.Report
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.ReportRepository
-import com.shyden.shytalk.data.repository.ResolveReportOutcome
 
 class FakeReportRepository : ReportRepository {
-    val reports = mutableListOf<Report>()
-
     override suspend fun reportMessage(
         reporterId: String,
         reporterName: String,
@@ -34,11 +30,4 @@ class FakeReportRepository : ReportRepository {
         description: String,
         evidenceUrls: List<String>,
     ): Resource<Unit> = Resource.Success(Unit)
-
-    override suspend fun getPendingReports(): Resource<List<Report>> = Resource.Success(reports)
-
-    override suspend fun resolveReport(
-        reportId: String,
-        action: String,
-    ): Resource<ResolveReportOutcome> = Resource.Success(ResolveReportOutcome())
 }

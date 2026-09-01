@@ -31,11 +31,4 @@ interface ReportRepository {
         description: String,
         evidenceUrls: List<String> = emptyList(),
     ): Resource<Unit>
-
-    suspend fun getPendingReports(): Resource<List<com.shyden.shytalk.core.model.Report>>
-
-    suspend fun resolveReport(
-        reportId: String,
-        action: String,
-    ): Resource<ResolveReportOutcome>
 }
