@@ -1,6 +1,6 @@
 ---
 id: SHY-0497
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-30
 priority: P2
@@ -153,3 +153,12 @@ safeguarding one.
   and dialog handling were both working by then: the modal cleared, and the
   dump showed a complete Home screen rather than the covered-window signature.
   So this is not a test-harness problem.
+
+- 2026-09-01 — **The guess in Why is wrong, and the story said to confirm it first.** Nothing is restored. The sign-out has simply not happened yet. `onSignOut` launched `authRepository.signOut()` on a process-scoped coroutine and RETURNED; the nav graph navigated to `Screen.SignIn` on the next line; `SignInScreen` composed a fresh `AuthViewModel` whose `init` asks `authRepository.isAuthenticated` — which is `auth.currentUser != null` and was still non-null; `init` set `isAuthenticated = true`, and the auth gate left for Main. That also explains why the earlier investigation kept finding a CLEAN sign-out: by the time anything looked, it had finished.
+- 2026-09-01 — **`SignOutCoordinator` was already right.** Its `signOut` parameter is `suspend () -> Unit`, so it can be awaited. Both nav graphs subverted it by passing a lambda whose body was a `() -> Unit` that launched and returned — the coordinator awaited a function that finished instantly without signing anybody out. The fix is a type, not new machinery: `onSignOut` is `suspend () -> Unit` in both graphs, and `MainActivity` joins the process-scoped job. Process scoping stays — the sign-out must still outlive the Activity the navigation destroys — it just has to be waited for too. The ban-screen binding is deliberately NOT joined and says so: it signs out and stays put, so nothing races it.
+- 2026-09-01 — **Acceptance criteria need a second look, and are deliberately left unticked.** Several were written around the session-restore hypothesis and do not describe anything that exists: *"the restored session is not re-established from a credential that sign-out should have cleared"* and *"a session restore that is CANCELLED by a sign-out is logged"* both presuppose a restore. There is none. The remaining criteria are behavioural and need device proof, which is deferred. Rewriting them to match the fix would be moving the goalposts, so they stand as written for the operator to revise.
+- 2026-09-01 — Tests. `SignOutCoordinatorTest` gains a behavioural one: `signOut()` must not return until its lambda has completed, which is exactly the contract the callers broke. `SignOutOrderingGuardTest` pins the signatures, because the signature IS the fix and a signature is what a later refactor reverts quietly; it anchors on the navigation still being present, so it cannot pass while guarding a sequence that moved. Mutation-proven: deleting `signOutJob.join()` turns it red.
+- 2026-09-01 — **Device proof is owed.** This was found on a device and should be closed on one: sign out on the OnePlus, confirm the app stays on sign-in, then sign in as a different persona and confirm whose account opens. Deferred with the rest of the device work.
+- 2026-09-01 — Gate: `:app:testDevDebugUnitTest` 2269/0, `:shared:jvmTest` 1745/0, `:app:compileDevDebugAndroidTestKotlin` green, `:shared:compileKotlinIosArm64` green, `detekt` + `ktlintCheck` clean.
+
+Reviewed-up-to: b16bd3004bf

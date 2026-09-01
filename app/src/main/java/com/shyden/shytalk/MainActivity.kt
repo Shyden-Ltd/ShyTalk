@@ -583,6 +583,11 @@ class MainActivity : AppCompatActivity() {
                                     // mid-call. `signOut()` itself clears the
                                     // API token cache (R3).
                                     onSignOut = {
+                                        // SHY-0497 deliberately does NOT join this one. The ban screen signs
+                                        // out and stays exactly where it is — a device or network ban follows
+                                        // the hardware, not the account — so no navigation races the sign-out
+                                        // and there is nothing to wait for. If this ever starts navigating,
+                                        // it needs the join that the NavGraph binding has.
                                         ProcessLifecycleOwner.get().lifecycleScope.launch {
                                             try {
                                                 authRepository.signOut()
@@ -821,15 +826,22 @@ class MainActivity : AppCompatActivity() {
                                             // Activity is destroyed by the navigation it triggers.
                                             // Rethrow CancellationException to keep structured
                                             // concurrency intact when the scope is cancelled.
-                                            ProcessLifecycleOwner.get().lifecycleScope.launch {
-                                                try {
-                                                    authRepository.signOut()
-                                                } catch (e: CancellationException) {
-                                                    throw e
-                                                } catch (e: Exception) {
-                                                    Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
+                                            //
+                                            // SHY-0497 — and JOINED. Process scoping alone only promised the
+                                            // sign-out would eventually finish. The caller carried on at once,
+                                            // navigated to SignIn, and the AuthViewModel built there still saw
+                                            // a signed-in Firebase user and bounced straight back to Home.
+                                            val signOutJob =
+                                                ProcessLifecycleOwner.get().lifecycleScope.launch {
+                                                    try {
+                                                        authRepository.signOut()
+                                                    } catch (e: CancellationException) {
+                                                        throw e
+                                                    } catch (e: Exception) {
+                                                        Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
+                                                    }
                                                 }
-                                            }
+                                            signOutJob.join()
                                         },
                                     )
                                 }
