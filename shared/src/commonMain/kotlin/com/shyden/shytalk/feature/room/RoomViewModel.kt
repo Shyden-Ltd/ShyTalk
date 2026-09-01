@@ -1868,8 +1868,21 @@ class RoomViewModel(
                 UserReportOutcome.Success ->
                     _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
 
-                UserReportOutcome.EvidenceUploadFailed ->
-                    _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to upload evidence") }
+                is UserReportOutcome.SuccessWithEvidenceMissing ->
+                    // SHY-0450: the report WAS filed, so this is a success that
+                    // also carries a warning -- both fields are set. Previously
+                    // this branch reported failure and no report existed at all.
+                    //
+                    // (The message is a hardcoded English string here, unlike
+                    // ProfileViewModel's UiText. Pre-existing, and left alone
+                    // rather than widened into this safeguarding fix.)
+                    _uiState.update {
+                        it.copy(
+                            isSubmittingReport = false,
+                            reportSubmitted = true,
+                            reportError = "Failed to upload evidence",
+                        )
+                    }
 
                 UserReportOutcome.ReportSubmitFailed ->
                     _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to submit report") }

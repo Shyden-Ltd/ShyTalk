@@ -594,10 +594,16 @@ class ProfileViewModel(
                 UserReportOutcome.Success ->
                     _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
 
-                UserReportOutcome.EvidenceUploadFailed ->
+                is UserReportOutcome.SuccessWithEvidenceMissing ->
+                    // SHY-0450: the report WAS filed, so this is a success that
+                    // also carries a warning -- both fields are set. Reusing the
+                    // existing evidence-failure string keeps the message honest
+                    // in all 21 locales without machine-translating safeguarding
+                    // copy for a new one.
                     _uiState.update {
                         it.copy(
                             isSubmittingReport = false,
+                            reportSubmitted = true,
                             reportError = UiText.res(Res.string.error_upload_evidence),
                         )
                     }
