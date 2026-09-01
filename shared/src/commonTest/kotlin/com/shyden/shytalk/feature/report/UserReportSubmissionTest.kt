@@ -115,8 +115,20 @@ class UserReportSubmissionTest {
             )
         }
 
+    /**
+     * SHY-0450 — the report must survive its pictures.
+     *
+     * These two tests used to assert the opposite: that a failed upload
+     * short-circuits and `reportUser` is never called. That is what the code
+     * did, and it meant an upload failure of any kind -- a flaky connection, a
+     * scanner refusal, an over-size image -- silently turned "I am reporting
+     * this person for harassment" into nothing having happened. The person was
+     * told the EVIDENCE failed; nothing told them the report went with it.
+     *
+     * A test that pins the defect is how a defect survives review.
+     */
     @Test
-    fun `evidence upload Error on first image short-circuits to EvidenceUploadFailed`() =
+    fun `an upload failure on the first image still files the report`() =
         runTest {
             val report = RecordingReportRepository(reportUser = Resource.Success(Unit))
             val storage =
@@ -137,15 +149,16 @@ class UserReportSubmissionTest {
                             byteArrayOf(2) to "image/jpeg",
                         ),
                 )
-            assertEquals(UserReportOutcome.EvidenceUploadFailed, outcome)
-            // Second image MUST NOT be attempted after the first one fails.
-            assertEquals(1, storage.uploadCalls.size)
-            // Report endpoint MUST NOT be called when evidence upload failed.
-            assertEquals(0, report.reportUserCalls.size)
+            // Filed, and the caller is told a picture did not make it.
+            assertEquals(UserReportOutcome.SuccessWithEvidenceMissing(1), outcome)
+            // Every image is still ATTEMPTED -- one failing must not silently
+            // drop the ones after it.
+            assertEquals(2, storage.uploadCalls.size)
+            assertEquals(1, report.reportUserCalls.size)
         }
 
     @Test
-    fun `evidence upload Error on second image still short-circuits`() =
+    fun `an upload failure on the second image files the report with the first`() =
         runTest {
             val report = RecordingReportRepository(reportUser = Resource.Success(Unit))
             val storage =
@@ -170,9 +183,11 @@ class UserReportSubmissionTest {
                             byteArrayOf(2) to "image/jpeg",
                         ),
                 )
-            assertEquals(UserReportOutcome.EvidenceUploadFailed, outcome)
+            assertEquals(UserReportOutcome.SuccessWithEvidenceMissing(1), outcome)
             assertEquals(2, storage.uploadCalls.size)
-            assertEquals(0, report.reportUserCalls.size)
+            assertEquals(1, report.reportUserCalls.size)
+            // The picture that DID upload is still attached.
+            assertEquals(listOf("https://cdn/a.jpg"), report.reportUserCalls.single().evidenceUrls)
         }
 
     @Test

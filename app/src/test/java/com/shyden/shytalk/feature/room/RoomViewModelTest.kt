@@ -5110,11 +5110,28 @@ class RoomViewModelTest {
 
     // ===== reportUser - evidence upload failure =====
 
+    /**
+     * SHY-0450 — the report survives its picture.
+     *
+     * This test used to assert only that an error was shown. It passed while
+     * the report was being SILENTLY DISCARDED: the pipeline returned on the
+     * first failed upload and never called reportUser at all, so "I am
+     * reporting this person for harassment" became nothing having happened,
+     * and the person was told only that the evidence failed.
+     *
+     * It now asserts BOTH halves: the report is filed, and the failed picture
+     * is still surfaced. Note the fake had to be told to succeed — under the
+     * old behaviour reportUser was never reached, so nobody noticed it was
+     * returning an error by default.
+     */
     @Test
-    fun `reportUser - evidence upload failure sets error`() =
+    fun `reportUser - a failed evidence upload still files the report`() =
         roomTest {
             coEvery { storageRepository.uploadImage(any(), any(), any(), any()) } returns
                 Resource.Error("Upload failed")
+            coEvery {
+                reportRepository.reportUser(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Resource.Success(Unit)
 
             val targetUser = TestData.createTestUser(uid = "target-1", displayName = "Target")
             coEvery { userRepository.getUser("target-1") } returns Resource.Success(targetUser)
@@ -5127,6 +5144,10 @@ class RoomViewModelTest {
             viewModel.reportUser("target-1", "Spam", "Spamming", listOf(imageData to "image/png"))
             advanceTimeBy(100L)
 
+            assertTrue(
+                "the report must be filed even when its picture fails",
+                viewModel.uiState.value.reportSubmitted,
+            )
             assertEquals("Failed to upload evidence", viewModel.uiState.value.reportError)
             assertFalse(viewModel.uiState.value.isSubmittingReport)
         }

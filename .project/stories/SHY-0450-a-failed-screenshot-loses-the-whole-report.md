@@ -1,6 +1,6 @@
 ---
 id: SHY-0450
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-24
 priority: P1
@@ -177,3 +177,31 @@ anything about it.
 - Found on 2026-08-24 while finishing SHY-0420's remaining scope. Every existing
   test of this flow mocks `StorageRepository` with a double that always
   succeeds, so the branch has never been exercised.
+
+## Notes (running log)
+
+- **2026-09-01** — The safeguarding half is fixed; the attach-time upload
+  redesign is not, and is called out below rather than implied.
+
+  `submitUserReport` returned on the first failed upload, so
+  `reportRepository.reportUser(...)` was never reached and **no report was
+  filed at all**. It now counts failures, still attempts every remaining image,
+  and files the report either way — returning
+  `SuccessWithEvidenceMissing(n)` so the caller can say both things.
+
+  Both view models set `reportSubmitted = true` AND surface the
+  evidence-failure message. Reusing the existing string keeps that honest in
+  **all 21 locales** without machine-translating safeguarding copy.
+
+  **Two tests pinned the defect** and had to be rewritten, not just the code:
+  `evidence upload Error on first image short-circuits` and its sibling
+  asserted that `reportUser` is never called. A third, in RoomViewModelTest,
+  passed while the report was being discarded — and its fake had to be told to
+  succeed, because under the old behaviour `reportUser` was never reached, so
+  nobody noticed it returned an error by default.
+
+  **Still owed** (the attach-time redesign): uploading each picture when it is
+  attached, with a per-picture failure state and retry, so the send request
+  carries keys rather than bytes. The ACs covering ttaching\ states,
+  per-picture retry and the SHY-0434 orphan guarantee are untouched by this
+  change.
