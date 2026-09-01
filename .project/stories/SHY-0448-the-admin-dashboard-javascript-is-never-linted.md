@@ -1,6 +1,6 @@
 ---
 id: SHY-0448
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-24
 priority: P2
@@ -147,3 +147,30 @@ that have never been checked.
 
 - Found on 2026-08-24 while adding the SHY-0438 conversion control to the
   Support tab: the file could not be linted at all.
+
+## Notes (running log)
+
+- **2026-09-01** — Linted, as a RATCHET rather than a wall.
+
+  `public/` needed its own ESLint config: express-api's is
+  `sourceType: commonjs` with Node globals, the opposite of browser code.
+  The first pass reported **133 problems** — of which **84 were one thing**,
+  `sgT` and friends, globals loaded by their own `<script>` tags. Declaring
+  those, and switching to module parsing (much of `public/` uses
+  import/export), left **56 real findings across 24 files**.
+
+  Two looked like live bugs and are not: `ShyTalkLogger` and `loadAuditLog`
+  are both used behind `typeof X !== 'undefined'` guards. They are declared
+  rather than flagged — the guard is the point, and reporting it would train
+  people to delete guards. `loadAuditLog` is dead, though: nothing else in
+  `public/` defines it, so that backward-compat branch never fires.
+
+  Fifty-six findings is too many to fail a build on today: that either blocks
+  every change to this surface or gets switched off. Per-file counts may only
+  **shrink**, and a file that improves without shrinking the baseline is a
+  STALE failure — the same shape as `check-no-new-stubs.js`.
+
+  **Still owed:** Prettier. 43 of 52 files fail `prettier --check`, which is
+  a ~27k-line reformat and belongs in its own commit, not smuggled in beside a
+  config change. `lint-staged` runs ESLint on `public/**/*.js` now; adding
+  `prettier --check` there should follow that reformat.

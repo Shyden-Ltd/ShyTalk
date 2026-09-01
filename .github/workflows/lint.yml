@@ -20,6 +20,11 @@ on:
         description: 'Whether app files changed'
         type: boolean
         required: true
+      web_changed:
+        description: 'Whether public/ web files changed'
+        required: false
+        default: false
+        type: boolean
       backend_changed:
         description: 'Whether backend files changed'
         type: boolean
@@ -142,6 +147,17 @@ jobs:
       # debt (jest.mock / Fake*Repository / page.route) may only SHRINK.
       # Fails on any NEW double not in scripts/no-stubs-baseline.json, or a
       # stale baseline entry left behind by a migration.
+      # SHY-0448. Installs express-api's node_modules itself: the ESLint binary
+      # lives there, and the Express lint step that installs it is conditional
+      # on backend_changed -- so on a public/-only PR this ran against a tree
+      # with no eslint at all and failed for a reason that had nothing to do
+      # with the code under test.
+      - name: public/ JavaScript is linted (SHY-0448 ratchet)
+        if: inputs.web_changed == true || github.event_name == 'workflow_dispatch'
+        run: |
+          cd express-api && npm ci --no-audit --no-fund
+          cd .. && node scripts/check-public-js-lint.js
+
       - name: No NEW in-process test doubles (EPIC-0003 ratchet)
         run: node scripts/check-no-new-stubs.js
 
