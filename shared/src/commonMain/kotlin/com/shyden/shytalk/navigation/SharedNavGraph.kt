@@ -103,7 +103,9 @@ fun SharedNavGraph(
     isBackendDegraded: Boolean = false,
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
-    onSignOut: () -> Unit,
+    // SHY-0497: suspend, so the navigation that follows cannot outrun it. See
+    // NavGraph.kt for the full sequence this prevents.
+    onSignOut: suspend () -> Unit,
     /**
      * SHY-0143 — the ban facts behind a [Screen.BanDevice] / [Screen.BanNetwork]
      * start destination. Defaulted so existing callers are unaffected: an

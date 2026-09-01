@@ -124,7 +124,10 @@ fun NavGraph(
     isBackendDegraded: Boolean = false,
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
-    onSignOut: () -> Unit,
+    // SHY-0497: suspend, so the navigation on the next line cannot outrun it.
+    // A `() -> Unit` here launched the sign-out and returned, and SignInScreen
+    // then composed an AuthViewModel that still saw a signed-in Firebase user.
+    onSignOut: suspend () -> Unit,
     /**
      * SHY-0143. Android normally renders `BanScreen` ABOVE this NavHost, so
      * these routes are belt-and-braces — but `initialRoute` can legitimately
