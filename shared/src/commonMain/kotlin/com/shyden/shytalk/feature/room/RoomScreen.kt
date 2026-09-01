@@ -69,6 +69,7 @@ import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.data.repository.GiftRepository
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
@@ -465,6 +466,10 @@ fun RoomScreen(
                     )
             }
         AlertDialog(
+            // SHY-0462: this is its own Compose window, so testTags inside it do not
+            // reach uiautomator without this — the dump shows android:id/content
+            // and nothing else while the controls are plainly on screen.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = {},
             title = { Text(title) },
             text = { Text(message) },
@@ -855,6 +860,10 @@ fun RoomScreen(
                     if (isOwner) {
                         var editedName by remember(showRoomNameDialog, isOwner) { mutableStateOf(uiState.room?.name ?: "") }
                         AlertDialog(
+                            // SHY-0462: this is its own Compose window, so testTags inside it do not
+                            // reach uiautomator without this — the dump shows android:id/content
+                            // and nothing else while the controls are plainly on screen.
+                            modifier = Modifier.exposeTestTagsToPlatformDumps(),
                             onDismissRequest = { showRoomNameDialog = false },
                             title = { Text(stringResource(Res.string.edit_room_name)) },
                             text = {
@@ -884,6 +893,10 @@ fun RoomScreen(
                         )
                     } else {
                         AlertDialog(
+                            // SHY-0462: this is its own Compose window, so testTags inside it do not
+                            // reach uiautomator without this — the dump shows android:id/content
+                            // and nothing else while the controls are plainly on screen.
+                            modifier = Modifier.exposeTestTagsToPlatformDumps(),
                             onDismissRequest = { showRoomNameDialog = false },
                             title = { Text(stringResource(Res.string.room_name)) },
                             text = {
@@ -1208,6 +1221,10 @@ fun RoomScreen(
                     val walletState by walletViewModel.uiState.collectAsStateWithLifecycle()
 
                     ModalBottomSheet(
+                        // SHY-0462: this is its own Compose window, so testTags inside it do not
+                        // reach uiautomator without this — the dump shows android:id/content
+                        // and nothing else while the controls are plainly on screen.
+                        modifier = Modifier.exposeTestTagsToPlatformDumps(),
                         onDismissRequest = { showWalletSheet = false },
                     ) {
                         com.shyden.shytalk.feature.shop.CoinPurchaseSheetContent(

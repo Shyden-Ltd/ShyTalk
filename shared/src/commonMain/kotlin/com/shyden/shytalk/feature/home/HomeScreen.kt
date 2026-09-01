@@ -38,6 +38,7 @@ import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.push.PushPermissionState
 import com.shyden.shytalk.core.push.PushPermissionStore
 import com.shyden.shytalk.core.ui.PushPermissionDeniedBanner
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -190,6 +191,10 @@ fun RoomListContent(
 
     if (uiState.showReplaceRoomConfirmation) {
         AlertDialog(
+            // SHY-0462: this is its own Compose window, so testTags inside it do not
+            // reach uiautomator without this — the dump shows android:id/content
+            // and nothing else while the controls are plainly on screen.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { viewModel.cancelReplaceRoom() },
             title = { Text(stringResource(Res.string.replace_room_title)) },
             text = { Text(stringResource(Res.string.replace_room_message)) },

@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -198,6 +199,10 @@ fun ConversationListScreen(
 
                                 // Context menu
                                 DropdownMenu(
+                                    // SHY-0462: this is its own Compose window, so testTags inside it do not
+                                    // reach uiautomator without this — the dump shows android:id/content
+                                    // and nothing else while the controls are plainly on screen.
+                                    modifier = Modifier.exposeTestTagsToPlatformDumps(),
                                     expanded = contextMenuConversationId == cId,
                                     onDismissRequest = { contextMenuConversationId = null },
                                 ) {
@@ -231,6 +236,10 @@ fun ConversationListScreen(
     // Delete confirmation dialog
     showDeleteConfirm?.let { conversationId ->
         AlertDialog(
+            // SHY-0462: this is its own Compose window, so testTags inside it do not
+            // reach uiautomator without this — the dump shows android:id/content
+            // and nothing else while the controls are plainly on screen.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { showDeleteConfirm = null },
             title = { Text(stringResource(Res.string.delete_conversation)) },
             text = { Text(stringResource(Res.string.delete_conversation_warning)) },

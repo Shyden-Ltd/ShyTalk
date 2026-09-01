@@ -1,6 +1,6 @@
 ---
 id: SHY-0462
-status: Draft
+status: In Review
 owner: unassigned
 created: 2026-08-25
 priority: P2
@@ -137,3 +137,21 @@ Every one is a journey that cannot be written until somebody rediscovers this.
 
 - Filed 2026-08-25 after the fourth occurrence in a single day. The pattern was
   documented in July and applied twice.
+
+## Notes (running log)
+
+- **2026-09-01** — Swept and guarded. 15 files, **20 Compose windows**: every
+  `AlertDialog`, `ModalBottomSheet` and `DropdownMenu` now applies
+  `Modifier.exposeTestTagsToPlatformDumps()`, and `Dialog` — which has no
+  `modifier` parameter — applies it to its content root instead.
+
+  The guard came FIRST and listed all 15 by path, which is what made the sweep
+  mechanical rather than a hunt. It is anchored three ways so it cannot pass
+  vacuously: the source roots must exist, it must scan >100 Kotlin files, and it
+  must still find >10 files opening a Compose window.
+
+  Worth recording why this mattered more than the ticket suggested: the same
+  trap cost three separate diagnosis cycles on 2026-08-30 alone — the
+  persona-credential dialog, the daily-reward calendar and the overlay-bubble
+  prompt each showed `android:id/content` and nothing else, and each looked
+  like a different bug. `DailyRewardDialog` was among the 15.

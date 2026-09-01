@@ -105,6 +105,7 @@ import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.flagEmojiForCode
 import com.shyden.shytalk.core.util.isFeatureOffered
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.feature.shop.SuperShyBottomSheet
@@ -368,6 +369,10 @@ fun ProfileScreen(
     if (showBlockDialog && user != null) {
         val isBlocked = uiState.isBlockedByViewer
         AlertDialog(
+            // SHY-0462: this is its own Compose window, so testTags inside it do not
+            // reach uiautomator without this — the dump shows android:id/content
+            // and nothing else while the controls are plainly on screen.
+            modifier = Modifier.exposeTestTagsToPlatformDumps(),
             onDismissRequest = { showBlockDialog = false },
             title = {
                 Text(

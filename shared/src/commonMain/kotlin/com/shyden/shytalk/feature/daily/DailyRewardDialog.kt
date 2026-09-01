@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.ui.SuperShyGold
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import kotlinx.datetime.LocalDate
@@ -100,7 +101,9 @@ fun DailyRewardDialog(
             viewModel.dismissDialog()
             onDismiss()
         },
-        modifier = Modifier.testTag("dailyReward_dialog"),
+        // SHY-0462: its own Compose window, so every testTag below is
+        // invisible to uiautomator without this.
+        modifier = Modifier.exposeTestTagsToPlatformDumps().testTag("dailyReward_dialog"),
         icon = {
             Icon(
                 imageVector = Icons.Filled.CalendarMonth,

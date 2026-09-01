@@ -71,6 +71,7 @@ import com.shyden.shytalk.core.ui.PlatformVideoPlayer
 import com.shyden.shytalk.data.repository.AttachmentType
 import com.shyden.shytalk.data.repository.OpenTicketSummary
 import com.shyden.shytalk.data.repository.SupportCategory
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.close
 import com.shyden.shytalk.resources.report_guide_intro
@@ -984,8 +985,12 @@ private fun AttachmentPreview(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
+            // SHY-0462: `Dialog` has no `modifier` parameter, so the semantics
+            // go on its content root instead. Same effect: everything below
+            // this node reaches uiautomator.
             modifier =
                 Modifier
+                    .exposeTestTagsToPlatformDumps()
                     .fillMaxSize()
                     .background(Color.Black)
                     .testTag(TAG_SUPPORT_ATTACHMENT_PREVIEW),

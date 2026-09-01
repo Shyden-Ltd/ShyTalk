@@ -68,6 +68,7 @@ import com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitScreen
 import com.shyden.shytalk.feature.auth.EmailOtpScreen
 import com.shyden.shytalk.feature.auth.PinSetupScreen
 import com.shyden.shytalk.feature.auth.SignInScreen
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
@@ -454,6 +455,10 @@ fun NavGraph(
 
                 if (showOverlayDialog) {
                     AlertDialog(
+                        // SHY-0462: this is its own Compose window, so testTags inside it do not
+                        // reach uiautomator without this — the dump shows android:id/content
+                        // and nothing else while the controls are plainly on screen.
+                        modifier = Modifier.exposeTestTagsToPlatformDumps(),
                         onDismissRequest = { showOverlayDialog = false },
                         title = { Text(stringResource(Res.string.display_over_other_apps)) },
                         text = { Text(stringResource(Res.string.display_over_other_apps_description)) },

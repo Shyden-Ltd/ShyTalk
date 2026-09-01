@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -98,6 +99,10 @@ fun PinSetupScreen(
         if (state.showBiometricOffer) {
             if (biometricAvailable) {
                 AlertDialog(
+                    // SHY-0462: this is its own Compose window, so testTags inside it do not
+                    // reach uiautomator without this — the dump shows android:id/content
+                    // and nothing else while the controls are plainly on screen.
+                    modifier = Modifier.exposeTestTagsToPlatformDumps(),
                     onDismissRequest = { viewModel.onBiometricDeclined() },
                     title = { Text(stringResource(Res.string.pin_enable_biometric_title)) },
                     text = {
