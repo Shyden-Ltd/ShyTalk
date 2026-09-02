@@ -21,10 +21,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *    we don't quietly leave a locale behind in future refactors.
  */
 
-const SUPPORTED_LOCALES = [
-  'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-  'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
-];
+const SUPPORTED_LOCALES = ['zh', 'th', 'vi', 'id'];
 
 test.describe('Khmer New Year — zodiac table i18n', () => {
   test('Spanish switch translates zodiac column headers (not English)', async ({ page }) => {

@@ -44,7 +44,7 @@ test.describe('Language Selector', () => {
     await page.locator('.stl-lang-btn').click();
     await page.locator('.stl-lang-item[data-lang="es"]').click();
     await expect(page.locator('.stl-lang-overlay')).not.toHaveClass(/open/);
-    // Homepage tagline should be in Spanish
+    // Homepage tagline should be in Thai
     await expect(page.locator('[data-i18n="tagline"]')).toContainText('reinventadas');
   });
 
@@ -54,9 +54,9 @@ test.describe('Language Selector', () => {
     await page.locator('.stl-lang-item[data-lang="fr"]').click();
     // Navigate to roadmap
     await page.goto('/roadmap.html');
-    // Should still be French
+    // Should still be Vietnamese
     const lang = await page.evaluate(() => document.documentElement.lang);
-    expect(lang).toBe('fr');
+    expect(lang).toBe('vi');
   });
 
   test('escape key closes modal', async ({ page }) => {

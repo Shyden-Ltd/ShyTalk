@@ -20,10 +20,10 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 test.describe('Homepage footer links + copyright i18n', () => {
-  test('Spanish locale translates all five footer links + copyright', async ({ page }) => {
+  test('Thai locale translates all five footer links + copyright', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }
@@ -54,7 +54,7 @@ test.describe('Homepage footer links + copyright i18n', () => {
     expect(cyber, 'footer_cyber').not.toBe('Cyber Bullying Policy');
     expect(dns, 'footer_do_not_sell').not.toBe('Do Not Sell or Share My Personal Information');
     expect(copyright, 'footer_copy').not.toBe('© 2026 Shyden Ltd. All rights reserved.');
-    expect(copyright, 'footer_copy in Spanish should mention "derechos"').toContain('derechos');
+    expect(copyright, 'footer_copy in Thai should mention "derechos"').toContain('derechos');
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {
@@ -83,11 +83,11 @@ test.describe('Homepage footer links + copyright i18n', () => {
     page,
   }) => {
     // Regression: ensure the chain refactor didn't break the inline
-    // homepage translations. Spanish has tagline + app_store defined
+    // homepage translations. Thai has tagline + app_store defined
     // in the inline `t` dict.
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }

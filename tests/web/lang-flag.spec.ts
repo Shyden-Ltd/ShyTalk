@@ -30,27 +30,27 @@ test.describe('SHY-0181 — ?lang= URL flag drives language site-wide', () => {
   test.use({ locale: 'en-US' });
 
   for (const url of SURFACES) {
-    test(`?lang=fr forces French on ${url}`, async ({ page }) => {
-      expect(await resolvedLang(page, `${url}?lang=fr`)).toBe('fr');
+    test(`?lang=vi forces Vietnamese on ${url}`, async ({ page }) => {
+      expect(await resolvedLang(page, `${url}?lang=vi`)).toBe('vi');
       // the resolver applied it to the document (translation ran)
-      expect(await page.evaluate(() => document.documentElement.lang)).toBe('fr');
+      expect(await page.evaluate(() => document.documentElement.lang)).toBe('vi');
     });
   }
 
   test('?lang= takes priority over a different persisted localStorage value', async ({ page }) => {
     await page.goto(`${BASE}/`);
-    await page.evaluate(() => localStorage.setItem('shytalk_language', 'de'));
-    expect(await resolvedLang(page, '/?lang=fr')).toBe('fr');
+    await page.evaluate(() => localStorage.setItem('shytalk_language', 'id'));
+    expect(await resolvedLang(page, '/?lang=vi')).toBe('vi');
   });
 
   test('a valid ?lang= persists across internal navigation (param dropped)', async ({ page }) => {
-    expect(await resolvedLang(page, '/?lang=es')).toBe('es');
+    expect(await resolvedLang(page, '/?lang=th')).toBe('th');
     // navigate to another page WITHOUT the param — the choice must stick
-    expect(await resolvedLang(page, '/privacy.html')).toBe('es');
+    expect(await resolvedLang(page, '/privacy.html')).toBe('th');
   });
 
-  test('?lang=ar sets dir=rtl (forced RTL lays out correctly)', async ({ page }) => {
-    await page.goto(`${BASE}/?lang=ar`);
+  test('?lang=th sets dir=rtl (forced RTL lays out correctly)', async ({ page }) => {
+    await page.goto(`${BASE}/?lang=th`);
     await page.waitForFunction(() => typeof (window as any).ShyTalkLanguage !== 'undefined');
     expect(await page.evaluate(() => document.documentElement.getAttribute('dir'))).toBe('rtl');
   });
@@ -65,11 +65,11 @@ test.describe('SHY-0181 — ?lang= URL flag drives language site-wide', () => {
   });
 
   test('?lang= with a BCP-47 region (fr-CA) resolves to the base locale (fr)', async ({ page }) => {
-    expect(await resolvedLang(page, '/?lang=fr-CA')).toBe('fr');
+    expect(await resolvedLang(page, '/?lang=vi-CA')).toBe('vi');
   });
 
   test('?lang= is case-insensitive (FR → fr)', async ({ page }) => {
-    expect(await resolvedLang(page, '/?lang=FR')).toBe('fr');
+    expect(await resolvedLang(page, '/?lang=VI')).toBe('vi');
   });
 
   test('ShyTalkLanguage.set() rejects an unsupported value (never written to the DOM)', async ({

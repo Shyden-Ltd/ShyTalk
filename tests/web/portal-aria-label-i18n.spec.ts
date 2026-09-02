@@ -21,10 +21,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * "ShyTalk" is the brand name, not a translatable string.
  */
 
-const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const PORTAL_LOCALES = ['en', 'id', 'th', 'vi', 'zh'];
 
 const ARIA_KEYS = [
   'aria_loading',

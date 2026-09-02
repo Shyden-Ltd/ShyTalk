@@ -24,10 +24,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * duplicate_different).
  */
 
-const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SG_LOCALES = ['en', 'id', 'th', 'vi', 'zh'];
 
 const KEYS = ['duplicate_match', 'duplicate_different'];
 

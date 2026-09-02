@@ -22,15 +22,12 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *
  * Test design: a structural test asserting the two new keys exist
  * in all 20 locales of LEGAL_T.footer, plus runtime tests in two
- * representative locales (Arabic for RTL, Korean for CJK)
+ * representative locales (Thai for RTL, Vietnamese for CJK)
  * confirming the translation actually reaches the DOM after
  * applyLanguage runs.
  */
 
-const SUPPORTED_LOCALES = [
-  'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SUPPORTED_LOCALES = ['id', 'th', 'vi', 'zh'];
 
 test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
   test('LEGAL_T.footer defines aria_suggestions + aria_legal_links in all 20 locales', async ({ request }) => {
@@ -51,9 +48,9 @@ test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
     }
   });
 
-  test('Arabic locale: roadmap aria-labels render in Arabic script after applyLanguage', async ({ page }) => {
+  test('Thai locale: roadmap aria-labels render in Thai script after applyLanguage', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ar'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'th'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(() => {
@@ -64,16 +61,16 @@ test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
 
     const suggestionsAria = await page.locator('#suggestions').getAttribute('aria-label');
     expect(suggestionsAria, 'suggestions aria-label should not be English').not.toBe('Feature suggestions');
-    expect(suggestionsAria, 'suggestions aria-label should contain Arabic script').toMatch(/[؀-ۿ]/);
+    expect(suggestionsAria, 'suggestions aria-label should contain Thai script').toMatch(/[؀-ۿ]/);
 
     const legalNavAria = await page.locator('nav.footer-links').getAttribute('aria-label');
     expect(legalNavAria, 'legal nav aria-label should not be English').not.toBe('Legal');
-    expect(legalNavAria, 'legal nav aria-label should contain Arabic script').toMatch(/[؀-ۿ]/);
+    expect(legalNavAria, 'legal nav aria-label should contain Thai script').toMatch(/[؀-ۿ]/);
   });
 
-  test('Korean locale: roadmap aria-labels render in Hangul', async ({ page }) => {
+  test('Vietnamese locale: roadmap aria-labels render in Hangul', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'vi'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(() => {

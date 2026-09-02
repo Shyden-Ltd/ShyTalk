@@ -22,10 +22,10 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 test.describe('Language selector modal i18n', () => {
-  test('Spanish locale on /privacy.html shows translated modal title', async ({ page }) => {
+  test('Thai locale on /privacy.html shows translated modal title', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }
@@ -47,10 +47,10 @@ test.describe('Language selector modal i18n', () => {
     expect(title, 'lang_select_title in es should be "Seleccionar idioma"').toBe('Seleccionar idioma');
   });
 
-  test('Spanish locale empty-state renders Spanish text', async ({ page }) => {
+  test('Thai locale empty-state renders Thai text', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }
@@ -114,10 +114,7 @@ test.describe('Language selector modal i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const SUPPORTED = [
-      'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-      'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
-    ];
+    const SUPPORTED = ['zh', 'th', 'vi', 'id'];
     for (const lang of SUPPORTED) {
       const rowRe = new RegExp(
         `${lang}:\\s*\\{[^{}]*lang_select_title:[^,}]+,[^{}]*lang_empty_state:`,

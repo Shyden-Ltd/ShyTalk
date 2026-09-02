@@ -22,10 +22,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * Adds 7 new keys × 21 locales = 147 strings to PORTAL_T.
  */
 
-const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const PORTAL_LOCALES = ['en', 'id', 'th', 'vi', 'zh'];
 
 const NEW_KEYS = [
   'recovery_code_sent',

@@ -24,10 +24,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * suggestFeature were reused — already in SG_LABELS.)
  */
 
-const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SG_LOCALES = ['en', 'id', 'th', 'vi', 'zh'];
 
 const NEW_ARIA_KEYS = ['close', 'aria_upvote', 'aria_downvote', 'aria_watch'];
 

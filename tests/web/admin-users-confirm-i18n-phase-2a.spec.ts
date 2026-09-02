@@ -78,12 +78,8 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       // Single-line locale rows now contain values with `{name}`

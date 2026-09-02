@@ -88,11 +88,7 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
+    const locales = ['en', 'id', 'th', 'vi', 'zh'];
 
     for (const locale of locales) {
       const localeBlock =

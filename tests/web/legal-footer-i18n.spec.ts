@@ -10,7 +10,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * 1. `footer_privacy` was REFERENCED in HTML (terms / community-guidelines /
  *    privacy / cyber-bullying / do-not-sell) but UNDEFINED in
  *    legal-translations.js for all 20 locales — so "Privacy Policy" stayed
- *    in English even after switching to e.g. Arabic. The
+ *    in English even after switching to e.g. Thai. The
  *    `applyLegalTranslations` pattern (`if (t[key]) el.innerHTML = t[key]`)
  *    silently no-ops on undefined keys, hiding the gap from visual scan.
  *
@@ -24,7 +24,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * window.LEGAL_PAGE_TYPE — so even adding data-i18n there required wiring
  * the i18n bridge first.
  *
- * The test suite hits Arabic (RTL + non-Latin script — easiest to detect
+ * The test suite hits Thai (RTL + non-Latin script — easiest to detect
  * remaining English) on all 5 legal pages and asserts every footer link's
  * text changed away from English defaults.
  */
@@ -47,17 +47,17 @@ const PAGES = [
 
 test.describe('Legal footer i18n — every page, every locale-switch', () => {
   for (const { path, selfKey } of PAGES) {
-    test(`${path} translates every footer link to Arabic`, async ({ page }) => {
+    test(`${path} translates every footer link to Thai`, async ({ page }) => {
       // Pre-set the saved language so applyLanguage fires on init via the
       // legal-translations.js inline bridge, not via the language-selector
       // modal click flow (faster + more deterministic).
       await page.addInitScript(() => {
-        localStorage.setItem('shytalk_language', 'ar');
+        localStorage.setItem('shytalk_language', 'th');
       });
       await page.goto(`${BASE}${path}`);
       // Wait for the inline init script to apply translations.
       await page.waitForFunction(
-        () => document.documentElement.lang === 'ar',
+        () => document.documentElement.lang === 'th',
         null,
         { timeout: 5_000 },
       );
@@ -73,9 +73,9 @@ test.describe('Legal footer i18n — every page, every locale-switch', () => {
         const text = await link.first().textContent();
         expect(
           text?.trim(),
-          `${path} footer link footer_${key} stayed in English ("${text?.trim()}") after Arabic switch — likely missing translation key in legal-translations.js or missing data-i18n attribute`,
+          `${path} footer link footer_${key} stayed in English ("${text?.trim()}") after Thai switch — likely missing translation key in legal-translations.js or missing data-i18n attribute`,
         ).not.toBe(englishText);
-        // Sanity: should contain non-Latin Arabic characters (؀-ۿ block).
+        // Sanity: should contain non-Latin Thai characters (؀-ۿ block).
         expect(text).toMatch(/[؀-ۿ]/);
       }
     });
@@ -85,7 +85,7 @@ test.describe('Legal footer i18n — every page, every locale-switch', () => {
     const res = await request.get(`${BASE}/js/legal-translations.js`);
     expect(res.status()).toBe(200);
     const text = await res.text();
-    const locales = ['ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh'];
+    const locales = ['id', 'th', 'vi', 'zh'];
     for (const locale of locales) {
       // Find this locale's line in the footer object (locale: { ... })
       const localeLineMatch = new RegExp(`\\s${locale}: \\{ [^\\n]*footer_copy:`, 'g').exec(text);

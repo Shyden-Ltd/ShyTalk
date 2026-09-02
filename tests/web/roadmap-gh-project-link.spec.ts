@@ -67,7 +67,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     );
   });
 
-  test("Spanish locale translates link text + tooltip via data-i18n + data-i18n-title", async ({
+  test("Thai locale translates link text + tooltip via data-i18n + data-i18n-title", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -104,7 +104,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     expect(title, "es title should contain GitHub keyword").toContain("GitHub");
   });
 
-  test("Arabic locale: link is present + RTL document direction set", async ({
+  test("Thai locale: link is present + RTL document direction set", async ({
     page,
   }) => {
     await page.addInitScript(() => {

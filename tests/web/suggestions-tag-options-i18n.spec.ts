@@ -24,10 +24,7 @@ const TAG_KEYS = [
   'tagSocial', 'tagEconomy', 'tagAccessibility', 'tagOther',
 ];
 
-const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SG_LOCALES = ['en', 'id', 'th', 'vi', 'zh'];
 
 test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
   test('TAG_OPTIONS labels are sgT()-driven, not hardcoded', async ({ request }) => {

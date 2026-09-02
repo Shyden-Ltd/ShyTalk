@@ -70,7 +70,12 @@
   // to Arabic, so the layout never mirrors and Arabic users see a
   // backwards UX. Found 2026-05-09 via /manual-qa: language picker
   // set lang=ar but kept dir=""/ltr.
-  var RTL_LANGS = ['ar'];
+  // Empty since SHY-0289: Arabic was the only right-to-left language shipped
+  // and is no longer one of the five. The list and the assignment below stay,
+  // because the assignment's real job is setting `dir` EXPLICITLY rather than
+  // leaving it as the HTML default — and because an RTL language returning
+  // should be one entry here, not a rediscovery of why `dir` was never set.
+  var RTL_LANGS = [];
 
   function setLanguage(lang) {
     // Validate here too (not just in getLanguage): setLanguage is exposed as

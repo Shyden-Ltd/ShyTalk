@@ -60,7 +60,7 @@ test.describe('404.html i18n', () => {
     const res = await request.get(`${BASE}/js/legal-translations.js`);
     expect(res.status()).toBe(200);
     const text = await res.text();
-    const locales = ['ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh'];
+    const locales = ['id', 'th', 'vi', 'zh'];
     // Find the notfound section block. Use a non-greedy match to find each
     // locale's line within the notfound object.
     const notfoundStart = text.indexOf('notfound: {');

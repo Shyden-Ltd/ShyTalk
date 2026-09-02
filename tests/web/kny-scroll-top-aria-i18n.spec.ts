@@ -22,10 +22,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * so the HTML default "Scroll to top" stands for English users).
  */
 
-const KNY_NON_EN_LOCALES = [
-  'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const KNY_NON_EN_LOCALES = ['id', 'th', 'vi', 'zh'];
 
 test.describe('KNY scroll-to-top aria-label i18n', () => {
   test('all 20 KNY non-en locales define aria_scroll_to_top', async ({ request }) => {

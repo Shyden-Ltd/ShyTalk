@@ -76,12 +76,8 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
