@@ -83,6 +83,11 @@ jest.mock('../../src/utils/r2', () => ({
   putObject: (...args) => mockPutObject(...args),
   getObject: (...args) => mockGetObject(...args),
   deleteObjects: (...args) => mockDeleteObjects(...args),
+  // SHY-0501: the REAL one, not a stand-in. It is pure stream plumbing with no
+  // I/O, and the download route's whole job here is to stream — a double that
+  // merely piped would pass while the destroy-on-disconnect behaviour, which is
+  // the entire point of the function, went untested through this path.
+  pipeToResponse: jest.requireActual('../../src/utils/r2').pipeToResponse,
 }));
 
 const mockBuildDataExport = jest.fn();

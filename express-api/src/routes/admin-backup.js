@@ -156,7 +156,8 @@ router.get('/admin/backups/:date/:collection', async (req, res) => {
     }
 
     res.set('Content-Type', 'application/json');
-    obj.Body.pipe(res);
+    // SHY-0501: destroyed if the client leaves mid-download.
+    r2.pipeToResponse(obj.Body, res);
   } catch (err) {
     log.error('admin-backup', 'Error downloading collection backup', {
       date: req.params.date,
@@ -191,7 +192,8 @@ router.get('/admin/backups/:date', async (req, res) => {
     }
 
     res.set('Content-Type', 'application/json');
-    obj.Body.pipe(res);
+    // SHY-0501: destroyed if the client leaves mid-download.
+    r2.pipeToResponse(obj.Body, res);
   } catch (err) {
     log.error('admin-backup', 'Error downloading legacy backup', {
       date: req.params.date,

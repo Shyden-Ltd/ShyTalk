@@ -16,8 +16,60 @@ const {
   HeadObjectCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { NodeHttpHandler } = require('@smithy/node-http-handler');
 
 const isLocal = process.env.NODE_ENV === 'local';
+
+/**
+ * SHY-0501 — bound how long a storage call may wait to START.
+ *
+ * The SDK's defaults are no timeout at all, which is what turned a socket leak
+ * into a silent hang: with all 50 pooled sockets stuck in CLOSE_WAIT, every new
+ * request queued for a connection that would never come, and the caller waited
+ * forever with nothing logged.
+ *
+ * These bound establishing and idling, NOT total transfer time, so a large
+ * export streaming slowly is unaffected while a pool that cannot serve anybody
+ * fails loudly instead of quietly.
+ */
+function storageRequestHandler() {
+  return new NodeHttpHandler({
+    connectionTimeout: 5_000,
+    requestTimeout: 30_000,
+  });
+}
+
+/**
+ * Pipes a storage object body to an HTTP response, destroying it if the client
+ * leaves first.
+ *
+ * SHY-0501. Four routes streamed an R2 body straight to the client and simply
+ * dropped it when the client went away — a moderator scrubbing a reported
+ * video, a browser cancelling a large zip, a phone losing signal. Nothing
+ * closed this side of the connection, so it sat in CLOSE_WAIT forever. Fifty of
+ * those exhausted the pool and every storage operation stopped, with no error
+ * anywhere: attachments, exports and backups all dead until a restart.
+ *
+ * The `finished` flag is the whole subtlety. Express emits `close` on EVERY
+ * response including successful ones, so destroying unconditionally would
+ * truncate downloads that had already completed. Destroy only when the response
+ * closed while the body was still going.
+ */
+function pipeToResponse(body, res) {
+  let finished = false;
+  const done = () => {
+    finished = true;
+  };
+  body.once?.('end', done);
+  body.once?.('error', done);
+  res.once('close', () => {
+    if (!finished && typeof body.destroy === 'function' && !body.destroyed) {
+      body.destroy();
+    }
+  });
+  return body.pipe(res);
+}
+
 const bucketName = process.env.R2_BUCKET_NAME || 'shytalk-media';
 
 let s3;
@@ -30,6 +82,7 @@ if (isLocal) {
     region: 'us-east-1',
     credentials: { accessKeyId: minioUser, secretAccessKey: minioPass },
     forcePathStyle: true,
+    requestHandler: storageRequestHandler(),
   });
 } else {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -40,6 +93,7 @@ if (isLocal) {
       accessKeyId: process.env.R2_ACCESS_KEY_ID,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     },
+    requestHandler: storageRequestHandler(),
   });
 }
 
@@ -207,6 +261,7 @@ async function getSignedPutUrl(key, contentType, expiresInSec = 300) {
 }
 
 module.exports = {
+  pipeToResponse,
   s3,
   bucketName,
   putObject,
