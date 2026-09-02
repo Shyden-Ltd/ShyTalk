@@ -95,7 +95,7 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 

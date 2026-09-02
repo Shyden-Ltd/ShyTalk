@@ -98,7 +98,7 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 

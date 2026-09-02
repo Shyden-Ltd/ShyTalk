@@ -96,7 +96,7 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 

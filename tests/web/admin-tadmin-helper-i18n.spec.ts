@@ -114,7 +114,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     // (before falling back to localStorage), so this reliably wins.
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 

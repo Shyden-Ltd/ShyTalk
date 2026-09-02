@@ -99,7 +99,7 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
