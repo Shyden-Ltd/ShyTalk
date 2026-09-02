@@ -14,24 +14,8 @@
 (function () {
   var LANGUAGES = [
     { code: 'en', name: 'English', native: 'English' },
-    { code: 'ar', name: 'Arabic', native: 'العربية' },
-    { code: 'de', name: 'German', native: 'Deutsch' },
-    { code: 'es', name: 'Spanish', native: 'Español' },
-    { code: 'fr', name: 'French', native: 'Français' },
-    { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
     { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia' },
-    { code: 'it', name: 'Italian', native: 'Italiano' },
-    { code: 'km', name: 'Khmer', native: 'ភាសាខ្មែរ' },
-    { code: 'ja', name: 'Japanese', native: '日本語' },
-    { code: 'ko', name: 'Korean', native: '한국어' },
-    { code: 'nl', name: 'Dutch', native: 'Nederlands' },
-    { code: 'pl', name: 'Polish', native: 'Polski' },
-    { code: 'pt', name: 'Portuguese', native: 'Português' },
-    { code: 'ru', name: 'Russian', native: 'Русский' },
-    { code: 'sv', name: 'Swedish', native: 'Svenska' },
     { code: 'th', name: 'Thai', native: 'ไทย' },
-    { code: 'tr', name: 'Turkish', native: 'Türkçe' },
-    { code: 'uk', name: 'Ukrainian', native: 'Українська' },
     { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt' },
     { code: 'zh', name: 'Chinese', native: '中文' },
   ];
@@ -63,13 +47,13 @@
           // validated, explicit choice — persist in its own try, then return.
           try {
             localStorage.setItem(STORAGE_KEY, urlLang);
-          } catch (e2) {
+          } catch (_e2) {
             /* best-effort persistence */
           }
           return urlLang;
         }
       }
-    } catch (e) {
+    } catch (_e) {
       /* fall through to the persisted / browser default */
     }
     var saved = localStorage.getItem(STORAGE_KEY);

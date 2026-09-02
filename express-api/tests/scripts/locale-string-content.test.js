@@ -40,8 +40,16 @@ const fs = require('node:fs');
  */
 const carriesAndroidEscape = (value) => /\\(?!n)/.test(value);
 
-/** `TODO` is the ordinary Spanish word for "all" — these two are correct copy. */
-const TODO_IS_A_REAL_WORD = new Set(['values-es/all_caps', 'values-es/collect_all']);
+/**
+ * Locales where `TODO` is a real word rather than an unfinished string.
+ *
+ * Empty since SHY-0289. It held two Spanish entries — `TODO` is the ordinary
+ * Spanish word for "all" — and Spanish is no longer one of the five languages
+ * shipped. Kept as an empty set rather than deleted: the check it feeds is
+ * still needed, and the next language that collides with `TODO` needs somewhere
+ * to say so with a reason attached.
+ */
+const TODO_IS_A_REAL_WORD = new Set([]);
 
 /** [{ locale, name, value }] for every <string> in every locale. */
 function allStrings() {
