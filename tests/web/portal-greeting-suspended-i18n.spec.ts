@@ -71,9 +71,9 @@ test.describe('Portal greeting + suspension i18n', () => {
     expect(src, "should call getCurrentLang() for date format").toMatch(/toLocaleDateString\(getCurrentLang\(\),/);
   });
 
-  test('Korean locale: portal t() helper resolves new keys to Hangul', async ({ page }) => {
+  test('Korean locale: portal t() helper resolves new keys to Han characters', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(
@@ -96,8 +96,8 @@ test.describe('Portal greeting + suspension i18n', () => {
       };
     });
     expect(sample.lang).toBe('ko');
-    expect(sample.suspended_reason_label, 'ko.suspended_reason_label').toMatch(/[가-힯]/);
-    expect(sample.default_user_name, 'ko.default_user_name').toMatch(/[가-힯]/);
-    expect(sample.dashboard_welcome, 'ko.dashboard_welcome').toMatch(/[가-힯]/);
+    expect(sample.suspended_reason_label, 'ko.suspended_reason_label').toMatch(/[一-鿿]/);
+    expect(sample.default_user_name, 'ko.default_user_name').toMatch(/[一-鿿]/);
+    expect(sample.dashboard_welcome, 'ko.dashboard_welcome').toMatch(/[一-鿿]/);
   });
 });

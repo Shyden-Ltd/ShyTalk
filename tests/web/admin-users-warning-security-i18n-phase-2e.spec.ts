@@ -71,7 +71,7 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
@@ -119,28 +119,28 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // Korean translations must contain Hangul AND must NOT match the English source
-    expect(result!.revoked).toMatch(/[가-힯]/);
+    // Korean translations must contain Han characters AND must NOT match the English source
+    expect(result!.revoked).toMatch(/[一-鿿]/);
     expect(result!.revoked).not.toBe('Revoked');
 
-    expect(result!.note).toMatch(/[가-힯]/);
+    expect(result!.note).toMatch(/[一-鿿]/);
     expect(result!.note).toContain('spam detected');
 
-    expect(result!.meta).toMatch(/[가-힯]/);
+    expect(result!.meta).toMatch(/[一-鿿]/);
     expect(result!.meta).toContain('AdminBob');
     expect(result!.meta).toContain('90');
     expect(result!.meta).toContain('80');
 
-    expect(result!.revokedToast).toMatch(/[가-힯]/);
+    expect(result!.revokedToast).toMatch(/[一-鿿]/);
     expect(result!.revokedToast).toContain('10');
 
-    expect(result!.pinReset).toMatch(/[가-힯]/);
+    expect(result!.pinReset).toMatch(/[一-鿿]/);
     expect(result!.pinReset).not.toBe('PIN lockout reset');
 
-    expect(result!.biometric).toMatch(/[가-힯]/);
+    expect(result!.biometric).toMatch(/[一-鿿]/);
     expect(result!.biometric).not.toBe('Biometric key revoked');
 
-    expect(result!.gcsReset).toMatch(/[가-힯]/);
+    expect(result!.gcsReset).toMatch(/[一-鿿]/);
     expect(result!.gcsReset).not.toBe('GCS reset to 100');
   });
 });

@@ -190,7 +190,7 @@ test.describe('roadmap renders SHY-derived items', () => {
 });
 
 test.describe('badge aria-label is translated', () => {
-  test.use({ locale: 'ar' });
+  test.use({ locale: 'th' });
 
   test('Arabic storyBadge template is used in phase rows and the in-progress lift', async ({ page }) => {
     await gotoWithFixture(page);

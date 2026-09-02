@@ -57,9 +57,9 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Hangul for all 5 status keys', async ({ page }) => {
+  test('Korean locale: sgT() returns Han characters for all 5 status keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -79,7 +79,7 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
       const value = t[key];
       expect(value, `sgT(${key}) should not be English`).not.toBeNull();
       expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(false);
-      expect(value, `sgT(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `sgT(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

@@ -24,7 +24,7 @@ test.describe('Roadmap aria-label i18n', () => {
   test('Spanish locale translates all 5 roadmap aria-labels', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }

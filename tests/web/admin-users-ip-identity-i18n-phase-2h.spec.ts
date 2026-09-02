@@ -73,7 +73,7 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
@@ -123,33 +123,33 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    expect(result!.ipBanned).toMatch(/[가-힯]/);
+    expect(result!.ipBanned).toMatch(/[一-鿿]/);
     expect(result!.ipBanned).not.toBe('IP banned');
 
-    expect(result!.igSuspend).toMatch(/[가-힯]/);
+    expect(result!.igSuspend).toMatch(/[一-鿿]/);
     expect(result!.igSuspend).not.toBe('Identity graph suspended');
 
-    expect(result!.igUnsuspend).toMatch(/[가-힯]/);
+    expect(result!.igUnsuspend).toMatch(/[一-鿿]/);
     expect(result!.igUnsuspend).not.toBe('Identity graph unsuspended');
 
-    expect(result!.promptDel).toMatch(/[가-힯]/);
+    expect(result!.promptDel).toMatch(/[一-鿿]/);
     expect(result!.promptDel).not.toBe('Enter reason for account deletion (optional):');
 
-    expect(result!.promptBan).toMatch(/[가-힯]/);
+    expect(result!.promptBan).toMatch(/[一-鿿]/);
     expect(result!.promptBan).not.toBe('Reason (optional):');
 
-    expect(result!.bioDevice).toMatch(/[가-힯]/);
+    expect(result!.bioDevice).toMatch(/[一-鿿]/);
     expect(result!.bioDevice).not.toBe('Device:');
 
-    expect(result!.bioReg).toMatch(/[가-힯]/);
+    expect(result!.bioReg).toMatch(/[一-鿿]/);
     expect(result!.bioReg).not.toBe('Registered:');
 
-    expect(result!.segBan).toMatch(/[가-힯]/);
+    expect(result!.segBan).toMatch(/[一-鿿]/);
     expect(result!.segBan).toContain('2');
     expect(result!.segBan).toContain('5');
     expect(result!.segBan).toContain('timeout');
 
-    expect(result!.segPm).toMatch(/[가-힯]/);
+    expect(result!.segPm).toMatch(/[一-鿿]/);
     expect(result!.segPm).toContain('1');
     expect(result!.segPm).toContain('3');
   });

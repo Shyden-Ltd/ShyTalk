@@ -28,7 +28,7 @@ test.describe('Roadmap footer links i18n', () => {
   test('Spanish locale translates all four footer links', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }

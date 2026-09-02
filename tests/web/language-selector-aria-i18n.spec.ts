@@ -25,7 +25,7 @@ test.describe('Language selector aria-label i18n', () => {
   test('Spanish locale translates all 5 language-selector aria-labels', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }

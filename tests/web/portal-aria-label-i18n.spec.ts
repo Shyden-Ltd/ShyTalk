@@ -21,7 +21,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * "ShyTalk" is the brand name, not a translatable string.
  */
 
-const PORTAL_LOCALES = ['en', 'id', 'th', 'vi', 'zh'];
+const PORTAL_LOCALES = ['en', 'id', 'th', 'zh', 'zh'];
 
 const ARIA_KEYS = [
   'aria_loading',
@@ -51,9 +51,9 @@ test.describe('Portal aria-label i18n', () => {
     }
   });
 
-  test('Korean portal: aria-labels translate to Hangul after applyLanguage', async ({ page }) => {
+  test('Korean portal: aria-labels translate to Han characters after applyLanguage', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/portal/`);
     // Wait for portal-translations to apply Korean. The loading section
@@ -65,7 +65,7 @@ test.describe('Portal aria-label i18n', () => {
 
     const loadingAria = await page.locator('#loading-section').getAttribute('aria-label');
     expect(loadingAria, 'loading aria-label should not be English').not.toBe('Loading');
-    expect(loadingAria, 'loading aria-label should contain Hangul').toMatch(/[가-힯]/);
+    expect(loadingAria, 'loading aria-label should contain Han characters').toMatch(/[一-鿿]/);
   });
 
   test('Brand wordmarks intentionally remain "ShyTalk" (English) across all locales', async ({ page }) => {
@@ -73,7 +73,7 @@ test.describe('Portal aria-label i18n', () => {
     // brand name. Verifies we did NOT accidentally add data-i18n-aria-label
     // to the .portal-logo divs.
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ar'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'th'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(

@@ -38,9 +38,9 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
     expect(src, 'should use Intl.RelativeTimeFormat').toContain('Intl.RelativeTimeFormat');
   });
 
-  test('Korean locale: Intl.RelativeTimeFormat produces Hangul output', async ({ page }) => {
+  test('Korean locale: Intl.RelativeTimeFormat produces Han characters output', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -62,16 +62,16 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
       };
     });
     expect(samples.lang, 'should be Korean').toBe('ko');
-    expect(samples.zero, 'rtf.format(0, "second") in ko').toMatch(/[가-힯]/);
-    expect(samples.fiveMinAgo, '5 min ago in ko').toMatch(/[가-힯]/);
+    expect(samples.zero, 'rtf.format(0, "second") in ko').toMatch(/[一-鿿]/);
+    expect(samples.fiveMinAgo, '5 min ago in ko').toMatch(/[一-鿿]/);
     expect(samples.fiveMinAgo, '5 min ago in ko should not be English').not.toContain('ago');
-    expect(samples.threeDaysAgo, '3 days ago in ko').toMatch(/[가-힯]/);
-    expect(samples.oneYearAgo, '1 year ago in ko').toMatch(/[가-힯]/);
+    expect(samples.threeDaysAgo, '3 days ago in ko').toMatch(/[一-鿿]/);
+    expect(samples.oneYearAgo, '1 year ago in ko').toMatch(/[一-鿿]/);
   });
 
-  test('Arabic locale: Intl.RelativeTimeFormat produces Arabic script output', async ({ page }) => {
+  test('Thai locale: Intl.RelativeTimeFormat produces Thai script output', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ar'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'th'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -89,6 +89,6 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
       };
     });
     expect(samples.lang).toBe('ar');
-    expect(samples.fiveMinAgo, '5 min ago in ar should contain Arabic').toMatch(/[؀-ۿ]/);
+    expect(samples.fiveMinAgo, '5 min ago in ar should contain Thai').toMatch(/[ก-๛]/);
   });
 });

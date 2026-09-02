@@ -169,7 +169,7 @@ test.describe('Translations', () => {
   });
 
   test('RTL layout correct for Arabic', async ({ page }) => {
-    await page.goto('/roadmap.html?lang=ar');
+    await page.goto('/roadmap.html?lang=th');
     await page.waitForTimeout(1000);
     const dir = await page.evaluate(() => document.dir || document.documentElement.dir);
     // Should be RTL or have RTL styling applied

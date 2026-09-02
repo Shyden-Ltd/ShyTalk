@@ -72,7 +72,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
   }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem("shytalk_language", "es");
+        localStorage.setItem("shytalk_language", "th");
       } catch {
         /* ignore */
       }
@@ -109,7 +109,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
   }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem("shytalk_language", "ar");
+        localStorage.setItem("shytalk_language", "th");
       } catch {
         /* ignore */
       }

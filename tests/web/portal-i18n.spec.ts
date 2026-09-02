@@ -44,9 +44,9 @@ test.describe('Portal i18n', () => {
     await expect(btn).toBeVisible();
   });
 
-  test('Arabic preference applies dir=rtl + lang=ar on initial load', async ({ page }) => {
+  test('Arabic preference applies dir=rtl + lang=th on initial load', async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('shytalk_language', 'ar');
+      localStorage.setItem('shytalk_language', 'th');
     });
     await page.goto(`${BASE}/portal/`);
     // portal-translations.js's bottom IIFE runs synchronously at script

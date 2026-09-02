@@ -76,7 +76,7 @@ test.describe('Legal footer i18n — every page, every locale-switch', () => {
           `${path} footer link footer_${key} stayed in English ("${text?.trim()}") after Thai switch — likely missing translation key in legal-translations.js or missing data-i18n attribute`,
         ).not.toBe(englishText);
         // Sanity: should contain non-Latin Thai characters (؀-ۿ block).
-        expect(text).toMatch(/[؀-ۿ]/);
+        expect(text).toMatch(/[ก-๛]/);
       }
     });
   }

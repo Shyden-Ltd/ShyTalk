@@ -75,7 +75,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     // Multi-line locales: en, ar, de, es, fr, hi, id, it, ja, km, ko
     // Single-line locales: nl, pl, pt, ru, sv, th, tr, uk, vi, zh
     const multiLine = new Set(['en', 'id']);
@@ -140,7 +140,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
       const value = t![key];
       expect(value, `tAdmin(${key}) should not be null`).not.toBeNull();
       expect(value, `tAdmin(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `tAdmin(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `tAdmin(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

@@ -27,7 +27,7 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
   test('Spanish switch translates zodiac column headers (not English)', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* localStorage may be unavailable on some webkit configs; ignore */
       }

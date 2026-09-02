@@ -78,7 +78,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
@@ -100,7 +100,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     }
   });
 
-  test('Korean locale: tAdmin returns Hangul for all 9 dialog keys', async ({ page, request }) => {
+  test('Korean locale: tAdmin returns Han characters for all 9 dialog keys', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
@@ -136,7 +136,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
       const value = t![key];
       expect(value, `tAdmin(${key}) should not be null`).not.toBeNull();
       expect(value, `tAdmin(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `tAdmin(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `tAdmin(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

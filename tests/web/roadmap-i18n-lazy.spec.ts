@@ -134,14 +134,14 @@ test.describe("English visitors pay zero translate cost", () => {
 });
 
 test.describe("non-English lazy translation", () => {
-  test.use({ locale: "de" });
+  test.use({ locale: "id" });
 
   test("item names translate in place; legacy features keep embedded i18n path", async ({
     page,
   }) => {
     await setupPage(page);
     await expect(
-      page.locator(".feature-item", { hasText: "[DE] Tracked story one" }),
+      page.locator(".feature-item", { hasText: "[ID] Tracked story one" }),
     ).toHaveCount(1);
     // Legacy feature untouched by the service (no embedded de payload → raw name)
     await expect(
@@ -153,7 +153,7 @@ test.describe("non-English lazy translation", () => {
     await setupPage(page);
     await expect(
       page.locator("#in-progress-section .feature-item", {
-        hasText: "[DE] Tracked story two",
+        hasText: "[ID] Tracked story two",
       }),
     ).toHaveCount(1);
   });
@@ -165,12 +165,12 @@ test.describe("non-English lazy translation", () => {
       fixture: bigFixture(60),
     });
     await expect(
-      page.locator(".feature-item", { hasText: "[DE] Bulk story number 0" }),
+      page.locator(".feature-item", { hasText: "[ID] Bulk story number 0" }),
     ).toHaveCount(1);
     expect(translateCalls.length).toBeGreaterThanOrEqual(2);
     for (const c of translateCalls) {
       expect(c.texts.length).toBeLessThanOrEqual(50);
-      expect(c.target).toBe("de");
+      expect(c.target).toBe("id");
     }
   });
 
@@ -203,7 +203,7 @@ test.describe("non-English lazy translation", () => {
 });
 
 test.describe("gated story links (non-English)", () => {
-  test.use({ locale: "de" });
+  test.use({ locale: "id" });
 
   test("first click opens a translated confirm dialog; cancel stays; confirm-once unlocks the session", async ({
     page,
@@ -261,7 +261,7 @@ test.describe("gated story links (non-English)", () => {
 });
 
 test.describe("privacy mode (sessionStorage unavailable)", () => {
-  test.use({ locale: "fr" });
+  test.use({ locale: "vi" });
 
   test("dialog falls back to once-per-page-load, never blocks navigation", async ({
     page,
@@ -287,17 +287,7 @@ test.describe("privacy mode (sessionStorage unavailable)", () => {
   });
 });
 
-test.describe("RTL locale", () => {
-  test.use({ locale: "ar" });
-
-  test("Arabic translations apply and the dialog renders in the RTL layout", async ({
-    page,
-  }) => {
-    await setupPage(page);
-    await expect(
-      page.locator(".feature-item", { hasText: "[AR] Tracked story one" }),
-    ).toHaveCount(1);
-    await page.locator("a.shy-badge", { hasText: "SHY-9001" }).click();
-    await expect(page.locator(".shy-story-dialog")).toBeVisible();
-  });
-});
+// The "RTL locale" block that lived here is gone with SHY-0289. It used
+// Arabic, the only right-to-left language shipped, and there is no other
+// supported locale that can exercise an RTL layout. Restore it alongside any
+// future RTL language rather than retargeting it at one that reads LTR.

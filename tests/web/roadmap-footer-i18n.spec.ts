@@ -45,7 +45,7 @@ test.describe('Roadmap footer i18n', () => {
   test('copyright falls back to English when locale lacks the key', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'ar');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* localStorage may be unavailable on some webkit configs; ignore */
       }

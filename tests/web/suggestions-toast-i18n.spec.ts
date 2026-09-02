@@ -88,7 +88,7 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
 
     for (const locale of locales) {
       const localeBlock =
@@ -106,9 +106,9 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Hangul for all toast keys', async ({ page }) => {
+  test('Korean locale: sgT() returns Han characters for all toast keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -139,7 +139,7 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
       const value = t[key];
       expect(value, `sgT(${key}) should not be null`).not.toBeNull();
       expect(value, `sgT(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `sgT(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `sgT(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

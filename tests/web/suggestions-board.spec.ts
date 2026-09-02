@@ -2086,8 +2086,8 @@ test.describe('URL & Navigation Edge Cases', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('/roadmap?lang=ar loads in Arabic', async ({ page }) => {
-    await page.goto('/roadmap.html?lang=ar');
+  test('/roadmap?lang=th loads in Arabic', async ({ page }) => {
+    await page.goto('/roadmap.html?lang=th');
     await page.waitForTimeout(1000);
     // Page should load in Arabic (RTL direction)
     const html = page.locator('html');

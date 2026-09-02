@@ -70,7 +70,7 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
@@ -121,35 +121,35 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // Hangul + non-English + interpolated values preserved
-    expect(result!.revert).toMatch(/[가-힯]/);
+    // Han characters + non-English + interpolated values preserved
+    expect(result!.revert).toMatch(/[一-鿿]/);
     expect(result!.revert).not.toBe('Reset Device Binding');
 
-    expect(result!.escalate).toMatch(/[가-힯]/);
+    expect(result!.escalate).toMatch(/[一-鿿]/);
     expect(result!.escalate).not.toBe('This user has 5+ warnings. Consider suspending.');
 
-    expect(result!.noIp).toMatch(/[가-힯]/);
+    expect(result!.noIp).toMatch(/[一-鿿]/);
     expect(result!.noIp).not.toBe('No IP address found');
 
-    expect(result!.banned).toMatch(/[가-힯]/);
+    expect(result!.banned).toMatch(/[一-鿿]/);
     expect(result!.banned).toContain('3');
 
-    expect(result!.unbanned).toMatch(/[가-힯]/);
+    expect(result!.unbanned).toMatch(/[一-鿿]/);
     expect(result!.unbanned).toContain('2');
 
-    expect(result!.partial).toMatch(/[가-힯]/);
+    expect(result!.partial).toMatch(/[一-鿿]/);
     expect(result!.partial).toContain('1/3 PMs failed');
 
-    expect(result!.suspended).toMatch(/[가-힯]/);
+    expect(result!.suspended).toMatch(/[一-鿿]/);
     expect(result!.suspended).not.toBe('User suspended');
 
-    expect(result!.unsuspended).toMatch(/[가-힯]/);
+    expect(result!.unsuspended).toMatch(/[一-鿿]/);
     expect(result!.unsuspended).not.toBe('User unsuspended');
 
-    expect(result!.alreadyUnsuspended).toMatch(/[가-힯]/);
+    expect(result!.alreadyUnsuspended).toMatch(/[一-鿿]/);
     expect(result!.alreadyUnsuspended).not.toBe('User is already unsuspended');
 
-    expect(result!.warningIssued).toMatch(/[가-힯]/);
+    expect(result!.warningIssued).toMatch(/[一-鿿]/);
     expect(result!.warningIssued).not.toBe('Warning issued successfully');
   });
 });

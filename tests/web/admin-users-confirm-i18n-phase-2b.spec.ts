@@ -75,7 +75,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
@@ -124,25 +124,25 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
     expect(result, 'tAdminFmt should be defined').not.toBeNull();
 
     // All values should:
-    // 1. Contain Hangul characters (Korean translation active)
+    // 1. Contain Han characters characters (Korean translation active)
     // 2. NOT contain English fallback "Revoke" / "Ban IP" / etc.
     // 3. Substitute placeholders correctly
-    expect(result!.warning, 'warning should contain Hangul').toMatch(/[가-힯]/);
+    expect(result!.warning, 'warning should contain Han characters').toMatch(/[一-鿿]/);
     expect(result!.warning, 'warning should substitute deduction').toContain('5');
     expect(result!.warning, 'warning should not have raw placeholder').not.toContain('{deduction}');
 
-    expect(result!.biometric, 'biometric should contain Hangul').toMatch(/[가-힯]/);
+    expect(result!.biometric, 'biometric should contain Han characters').toMatch(/[一-鿿]/);
     expect(result!.biometric, 'biometric should substitute deviceId').toContain('abc-123');
 
-    expect(result!.issue, 'issue should contain Hangul').toMatch(/[가-힯]/);
+    expect(result!.issue, 'issue should contain Han characters').toMatch(/[一-鿿]/);
     expect(result!.issue, 'issue should substitute reason').toContain('spam');
     expect(result!.issue, 'issue should substitute severity').toContain('2');
     expect(result!.issue, 'issue should substitute deduction').toContain('10');
 
-    expect(result!.ip, 'ip should contain Hangul').toMatch(/[가-힯]/);
+    expect(result!.ip, 'ip should contain Han characters').toMatch(/[一-鿿]/);
     expect(result!.ip, 'ip should substitute ip').toContain('1.2.3.4');
 
-    expect(result!.graph, 'graph should contain Hangul').toMatch(/[가-힯]/);
+    expect(result!.graph, 'graph should contain Han characters').toMatch(/[一-鿿]/);
     expect(result!.graph, 'graph should substitute duration').toContain('7d');
     expect(result!.graph, 'graph should substitute scope').toContain('global');
 

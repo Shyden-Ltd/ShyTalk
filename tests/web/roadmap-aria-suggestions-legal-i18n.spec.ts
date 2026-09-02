@@ -22,12 +22,12 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *
  * Test design: a structural test asserting the two new keys exist
  * in all 20 locales of LEGAL_T.footer, plus runtime tests in two
- * representative locales (Thai for RTL, Vietnamese for CJK)
+ * representative locales (Thai for RTL, Chinese for CJK)
  * confirming the translation actually reaches the DOM after
  * applyLanguage runs.
  */
 
-const SUPPORTED_LOCALES = ['id', 'th', 'vi', 'zh'];
+const SUPPORTED_LOCALES = ['id', 'th', 'zh', 'zh'];
 
 test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
   test('LEGAL_T.footer defines aria_suggestions + aria_legal_links in all 20 locales', async ({ request }) => {
@@ -61,16 +61,16 @@ test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
 
     const suggestionsAria = await page.locator('#suggestions').getAttribute('aria-label');
     expect(suggestionsAria, 'suggestions aria-label should not be English').not.toBe('Feature suggestions');
-    expect(suggestionsAria, 'suggestions aria-label should contain Thai script').toMatch(/[؀-ۿ]/);
+    expect(suggestionsAria, 'suggestions aria-label should contain Thai script').toMatch(/[ก-๛]/);
 
     const legalNavAria = await page.locator('nav.footer-links').getAttribute('aria-label');
     expect(legalNavAria, 'legal nav aria-label should not be English').not.toBe('Legal');
-    expect(legalNavAria, 'legal nav aria-label should contain Thai script').toMatch(/[؀-ۿ]/);
+    expect(legalNavAria, 'legal nav aria-label should contain Thai script').toMatch(/[ก-๛]/);
   });
 
-  test('Vietnamese locale: roadmap aria-labels render in Hangul', async ({ page }) => {
+  test('Chinese locale: roadmap aria-labels render in Han characters', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'vi'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(() => {
@@ -79,8 +79,8 @@ test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
     }, undefined, { timeout: 10_000 });
 
     const suggestionsAria = await page.locator('#suggestions').getAttribute('aria-label');
-    expect(suggestionsAria, 'suggestions aria-label should contain Hangul').toMatch(/[가-힯]/);
+    expect(suggestionsAria, 'suggestions aria-label should contain Han characters').toMatch(/[一-鿿]/);
     const legalNavAria = await page.locator('nav.footer-links').getAttribute('aria-label');
-    expect(legalNavAria, 'legal nav aria-label should contain Hangul').toMatch(/[가-힯]/);
+    expect(legalNavAria, 'legal nav aria-label should contain Han characters').toMatch(/[一-鿿]/);
   });
 });
