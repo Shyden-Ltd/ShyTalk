@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  * instruction to send a message into nothing.
  *
  * Translated copy is the reason this is a pin rather than a unit test. The
- * address lived in 21 locale files; removing it from the English one and
+ * address lived in every locale file; removing it from the English one and
  * calling it done is exactly the mistake that leaves 20 languages still
  * pointing at the void. The scan covers all of them, and asserts it FOUND
  * them, because a scan that silently matches no files passes forever.
@@ -49,8 +49,9 @@ class SupportContactRouteWiringPinTest {
     fun `the scan reaches every locale, so a silent zero-file pass is impossible`() {
         val locales = localeFiles()
         assertTrue(
-            locales.size >= 21,
-            "expected at least 21 locale files, found ${locales.size}: ${locales.map { it.parentFile.name }}",
+            // Five since SHY-0289; hardcoded so a zero-file scan cannot pass.
+            locales.size >= 5,
+            "expected at least 5 locale files, found ${locales.size}: ${locales.map { it.parentFile.name }}",
         )
         assertTrue(
             locales.any { it.parentFile.name == "values" },

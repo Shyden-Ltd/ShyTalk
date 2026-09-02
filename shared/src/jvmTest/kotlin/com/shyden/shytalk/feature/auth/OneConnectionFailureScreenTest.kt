@@ -65,7 +65,8 @@ class OneConnectionFailureScreenTest {
         val resources = File(repoRoot(), "shared/src/commonMain/composeResources")
         val retired = listOf("technical_difficulties", "technical_difficulties_description", "contact_support_help")
         val localeDirs = resources.listFiles { f: File -> f.isDirectory && f.name.startsWith("values") } ?: emptyArray()
-        assertTrue(localeDirs.size >= 21, "expected at least 21 locales, found ${localeDirs.size}")
+        // Five since SHY-0289; hardcoded so a zero-file scan cannot pass.
+        assertTrue(localeDirs.size >= 5, "expected at least 5 locales, found ${localeDirs.size}")
         val offenders =
             localeDirs
                 .flatMap { dir ->

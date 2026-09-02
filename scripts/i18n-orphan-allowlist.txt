@@ -5,7 +5,7 @@
 #
 # Each entry should eventually be either:
 #   (a) added to the appropriate JS translation file with translations
-#       for all 20 locales, then removed from this list, OR
+#       for all five supported locales, then removed from this list, OR
 #   (b) confirmed as dormant markup (the page doesn't load any
 #       translation infrastructure) and removed from the HTML, OR
 #   (c) the page wired up with translation infrastructure and (a) applied.
@@ -30,3 +30,33 @@ pp_s10_p5
 pp_s10_p6
 pp_s10_p7
 
+# ─── SHY-0289 / SHY-0502 — public/cyber-bullying.html ───
+#
+# These are NOT new orphans. LEGAL_T.cyber defined them for exactly three
+# locales — ar, de and km — and NONE of the five ShyTalk ships. Retiring
+# those three (SHY-0289) turned a gap that had always existed for every
+# supported language into a visible one.
+#
+# That page is the policy a bullied minor is pointed at, so this is tracked
+# as SHY-0502 (P1) rather than left as a line in a list. Remove these when
+# the translations land.
+appeals_h
+appeals_p
+device_h
+device_p
+enforce_h
+filter_h
+filter_p
+report_h
+report_p
+room_h
+room_p
+root_h
+root_p
+suspend_h
+suspend_p
+title
+what_h
+what_p
+zero_h
+zero_p
