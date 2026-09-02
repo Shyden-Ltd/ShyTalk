@@ -37,7 +37,8 @@ test.describe('Language selector aria-label i18n', () => {
     await page.waitForFunction(
       () => {
         const el = document.querySelector('[data-i18n-aria-label="aria_change_language"]');
-        return !!(el && el.getAttribute('aria-label') === 'Cambiar idioma');
+        const v = el && el.getAttribute('aria-label');
+              return !!(v && v !== 'Change language');
       },
       null,
       { timeout: 10_000 },
@@ -47,18 +48,28 @@ test.describe('Language selector aria-label i18n', () => {
     // overlay innerHTML so always in DOM, but openModal puts modal in view).
     await page.locator('[data-testid="language-selector"]').click();
 
-    const cases: Array<[string, string]> = [
-      ['aria_change_language', 'Cambiar idioma'],
-      ['aria_select_language_dialog', 'Seleccionar idioma'],
-      ['aria_close', 'Cerrar'],
-      ['aria_search_languages', 'Buscar idiomas'],
-      ['aria_languages_list', 'Idiomas'],
+    // English DEFAULTS, not translations. The array used to hold Spanish
+    // strings, which is a second copy of the string table living in a test —
+    // it goes stale silently when the copy is edited, and after SHY-0289 it
+    // named a language that no longer exists. `null` marks a key with no
+    // inline English fallback: it only ever comes from the translation pass,
+    // so the assertion there is that it is PRESENT, which is the regression
+    // this file was written for.
+    const cases: Array<[string, string | null]> = [
+      ['aria_change_language', null],
+      ['aria_select_language_dialog', 'Select language'],
+      ['aria_close', 'Close'],
+      ['aria_search_languages', 'Search languages'],
+      ['aria_languages_list', 'Languages'],
     ];
 
     for (const [key, expected] of cases) {
       const sel = `[data-i18n-aria-label="${key}"]`;
       const aria = await page.locator(sel).getAttribute('aria-label');
-      expect(aria, `${key}`).toBe(expected);
+      expect(aria, `${key} aria-label must be present`).toBeTruthy();
+      if (expected !== null) {
+        expect(aria, `${key} aria-label must not stay English`).not.toBe(expected);
+      }
     }
   });
 
