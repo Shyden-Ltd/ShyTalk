@@ -60,29 +60,29 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     expect(eventsBlock, 'SUBSCRIBE_EVENTS array not found').not.toBeNull();
     for (const lit of HARDCODED_LABELS.slice(0, 4)) {
       expect(eventsBlock![1], `SUBSCRIBE_EVENTS should not hardcode "${lit}"`).not.toMatch(
-        new RegExp(`label:\\s*"${lit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+        new RegExp(`label:\\s*['"]${lit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`),
       );
     }
-    expect(eventsBlock![1]).toMatch(/sgT\("subscribe_event_new_suggestion"\)/);
-    expect(eventsBlock![1]).toMatch(/sgT\("subscribe_event_watched_update"\)/);
+    expect(eventsBlock![1]).toMatch(/sgT\(['"]subscribe_event_new_suggestion['"]\)/);
+    expect(eventsBlock![1]).toMatch(/sgT\(['"]subscribe_event_watched_update['"]\)/);
 
     // CHANNEL_LABELS object must use sgT() for all 4 entries
     const channelsBlock = src.match(/var CHANNEL_LABELS = \{([\s\S]*?)\};/);
     expect(channelsBlock, 'CHANNEL_LABELS object not found').not.toBeNull();
-    expect(channelsBlock![1]).toMatch(/email:\s*sgT\("subscribe_channel_email"\)/);
-    expect(channelsBlock![1]).toMatch(/push:\s*sgT\("subscribe_channel_push"\)/);
-    expect(channelsBlock![1]).toMatch(/inApp:\s*sgT\("subscribe_channel_inapp"\)/);
-    expect(channelsBlock![1]).toMatch(/systemMessage:\s*sgT\("subscribe_channel_system"\)/);
-    expect(channelsBlock![1]).not.toMatch(/email:\s*"Email"/);
-    expect(channelsBlock![1]).not.toMatch(/systemMessage:\s*"System Message"/);
+    expect(channelsBlock![1]).toMatch(/email:\s*sgT\(['"]subscribe_channel_email['"]\)/);
+    expect(channelsBlock![1]).toMatch(/push:\s*sgT\(['"]subscribe_channel_push['"]\)/);
+    expect(channelsBlock![1]).toMatch(/inApp:\s*sgT\(['"]subscribe_channel_inapp['"]\)/);
+    expect(channelsBlock![1]).toMatch(/systemMessage:\s*sgT\(['"]subscribe_channel_system['"]\)/);
+    expect(channelsBlock![1]).not.toMatch(/email:\s*['"]Email['"]/);
+    expect(channelsBlock![1]).not.toMatch(/systemMessage:\s*['"]System Message['"]/);
 
     // Runtime sites: button states + toasts + Event header
-    expect(src, 'Saving... should use sgT').toMatch(/sgT\("subscribe_btn_saving"\)/);
-    expect(src, 'Save reset should use sgT("save")').toMatch(/saveBtn\.textContent = sgT\("save"\)/);
-    expect(src, 'success toast should use sgT').toMatch(/sgT\("subscribe_toast_saved"\)/);
-    expect(src, 'failure toast should use sgT').toMatch(/sgT\("subscribe_toast_save_failed"\)/);
-    expect(src, 'unknown_error fallback should use sgT').toMatch(/sgT\("subscribe_unknown_error"\)/);
-    expect(src, 'Event header should use sgT').toMatch(/sgT\("subscribe_event_header"\)/);
+    expect(src, 'Saving... should use sgT').toMatch(/sgT\(['"]subscribe_btn_saving['"]\)/);
+    expect(src, 'Save reset should use sgT("save")').toMatch(/saveBtn\.textContent = sgT\(['"]save['"]\)/);
+    expect(src, 'success toast should use sgT').toMatch(/sgT\(['"]subscribe_toast_saved['"]\)/);
+    expect(src, 'failure toast should use sgT').toMatch(/sgT\(['"]subscribe_toast_save_failed['"]\)/);
+    expect(src, 'unknown_error fallback should use sgT').toMatch(/sgT\(['"]subscribe_unknown_error['"]\)/);
+    expect(src, 'Event header should use sgT').toMatch(/sgT\(['"]subscribe_event_header['"]\)/);
 
     // Hardcoded fail-cases: must NOT appear as bare quoted strings
     // anywhere except within sgT() arguments. The eval inside sgT() is
@@ -90,16 +90,16 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     // not appear in a *runtime* context (textContent assignment,
     // showToast call, escapeHtml call, etc.).
     expect(src, 'Should not hardcode "Saving..." in textContent').not.toMatch(
-      /textContent\s*=\s*"Saving\.\.\."/,
+      /textContent\s*=\s*['"]Saving\.\.\.['"]/,
     );
     expect(src, 'Should not hardcode "Save" reset in textContent').not.toMatch(
-      /saveBtn\.textContent\s*=\s*"Save"/,
+      /saveBtn\.textContent\s*=\s*['"]Save['"]/,
     );
     expect(src, 'Should not hardcode "Subscription preferences saved" in showToast').not.toMatch(
-      /showToast\("Subscription preferences saved"\)/,
+      /showToast\(['"]Subscription preferences saved['"]\)/,
     );
     expect(src, 'Should not hardcode "Failed to save: " in showToast').not.toMatch(
-      /showToast\("Failed to save: "/,
+      /showToast\(['"]Failed to save: ['"]/,
     );
     expect(src, 'Should not hardcode ">Event<" in HTML').not.toMatch(
       />Event</,

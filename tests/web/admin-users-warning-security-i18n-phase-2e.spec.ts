@@ -42,14 +42,14 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Revoked inline label', /rs\.textContent\s*=\s*"Revoked"/],
-      ['Note: prefix', /textContent\s*=\s*"Note: "\s*\+/],
-      ['By: meta line', /textContent\s*=\s*"By: "\s*\+/],
-      ['Warning revoked toast', /showToast\("Warning revoked, \+"\s*\+/],
-      ['Revoke catch fallback', /btn\.textContent\s*=\s*"Revoke";/],
-      ['PIN lockout reset toast', /showToast\("PIN lockout reset"\)/],
-      ['Biometric key revoked toast', /showToast\("Biometric key revoked"\)/],
-      ['GCS reset toast', /showToast\("GCS reset to 100"\)/],
+      ['Revoked inline label', /rs\.textContent\s*=\s*['"]Revoked['"]/],
+      ['Note: prefix', /textContent\s*=\s*['"]Note: ['"]\s*\+/],
+      ['By: meta line', /textContent\s*=\s*['"]By: ['"]\s*\+/],
+      ['Warning revoked toast', /showToast\(['"]Warning revoked, \+['"]\s*\+/],
+      ['Revoke catch fallback', /btn\.textContent\s*=\s*['"]Revoke['"];/],
+      ['PIN lockout reset toast', /showToast\(['"]PIN lockout reset['"]\)/],
+      ['Biometric key revoked toast', /showToast\(['"]Biometric key revoked['"]\)/],
+      ['GCS reset toast', /showToast\(['"]GCS reset to 100['"]\)/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -58,11 +58,11 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     // Each new key wired through tAdmin / tAdminFmt
     for (const key of PHASE_2E_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
     // Reused key — must appear at least twice (Phase 2c primary site + Phase 2e catch fallback)
-    const revokeMatches = src.match(/tAdmin\("btn_revoke"\)/g) || [];
+    const revokeMatches = src.match(/tAdmin\(['"]btn_revoke['"]\)/g) || [];
     expect(revokeMatches.length, 'btn_revoke should be referenced ≥2x (primary + catch)').toBeGreaterThanOrEqual(2);
   });
 

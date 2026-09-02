@@ -52,15 +52,15 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Remove all device bindings', /confirm\("Remove all device bindings/],
-      ['Remove this device ban', /confirm\("Remove this device ban\?"\)/],
-      ['Remove this network ban', /confirm\("Remove this network ban\?"\)/],
-      ['Unban this device', /confirm\("Unban this device\?"\)/],
-      ['Ban all devices', /confirm\("Ban all devices for this user\?"\)/],
-      ['Remove all bans', /confirm\("Remove all bans for this user\?"\)/],
-      ['Unsuspend identity graph', /confirm\("Unsuspend identity graph/],
-      ['Account deletion cancelled', /alert\("Account deletion cancelled\."\)/],
-      ['Clear temporary ID', /confirm\("Clear the temporary ID\?"\)/],
+      ['Remove all device bindings', /confirm\(['"]Remove all device bindings/],
+      ['Remove this device ban', /confirm\(['"]Remove this device ban\?['"]\)/],
+      ['Remove this network ban', /confirm\(['"]Remove this network ban\?['"]\)/],
+      ['Unban this device', /confirm\(['"]Unban this device\?['"]\)/],
+      ['Ban all devices', /confirm\(['"]Ban all devices for this user\?['"]\)/],
+      ['Remove all bans', /confirm\(['"]Remove all bans for this user\?['"]\)/],
+      ['Unsuspend identity graph', /confirm\(['"]Unsuspend identity graph/],
+      ['Account deletion cancelled', /alert\(['"]Account deletion cancelled\.['"]\)/],
+      ['Clear temporary ID', /confirm\(['"]Clear the temporary ID\?['"]\)/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -68,7 +68,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
 
     for (const key of PHASE_2A_KEYS) {
       expect(src, `users.js should call tAdmin("${key}")`).toMatch(
-        new RegExp(`window\\.tAdmin\\("${key}"\\)`),
+        new RegExp(`window\\.tAdmin\\(['"]${key}['"]\\)`),
       );
     }
   });

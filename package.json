@@ -20,7 +20,8 @@
       "bash .claude/hooks/check-kmp-compat.sh"
     ],
     "public/**/*.js": [
-      "npx --prefix express-api eslint --config public/eslint.config.mjs"
+      "node scripts/check-public-js-lint.js",
+      "npx --prefix express-api prettier --check"
     ]
   },
   "devDependencies": {

@@ -70,7 +70,7 @@ test.describe('Roadmap footer i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
     expect(src, 'copyright key must be defined to satisfy orphan-i18n-keys check').toMatch(
-      /copyright:\s*"[^"]*Shyden Ltd[^"]*"/,
+      /copyright:\s*['"][^'"]*Shyden Ltd[^'"]*['"]/,
     );
   });
 });

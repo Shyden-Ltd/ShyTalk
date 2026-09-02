@@ -1,0 +1,48 @@
+# Root Prettier ignore (SHY-0448).
+#
+# lint-staged and CI both run Prettier from the repository root, and Prettier
+# reads the ignore file next to its working directory. Until now there was none
+# here, so `express-api/.prettierignore` — the only one in the tree — was never
+# consulted from root. Its entries are carried over below so express-api's
+# behaviour is unchanged, which SHY-0448 requires.
+#
+# That gap was not theoretical. `express-api/.prettierignore` protects
+# `public/js/legal-translations.js` as "deliberately single-line per locale",
+# and from the root Prettier wanted to reformat it anyway. Adding
+# `prettier --check` over `public/` without this file would have destroyed the
+# formatting somebody had already written down a reason for.
+
+# ── Carried over from express-api/.prettierignore ──
+node_modules/
+coverage/
+package-lock.json
+test-results/
+
+# ── Vendored and generated assets ──
+# Not ours to format. Mirrors the `ignores` in public/eslint.config.mjs so the
+# two tools agree about what is vendored.
+**/*.min.js
+**/vendor/**
+
+# ── Locale tables: DATA, not code ──
+#
+# Every translation table under public/ is excluded, not just the compressed
+# ones. Two independent reasons, and either alone is sufficient:
+#
+# 1. Several are written one line per locale ON PURPOSE. They are read by
+#    comparing rows DOWN the file — one per language — so a missing or wrong
+#    translation is visible at a glance across twenty of them. Expanding each
+#    row into a block does not change the style, it removes the only way they
+#    are reviewable. `express-api/.prettierignore` already said this about
+#    legal-translations.js; the entry simply never took effect from the root.
+#
+# 2. 36 web specs assert locale COMPLETENESS by matching the shape of these
+#    files — `zh: { ... }` blocks and the keys inside them. Re-serialising the
+#    data would break those assertions, or worse, leave them passing while
+#    matching something else. A formatter has no opinion worth that.
+public/admin/translations.js
+public/js/event-translations.js
+public/js/homepage-translations.js
+public/js/legal-translations.js
+public/js/suggestions-i18n.js
+public/portal/portal-translations.js

@@ -1,10 +1,10 @@
 // Dev environment configuration — copied as config.js during dev deployment
 // Copy this to config.dev.js and replace <DEV_FIREBASE_API_KEY> with the real key
 window.SHYTALK_CONFIG = {
-  API_BASE: "https://dev-api.shytalk.shyden.co.uk",
+  API_BASE: 'https://dev-api.shytalk.shyden.co.uk', // localhost: http://localhost:3000
   FIREBASE_CONFIG: {
-    apiKey: "<DEV_FIREBASE_API_KEY>",
-    authDomain: "shytalk-dev.firebaseapp.com",
-    projectId: "shytalk-dev"
-  }
+    apiKey: '<DEV_FIREBASE_API_KEY>',
+    authDomain: 'shytalk-dev.firebaseapp.com',
+    projectId: 'shytalk-dev',
+  },
 };

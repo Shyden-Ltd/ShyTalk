@@ -44,15 +44,15 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['User suspended', /,\s*"User suspended"/],
-      ['User unsuspended', /,\s*"User unsuspended"/],
-      ['Warning issued successfully', /,\s*"Warning issued successfully"/],
-      ['5+ warnings auto-escalate', /showToast\("This user has 5\+/],
-      ['Reset Device Binding revert', /textContent\s*=\s*"Reset Device Binding";/],
+      ['User suspended', /,\s*['"]User suspended['"]/],
+      ['User unsuspended', /,\s*['"]User unsuspended['"]/],
+      ['Warning issued successfully', /,\s*['"]Warning issued successfully['"]/],
+      ['5+ warnings auto-escalate', /showToast\(['"]This user has 5\+/],
+      ['Reset Device Binding revert', /textContent\s*=\s*['"]Reset Device Binding['"];/],
       ['Partial retry message', /showToast\(`Partial: \$\{segments/],
       ['Banned N device(s) success', /showToast\(`Banned \$\{fulfilled/],
-      ['No IP address found', /showToast\("No IP address found"/],
-      ['Removed N ban(s)', /"Removed " \+ \(result\.removed/],
+      ['No IP address found', /showToast\(['"]No IP address found['"]/],
+      ['Removed N ban(s)', /['"]Removed ['"] \+ \(result\.removed/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -60,7 +60,7 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
 
     for (const key of PHASE_2G_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
   });

@@ -33,7 +33,13 @@ const {
   buildReportDocument,
 } = require('../utils/report-document');
 const { attachmentKeysOf } = require('../utils/support-retention');
-const { deleteObject, getObject, getSignedPutUrl, headObject } = require('../utils/r2');
+const {
+  deleteObject,
+  getObject,
+  getSignedPutUrl,
+  headObject,
+  pipeToResponse,
+} = require('../utils/r2');
 const { refusalForStoredObject } = require('../utils/attachment-limits');
 const { scanAttachment } = require('../utils/attachment-scan');
 const { writeLimiter } = require('../middleware/rateLimit');
@@ -694,7 +700,9 @@ router.get('/support-tickets/:id/attachments/:index', writeLimiter, async (req, 
 
     // Streamed rather than buffered: these are photographs and video, and
     // holding one in memory per moderator view is a needless cost.
-    return object.Body.pipe(res);
+    // SHY-0501: destroyed if the moderator closes the video before it ends,
+    // or the socket leaks in CLOSE_WAIT and fifty of them stop storage dead.
+    return pipeToResponse(object.Body, res);
   } catch (err) {
     log.error('support-tickets', 'GET attachment stream failed', { error: err.message });
     return res.status(500).json({ error: 'Internal server error' });

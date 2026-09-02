@@ -48,14 +48,14 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Auto-save failed (toast)', /showToast\("Auto-save failed: " \+ err\.message/],
-      ['Undo failed (toast)', /showToast\("Undo failed: " \+ err\.message/],
-      ['Suspended since (badge)', /"Suspended since " \+ since/],
-      ['Not Suspended badge', /textContent\s*=\s*"Not Suspended"/],
-      ['Deletion scheduled badge', /"Deletion scheduled — "/],
-      ['Severity ... GCS', /"Severity " \+ w\.severity/],
-      ['permanent fallback', /:\s*"permanent"/],
-      ['No reason provided fallback', /\|\| "No reason provided"/],
+      ['Auto-save failed (toast)', /showToast\(['"]Auto-save failed: ['"] \+ err\.message/],
+      ['Undo failed (toast)', /showToast\(['"]Undo failed: ['"] \+ err\.message/],
+      ['Suspended since (badge)', /['"]Suspended since ['"] \+ since/],
+      ['Not Suspended badge', /textContent\s*=\s*['"]Not Suspended['"]/],
+      ['Deletion scheduled badge', /['"]Deletion scheduled — ['"]/],
+      ['Severity ... GCS', /['"]Severity ['"] \+ w\.severity/],
+      ['permanent fallback', /:\s*['"]permanent['"]/],
+      ['No reason provided fallback', /\|\| ['"]No reason provided['"]/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -64,7 +64,7 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     // Verify each key is wired (tAdmin or tAdminFmt depending on shape)
     for (const key of PHASE_2D_KEYS.filter(k => k !== 'msg_suspended_since_until_format')) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
   });

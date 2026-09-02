@@ -41,14 +41,14 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Failed: err toast', /showToast\("Failed: " \+ err\.message/],
-      ['Reason is required', /showToast\("Reason is required"/],
-      ['Select a reason', /showToast\("Select a reason"/],
-      ['No user loaded', /showToast\("No user loaded"/],
-      ['Issuing... loading', /textContent\s*=\s*"Issuing\.\.\.";/],
-      ['Issue Warning revert', /textContent\s*=\s*"Issue Warning";/],
-      ['Resetting... loading', /textContent\s*=\s*"Resetting\.\.\.";/],
-      ['Removed N device binding(s)', /showToast\("Removed " \+ \(result\.deleted/],
+      ['Failed: err toast', /showToast\(['"]Failed: ['"] \+ err\.message/],
+      ['Reason is required', /showToast\(['"]Reason is required['"]/],
+      ['Select a reason', /showToast\(['"]Select a reason['"]/],
+      ['No user loaded', /showToast\(['"]No user loaded['"]/],
+      ['Issuing... loading', /textContent\s*=\s*['"]Issuing\.\.\.['"];/],
+      ['Issue Warning revert', /textContent\s*=\s*['"]Issue Warning['"];/],
+      ['Resetting... loading', /textContent\s*=\s*['"]Resetting\.\.\.['"];/],
+      ['Removed N device binding(s)', /showToast\(['"]Removed ['"] \+ \(result\.deleted/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -57,11 +57,11 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
     // Each new key wired through tAdmin / tAdminFmt
     for (const key of PHASE_2F_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
     // toast_action_failed must appear at least 6 times (shared across 6 catch sites)
-    const actionFailedMatches = src.match(/tAdminFmt\("toast_action_failed"/g) || [];
+    const actionFailedMatches = src.match(/tAdminFmt\(['"]toast_action_failed['"]/g) || [];
     expect(actionFailedMatches.length, 'toast_action_failed should cover ≥6 sites').toBeGreaterThanOrEqual(6);
   });
 

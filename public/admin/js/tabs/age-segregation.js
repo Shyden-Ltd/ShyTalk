@@ -135,8 +135,7 @@ function showConfirmModal({ targetUid, cohortLabel, reason }) {
   _pendingOverride = { targetUid, cohortLabel, reason };
   const summary = $('age-seg-confirm-summary');
   if (summary) {
-    summary.textContent =
-      `Target: ${targetUid} — New cohort: ${cohortLabel} — Reason: ${reason}`;
+    summary.textContent = `Target: ${targetUid} — New cohort: ${cohortLabel} — Reason: ${reason}`;
   }
   const modal = $('age-seg-confirm-modal');
   if (modal) modal.style.display = 'flex';

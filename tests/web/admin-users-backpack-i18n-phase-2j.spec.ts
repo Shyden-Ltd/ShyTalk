@@ -41,15 +41,15 @@ test.describe('Admin users-tab backpack panel i18n (Phase 2j)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Loading backpack...', /textContent\s*=\s*"Loading backpack\.\.\."/],
-      ['Backpack is empty (ternary)', /\?\s*"Backpack is empty"/],
-      ['No matching gifts (ternary)', /:\s*"No matching gifts"/],
-      ['Confirm (countdown) initial', /textContent\s*=\s*"Confirm \(" \+ countdown/],
-      ['Confirm Clear All revert', /textContent\s*=\s*"Confirm Clear All"/],
-      ['Clearing... loading', /textContent\s*=\s*"Clearing\.\.\."/],
-      ['Backpack cleared (N items removed)', /showToast\("Backpack cleared \("/],
-      ['Cleared N, failed N', /showToast\("Cleared " \+ cleared/],
-      ['Failed to save:', /showToast\("Failed to save: "/],
+      ['Loading backpack...', /textContent\s*=\s*['"]Loading backpack\.\.\.['"]/],
+      ['Backpack is empty (ternary)', /\?\s*['"]Backpack is empty['"]/],
+      ['No matching gifts (ternary)', /:\s*['"]No matching gifts['"]/],
+      ['Confirm (countdown) initial', /textContent\s*=\s*['"]Confirm \(['"] \+ countdown/],
+      ['Confirm Clear All revert', /textContent\s*=\s*['"]Confirm Clear All['"]/],
+      ['Clearing... loading', /textContent\s*=\s*['"]Clearing\.\.\.['"]/],
+      ['Backpack cleared (N items removed)', /showToast\(['"]Backpack cleared \(['"]/],
+      ['Cleared N, failed N', /showToast\(['"]Cleared ['"] \+ cleared/],
+      ['Failed to save:', /showToast\(['"]Failed to save: ['"]/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -58,11 +58,11 @@ test.describe('Admin users-tab backpack panel i18n (Phase 2j)', () => {
     // Tolerant regex — allows ternary like (X ? "k1" : "k2") form
     for (const key of PHASE_2J_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\([^)]*?"${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\([^)]*?['"]${key}['"]`),
       );
     }
     // btn_confirming used at 2 sites (initial + countdown tick)
-    const confirmingMatches = src.match(/tAdminFmt\("btn_confirming"/g) || [];
+    const confirmingMatches = src.match(/tAdminFmt\(['"]btn_confirming['"]/g) || [];
     expect(confirmingMatches.length, 'btn_confirming should appear ≥2x').toBeGreaterThanOrEqual(2);
   });
 

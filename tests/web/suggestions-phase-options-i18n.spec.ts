@@ -55,13 +55,13 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
     for (const name of HARDCODED_LABELS) {
       const escaped = name.replace(/[&]/g, '\\&');
       expect(arrSrc, `PHASE_OPTIONS should not hardcode "${name}"`).not.toMatch(
-        new RegExp(`label:\\s*"${escaped}"`),
+        new RegExp(`label:\\s*['"]${escaped}['"]`),
       );
     }
 
     for (const key of PHASE_KEYS) {
       expect(arrSrc, `PHASE_OPTIONS should use sgT("${key}")`).toMatch(
-        new RegExp(`label:\\s*sgT\\("${key}"\\)`),
+        new RegExp(`label:\\s*sgT\\(['"]${key}['"]\\)`),
       );
     }
   });

@@ -23,8 +23,8 @@
  * shape of a stored-XSS problem if it is ever trusted.
  */
 
-import { apiCall, fetchObjectUrl } from "/js/core/api.js";
-import { showToast, escapeHtml } from "/js/core/ui.js";
+import { apiCall, fetchObjectUrl } from '/js/core/api.js';
+import { showToast, escapeHtml } from '/js/core/ui.js';
 // Reused, never re-implemented: this already renders BOTH an image and a video
 // with a lightbox. SHY-0400 exists because a second, images-only path was built
 // beside it and the video branch became unreachable.
@@ -34,11 +34,11 @@ import { showToast, escapeHtml } from "/js/core/ui.js";
 // prefix left the Support tab rendering nothing at all -- no tickets, no
 // empty state -- in every browser, while every source-scanning test stayed
 // green. `main.js` had it right all along.
-import { renderEvidence, openEvidenceLightbox } from "/admin/js/tabs/users.js";
+import { renderEvidence, openEvidenceLightbox } from '/admin/js/tabs/users.js';
 
 // ── State ──────────────────────────────────────────────────────────
 
-let currentFilter = "open";
+let currentFilter = 'open';
 
 /**
  * Object URLs minted for attachment thumbnails, so they can be released.
@@ -58,12 +58,12 @@ function releaseAttachmentObjectUrls() {
 // ── Public API ─────────────────────────────────────────────────────
 
 export function init() {
-  for (const btn of document.querySelectorAll("[data-support-filter]")) {
-    btn.addEventListener("click", () => {
-      for (const b of document.querySelectorAll("[data-support-filter]")) {
-        b.classList.remove("active");
+  for (const btn of document.querySelectorAll('[data-support-filter]')) {
+    btn.addEventListener('click', () => {
+      for (const b of document.querySelectorAll('[data-support-filter]')) {
+        b.classList.remove('active');
       }
-      btn.classList.add("active");
+      btn.classList.add('active');
       currentFilter = btn.dataset.supportFilter;
       load(currentFilter);
     });
@@ -87,13 +87,12 @@ async function load(status) {
   // are unreachable from the moment `list.innerHTML` is cleared -- released
   // here rather than left to the garbage collector, which does not revoke them.
   releaseAttachmentObjectUrls();
-  const list = document.getElementById("support-list");
+  const list = document.getElementById('support-list');
   if (!list) return;
-  list.innerHTML =
-    '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
+  list.innerHTML = '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
 
   try {
-    const raw = await apiCall("GET", `/api/support-tickets?status=${status}`);
+    const raw = await apiCall('GET', `/api/support-tickets?status=${status}`);
     const tickets = Array.isArray(raw) ? raw : raw.tickets || [];
 
     if (tickets.length === 0) {
@@ -102,27 +101,27 @@ async function load(status) {
       return;
     }
 
-    list.innerHTML = "";
+    list.innerHTML = '';
     for (const ticket of tickets) {
       list.appendChild(renderCard(ticket, status));
     }
 
-    for (const btn of list.querySelectorAll("[data-resolve-ticket]")) {
-      btn.addEventListener("click", async () => {
+    for (const btn of list.querySelectorAll('[data-resolve-ticket]')) {
+      btn.addEventListener('click', async () => {
         if (btn.disabled) return;
         const ticketId = btn.dataset.resolveTicket;
         const noteInput = list.querySelector(`[data-note-for="${ticketId}"]`);
-        const adminNote = noteInput ? noteInput.value.trim() : "";
+        const adminNote = noteInput ? noteInput.value.trim() : '';
         btn.disabled = true;
         try {
-          await apiCall("PATCH", `/api/support-tickets/${ticketId}`, {
-            status: "resolved",
+          await apiCall('PATCH', `/api/support-tickets/${ticketId}`, {
+            status: 'resolved',
             ...(adminNote ? { adminNote } : {}),
           });
-          showToast("Ticket resolved");
+          showToast('Ticket resolved');
           load(currentFilter);
         } catch (err) {
-          showToast(err.message, "error");
+          showToast(err.message, 'error');
         } finally {
           btn.disabled = false;
         }
@@ -130,26 +129,19 @@ async function load(status) {
     }
 
     // SHY-0438 — turning a ticket into a report.
-    for (const btn of list.querySelectorAll("[data-convert-ticket]")) {
-      btn.addEventListener("click", async () => {
+    for (const btn of list.querySelectorAll('[data-convert-ticket]')) {
+      btn.addEventListener('click', async () => {
         if (btn.disabled) return;
         const ticketId = btn.dataset.convertTicket;
-        const userInput = list.querySelector(
-          `[data-report-user-for="${ticketId}"]`,
-        );
-        const reasonInput = list.querySelector(
-          `[data-report-reason-for="${ticketId}"]`,
-        );
-        const reportedUserId = userInput ? userInput.value.trim() : "";
-        const reason = reasonInput ? reasonInput.value : "";
+        const userInput = list.querySelector(`[data-report-user-for="${ticketId}"]`);
+        const reasonInput = list.querySelector(`[data-report-reason-for="${ticketId}"]`);
+        const reportedUserId = userInput ? userInput.value.trim() : '';
+        const reason = reasonInput ? reasonInput.value : '';
 
         // Asked here rather than let the server answer 400, because the server's
         // refusal would arrive after the admin thinks they have filed it.
         if (!reportedUserId) {
-          showToast(
-            "Who is this report about? Enter the reported user id.",
-            "error",
-          );
+          showToast('Who is this report about? Enter the reported user id.', 'error');
           return;
         }
 
@@ -157,14 +149,14 @@ async function load(status) {
         // confirmed once, naming what happens.
         const confirmed = window.confirm(
           `File a report against ${reportedUserId} for "${reason}" on this person's behalf?\n\n` +
-            "Their support ticket will be closed permanently and cannot be reopened.",
+            'Their support ticket will be closed permanently and cannot be reopened.',
         );
         if (!confirmed) return;
 
         btn.disabled = true;
         try {
           const result = await apiCall(
-            "POST",
+            'POST',
             `/api/support-tickets/${ticketId}/convert-to-report`,
             { reportedUserId, reason },
           );
@@ -176,22 +168,22 @@ async function load(status) {
           showToast(
             missing > 0
               ? `Report filed. ${missing} attachment(s) were no longer in storage.`
-              : "Report filed and ticket closed",
+              : 'Report filed and ticket closed',
           );
           load(currentFilter);
         } catch (err) {
           // The ticket is untouched when this fails -- the server creates the
           // report first -- so the admin can simply try again.
-          showToast(err.message, "error");
+          showToast(err.message, 'error');
         } finally {
           btn.disabled = false;
         }
       });
     }
   } catch (err) {
-    list.textContent = "";
-    const errDiv = document.createElement("div");
-    errDiv.style.cssText = "color:var(--danger);font-size:13px;";
+    list.textContent = '';
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'color:var(--danger);font-size:13px;';
     errDiv.textContent = err.message;
     list.appendChild(errDiv);
   }
@@ -212,9 +204,7 @@ async function load(status) {
  * act on a report while unaware evidence exists.
  */
 async function loadAttachments(ticketId, card) {
-  const slot = card.querySelector(
-    `[data-attachments-for="${CSS.escape(String(ticketId))}"]`,
-  );
+  const slot = card.querySelector(`[data-attachments-for="${CSS.escape(String(ticketId))}"]`);
   if (!slot) return;
 
   try {
@@ -224,7 +214,7 @@ async function loadAttachments(ticketId, card) {
     // surfaced as a red "Attachments could not be loaded" on EVERY ticket,
     // including ones with no attachments, with no request on the wire at all.
     const res = await apiCall(
-      "GET",
+      'GET',
       `/api/support-tickets/${encodeURIComponent(ticketId)}/attachments`,
     );
     const rows = Array.isArray(res?.attachments) ? res.attachments : [];
@@ -241,9 +231,7 @@ async function loadAttachments(ticketId, card) {
     // keeps what SHY-0420 was for: no signed URL, no address that outlives the
     // session, and every read still passing through a route that knows who is
     // asking.
-    const paths = rows
-      .map((a) => (typeof a === "string" ? a : a.viewUrl))
-      .filter(Boolean);
+    const paths = rows.map((a) => (typeof a === 'string' ? a : a.viewUrl)).filter(Boolean);
     if (paths.length === 0) return;
 
     const fetched = await Promise.all(
@@ -261,7 +249,7 @@ async function loadAttachments(ticketId, card) {
     if (urls.length === 0) {
       slot.innerHTML =
         '<div style="font-size:11px;color:var(--danger);margin-top:6px;">' +
-        "Attachments could not be loaded</div>";
+        'Attachments could not be loaded</div>';
       return;
     }
 
@@ -281,45 +269,35 @@ async function loadAttachments(ticketId, card) {
     // difference is invisible in a screenshot — which is how it survived a
     // source-scanning guard and a rendering test that only asked whether the
     // thumbnail appeared.
-    for (const thumb of slot.querySelectorAll(
-      ".evidence-thumb:not([data-wired])",
-    )) {
-      thumb.dataset.wired = "1";
-      thumb.addEventListener("click", () => {
-        openEvidenceLightbox(
-          thumb.dataset.evidenceUrl,
-          thumb.dataset.evidenceType,
-        );
+    for (const thumb of slot.querySelectorAll('.evidence-thumb:not([data-wired])')) {
+      thumb.dataset.wired = '1';
+      thumb.addEventListener('click', () => {
+        openEvidenceLightbox(thumb.dataset.evidenceUrl, thumb.dataset.evidenceType);
       });
     }
   } catch (err) {
     slot.innerHTML =
       '<div style="font-size:11px;color:var(--danger);margin-top:6px;">' +
-      "Attachments could not be loaded</div>";
+      'Attachments could not be loaded</div>';
   }
 }
 
 function renderCard(ticket, status) {
-  const card = document.createElement("div");
-  card.className = "appeal-card";
+  const card = document.createElement('div');
+  card.className = 'appeal-card';
 
-  const raised = ticket.createdAt
-    ? new Date(ticket.createdAt).toLocaleString()
-    : "";
-  const uniqueId = ticket.userId ?? "?";
-  const category = ticket.category || "other";
+  const raised = ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : '';
+  const uniqueId = ticket.userId ?? '?';
+  const category = ticket.category || 'other';
 
   // Context is an allowlisted set of short strings, but it still came from a
   // client, so it is escaped like everything else.
-  const context =
-    ticket.context && typeof ticket.context === "object" ? ticket.context : {};
+  const context = ticket.context && typeof ticket.context === 'object' ? ticket.context : {};
   const contextHtml = Object.keys(context).length
-    ? `<div style="font-size:11px;color:var(--text2);margin-top:6px;">${Object.entries(
-        context,
-      )
+    ? `<div style="font-size:11px;color:var(--text2);margin-top:6px;">${Object.entries(context)
         .map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(String(v))}`)
-        .join(" &middot; ")}</div>`
-    : "";
+        .join(' &middot; ')}</div>`
+    : '';
 
   // SHY-0396: what somebody ADDED after choosing "it is the problem I already
   // reported". Without this the append endpoint writes their words into
@@ -336,36 +314,34 @@ function renderCard(ticket, status) {
   // original message div has always been a single line, which is why it was
   // never affected and the difference was easy to miss.
   const followUpHtml = (m) => {
-    const body = escapeHtml(String(m?.message ?? ""));
-    const when = m?.addedAt
-      ? ` ${escapeHtml(new Date(m.addedAt).toLocaleString())}`
-      : "";
+    const body = escapeHtml(String(m?.message ?? ''));
+    const when = m?.addedAt ? ` ${escapeHtml(new Date(m.addedAt).toLocaleString())}` : '';
     return (
       `<div style="margin-top:6px;font-size:13px;white-space:pre-wrap;">${body}</div>` +
       `<div style="font-size:11px;color:var(--text2);">Added${when}</div>`
     );
   };
   const followUpsHtml = followUps.length
-    ? `<div style="margin-top:8px;border-left:2px solid var(--text2);padding-left:8px;">${followUps.map(followUpHtml).join("")}</div>`
-    : "";
+    ? `<div style="margin-top:8px;border-left:2px solid var(--text2);padding-left:8px;">${followUps.map(followUpHtml).join('')}</div>`
+    : '';
 
   const resolvedHtml =
-    status === "resolved"
+    status === 'resolved'
       ? `<div style="font-size:11px;color:var(--text2);margin-top:8px;">
-           Resolved by ${escapeHtml(String(ticket.resolvedBy ?? "unknown"))}
-           ${ticket.resolvedAt ? `on ${escapeHtml(new Date(ticket.resolvedAt).toLocaleString())}` : ""}
-           ${ticket.adminNote ? `<div style="margin-top:4px;">Note: ${escapeHtml(ticket.adminNote)}</div>` : ""}
+           Resolved by ${escapeHtml(String(ticket.resolvedBy ?? 'unknown'))}
+           ${ticket.resolvedAt ? `on ${escapeHtml(new Date(ticket.resolvedAt).toLocaleString())}` : ''}
+           ${ticket.adminNote ? `<div style="margin-top:4px;">Note: ${escapeHtml(ticket.adminNote)}</div>` : ''}
          </div>`
-      : "";
+      : '';
 
   // SHY-0439: what became of it, and which report to look in.
   const convertedHtml =
-    status === "converted_to_report"
+    status === 'converted_to_report'
       ? `<div style="font-size:11px;color:var(--text2);margin-top:8px;">
-           Became report ${escapeHtml(String(ticket.convertedToReportId ?? "unknown"))}
-           ${ticket.convertedAt ? `on ${escapeHtml(new Date(ticket.convertedAt).toLocaleString())}` : ""}
+           Became report ${escapeHtml(String(ticket.convertedToReportId ?? 'unknown'))}
+           ${ticket.convertedAt ? `on ${escapeHtml(new Date(ticket.convertedAt).toLocaleString())}` : ''}
          </div>`
-      : "";
+      : '';
 
   // SHY-0438. Offered on EVERY open ticket, not only the safety ones: an admin
   // reading a ticket filed under "other" may be the first person to recognise
@@ -375,7 +351,7 @@ function renderCard(ticket, status) {
   // somebody's ticket permanently, and a destructive control sitting beside an
   // everyday one gets pressed by accident.
   const convertActionHtml =
-    status === "open"
+    status === 'open'
       ? `<details style="margin-top:10px;border-top:1px solid var(--text2);padding-top:8px;">
            <summary style="font-size:12px;cursor:pointer;">Turn this into a report</summary>
            <div style="font-size:11px;color:var(--text2);margin:6px 0;">
@@ -397,11 +373,11 @@ function renderCard(ticket, status) {
              <button class="btn" data-convert-ticket="${escapeHtml(String(ticket.id))}">File report</button>
            </div>
          </details>`
-      : "";
+      : '';
 
   const actionHtml =
-    status !== "open"
-      ? ""
+    status !== 'open'
+      ? ''
       : `<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
            <input type="text" data-note-for="${escapeHtml(String(ticket.id))}"
                   placeholder="Internal note (optional)"
@@ -414,7 +390,7 @@ function renderCard(ticket, status) {
       <div style="font-weight:600;font-size:14px;">#${escapeHtml(String(uniqueId))}</div>
       <div style="font-size:11px;color:var(--text2);">${escapeHtml(category)} &middot; ${escapeHtml(raised)}</div>
     </div>
-    <div style="margin-top:8px;font-size:13px;white-space:pre-wrap;">${escapeHtml(String(ticket.message ?? ""))}</div>
+    <div style="margin-top:8px;font-size:13px;white-space:pre-wrap;">${escapeHtml(String(ticket.message ?? ''))}</div>
     ${followUpsHtml}
     ${contextHtml}
     <div data-attachments-for="${escapeHtml(String(ticket.id))}"></div>
