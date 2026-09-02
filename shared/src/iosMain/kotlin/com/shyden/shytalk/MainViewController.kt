@@ -31,8 +31,10 @@ import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
 import com.shyden.shytalk.navigation.BanState
+import com.shyden.shytalk.navigation.ColdStartConfirmation
 import com.shyden.shytalk.navigation.ColdStartSequencer
 import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
+import com.shyden.shytalk.navigation.LaunchRedirectReason
 import com.shyden.shytalk.navigation.LaunchState
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
@@ -197,6 +199,11 @@ private fun IosApp() {
                 // the room list before being stopped.
                 var coldStartBan by remember { mutableStateOf(BanState()) }
 
+                // SHY-0500 — set when the background confirmation finds the stored
+                // session dead, so the sign-in screen can say why the person is
+                // there rather than leaving them to guess.
+                var launchRedirect by remember { mutableStateOf<LaunchRedirectReason?>(null) }
+
                 // SHY-0143 — gates the background cohort reconcile, which is
                 // only worth running once the claim has been confirmed fresh.
                 // NOT the nav graph's user-flag subscription: that keys on
@@ -283,16 +290,36 @@ private fun IosApp() {
                                     )
                                 },
                             )
-                        val destination = sequencer.run()
+                        // SHY-0500 — DRAW FIRST, confirm behind it.
+                        //
+                        // `immediateDestination()` performs no I/O, so the graph mounts
+                        // on the first frame instead of after a ban round trip and a
+                        // token refresh. Everything the sequence enforces still runs, in
+                        // the same order, behind the screen already on display.
+                        val immediate = sequencer.immediateDestination()
+                        value = immediate.route
+
+                        val confirmation = sequencer.confirm()
                         coldStartBan = sequencer.lastBan
                         cohortVerified = sequencer.cohortVerified
+                        when (confirmation) {
+                            is ColdStartConfirmation.Stay -> Unit
+
+                            is ColdStartConfirmation.Redirect -> {
+                                // A ban renders above the graph via `coldStartBan`; a dead
+                                // session has to move it, and carries its reason so the
+                                // person is TOLD to sign in again.
+                                if (confirmation.screen == Screen.SignIn) {
+                                    launchRedirect = confirmation.reason
+                                }
+                                value = confirmation.screen.route
+                            }
+                        }
                         logI(
                             "MainViewController",
-                            "Cold-launch destination: ${destination.route} " +
-                                "(lockGated=${destination == Screen.Lock}, " +
-                                "banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
+                            "Cold-launch: drew ${immediate.route}, confirmation=$confirmation " +
+                                "(banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
                         )
-                        value = destination.route
 
                         // SHY-0143 I5 — the cohort reconcile, after the shell
                         // is released. `produceState`'s block runs in its own
@@ -337,6 +364,7 @@ private fun IosApp() {
                     SharedNavGraph(
                         navController = navController,
                         startDestination = route,
+                        launchRedirect = launchRedirect,
                         // SHY-0143 — this used to ONLY navigate. `SharedNavGraph`
                         // invokes it on the mid-session suspension path, so a
                         // suspended iPhone user was shown the Sign-In screen
