@@ -62,10 +62,7 @@ export function init(deps) {
   const addBtn = $('#ms-add-btn');
   if (addBtn) {
     addBtn.addEventListener('click', () => {
-      const maxDay =
-        milestoneData.length > 0
-          ? Math.max(...milestoneData.map((r) => r.day))
-          : 0;
+      const maxDay = milestoneData.length > 0 ? Math.max(...milestoneData.map((r) => r.day)) : 0;
       milestoneData.push({
         day: maxDay + 7,
         type: 'coins',
@@ -111,10 +108,7 @@ async function load() {
       const raw = await apiCall('GET', '/api/gifts/all');
       giftsCache = Array.isArray(raw) ? raw : raw.gifts || [];
     } catch (giftErr) {
-      console.warn(
-        'Failed to load gift catalog for milestones:',
-        giftErr.message,
-      );
+      console.warn('Failed to load gift catalog for milestones:', giftErr.message);
     }
 
     const token = await _getToken();
@@ -132,13 +126,9 @@ async function load() {
 
     // Sync slider labels
     const shiftEl = $('#eco-pitySoftMaxShift');
-    if (shiftEl)
-      $('#eco-pitySoftMaxShift-val').textContent =
-        shiftEl.value || '0.15';
+    if (shiftEl) $('#eco-pitySoftMaxShift-val').textContent = shiftEl.value || '0.15';
     const dropEl = $('#eco-dropRateExponent');
-    if (dropEl)
-      $('#eco-dropRateExponent-val').textContent =
-        dropEl.value || '1.5';
+    if (dropEl) $('#eco-dropRateExponent-val').textContent = dropEl.value || '1.5';
 
     // Cache pity hard limit (also update inline shim for spin monitor)
     if (config.pityHardLimit) {
@@ -149,11 +139,8 @@ async function load() {
       const pityInput = $('#eco-pity');
       if (pityInput) {
         pityInput.max = cachedPityHardLimit;
-        const label = pityInput
-          .closest('.field-group')
-          ?.querySelector('label');
-        if (label)
-          label.textContent = `Pity Counter (0-${cachedPityHardLimit})`;
+        const label = pityInput.closest('.field-group')?.querySelector('label');
+        if (label) label.textContent = `Pity Counter (0-${cachedPityHardLimit})`;
       }
     }
 
@@ -172,10 +159,7 @@ async function load() {
     // Milestone rewards
     loadMilestoneUI(config.milestoneRewards || {});
   } catch (err) {
-    showToast(
-      'Failed to load economy config: ' + err.message,
-      'error',
-    );
+    showToast('Failed to load economy config: ' + err.message, 'error');
   }
 }
 
@@ -183,9 +167,7 @@ async function load() {
 
 function loadMilestoneUI(obj) {
   milestoneData = [];
-  for (const [day, val] of Object.entries(obj).sort(
-    (a, b) => Number(a[0]) - Number(b[0]),
-  )) {
+  for (const [day, val] of Object.entries(obj).sort((a, b) => Number(a[0]) - Number(b[0]))) {
     if (typeof val === 'number') {
       milestoneData.push({
         day: Number(day),
@@ -281,20 +263,14 @@ function renderMilestoneRows() {
       } else if (field === 'giftId') {
         milestoneData[idx].giftId = el.value;
       } else if (field === 'quantity') {
-        milestoneData[idx].quantity = Math.max(
-          1,
-          Number(el.value) || 1,
-        );
+        milestoneData[idx].quantity = Math.max(1, Number(el.value) || 1);
       }
     });
   }
   for (const btn of container.querySelectorAll('.ms-swap-btn')) {
     btn.addEventListener('click', () => {
       const idx = Number(btn.dataset.idx);
-      [milestoneData[idx - 1], milestoneData[idx]] = [
-        milestoneData[idx],
-        milestoneData[idx - 1],
-      ];
+      [milestoneData[idx - 1], milestoneData[idx]] = [milestoneData[idx], milestoneData[idx - 1]];
       renderMilestoneRows();
     });
   }
@@ -339,8 +315,7 @@ async function save() {
       const el = $(`#eco-${f}`);
       if (el && el.value !== '') {
         const v = Number(el.value);
-        if (!Number.isFinite(v))
-          throw new Error(`${f} must be a number`);
+        if (!Number.isFinite(v)) throw new Error(`${f} must be a number`);
         updates[f] = v;
       }
     }
@@ -352,9 +327,7 @@ async function save() {
       if (el && el.value !== '') {
         const v = Number(el.value);
         if (!Number.isFinite(v) || v < 0)
-          throw new Error(
-            `Pull cost for ${k} spins must be a positive number`,
-          );
+          throw new Error(`Pull cost for ${k} spins must be a positive number`);
         pullCosts[k] = v;
         hasPullCost = true;
       }
@@ -374,8 +347,7 @@ async function save() {
 
     updates.milestoneRewards = collectMilestoneRewards();
 
-    if (Object.keys(updates).length === 0)
-      throw new Error('No fields to save');
+    if (Object.keys(updates).length === 0) throw new Error('No fields to save');
 
     const token = await _getToken();
     const resp = await fetch(`${_apiBase}/api/config/economy`, {
@@ -389,9 +361,7 @@ async function save() {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Save failed');
 
-    const fields = Array.isArray(data.updatedFields)
-      ? data.updatedFields
-      : Object.keys(updates);
+    const fields = Array.isArray(data.updatedFields) ? data.updatedFields : Object.keys(updates);
     info.textContent = `Saved: ${fields.join(', ')}`;
     info.style.color = 'var(--success)';
     showToast('Economy config saved', 'success');

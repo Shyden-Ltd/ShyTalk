@@ -152,11 +152,15 @@ jobs:
       # on backend_changed -- so on a public/-only PR this ran against a tree
       # with no eslint at all and failed for a reason that had nothing to do
       # with the code under test.
-      - name: public/ JavaScript is linted (SHY-0448 ratchet)
+      - name: public/ JavaScript is linted and format-checked (SHY-0448)
         if: inputs.web_changed == true || github.event_name == 'workflow_dispatch'
         run: |
           cd express-api && npm ci --no-audit --no-fund
           cd .. && node scripts/check-public-js-lint.js
+          # Same command the pre-commit hook runs, so a red build here is
+          # reproducible locally rather than only in CI. Exclusions live in
+          # the root .prettierignore, with a reason beside each one.
+          npx --prefix express-api prettier --check 'public/**/*.js'
 
       - name: No NEW in-process test doubles (EPIC-0003 ratchet)
         run: node scripts/check-no-new-stubs.js

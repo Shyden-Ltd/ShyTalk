@@ -24,14 +24,11 @@ let _openEvidenceLightbox = () => {};
  */
 export function init(deps) {
   _renderEvidence = deps.renderEvidence || _renderEvidence;
-  _openEvidenceLightbox =
-    deps.openEvidenceLightbox || _openEvidenceLightbox;
+  _openEvidenceLightbox = deps.openEvidenceLightbox || _openEvidenceLightbox;
 
   for (const btn of document.querySelectorAll('[data-appeal-filter]')) {
     btn.addEventListener('click', () => {
-      for (const b of document.querySelectorAll(
-        '[data-appeal-filter]',
-      ))
+      for (const b of document.querySelectorAll('[data-appeal-filter]'))
         b.classList.remove('active');
       btn.classList.add('active');
       currentFilter = btn.dataset.appealFilter;
@@ -50,8 +47,7 @@ export function deactivate() {}
 
 async function load(status) {
   const list = document.getElementById('appeals-list');
-  list.innerHTML =
-    '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
+  list.innerHTML = '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
   try {
     const raw = await apiCall('GET', `/api/appeals?status=${status}`);
     const appeals = Array.isArray(raw) ? raw : raw.appeals || [];
@@ -71,9 +67,7 @@ async function load(status) {
         if (btn.disabled) return;
         const appealId = btn.dataset.resolve;
         const newStatus = btn.dataset.status;
-        const noteInput = list.querySelector(
-          `[data-note-for="${appealId}"]`,
-        );
+        const noteInput = list.querySelector(`[data-note-for="${appealId}"]`);
         const adminNote = noteInput ? noteInput.value.trim() : '';
         btn.disabled = true;
         try {
@@ -92,15 +86,10 @@ async function load(status) {
     }
 
     // Wire evidence thumbnail clicks
-    for (const thumb of list.querySelectorAll(
-      '.evidence-thumb:not([data-wired])',
-    )) {
+    for (const thumb of list.querySelectorAll('.evidence-thumb:not([data-wired])')) {
       thumb.dataset.wired = '1';
       thumb.addEventListener('click', () => {
-        _openEvidenceLightbox(
-          thumb.dataset.evidenceUrl,
-          thumb.dataset.evidenceType,
-        );
+        _openEvidenceLightbox(thumb.dataset.evidenceUrl, thumb.dataset.evidenceType);
       });
     }
   } catch (err) {
@@ -115,15 +104,10 @@ async function load(status) {
 function renderCard(appeal, status) {
   const card = document.createElement('div');
   card.className = 'appeal-card';
-  const date = appeal.submittedAt
-    ? new Date(appeal.submittedAt).toLocaleString()
-    : '';
+  const date = appeal.submittedAt ? new Date(appeal.submittedAt).toLocaleString() : '';
   const userInfo = appeal.userInfo || {};
   const originalName =
-    appeal.originalDisplayName ||
-    appeal.userDisplayName ||
-    userInfo.displayName ||
-    'Unknown';
+    appeal.originalDisplayName || appeal.userDisplayName || userInfo.displayName || 'Unknown';
   const originalPhoto = appeal.originalProfilePhotoUrl || null;
   const uniqueId = appeal.userUniqueId || userInfo.uniqueId || '?';
 
@@ -157,9 +141,7 @@ function renderCard(appeal, status) {
   if (reports.length > 0) {
     const reportItems = reports
       .map((r) => {
-        const reportDate = r.timestamp
-          ? new Date(r.timestamp).toLocaleString()
-          : '';
+        const reportDate = r.timestamp ? new Date(r.timestamp).toLocaleString() : '';
         const reporterName = r.reporterName || 'Unknown';
         const reporterUid = r.reporterUniqueId || '';
         const reportStatus =

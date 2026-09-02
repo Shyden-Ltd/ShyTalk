@@ -37,38 +37,33 @@
  *   - `window.__shytalk_user_cohort` — cohort label paired with the UID.
  */
 (function initPreviewWatermark() {
-  "use strict";
+  'use strict';
 
   var BRANCH_MAX_CHARS = 24;
   var HEALTH_POLL_INTERVAL_MS = 30000;
 
   function getEnvironment() {
-    if (typeof window.__preview_env_override === "string") {
+    if (typeof window.__preview_env_override === 'string') {
       return window.__preview_env_override;
     }
-    var host = window.location.hostname || "";
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1")
-      return "local";
-    if (/dev-api\.|dev\.shytalk/.test(host)) return "dev";
-    return "prod";
+    var host = window.location.hostname || '';
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return 'local';
+    if (/dev-api\.|dev\.shytalk/.test(host)) return 'dev';
+    return 'prod';
   }
 
   function getBrowserId() {
-    var ua = navigator.userAgent || "";
+    var ua = navigator.userAgent || '';
     // Order matters — Chrome reports "Chrome ... Safari" so test for it
     // before generic Safari; Edge reports "Chrome ... Edg/" so check Edg
     // first; Firefox + WebKit are unambiguous.
     var match;
-    if ((match = /Edg\/([0-9.]+)/.exec(ua)))
-      return "Edge " + match[1].split(".")[0];
-    if ((match = /Firefox\/([0-9.]+)/.exec(ua)))
-      return "Firefox " + match[1].split(".")[0];
-    if ((match = /Chrome\/([0-9.]+)/.exec(ua)))
-      return "Chrome " + match[1].split(".")[0];
-    if ((match = /Version\/([0-9.]+).*Safari/.exec(ua)))
-      return "Safari " + match[1].split(".")[0];
-    if (/AppleWebKit/.test(ua)) return "WebKit";
-    return "Unknown";
+    if ((match = /Edg\/([0-9.]+)/.exec(ua))) return 'Edge ' + match[1].split('.')[0];
+    if ((match = /Firefox\/([0-9.]+)/.exec(ua))) return 'Firefox ' + match[1].split('.')[0];
+    if ((match = /Chrome\/([0-9.]+)/.exec(ua))) return 'Chrome ' + match[1].split('.')[0];
+    if ((match = /Version\/([0-9.]+).*Safari/.exec(ua))) return 'Safari ' + match[1].split('.')[0];
+    if (/AppleWebKit/.test(ua)) return 'WebKit';
+    return 'Unknown';
   }
 
   function getMeta(name) {
@@ -79,7 +74,7 @@
   function getBuildVersion() {
     // Deploy pipelines stamp shytalk-build (stamp-build-meta.mjs);
     // otherwise fall back to the document's own date stamp.
-    return getMeta("shytalk-build") || document.lastModified || "?";
+    return getMeta('shytalk-build') || document.lastModified || '?';
   }
 
   function getCurrentUid() {
@@ -100,7 +95,7 @@
       /* not present */
     }
     try {
-      var ls = localStorage.getItem("shytalk_user_uid");
+      var ls = localStorage.getItem('shytalk_user_uid');
       if (ls) return ls;
     } catch (_) {
       /* localStorage blocked */
@@ -112,12 +107,10 @@
    *  (incl. its max<=1 → "…" degenerate-budget rule). */
   function truncateMiddle(value, max) {
     if (value.length <= max) return value;
-    if (max <= 1) return "…";
+    if (max <= 1) return '…';
     var keepEnd = Math.floor((max - 1) / 2);
     var keepStart = max - 1 - keepEnd;
-    return (
-      value.slice(0, keepStart) + "…" + value.slice(value.length - keepEnd)
-    );
+    return value.slice(0, keepStart) + '…' + value.slice(value.length - keepEnd);
   }
 
   /** "MM-dd HH:mm" in the viewer's zone, from the ISO built-at meta. */
@@ -125,38 +118,38 @@
     var d = new Date(iso);
     if (isNaN(d.getTime())) return null;
     var pad = function (n) {
-      return (n < 10 ? "0" : "") + n;
+      return (n < 10 ? '0' : '') + n;
     };
     return (
       pad(d.getMonth() + 1) +
-      "-" +
+      '-' +
       pad(d.getDate()) +
-      " " +
+      ' ' +
       pad(d.getHours()) +
-      ":" +
+      ':' +
       pad(d.getMinutes())
     );
   }
 
   var env = getEnvironment();
-  if (env === "prod") return; // No watermark, no polling, on prod.
+  if (env === 'prod') return; // No watermark, no polling, on prod.
 
   // One greppable build-identity line per page load (Observability AC —
   // parity with Android's logcat line and iOS's NSLog).
   try {
     // eslint-disable-next-line no-console
     console.log(
-      "[ShyTalk] build identity: " +
+      '[ShyTalk] build identity: ' +
         env +
-        " " +
+        ' ' +
         getBuildVersion() +
-        " " +
-        (getMeta("shytalk-git-branch") || "?") +
-        "@" +
-        (getMeta("shytalk-git-sha") || "?") +
-        (getMeta("shytalk-git-dirty") === "1" ? "*" : "") +
-        " built " +
-        (getMeta("shytalk-built-at") || "?"),
+        ' ' +
+        (getMeta('shytalk-git-branch') || '?') +
+        '@' +
+        (getMeta('shytalk-git-sha') || '?') +
+        (getMeta('shytalk-git-dirty') === '1' ? '*' : '') +
+        ' built ' +
+        (getMeta('shytalk-built-at') || '?'),
     );
   } catch (_) {
     /* console unavailable — never break the page */
@@ -180,14 +173,14 @@
   // line that appear to contradict each other, when the dot meant
   // "reachable" and the word meant "no build id". Operator, journey
   // J38, 2026-08-22. Mirrors ServerHealth.SERVER_UNKNOWN_SHA.
-  var SERVER_UNKNOWN_SHA = "unknown";
+  var SERVER_UNKNOWN_SHA = 'unknown';
 
   // Absence — a non-string, blank, or the sentinel in any case or
   // padding — becomes null so the badge renders its own "?" marker
   // instead of the server's word. Matched WHOLE: a real sha that merely
   // begins with those letters is a build we can identify, and is kept.
   function normaliseServerSha(raw) {
-    if (typeof raw !== "string") return null;
+    if (typeof raw !== 'string') return null;
     var trimmed = raw.trim();
     if (!trimmed) return null;
     if (trimmed.toLowerCase() === SERVER_UNKNOWN_SHA) return null;
@@ -195,15 +188,13 @@
   }
 
   function healthBase() {
-    if (typeof window.__preview_api_override === "string") {
+    if (typeof window.__preview_api_override === 'string') {
       return window.__preview_api_override;
     }
     // prod never reaches here (script exits above) — local vs dev only.
     // Single-line env ternary: the env-url guard's sanctioned shape
     // (suggestions-board.js precedent).
-    return env === "local"
-      ? "http://localhost:3000"
-      : "https://dev-api.shytalk.shyden.co.uk"; // localhost checked first
+    return env === 'local' ? 'http://localhost:3000' : 'https://dev-api.shytalk.shyden.co.uk'; // localhost checked first
   }
 
   // Logs only on ok→fail / fail→ok transitions (Observability AC —
@@ -215,13 +206,13 @@
       try {
         // eslint-disable-next-line no-console
         console.log(
-          "[ShyTalk] server health " +
-            (previous === null ? "unknown" : previous) +
-            " -> " +
+          '[ShyTalk] server health ' +
+            (previous === null ? 'unknown' : previous) +
+            ' -> ' +
             ok +
-            " (sha=" +
-            (serverHealth.sha || "?") +
-            ")",
+            ' (sha=' +
+            (serverHealth.sha || '?') +
+            ')',
         );
       } catch (_) {
         /* console unavailable */
@@ -231,15 +222,15 @@
 
   function pollHealth() {
     try {
-      fetch(healthBase() + "/api/health", { cache: "no-store" })
+      fetch(healthBase() + '/api/health', { cache: 'no-store' })
         .then(function (res) {
-          if (!res.ok) throw new Error("http " + res.status);
+          if (!res.ok) throw new Error('http ' + res.status);
           return res.json();
         })
         .then(function (body) {
           var sha = normaliseServerSha(body && body.sha);
           if (sha) serverHealth.sha = sha;
-          recordHealth(!!(body && body.status === "ok"));
+          recordHealth(!!(body && body.status === 'ok'));
         })
         .catch(function () {
           recordHealth(false);
@@ -252,12 +243,12 @@
   setInterval(pollHealth, HEALTH_POLL_INTERVAL_MS);
 
   function render() {
-    var existing = document.getElementById("preview-watermark");
+    var existing = document.getElementById('preview-watermark');
     if (existing) existing.remove();
 
-    var node = document.createElement("div");
-    node.id = "preview-watermark";
-    node.setAttribute("aria-hidden", "true");
+    var node = document.createElement('div');
+    node.id = 'preview-watermark';
+    node.setAttribute('aria-hidden', 'true');
     // Dodge the shared header (public/js/shared-header.js) when one is
     // present — otherwise the badge sits inside the header's hit-test
     // area at the top of the page, swallowing taps that should reach
@@ -266,110 +257,95 @@
     // original top:4 placement. The 2s re-render interval guarantees
     // the position stays correct if the header is injected after the
     // first render (init race between the two scripts).
-    var sharedHeader = document.querySelector(".sh-header");
+    var sharedHeader = document.querySelector('.sh-header');
     var topPx = (sharedHeader ? sharedHeader.offsetHeight : 0) + 4;
     node.style.cssText = [
-      "position:fixed",
-      "top:" + topPx + "px",
-      "right:4px",
-      "z-index:2147483647", // max int — guarantee on top of any modal
+      'position:fixed',
+      'top:' + topPx + 'px',
+      'right:4px',
+      'z-index:2147483647', // max int — guarantee on top of any modal
       // Alpha 0.4 — visible enough to read the build/env/UID lines
       // against any background, transparent enough that the underlying
       // page colour clearly bleeds through. The contract is enforced by
       // the alpha test in preview-watermark.spec.ts (≤ 0.5, ≥ 0.1).
-      "background:rgba(211,47,47,0.4)",
-      "color:#fff",
+      'background:rgba(211,47,47,0.4)',
+      'color:#fff',
       // White text against semi-transparent red can wash out — add a
       // subtle dark text-shadow so the labels remain readable on light
       // backgrounds without bumping the badge opacity back up.
-      "text-shadow:0 1px 2px rgba(0,0,0,0.6)",
-      "padding:3px 6px",
-      "border-radius:3px",
-      "font-family:ui-monospace,Menlo,Consolas,monospace",
-      "font-size:9px",
-      "line-height:1.3",
-      "text-align:right",
+      'text-shadow:0 1px 2px rgba(0,0,0,0.6)',
+      'padding:3px 6px',
+      'border-radius:3px',
+      'font-family:ui-monospace,Menlo,Consolas,monospace',
+      'font-size:9px',
+      'line-height:1.3',
+      'text-align:right',
       // Compactness cap (operator ruling 2026-07-18) — long lines
       // ellipsize instead of widening the badge across the page.
-      "max-width:60vw",
-      "overflow:hidden",
-      "pointer-events:none",
-      "user-select:none",
-      "-webkit-user-select:none",
-    ].join(";");
+      'max-width:60vw',
+      'overflow:hidden',
+      'pointer-events:none',
+      'user-select:none',
+      '-webkit-user-select:none',
+    ].join(';');
 
     // ── Assemble the compact lines (mirrors WatermarkFormat.content) ──
-    var serverPart = serverHealth.sha ? serverHealth.sha.slice(0, 7) : "?";
+    var serverPart = serverHealth.sha ? serverHealth.sha.slice(0, 7) : '?';
     var dotColor =
-      serverHealth.ok === true
-        ? "#66BB6A"
-        : serverHealth.ok === false
-          ? "#FF5252"
-          : "#BDBDBD";
+      serverHealth.ok === true ? '#66BB6A' : serverHealth.ok === false ? '#FF5252' : '#BDBDBD';
     var statusLine =
       escapeHtml(env) +
-      " · " +
+      ' · ' +
       escapeHtml(getBuildVersion()) +
-      " · api " +
+      ' · api ' +
       escapeHtml(serverPart) +
       ' <span style="color:' +
       dotColor +
       ';text-shadow:none">●</span>';
 
-    var branch = getMeta("shytalk-git-branch");
-    var sha = getMeta("shytalk-git-sha");
-    var dirty = getMeta("shytalk-git-dirty") === "1";
-    var builtAt = getMeta("shytalk-built-at");
+    var branch = getMeta('shytalk-git-branch');
+    var sha = getMeta('shytalk-git-sha');
+    var dirty = getMeta('shytalk-git-dirty') === '1';
+    var builtAt = getMeta('shytalk-built-at');
     var builtAtLabel = builtAt ? formatBuiltAt(builtAt) : null;
-    var shaPart = sha ? escapeHtml(sha.slice(0, 7)) + (dirty ? "*" : "") : "?";
-    var shaLine = builtAtLabel
-      ? shaPart + " · " + escapeHtml(builtAtLabel)
-      : shaPart;
+    var shaPart = sha ? escapeHtml(sha.slice(0, 7)) + (dirty ? '*' : '') : '?';
+    var shaLine = builtAtLabel ? shaPart + ' · ' + escapeHtml(builtAtLabel) : shaPart;
 
     var uid = getCurrentUid();
     var cohort =
-      typeof window.__shytalk_user_cohort === "string"
-        ? window.__shytalk_user_cohort
-        : null;
+      typeof window.__shytalk_user_cohort === 'string' ? window.__shytalk_user_cohort : null;
     var uidLine = uid
-      ? "UID: " + escapeHtml(uid) + (cohort ? " · " + escapeHtml(cohort) : "")
-      : "UID: -";
+      ? 'UID: ' + escapeHtml(uid) + (cohort ? ' · ' + escapeHtml(cohort) : '')
+      : 'UID: -';
 
-    var locale =
-      document.documentElement.lang ||
-      (navigator.language || "").split("-")[0] ||
-      "?";
-    var route = window.location.pathname || "";
-    var localeRouteLine =
-      escapeHtml(locale) + (route ? " · " + escapeHtml(route) : "");
+    var locale = document.documentElement.lang || (navigator.language || '').split('-')[0] || '?';
+    var route = window.location.pathname || '';
+    var localeRouteLine = escapeHtml(locale) + (route ? ' · ' + escapeHtml(route) : '');
 
     var marker =
-      typeof window.__journey_marker === "string" &&
-      window.__journey_marker.trim()
+      typeof window.__journey_marker === 'string' && window.__journey_marker.trim()
         ? window.__journey_marker.trim()
         : null;
 
     // Per-line clamp (compactness AC): one visual row per line, ellipsis
     // instead of wrapping — the JS mirror of Compose's maxLines=1 +
     // TextOverflow.Ellipsis.
-    var LINE_STYLE =
-      ' style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"';
+    var LINE_STYLE = ' style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"';
     var lines = [
       '<div style="font-weight:700;font-size:10px;font-family:system-ui,sans-serif">ShyTalk Preview</div>',
-      "<div" + LINE_STYLE + ">" + statusLine + "</div>",
-      "<div" +
+      '<div' + LINE_STYLE + '>' + statusLine + '</div>',
+      '<div' +
         LINE_STYLE +
-        ">" +
-        escapeHtml(branch ? truncateMiddle(branch, BRANCH_MAX_CHARS) : "?") +
-        "</div>",
-      "<div" + LINE_STYLE + ">" + shaLine + "</div>",
-      "<div" + LINE_STYLE + ">" + escapeHtml(getBrowserId()) + "</div>",
-      "<div" + LINE_STYLE + ">" + uidLine + "</div>",
-      "<div" + LINE_STYLE + ">" + localeRouteLine + "</div>",
+        '>' +
+        escapeHtml(branch ? truncateMiddle(branch, BRANCH_MAX_CHARS) : '?') +
+        '</div>',
+      '<div' + LINE_STYLE + '>' + shaLine + '</div>',
+      '<div' + LINE_STYLE + '>' + escapeHtml(getBrowserId()) + '</div>',
+      '<div' + LINE_STYLE + '>' + uidLine + '</div>',
+      '<div' + LINE_STYLE + '>' + localeRouteLine + '</div>',
     ];
-    if (marker)
-      lines.push("<div" + LINE_STYLE + ">▶ " + escapeHtml(marker) + "</div>");
-    node.innerHTML = lines.join("");
+    if (marker) lines.push('<div' + LINE_STYLE + '>▶ ' + escapeHtml(marker) + '</div>');
+    node.innerHTML = lines.join('');
 
     if (document.body) document.body.appendChild(node);
   }
@@ -377,11 +353,11 @@
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
       }[c];
     });
   }
@@ -394,10 +370,10 @@
   // header's hit-test area). Wait for DOMContentLoaded in BOTH the
   // 'loading' and 'interactive' cases so we always measure
   // `.sh-header.offsetHeight` after shared-header has rendered.
-  if (document.readyState === "complete") {
+  if (document.readyState === 'complete') {
     render();
   } else {
-    document.addEventListener("DOMContentLoaded", render, { once: true });
+    document.addEventListener('DOMContentLoaded', render, { once: true });
   }
 
   // Re-render every 2s so the UID / journey marker / health dot pick up

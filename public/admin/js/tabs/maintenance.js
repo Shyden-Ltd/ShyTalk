@@ -19,9 +19,7 @@ export function init(deps) {
   _getToken = deps.getToken;
 
   // Store original button labels for reset after action
-  for (const btn of document.querySelectorAll(
-    '#maintenance-panel button',
-  )) {
+  for (const btn of document.querySelectorAll('#maintenance-panel button')) {
     btn.dataset.label = btn.textContent;
   }
 
@@ -46,16 +44,11 @@ export function init(deps) {
   );
 
   // Wire any other maintenance buttons using data attributes
-  for (const btn of document.querySelectorAll(
-    '[data-maintenance-action]',
-  )) {
+  for (const btn of document.querySelectorAll('[data-maintenance-action]')) {
     const action = btn.dataset.maintenanceAction;
     const resultId = btn.dataset.resultId || 'maintenance-result';
-    const msg =
-      btn.dataset.confirmMsg || `Run ${action}? This cannot be undone.`;
-    btn.addEventListener('click', () =>
-      runAction(btn.id, resultId, action, msg),
-    );
+    const msg = btn.dataset.confirmMsg || `Run ${action}? This cannot be undone.`;
+    btn.addEventListener('click', () => runAction(btn.id, resultId, action, msg));
   }
 
   // Storage audit
@@ -80,9 +73,7 @@ export function deactivate() {
 function wire(btnId, resultId, endpoint, confirmMsg) {
   const btn = document.getElementById(btnId);
   if (btn) {
-    btn.addEventListener('click', () =>
-      runAction(btnId, resultId, endpoint, confirmMsg),
-    );
+    btn.addEventListener('click', () => runAction(btnId, resultId, endpoint, confirmMsg));
   }
 }
 
@@ -102,7 +93,9 @@ async function runAction(btnId, resultId, endpoint, confirmMsg) {
     const token = await _getToken();
     // Support both short names (e.g. "all-backpacks" → /api/cleanup/all-backpacks)
     // and full paths (e.g. "/api/admin/maintenance/clear-suggestions")
-    const url = endpoint.startsWith('/') ? `${_apiBase}${endpoint}` : `${_apiBase}/api/cleanup/${endpoint}`;
+    const url = endpoint.startsWith('/')
+      ? `${_apiBase}${endpoint}`
+      : `${_apiBase}/api/cleanup/${endpoint}`;
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
@@ -151,12 +144,9 @@ async function auditStorage() {
 
     const folders = data.folders || {};
     const lines = Object.entries(folders).map(
-      ([folder, info]) =>
-        `${folder}: ${info.count} files (${formatBytes(info.bytes)})`,
+      ([folder, info]) => `${folder}: ${info.count} files (${formatBytes(info.bytes)})`,
     );
-    lines.push(
-      `Total: ${data.totalFiles} files (${formatBytes(data.totalBytes)})`,
-    );
+    lines.push(`Total: ${data.totalFiles} files (${formatBytes(data.totalBytes)})`);
     result.className = 'maintenance-result success';
     result.textContent = lines.join('\n');
     result.style.display = 'block';

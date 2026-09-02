@@ -109,7 +109,8 @@ export function init(deps) {
   // Filter buttons
   for (const btn of document.querySelectorAll('#report-filter-bar .tab-btn')) {
     btn.addEventListener('click', () => {
-      for (const b of document.querySelectorAll('#report-filter-bar .tab-btn')) b.classList.remove('active');
+      for (const b of document.querySelectorAll('#report-filter-bar .tab-btn'))
+        b.classList.remove('active');
       btn.classList.add('active');
       void btn.offsetHeight; // Force layout flush for WebKit
       currentReportFilter = btn.dataset.reportFilter;
@@ -156,7 +157,8 @@ export function init(deps) {
   for (const btn of document.querySelectorAll('.period-toggle button')) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      for (const b of document.querySelectorAll('.period-toggle button')) b.classList.remove('active');
+      for (const b of document.querySelectorAll('.period-toggle button'))
+        b.classList.remove('active');
       btn.classList.add('active');
       statsPeriod = btn.dataset.period;
       loadReportStats();
@@ -188,11 +190,14 @@ export function init(deps) {
         const token = await _getToken();
         const url = `${_apiBase}/api/reports/export?from=${exportFrom.value}&to=${exportTo.value}`;
         const res = await fetch(url, {
-          headers: { 'Authorization': `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) {
           let errMsg = `HTTP ${res.status}`;
-          try { const data = await res.json(); errMsg = data.error || errMsg; } catch (_) {}
+          try {
+            const data = await res.json();
+            errMsg = data.error || errMsg;
+          } catch (_) {}
           throw new Error(errMsg);
         }
         const blob = await res.blob();
@@ -213,7 +218,12 @@ export function init(deps) {
   // Keyboard shortcuts (Reports tab)
   document.addEventListener('keydown', (e) => {
     if (_getCurrentTab() !== 'reports') return;
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    if (
+      e.target.tagName === 'INPUT' ||
+      e.target.tagName === 'TEXTAREA' ||
+      e.target.tagName === 'SELECT'
+    )
+      return;
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -253,7 +263,9 @@ export function init(deps) {
     if (currentLockedUid && currentUser) {
       const token = currentUser.accessToken || '';
       fetch(`${_apiBase}/api/report-locks/${currentLockedUid}`, {
-        method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }, keepalive: true,
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+        keepalive: true,
       }).catch(() => {});
     }
   });
@@ -270,8 +282,14 @@ export function init(deps) {
           }
         } catch (_) {}
       } else {
-        if (reportsUnsubscribe) { reportsUnsubscribe(); reportsUnsubscribe = null; }
-        if (reportsPollInterval) { clearInterval(reportsPollInterval); reportsPollInterval = null; }
+        if (reportsUnsubscribe) {
+          reportsUnsubscribe();
+          reportsUnsubscribe = null;
+        }
+        if (reportsPollInterval) {
+          clearInterval(reportsPollInterval);
+          reportsPollInterval = null;
+        }
       }
     });
   }
@@ -289,15 +307,23 @@ export function activate() {
 
 /** Called when leaving the Reports tab. */
 export function deactivate() {
-  if (reportsUnsubscribe) { reportsUnsubscribe(); reportsUnsubscribe = null; }
-  if (reportsPollInterval) { clearInterval(reportsPollInterval); reportsPollInterval = null; }
+  if (reportsUnsubscribe) {
+    reportsUnsubscribe();
+    reportsUnsubscribe = null;
+  }
+  if (reportsPollInterval) {
+    clearInterval(reportsPollInterval);
+    reportsPollInterval = null;
+  }
   releaseLock();
 }
 
 /** Release any held review lock. Exported for sign-out cleanup. */
 export async function releaseLock() {
   if (!currentLockedUid) return;
-  try { await apiCall('DELETE', `/api/report-locks/${currentLockedUid}`, null, { skipTabAbort: true }); } catch (_) {}
+  try {
+    await apiCall('DELETE', `/api/report-locks/${currentLockedUid}`, null, { skipTabAbort: true });
+  } catch (_) {}
   currentLockedUid = null;
 }
 
@@ -326,8 +352,11 @@ async function loadReportStats() {
     const el = (id) => document.getElementById(id);
     el('stat-pending').textContent = stats.pendingCount;
     el('stat-resolved-today').textContent = stats.resolvedToday;
-    el('stat-avg-response').textContent = stats.avgResponseHours != null ? `${stats.avgResponseHours}h` : '-';
-    el('stat-reviewers').textContent = Array.isArray(stats.activeReviewers) ? stats.activeReviewers.length : (stats.activeReviewers || 0);
+    el('stat-avg-response').textContent =
+      stats.avgResponseHours != null ? `${stats.avgResponseHours}h` : '-';
+    el('stat-reviewers').textContent = Array.isArray(stats.activeReviewers)
+      ? stats.activeReviewers.length
+      : stats.activeReviewers || 0;
 
     // Update tab badge
     updateReportBadge(stats.pendingCount);
@@ -366,7 +395,9 @@ function startReportListener() {
     // and let it stay set for the test's lifetime. Production code
     // never sets the flag so the poll behaviour is unchanged.
     if (typeof window !== 'undefined' && window.__SHYTALK_PAUSE_REPORTS_POLL__) return;
-    try { await loadReports(); } catch (_) {}
+    try {
+      await loadReports();
+    } catch (_) {}
   }, 15000);
 }
 
@@ -413,7 +444,8 @@ async function loadReports() {
     if (resolveInProgress) return;
 
     if (result.users.length === 0) {
-      reportsList.innerHTML = '<div style="color:var(--text2);font-size:13px;font-style:italic;">No reports found</div>';
+      reportsList.innerHTML =
+        '<div style="color:var(--text2);font-size:13px;font-style:italic;">No reports found</div>';
       reportCards = [];
       allReportUsers = [];
       renderedCount = 0;
@@ -427,7 +459,6 @@ async function loadReports() {
 
     // Render first batch
     renderMoreCards();
-
   } catch (err) {
     if (err.name === 'AbortError') return; // Tab switch -- silently bail
     reportsList.innerHTML = `<div style="color:var(--danger);font-size:13px;">${escapeHtml(err.message)}</div>`;
@@ -494,9 +525,13 @@ function renderMoreCards() {
         ${r.description ? `<div class="report-item-text">${escapeHtml(r.description)}</div>` : ''}
         ${r.messageText ? `<div class="report-item-context">\u{1F4AC} ${escapeHtml(r.messageText)}</div>` : ''}
         ${_renderEvidence(r.evidenceUrls)}
-        ${r.conversationId ? `<div class="console-links">
+        ${
+          r.conversationId
+            ? `<div class="console-links">
           <a href="#" class="view-conversation-btn" data-conv-id="${escapeHtml(r.conversationId)}" data-highlight-msg="${escapeHtml(r.messageId || '')}">View Conversation</a>
-        </div>` : ''}
+        </div>`
+            : ''
+        }
       </div>`;
     }
     if (reports.length > maxShow) {
@@ -520,7 +555,7 @@ function renderMoreCards() {
         <div class="action-row" data-severity-row="${safeUid}">
           <label>Severity</label>
           <div class="severity-radio">
-            ${[1,2,3,4,5].map((n) => `<input type="radio" name="sev-${safeUid}" id="sev-${safeUid}-${n}" value="${n}" ${n===1?'checked':''}><label for="sev-${safeUid}-${n}">${n} (-${n*5})</label>`).join('')}
+            ${[1, 2, 3, 4, 5].map((n) => `<input type="radio" name="sev-${safeUid}" id="sev-${safeUid}-${n}" value="${n}" ${n === 1 ? 'checked' : ''}><label for="sev-${safeUid}-${n}">${n} (-${n * 5})</label>`).join('')}
           </div>
         </div>
         <div class="suspension-fields" data-suspension-fields="${safeUid}">
@@ -548,7 +583,10 @@ function renderMoreCards() {
     // Disable action form if locked by another admin
     const isLockedByOther = user.lock && user.lock.adminUid !== myUid;
     if (isLockedByOther) {
-      actionHtml = actionHtml.replace('class="report-action-form"', 'class="report-action-form locked-form" style="opacity:0.5;pointer-events:none;"');
+      actionHtml = actionHtml.replace(
+        'class="report-action-form"',
+        'class="report-action-form locked-form" style="opacity:0.5;pointer-events:none;"',
+      );
     }
 
     card.innerHTML = headerHtml + reportsHtml + actionHtml;
@@ -565,12 +603,15 @@ function renderMoreCards() {
     sentinel.className = 'scroll-sentinel';
     sentinel.style.height = '1px';
     reportsList.appendChild(sentinel);
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        observer.disconnect();
-        renderMoreCards();
-      }
-    }, { rootMargin: '200px' });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          observer.disconnect();
+          renderMoreCards();
+        }
+      },
+      { rootMargin: '200px' },
+    );
     observer.observe(sentinel);
   }
 
@@ -588,7 +629,6 @@ function renderMoreCards() {
   if (selectedCardIndex >= 0 && selectedCardIndex < reportCards.length) {
     highlightCard();
   }
-
 }
 
 function wireUpReportCards() {
@@ -627,7 +667,9 @@ function wireUpReportCards() {
       resolveInProgress = true;
       try {
         if (await acquireLock(uid)) await resolveReport(uid, false);
-      } finally { resolveInProgress = false; }
+      } finally {
+        resolveInProgress = false;
+      }
     });
   }
   for (const btn of reportsList.querySelectorAll('[data-resolve-all]:not([data-wired])')) {
@@ -637,7 +679,9 @@ function wireUpReportCards() {
       resolveInProgress = true;
       try {
         if (await acquireLock(uid)) await resolveReport(uid, true);
-      } finally { resolveInProgress = false; }
+      } finally {
+        resolveInProgress = false;
+      }
     });
   }
 
@@ -677,7 +721,10 @@ function wireUpReportCards() {
       const highlightMsgId = link.dataset.highlightMsg;
       const parent = link.closest('.report-item');
       const existing = parent.querySelector('.conv-viewer');
-      if (existing) { existing.remove(); return; }
+      if (existing) {
+        existing.remove();
+        return;
+      }
       const viewer = document.createElement('div');
       viewer.className = 'conv-viewer';
       viewer.innerHTML = '<div class="conv-viewer-loading">Loading messages...</div>';
@@ -696,7 +743,12 @@ function wireUpReportCards() {
           const time = m.timestamp ? escapeHtml(new Date(m.timestamp).toLocaleString()) : '';
           let contentHtml = '';
           if (m.type === 'IMAGE' && m.imageUrls && m.imageUrls.length > 0) {
-            contentHtml = m.imageUrls.map(url => `<img class="conv-msg-image" src="${escapeHtml(url)}" alt="Message image" onclick="window.open(this.src,'_blank')">`).join('');
+            contentHtml = m.imageUrls
+              .map(
+                (url) =>
+                  `<img class="conv-msg-image" src="${escapeHtml(url)}" alt="Message image" onclick="window.open(this.src,'_blank')">`,
+              )
+              .join('');
           } else if (m.type === 'STICKER' && m.stickerUrl) {
             contentHtml = `<img class="conv-msg-sticker" src="${escapeHtml(m.stickerUrl)}" alt="Sticker">`;
           } else if (m.type === 'ROOM_INVITE') {
@@ -769,14 +821,16 @@ async function resolveReport(reportedUserId, resolveAll) {
   const actionLabel = { warn: 'Warn', suspend: 'Suspend', dismiss: 'Dismiss' }[action];
   const confirmed = await showConfirm(
     'Confirm Action',
-    `${resolveAll ? 'Resolve ALL pending reports' : 'Resolve latest report'} for this user with action: ${actionLabel}${action !== 'dismiss' ? ` (Severity ${severity}, -${severity*5} GCS)` : ''}?`
+    `${resolveAll ? 'Resolve ALL pending reports' : 'Resolve latest report'} for this user with action: ${actionLabel}${action !== 'dismiss' ? ` (Severity ${severity}, -${severity * 5} GCS)` : ''}?`,
   );
   if (!confirmed) return;
 
   try {
     // Fetch pending reports to get the correct Firebase Auth UID and report IDs
     const reportsData = await apiCall('GET', `/api/reports?status=pending`);
-    const userReports = reportsData.users.find((u) => String(u.uniqueId || u.uid) === String(reportedUserId));
+    const userReports = reportsData.users.find(
+      (u) => String(u.uniqueId || u.uid) === String(reportedUserId),
+    );
     if (!userReports || userReports.reports.length === 0) {
       showToast('No pending reports found', 'error');
       return;
@@ -786,14 +840,20 @@ async function resolveReport(reportedUserId, resolveAll) {
     if (resolveAll) {
       // resolve-all endpoint expects the Firebase Auth UID (reportedUserId), not the uniqueId
       result = await apiCall('POST', `/api/reports/resolve-all/${userReports.reportedUserId}`, {
-        action, severity: action !== 'dismiss' ? severity : undefined, adminNote,
-        suspensionDays, canAppeal,
+        action,
+        severity: action !== 'dismiss' ? severity : undefined,
+        adminNote,
+        suspensionDays,
+        canAppeal,
       });
     } else {
       const reportId = userReports.reports[0].id;
       result = await apiCall('POST', `/api/reports/${reportId}/resolve`, {
-        action, severity: action !== 'dismiss' ? severity : undefined, adminNote,
-        suspensionDays, canAppeal,
+        action,
+        severity: action !== 'dismiss' ? severity : undefined,
+        adminNote,
+        suspensionDays,
+        canAppeal,
       });
     }
 

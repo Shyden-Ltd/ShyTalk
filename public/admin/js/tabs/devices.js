@@ -81,10 +81,7 @@ export function deactivate() {
 // ── Internal ───────────────────────────────────────────────────────
 
 async function loadDevices(query) {
-  const q =
-    query !== undefined
-      ? query
-      : (devicesSearchInput.value || '').trim();
+  const q = query !== undefined ? query : (devicesSearchInput.value || '').trim();
   try {
     const params = new URLSearchParams({
       limit: devicesLimit,
@@ -97,9 +94,7 @@ async function loadDevices(query) {
     // Also load banned devices set
     try {
       const bansData = await apiCall('GET', '/api/admin/bans');
-      devicesBannedSet = new Set(
-        (bansData.deviceBans || []).map((b) => b.deviceId),
-      );
+      devicesBannedSet = new Set((bansData.deviceBans || []).map((b) => b.deviceId));
     } catch (_) {
       /* ignore — banned set is best-effort */
     }
@@ -124,9 +119,7 @@ function renderDevicesTable(data) {
 
   for (const d of devices) {
     const isBanned = devicesBannedSet.has(d.id);
-    const lastSeen = d.lastSeen
-      ? new Date(d.lastSeen).toLocaleString()
-      : 'N/A';
+    const lastSeen = d.lastSeen ? new Date(d.lastSeen).toLocaleString() : 'N/A';
     const tr = document.createElement('tr');
     tr.style.cursor = 'pointer';
     tr.innerHTML = `

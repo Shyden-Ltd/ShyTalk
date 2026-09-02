@@ -36,7 +36,7 @@ export function resetAbortController() {
 export async function fetchObjectUrl(path, { signal } = {}) {
   const token = await _getToken();
   const res = await fetch(`${_apiBase}${path}`, {
-    headers: { 'Authorization': `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: signal || _abortController.signal,
   });
   if (!res.ok) {
@@ -52,7 +52,7 @@ export async function apiCall(method, path, body, { signal, skipTabAbort } = {})
   const token = await _getToken();
   const opts = {
     method,
-    headers: { 'Authorization': `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: signal || (skipTabAbort ? undefined : _abortController.signal),
   };
   if (body instanceof FormData) {

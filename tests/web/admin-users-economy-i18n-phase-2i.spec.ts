@@ -40,13 +40,13 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['No devices to ban', /showToast\("No devices to ban"/],
-      ['Enter a positive amount', /showToast\("Enter a positive amount"/],
-      ['Added/Deducted N coins (op string concat)', /\(op === "add" \? "Added" : "Deducted"\) \+ " " \+ amount \+ " coins/],
-      ['Added/Deducted N beans (op string concat)', /\(op === "add" \? "Added" : "Deducted"\) \+ " " \+ amount \+ " beans/],
-      ['Select a gift', /showToast\("Select a gift and enter a quantity"/],
-      ['Added N (total now M)', /"Added " \+ qty \+ " \(total now /],
-      ['Backpack already empty', /showToast\("Backpack is already empty"/],
+      ['No devices to ban', /showToast\(['"]No devices to ban['"]/],
+      ['Enter a positive amount', /showToast\(['"]Enter a positive amount['"]/],
+      ['Added/Deducted N coins (op string concat)', /\(op === ['"]add['"] \? ['"]Added['"] : ['"]Deducted['"]\) \+ ['"] ['"] \+ amount \+ ['"] coins/],
+      ['Added/Deducted N beans (op string concat)', /\(op === ['"]add['"] \? ['"]Added['"] : ['"]Deducted['"]\) \+ ['"] ['"] \+ amount \+ ['"] beans/],
+      ['Select a gift', /showToast\(['"]Select a gift and enter a quantity['"]/],
+      ['Added N (total now M)', /['"]Added ['"] \+ qty \+ ['"] \(total now /],
+      ['Backpack already empty', /showToast\(['"]Backpack is already empty['"]/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -58,11 +58,11 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     // first `)`.
     for (const key of PHASE_2I_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\([^)]*?"${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\([^)]*?['"]${key}['"]`),
       );
     }
     // toast_enter_positive_amount is shared (coins + beans validation) — must appear ≥2x
-    const positiveMatches = src.match(/tAdmin\("toast_enter_positive_amount"\)/g) || [];
+    const positiveMatches = src.match(/tAdmin\(['"]toast_enter_positive_amount['"]\)/g) || [];
     expect(positiveMatches.length, 'toast_enter_positive_amount should appear ≥2x').toBeGreaterThanOrEqual(2);
   });
 

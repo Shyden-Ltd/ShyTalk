@@ -74,7 +74,7 @@
         sessionTraceId: self._sessionTraceId,
         platform: 'web',
         timestamp: new Date().toISOString(),
-        context: entry.context || {}
+        context: entry.context || {},
       };
 
       if (self._config.appVersion) {
@@ -98,22 +98,24 @@
 
       var fetchFn = self._originalFetch || window.fetch;
 
-      tokenPromise.then(function (token) {
-        var headers = { 'Content-Type': 'application/json' };
-        if (token) {
-          headers['Authorization'] = 'Bearer ' + token;
-        }
-        if (self._sessionTraceId) {
-          headers['x-session-trace-id'] = self._sessionTraceId;
-        }
-        return fetchFn.call(window, self._config.endpoint, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(payload)
+      tokenPromise
+        .then(function (token) {
+          var headers = { 'Content-Type': 'application/json' };
+          if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+          }
+          if (self._sessionTraceId) {
+            headers['x-session-trace-id'] = self._sessionTraceId;
+          }
+          return fetchFn.call(window, self._config.endpoint, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload),
+          });
+        })
+        .catch(function () {
+          // Fire-and-forget — silently ignore errors
         });
-      }).catch(function () {
-        // Fire-and-forget — silently ignore errors
-      });
     },
 
     /**
@@ -147,7 +149,7 @@
           filename: event.filename || null,
           lineno: event.lineno || null,
           colno: event.colno || null,
-          stack: event.error && event.error.stack ? event.error.stack : null
+          stack: event.error && event.error.stack ? event.error.stack : null,
         });
       });
 
@@ -206,7 +208,8 @@
         // Only add trace header to same-origin or our own API requests.
         // Adding custom headers to cross-origin requests triggers CORS
         // preflight which breaks Firebase SDK calls to googleapis.com.
-        var isOwnApi = url.indexOf('/api/') !== -1 &&
+        var isOwnApi =
+          url.indexOf('/api/') !== -1 &&
           (url.indexOf(location.origin) === 0 || url.charAt(0) === '/');
         if (isOwnApi) {
           init = init || {};
@@ -225,25 +228,28 @@
         var method = ((init && init.method) || 'GET').toUpperCase();
         var startTime = Date.now();
 
-        return self._originalFetch.call(window, input, init).then(function (response) {
-          var durationMs = Date.now() - startTime;
-          self.info('Fetch completed', {
-            url: url,
-            method: method,
-            status: response.status,
-            durationMs: durationMs
+        return self._originalFetch
+          .call(window, input, init)
+          .then(function (response) {
+            var durationMs = Date.now() - startTime;
+            self.info('Fetch completed', {
+              url: url,
+              method: method,
+              status: response.status,
+              durationMs: durationMs,
+            });
+            return response;
+          })
+          .catch(function (err) {
+            var durationMs = Date.now() - startTime;
+            self.error('Fetch failed', {
+              url: url,
+              method: method,
+              durationMs: durationMs,
+              error: err.message || String(err),
+            });
+            throw err;
           });
-          return response;
-        }).catch(function (err) {
-          var durationMs = Date.now() - startTime;
-          self.error('Fetch failed', {
-            url: url,
-            method: method,
-            durationMs: durationMs,
-            error: err.message || String(err)
-          });
-          throw err;
-        });
       };
     },
 
@@ -284,7 +290,7 @@
             self.info('Page performance', {
               domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.startTime),
               loadComplete: Math.round(nav.loadEventEnd - nav.startTime),
-              ttfb: Math.round(nav.responseStart - nav.startTime)
+              ttfb: Math.round(nav.responseStart - nav.startTime),
             });
           }
         } catch (e) {
@@ -301,7 +307,7 @@
           setTimeout(logMetrics, 100);
         });
       }
-    }
+    },
   };
 
   window.ShyTalkLogger = ShyTalkLogger;

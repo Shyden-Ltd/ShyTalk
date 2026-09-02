@@ -46,7 +46,7 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
     }
     for (const key of TAG_KEYS) {
       expect(arrSrc, `TAG_OPTIONS should use sgT("${key}")`).toMatch(
-        new RegExp(`label:\\s*sgT\\("${key}"\\)`),
+        new RegExp(`label:\\s*sgT\\(['"]${key}['"]\\)`),
       );
     }
   });

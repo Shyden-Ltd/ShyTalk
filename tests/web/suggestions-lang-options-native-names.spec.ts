@@ -56,7 +56,7 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const arrSrc = langBlock![1];
 
     for (const [code, native] of Object.entries(NATIVE_NAMES)) {
-      const re = new RegExp(`value:\\s*"${code}",\\s*label:\\s*"${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}"`);
+      const re = new RegExp(`value:\\s*['"]${code}['"],\\s*label:\\s*['"]${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}['"]`);
       expect(arrSrc, `${code} label should be native "${native}"`).toMatch(re);
     }
   });
@@ -75,7 +75,7 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     ];
     for (const name of englishNames) {
       expect(arrSrc, `English name "${name}" should not be in LANG_OPTIONS`).not.toMatch(
-        new RegExp(`label:\\s*"${name}"`),
+        new RegExp(`label:\\s*['"]${name}['"]`),
       );
     }
   });
