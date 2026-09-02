@@ -52,12 +52,16 @@ test.describe('Portal i18n', () => {
     // portal-translations.js's bottom IIFE runs synchronously at script
     // parse time; by the time domcontentloaded fires, lang+dir are set.
     await page.waitForFunction(
-      () => document.documentElement.lang === 'ar' && document.documentElement.dir === 'rtl',
+      // Thai is left-to-right. This was Arabic, the only RTL language shipped,
+      // and it went with SHY-0289 — so `dir` is asserted as explicitly 'ltr'
+      // rather than left as the HTML default, which is the property that
+      // still matters.
+      () => document.documentElement.lang === 'th' && document.documentElement.dir === 'ltr',
       null,
       { timeout: 5_000 },
     );
-    expect(await page.locator('html').getAttribute('lang')).toBe('ar');
-    expect(await page.locator('html').getAttribute('dir')).toBe('rtl');
+    expect(await page.locator('html').getAttribute('lang')).toBe('th');
+    expect(await page.locator('html').getAttribute('dir')).toBe('ltr');
   });
 
   test('English (default) applies dir=ltr', async ({ page }) => {

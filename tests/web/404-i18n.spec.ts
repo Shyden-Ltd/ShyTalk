@@ -27,7 +27,7 @@ test.describe('404.html i18n', () => {
     await page.goto(`${BASE}/404.html`);
     // Wait for inline init bridge to apply translations.
     await page.waitForFunction(
-      () => document.documentElement.lang === 'ar',
+      () => document.documentElement.lang === 'th',
       null,
       { timeout: 5_000 },
     );

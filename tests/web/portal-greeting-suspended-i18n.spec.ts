@@ -95,7 +95,7 @@ test.describe('Portal greeting + suspension i18n', () => {
         dashboard_welcome: dict.dashboard_welcome,
       };
     });
-    expect(sample.lang).toBe('vi');
+    expect(sample.lang).toBe('zh');
     expect(sample.suspended_reason_label, 'ko.suspended_reason_label').toMatch(/[一-鿿]/);
     expect(sample.default_user_name, 'ko.default_user_name').toMatch(/[一-鿿]/);
     expect(sample.dashboard_welcome, 'ko.dashboard_welcome').toMatch(/[一-鿿]/);
