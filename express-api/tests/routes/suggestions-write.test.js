@@ -410,7 +410,7 @@ describe('POST /api/suggestions — Create', () => {
     const app = createApp();
     await request(app)
       .post('/api/suggestions')
-      .send({ ...VALID_SUGGESTION, language: 'ja' })
+      .send({ ...VALID_SUGGESTION, language: 'th' })
       .expect(201);
   });
 
