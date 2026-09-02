@@ -62,7 +62,16 @@ describe('users.js — stale-write guard on rapid user switch', () => {
       // function's test would silently no-op.
       const fnStart = USERS_JS.indexOf(`function ${name}(`);
       expect(fnStart).toBeGreaterThan(-1);
-      const idx = USERS_JS.indexOf(awaitMarker, fnStart);
+      // Quote-agnostic. The markers are SOURCE strings, and public/ became
+      // Prettier-formatted in SHY-0448 — `apiCall("GET", ...)` is now
+      // `apiCall('GET', ...)`. Pinning the quote character made every one of
+      // these fail as "marker must exist after fn start", which reads as the
+      // guard having been deleted rather than as a formatting change.
+      const markerRe = new RegExp(
+        awaitMarker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/["']/g, `['"]`),
+      );
+      const rel = USERS_JS.slice(fnStart).search(markerRe);
+      const idx = rel === -1 ? -1 : fnStart + rel;
       expect(idx).toBeGreaterThan(-1); // sanity — marker must exist after fn start
       // Take the next ~400 chars after the marker; the guard must
       // appear before any DOM- or state-mutation token.
