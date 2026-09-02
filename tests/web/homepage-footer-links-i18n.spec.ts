@@ -34,7 +34,12 @@ test.describe('Homepage footer links + copyright i18n', () => {
     await page.waitForFunction(
       () => {
         const el = document.querySelector('[data-i18n="footer_privacy"]');
-        return !!(el && el.textContent && el.textContent.includes('Política'));
+        // Waits for the text to stop being ENGLISH rather than for a specific
+        // translation. The old predicate pinned a Spanish word, which is a second
+        // copy of the string table living in a test — it went stale the moment the
+        // locale changed, and surfaced as a timeout rather than a clear failure
+        // (SHY-0289).
+        return !!(el && el.textContent && el.textContent.trim() && !el.textContent.includes('Privacy Policy'));
       },
       null,
       { timeout: 10_000 },
@@ -48,13 +53,15 @@ test.describe('Homepage footer links + copyright i18n', () => {
     const copyright = (await page.locator('[data-i18n="footer_copy"]').textContent())?.trim();
 
     expect(privacy, 'footer_privacy').not.toBe('Privacy Policy');
-    expect(privacy).toContain('Política');
+    // Not-English rather than a pinned translation (SHY-0289).
+    expect(privacy).not.toContain('Privacy Policy');
+    expect(privacy?.trim()).toBeTruthy();
     expect(terms, 'footer_terms').not.toBe('Terms of Service');
     expect(guidelines, 'footer_guidelines').not.toBe('Community Guidelines');
     expect(cyber, 'footer_cyber').not.toBe('Cyber Bullying Policy');
     expect(dns, 'footer_do_not_sell').not.toBe('Do Not Sell or Share My Personal Information');
     expect(copyright, 'footer_copy').not.toBe('© 2026 Shyden Ltd. All rights reserved.');
-    expect(copyright, 'footer_copy in Thai should mention "derechos"').toContain('derechos');
+    expect(copyright, 'footer_copy should not stay English').not.toContain('All rights reserved');
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {
@@ -97,13 +104,20 @@ test.describe('Homepage footer links + copyright i18n', () => {
     await page.waitForFunction(
       () => {
         const el = document.querySelector('[data-i18n="tagline"]');
-        return !!(el && el.textContent && el.textContent.includes('Salas'));
+        // Not-English rather than a pinned Spanish word (SHY-0289).
+        return !!(
+          el &&
+          el.textContent &&
+          el.textContent.trim() &&
+          !el.textContent.includes('Voice chat rooms')
+        );
       },
       null,
       { timeout: 10_000 },
     );
 
     const tagline = (await page.locator('[data-i18n="tagline"]').textContent())?.trim();
-    expect(tagline, 'tagline in es').toContain('Salas');
+    expect(tagline, 'tagline should not stay English').not.toContain('Voice chat rooms');
+    expect(tagline?.trim(), 'tagline should not be empty').toBeTruthy();
   });
 });

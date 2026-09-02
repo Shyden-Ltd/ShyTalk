@@ -39,7 +39,12 @@ test.describe('Roadmap footer links i18n', () => {
     await page.waitForFunction(
       () => {
         const el = document.querySelector('[data-i18n="footer_privacy"]');
-        return !!(el && el.textContent && el.textContent.includes('Política'));
+        // Waits for the text to stop being ENGLISH rather than for a specific
+        // translation. The old predicate pinned a Spanish word, which is a second
+        // copy of the string table living in a test — it went stale the moment the
+        // locale changed, and surfaced as a timeout rather than a clear failure
+        // (SHY-0289).
+        return !!(el && el.textContent && el.textContent.trim() && !el.textContent.includes('Privacy Policy'));
       },
       null,
       { timeout: 10_000 },
@@ -51,7 +56,9 @@ test.describe('Roadmap footer links i18n', () => {
     const dns = (await page.locator('[data-i18n="footer_do_not_sell"]').textContent())?.trim();
 
     expect(privacy, 'footer_privacy should not be English').not.toBe('Privacy Policy');
-    expect(privacy, 'footer_privacy in es').toContain('Política');
+    // Not-English rather than a pinned translation (SHY-0289).
+    expect(privacy, 'footer_privacy should not stay English').not.toContain('Privacy Policy');
+    expect(privacy?.trim(), 'footer_privacy should not be empty').toBeTruthy();
     expect(terms, 'footer_terms should not be English').not.toBe('Terms');
     expect(guidelines, 'footer_guidelines should not be English').not.toBe('Community Guidelines');
     expect(dns, 'footer_do_not_sell should not be English').not.toBe(

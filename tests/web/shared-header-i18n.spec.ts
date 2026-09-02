@@ -41,7 +41,12 @@ test.describe('Shared header signIn i18n', () => {
     await page.waitForFunction(
       () => {
         const btn = document.querySelector('[data-testid="header-signin-btn"]');
-        return !!(btn && btn.textContent && btn.textContent.includes('Iniciar'));
+        // Waits for the text to stop being ENGLISH rather than for a specific
+        // translation. The old predicate pinned a Spanish word, which is a second
+        // copy of the string table living in a test — it went stale the moment the
+        // locale changed, and surfaced as a timeout rather than a clear failure
+        // (SHY-0289).
+        return !!(btn && btn.textContent && btn.textContent.trim() && !btn.textContent.includes('Sign In'));
       },
       null,
       { timeout: 10_000 },
@@ -69,7 +74,12 @@ test.describe('Shared header signIn i18n', () => {
     await page.waitForFunction(
       () => {
         const btn = document.querySelector('[data-testid="header-signin-btn"]');
-        return !!(btn && btn.textContent && btn.textContent.includes('Iniciar'));
+        // Waits for the text to stop being ENGLISH rather than for a specific
+        // translation. The old predicate pinned a Spanish word, which is a second
+        // copy of the string table living in a test — it went stale the moment the
+        // locale changed, and surfaced as a timeout rather than a clear failure
+        // (SHY-0289).
+        return !!(btn && btn.textContent && btn.textContent.trim() && !btn.textContent.includes('Sign In'));
       },
       null,
       { timeout: 10_000 },

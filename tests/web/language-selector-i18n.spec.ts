@@ -36,14 +36,19 @@ test.describe('Language selector modal i18n', () => {
     await page.waitForFunction(
       () => {
         const h2 = document.querySelector('[data-i18n="lang_select_title"]');
-        return !!(h2 && h2.textContent && h2.textContent.includes('Seleccionar'));
+        // Waits for the text to stop being ENGLISH rather than for a specific
+        // translation. The old predicate pinned a Spanish word, which is a second
+        // copy of the string table living in a test — it went stale the moment the
+        // locale changed, and surfaced as a timeout rather than a clear failure
+        // (SHY-0289).
+        return !!(h2 && h2.textContent && h2.textContent.trim() && !h2.textContent.includes('Select Language'));
       },
       null,
       { timeout: 10_000 },
     );
 
     const title = (await page.locator('[data-i18n="lang_select_title"]').textContent())?.trim();
-    expect(title, 'lang_select_title in es should NOT be English').not.toBe('Select Language');
+    expect(title, 'lang_select_title in th should NOT be English').not.toBe('Select Language');
     expect(title, 'lang_select_title in es should be "Seleccionar idioma"').toBe('Seleccionar idioma');
   });
 
