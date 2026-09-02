@@ -24,7 +24,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * window.LEGAL_PAGE_TYPE — so even adding data-i18n there required wiring
  * the i18n bridge first.
  *
- * The test suite hits Thai (RTL + non-Latin script — easiest to detect
+ * The test suite hits Thai (non-Latin script — easiest to detect
  * remaining English) on all 5 legal pages and asserts every footer link's
  * text changed away from English defaults.
  */

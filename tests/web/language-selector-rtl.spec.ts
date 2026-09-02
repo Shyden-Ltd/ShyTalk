@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 
 /**
- * Regression: language picker MUST set `dir="rtl"` on Thai and
+ * Regression: language picker MUST set `dir` EXPLICITLY rather than leaving
+ * the HTML default. It once set `rtl` on Arabic and
  * `dir="ltr"` on every other supported language.
  *
  * Pre-fix: `setLanguage()` only set `document.documentElement.lang`,

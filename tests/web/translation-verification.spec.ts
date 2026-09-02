@@ -98,7 +98,7 @@ test.describe('Translation Verification', () => {
     });
   });
 
-  test.describe('Thai New Year Page', () => {
+  test.describe('Khmer New Year Page', () => {
     test('section headings change when language is set to Thai', async ({ page }) => {
       await page.goto(`${BASE}/events/khmer-new-year.html`);
       const heading = page.locator('[data-i18n="kny_what_h"]');

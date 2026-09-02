@@ -22,7 +22,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *
  * Test design: a structural test asserting the two new keys exist
  * in all 20 locales of LEGAL_T.footer, plus runtime tests in two
- * representative locales (Thai for RTL, Chinese for CJK)
+ * representative locales (Thai and Chinese, both non-Latin scripts)
  * confirming the translation actually reaches the DOM after
  * applyLanguage runs.
  */

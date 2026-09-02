@@ -44,7 +44,7 @@ test.describe('Portal i18n', () => {
     await expect(btn).toBeVisible();
   });
 
-  test('Thai preference applies dir=rtl + lang=th on initial load', async ({ page }) => {
+  test('Thai preference applies dir + lang=th on initial load', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('shytalk_language', 'th');
     });

@@ -14,7 +14,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * `LEGAL_T.notfound[lang]` section for all 20 locales (excluding en
  * which falls back to the inline HTML default).
  *
- * Test design: hit Thai (RTL + non-Latin script — easiest to detect
+ * Test design: hit Thai (non-Latin script — easiest to detect
  * remaining English) for the deepest functional check, plus a
  * structural test asserting all 20 locales define the 3 keys.
  */

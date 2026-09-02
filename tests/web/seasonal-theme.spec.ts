@@ -34,7 +34,7 @@ test.describe('Seasonal Theme System', () => {
     await page.goto(BASE);
     const ribbon = page.locator('#seasonal-ribbon');
     await expect(ribbon).toBeVisible({ timeout: 5_000 });
-    await expect(ribbon).toContainText('Thai New Year');
+    await expect(ribbon).toContainText('Khmer New Year');
   });
 
   test('seasonal banner does NOT appear outside event dates', async ({ page }) => {

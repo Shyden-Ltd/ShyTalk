@@ -168,7 +168,7 @@ test.describe('Translations', () => {
     }
   });
 
-  test('RTL layout correct for Thai', async ({ page }) => {
+  test('layout correct for Thai (non-Latin script)', async ({ page }) => {
     await page.goto('/roadmap.html?lang=th');
     await page.waitForTimeout(1000);
     const dir = await page.evaluate(() => document.dir || document.documentElement.dir);

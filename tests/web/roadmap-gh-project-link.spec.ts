@@ -104,7 +104,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     expect(title, "es title should contain GitHub keyword").toContain("GitHub");
   });
 
-  test("Thai locale: link is present + RTL document direction set", async ({
+  test("Thai locale: link is present + document direction set", async ({
     page,
   }) => {
     await page.addInitScript(() => {

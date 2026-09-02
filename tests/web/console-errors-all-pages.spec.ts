@@ -16,7 +16,7 @@ test.describe('Console Errors — All Pages', () => {
     { name: 'Community Guidelines', path: '/community-guidelines.html' },
     { name: 'Cyber Bullying Policy', path: '/cyber-bullying.html' },
     { name: 'Portal', path: '/portal/' },
-    { name: 'Thai New Year', path: '/events/khmer-new-year.html' },
+    { name: 'Khmer New Year', path: '/events/khmer-new-year.html' },
   ];
 
   for (const { name, path } of pages) {
