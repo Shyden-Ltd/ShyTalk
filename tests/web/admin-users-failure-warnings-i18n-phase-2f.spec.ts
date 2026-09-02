@@ -88,7 +88,7 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
     }
   });
 
-  test('Korean runtime: generic failure + warning + device-binding interpolate', async ({ page, request }) => {
+  test('Chinese runtime: generic failure + warning + device-binding interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

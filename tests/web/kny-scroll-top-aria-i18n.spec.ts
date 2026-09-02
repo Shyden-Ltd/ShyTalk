@@ -17,7 +17,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *      KNY locales.
  *
  * SHY-0289 note: Khmer New Year remains a shipped event. What went was the
- * Khmer LOCALE — the page is still there, now read in one of the five.
+ * Thai LOCALE — the page is still there, now read in one of the five.
  *
  * This fix adds the aria-label walk to applyEventTranslations and
  * defines aria_scroll_to_top in every KNY locale (en is skipped at

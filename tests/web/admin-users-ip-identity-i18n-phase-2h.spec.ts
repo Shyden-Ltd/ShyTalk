@@ -91,7 +91,7 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
     }
   });
 
-  test('Korean runtime: IP/identity + prompts + partial-failure segments interpolate', async ({ page, request }) => {
+  test('Chinese runtime: IP/identity + prompts + partial-failure segments interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

@@ -62,7 +62,7 @@ test.describe('Suggestions-board aria-label i18n', () => {
     expect(hardcoded.map(m => m[1]), 'all aria-labels should be sgT()-driven').toEqual([]);
   });
 
-  test('Korean locale: voting button aria-labels translate to Han characters', async ({ page }) => {
+  test('Chinese locale: voting button aria-labels translate to Han characters', async ({ page }) => {
     // Suggestions board mounts on roadmap.html.
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }

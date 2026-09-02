@@ -3,12 +3,12 @@ import { test, expect } from '@playwright/test';
 const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 
 /**
- * Regression: language picker MUST set `dir="rtl"` on Arabic and
+ * Regression: language picker MUST set `dir="rtl"` on Thai and
  * `dir="ltr"` on every other supported language.
  *
  * Pre-fix: `setLanguage()` only set `document.documentElement.lang`,
  * leaving `dir` as whatever HTML default (`""` → browser-default LTR).
- * Switching to Arabic kept the page LTR, so Arabic readers saw a
+ * Switching to Thai kept the page LTR, so Thai readers saw a
  * backwards-mirrored UX (logo on left, Sign In on right is wrong for
  * RTL). Found 2026-05-09 during /manual-qa.
  */

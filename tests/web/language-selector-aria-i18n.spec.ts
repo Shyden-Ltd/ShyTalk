@@ -16,13 +16,13 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * keys added to LEGAL_T.footer + 5 data-i18n-aria-label attributes
  * applied to the language-selector elements.
  *
- * Test design: Spanish locale on /privacy.html, assert all 5 elements
- * have Spanish aria-label after init. Plus structural test that all
+ * Test design: Thai locale on /privacy.html, assert all 5 elements
+ * have Thai aria-label after init. Plus structural test that all
  * 20 locales define all 5 keys.
  */
 
 test.describe('Language selector aria-label i18n', () => {
-  test('Spanish locale translates all 5 language-selector aria-labels', async ({ page }) => {
+  test('Thai locale translates all 5 language-selector aria-labels', async ({ page }) => {
     await page.addInitScript(() => {
       try {
         localStorage.setItem('shytalk_language', 'th');
@@ -48,7 +48,7 @@ test.describe('Language selector aria-label i18n', () => {
     // overlay innerHTML so always in DOM, but openModal puts modal in view).
     await page.locator('[data-testid="language-selector"]').click();
 
-    // English DEFAULTS, not translations. The array used to hold Spanish
+    // English DEFAULTS, not translations. The array used to hold Thai
     // strings, which is a second copy of the string table living in a test —
     // it goes stale silently when the copy is edited, and after SHY-0289 it
     // named a language that no longer exists. `null` marks a key with no

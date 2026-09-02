@@ -57,7 +57,7 @@ test.describe('Suggestions-board STATUS_OPTIONS i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Han characters for all 5 status keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all 5 status keys', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });

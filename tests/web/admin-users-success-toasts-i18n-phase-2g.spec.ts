@@ -88,7 +88,7 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
     }
   });
 
-  test('Korean runtime: success + partial-failure messages interpolate', async ({ page, request }) => {
+  test('Chinese runtime: success + partial-failure messages interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

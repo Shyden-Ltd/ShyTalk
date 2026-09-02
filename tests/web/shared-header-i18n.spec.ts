@@ -42,7 +42,7 @@ test.describe('Shared header signIn i18n', () => {
       () => {
         const btn = document.querySelector('[data-testid="header-signin-btn"]');
         // Waits for the text to stop being ENGLISH rather than for a specific
-        // translation. The old predicate pinned a Spanish word, which is a second
+        // translation. The old predicate pinned a Thai word, which is a second
         // copy of the string table living in a test — it went stale the moment the
         // locale changed, and surfaced as a timeout rather than a clear failure
         // (SHY-0289).
@@ -75,7 +75,7 @@ test.describe('Shared header signIn i18n', () => {
       () => {
         const btn = document.querySelector('[data-testid="header-signin-btn"]');
         // Waits for the text to stop being ENGLISH rather than for a specific
-        // translation. The old predicate pinned a Spanish word, which is a second
+        // translation. The old predicate pinned a Thai word, which is a second
         // copy of the string table living in a test — it went stale the moment the
         // locale changed, and surfaced as a timeout rather than a clear failure
         // (SHY-0289).

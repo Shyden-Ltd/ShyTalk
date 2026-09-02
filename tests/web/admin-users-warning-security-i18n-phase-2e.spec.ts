@@ -71,7 +71,7 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const locales = ['en', 'id', 'th', 'vi', 'zh'];
     const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
@@ -89,7 +89,7 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     }
   });
 
-  test('Korean runtime: warning meta + security toasts interpolate', async ({ page, request }) => {
+  test('Chinese runtime: warning meta + security toasts interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
@@ -119,7 +119,7 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // Korean translations must contain Han characters AND must NOT match the English source
+    // Chinese translations must contain Han characters AND must NOT match the English source
     expect(result!.revoked).toMatch(/[一-鿿]/);
     expect(result!.revoked).not.toBe('Revoked');
 

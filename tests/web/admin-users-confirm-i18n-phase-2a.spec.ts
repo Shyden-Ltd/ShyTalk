@@ -100,7 +100,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     }
   });
 
-  test('Korean locale: tAdmin returns Han characters for all 9 dialog keys', async ({ page, request }) => {
+  test('Chinese locale: tAdmin returns Han characters for all 9 dialog keys', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

@@ -15,7 +15,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * Pages can now translate aria-labels per-locale by adding the
  * attribute and defining the key in LEGAL_T.footer.
  *
- * Test design: load /roadmap.html in Spanish (Latin script, easy to
+ * Test design: load /roadmap.html in Thai (Latin script, easy to
  * detect drift), assert the 5 aria-labels are translated. Plus a
  * structural test asserting all 20 locales define the 5 keys.
  */
@@ -43,7 +43,7 @@ test.describe('Roadmap aria-label i18n', () => {
       { timeout: 10_000 },
     );
 
-    // English DEFAULTS, not translations. The array used to hold Spanish
+    // English DEFAULTS, not translations. The array used to hold Thai
     // strings, which is a second copy of the string table living in a test —
     // it goes stale silently when the copy is edited, and after SHY-0289 it
     // named a language that no longer exists. `null` marks a key with no

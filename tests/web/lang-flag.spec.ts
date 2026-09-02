@@ -49,10 +49,15 @@ test.describe('SHY-0181 — ?lang= URL flag drives language site-wide', () => {
     expect(await resolvedLang(page, '/privacy.html')).toBe('th');
   });
 
-  test('?lang=th sets dir=rtl (forced RTL lays out correctly)', async ({ page }) => {
+  // Was '?lang=ar sets dir=rtl'. Arabic was the only right-to-left language
+  // shipped and went with SHY-0289, so there is no locale that can produce
+  // `rtl` any more. What survives is the half that still bites: `dir` must be
+  // set EXPLICITLY rather than left as the HTML default, which is the
+  // regression the RTL work was done for in the first place.
+  test('?lang= sets dir explicitly rather than leaving the HTML default', async ({ page }) => {
     await page.goto(`${BASE}/?lang=th`);
     await page.waitForFunction(() => typeof (window as any).ShyTalkLanguage !== 'undefined');
-    expect(await page.evaluate(() => document.documentElement.getAttribute('dir'))).toBe('rtl');
+    expect(await page.evaluate(() => document.documentElement.getAttribute('dir'))).toBe('ltr');
   });
 
   test('an unsupported ?lang= is ignored (falls back, never applied)', async ({ page }) => {

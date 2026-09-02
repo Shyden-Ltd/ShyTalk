@@ -20,12 +20,12 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * roadmap-app.js applyLanguage to chain (not replace) the prior
  * handler, and add `data-i18n` attributes to the four link texts.
  *
- * Test design: Spanish locale (Latin script, easiest to detect drift),
+ * Test design: Thai locale (Latin script, easiest to detect drift),
  * with a structural check that all four data-i18n attrs exist in HTML.
  */
 
 test.describe('Roadmap footer links i18n', () => {
-  test('Spanish locale translates all four footer links', async ({ page }) => {
+  test('Thai locale translates all four footer links', async ({ page }) => {
     await page.addInitScript(() => {
       try {
         localStorage.setItem('shytalk_language', 'th');
@@ -40,7 +40,7 @@ test.describe('Roadmap footer links i18n', () => {
       () => {
         const el = document.querySelector('[data-i18n="footer_privacy"]');
         // Waits for the text to stop being ENGLISH rather than for a specific
-        // translation. The old predicate pinned a Spanish word, which is a second
+        // translation. The old predicate pinned a Thai word, which is a second
         // copy of the string table living in a test — it went stale the moment the
         // locale changed, and surfaced as a timeout rather than a clear failure
         // (SHY-0289).

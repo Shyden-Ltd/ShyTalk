@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 const PAGE_URL = `${BASE}/events/khmer-new-year.html`;
 
-test.describe('Khmer New Year Page', () => {
+test.describe('Thai New Year Page', () => {
   test('page loads without errors', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
@@ -12,7 +12,7 @@ test.describe('Khmer New Year Page', () => {
     expect(errors).toHaveLength(0);
   });
 
-  test('hero section displays Khmer greeting', async ({ page }) => {
+  test('hero section displays Thai greeting', async ({ page }) => {
     await page.goto(PAGE_URL);
     await expect(page.locator('.hero h1')).toContainText('សួស្តីឆ្នាំថ្មី');
   });
@@ -119,7 +119,7 @@ test.describe('Language Selector Regression', () => {
     { name: 'Community Guidelines', path: '/community-guidelines.html' },
     { name: 'Cyber Bullying', path: '/cyber-bullying.html' },
     { name: 'Roadmap', path: '/roadmap.html' },
-    { name: 'Khmer New Year', path: '/events/khmer-new-year.html' },
+    { name: 'Thai New Year', path: '/events/khmer-new-year.html' },
   ];
 
   for (const { name, path } of pagesWithSelector) {

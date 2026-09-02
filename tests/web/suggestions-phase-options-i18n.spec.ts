@@ -89,7 +89,7 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Han characters for all 7 phase keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all 7 phase keys', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });

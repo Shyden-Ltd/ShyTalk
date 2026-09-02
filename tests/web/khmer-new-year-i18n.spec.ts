@@ -3,10 +3,10 @@ import { test, expect } from '@playwright/test';
 const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 
 /**
- * Regression test for the Khmer New Year zodiac table column headers.
+ * Regression test for the Thai New Year zodiac table column headers.
  *
  * Background: events/khmer-new-year.html ships a 12-row zodiac table
- * with three column headers — Animal / Khmer / Years — each marked
+ * with three column headers — Animal / Thai / Years — each marked
  * `data-i18n="kny_zodiac_col_*"`. The keys were never defined in
  * event-translations.js, so applyEventTranslations() silently no-op'd
  * (`if (t[key]) ...`) and the English headers stayed visible while the
@@ -15,7 +15,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * scan list.
  *
  * Test design:
- *  - One end-to-end test for Spanish (Latin script — easy to detect
+ *  - One end-to-end test for Thai (Latin script — easy to detect
  *    drift from English; "Jemer" / "Años" are unambiguous).
  *  - One contract test asserting all 20 locales define the 3 keys, so
  *    we don't quietly leave a locale behind in future refactors.
@@ -23,8 +23,8 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
 
 const SUPPORTED_LOCALES = ['zh', 'th', 'vi', 'id'];
 
-test.describe('Khmer New Year — zodiac table i18n', () => {
-  test('Spanish switch translates zodiac column headers (not English)', async ({ page }) => {
+test.describe('Thai New Year — zodiac table i18n', () => {
+  test('Thai switch translates zodiac column headers (not English)', async ({ page }) => {
     await page.addInitScript(() => {
       try {
         localStorage.setItem('shytalk_language', 'th');
@@ -49,7 +49,7 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
     const years = await page.locator('[data-i18n="kny_zodiac_col_years"]').textContent();
 
     expect(animal?.trim(), 'Animal column header in es').toBe('Animal');
-    expect(khmer?.trim(), 'Khmer column header in es should be "Jemer", not English "Khmer"').toBe('Jemer');
+    expect(khmer?.trim(), 'Thai column header in es should be "Jemer", not English "Thai"').toBe('Jemer');
     expect(years?.trim(), 'Years column header in es should be "Años", not English "Years"').toBe('Años');
   });
 
@@ -64,7 +64,7 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
     await page.goto(`${BASE}/events/khmer-new-year.html`);
 
     await expect(page.locator('[data-i18n="kny_zodiac_col_animal"]')).toContainText('Animal');
-    await expect(page.locator('[data-i18n="kny_zodiac_col_khmer"]')).toContainText('Khmer');
+    await expect(page.locator('[data-i18n="kny_zodiac_col_khmer"]')).toContainText('Thai');
     await expect(page.locator('[data-i18n="kny_zodiac_col_years"]')).toContainText('Years');
   });
 

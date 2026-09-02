@@ -89,7 +89,7 @@ test.describe('Admin users-tab backpack panel i18n (Phase 2j)', () => {
     }
   });
 
-  test('Korean runtime: backpack UX strings interpolate', async ({ page, request }) => {
+  test('Chinese runtime: backpack UX strings interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

@@ -92,7 +92,7 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     }
   });
 
-  test('Korean runtime: status badges interpolate correctly', async ({ page, request }) => {
+  test('Chinese runtime: status badges interpolate correctly', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
@@ -127,12 +127,12 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
     // All values should contain Han characters + interpolated values
-    expect(result!.suspended, 'suspended badge should be Korean').toMatch(/[一-鿿]/);
+    expect(result!.suspended, 'suspended badge should be Chinese').toMatch(/[一-鿿]/);
     expect(result!.suspended).toContain('2026-05-10');
     expect(result!.suspended).toContain('2026-05-20');
     expect(result!.suspended).toContain('spam');
 
-    expect(result!.notSuspended, 'not-suspended should be Korean').toMatch(/[一-鿿]/);
+    expect(result!.notSuspended, 'not-suspended should be Chinese').toMatch(/[一-鿿]/);
     expect(result!.notSuspended).not.toBe('Not Suspended');
 
     expect(result!.deletion).toMatch(/[一-鿿]/);

@@ -37,7 +37,7 @@ test.describe('Language selector modal i18n', () => {
       () => {
         const h2 = document.querySelector('[data-i18n="lang_select_title"]');
         // Waits for the text to stop being ENGLISH rather than for a specific
-        // translation. The old predicate pinned a Spanish word, which is a second
+        // translation. The old predicate pinned a Thai word, which is a second
         // copy of the string table living in a test — it went stale the moment the
         // locale changed, and surfaced as a timeout rather than a clear failure
         // (SHY-0289).

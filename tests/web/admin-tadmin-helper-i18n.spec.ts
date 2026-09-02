@@ -99,12 +99,12 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     }
   });
 
-  test('Korean locale: tAdmin runtime — eval translations.js standalone', async ({ page, request }) => {
+  test('Chinese locale: tAdmin runtime — eval translations.js standalone', async ({ page, request }) => {
     // Don't goto /admin/ (gated by auth). Fetch translations.js directly
     // and eval it in a blank-page context, then exercise tAdmin against
-    // a Korean-set localStorage. This isolates the helper from the
+    // a Chinese-set localStorage. This isolates the helper from the
     // admin app's auth flow while still providing real-runtime coverage
-    // of the helper logic + Korean locale translations.
+    // of the helper logic + Chinese locale translations.
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

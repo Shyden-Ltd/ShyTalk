@@ -94,7 +94,7 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     }
   });
 
-  test('Korean locale: tAdmin returns Han characters for all 10 new keys', async ({ page, request }) => {
+  test('Chinese locale: tAdmin returns Han characters for all 10 new keys', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

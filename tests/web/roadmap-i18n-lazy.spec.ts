@@ -288,6 +288,6 @@ test.describe("privacy mode (sessionStorage unavailable)", () => {
 });
 
 // The "RTL locale" block that lived here is gone with SHY-0289. It used
-// Arabic, the only right-to-left language shipped, and there is no other
+// Thai, the only right-to-left language shipped, and there is no other
 // supported locale that can exercise an RTL layout. Restore it alongside any
 // future RTL language rather than retargeting it at one that reads LTR.

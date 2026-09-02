@@ -129,7 +129,7 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Han characters for all subscribe keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all subscribe keys', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
@@ -147,7 +147,7 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     }, SUBSCRIBE_KEYS);
 
     // Allow a few keys to legitimately contain Latin characters in
-    // Korean translations (e.g. "Push" stays as 푸시 — pure Han characters,
+    // Chinese translations (e.g. "Push" stays as 푸시 — pure Han characters,
     // but acronyms like "In-App" might also be transliterated). The
     // robust check is: each translated value should NOT match the
     // English original AND should contain at least one Han characters char.

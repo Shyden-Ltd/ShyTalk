@@ -125,7 +125,7 @@ test.describe('Translations', () => {
       if (await idOption.count() > 0) {
         await idOption.click();
         await page.waitForTimeout(1000);
-        // Page content should be in German
+        // Page content should be in Indonesian
       }
     }
   });
@@ -168,7 +168,7 @@ test.describe('Translations', () => {
     }
   });
 
-  test('RTL layout correct for Arabic', async ({ page }) => {
+  test('RTL layout correct for Thai', async ({ page }) => {
     await page.goto('/roadmap.html?lang=th');
     await page.waitForTimeout(1000);
     const dir = await page.evaluate(() => document.dir || document.documentElement.dir);

@@ -51,12 +51,12 @@ test.describe('Portal aria-label i18n', () => {
     }
   });
 
-  test('Korean portal: aria-labels translate to Han characters after applyLanguage', async ({ page }) => {
+  test('Chinese portal: aria-labels translate to Han characters after applyLanguage', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/portal/`);
-    // Wait for portal-translations to apply Korean. The loading section
+    // Wait for portal-translations to apply Chinese. The loading section
     // has aria-label translated by applyPortalTranslations.
     await page.waitForFunction(() => {
       const el = document.querySelector('#loading-section[aria-label]');

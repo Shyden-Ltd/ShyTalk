@@ -89,7 +89,7 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     }
   });
 
-  test('Korean runtime: economy + validation messages interpolate', async ({ page, request }) => {
+  test('Chinese runtime: economy + validation messages interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

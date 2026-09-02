@@ -27,8 +27,8 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *   3. line 635: `date.toLocaleDateString(undefined, ...)`
  *      `undefined` first arg defaults to navigator.language, NOT the
  *      portal's selected locale. A user whose browser is English but
- *      who picked Korean in the portal would see the date formatted
- *      US-style instead of Korean-style.
+ *      who picked Chinese in the portal would see the date formatted
+ *      US-style instead of Chinese-style.
  *
  * Fix: introduce a `t(key)` helper in portal.js that reads from
  * `window.PORTAL_T[lang]` based on `window.ShyTalkLanguage.get()`.
@@ -71,7 +71,7 @@ test.describe('Portal greeting + suspension i18n', () => {
     expect(src, "should call getCurrentLang() for date format").toMatch(/toLocaleDateString\(getCurrentLang\(\),/);
   });
 
-  test('Korean locale: portal t() helper resolves new keys to Han characters', async ({ page }) => {
+  test('Chinese locale: portal t() helper resolves new keys to Han characters', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
@@ -95,7 +95,7 @@ test.describe('Portal greeting + suspension i18n', () => {
         dashboard_welcome: dict.dashboard_welcome,
       };
     });
-    expect(sample.lang).toBe('ko');
+    expect(sample.lang).toBe('vi');
     expect(sample.suspended_reason_label, 'ko.suspended_reason_label').toMatch(/[一-鿿]/);
     expect(sample.default_user_name, 'ko.default_user_name').toMatch(/[一-鿿]/);
     expect(sample.dashboard_welcome, 'ko.dashboard_welcome').toMatch(/[一-鿿]/);

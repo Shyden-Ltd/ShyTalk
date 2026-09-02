@@ -106,7 +106,7 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Han characters for all toast keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all toast keys', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });

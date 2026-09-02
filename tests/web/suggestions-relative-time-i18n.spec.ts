@@ -14,7 +14,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * compact relative times like "5분 전" / "il y a 5 min" / "5 منذ" with
  * zero project-side translations needed.
  *
- * Test approach: open the suggestions board in Korean, evaluate
+ * Test approach: open the suggestions board in Chinese, evaluate
  * relativeTime() in-page (it's not exported but Intl.RelativeTimeFormat
  * is), and verify the formatter's output for several time deltas.
  *
@@ -38,7 +38,7 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
     expect(src, 'should use Intl.RelativeTimeFormat').toContain('Intl.RelativeTimeFormat');
   });
 
-  test('Korean locale: Intl.RelativeTimeFormat produces Han characters output', async ({ page }) => {
+  test('Chinese locale: Intl.RelativeTimeFormat produces Han characters output', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
@@ -88,7 +88,7 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
         fiveMinAgo: rtf.format(-5, 'minute'),
       };
     });
-    expect(samples.lang).toBe('ar');
+    expect(samples.lang).toBe('th');
     expect(samples.fiveMinAgo, '5 min ago in ar should contain Thai').toMatch(/[ก-๛]/);
   });
 });

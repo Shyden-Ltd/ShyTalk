@@ -70,7 +70,7 @@ test.describe('Portal TOTP + recovery + copy i18n', () => {
     expect(src).toContain("t('copy_feedback_copied')");
   });
 
-  test('Korean locale: portal t() resolves all 7 keys to Han characters', async ({ page }) => {
+  test('Chinese locale: portal t() resolves all 7 keys to Han characters', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });

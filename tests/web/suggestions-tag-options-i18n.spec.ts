@@ -62,7 +62,7 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Han characters for all 9 tag keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all 9 tag keys', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
@@ -79,7 +79,7 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
       return out;
     }, TAG_KEYS);
     // UI/UX is preserved as the literal "UI/UX" in many locales — accept
-    // either Han characters characters OR the literal "UI/UX" string.
+    // either Han characters OR the literal "UI/UX" string.
     for (const key of TAG_KEYS) {
       const v = results[key];
       expect(v, `sgT(${key}) in ko`).toBeTruthy();

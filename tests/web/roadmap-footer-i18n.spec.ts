@@ -62,7 +62,7 @@ test.describe('Roadmap footer i18n', () => {
     );
 
     const copyright = await page.locator('[data-i18n="copyright"]').textContent();
-    expect(copyright, 'copyright must contain Shyden Ltd brand even in Arabic locale').toContain('Shyden Ltd');
+    expect(copyright, 'copyright must contain Shyden Ltd brand even in Thai locale').toContain('Shyden Ltd');
   });
 
   test('roadmap-app.js defines copyright key (orphan-checker contract)', async ({ request }) => {

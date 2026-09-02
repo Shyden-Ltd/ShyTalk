@@ -54,7 +54,7 @@ test.describe('Suggestions-board duplicate-detection buttons i18n', () => {
     expect(src, 'should now use sgT("duplicate_different")').toContain('sgT("duplicate_different")');
   });
 
-  test('Korean locale: sgT returns Han characters for both keys', async ({ page }) => {
+  test('Chinese locale: sgT returns Han characters for both keys', async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });

@@ -16,7 +16,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *
  * 2. portal-translations.js's `applyPortalTranslations` set
  *    document.documentElement.lang but NOT dir — same RTL gap PR #569
- *    fixed in language-selector.js. So Arabic would translate text but
+ *    fixed in language-selector.js. So Thai would translate text but
  *    leave layout LTR.
  *
  * The portal has a strict CSP (style-src 'self' — no `unsafe-inline`),
@@ -44,7 +44,7 @@ test.describe('Portal i18n', () => {
     await expect(btn).toBeVisible();
   });
 
-  test('Arabic preference applies dir=rtl + lang=th on initial load', async ({ page }) => {
+  test('Thai preference applies dir=rtl + lang=th on initial load', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('shytalk_language', 'th');
     });
