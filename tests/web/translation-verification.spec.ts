@@ -59,7 +59,13 @@ test.describe('Translation Verification', () => {
       const title = page.locator('[data-i18n="tos_title"]');
       await expect(title).toBeVisible({ timeout: 5_000 });
       await changeLanguage(page, 'zh');
-      await expect(title).toContainText('利用規約', { timeout: 5_000 });
+      // Asserted as "no longer English", like every other case in this file,
+      // rather than against a hardcoded translation. The old literal was the
+      // JAPANESE for Terms of Service and survived the locale swap unnoticed —
+      // a pinned translation is a second copy of the string table, and it goes
+      // stale silently (SHY-0289).
+      await expect(title).not.toContainText('Terms of Service', { timeout: 5_000 });
+      await expect(title).toHaveText(/\S/, { timeout: 5_000 });
     });
   });
 

@@ -61,7 +61,7 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
         oneYearAgo: rtf.format(-1, 'year'),
       };
     });
-    expect(samples.lang, 'should be Korean').toBe('ko');
+    expect(samples.lang, 'should be Chinese').toBe('zh');
     expect(samples.zero, 'rtf.format(0, "second") in ko').toMatch(/[一-鿿]/);
     expect(samples.fiveMinAgo, '5 min ago in ko').toMatch(/[一-鿿]/);
     expect(samples.fiveMinAgo, '5 min ago in ko should not be English').not.toContain('ago');

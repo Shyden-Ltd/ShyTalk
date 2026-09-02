@@ -23,11 +23,13 @@ test.describe('Language Selector', () => {
     await expect(page.locator('.stl-lang-search')).toBeFocused();
   });
 
-  test('modal shows all 21 languages', async ({ page }) => {
+  test('modal shows all five supported languages', async ({ page }) => {
     await page.goto('/');
     await page.locator('.stl-lang-btn').click();
     const items = page.locator('.stl-lang-item');
-    await expect(items).toHaveCount(21);
+    // Five, not twenty-one (SHY-0289). The count is asserted rather than a
+    // lower bound: a language quietly appearing is as wrong as one missing.
+    await expect(items).toHaveCount(5);
   });
 
   test('search filters languages', async ({ page }) => {
@@ -42,16 +44,19 @@ test.describe('Language Selector', () => {
   test('selecting a language closes modal and updates page', async ({ page }) => {
     await page.goto('/');
     await page.locator('.stl-lang-btn').click();
-    await page.locator('.stl-lang-item[data-lang="es"]').click();
+    await page.locator('.stl-lang-item[data-lang="th"]').click();
     await expect(page.locator('.stl-lang-overlay')).not.toHaveClass(/open/);
-    // Homepage tagline should be in Thai
-    await expect(page.locator('[data-i18n="tagline"]')).toContainText('reinventadas');
+    // Asserted as "no longer English" rather than against a hardcoded
+    // translation. The old literal was the SPANISH word 'reinventadas', and a
+    // pinned translation is a second copy of the string table that goes stale
+    // silently when a locale changes (SHY-0289).
+    await expect(page.locator('[data-i18n="tagline"]')).not.toContainText('reinvented');
   });
 
   test('language persists across page navigation', async ({ page }) => {
     await page.goto('/');
     await page.locator('.stl-lang-btn').click();
-    await page.locator('.stl-lang-item[data-lang="fr"]').click();
+    await page.locator('.stl-lang-item[data-lang="vi"]').click();
     // Navigate to roadmap
     await page.goto('/roadmap.html');
     // Should still be Vietnamese

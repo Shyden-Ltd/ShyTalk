@@ -121,9 +121,9 @@ test.describe('Translations', () => {
     const switcher = page.locator('.lang-selector, [data-testid="language-selector"], .language-btn');
     if (await switcher.count() > 0) {
       await switcher.click();
-      const deOption = page.locator('[data-lang="de"], .lang-option:has-text("Deutsch")');
-      if (await deOption.count() > 0) {
-        await deOption.click();
+      const idOption = page.locator('[data-lang="id"], .lang-option:has-text("Bahasa Indonesia")');
+      if (await idOption.count() > 0) {
+        await idOption.click();
         await page.waitForTimeout(1000);
         // Page content should be in German
       }
