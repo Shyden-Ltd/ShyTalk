@@ -51,6 +51,11 @@ jest.mock('../../src/utils/r2', () => ({
   getObject: (...args) => mockGetObject(...args),
   listObjectsWithMetadata: (...args) => mockListObjectsWithMetadata(...args),
   CDN_URL: 'https://images.test.example.com',
+  // SHY-0501: the REAL one, not a stand-in. It is pure stream plumbing with no
+  // I/O, and these routes exist to STREAM — a double that merely piped would
+  // pass while the destroy-on-disconnect behaviour, which is the whole point of
+  // the function, went untested through this path.
+  pipeToResponse: jest.requireActual('../../src/utils/r2').pipeToResponse,
 }));
 
 // ─── Backups cron mock ──────────────────────────────────────────
