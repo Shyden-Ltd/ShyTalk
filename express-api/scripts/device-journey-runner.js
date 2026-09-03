@@ -396,8 +396,13 @@ class Device {
    *
    * On the local target the app reaches the stack through `adb reverse`
    * tunnels, which ride USB and need no radio at all -- so switching Wi-Fi
-   * and data off on their own would leave the phone fully connected. The
-   * tunnels go too, and come back with the radios.
+   * off on its own would leave the phone fully connected. The tunnels go
+   * too, and come back with Wi-Fi.
+   *
+   * Mobile data is left alone. `svc data enable` on the OnePlus raises a
+   * system "Turn on mobile data?" confirmation from com.android.phone that
+   * sits over the app until a person answers it (run 7, 2026-09-04) -- and
+   * on local, data was never a route to the stack in the first place.
    */
   async setOffline(on, { reversePorts = [] } = {}) {
     if (on) {
@@ -405,11 +410,9 @@ class Device {
       // reverse socket the screen recorder rides, mid-recording.
       for (const port of reversePorts) this.adbRun(`reverse --remove tcp:${port}`);
       this.shell('svc wifi disable');
-      this.shell('svc data disable');
       return;
     }
     this.shell('svc wifi enable');
-    this.shell('svc data enable');
     for (const port of reversePorts) this.reverse(port);
   }
 

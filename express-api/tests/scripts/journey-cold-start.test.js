@@ -220,14 +220,16 @@ describe('the launch log and the network are device operations on BOTH backends'
         'reverse --remove tcp:3000',
         'reverse --remove tcp:9099',
       ]);
-      expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi disable', 'svc data disable']);
+      // Wi-Fi only: toggling mobile data raises a system "Turn on mobile
+      // data?" dialog on the OnePlus that covers the app (run 7).
+      expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi disable']);
       expect(reverse).not.toHaveBeenCalled();
     });
     test('setOffline(false) restores the radios AND the tunnels it removed', async () => {
       const d = new AndroidJourneyDevice('SERIAL');
       jest.spyOn(d, 'adbRun').mockImplementation(() => '');
       await d.setOffline(false, { reversePorts: [3000, 9099] });
-      expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi enable', 'svc data enable']);
+      expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi enable']);
       expect(reverse.mock.calls.map((c) => c[0])).toEqual([3000, 9099]);
     });
   });
