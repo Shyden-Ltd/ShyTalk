@@ -99,6 +99,26 @@ class ColdStartInstantLaunchTest {
     }
 
     @Test
+    fun immediateDestination_isTheRoomListForASignedInPersonWhoNeverEnrolledAppLock() {
+        // What the OnePlus actually holds after a persona sign-in (2026-09-04):
+        // a live Firebase user, a cached identity, and NO App-Lock credential --
+        // PIN enrolment only happens from the Lock screen's "reset" path, so
+        // this is every signed-in person's normal state. The fixture's default
+        // of `hasStoredCredential = true` hid it: the phone drew sign-in first
+        // and took the network round trip the story exists to remove.
+        val rec = Recorder()
+        assertEquals(Screen.Main, sequencer(rec, hasStoredCredential = false).immediateDestination())
+        // With nothing enrolled there is nothing to lock behind, so a "due"
+        // lock cannot apply either.
+        assertEquals(
+            Screen.Main,
+            sequencer(rec, hasStoredCredential = false, isAppLockEnabled = true, isLockRequired = true)
+                .immediateDestination(),
+        )
+        assertEquals(listOf("launch-state", "launch-state"), rec.events)
+    }
+
+    @Test
     fun immediateDestination_isSignInWhenThereIsNoSessionAtAll() {
         // Answerable locally, so it must not cost a round trip. Somebody with no
         // session should see sign-in as the first thing drawn, not after one.

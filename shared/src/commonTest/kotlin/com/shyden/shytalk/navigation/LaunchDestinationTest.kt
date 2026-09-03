@@ -42,10 +42,10 @@ class LaunchDestinationTest {
         user: Boolean,
     ): Screen =
         when {
-            !cred -> Screen.SignIn
-            enabled && required -> Screen.Lock
+            cred && enabled && required -> Screen.Lock
             auth && user -> Screen.Main
-            else -> Screen.Lock
+            cred -> Screen.Lock
+            else -> Screen.SignIn
         }
 
     @Test
@@ -96,11 +96,19 @@ class LaunchDestinationTest {
     }
 
     @Test
-    fun `no stored credential always resolves SignIn regardless of every other flag`() {
+    fun `no stored credential resolves SignIn unless a live resolved session exists`() {
+        // SHY-0500: an App-Lock credential is enrolled only from the Lock
+        // screen's reset path, so "no credential" is every signed-in person's
+        // normal state -- not evidence that nobody is signed in. Reading it as
+        // "no session" drew sign-in first on the real phone and sent the
+        // launch through the network round trip the story removes. Enrolment
+        // still gates nothing here: with nothing enrolled there is nothing to
+        // lock behind.
         for (enabled in listOf(false, true)) {
             for (required in listOf(false, true)) {
                 for (auth in listOf(false, true)) {
                     for (user in listOf(false, true)) {
+                        val expected = if (auth && user) Screen.Main else Screen.SignIn
                         val c =
                             Case(
                                 hasStoredCredential = false,
@@ -108,12 +116,12 @@ class LaunchDestinationTest {
                                 isLockRequired = required,
                                 isAuthenticated = auth,
                                 hasResolvedUser = user,
-                                expected = Screen.SignIn,
+                                expected = expected,
                             )
                         assertEquals(
-                            Screen.SignIn,
+                            expected,
                             resolve(c),
-                            "no credential must resolve SignIn for enabled=$enabled required=$required auth=$auth user=$user",
+                            "no credential must resolve $expected for enabled=$enabled required=$required auth=$auth user=$user",
                         )
                     }
                 }
