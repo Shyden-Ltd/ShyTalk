@@ -42,6 +42,13 @@ if curl -fs -m 2 "http://localhost:${APPIUM_PORT}/status" >/dev/null 2>&1; then
 else
   command -v appium >/dev/null 2>&1 || die "appium CLI not installed (npm i -g appium)"
   log "starting Appium on :${APPIUM_PORT} → $APPIUM_LOG"
+  # One Appium serves BOTH phones. Without ANDROID_HOME the UiAutomator2
+  # driver refuses every Android session ("Neither ANDROID_HOME nor
+  # ANDROID_SDK_ROOT environment variable was exported") and the journey
+  # runner falls back to `uiautomator dump` -- 2.3s a read instead of 65ms.
+  # Named here, where the server is born, defaulting to where Android Studio
+  # installs the SDK (SHY-0500, 2026-09-04).
+  export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
   ( nohup appium --port "$APPIUM_PORT" >"$APPIUM_LOG" 2>&1 </dev/null & )
   wait_http "http://localhost:${APPIUM_PORT}/status" 30 "Appium (:${APPIUM_PORT})" \
     || die "Appium did not become ready — see $APPIUM_LOG"
