@@ -3,19 +3,26 @@ package com.shyden.shytalk.core.util
 import platform.Foundation.NSLog
 
 /**
- * iOS logging goes through the unified log, not stdout.
+ * Where every iOS log line goes.
  *
  * `println` is the process's stdout, which only a debugger or a
  * `devicectl --console` attach can see: a full device syslog captured across
- * a launch carried none of it (SHY-0500, 2026-09-04). NSLog lands in the
+ * a launch carried none of it (SHY-0500, 2026-09-04). NSLog does reach the
  * unified log, which `idevicesyslog` streams over USB with nothing attached —
- * the same route the app's Swift side already uses.
+ * but its message arrives REDACTED as `<private>`. What shows the words is
+ * `os_log` with a `%{public}` format, and only Swift can call `os_log`, so
+ * the Swift app installs that writer here at startup (`iOSApp.swift`). NSLog
+ * stays as the fallback so nothing is ever silent.
  *
  * NSLog takes a FORMAT, so a message is escaped before it is handed over:
  * "50% done" must print as written, not be read as a directive.
  */
+object IosLogSink {
+    var write: (String) -> Unit = { line -> NSLog(line.replace("%", "%%")) }
+}
+
 private fun emit(line: String) {
-    NSLog(line.replace("%", "%%"))
+    IosLogSink.write(line)
 }
 
 actual fun logD(

@@ -2,6 +2,7 @@ import SwiftUI
 import shared
 import FirebaseCore
 import GoogleSignIn
+import os.log
 
 @main
 struct iOSApp: App {
@@ -9,6 +10,14 @@ struct iOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
+        // SHY-0500 — which launch path the app took must be readable from the
+        // device log with nothing attached. The Kotlin side's NSLog fallback
+        // reaches the log with its message redacted as <private>; a %{public}
+        // os_log format is what makes the words visible, and only Swift can
+        // call os_log. Installed FIRST, so no line below it is lost.
+        let unifiedLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "com.shyden.shytalk", category: "app")
+        IosLogSink.shared.write = { line in os_log("%{public}@", log: unifiedLog, line) }
+
         // Three build variants (mirrors Android's local/dev/prod flavors).
         // Each branch only (a) configures Firebase and (b) names the variant +
         // its persona password; the variant→runtime-config mapping lives in the
