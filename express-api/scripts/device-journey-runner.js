@@ -4462,8 +4462,13 @@ const J40 = {
           const first = await drawnFirst(f, 'main');
           await sleep(8000);
           const nodes = await dump(device);
-          if (atSignIn(nodes) || !anyMainTab(nodes)) {
-            throw new Error('an offline launch read as "signed out"');
+          // Overlay-aware, like the first frame: run 4 on the OnePlus had the
+          // daily-reward sheet over Home here, and a raw tab check called that
+          // "signed out" while the person was exactly where they should be.
+          if (classifyFirstFrame(nodes) !== 'main') {
+            throw new Error(
+              `an offline launch read as "${classifyFirstFrame(nodes)}" 8s in -- not the room list`,
+            );
           }
           if (byTextContains(nodes, 'session has ended')) {
             throw new Error('a transport failure was announced as an ended session');
