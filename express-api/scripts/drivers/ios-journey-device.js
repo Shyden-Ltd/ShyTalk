@@ -846,10 +846,16 @@ class IosDevice {
    * and this driver did not, so on iOS the keyboard was never dismissed and
    * the guard silently did nothing (SHY-0457).
    *
-   * Best effort on purpose: WDA answers 404 for this route on some iOS
-   * versions, and a keyboard that will not close is a worse screenshot, not a
-   * failed journey. It warns instead of throwing, so the tolerance is part of
-   * the output rather than a silence.
+   * Through `mobile: hideKeyboard`, the command Appium routes. The raw
+   * WebDriverAgent endpoint (`/wda/keyboard/dismiss`) is one the xcuitest
+   * driver proxies INTERNALLY; posted by a client it is Appium's own 404, on
+   * every iOS version -- which the tolerance below read as "WDA would not
+   * dismiss the keyboard" for weeks, until iOS 27.0's taller keyboard put the
+   * send button under it and J07 tapped a key (SHY-0500, 2026-09-04).
+   *
+   * Still best effort: a keyboard that will not close is a worse screenshot,
+   * not a failed journey. It warns instead of throwing, so the tolerance is
+   * part of the output rather than a silence.
    */
   async hideKeyboard() {
     // The tolerance sits OUTSIDE withSessionRecovery, not inside it. Catching
@@ -859,7 +865,12 @@ class IosDevice {
     // defect that wrapper exists to prevent.
     try {
       return await this.withSessionRecovery('hideKeyboard()', async () => {
-        await this._post('/wda/keyboard/dismiss', {});
+        await this._post('/execute/sync', {
+          script: 'mobile: hideKeyboard',
+          // The keys WebDriverAgent will tap to close it, in order tried; a
+          // search field's keyboard says "search", a message field's "return".
+          args: [{ keys: ['done', 'return', 'search', 'go', 'send'] }],
+        });
         return true;
       });
     } catch (err) {
