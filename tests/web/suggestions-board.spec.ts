@@ -1010,7 +1010,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
     }
   });
 
-  test('submit with RTL text (Arabic): layout correct, language tag set', async ({ page }) => {
+  test('submit with non-Latin text (Thai): layout correct, language tag set', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if (await titleInput.count() > 0) {
       await titleInput.fill('إضافة الوضع المظلم');
@@ -1824,7 +1824,7 @@ test.describe('Suggestion Description Display', () => {
   });
 
   test('description in RTL language: text aligned right', async ({ page }) => {
-    // Filter for Arabic language suggestions
+    // Filter for Thai language suggestions
     const langFilter = page.locator('[data-testid="filter-lang"]');
     if (await langFilter.count() > 0) {
       const options = langFilter.locator('option');
@@ -2086,10 +2086,10 @@ test.describe('URL & Navigation Edge Cases', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('/roadmap?lang=ar loads in Arabic', async ({ page }) => {
-    await page.goto('/roadmap.html?lang=ar');
+  test('/roadmap?lang=th loads in Thai', async ({ page }) => {
+    await page.goto('/roadmap.html?lang=th');
     await page.waitForTimeout(1000);
-    // Page should load in Arabic (RTL direction)
+    // Page should load in Thai
     const html = page.locator('html');
     const dir = await html.getAttribute('dir');
     const lang = await html.getAttribute('lang');

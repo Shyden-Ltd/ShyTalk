@@ -121,11 +121,11 @@ test.describe('Translations', () => {
     const switcher = page.locator('.lang-selector, [data-testid="language-selector"], .language-btn');
     if (await switcher.count() > 0) {
       await switcher.click();
-      const deOption = page.locator('[data-lang="de"], .lang-option:has-text("Deutsch")');
-      if (await deOption.count() > 0) {
-        await deOption.click();
+      const idOption = page.locator('[data-lang="id"], .lang-option:has-text("Bahasa Indonesia")');
+      if (await idOption.count() > 0) {
+        await idOption.click();
         await page.waitForTimeout(1000);
-        // Page content should be in German
+        // Page content should be in Indonesian
       }
     }
   });
@@ -159,7 +159,7 @@ test.describe('Translations', () => {
   });
 
   test('test all 20 languages render correctly', async ({ page }) => {
-    const languages = ['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh'];
+    const languages = ['en', 'id', 'th', 'vi', 'zh'];
     for (const lang of languages) {
       await page.goto(`/roadmap.html?lang=${lang}`);
       await page.waitForTimeout(500);
@@ -168,8 +168,8 @@ test.describe('Translations', () => {
     }
   });
 
-  test('RTL layout correct for Arabic', async ({ page }) => {
-    await page.goto('/roadmap.html?lang=ar');
+  test('layout correct for Thai (non-Latin script)', async ({ page }) => {
+    await page.goto('/roadmap.html?lang=th');
     await page.waitForTimeout(1000);
     const dir = await page.evaluate(() => document.dir || document.documentElement.dir);
     // Should be RTL or have RTL styling applied

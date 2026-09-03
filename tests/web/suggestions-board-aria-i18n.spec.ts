@@ -24,10 +24,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * suggestFeature were reused — already in SG_LABELS.)
  */
 
-const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SG_LOCALES = ['en', 'id', 'th', 'zh', 'zh'];
 
 const NEW_ARIA_KEYS = ['close', 'aria_upvote', 'aria_downvote', 'aria_watch'];
 
@@ -65,10 +62,10 @@ test.describe('Suggestions-board aria-label i18n', () => {
     expect(hardcoded.map(m => m[1]), 'all aria-labels should be sgT()-driven').toEqual([]);
   });
 
-  test('Korean locale: voting button aria-labels translate to Hangul', async ({ page }) => {
+  test('Chinese locale: voting button aria-labels translate to Han characters', async ({ page }) => {
     // Suggestions board mounts on roadmap.html.
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     // Wait for the suggestions board to render at least one card with a
@@ -91,9 +88,9 @@ test.describe('Suggestions-board aria-label i18n', () => {
       };
     });
     expect(sgT.upvote, 'sgT(aria_upvote) in ko should not be English').not.toBe('Upvote');
-    expect(sgT.upvote, 'sgT(aria_upvote) in ko should contain Hangul').toMatch(/[가-힯]/);
-    expect(sgT.downvote, 'sgT(aria_downvote) in ko should contain Hangul').toMatch(/[가-힯]/);
-    expect(sgT.watch, 'sgT(aria_watch) in ko should contain Hangul').toMatch(/[가-힯]/);
-    expect(sgT.close, 'sgT(close) in ko should contain Hangul').toMatch(/[가-힯]/);
+    expect(sgT.upvote, 'sgT(aria_upvote) in ko should contain Han characters').toMatch(/[一-鿿]/);
+    expect(sgT.downvote, 'sgT(aria_downvote) in ko should contain Han characters').toMatch(/[一-鿿]/);
+    expect(sgT.watch, 'sgT(aria_watch) in ko should contain Han characters').toMatch(/[一-鿿]/);
+    expect(sgT.close, 'sgT(close) in ko should contain Han characters').toMatch(/[一-鿿]/);
   });
 });

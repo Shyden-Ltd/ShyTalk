@@ -71,12 +71,8 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -93,14 +89,14 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
     }
   });
 
-  test('Korean runtime: economy + validation messages interpolate', async ({ page, request }) => {
+  test('Chinese runtime: economy + validation messages interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -125,38 +121,38 @@ test.describe('Admin users-tab economy + validation i18n (Phase 2i)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    expect(result!.noDevices).toMatch(/[가-힯]/);
+    expect(result!.noDevices).toMatch(/[一-鿿]/);
     expect(result!.noDevices).not.toBe('No devices to ban');
 
-    expect(result!.positive).toMatch(/[가-힯]/);
+    expect(result!.positive).toMatch(/[一-鿿]/);
     expect(result!.positive).not.toBe('Enter a positive amount');
 
-    expect(result!.coinsAdd).toMatch(/[가-힯]/);
+    expect(result!.coinsAdd).toMatch(/[一-鿿]/);
     expect(result!.coinsAdd).toContain('100');
     expect(result!.coinsAdd).toContain('500');
 
-    expect(result!.coinsDeduct).toMatch(/[가-힯]/);
+    expect(result!.coinsDeduct).toMatch(/[一-鿿]/);
     expect(result!.coinsDeduct).toContain('50');
     expect(result!.coinsDeduct).toContain('450');
     // Make sure deducted is distinguishable from added (i.e., not the same string)
     expect(result!.coinsDeduct).not.toBe(result!.coinsAdd);
 
-    expect(result!.beansAdd).toMatch(/[가-힯]/);
+    expect(result!.beansAdd).toMatch(/[一-鿿]/);
     expect(result!.beansAdd).toContain('25');
     expect(result!.beansAdd).toContain('175');
 
-    expect(result!.beansDeduct).toMatch(/[가-힯]/);
+    expect(result!.beansDeduct).toMatch(/[一-鿿]/);
     expect(result!.beansDeduct).toContain('10');
     expect(result!.beansDeduct).toContain('165');
 
-    expect(result!.selectGift).toMatch(/[가-힯]/);
+    expect(result!.selectGift).toMatch(/[一-鿿]/);
     expect(result!.selectGift).not.toBe('Select a gift and enter a quantity');
 
-    expect(result!.giftAdded).toMatch(/[가-힯]/);
+    expect(result!.giftAdded).toMatch(/[一-鿿]/);
     expect(result!.giftAdded).toContain('3');
     expect(result!.giftAdded).toContain('8');
 
-    expect(result!.bpEmpty).toMatch(/[가-힯]/);
+    expect(result!.bpEmpty).toMatch(/[一-鿿]/);
     expect(result!.bpEmpty).not.toBe('Backpack is already empty');
   });
 });

@@ -74,12 +74,8 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -96,14 +92,14 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
     }
   });
 
-  test('Korean runtime: status badges interpolate correctly', async ({ page, request }) => {
+  test('Chinese runtime: status badges interpolate correctly', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -130,30 +126,30 @@ test.describe('Admin users-tab interpolated i18n (Phase 2d)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // All values should contain Hangul + interpolated values
-    expect(result!.suspended, 'suspended badge should be Korean').toMatch(/[가-힯]/);
+    // All values should contain Han characters + interpolated values
+    expect(result!.suspended, 'suspended badge should be Chinese').toMatch(/[一-鿿]/);
     expect(result!.suspended).toContain('2026-05-10');
     expect(result!.suspended).toContain('2026-05-20');
     expect(result!.suspended).toContain('spam');
 
-    expect(result!.notSuspended, 'not-suspended should be Korean').toMatch(/[가-힯]/);
+    expect(result!.notSuspended, 'not-suspended should be Chinese').toMatch(/[一-鿿]/);
     expect(result!.notSuspended).not.toBe('Not Suspended');
 
-    expect(result!.deletion).toMatch(/[가-힯]/);
+    expect(result!.deletion).toMatch(/[一-鿿]/);
     expect(result!.deletion).toContain('7');
     expect(result!.deletion).toContain('2026-05-17');
 
-    expect(result!.severity).toMatch(/[가-힯]/);
+    expect(result!.severity).toMatch(/[一-鿿]/);
     expect(result!.severity).toContain('2');
     expect(result!.severity).toContain('10');
 
-    expect(result!.permanent).toMatch(/[가-힯]/);
+    expect(result!.permanent).toMatch(/[一-鿿]/);
     expect(result!.permanent).not.toBe('permanent');
 
-    expect(result!.noReason).toMatch(/[가-힯]/);
+    expect(result!.noReason).toMatch(/[一-鿿]/);
     expect(result!.noReason).not.toBe('No reason provided');
 
-    expect(result!.autoSaveFail).toMatch(/[가-힯]/);
+    expect(result!.autoSaveFail).toMatch(/[一-鿿]/);
     expect(result!.autoSaveFail).toContain('network');
   });
 });

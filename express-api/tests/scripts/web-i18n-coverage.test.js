@@ -1,7 +1,7 @@
 /**
  * Tests for web page i18n translation coverage.
  *
- * Verifies that all translation files have all 20 languages
+ * Verifies that all translation files have every supported language
  * and that no language is missing keys present in other languages.
  */
 
@@ -11,24 +11,13 @@ const path = require('node:path');
 const PUBLIC_DIR = path.join(__dirname, '..', '..', '..', 'public');
 
 const ALL_LANGUAGES = [
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'hi',
+  // SHY-0289 — four non-English languages, not twenty. Supporting a language is
+  // a promise about the quality of what it says, including the legal and safety
+  // copy a minor reads, and that promise is only made for the MVP five.
+  // Hardcoded rather than read from the files it checks: it is the DECLARATION,
+  // and these tests assert the files match it. Derived, it could never disagree.
   'id',
-  'it',
-  'ja',
-  'km',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
   'th',
-  'tr',
-  'uk',
   'vi',
   'zh',
 ];
@@ -42,7 +31,7 @@ describe('portal-translations.js', () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test('contains all 20 non-English languages', () => {
+  test('contains every non-English language', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     for (const lang of ALL_LANGUAGES) {
       const regex = new RegExp(`^\\s{2}${lang}:`, 'm');
@@ -55,10 +44,8 @@ describe('portal-translations.js', () => {
     expect(content).toMatch(/^\s{2}en:/m);
   });
 
-  test('km (Khmer) language block exists with translations', () => {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    expect(content).toMatch(/^\s{2}km:/m);
-  });
+  // The Khmer block check went with SHY-0289: km is no longer supported.
+  // Khmer New Year remains a shipped EVENT — only the locale went.
 });
 
 // ── Admin translations ─────────────────────────────────────────
@@ -70,7 +57,7 @@ describe('admin/translations.js', () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test('contains all 20 non-English languages', () => {
+  test('contains every non-English language', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     for (const lang of ALL_LANGUAGES) {
       const regex = new RegExp(`^\\s{2}${lang}:`, 'm');
@@ -78,10 +65,8 @@ describe('admin/translations.js', () => {
     }
   });
 
-  test('km (Khmer) language block exists', () => {
-    const content = fs.readFileSync(filePath, 'utf-8');
-    expect(content).toMatch(/^\s{2}km:/m);
-  });
+  // The Khmer block check went with SHY-0289: km is no longer a supported
+  // locale. Khmer New Year remains a shipped EVENT — only the locale went.
 
   // ── Reverse-parity: en keys ⊆ each non-en locale's keys ─────────
   //
@@ -134,7 +119,7 @@ describe('legal-translations.js', () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test('contains all 20 non-English languages', () => {
+  test('contains every non-English language', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     for (const lang of ALL_LANGUAGES) {
       const regex = new RegExp(`(?:["']${lang}["']|\\b${lang})\\s*:`, 'm');
@@ -152,7 +137,7 @@ describe('suggestions-i18n.js', () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test('contains all 20 non-English languages', () => {
+  test('contains every non-English language', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     for (const lang of ALL_LANGUAGES) {
       const regex = new RegExp(`(?:["']${lang}["']|\\b${lang})\\s*:`, 'm');
@@ -170,7 +155,7 @@ describe('event-translations.js', () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test('contains all 20 non-English languages', () => {
+  test('contains every non-English language', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     for (const lang of ALL_LANGUAGES) {
       const regex = new RegExp(`(?:["']${lang}["']|\\b${lang})\\s*:`, 'm');
@@ -188,7 +173,7 @@ describe('roadmap-app.js LABELS', () => {
     expect(fs.existsSync(filePath)).toBe(true);
   });
 
-  test('contains all 20 non-English language blocks in LABELS', () => {
+  test('contains every non-English language block in LABELS', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     for (const lang of ALL_LANGUAGES) {
       const regex = new RegExp(`^\\s+${lang}:\\s*\\{`, 'm');
@@ -199,7 +184,7 @@ describe('roadmap-app.js LABELS', () => {
   // SHY-0061: the shyId badge aria-label template must exist INSIDE every
   // locale's brace block (per-locale-block assertion — a file-wide substring
   // match would silently pass with locales missing). `en` is asserted too:
-  // 21 blocks total. The DISCLAIMER-style late-merge pattern would NOT
+  // 5 blocks total. The DISCLAIMER-style late-merge pattern would NOT
   // satisfy this regex by design — storyBadge belongs in the blocks.
   test.each([...ALL_LANGUAGES, 'en'])(
     'locale block %s contains storyBadge inside its braces',

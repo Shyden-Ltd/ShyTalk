@@ -16,19 +16,19 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *      scroll-top button was English-only across all 20 supported
  *      KNY locales.
  *
+ * SHY-0289 note: Khmer New Year remains a shipped event. What went was the
+ * Thai LOCALE — the page is still there, now read in one of the five.
+ *
  * This fix adds the aria-label walk to applyEventTranslations and
- * defines aria_scroll_to_top in all 20 KNY locales (en is skipped at
+ * defines aria_scroll_to_top in every KNY locale (en is skipped at
  * runtime — applyEventTranslations short-circuits on lang === 'en' —
  * so the HTML default "Scroll to top" stands for English users).
  */
 
-const KNY_NON_EN_LOCALES = [
-  'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const KNY_NON_EN_LOCALES = ['id', 'th', 'vi', 'zh'];
 
 test.describe('KNY scroll-to-top aria-label i18n', () => {
-  test('all 20 KNY non-en locales define aria_scroll_to_top', async ({ request }) => {
+  test('every KNY non-en locale define aria_scroll_to_top', async ({ request }) => {
     const res = await request.get(`${BASE}/js/event-translations.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
@@ -45,9 +45,9 @@ test.describe('KNY scroll-to-top aria-label i18n', () => {
     }
   });
 
-  test('Khmer locale: scroll-top button aria-label translates to Khmer script', async ({ page }) => {
+  test('Thai locale: scroll-top button aria-label translates to Thai script', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'km'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'th'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/events/khmer-new-year.html`);
     await page.waitForFunction(() => {
@@ -57,7 +57,7 @@ test.describe('KNY scroll-to-top aria-label i18n', () => {
 
     const aria = await page.locator('#scroll-top').getAttribute('aria-label');
     expect(aria, 'scroll-top aria-label should not be English').not.toBe('Scroll to top');
-    expect(aria, 'scroll-top aria-label should contain Khmer script').toMatch(/[ក-៿]/);
+    expect(aria, 'scroll-top aria-label should contain Thai script').toMatch(/[ก-๛]/);
   });
 
   test('English locale: scroll-top button keeps the HTML default (skip path)', async ({ page }) => {

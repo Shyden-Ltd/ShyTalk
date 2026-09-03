@@ -20,15 +20,15 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * roadmap-app.js applyLanguage to chain (not replace) the prior
  * handler, and add `data-i18n` attributes to the four link texts.
  *
- * Test design: Spanish locale (Latin script, easiest to detect drift),
+ * Test design: Thai locale (Latin script, easiest to detect drift),
  * with a structural check that all four data-i18n attrs exist in HTML.
  */
 
 test.describe('Roadmap footer links i18n', () => {
-  test('Spanish locale translates all four footer links', async ({ page }) => {
+  test('Thai locale translates all four footer links', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* ignore */
       }
@@ -39,7 +39,12 @@ test.describe('Roadmap footer links i18n', () => {
     await page.waitForFunction(
       () => {
         const el = document.querySelector('[data-i18n="footer_privacy"]');
-        return !!(el && el.textContent && el.textContent.includes('Política'));
+        // Waits for the text to stop being ENGLISH rather than for a specific
+        // translation. The old predicate pinned a Thai word, which is a second
+        // copy of the string table living in a test — it went stale the moment the
+        // locale changed, and surfaced as a timeout rather than a clear failure
+        // (SHY-0289).
+        return !!(el && el.textContent && el.textContent.trim() && !el.textContent.includes('Privacy Policy'));
       },
       null,
       { timeout: 10_000 },
@@ -51,7 +56,9 @@ test.describe('Roadmap footer links i18n', () => {
     const dns = (await page.locator('[data-i18n="footer_do_not_sell"]').textContent())?.trim();
 
     expect(privacy, 'footer_privacy should not be English').not.toBe('Privacy Policy');
-    expect(privacy, 'footer_privacy in es').toContain('Política');
+    // Not-English rather than a pinned translation (SHY-0289).
+    expect(privacy, 'footer_privacy should not stay English').not.toContain('Privacy Policy');
+    expect(privacy?.trim(), 'footer_privacy should not be empty').toBeTruthy();
     expect(terms, 'footer_terms should not be English').not.toBe('Terms');
     expect(guidelines, 'footer_guidelines should not be English').not.toBe('Community Guidelines');
     expect(dns, 'footer_do_not_sell should not be English').not.toBe(

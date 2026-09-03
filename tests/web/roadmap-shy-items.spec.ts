@@ -190,9 +190,9 @@ test.describe('roadmap renders SHY-derived items', () => {
 });
 
 test.describe('badge aria-label is translated', () => {
-  test.use({ locale: 'ar' });
+  test.use({ locale: 'th' });
 
-  test('Arabic storyBadge template is used in phase rows and the in-progress lift', async ({ page }) => {
+  test('Thai storyBadge template is used in phase rows and the in-progress lift', async ({ page }) => {
     await gotoWithFixture(page);
     const badges = page.locator('.shy-badge');
     await expect(badges).toHaveCount(3); // SHY-0099 + SHY-0101 bodies, SHY-0060 lift
@@ -201,7 +201,7 @@ test.describe('badge aria-label is translated', () => {
       const label = await badge.getAttribute('aria-label');
       expect(label).toBeTruthy();
       expect(label).toContain(id as string);
-      // Arabic template, not the English "Story SHY-NNNN"
+      // Thai template, not the English "Story SHY-NNNN"
       expect(label).not.toContain('Story ');
     }
   });

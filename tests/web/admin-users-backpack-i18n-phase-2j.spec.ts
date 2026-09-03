@@ -71,12 +71,8 @@ test.describe('Admin users-tab backpack panel i18n (Phase 2j)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -93,14 +89,14 @@ test.describe('Admin users-tab backpack panel i18n (Phase 2j)', () => {
     }
   });
 
-  test('Korean runtime: backpack UX strings interpolate', async ({ page, request }) => {
+  test('Chinese runtime: backpack UX strings interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -125,26 +121,26 @@ test.describe('Admin users-tab backpack panel i18n (Phase 2j)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // Hangul + non-English + interpolated values preserved
-    expect(result!.loading).toMatch(/[가-힯]/);
+    // Han characters + non-English + interpolated values preserved
+    expect(result!.loading).toMatch(/[一-鿿]/);
     expect(result!.loading).not.toBe('Loading backpack...');
-    expect(result!.empty).toMatch(/[가-힯]/);
-    expect(result!.noMatch).toMatch(/[가-힯]/);
-    expect(result!.confirmAll).toMatch(/[가-힯]/);
+    expect(result!.empty).toMatch(/[一-鿿]/);
+    expect(result!.noMatch).toMatch(/[一-鿿]/);
+    expect(result!.confirmAll).toMatch(/[一-鿿]/);
 
-    expect(result!.confirming).toMatch(/[가-힯]/);
+    expect(result!.confirming).toMatch(/[一-鿿]/);
     expect(result!.confirming).toContain('3');
 
-    expect(result!.clearing).toMatch(/[가-힯]/);
+    expect(result!.clearing).toMatch(/[一-鿿]/);
 
-    expect(result!.cleared).toMatch(/[가-힯]/);
+    expect(result!.cleared).toMatch(/[一-鿿]/);
     expect(result!.cleared).toContain('7');
 
-    expect(result!.withErrors).toMatch(/[가-힯]/);
+    expect(result!.withErrors).toMatch(/[一-鿿]/);
     expect(result!.withErrors).toContain('5');
     expect(result!.withErrors).toContain('2');
 
-    expect(result!.failedSave).toMatch(/[가-힯]/);
+    expect(result!.failedSave).toMatch(/[一-鿿]/);
     expect(result!.failedSave).toContain('Network error');
   });
 });

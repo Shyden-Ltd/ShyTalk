@@ -134,10 +134,14 @@ class ConnectionCopyTakesNoBlameTest {
 
     @Test
     fun `every locale carries the tips, not just English`() {
-        // A tip nobody outside English can read is not a tip. 21 locales.
+        // A tip nobody outside English can read is not a tip. Five locales
+        // since SHY-0289 (base + id, th, vi, zh). The count is hardcoded on
+        // purpose: it is the anchor that makes a zero-file scan impossible,
+        // and deriving it from the directory listing would make it agree with
+        // whatever it found.
         val resources = File(repoRoot(), "shared/src/commonMain/composeResources")
         val localeDirs = resources.listFiles { f: File -> f.isDirectory && f.name.startsWith("values") } ?: emptyArray()
-        assertTrue(localeDirs.size >= 21, "expected at least 21 locale directories, found ${localeDirs.size}")
+        assertTrue(localeDirs.size >= 5, "expected at least 5 locale directories, found ${localeDirs.size}")
         val missing =
             localeDirs
                 .filterNot { File(it, "strings.xml").readText().contains("""<string name="connection_tips">""") }

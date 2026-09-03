@@ -118,7 +118,9 @@ describe('SHY-0144 — the FunFact splash is gone from the app', () => {
     const dir = path.join(REPO, 'shared/src/commonMain/composeResources');
     const localeDirs = fs.readdirSync(dir).filter((d) => d.startsWith('values'));
     // Not vacuous: deleting the locale tree must not make this pass.
-    expect(localeDirs.length).toBeGreaterThanOrEqual(21);
+    // Five since SHY-0289 (base + id, th, vi, zh). Hardcoded on purpose: this
+    // is the anchor that stops the scan passing because it found no files.
+    expect(localeDirs.length).toBeGreaterThanOrEqual(5);
     const offenders = localeDirs.filter((d) => {
       const f = path.join(dir, d, 'strings.xml');
       return fs.existsSync(f) && /splash_tagline/.test(fs.readFileSync(f, 'utf8'));

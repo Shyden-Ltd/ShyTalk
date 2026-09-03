@@ -15,22 +15,22 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * scan list.
  *
  * Test design:
- *  - One end-to-end test for Spanish (Latin script — easy to detect
- *    drift from English; "Jemer" / "Años" are unambiguous).
+ *  - One end-to-end test in a non-English locale. It asserts the headers are
+ *    NO LONGER the English words rather than matching a translation: the
+ *    latter pinned Spanish ("Jemer" / "Años") and broke when Spanish was
+ *    retired (SHY-0289). Khmer New Year itself is untouched — the EVENT
+ *    stays, only the Khmer locale went.
  *  - One contract test asserting all 20 locales define the 3 keys, so
  *    we don't quietly leave a locale behind in future refactors.
  */
 
-const SUPPORTED_LOCALES = [
-  'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-  'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
-];
+const SUPPORTED_LOCALES = ['zh', 'th', 'vi', 'id'];
 
 test.describe('Khmer New Year — zodiac table i18n', () => {
-  test('Spanish switch translates zodiac column headers (not English)', async ({ page }) => {
+  test('Thai switch translates zodiac column headers (not English)', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'es');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* localStorage may be unavailable on some webkit configs; ignore */
       }
@@ -41,8 +41,8 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
     // and applyEventTranslations to walk the DOM.
     await page.waitForFunction(
       () =>
-        document.documentElement.lang === 'es' ||
-        document.querySelector('[data-i18n="kny_zodiac_col_khmer"]')?.textContent === 'Jemer',
+        document.documentElement.lang === 'th' ||
+        document.querySelector('[data-i18n="kny_zodiac_col_khmer"]')?.textContent.trim(),
       null,
       { timeout: 10_000 },
     );
@@ -51,9 +51,12 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
     const khmer = await page.locator('[data-i18n="kny_zodiac_col_khmer"]').textContent();
     const years = await page.locator('[data-i18n="kny_zodiac_col_years"]').textContent();
 
-    expect(animal?.trim(), 'Animal column header in es').toBe('Animal');
-    expect(khmer?.trim(), 'Khmer column header in es should be "Jemer", not English "Khmer"').toBe('Jemer');
-    expect(years?.trim(), 'Years column header in es should be "Años", not English "Years"').toBe('Años');
+    expect(animal?.trim(), 'Animal column header should be translated').not.toBe('Animal');
+    expect(animal?.trim(), 'Animal column header should not be empty').toBeTruthy();
+    expect(khmer?.trim(), 'Khmer column header should be translated').not.toBe('Khmer');
+    expect(khmer?.trim(), 'Khmer column header should not be empty').toBeTruthy();
+    expect(years?.trim(), 'Years column header should be translated').not.toBe('Years');
+    expect(years?.trim(), 'Years column header should not be empty').toBeTruthy();
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {

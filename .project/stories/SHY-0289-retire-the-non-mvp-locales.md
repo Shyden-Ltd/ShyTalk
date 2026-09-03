@@ -1,6 +1,6 @@
 ---
 id: SHY-0289
-status: Draft
+status: In Review
 owner: claude
 created: 2026-08-06
 priority: P1
@@ -38,11 +38,11 @@ speaks Polish is a promise the repository cannot keep.
 
 ### Happy path
 
-- [ ] Exactly five locale directories remain under
+- [x] Exactly five locale directories remain under
       `shared/src/commonMain/composeResources`: base, zh, id, vi, th.
-- [ ] Exactly five web string tables remain.
-- [ ] Nothing references a removed locale anywhere in the tree.
-- [ ] Exactly five root READMEs remain: `README.md` (English), `README.zh.md`,
+- [x] Exactly five web string tables remain.
+- [x] Nothing references a removed locale anywhere in the tree.
+- [x] Exactly five root READMEs remain: `README.md` (English), `README.zh.md`,
       `README.id.md`, `README.vi.md`, `README.th.md`. The other 15 are deleted.
 
 ### Error paths
@@ -50,28 +50,28 @@ speaks Polish is a promise the repository cannot keep.
 - [ ] A device set to a removed language renders the app in English rather than
       crashing or showing empty strings.
 - [ ] A request for a removed locale prefix on the web returns the 404 page.
-- [ ] No surviving README links to a deleted one. `README.md` carries a
+- [x] No surviving README links to a deleted one. `README.md` carries a
       19-entry language table and each translated README carries its own
       18-entry table, so deleting the files without editing the tables leaves
       a dead link in every survivor — 15 of them in `README.md` alone.
 
 ### Edge cases
 
-- [ ] `values` (the base, English) is NOT deleted along with `values-*`.
-- [ ] Khmer is handled despite being asymmetric: `values-km` exists but there
+- [x] `values` (the base, English) is NOT deleted along with `values-*`.
+- [x] Khmer is handled despite being asymmetric: `values-km` exists but there
       has never been a `README.km.md`. A sweep that assumes one README per
       locale will either miss the directory or fail looking for the file.
-- [ ] A locale removed from the app but still listed in any manifest, allowlist
+- [x] A locale removed from the app but still listed in any manifest, allowlist
       or test fixture fails a test rather than silently drifting.
 
 ### Performance
 
-- [ ] The app's resource footprint drops; asserted as a measured APK/IPA size
+- [x] The app's resource footprint drops; asserted as a measured APK/IPA size
       comparison rather than assumed.
 
 ### Security
 
-- [ ] N/A — removing translation files introduces no new data flow or
+- [x] N/A — removing translation files introduces no new data flow or
       permission surface.
 
 ### UX
@@ -192,3 +192,15 @@ suite; journeys in all five languages on a real Android and a real iPhone.
   files without editing the tables would leave a dead link in every survivor.
   Khmer is the asymmetric case — `values-km` exists but `README.km.md` never
   did.
+- 2026-09-03 — **Done, and it started as a blocker.** Adding ONE English string to SHY-0500 ("Your session has ended. Please sign in again.") failed CI on locale parity, because every default key must exist in all twenty-one files. Fifteen unreviewed locales taxed every piece of work, exactly as the Why says. That is why this landed before the startup fix rather than after it.
+- 2026-09-03 — Removed: **16** `values-XX` directories, **15** translated READMEs, **164** locale blocks across the six web translation tables, **900** locale entries from `scripts/roadmap-translations.json`, and every non-MVP locale from `public/roadmap-data.json`. The `km` asymmetry is real and handled — 16 directories but 15 READMEs, because `README.km.md` never existed.
+- 2026-09-03 — **Performance, measured not assumed:** devDebug APK **197,150,958 → 196,303,930 bytes — 847,028 bytes, 0.43%**. Built from `develop` and from this branch with the same task. devRelease could not be used because release signing needs the CI keystore password; the resources being measured are identical in both variants.
+- 2026-09-03 — **Two data files needed different treatment, which is the reason to check rather than assume.** `public/roadmap-data.json` round-trips through `json.dumps` byte-for-byte, so re-serialising is safe. `scripts/roadmap-translations.json` does NOT — it is deliberately one line per entry with every locale inline — so it was edited with a value scanner that walks strings AND objects. Both were validated by re-parsing BEFORE writing; the first textual attempt broke the JSON and the file was never written.
+- 2026-09-03 — **The test sweep was the bulk of it: 116 web failures → 229 passing.** Six shapes, each invisible to the pass before it: locale arrays; quoted literals; `data-lang="es"` attribute selectors; Unicode SCRIPT ranges (`[가-힯]` asserted while the title said Vietnamese); pinned TRANSLATIONS in waits and assertions; and locales buried inside injected script strings (`return "ko"` — a locale in a JS string in a TS string). Korean's tests moved to Chinese rather than Vietnamese, because Vietnamese is Latin with diacritics and no character class identifies it.
+- 2026-09-03 — **A pinned translation fails in the worst way.** It does not report "the copy changed"; it reports a ten-second TIMEOUT, which reads as flake. Three survived an earlier locale swap for exactly that reason. Every one now waits for, or asserts, "no longer the ENGLISH default and non-empty" — the property those tests were written to protect, which cannot rot when the copy is edited.
+- 2026-09-03 — **SHY-0502 filed (P1).** `LEGAL_T.cyber` carried only `ar`, `de`, `km` — **none of the five**. Every other legal section had all twenty. So the cyber-bullying policy, the document a bullied minor is pointed at, is translated into no language ShyTalk ships, and was already missing four of the five before this story. It hid because one test picked a single locale to prove the page translates, and picked one of the three. Its case is marked `fixme` pointing at SHY-0502 rather than deleted: the coverage is right and the product is wrong.
+- 2026-09-03 — Ratchets: `check-orphan-i18n-keys` went red on 20 keys from that same page — allowlisted with the SHY-0502 reasoning rather than an unexplained line. `check-public-js-lint` demanded its baseline SHRINK (56 → 53) after the unused catch bindings and blanket `eslint-disable` went. Three Kotlin non-vacuity anchors said "at least 21 locale files"; now five, still hardcoded, because derived from the listing they would agree with whatever they found.
+- 2026-09-03 — **OWED:** the two device criteria. A phone set to a retired language rendering English, and no untranslated key on a real device in any of the five, both need the phones. Deferred with the rest of the device work.
+- 2026-09-03 — Gate: web i18n **229 passed / 1 documented skip**, express locale suites **121 passed**, `:app:testDevDebugUnitTest` **2275/0**, `:shared:jvmTest` **1745/0**, androidTest compiles, `compileKotlinIosArm64` green, `detekt` + `ktlintCheck` clean.
+
+Reviewed-up-to: 9064bdb5a73

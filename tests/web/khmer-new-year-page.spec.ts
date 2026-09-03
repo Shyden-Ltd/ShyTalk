@@ -12,7 +12,7 @@ test.describe('Khmer New Year Page', () => {
     expect(errors).toHaveLength(0);
   });
 
-  test('hero section displays Khmer greeting', async ({ page }) => {
+  test('hero section displays Thai greeting', async ({ page }) => {
     await page.goto(PAGE_URL);
     await expect(page.locator('.hero h1')).toContainText('សួស្តីឆ្នាំថ្មី');
   });

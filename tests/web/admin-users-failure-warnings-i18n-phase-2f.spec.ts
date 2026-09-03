@@ -70,12 +70,8 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -92,14 +88,14 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
     }
   });
 
-  test('Korean runtime: generic failure + warning + device-binding interpolate', async ({ page, request }) => {
+  test('Chinese runtime: generic failure + warning + device-binding interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -123,29 +119,29 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // Hangul present + NOT English source + interpolated value preserved
-    expect(result!.actionFailed).toMatch(/[가-힯]/);
+    // Han characters present + NOT English source + interpolated value preserved
+    expect(result!.actionFailed).toMatch(/[一-鿿]/);
     expect(result!.actionFailed).toContain('Network timeout');
 
-    expect(result!.issuing).toMatch(/[가-힯]/);
+    expect(result!.issuing).toMatch(/[一-鿿]/);
     expect(result!.issuing).not.toBe('Issuing...');
 
-    expect(result!.issueWarning).toMatch(/[가-힯]/);
+    expect(result!.issueWarning).toMatch(/[一-鿿]/);
     expect(result!.issueWarning).not.toBe('Issue Warning');
 
-    expect(result!.resetting).toMatch(/[가-힯]/);
+    expect(result!.resetting).toMatch(/[一-鿿]/);
     expect(result!.resetting).not.toBe('Resetting...');
 
-    expect(result!.reasonReq).toMatch(/[가-힯]/);
+    expect(result!.reasonReq).toMatch(/[一-鿿]/);
     expect(result!.reasonReq).not.toBe('Reason is required');
 
-    expect(result!.selectReason).toMatch(/[가-힯]/);
+    expect(result!.selectReason).toMatch(/[一-鿿]/);
     expect(result!.selectReason).not.toBe('Select a reason');
 
-    expect(result!.noUser).toMatch(/[가-힯]/);
+    expect(result!.noUser).toMatch(/[一-鿿]/);
     expect(result!.noUser).not.toBe('No user loaded');
 
-    expect(result!.bindingsRemoved).toMatch(/[가-힯]/);
+    expect(result!.bindingsRemoved).toMatch(/[一-鿿]/);
     expect(result!.bindingsRemoved).toContain('3');
   });
 });

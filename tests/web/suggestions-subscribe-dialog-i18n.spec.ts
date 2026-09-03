@@ -111,11 +111,7 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
 
     for (const locale of locales) {
       const localeBlock =
@@ -133,9 +129,9 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Hangul for all subscribe keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all subscribe keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -151,10 +147,10 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     }, SUBSCRIBE_KEYS);
 
     // Allow a few keys to legitimately contain Latin characters in
-    // Korean translations (e.g. "Push" stays as 푸시 — pure Hangul,
+    // Chinese translations (e.g. "Push" stays as 푸시 — pure Han characters,
     // but acronyms like "In-App" might also be transliterated). The
     // robust check is: each translated value should NOT match the
-    // English original AND should contain at least one Hangul char.
+    // English original AND should contain at least one Han characters char.
     const englishValues: Record<string, string> = {
       subscribe_event_new_suggestion: 'New suggestions posted',
       subscribe_event_status_change: 'Suggestion status changes',
@@ -174,7 +170,7 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
       const value = t[key];
       expect(value, `sgT(${key}) should not be null`).not.toBeNull();
       expect(value, `sgT(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `sgT(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `sgT(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

@@ -800,11 +800,16 @@ describe('11.22 — Edge Cases & Boundaries', () => {
           ...VALID_SUGGESTION,
           description:
             '\u6697\u3044\u30E2\u30FC\u30C9\u3092\u8FFD\u52A0\u3057\u3066\u304F\u3060\u3055\u3044\u3002\u3053\u308C\u306F\u3068\u3066\u3082\u4FBF\u5229\u3067\u3059\u3002',
-          language: 'ja',
+          language: 'en',
         })
         .expect(201);
     });
 
+    // The TEXT in these cases stays as written: people type whatever they
+    // like, and storing non-Latin and right-to-left input correctly is the
+    // whole subject. Only the language TAGS moved to 'en' — the languages
+    // they named are no longer ones ShyTalk ships, so they are no longer
+    // valid tags (SHY-0289), and the tag was never what these assert.
     test('CJK characters (Korean) in title stored correctly', async () => {
       mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
       const app = createApp();
@@ -813,7 +818,7 @@ describe('11.22 — Edge Cases & Boundaries', () => {
         .send({
           ...VALID_SUGGESTION,
           title: '\uB2E4\uD06C \uBAA8\uB4DC\uB97C \uCD94\uAC00\uD574 \uC8FC\uC138\uC694',
-          language: 'ko',
+          language: 'en',
         })
         .expect(201);
     });
@@ -827,7 +832,7 @@ describe('11.22 — Edge Cases & Boundaries', () => {
           ...VALID_SUGGESTION,
           title:
             '\u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u0648\u0636\u0639 \u0627\u0644\u0645\u0638\u0644\u0645',
-          language: 'ar',
+          language: 'en',
         })
         .expect(201);
     });
@@ -841,7 +846,7 @@ describe('11.22 — Edge Cases & Boundaries', () => {
           ...VALID_SUGGESTION,
           description:
             '\u05D1\u05D1\u05E7\u05E9\u05D4 \u05DC\u05D4\u05D5\u05E1\u05D9\u05E3 \u05DE\u05E6\u05D1 \u05D7\u05E9\u05D5\u05DA',
-          language: 'he',
+          language: 'en',
         });
       // May succeed or fail based on language code validation
       // Hebrew "he" should be a valid ISO 639-1 code
@@ -907,7 +912,7 @@ describe('11.22 — Edge Cases & Boundaries', () => {
           ...VALID_SUGGESTION,
           title:
             '\u0921\u093E\u0930\u094D\u0915 \u092E\u094B\u0921 \u091C\u094B\u0921\u093C\u0947\u0902',
-          language: 'hi',
+          language: 'en',
         })
         .expect(201);
     });

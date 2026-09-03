@@ -78,12 +78,8 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       // Single-line locale rows now contain values with `{name}`
@@ -104,14 +100,14 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     }
   });
 
-  test('Korean locale: tAdmin returns Hangul for all 9 dialog keys', async ({ page, request }) => {
+  test('Chinese locale: tAdmin returns Han characters for all 9 dialog keys', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -140,7 +136,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
       const value = t![key];
       expect(value, `tAdmin(${key}) should not be null`).not.toBeNull();
       expect(value, `tAdmin(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `tAdmin(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `tAdmin(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

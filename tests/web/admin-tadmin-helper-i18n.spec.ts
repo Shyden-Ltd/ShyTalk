@@ -75,14 +75,10 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
     // Multi-line locales: en, ar, de, es, fr, hi, id, it, ja, km, ko
     // Single-line locales: nl, pl, pt, ru, sv, th, tr, uk, vi, zh
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       // Single-line locale rows now contain values with `{name}`
@@ -103,12 +99,12 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     }
   });
 
-  test('Korean locale: tAdmin runtime — eval translations.js standalone', async ({ page, request }) => {
+  test('Chinese locale: tAdmin runtime — eval translations.js standalone', async ({ page, request }) => {
     // Don't goto /admin/ (gated by auth). Fetch translations.js directly
     // and eval it in a blank-page context, then exercise tAdmin against
-    // a Korean-set localStorage. This isolates the helper from the
+    // a Chinese-set localStorage. This isolates the helper from the
     // admin app's auth flow while still providing real-runtime coverage
-    // of the helper logic + Korean locale translations.
+    // of the helper logic + Chinese locale translations.
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
@@ -118,7 +114,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
     // (before falling back to localStorage), so this reliably wins.
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -144,7 +140,7 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 1)', () => {
       const value = t![key];
       expect(value, `tAdmin(${key}) should not be null`).not.toBeNull();
       expect(value, `tAdmin(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `tAdmin(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `tAdmin(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

@@ -24,10 +24,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * duplicate_different).
  */
 
-const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SG_LOCALES = ['en', 'id', 'th', 'zh', 'zh'];
 
 const KEYS = ['duplicate_match', 'duplicate_different'];
 
@@ -57,9 +54,9 @@ test.describe('Suggestions-board duplicate-detection buttons i18n', () => {
     expect(src, 'should now use sgT("duplicate_different")').toMatch(/sgT\(['"]duplicate_different['"]\)/);
   });
 
-  test('Korean locale: sgT returns Hangul for both keys', async ({ page }) => {
+  test('Chinese locale: sgT returns Han characters for both keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -75,7 +72,7 @@ test.describe('Suggestions-board duplicate-detection buttons i18n', () => {
       };
     });
     expect(t.match, 'sgT(duplicate_match) in ko').not.toBe('Yes, this is what I meant');
-    expect(t.match, 'sgT(duplicate_match) ko should contain Hangul').toMatch(/[가-힯]/);
-    expect(t.diff, 'sgT(duplicate_different) ko should contain Hangul').toMatch(/[가-힯]/);
+    expect(t.match, 'sgT(duplicate_match) ko should contain Han characters').toMatch(/[一-鿿]/);
+    expect(t.diff, 'sgT(duplicate_different) ko should contain Han characters').toMatch(/[一-鿿]/);
   });
 });

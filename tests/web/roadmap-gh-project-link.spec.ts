@@ -67,12 +67,12 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     );
   });
 
-  test("Spanish locale translates link text + tooltip via data-i18n + data-i18n-title", async ({
+  test("Thai locale translates link text + tooltip via data-i18n + data-i18n-title", async ({
     page,
   }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem("shytalk_language", "es");
+        localStorage.setItem("shytalk_language", "th");
       } catch {
         /* ignore */
       }
@@ -84,7 +84,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     await page.waitForFunction(
       () => {
         const el = document.querySelector('[data-i18n="footer_privacy"]');
-        return !!(el && el.textContent && el.textContent.includes("Política"));
+        return !!(el && el.textContent && el.textContent.trim() && !el.textContent.includes('Privacy Policy'));
       },
       null,
       { timeout: 10_000 },
@@ -104,12 +104,12 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     expect(title, "es title should contain GitHub keyword").toContain("GitHub");
   });
 
-  test("Arabic locale: link is present + RTL document direction set", async ({
+  test("Thai locale: link is present + document direction set", async ({
     page,
   }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem("shytalk_language", "ar");
+        localStorage.setItem("shytalk_language", "th");
       } catch {
         /* ignore */
       }
@@ -117,7 +117,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     await page.goto(`${BASE}/roadmap.html`);
 
     await page.waitForFunction(
-      () => document.documentElement.lang === "ar",
+      () => document.documentElement.lang === "th",
       null,
       { timeout: 10_000 },
     );
@@ -125,7 +125,7 @@ test.describe("Roadmap footer — GitHub Project link", () => {
     const link = page.locator(SELECTOR);
     await expect(link).toBeVisible();
     // The HTML `lang` attribute drives RTL via CSS. Confirm it's set.
-    await expect(page.locator("html")).toHaveAttribute("lang", "ar");
+    await expect(page.locator("html")).toHaveAttribute("lang", "th");
   });
 
   test("Link is visible at mobile (360px) viewport", async ({ page }) => {
