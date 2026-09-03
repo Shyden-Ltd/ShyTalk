@@ -2,10 +2,13 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.GoogleAuthProvider
 import dev.gitlive.firebase.auth.OAuthProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 
 class IosAuthRepositoryImpl(
     private val auth: FirebaseAuth,
@@ -42,6 +45,20 @@ class IosAuthRepositoryImpl(
 
     override val currentFirebaseUid: String?
         get() = auth.currentUser?.uid
+
+    /**
+     * The SDK's first auth-state emission IS its keychain load finishing: the
+     * listener fires once the persisted user (or its absence) is known, and
+     * that is what a cold start must wait for before it reads [currentFirebaseUid].
+     * No network is involved. Bounded so a wedged SDK costs one short wait,
+     * not a launch that never draws; the launch then decides on what it has.
+     */
+    override suspend fun awaitPersistedSession() {
+        val restored = withTimeoutOrNull(PERSISTED_SESSION_TIMEOUT_MS) { auth.authStateChanged.first() }
+        if (restored == null && auth.currentUser == null) {
+            logI(TAG, "persisted session not reported within ${PERSISTED_SESSION_TIMEOUT_MS}ms; deciding on what is known")
+        }
+    }
 
     override val isAuthenticated: Boolean
         get() = auth.currentUser != null
@@ -163,3 +180,7 @@ class IosAuthRepositoryImpl(
             user.getIdToken(true).let { }
         }
 }
+
+/** How long a cold start waits for the SDK to report its persisted user. */
+private const val PERSISTED_SESSION_TIMEOUT_MS = 1_500L
+private const val TAG = "IosAuthRepository"

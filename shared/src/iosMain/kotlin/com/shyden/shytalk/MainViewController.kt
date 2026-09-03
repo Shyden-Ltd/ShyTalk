@@ -239,6 +239,12 @@ private fun IosApp() {
                         // keyed on the live Firebase uid and refuses a record
                         // belonging to anyone else.
                         val sessionCache = koin.get<SessionCache>()
+                        // The iOS SDK restores its user from the keychain
+                        // asynchronously. Read before that, `currentFirebaseUid`
+                        // is null, the cache misses, and a signed-in person is
+                        // drawn sign-in first (SHY-0500, J40 on the iPhone).
+                        // A bounded keychain wait, never the network.
+                        authRepo.awaitPersistedSession()
                         val cached = sessionCache.read(authRepo.currentFirebaseUid)
                         if (cached != null) {
                             authRepo.resolvedUniqueId = cached.uniqueId

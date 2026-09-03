@@ -16,6 +16,19 @@ interface AuthRepository {
     val currentFirebaseUid: String?
 
     /**
+     * Resolves once the SDK has loaded whatever user it PERSISTED — a
+     * keychain or preferences read, never the network.
+     *
+     * The Android SDK restores its user synchronously, so [isAuthenticated] and
+     * [currentFirebaseUid] are right from the first call. The iOS SDK restores
+     * asynchronously: read too early they say "nobody", the identity cache
+     * keyed by that uid misses, and a cold start draws sign-in first for a
+     * signed-in person (SHY-0500). A cold start calls this before it decides
+     * what to draw. Bounded on every platform: a launch may never hang on it.
+     */
+    suspend fun awaitPersistedSession() {}
+
+    /**
      * Set by AuthViewModel after successful identity resolution.
      * Makes [currentUserId] return the uniqueId instead of Firebase UID.
      */
