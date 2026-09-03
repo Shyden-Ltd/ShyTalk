@@ -143,7 +143,11 @@ describe('locale strings render as written', () => {
     // unavailable" because three of its four sites recorded no reason. Four
     // strings: voice dropped, what still works, voice connecting, and what
     // the microphone says when it is tapped and cannot be used.
-    expect([...new Set(report.map((r) => r.parsed))]).toEqual([884]);
+    // 884 -> 885 on 2026-09-04: SHY-0500. The app used to block on the network
+    // before drawing anything; it now draws immediately and confirms the stored
+    // session behind the first frame. One string: what the sign-in screen says
+    // when that confirmation finds the session expired or revoked.
+    expect([...new Set(report.map((r) => r.parsed))]).toEqual([885]);
   });
 
   test('no string carries an Android-style escape sequence', () => {

@@ -886,6 +886,9 @@
     <!-- Auth -->
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in">Đăng nhập</string>
+    <!-- SHY-0500: shown when a stored session turns out to be expired or revoked. -->
+    <!-- google-translated 2026-09-03 -->
+    <string name="session_expired_sign_in_again">Phiên của bạn đã kết thúc. Vui lòng đăng nhập lại.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="verification_code">Mã xác minh</string>
     <!-- google-translated 2026-05-04 -->

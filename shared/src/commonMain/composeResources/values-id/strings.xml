@@ -886,6 +886,9 @@
     <!-- Auth -->
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in">Masuk</string>
+    <!-- SHY-0500: shown when a stored session turns out to be expired or revoked. -->
+    <!-- google-translated 2026-09-03 -->
+    <string name="session_expired_sign_in_again">Sesi Anda telah berakhir. Silakan masuk lagi.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="verification_code">Kode Verifikasi</string>
     <!-- google-translated 2026-05-04 -->
