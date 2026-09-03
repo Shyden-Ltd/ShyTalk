@@ -187,6 +187,66 @@ describe('SHY-0465 — stdout carries the address and nothing else', () => {
   });
 });
 
+describe('SHY-0500 — the default adb probe runs on the bash macOS ships', () => {
+  // 2026-09-04: with a phone attached and ANDROID_SERIAL unset, the chooser
+  // died with `serial[@]: unbound variable` and fell through to loopback —
+  // LiveKit advertised 127.0.0.1 to an iPhone that could reach the Mac fine.
+  // bash 3.2 treats an EMPTY array as unset under `set -u`; every test above
+  // replaced the probe, so none of them ever ran the real one.
+  const HOST_IP = '192.168.1.8';
+  let fakeBin;
+  let argLog;
+  beforeAll(() => {
+    fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'chooser-adb-'));
+    argLog = path.join(fakeBin, 'adb-args.log');
+    const adb = path.join(fakeBin, 'adb');
+    fs.writeFileSync(
+      adb,
+      [
+        '#!/bin/sh',
+        `printf '%s\\n' "$*" >> "${argLog}"`,
+        'case "$1 $2" in',
+        '  "devices ") printf "List of devices attached\\nFAKE1234\\tdevice\\n" ;;',
+        '  *shell*|"-s "*) echo "1 packets transmitted, 1 packets received" ;;',
+        '  *) echo "1 packets transmitted, 1 packets received" ;;',
+        'esac',
+      ].join('\n'),
+    );
+    fs.chmodSync(adb, 0o755);
+  });
+  afterAll(() => {
+    fs.rmSync(fakeBin, { recursive: true, force: true });
+  });
+
+  test('with no ANDROID_SERIAL the phone is still asked, and the LAN address kept', () => {
+    const { address, reason } = chooseWithReason({
+      LIVEKIT_NODE_IP: '',
+      LIVEKIT_HOST_IP: HOST_IP,
+      LIVEKIT_PROBE: '',
+      ANDROID_SERIAL: '',
+      ADB: path.join(fakeBin, 'adb'),
+    });
+    expect(reason).not.toMatch(/unbound variable/);
+    expect(address).toBe(HOST_IP);
+    const calls = fs.readFileSync(argLog, 'utf8');
+    expect(calls).toMatch(/shell ping -c 1 -W 2 /);
+    expect(calls).not.toMatch(/-s /);
+  });
+
+  test('with ANDROID_SERIAL set the probe pins that serial', () => {
+    fs.writeFileSync(argLog, '');
+    const { address } = chooseWithReason({
+      LIVEKIT_NODE_IP: '',
+      LIVEKIT_HOST_IP: HOST_IP,
+      LIVEKIT_PROBE: '',
+      ANDROID_SERIAL: 'FAKE1234',
+      ADB: path.join(fakeBin, 'adb'),
+    });
+    expect(address).toBe(HOST_IP);
+    expect(fs.readFileSync(argLog, 'utf8')).toMatch(/-s FAKE1234 shell ping/);
+  });
+});
+
 describe('SHY-0465 — start.sh actually uses the chooser', () => {
   const SRC = fs.readFileSync(START_SH, 'utf8');
   const codeLines = SRC.split('\n').filter((l) => !/^\s*#/.test(l));
