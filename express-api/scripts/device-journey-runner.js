@@ -4488,6 +4488,9 @@ const J40 = {
       device,
       'Signed out: the sign-in screen is the first thing drawn',
       async () => {
+        // The offline launch may have left the daily-reward sheet over Home;
+        // settle clears it before the profile tab is tapped (run 6).
+        await settle(device, 20000);
         await signOutFlow(device);
         const f = await coldLaunch('signed-out');
         if (f.kind !== 'signIn') {
