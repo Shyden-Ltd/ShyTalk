@@ -218,6 +218,11 @@ describe('every device command survives a WebDriverAgent restart', () => {
       'warning: a slower run is worth more than no run.',
     install: 'never reaches WDA — refuses by design, see SHY-0446',
     uninstall: 'never reaches WDA — refuses by design, see SHY-0446',
+    clearAppLog:
+      'never reaches WDA — it starts an idevicesyslog capture over USB (SHY-0500), and a ' +
+      'lost WebDriverAgent session has nothing to do with the device log',
+    readAppLog: 'never reaches WDA — it stops the capture clearAppLog started and reads it',
+    _stopSyslog: 'the capture teardown behind readAppLog — a child process, not a session',
   };
 
   /** How to invoke each command that must recover. */
@@ -232,6 +237,7 @@ describe('every device command survives a WebDriverAgent restart', () => {
     swipe: (d) => d.swipe(100, 800, 100, 200),
     screencap: (d) => d.screencap(path.join(tmp, 'shot.png')),
     measure: (d) => d.measure(),
+    setOffline: (d) => d.setOffline(true),
   };
 
   const commands = Object.getOwnPropertyNames(
@@ -271,6 +277,9 @@ describe('every device command survives a WebDriverAgent restart', () => {
     swipe: 'ACCEPTED: a repeated scroll overshoots at worst, and the callers re-read after',
     screencap: 'idempotent — overwrites the same file',
     measure: 'idempotent — reads the window size',
+    setOffline:
+      'idempotent — it READS the Airplane Mode switch before touching it, so a replay ' +
+      'after a lost answer flips nothing a second time',
   };
 
   test('every replayed command has DECIDED how it survives running twice', () => {
@@ -322,6 +331,9 @@ describe('every device command survives a WebDriverAgent restart', () => {
     d._sessionId = 'dead-session';
     let failed = false;
     const reply = (routePath) => {
+      // The Airplane Mode switch setOffline(true) reads: already on, so the
+      // replay has nothing to flip.
+      if (String(routePath).includes('/attribute/value')) return '1';
       if (String(routePath).includes('/element') && !String(routePath).includes('/click'))
         return { 'element-6066-11e4-a52e-4f735466cecf': 'el-1' };
       if (String(routePath).includes('/screenshot')) return Buffer.from('png').toString('base64');

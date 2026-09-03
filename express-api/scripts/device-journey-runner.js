@@ -369,6 +369,48 @@ class Device {
     sh(`${this.adb} reverse tcp:${port} tcp:${port}`);
   }
 
+  /** Run an adb subcommand (not `adb shell`) against THIS serial. */
+  adbRun(args) {
+    return sh(`${this.adb} ${args}`);
+  }
+
+  /** Empty logcat, so the next read holds only what happens from here on. */
+  async clearAppLog() {
+    this.shell('logcat -c');
+  }
+
+  /**
+   * Everything one tag has logged since clearAppLog(), one line per entry.
+   * `-d` dumps and exits; `-s tag:V` keeps that tag alone, at every priority.
+   */
+  async readAppLog(tag) {
+    return String(this.shell(`logcat -d -s ${tag}:V`) || '')
+      .split('\n')
+      .map((l) => l.trimEnd())
+      .filter(Boolean);
+  }
+
+  /**
+   * Cut, or restore, every route the app has to this machine (SHY-0500's
+   * offline launch).
+   *
+   * On the local target the app reaches the stack through `adb reverse`
+   * tunnels, which ride USB and need no radio at all -- so switching Wi-Fi
+   * and data off on their own would leave the phone fully connected. The
+   * tunnels go too, and come back with the radios.
+   */
+  async setOffline(on, { reversePorts = [] } = {}) {
+    if (on) {
+      this.adbRun('reverse --remove-all');
+      this.shell('svc wifi disable');
+      this.shell('svc data disable');
+      return;
+    }
+    this.shell('svc wifi enable');
+    this.shell('svc data enable');
+    for (const port of reversePorts) this.reverse(port);
+  }
+
   install(apkAbs) {
     return sh(`${this.adb} install -r -d "${apkAbs}"`, { maxBuffer: 32 * 1024 * 1024 });
   }
@@ -1805,6 +1847,120 @@ const advanceToMain = (device, timeoutMs = 60000) =>
 // the Home tab bar — clearing dialogs/interstitials on the way.
 const settle = (device, timeoutMs = 60000) =>
   advanceUntil(device, (n) => atSignIn(n) || anyMainTab(n), timeoutMs, 'SignIn or Home');
+
+// ---- SHY-0500: what a cold start draws first, and what the app says about it
+
+/** The tag ColdStartSequencer logs under, on both platforms. */
+const COLD_START_TAG = 'ColdStartSequencer';
+
+/**
+ * What the app has drawn: the room list (`main`), the sign-in screen
+ * (`signIn`), or nothing of its own yet (`blank` -- the launcher, the
+ * springboard, or a window with no content).
+ */
+function classifyFirstFrame(nodes) {
+  if (anyMainTab(nodes)) return 'main';
+  if (atSignIn(nodes)) return 'signIn';
+  return 'blank';
+}
+
+/**
+ * The launch path in the app's own words, from its log.
+ *
+ * `immediate` is the screen `immediateDestination()` chose without I/O;
+ * `confirm` is what `confirm()` then decided over the network. Only the LAST
+ * launch in the buffer counts, so a read after a relaunch is not answered by
+ * the launch before it. Accepts logcat lines and syslog lines alike: both
+ * carry `ColdStartSequencer: ` ahead of the message.
+ */
+function summarizeLaunchLog(lines) {
+  const marker = `${COLD_START_TAG}: `;
+  const entries = (lines ?? [])
+    .map((l) => {
+      const at = String(l).lastIndexOf(marker);
+      return at >= 0
+        ? String(l)
+            .slice(at + marker.length)
+            .trim()
+        : null;
+    })
+    .filter(Boolean);
+  const starts = entries.map((e, i) => (e.startsWith('immediate:') ? i : -1)).filter((i) => i >= 0);
+  const launch = starts.length ? entries.slice(starts[starts.length - 1]) : entries;
+  const immediate = launch[0]?.match(/^immediate: destination=(\w+)/)?.[1] ?? null;
+  const confirm = launch.find((e) => /^confirm(ed)?:/.test(e)) ?? null;
+  return { immediate, confirm };
+}
+
+/**
+ * Open the app, and be credited with having used it.
+ *
+ * SHY-0457 counts taps, typing and swipes as proof a journey drove the
+ * product. For a launch journey the launch IS the action: a person opens the
+ * app and what appears is the feature under test. Counted here, deliberately,
+ * so a journey made of launches is not mistaken for one that never touched
+ * the phone.
+ */
+async function openApp(device, pkg) {
+  uiOps.count += 1;
+  await device.launch(pkg);
+}
+
+/**
+ * The first tree the app itself draws after a launch, and how long it took.
+ *
+ * Polled as fast as the screen reader allows (~65ms warm on Android, slower
+ * over WebDriverAgent), without clearing overlays: this is about what
+ * appeared FIRST, so nothing is dismissed on the way.
+ */
+async function firstAppFrame(device, timeoutMs) {
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  while (Date.now() < deadline) {
+    const nodes = await dump(device);
+    const kind = classifyFirstFrame(nodes);
+    if (kind !== 'blank') return { kind, nodes, afterMs: Date.now() - started };
+    await sleep(50);
+  }
+  throw new Error(`the app drew neither the room list nor sign-in within ${timeoutMs}ms of launch`);
+}
+
+/**
+ * Make a persona's stored session INVALID from the server side, the way a
+ * revoked session is on the real service.
+ *
+ * `revokeRefreshTokens` is the production lever, and the Auth emulator ignores
+ * it for the refresh exchange (verified 2026-09-04: the old refresh token
+ * still minted a fresh ID token after revocation). What the emulator DOES
+ * refuse is a disabled account -- `400 USER_DISABLED` on the next refresh --
+ * and the phone's SDK reacts to that exactly as it does to a revoked token:
+ * the refresh fails with an auth error and the user is signed out locally.
+ * Local only: dev offers no such handle from a laptop, which is why J40
+ * declares `requiresLocalState`.
+ */
+async function localAdminAuth() {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST =
+    process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+  if (!require('firebase-admin/app').getApps().length) {
+    admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-shytalk' });
+  }
+  return require('firebase-admin/auth').getAuth();
+}
+
+async function invalidateSession(email) {
+  const auth = await localAdminAuth();
+  const user = await auth.getUserByEmail(email);
+  await auth.updateUser(user.uid, { disabled: true });
+  return user.uid;
+}
+
+/** Undo invalidateSession, so the persona can sign in again. */
+async function restoreSession(email) {
+  const auth = await localAdminAuth();
+  const user = await auth.getUserByEmail(email);
+  await auth.updateUser(user.uid, { disabled: false });
+  return user.uid;
+}
 
 // Get to the SignIn screen regardless of where the app currently sits. A
 // signed-in relaunch lands on Home, so settle to a stable anchor first, then
@@ -4152,6 +4308,186 @@ const J09 = {
 // (J07), and the cross-cohort wall (J02, J08) — age segregation being the one
 // defect class here with real safeguarding exposure. Adding to this list is a
 // story of its own; it is pinned by tests/scripts/core-journey-set.test.js.
+// j40 — SHY-0500. A cold start draws the app from what the phone already
+// knows and confirms the session BEHIND that first screen. Four launches on
+// the device, watching what is drawn first and reading what the app's own log
+// says about why (the story's observability criterion -- logcat on Android,
+// the device syslog on iPhone, no debugger attached):
+//   signed in   -> the room list first; it stays; "confirmed: claim refreshed"
+//   revoked     -> the room list first; then sign-in WITH the reason on screen
+//   offline     -> the room list first; it stays, unverified; never "signed out"
+//   signed out  -> sign-in first, and nothing before it
+// Firebase Admin invalidates the session against the emulator, which is why
+// this runs on local only (SHY-0488's shape: skipped loudly elsewhere).
+const COLD_START_PERSONA = 'adult-power@shytalk.dev';
+
+const J40 = {
+  id: 'J40',
+  kind: 'ui',
+  requiresLocalState: true,
+  title: 'j40 — a cold start draws the app first and confirms the session behind it (SHY-0500)',
+  async run(device, reporter, ctx) {
+    const pkg = ctx.pkg;
+
+    // The reporter photographs a step when it ENDS. The first frame is gone by
+    // then, so each launch keeps its own picture, named for the scenario.
+    const keepFrame = async (name) => {
+      const file = `J40-first-frame-${name}.png`;
+      await device.screencap(path.join(reporter.runDir, file));
+      return file;
+    };
+    const coldLaunch = async (name) => {
+      await device.clearAppLog();
+      await device.forceStop(pkg);
+      await openApp(device, pkg);
+      const frame = await firstAppFrame(device, 15000);
+      return { ...frame, shot: await keepFrame(name) };
+    };
+    const launchLog = async () => summarizeLaunchLog(await device.readAppLog(COLD_START_TAG));
+    const expectLog = (log, immediate, confirmRe) => {
+      if (log.immediate !== immediate) {
+        throw new Error(
+          `the app's log says it drew "${log.immediate}" first; expected "${immediate}" ` +
+            `(confirm: ${log.confirm ?? 'none'})`,
+        );
+      }
+      if (confirmRe && !(log.confirm && confirmRe.test(log.confirm))) {
+        throw new Error(
+          `the app's log does not say why: got "${log.confirm ?? 'nothing'}", expected ${confirmRe}`,
+        );
+      }
+    };
+    // The screen is the proof; the log is the tie-break. Over WebDriverAgent a
+    // tree read can land AFTER a redirect that took under a second, so a first
+    // frame that already shows the redirect is accepted only when the app's
+    // own log records the expected screen as drawn first -- and the step says
+    // so, with the read latency, rather than claiming a picture it did not get.
+    const drawnFirst = async (frame, expected) => {
+      if (frame.kind === expected) return `${expected} drawn ${frame.afterMs}ms after launch`;
+      const log = await launchLog();
+      if (log.immediate?.toLowerCase() === expected.toLowerCase()) {
+        return (
+          `first tree read only ${frame.afterMs}ms after launch already showed "${frame.kind}"; ` +
+          `the app's log records ${log.immediate} drawn first`
+        );
+      }
+      throw new Error(
+        `drew "${frame.kind}" first (${frame.afterMs}ms after launch); ` +
+          `log says immediate=${log.immediate ?? 'nothing'}`,
+      );
+    };
+
+    await signInAs(device, reporter, ctx, COLD_START_PERSONA);
+
+    await reporter.step(device, 'Signed in: the room list is the first thing drawn', async () => {
+      const f = await coldLaunch('signed-in');
+      if (f.kind !== 'main') {
+        throw new Error(`drew "${f.kind}" first (${f.afterMs}ms after launch)`);
+      }
+      return `room list drawn ${f.afterMs}ms after launch (${f.shot})`;
+    });
+
+    await reporter.step(
+      device,
+      'Signed in: the session is confirmed behind it, and the room list stays',
+      async () => {
+        const nodes = await settle(device, 20000);
+        if (!anyMainTab(nodes) || atSignIn(nodes)) throw new Error('the room list did not stay');
+        const log = await launchLog();
+        expectLog(log, 'Main', /^confirmed: claim refreshed/);
+        return `log: immediate=${log.immediate}; ${log.confirm}`;
+      },
+    );
+
+    await reporter.step(
+      device,
+      'Signed in: private data reaches the room list without the shell having waited',
+      async () => {
+        const deadline = Date.now() + 15000;
+        let seen = null;
+        while (Date.now() < deadline && !seen) {
+          const nodes = await dump(device);
+          const card = byIdPrefix(nodes, 'roomList_roomCard_');
+          if (card) seen = card.id;
+          else if (byId(nodes, 'roomList_emptyState')) seen = 'roomList_emptyState';
+          else await sleep(300);
+        }
+        if (!seen) throw new Error('neither a room card nor the empty state arrived within 15s');
+        return `room list content: ${seen}`;
+      },
+    );
+
+    // The account is disabled for exactly these two steps and re-enabled in
+    // `finally`, so a red step cannot leave Alice locked out for every journey
+    // that follows.
+    await invalidateSession(COLD_START_PERSONA);
+    try {
+      await reporter.step(
+        device,
+        'Revoked on the server: the room list is STILL what is drawn first',
+        async () => {
+          const f = await coldLaunch('revoked');
+          return `${await drawnFirst(f, 'main')}, session invalidated beforehand (${f.shot})`;
+        },
+      );
+
+      await reporter.step(device, 'Revoked: sent back to sign-in AND told why', async () => {
+        await advanceUntil(device, atSignIn, 30000, 'SignIn after the revoked session');
+        await waitForText(device, 'Your session has ended', 8000);
+        const log = await launchLog();
+        expectLog(log, 'Main', /^confirm: refresh FAILED; sessionAlive=false/);
+        return `sign-in reached with "Your session has ended. Please sign in again." on screen; log: ${log.confirm}`;
+      });
+    } finally {
+      await restoreSession(COLD_START_PERSONA);
+    }
+
+    await signInAs(device, reporter, ctx, COLD_START_PERSONA);
+
+    await device.setOffline(true, { reversePorts: ctx.reversePorts });
+    try {
+      await reporter.step(
+        device,
+        'Offline: the room list is drawn, and the person is kept there',
+        async () => {
+          const f = await coldLaunch('offline');
+          const first = await drawnFirst(f, 'main');
+          await sleep(8000);
+          const nodes = await dump(device);
+          if (atSignIn(nodes) || !anyMainTab(nodes)) {
+            throw new Error('an offline launch read as "signed out"');
+          }
+          if (byTextContains(nodes, 'session has ended')) {
+            throw new Error('a transport failure was announced as an ended session');
+          }
+          const log = await launchLog();
+          expectLog(log, 'Main', /^confirm: transport failure, staying unverified/);
+          return `${first}; still the room list 8s later, unverified (${f.shot}); log: ${log.confirm}`;
+        },
+      );
+    } finally {
+      await device.setOffline(false, { reversePorts: ctx.reversePorts });
+    }
+
+    await reporter.step(
+      device,
+      'Signed out: the sign-in screen is the first thing drawn',
+      async () => {
+        await signOutFlow(device);
+        const f = await coldLaunch('signed-out');
+        if (f.kind !== 'signIn') {
+          throw new Error(`drew "${f.kind}" first (${f.afterMs}ms after launch)`);
+        }
+        const nodes = await settle(device, 20000);
+        if (!atSignIn(nodes)) throw new Error('sign-in did not stay');
+        const log = await launchLog();
+        expectLog(log, 'SignIn', null);
+        return `sign-in drawn ${f.afterMs}ms after launch, nothing before it (${f.shot}); log: immediate=${log.immediate}`;
+      },
+    );
+  },
+};
+
 const CORE_JOURNEY_IDS = Object.freeze(['J-SMOKE', 'J09', 'J07', 'J02', 'J08']);
 
 /** True when a journey id belongs to the core set — used to halt a run. */
@@ -4297,6 +4633,7 @@ function buildJourneys(ctx) {
     J06,
     J38,
     J39,
+    J40,
   ];
   return all;
 }
@@ -4605,6 +4942,11 @@ module.exports = {
   assertJourneyTouchedTheUi,
   dismissKeyboard,
   uiOps,
+  // SHY-0500 -- the cold-start journey's pure pieces.
+  classifyFirstFrame,
+  summarizeLaunchLog,
+  openApp,
+  firstAppFrame,
   parseArgs,
   capturesScreenFor,
   occluderOf,

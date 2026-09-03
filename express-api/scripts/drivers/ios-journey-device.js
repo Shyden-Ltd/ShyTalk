@@ -39,7 +39,7 @@
  *   - a REAL iPhone. Never a simulator: the operator's rule, and SHY-0419 is why.
  */
 
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
 
 /**
  * Run a command with an ARGUMENT ARRAY, never a shell string.
@@ -356,6 +356,10 @@ class IosDevice {
       );
     }
     this.kind = 'ios';
+    // The syslog capture behind clearAppLog()/readAppLog(). `_spawn` is a
+    // field so a test can hand in a fake process; the default is the real one.
+    this._spawn = spawn;
+    this._syslog = null;
     this.coreDeviceUuid = coreDeviceUuid;
     this.hardwareUdid = hardwareUdid;
     // `serial` is the runner-wide name for "the thing that identifies this
@@ -1089,6 +1093,88 @@ class IosDevice {
     return this.withSessionRecovery('screencap', async () => {
       const b64 = await this._get('/screenshot');
       require('node:fs').writeFileSync(absPath, Buffer.from(String(b64), 'base64'));
+    });
+  }
+
+  /**
+   * Start capturing the device log for the app's process.
+   *
+   * Kotlin/Native's `println` is the app's stdout, which iOS folds into the
+   * unified log, and `idevicesyslog` streams that over USB -- no debugger
+   * attached, which is what SHY-0500's observability criterion asks for.
+   * "Clear" on iOS means "start from here": the syslog cannot be emptied, so
+   * a fresh capture is what makes the next read hold only what follows.
+   */
+  async clearAppLog() {
+    this._stopSyslog();
+    const child = this._spawn('idevicesyslog', ['-u', this.hardwareUdid, '-p', 'ShyTalk']);
+    const chunks = [];
+    child.stdout.on('data', (d) => chunks.push(String(d)));
+    child.stderr.on('data', () => {});
+    child.on('error', (e) => this._warn(`[ios] idevicesyslog: ${e.message}`));
+    this._syslog = { child, chunks };
+  }
+
+  /** The captured lines that carry `tag`, and the end of the capture. */
+  async readAppLog(tag) {
+    if (!this._syslog) {
+      throw new Error('readAppLog() before clearAppLog(): nothing was being captured');
+    }
+    const { chunks } = this._syslog;
+    this._stopSyslog();
+    return chunks
+      .join('')
+      .split('\n')
+      .map((l) => l.trimEnd())
+      .filter((l) => l.includes(tag));
+  }
+
+  _stopSyslog() {
+    if (!this._syslog) return;
+    try {
+      this._syslog.child.kill();
+    } catch (_e) {
+      /* already gone */
+    }
+    this._syslog = null;
+  }
+
+  /**
+   * Airplane Mode on, or off, through the Settings app (SHY-0500's offline
+   * launch).
+   *
+   * Nothing toggles the radios of a real iPhone from a Mac: not devicectl,
+   * not WebDriverAgent, not Appium. What a person does is open Settings and
+   * flip the first switch, so that is what this does. WebDriverAgent keeps
+   * answering over USB while the radios are off, which is what lets the
+   * journey go on reading the screen. Always returns to the app under test,
+   * even when the switch was not found.
+   */
+  async setOffline(on) {
+    const SETTINGS = 'com.apple.Preferences';
+    const want = on ? '1' : '0';
+    return this.withSessionRecovery(`setOffline(${on})`, async () => {
+      await this._post('/appium/device/activate_app', { bundleId: SETTINGS });
+      try {
+        const el = await this._post('/element', {
+          using: '-ios predicate string',
+          value:
+            "type == 'XCUIElementTypeSwitch' AND " +
+            "(label == 'Airplane Mode' OR name == 'Airplane Mode')",
+        });
+        const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+        if (!id) throw new Error('Settings showed no "Airplane Mode" switch');
+        const current = String(await this._get(`/element/${id}/attribute/value`));
+        if (current !== want) {
+          await this._post(`/element/${id}/click`, {});
+          const after = String(await this._get(`/element/${id}/attribute/value`));
+          if (after !== want) {
+            throw new Error(`Airplane Mode reads ${after} after the tap; wanted ${want}`);
+          }
+        }
+      } finally {
+        await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
+      }
     });
   }
 
