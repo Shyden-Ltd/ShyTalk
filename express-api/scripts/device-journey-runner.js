@@ -1896,7 +1896,9 @@ function summarizeLaunchLog(lines) {
   const starts = entries.map((e, i) => (e.startsWith('immediate:') ? i : -1)).filter((i) => i >= 0);
   const launch = starts.length ? entries.slice(starts[starts.length - 1]) : entries;
   const immediate = launch[0]?.match(/^immediate: destination=(\w+)/)?.[1] ?? null;
-  const confirm = launch.find((e) => /^confirm(ed)?:/.test(e)) ?? null;
+  // The LAST confirm line is the verdict: an offline launch logs the failed
+  // refresh and THEN "transport failure, staying unverified".
+  const confirm = launch.filter((e) => /^confirm(ed)?:/.test(e)).pop() ?? null;
   return { immediate, confirm };
 }
 

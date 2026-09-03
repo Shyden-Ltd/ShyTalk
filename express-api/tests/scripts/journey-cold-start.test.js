@@ -90,6 +90,19 @@ describe('summarizeLaunchLog — which launch path the app took, from its own lo
       'confirm: transport failure, staying unverified',
     );
   });
+  test('the LAST confirm line is the decision when the app logs two', () => {
+    // An offline launch logs the failed refresh first and its verdict second;
+    // run 5 on the OnePlus read the first and called a transport failure a
+    // dead session.
+    const lines = [
+      'D ColdStartSequencer: immediate: destination=Main (no I/O)',
+      'D ColdStartSequencer: confirm: refresh FAILED; sessionAlive=true',
+      'D ColdStartSequencer: confirm: transport failure, staying unverified',
+    ];
+    expect(summarizeLaunchLog(lines).confirm).toBe(
+      'confirm: transport failure, staying unverified',
+    );
+  });
   test('an empty or unrelated log yields nothing rather than a guess', () => {
     expect(summarizeLaunchLog([])).toEqual({ immediate: null, confirm: null });
     expect(summarizeLaunchLog(['D SomethingElse: immediate: destination=Main'])).toEqual({
