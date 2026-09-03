@@ -62,93 +62,74 @@ export function init(deps) {
   });
 
   // Alert config toggle
-  document
-    .getElementById('alerts-config-toggle')
-    .addEventListener('click', () => {
-      const panel = document.getElementById('alert-config-panel');
-      if (panel.style.display === 'none') {
-        panel.style.display = '';
-        loadAlertConfig();
-      } else {
-        panel.style.display = 'none';
-      }
-    });
+  document.getElementById('alerts-config-toggle').addEventListener('click', () => {
+    const panel = document.getElementById('alert-config-panel');
+    if (panel.style.display === 'none') {
+      panel.style.display = '';
+      loadAlertConfig();
+    } else {
+      panel.style.display = 'none';
+    }
+  });
 
   // Alert config save
-  document
-    .getElementById('alert-config-save-btn')
-    .addEventListener('click', saveAlertConfig);
+  document.getElementById('alert-config-save-btn').addEventListener('click', saveAlertConfig);
 
   // Filter actions
-  document
-    .getElementById('log-search-btn')
-    .addEventListener('click', () => {
-      stopLiveMode();
-      logsCursor = null;
-      loadLogs();
-    });
+  document.getElementById('log-search-btn').addEventListener('click', () => {
+    stopLiveMode();
+    logsCursor = null;
+    loadLogs();
+  });
 
-  document
-    .getElementById('log-clear-btn')
-    .addEventListener('click', () => {
-      clearFilters();
-      stopLiveMode();
-      logsCursor = null;
-      loadLogs();
-    });
+  document.getElementById('log-clear-btn').addEventListener('click', () => {
+    clearFilters();
+    stopLiveMode();
+    logsCursor = null;
+    loadLogs();
+  });
 
   // Load more
-  document
-    .getElementById('logs-load-more')
-    .addEventListener('click', () => loadLogs(true));
+  document.getElementById('logs-load-more').addEventListener('click', () => loadLogs(true));
 
   // Live mode toggle
-  document
-    .getElementById('log-live-toggle')
-    .addEventListener('click', () => {
-      if (liveUnsub) stopLiveMode();
-      else startLiveMode();
-    });
+  document.getElementById('log-live-toggle').addEventListener('click', () => {
+    if (liveUnsub) stopLiveMode();
+    else startLiveMode();
+  });
 
   // Trace back button
-  document
-    .getElementById('trace-back-btn')
-    .addEventListener('click', () => {
-      document
-        .getElementById('trace-view')
-        .classList.remove('visible');
-      document.getElementById('logs-table-view').style.display = '';
-      document.getElementById('logs-filters').style.display = '';
-    });
+  document.getElementById('trace-back-btn').addEventListener('click', () => {
+    document.getElementById('trace-view').classList.remove('visible');
+    document.getElementById('logs-table-view').style.display = '';
+    document.getElementById('logs-filters').style.display = '';
+  });
 
   // Export buttons
-  document
-    .getElementById('log-export-json')
-    .addEventListener('click', () => exportLogs('json'));
-  document
-    .getElementById('log-export-csv')
-    .addEventListener('click', () => exportLogs('csv'));
+  document.getElementById('log-export-json').addEventListener('click', () => exportLogs('json'));
+  document.getElementById('log-export-csv').addEventListener('click', () => exportLogs('csv'));
 
   // Log settings save
-  document
-    .getElementById('log-settings-save-btn')
-    .addEventListener('click', saveLogConfig);
+  document.getElementById('log-settings-save-btn').addEventListener('click', saveLogConfig);
 
   // Inline audit log section (inside Logs panel)
   const auditSearchBtn = document.getElementById('audit-search-btn');
-  if (auditSearchBtn) auditSearchBtn.addEventListener('click', () => {
-    _auditCurrentPage = 1;
-    _auditPageTokens = [null];
-    loadInlineAuditLog(1);
-  });
+  if (auditSearchBtn)
+    auditSearchBtn.addEventListener('click', () => {
+      _auditCurrentPage = 1;
+      _auditPageTokens = [null];
+      loadInlineAuditLog(1);
+    });
   const auditPrevBtn = document.getElementById('audit-prev-btn');
-  if (auditPrevBtn) auditPrevBtn.addEventListener('click', () => {
-    if (_auditCurrentPage > 1) loadInlineAuditLog(_auditCurrentPage - 1);
-  });
+  if (auditPrevBtn)
+    auditPrevBtn.addEventListener('click', () => {
+      if (_auditCurrentPage > 1) loadInlineAuditLog(_auditCurrentPage - 1);
+    });
   const auditNextBtn = document.getElementById('audit-next-btn');
-  if (auditNextBtn) auditNextBtn.addEventListener('click', () => {
-    if (_auditLastPageToken) loadInlineAuditLog(_auditCurrentPage + 1);
-  });
+  if (auditNextBtn)
+    auditNextBtn.addEventListener('click', () => {
+      if (_auditLastPageToken) loadInlineAuditLog(_auditCurrentPage + 1);
+    });
   const auditExportBtn = document.getElementById('audit-export-csv-btn');
   if (auditExportBtn) auditExportBtn.addEventListener('click', exportInlineAuditCsv);
 }
@@ -205,9 +186,7 @@ async function loadAlerts() {
       const isCritical = a.severity === 'critical';
 
       const tdSev = document.createElement('td');
-      tdSev.className = isCritical
-        ? 'alert-severity-critical'
-        : 'alert-severity-warning';
+      tdSev.className = isCritical ? 'alert-severity-critical' : 'alert-severity-warning';
       tdSev.textContent = '\u26A0';
       tr.appendChild(tdSev);
 
@@ -223,9 +202,7 @@ async function loadAlerts() {
       tdTs.style.cssText = 'font-size:12px;color:var(--text2);';
       tdTs.textContent = a.createdAt
         ? new Date(
-            a.createdAt._seconds
-              ? a.createdAt._seconds * 1000
-              : a.createdAt,
+            a.createdAt._seconds ? a.createdAt._seconds * 1000 : a.createdAt,
           ).toLocaleString()
         : '';
       tr.appendChild(tdTs);
@@ -253,17 +230,13 @@ async function loadAlerts() {
         const link = document.createElement('span');
         link.className = 'alert-link';
         link.textContent = 'View Logs';
-        link.addEventListener('click', () =>
-          filterLogsByTrace(a.sampleTraceId),
-        );
+        link.addEventListener('click', () => filterLogsByTrace(a.sampleTraceId));
         tdActions.appendChild(link);
       }
       tr.appendChild(tdActions);
       tbody.appendChild(tr);
     }
-    const unresolved = alerts.filter(
-      (a) => a.status !== 'resolved',
-    ).length;
+    const unresolved = alerts.filter((a) => a.status !== 'resolved').length;
     const badge = document.getElementById('alerts-unresolved-count');
     if (unresolved > 0) {
       badge.textContent = unresolved;
@@ -313,8 +286,7 @@ async function loadUnresolvedCount() {
       apiCall('GET', '/api/admin/alerts?status=new&limit=100'),
       apiCall('GET', '/api/admin/alerts?status=acknowledged&limit=100'),
     ]);
-    const count =
-      (data.alerts || []).length + (data2.alerts || []).length;
+    const count = (data.alerts || []).length + (data2.alerts || []).length;
     const badge = document.getElementById('alert-bell-badge');
     if (count > 0) {
       badge.textContent = count > 99 ? '99+' : count;
@@ -339,19 +311,14 @@ async function loadAlertConfig() {
     for (const [key, val] of Object.entries(thresholds)) {
       if (typeof val === 'object' && val !== null) {
         for (const [subKey, subVal] of Object.entries(val)) {
-          grid.appendChild(
-            makeConfigField(key + '.' + subKey, subVal),
-          );
+          grid.appendChild(makeConfigField(key + '.' + subKey, subVal));
         }
       } else {
         grid.appendChild(makeConfigField(key, val));
       }
     }
   } catch (err) {
-    showToast(
-      'Failed to load alert config: ' + err.message,
-      'error',
-    );
+    showToast('Failed to load alert config: ' + err.message, 'error');
   }
 }
 
@@ -375,8 +342,7 @@ async function saveAlertConfig() {
     const body = {};
     for (const inp of inputs) {
       const key = inp.dataset.alertCfg;
-      const val =
-        inp.type === 'number' ? Number(inp.value) : inp.value;
+      const val = inp.type === 'number' ? Number(inp.value) : inp.value;
       const parts = key.split('.');
       if (parts.length === 2) {
         if (!body[parts[0]]) body[parts[0]] = {};
@@ -401,22 +367,14 @@ async function loadQuotaStats() {
     const cap = data.hardCap || 15000;
     const pct = Math.min((count / cap) * 100, 100);
     document.getElementById('quota-label').textContent =
-      count.toLocaleString() +
-      ' / ' +
-      cap.toLocaleString() +
-      ' logs today';
+      count.toLocaleString() + ' / ' + cap.toLocaleString() + ' logs today';
     const bar = document.getElementById('quota-bar');
     bar.style.width = pct + '%';
     bar.className =
       'quota-bar-inner ' +
-      (pct > 80
-        ? 'quota-bar-red'
-        : pct > 60
-          ? 'quota-bar-yellow'
-          : 'quota-bar-green');
+      (pct > 80 ? 'quota-bar-red' : pct > 60 ? 'quota-bar-yellow' : 'quota-bar-green');
   } catch (err) {
-    document.getElementById('quota-label').textContent =
-      'Quota unavailable';
+    document.getElementById('quota-label').textContent = 'Quota unavailable';
   }
 }
 
@@ -436,9 +394,7 @@ function getLogFilters() {
     const val = document.getElementById(id).value.trim();
     if (val) f[key] = val;
   }
-  const startTime = document.getElementById(
-    'log-filter-startTime',
-  ).value;
+  const startTime = document.getElementById('log-filter-startTime').value;
   const endTime = document.getElementById('log-filter-endTime').value;
   if (startTime) f.startTime = new Date(startTime).toISOString();
   if (endTime) f.endTime = new Date(endTime).toISOString();
@@ -452,10 +408,7 @@ async function loadLogs(append = false) {
     params.set('limit', '50');
     if (append && logsCursor) params.set('cursor', logsCursor);
 
-    const data = await apiCall(
-      'GET',
-      '/api/admin/logs?' + params.toString(),
-    );
+    const data = await apiCall('GET', '/api/admin/logs?' + params.toString());
     const logs = data.logs || [];
     logsCursor = data.nextCursor || null;
 
@@ -463,10 +416,8 @@ async function loadLogs(append = false) {
     else logsData = logsData.concat(logs);
 
     renderLogTable(!append);
-    document.getElementById('logs-load-more').style.display =
-      logsCursor ? '' : 'none';
-    document.getElementById('logs-empty').style.display =
-      logsData.length === 0 ? '' : 'none';
+    document.getElementById('logs-load-more').style.display = logsCursor ? '' : 'none';
+    document.getElementById('logs-empty').style.display = logsData.length === 0 ? '' : 'none';
   } catch (err) {
     showToast('Failed to load logs: ' + err.message, 'error');
   }
@@ -475,9 +426,7 @@ async function loadLogs(append = false) {
 function renderLogTable(clear) {
   const tbody = document.getElementById('logs-tbody');
   if (clear) tbody.textContent = '';
-  const startIdx = clear
-    ? 0
-    : tbody.querySelectorAll('tr:not(.log-expanded-row)').length;
+  const startIdx = clear ? 0 : tbody.querySelectorAll('tr:not(.log-expanded-row)').length;
   const logs = clear ? logsData : logsData.slice(startIdx);
   for (const log of logs) {
     tbody.appendChild(renderLogRow(log));
@@ -489,14 +438,10 @@ function renderLogRow(log) {
   const level = (log.level || 'info').toLowerCase();
   const ts = log.timestamp
     ? new Date(
-        log.timestamp._seconds
-          ? log.timestamp._seconds * 1000
-          : log.timestamp,
+        log.timestamp._seconds ? log.timestamp._seconds * 1000 : log.timestamp,
       ).toLocaleString()
     : '';
-  const traceShort = log.sessionTraceId
-    ? log.sessionTraceId.substring(0, 10) + '...'
-    : '';
+  const traceShort = log.sessionTraceId ? log.sessionTraceId.substring(0, 10) + '...' : '';
 
   const tdTime = document.createElement('td');
   tdTime.style.cssText = 'font-size:12px;color:var(--text2);';
@@ -551,12 +496,9 @@ function renderLogRow(log) {
     pre.className = 'log-context-pre';
     const ctx = log.context || {};
     const displayObj = Object.assign({}, ctx);
-    if (log.requestTraceId)
-      displayObj.requestTraceId = log.requestTraceId;
-    if (log.sessionTraceId)
-      displayObj.sessionTraceId = log.sessionTraceId;
-    if (log.durationMs !== undefined)
-      displayObj.durationMs = log.durationMs;
+    if (log.requestTraceId) displayObj.requestTraceId = log.requestTraceId;
+    if (log.sessionTraceId) displayObj.sessionTraceId = log.sessionTraceId;
+    if (log.durationMs !== undefined) displayObj.durationMs = log.durationMs;
     if (log.route) displayObj.route = log.route;
     if (log.method) displayObj.method = log.method;
     if (log.statusCode) displayObj.statusCode = log.statusCode;
@@ -572,16 +514,12 @@ function renderLogRow(log) {
 
 async function loadTrace(traceId) {
   try {
-    const data = await apiCall(
-      'GET',
-      '/api/admin/logs/trace/' + encodeURIComponent(traceId),
-    );
+    const data = await apiCall('GET', '/api/admin/logs/trace/' + encodeURIComponent(traceId));
     const logs = data.logs || [];
     document.getElementById('logs-table-view').style.display = 'none';
     document.getElementById('logs-filters').style.display = 'none';
     document.getElementById('trace-view').classList.add('visible');
-    document.getElementById('trace-view-title').textContent =
-      'Session Trace: ' + traceId;
+    document.getElementById('trace-view-title').textContent = 'Session Trace: ' + traceId;
     const timeline = document.getElementById('trace-timeline');
     timeline.textContent = '';
     for (const log of logs) {
@@ -598,9 +536,7 @@ function renderTraceEntry(log) {
   const level = (log.level || 'info').toLowerCase();
   const ts = log.timestamp
     ? new Date(
-        log.timestamp._seconds
-          ? log.timestamp._seconds * 1000
-          : log.timestamp,
+        log.timestamp._seconds ? log.timestamp._seconds * 1000 : log.timestamp,
       ).toLocaleString()
     : '';
   const badgeColors = {
@@ -621,8 +557,7 @@ function renderTraceEntry(log) {
 
   const badge = document.createElement('span');
   badge.className = 'trace-entry-badge';
-  badge.style.cssText =
-    'background:' + (badgeColors[level] || '#555') + ';color:#fff;';
+  badge.style.cssText = 'background:' + (badgeColors[level] || '#555') + ';color:#fff;';
   badge.textContent = level;
   header.appendChild(badge);
 
@@ -633,8 +568,7 @@ function renderTraceEntry(log) {
 
   if (log.requestTraceId) {
     const reqSpan = document.createElement('span');
-    reqSpan.style.cssText =
-      'font-size:11px;color:var(--text2);font-family:monospace;';
+    reqSpan.style.cssText = 'font-size:11px;color:var(--text2);font-family:monospace;';
     reqSpan.textContent = log.requestTraceId.substring(0, 8);
     header.appendChild(reqSpan);
   }
@@ -671,8 +605,7 @@ function startLiveMode() {
     (snap) => {
       logsData = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       renderLogTable(true);
-      document.getElementById('logs-empty').style.display =
-        logsData.length === 0 ? '' : 'none';
+      document.getElementById('logs-empty').style.display = logsData.length === 0 ? '' : 'none';
       document.getElementById('logs-load-more').style.display = 'none';
     },
     (err) => {
@@ -753,11 +686,7 @@ function exportLogs(format) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download =
-    'shytalk-logs-' +
-    new Date().toISOString().slice(0, 10) +
-    '.' +
-    ext;
+  a.download = 'shytalk-logs-' + new Date().toISOString().slice(0, 10) + '.' + ext;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -771,14 +700,10 @@ async function loadLogConfig() {
     const el = (id) => document.getElementById(id);
     if (cfg.retentionHours) el('log-cfg-retention').value = cfg.retentionHours;
     if (cfg.dailyHardCap) el('log-cfg-hardcap').value = cfg.dailyHardCap;
-    if (cfg.batchIntervalSeconds)
-      el('log-cfg-batch-interval').value = cfg.batchIntervalSeconds;
-    if (cfg.wifiOnly !== undefined)
-      el('log-cfg-wifi-only').checked = cfg.wifiOnly;
+    if (cfg.batchIntervalSeconds) el('log-cfg-batch-interval').value = cfg.batchIntervalSeconds;
+    if (cfg.wifiOnly !== undefined) el('log-cfg-wifi-only').checked = cfg.wifiOnly;
     if (cfg.excludedRoutes)
-      el('log-cfg-excluded-routes').value = (
-        cfg.excludedRoutes || []
-      ).join(', ');
+      el('log-cfg-excluded-routes').value = (cfg.excludedRoutes || []).join(', ');
     const levels = cfg.logLevels || cfg.levelPerSource || {};
     for (const [src, lvl] of Object.entries(levels)) {
       const srcEl = el('log-cfg-level-' + src);
@@ -801,8 +726,7 @@ async function saveLogConfig() {
 
     if (retention) body.retentionHours = Number(retention);
     if (hardcap) body.dailyHardCap = Number(hardcap);
-    if (batchInterval)
-      body.batchIntervalSeconds = Number(batchInterval);
+    if (batchInterval) body.batchIntervalSeconds = Number(batchInterval);
     body.wifiOnly = wifiOnly;
     if (excludedRoutes)
       body.excludedRoutes = excludedRoutes
@@ -811,13 +735,7 @@ async function saveLogConfig() {
         .filter(Boolean);
 
     const levels = {};
-    const sources = [
-      'express-api',
-      'android',
-      'ios',
-      'admin-panel',
-      'landing-page',
-    ];
+    const sources = ['express-api', 'android', 'ios', 'admin-panel', 'landing-page'];
     for (const src of sources) {
       const srcEl = el('log-cfg-level-' + src);
       if (srcEl) levels[src] = srcEl.value;
@@ -859,7 +777,8 @@ async function loadInlineAuditLog(page) {
   const pagination = document.getElementById('audit-pagination');
   const pageInfo = document.getElementById('audit-page-info');
 
-  tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text2);font-size:12px;">Loading...</td></tr>';
+  tbody.innerHTML =
+    '<tr><td colspan="5" style="color:var(--text2);font-size:12px;">Loading...</td></tr>';
   emptyMsg.style.display = 'none';
 
   const params = new URLSearchParams();
@@ -894,7 +813,7 @@ async function loadInlineAuditLog(page) {
     emptyMsg.style.display = 'none';
     tbody.textContent = '';
 
-    entries.forEach(entry => {
+    entries.forEach((entry) => {
       const tr = document.createElement('tr');
 
       const tdAdmin = document.createElement('td');
@@ -916,7 +835,8 @@ async function loadInlineAuditLog(page) {
 
       const tdDetails = document.createElement('td');
       tdDetails.className = 'audit-details';
-      tdDetails.textContent = typeof entry.details === 'object' ? JSON.stringify(entry.details) : (entry.details || '');
+      tdDetails.textContent =
+        typeof entry.details === 'object' ? JSON.stringify(entry.details) : entry.details || '';
       tdDetails.title = tdDetails.textContent;
       tr.appendChild(tdDetails);
 
@@ -934,7 +854,10 @@ async function loadInlineAuditLog(page) {
     document.getElementById('audit-prev-btn').disabled = page <= 1;
     document.getElementById('audit-next-btn').disabled = !_auditLastPageToken;
   } catch (err) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--danger);font-size:12px;">Failed: ' + escapeHtml(err.message) + '</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="5" style="color:var(--danger);font-size:12px;">Failed: ' +
+      escapeHtml(err.message) +
+      '</td></tr>';
   }
 }
 
@@ -954,7 +877,7 @@ async function exportInlineAuditCsv() {
     if (to) params.set('to', new Date(to).toISOString());
 
     const res = await fetch(`${_apiBase}/api/admin/audit-log/export?${params.toString()}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Export failed: HTTP ' + res.status);
     const blob = await res.blob();

@@ -45,7 +45,10 @@ describe('scripts/translate-admin-strings.js — module surface', () => {
     expect(typeof mod.translateAdminKeys).toBe('function');
     expect(typeof mod.TRANSLATION_OVERRIDES).toBe('object');
     expect(Array.isArray(mod.LOCALES)).toBe(true);
-    expect(mod.LOCALES).toHaveLength(20);
+    // Four non-English locales since SHY-0289. Asserted EXACTLY, not as a
+    // floor: a language quietly reappearing in the translation runner is as
+    // wrong as one going missing.
+    expect(mod.LOCALES).toHaveLength(4);
   });
 });
 
@@ -63,8 +66,8 @@ describe('parseAdminTranslations', () => {
       "    tab_users: 'Users', tab_appeals: 'Appeals',",
       "    btn_sign_in: 'Sign In',",
       '  },',
-      '  ar: {',
-      "    tab_users: 'arabic',",
+      '  id: {',
+      "    tab_users: 'indonesian',",
       '  },',
       '};',
     ].join('\n');
@@ -74,20 +77,20 @@ describe('parseAdminTranslations', () => {
       tab_appeals: 'Appeals',
       btn_sign_in: 'Sign In',
     });
-    expect(parsed.ar).toEqual({ tab_users: 'arabic' });
+    expect(parsed.id).toEqual({ tab_users: 'indonesian' });
   });
 
-  test('extracts keys from a single-line compact block (nl-style)', () => {
+  test('extracts keys from a single-line compact block (compact style)', () => {
     const src = [
       'var ADMIN_TRANSLATIONS = {',
       '  en: {',
       "    a: 'A', b: 'B',",
       '  },',
-      "  nl: { a: 'Aa', b: 'Bb', c: 'Cc' },",
+      "  th: { a: 'Aa', b: 'Bb', c: 'Cc' },",
       '};',
     ].join('\n');
     const parsed = parseAdminTranslations(src);
-    expect(parsed.nl).toEqual({ a: 'Aa', b: 'Bb', c: 'Cc' });
+    expect(parsed.th).toEqual({ a: 'Aa', b: 'Bb', c: 'Cc' });
   });
 
   test('handles double-quoted values containing apostrophes', () => {
@@ -162,51 +165,51 @@ describe('upsertAdminTranslation', () => {
     '  en: {',
     "    existing_key: 'Existing',",
     '  },',
-    '  ar: {',
-    "    existing_key: 'arabic existing',",
+    '  id: {',
+    "    existing_key: 'indonesian existing',",
     '  },',
     '};',
   ].join('\n');
 
   test('inserts a new key with provenance comment', () => {
-    const updated = upsertAdminTranslation(baseSrc, 'ar', 'new_key', 'arabic new', 'google');
+    const updated = upsertAdminTranslation(baseSrc, 'id', 'new_key', 'indonesian new', 'google');
     const parsed = parseAdminTranslations(updated);
-    expect(parsed.ar.existing_key).toBe('arabic existing');
-    expect(parsed.ar.new_key).toBe('arabic new');
+    expect(parsed.id.existing_key).toBe('indonesian existing');
+    expect(parsed.id.new_key).toBe('indonesian new');
     // Provenance tag MUST be in the file so future re-runs can skip it.
     expect(updated).toMatch(/google-translated \d{4}-\d{2}-\d{2}/);
   });
 
   test('re-running upsert with same key/value is idempotent', () => {
-    const once = upsertAdminTranslation(baseSrc, 'ar', 'new_key', 'arabic new', 'google');
-    const twice = upsertAdminTranslation(once, 'ar', 'new_key', 'arabic new', 'google');
+    const once = upsertAdminTranslation(baseSrc, 'id', 'new_key', 'indonesian new', 'google');
+    const twice = upsertAdminTranslation(once, 'id', 'new_key', 'indonesian new', 'google');
     const parsed = parseAdminTranslations(twice);
-    expect(parsed.ar.new_key).toBe('arabic new');
+    expect(parsed.id.new_key).toBe('indonesian new');
     // `new_key:` must appear exactly once in the ar block — duplicates
     // would corrupt the object at runtime (last-wins, but with stale
     // provenance pointing at non-current value).
-    const arStart = twice.indexOf('\n  ar: {');
-    const arEnd = twice.indexOf('\n  },', arStart);
-    const arBody = twice.substring(arStart, arEnd);
+    const idStart = twice.indexOf('\n  id: {');
+    const arEnd = twice.indexOf('\n  },', idStart);
+    const arBody = twice.substring(idStart, arEnd);
     const matches = arBody.match(/\bnew_key\s*:/g) || [];
     expect(matches).toHaveLength(1);
   });
 
   test('upserting with a new value replaces the old one', () => {
-    const once = upsertAdminTranslation(baseSrc, 'ar', 'new_key', 'first', 'google');
-    const twice = upsertAdminTranslation(once, 'ar', 'new_key', 'second', 'google');
+    const once = upsertAdminTranslation(baseSrc, 'id', 'new_key', 'first', 'google');
+    const twice = upsertAdminTranslation(once, 'id', 'new_key', 'second', 'google');
     const parsed = parseAdminTranslations(twice);
-    expect(parsed.ar.new_key).toBe('second');
+    expect(parsed.id.new_key).toBe('second');
   });
 
   test.each(['google', 'claude', 'override'])(
     'replacing a key previously sourced from %s leaves exactly one provenance comment',
     (initialSource) => {
-      const once = upsertAdminTranslation(baseSrc, 'ar', 'new_key', 'first', initialSource);
-      const twice = upsertAdminTranslation(once, 'ar', 'new_key', 'second', 'override');
-      const arStart = twice.indexOf('\n  ar: {');
-      const arEnd = twice.indexOf('\n  },', arStart);
-      const arBody = twice.substring(arStart, arEnd);
+      const once = upsertAdminTranslation(baseSrc, 'id', 'new_key', 'first', initialSource);
+      const twice = upsertAdminTranslation(once, 'id', 'new_key', 'second', 'override');
+      const idStart = twice.indexOf('\n  id: {');
+      const arEnd = twice.indexOf('\n  },', idStart);
+      const arBody = twice.substring(idStart, arEnd);
       // The new entry has one provenance comment (the override one).
       // The old comment from the initial source must have been
       // consumed by the replacement regex, not left dangling above
@@ -219,42 +222,42 @@ describe('upsertAdminTranslation', () => {
   );
 
   test('inserts into the correct locale block — does not touch others', () => {
-    const updated = upsertAdminTranslation(baseSrc, 'ar', 'new_key', 'arabic new', 'google');
+    const updated = upsertAdminTranslation(baseSrc, 'id', 'new_key', 'indonesian new', 'google');
     const parsed = parseAdminTranslations(updated);
     expect(parsed.en).not.toHaveProperty('new_key');
-    expect(parsed.ar.new_key).toBe('arabic new');
+    expect(parsed.id.new_key).toBe('indonesian new');
   });
 
   test('handles values containing quotes via JSON-safe escaping', () => {
     const updated = upsertAdminTranslation(
       baseSrc,
-      'ar',
+      'id',
       'tricky',
       `she said "hi" — it's odd`,
       'google',
     );
     const parsed = parseAdminTranslations(updated);
-    expect(parsed.ar.tricky).toBe(`she said "hi" — it's odd`);
+    expect(parsed.id.tricky).toBe(`she said "hi" — it's odd`);
   });
 
   test('handles values with literal backslashes', () => {
-    const updated = upsertAdminTranslation(baseSrc, 'ar', 'p', 'C:\\Users\\x', 'google');
+    const updated = upsertAdminTranslation(baseSrc, 'id', 'p', 'C:\\Users\\x', 'google');
     const parsed = parseAdminTranslations(updated);
-    expect(parsed.ar.p).toBe('C:\\Users\\x');
+    expect(parsed.id.p).toBe('C:\\Users\\x');
   });
 
-  test('upsert into a single-line compact locale block (nl-style)', () => {
+  test('upsert into a single-line compact locale block (compact style)', () => {
     const src = [
       'var ADMIN_TRANSLATIONS = {',
       '  en: {',
       "    a: 'A',",
       '  },',
-      "  nl: { a: 'Aa' },",
+      "  th: { a: 'Aa' },",
       '};',
     ].join('\n');
-    const updated = upsertAdminTranslation(src, 'nl', 'b', 'Bb', 'google');
+    const updated = upsertAdminTranslation(src, 'th', 'b', 'Bb', 'google');
     const parsed = parseAdminTranslations(updated);
-    expect(parsed.nl).toEqual({ a: 'Aa', b: 'Bb' });
+    expect(parsed.th).toEqual({ a: 'Aa', b: 'Bb' });
   });
 
   test('upsert REPLACES an existing key in a compact single-line block', () => {
@@ -266,12 +269,12 @@ describe('upsertAdminTranslation', () => {
       '  en: {',
       "    a: 'A', b: 'B',",
       '  },',
-      "  nl: { a: 'Aa', b: 'Bb' },",
+      "  th: { a: 'Aa', b: 'Bb' },",
       '};',
     ].join('\n');
-    const updated = upsertAdminTranslation(src, 'nl', 'a', 'Aaa', 'override');
+    const updated = upsertAdminTranslation(src, 'th', 'a', 'Aaa', 'override');
     const parsed = parseAdminTranslations(updated);
-    expect(parsed.nl).toEqual({ a: 'Aaa', b: 'Bb' });
+    expect(parsed.th).toEqual({ a: 'Aaa', b: 'Bb' });
     // The `b` key in nl must remain intact AFTER the in-place replace.
     expect(updated).toMatch(/b:\s*['"]Bb['"]/);
   });
@@ -287,15 +290,15 @@ describe('upsertAdminTranslation', () => {
       "    // example_key: 'should not match'",
       "    real_key: 'real',",
       '  },',
-      '  ar: {',
+      '  id: {',
       "    // example_key: 'comment-only'",
       "    real_key: 'real_ar',",
       '  },',
       '};',
     ].join('\n');
-    const updated = upsertAdminTranslation(src, 'ar', 'example_key', 'inserted', 'override');
+    const updated = upsertAdminTranslation(src, 'id', 'example_key', 'inserted', 'override');
     const parsed = parseAdminTranslations(updated);
-    expect(parsed.ar.example_key).toBe('inserted');
+    expect(parsed.id.example_key).toBe('inserted');
     // The comment line must still be intact — the splice must NOT
     // have replaced the commented-out example.
     expect(updated).toMatch(/\/\/ example_key: 'comment-only'/);
@@ -369,7 +372,7 @@ describe('decodeJsStringLiteral edge cases', () => {
   });
 
   test('still decodes valid 4-digit \\uXXXX escapes', () => {
-    expect(decodeJsStringLiteral("'\\u0627'")).toBe('ا'); // Arabic alef
+    expect(decodeJsStringLiteral("'\\u0627'")).toBe('ا'); // Indonesian alef
     expect(decodeJsStringLiteral('"\\u00E9"')).toBe('é');
   });
 
@@ -391,25 +394,25 @@ describe('findMissingKeys', () => {
   test('returns en keys absent in each non-en locale', () => {
     const parsed = {
       en: { a: 'A', b: 'B', c: 'C' },
-      ar: { a: 'arA' },
-      de: { a: 'deA', b: 'deB' },
+      id: { a: 'idA' },
+      th: { a: 'thA', b: 'thB' },
     };
-    expect(findMissingKeys(parsed, ['ar', 'de'])).toEqual({
-      ar: ['b', 'c'],
-      de: ['c'],
+    expect(findMissingKeys(parsed, ['id', 'th'])).toEqual({
+      id: ['b', 'c'],
+      th: ['c'],
     });
   });
 
   test('omits locales that already have full parity', () => {
     const parsed = {
       en: { a: 'A' },
-      ar: { a: 'arA' },
+      id: { a: 'idA' },
     };
-    expect(findMissingKeys(parsed, ['ar'])).toEqual({});
+    expect(findMissingKeys(parsed, ['id'])).toEqual({});
   });
 
   test('throws if en block is missing rather than report all keys missing', () => {
-    expect(() => findMissingKeys({ ar: { a: 'arA' } }, ['ar'])).toThrow(/en/i);
+    expect(() => findMissingKeys({ id: { a: 'idA' } }, ['id'])).toThrow(/en/i);
   });
 });
 
@@ -443,10 +446,10 @@ describe('translateAdminKeys — driver with mocked Google', () => {
         '  en: {',
         "    new_key: 'Hello',",
         '  },',
-        '  ar: {',
-        "    existing: 'arabic existing',",
+        '  id: {',
+        "    existing: 'indonesian existing',",
         '  },',
-        '  de: {',
+        '  th: {',
         "    existing: 'deutsch existing',",
         '  },',
         '};',
@@ -458,21 +461,21 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     const result = await translateAdminKeys({
       filePath: tmpFile,
       keys: ['new_key'],
-      locales: ['ar', 'de'],
+      locales: ['id', 'th'],
       apply: true,
       googleTranslateFn: fakeTranslate,
     });
 
-    expect(fakeTranslate).toHaveBeenCalledWith('Hello', 'ar');
-    expect(fakeTranslate).toHaveBeenCalledWith('Hello', 'de');
+    expect(fakeTranslate).toHaveBeenCalledWith('Hello', 'id');
+    expect(fakeTranslate).toHaveBeenCalledWith('Hello', 'th');
     expect(result.googleCount).toBe(2);
     expect(result.skipCount).toBe(0);
     expect(result.claudeTodo).toHaveLength(0);
 
     const after = fs.readFileSync(tmpFile, 'utf8');
     const parsed = require(SCRIPT_PATH).parseAdminTranslations(after);
-    expect(parsed.ar.new_key).toBe('ar:Hello');
-    expect(parsed.de.new_key).toBe('de:Hello');
+    expect(parsed.id.new_key).toBe('id:Hello');
+    expect(parsed.th.new_key).toBe('th:Hello');
   });
 
   test('TRANSLATION_OVERRIDES bypass Google entirely', async () => {
@@ -482,8 +485,8 @@ describe('translateAdminKeys — driver with mocked Google', () => {
         '  en: {',
         "    DOB: 'DOB',",
         '  },',
-        '  ar: {},',
-        '  de: {},',
+        '  id: {},',
+        '  th: {},',
         '};',
       ].join('\n'),
     );
@@ -497,7 +500,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     const result = await translateAdminKeys({
       filePath: tmpFile,
       keys: ['DOB'],
-      locales: ['ar', 'de'],
+      locales: ['id', 'th'],
       apply: true,
       googleTranslateFn: fakeTranslate,
     });
@@ -507,8 +510,8 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     expect(result.overrideCount).toBe(2);
     const after = fs.readFileSync(tmpFile, 'utf8');
     const parsed = require(SCRIPT_PATH).parseAdminTranslations(after);
-    expect(parsed.ar.DOB).toBe('DOB');
-    expect(parsed.de.DOB).toBe('DOB');
+    expect(parsed.id.DOB).toBe('DOB');
+    expect(parsed.th.DOB).toBe('DOB');
   });
 
   test('does not write when apply=false', async () => {
@@ -518,7 +521,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
         '  en: {',
         "    new_key: 'Hello',",
         '  },',
-        '  ar: {},',
+        '  id: {},',
         '};',
       ].join('\n'),
     );
@@ -528,7 +531,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     await translateAdminKeys({
       filePath: tmpFile,
       keys: ['new_key'],
-      locales: ['ar'],
+      locales: ['id'],
       apply: false,
       googleTranslateFn: fakeTranslate,
     });
@@ -543,8 +546,8 @@ describe('translateAdminKeys — driver with mocked Google', () => {
         '  en: {',
         "    new_key: 'Hello',",
         '  },',
-        '  ar: {},',
-        '  de: {},',
+        '  id: {},',
+        '  th: {},',
         '};',
       ].join('\n'),
     );
@@ -556,7 +559,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     const result = await translateAdminKeys({
       filePath: tmpFile,
       keys: ['new_key'],
-      locales: ['ar', 'de'],
+      locales: ['id', 'th'],
       apply: true,
       googleTranslateFn: fakeTranslate,
     });
@@ -576,7 +579,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
         '  en: {',
         "    real_key: 'Real',",
         '  },',
-        '  ar: {},',
+        '  id: {},',
         '};',
       ].join('\n'),
     );
@@ -585,7 +588,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     const result = await translateAdminKeys({
       filePath: tmpFile,
       keys: ['real_key', 'phantom_key'],
-      locales: ['ar'],
+      locales: ['id'],
       apply: true,
       googleTranslateFn: fakeTranslate,
     });
@@ -593,7 +596,7 @@ describe('translateAdminKeys — driver with mocked Google', () => {
     expect(result.googleCount).toBe(1);
     expect(result.skipCount).toBe(1);
     expect(fakeTranslate).toHaveBeenCalledTimes(1);
-    expect(fakeTranslate).toHaveBeenCalledWith('Real', 'ar');
+    expect(fakeTranslate).toHaveBeenCalledWith('Real', 'id');
   });
 });
 

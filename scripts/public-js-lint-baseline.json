@@ -14,13 +14,11 @@
   "public/admin/js/tabs/support.js": 1,
   "public/admin/js/tabs/users.js": 7,
   "public/js/event-translations.js": 1,
-  "public/js/language-selector.js": 2,
   "public/js/logger.js": 2,
   "public/js/preview-watermark.js": 2,
   "public/js/roadmap-app.js": 5,
   "public/js/roadmap-auth.js": 1,
   "public/js/shared-header.js": 2,
   "public/js/suggestions-board.js": 6,
-  "public/portal/portal-translations.js": 1,
   "public/portal/portal.js": 4
 }

@@ -15,24 +15,16 @@ const VALID_TAGS = [
 ];
 
 const VALID_LANGUAGES = [
+  // SHY-0289 — the five ShyTalk ships. A suggestion submitted in a language we
+  // no longer support would be stored in one nobody here can read or moderate,
+  // and the sanitiser normalises anything outside this list to undefined
+  // (English) rather than rejecting the submission.
+  //
+  // Suggestions ALREADY stored in a retired language keep their tag; this gates
+  // what arrives from now on.
   'en',
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'hi',
   'id',
-  'it',
-  'ja',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
   'th',
-  'tr',
-  'uk',
   'vi',
   'zh',
 ];

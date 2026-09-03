@@ -312,7 +312,7 @@ describe('Language Tag Validation', () => {
     const app = createApp();
     await request(app)
       .post('/api/suggestions')
-      .send({ ...VALID_SUGGESTION, language: 'de' })
+      .send({ ...VALID_SUGGESTION, language: 'id' })
       .expect(201);
   });
 
@@ -461,7 +461,11 @@ describe('Suggestion Text Handling', () => {
     const app = createApp();
     await request(app)
       .post('/api/suggestions')
-      .send({ ...VALID_SUGGESTION, title: 'إضافة الوضع المظلم', language: 'ar' })
+      // The TEXT stays Arabic on purpose: people type whatever they like, and
+      // storing right-to-left, non-Latin input correctly is the subject here.
+      // Only the language TAG had to move — Arabic is no longer a language
+      // ShyTalk ships, so it is no longer a valid tag (SHY-0289).
+      .send({ ...VALID_SUGGESTION, title: 'إضافة الوضع المظلم', language: 'en' })
       .expect(201);
   });
 

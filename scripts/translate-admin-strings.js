@@ -44,16 +44,23 @@
  * Without --apply the script reports what it WOULD do.
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
+const fs = require("node:fs");
+const path = require("node:path");
 
 const { googleTranslate, sleep, GOOGLE_QUOTA_EXHAUSTED } = require(
-  path.join(__dirname, 'lib', 'google-translate.js'),
+  path.join(__dirname, "lib", "google-translate.js"),
 );
 
 const LOCALES = [
-  'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  // SHY-0289 — four non-English locales, not nineteen. Supporting a language is
+  // a promise about the quality of what it says, and that promise is only made
+  // for the MVP five. Left as an explicit list rather than a directory scan: a
+  // translation run should write where somebody DECIDED it should, not wherever
+  // a folder happens to exist.
+  "id",
+  "th",
+  "vi",
+  "zh",
 ];
 
 // Keys that must NOT be machine-translated. `null` means "copy en
@@ -76,9 +83,9 @@ const LOCALES = [
 // `// override-translated YYYY-MM-DD` provenance comment so future
 // bulk re-runs preserve them.
 const TRANSLATION_OVERRIDES = {
-  DOB: null,    // English acronym for "date of birth" — universal in admin UI.
-  ID: null,     // English acronym for "identifier" — universal in admin UI.
-  at: null,     // Single-token English preposition; no portable translation absent context.
+  DOB: null, // English acronym for "date of birth" — universal in admin UI.
+  ID: null, // English acronym for "identifier" — universal in admin UI.
+  at: null, // Single-token English preposition; no portable translation absent context.
   system: null, // Collides with locale-specific "system" terms; verbatim is safer than guessing.
   method: null, // Same risk class as `system`; can be lifted per-locale after native review.
 };
@@ -91,10 +98,14 @@ function parseArgs(argv) {
   const out = { file: null, keys: [], apply: false, missing: false };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--file') out.file = argv[++i];
-    else if (arg === '--keys') out.keys = argv[++i].split(',').map((s) => s.trim()).filter(Boolean);
-    else if (arg === '--apply') out.apply = true;
-    else if (arg === '--missing') out.missing = true;
+    if (arg === "--file") out.file = argv[++i];
+    else if (arg === "--keys")
+      out.keys = argv[++i]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    else if (arg === "--apply") out.apply = true;
+    else if (arg === "--missing") out.missing = true;
   }
   return out;
 }
@@ -119,7 +130,7 @@ function parseArgs(argv) {
  * `stripCommentsPreservingStrings` need a backtick branch.
  */
 function findLocaleBlockSpan(src, locale) {
-  const headerRe = new RegExp(`^  ${locale}\\s*:\\s*\\{`, 'm');
+  const headerRe = new RegExp(`^  ${locale}\\s*:\\s*\\{`, "m");
   const m = headerRe.exec(src);
   if (!m) return null;
   const openBrace = m.index + m[0].length - 1; // index of the `{`
@@ -132,27 +143,33 @@ function findLocaleBlockSpan(src, locale) {
       const quote = c;
       i++;
       while (i < src.length) {
-        if (src[i] === '\\') { i += 2; continue; }
-        if (src[i] === quote) { i++; break; }
+        if (src[i] === "\\") {
+          i += 2;
+          continue;
+        }
+        if (src[i] === quote) {
+          i++;
+          break;
+        }
         i++;
       }
       continue;
     }
-    if (c === '/' && src[i + 1] === '/') {
+    if (c === "/" && src[i + 1] === "/") {
       // Line comment.
       i += 2;
-      while (i < src.length && src[i] !== '\n') i++;
+      while (i < src.length && src[i] !== "\n") i++;
       continue;
     }
-    if (c === '/' && src[i + 1] === '*') {
+    if (c === "/" && src[i + 1] === "*") {
       // Block comment.
       i += 2;
-      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
       i += 2;
       continue;
     }
-    if (c === '{') depth++;
-    else if (c === '}') depth--;
+    if (c === "{") depth++;
+    else if (c === "}") depth--;
     i++;
   }
   if (depth !== 0) return null;
@@ -174,7 +191,7 @@ function findLocaleBlockSpan(src, locale) {
  * a guard then.
  */
 function stripCommentsPreservingStrings(src) {
-  let out = '';
+  let out = "";
   let i = 0;
   while (i < src.length) {
     const c = src[i];
@@ -184,20 +201,27 @@ function stripCommentsPreservingStrings(src) {
       i++;
       while (i < src.length) {
         out += src[i];
-        if (src[i] === '\\') { out += src[i + 1] || ''; i += 2; continue; }
-        if (src[i] === quote) { i++; break; }
+        if (src[i] === "\\") {
+          out += src[i + 1] || "";
+          i += 2;
+          continue;
+        }
+        if (src[i] === quote) {
+          i++;
+          break;
+        }
         i++;
       }
       continue;
     }
-    if (c === '/' && src[i + 1] === '/') {
+    if (c === "/" && src[i + 1] === "/") {
       i += 2;
-      while (i < src.length && src[i] !== '\n') i++;
+      while (i < src.length && src[i] !== "\n") i++;
       continue;
     }
-    if (c === '/' && src[i + 1] === '*') {
+    if (c === "/" && src[i + 1] === "*") {
       i += 2;
-      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) i++;
       i += 2;
       continue;
     }
@@ -216,7 +240,7 @@ function stripCommentsPreservingStrings(src) {
  * file by replacing comment text instead of the real entry.
  */
 function blankCommentsPreservingOffsets(src) {
-  let out = '';
+  let out = "";
   let i = 0;
   while (i < src.length) {
     const c = src[i];
@@ -226,27 +250,40 @@ function blankCommentsPreservingOffsets(src) {
       i++;
       while (i < src.length) {
         out += src[i];
-        if (src[i] === '\\') { out += src[i + 1] || ''; i += 2; continue; }
-        if (src[i] === quote) { i++; break; }
+        if (src[i] === "\\") {
+          out += src[i + 1] || "";
+          i += 2;
+          continue;
+        }
+        if (src[i] === quote) {
+          i++;
+          break;
+        }
         i++;
       }
       continue;
     }
-    if (c === '/' && src[i + 1] === '/') {
+    if (c === "/" && src[i + 1] === "/") {
       // Replace `//` and the comment body (up to but not including
       // the newline) with spaces of equal length.
-      while (i < src.length && src[i] !== '\n') { out += ' '; i++; }
+      while (i < src.length && src[i] !== "\n") {
+        out += " ";
+        i++;
+      }
       continue;
     }
-    if (c === '/' && src[i + 1] === '*') {
+    if (c === "/" && src[i + 1] === "*") {
       // Replace `/* ... */` with spaces of equal length, preserving
       // embedded newlines so line numbers stay aligned for any
       // debugging that uses them.
-      while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
-        out += src[i] === '\n' ? '\n' : ' ';
+      while (i < src.length && !(src[i] === "*" && src[i + 1] === "/")) {
+        out += src[i] === "\n" ? "\n" : " ";
         i++;
       }
-      if (i < src.length) { out += '  '; i += 2; }
+      if (i < src.length) {
+        out += "  ";
+        i += 2;
+      }
       continue;
     }
     out += c;
@@ -271,18 +308,23 @@ function decodeJsStringLiteral(lit) {
     throw new Error(`Not a quoted string literal: ${lit.slice(0, 40)}`);
   }
   const body = lit.slice(1, -1);
-  let out = '';
+  let out = "";
   for (let i = 0; i < body.length; i++) {
     const c = body[i];
-    if (c !== '\\') { out += c; continue; }
+    if (c !== "\\") {
+      out += c;
+      continue;
+    }
     const next = body[++i];
-    if (next === 'n') out += '\n';
-    else if (next === 't') out += '\t';
-    else if (next === 'r') out += '\r';
-    else if (next === 'u') {
+    if (next === "n") out += "\n";
+    else if (next === "t") out += "\t";
+    else if (next === "r") out += "\r";
+    else if (next === "u") {
       const hex = body.slice(i + 1, i + 5);
       if (hex.length < 4 || !/^[0-9a-fA-F]{4}$/.test(hex)) {
-        throw new Error(`Truncated or invalid \\uXXXX escape near offset ${i}: ${JSON.stringify(hex)}`);
+        throw new Error(
+          `Truncated or invalid \\uXXXX escape near offset ${i}: ${JSON.stringify(hex)}`,
+        );
       }
       out += String.fromCharCode(parseInt(hex, 16));
       i += 4;
@@ -299,7 +341,8 @@ function decodeJsStringLiteral(lit) {
  * comment-free body. The string literal alternation matches escape
  * sequences via `(?:[^'\\]|\\.)*` so apostrophes and quotes survive.
  */
-const KEY_VALUE_RE = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
+const KEY_VALUE_RE =
+  /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
 
 /**
  * Parse the full ADMIN_TRANSLATIONS object — returns
@@ -309,7 +352,7 @@ const KEY_VALUE_RE = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*('(?:[^'\\]|\\.)*'|"(?:[^
  */
 function parseAdminTranslations(src) {
   const out = {};
-  const locales = ['en', ...LOCALES];
+  const locales = ["en", ...LOCALES];
   for (const locale of locales) {
     const span = findLocaleBlockSpan(src, locale);
     if (!span) continue;
@@ -329,7 +372,7 @@ function parseAdminTranslations(src) {
 // ── Upsert ────────────────────────────────────────────────────────
 
 function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -345,7 +388,9 @@ function escapeRegex(s) {
 function upsertAdminTranslation(src, locale, key, value, source) {
   const span = findLocaleBlockSpan(src, locale);
   if (!span) {
-    throw new Error(`upsertAdminTranslation: locale "${locale}" block not found`);
+    throw new Error(
+      `upsertAdminTranslation: locale "${locale}" block not found`,
+    );
   }
   const body = src.substring(span.bodyStart, span.bodyEnd);
 
@@ -376,18 +421,25 @@ function upsertAdminTranslation(src, locale, key, value, source) {
   if (m) {
     // Replace the matched span in raw body. Use the indices from
     // `blanked` because offsets are preserved 1:1.
-    newBody = body.substring(0, m.index) + newEntry + body.substring(m.index + m[0].length);
+    newBody =
+      body.substring(0, m.index) +
+      newEntry +
+      body.substring(m.index + m[0].length);
   } else {
     // Splice before the trailing whitespace/newline (so the closing
     // `}` keeps its original indent on the next line).
     const trailingWs = body.match(/\s*$/)[0];
     const head = body.substring(0, body.length - trailingWs.length);
     // Ensure the previous entry has a trailing comma so JS-parses cleanly.
-    const headWithComma = /[,{]\s*$/.test(head) ? head : head.replace(/(\S)(\s*)$/, '$1,$2');
+    const headWithComma = /[,{]\s*$/.test(head)
+      ? head
+      : head.replace(/(\S)(\s*)$/, "$1,$2");
     newBody = `${headWithComma}${newEntry}\n  `;
   }
 
-  return src.substring(0, span.bodyStart) + newBody + src.substring(span.bodyEnd);
+  return (
+    src.substring(0, span.bodyStart) + newBody + src.substring(span.bodyEnd)
+  );
 }
 
 // ── Diff ──────────────────────────────────────────────────────────
@@ -399,7 +451,7 @@ function upsertAdminTranslation(src, locale, key, value, source) {
  */
 function findMissingKeys(parsed, locales) {
   if (!parsed.en) {
-    throw new Error('findMissingKeys: en block missing from parsed map');
+    throw new Error("findMissingKeys: en block missing from parsed map");
   }
   const enKeys = Object.keys(parsed.en);
   const out = {};
@@ -438,7 +490,7 @@ async function translateAdminKeys({
   googleTranslateFn = googleTranslate,
   log = console.log,
 }) {
-  let src = fs.readFileSync(filePath, 'utf8');
+  let src = fs.readFileSync(filePath, "utf8");
   const parsed = parseAdminTranslations(src);
   const englishMap = parsed.en || {};
 
@@ -461,7 +513,7 @@ async function translateAdminKeys({
         const override = TRANSLATION_OVERRIDES[key];
         const value = override === null ? enValue : override;
         if (apply) {
-          src = upsertAdminTranslation(src, locale, key, value, 'override');
+          src = upsertAdminTranslation(src, locale, key, value, "override");
         }
         log(`  = ${locale}/${key}: (override) ${value}`);
         overrideCount++;
@@ -471,9 +523,11 @@ async function translateAdminKeys({
       try {
         const translated = await googleTranslateFn(enValue, locale);
         if (apply) {
-          src = upsertAdminTranslation(src, locale, key, translated, 'google');
+          src = upsertAdminTranslation(src, locale, key, translated, "google");
         }
-        log(`  ✓ ${locale}/${key}: ${translated.slice(0, 60)}${translated.length > 60 ? '…' : ''}`);
+        log(
+          `  ✓ ${locale}/${key}: ${translated.slice(0, 60)}${translated.length > 60 ? "…" : ""}`,
+        );
         googleCount++;
       } catch (err) {
         if (err.message === GOOGLE_QUOTA_EXHAUSTED) {
@@ -502,13 +556,13 @@ async function main() {
 
   if (!args.file) {
     console.error(
-      'Usage: node scripts/translate-admin-strings.js --file path/to/translations.js \\\n' +
-        '         (--keys k1,k2 | --missing) [--apply]',
+      "Usage: node scripts/translate-admin-strings.js --file path/to/translations.js \\\n" +
+        "         (--keys k1,k2 | --missing) [--apply]",
     );
     process.exit(2);
   }
 
-  const src = fs.readFileSync(args.file, 'utf8');
+  const src = fs.readFileSync(args.file, "utf8");
   const parsed = parseAdminTranslations(src);
 
   let keys = args.keys;
@@ -517,13 +571,16 @@ async function main() {
     // Union across locales — re-translate per (locale, key) is fine,
     // the upsert path is idempotent.
     const union = new Set();
-    for (const list of Object.values(missing)) for (const k of list) union.add(k);
+    for (const list of Object.values(missing))
+      for (const k of list) union.add(k);
     keys = [...union];
-    console.log(`--missing: ${keys.length} unique keys across ${Object.keys(missing).length} locales`);
+    console.log(
+      `--missing: ${keys.length} unique keys across ${Object.keys(missing).length} locales`,
+    );
   }
 
   if (keys.length === 0) {
-    console.log('No keys to translate.');
+    console.log("No keys to translate.");
     return;
   }
 
@@ -541,7 +598,7 @@ async function main() {
       `skipped: ${result.skipCount}, claude-fallback: ${result.claudeTodo.length}`,
   );
   if (result.claudeTodo.length > 0) {
-    const todoPath = path.resolve('translate-admin-claude-todo.json');
+    const todoPath = path.resolve("translate-admin-claude-todo.json");
     fs.writeFileSync(todoPath, JSON.stringify(result.claudeTodo, null, 2));
     console.log(`Claude-todo manifest written to ${todoPath}`);
   }

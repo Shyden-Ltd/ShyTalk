@@ -26,24 +26,14 @@ const RESOURCES_DIR = path.join(
 
 /** The 20 translated locales (the default `values` dir is separate). */
 const ALL_LOCALES = [
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'hi',
+  // SHY-0289 — five languages, not twenty. Supporting a language is a promise
+  // about the quality of what it says, including the legal and safety copy a
+  // minor reads, and that promise is only made for the MVP five. Deliberately
+  // hardcoded rather than read from disk: this list is the DECLARATION, and the
+  // parity suite asserts the directories match it. Derived from disk it could
+  // never disagree, and a locale quietly appearing or vanishing would pass.
   'id',
-  'it',
-  'ja',
-  'km',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
   'th',
-  'tr',
-  'uk',
   'vi',
   'zh',
 ];

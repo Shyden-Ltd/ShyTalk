@@ -44,13 +44,13 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['IP banned', /,\s*"IP banned"\)/],
-      ['Identity graph suspended', /showToast\("Identity graph suspended"/],
-      ['Identity graph unsuspended', /showToast\("Identity graph unsuspended"/],
-      ['Enter reason for account deletion prompt', /prompt\("Enter reason for account deletion/],
-      ['Reason optional prompt', /prompt\("Reason \(optional\):"\)/],
+      ['IP banned', /,\s*['"]IP banned['"]\)/],
+      ['Identity graph suspended', /showToast\(['"]Identity graph suspended['"]/],
+      ['Identity graph unsuspended', /showToast\(['"]Identity graph unsuspended['"]/],
+      ['Enter reason for account deletion prompt', /prompt\(['"]Enter reason for account deletion/],
+      ['Reason optional prompt', /prompt\(['"]Reason \(optional\):['"]\)/],
       ['Device: biometric label (literal HTML)', /<strong>Device:<\/strong>/],
-      ['Registered: biometric label', /">Registered: /],
+      ['Registered: biometric label', /['"]>Registered: /],
       ['ban call(s) failed segment', /\$\{rejected\.length\}\/\$\{devices\.length\} ban call/],
       ['PMs failed segment', /\$\{aggregatePmFailed\}\/\$\{aggregatePmTotal\} PMs failed/],
     ];
@@ -60,11 +60,11 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
 
     for (const key of PHASE_2H_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
     // prompt_ban_reason is used at ≥2 sites (ban-all-devices + ban-IP)
-    const banReasonMatches = src.match(/tAdmin\("prompt_ban_reason"\)/g) || [];
+    const banReasonMatches = src.match(/tAdmin\(['"]prompt_ban_reason['"]\)/g) || [];
     expect(banReasonMatches.length, 'prompt_ban_reason should be ≥2x').toBeGreaterThanOrEqual(2);
   });
 
@@ -73,12 +73,8 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -95,14 +91,14 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
     }
   });
 
-  test('Korean runtime: IP/identity + prompts + partial-failure segments interpolate', async ({ page, request }) => {
+  test('Chinese runtime: IP/identity + prompts + partial-failure segments interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -127,33 +123,33 @@ test.describe('Admin users-tab IP/identity + prompts + bio-labels i18n (Phase 2h
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    expect(result!.ipBanned).toMatch(/[가-힯]/);
+    expect(result!.ipBanned).toMatch(/[一-鿿]/);
     expect(result!.ipBanned).not.toBe('IP banned');
 
-    expect(result!.igSuspend).toMatch(/[가-힯]/);
+    expect(result!.igSuspend).toMatch(/[一-鿿]/);
     expect(result!.igSuspend).not.toBe('Identity graph suspended');
 
-    expect(result!.igUnsuspend).toMatch(/[가-힯]/);
+    expect(result!.igUnsuspend).toMatch(/[一-鿿]/);
     expect(result!.igUnsuspend).not.toBe('Identity graph unsuspended');
 
-    expect(result!.promptDel).toMatch(/[가-힯]/);
+    expect(result!.promptDel).toMatch(/[一-鿿]/);
     expect(result!.promptDel).not.toBe('Enter reason for account deletion (optional):');
 
-    expect(result!.promptBan).toMatch(/[가-힯]/);
+    expect(result!.promptBan).toMatch(/[一-鿿]/);
     expect(result!.promptBan).not.toBe('Reason (optional):');
 
-    expect(result!.bioDevice).toMatch(/[가-힯]/);
+    expect(result!.bioDevice).toMatch(/[一-鿿]/);
     expect(result!.bioDevice).not.toBe('Device:');
 
-    expect(result!.bioReg).toMatch(/[가-힯]/);
+    expect(result!.bioReg).toMatch(/[一-鿿]/);
     expect(result!.bioReg).not.toBe('Registered:');
 
-    expect(result!.segBan).toMatch(/[가-힯]/);
+    expect(result!.segBan).toMatch(/[一-鿿]/);
     expect(result!.segBan).toContain('2');
     expect(result!.segBan).toContain('5');
     expect(result!.segBan).toContain('timeout');
 
-    expect(result!.segPm).toMatch(/[가-힯]/);
+    expect(result!.segPm).toMatch(/[一-鿿]/);
     expect(result!.segPm).toContain('1');
     expect(result!.segPm).toContain('3');
   });

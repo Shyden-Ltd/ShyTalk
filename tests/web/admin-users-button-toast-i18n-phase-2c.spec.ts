@@ -45,18 +45,18 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Searching...', /textContent\s*=\s*"Searching\.\.\."/],
-      ['Search reset', /searchBtnEl\.textContent\s*=\s*"Search"/],
-      ['Show (email toggle)', /emailToggle\.textContent\s*=\s*"Show"/],
-      ['Hide (email toggle)', /emailToggle\.textContent\s*=\s*"Hide"/],
-      ['Saving… (email)', /text\.textContent\s*=\s*"Saving…"/],
-      ['Undo link', /undoLink\.textContent\s*=\s*"Undo"/],
-      ['Display name empty toast', /showToast\("Display name cannot be empty"/],
-      ['Undo successful toast', /showToast\("Undo successful"\)/],
-      ['Already in list toast', /showToast\("Already in list"/],
-      ['Loading...', /ld\.textContent\s*=\s*"Loading\.\.\."/],
-      ['No warnings', /ed\.textContent\s*=\s*"No warnings"/],
-      ['Revoke button', /rb\.textContent\s*=\s*"Revoke"/],
+      ['Searching...', /textContent\s*=\s*['"]Searching\.\.\.['"]/],
+      ['Search reset', /searchBtnEl\.textContent\s*=\s*['"]Search['"]/],
+      ['Show (email toggle)', /emailToggle\.textContent\s*=\s*['"]Show['"]/],
+      ['Hide (email toggle)', /emailToggle\.textContent\s*=\s*['"]Hide['"]/],
+      ['Saving… (email)', /text\.textContent\s*=\s*['"]Saving…['"]/],
+      ['Undo link', /undoLink\.textContent\s*=\s*['"]Undo['"]/],
+      ['Display name empty toast', /showToast\(['"]Display name cannot be empty['"]/],
+      ['Undo successful toast', /showToast\(['"]Undo successful['"]\)/],
+      ['Already in list toast', /showToast\(['"]Already in list['"]/],
+      ['Loading...', /ld\.textContent\s*=\s*['"]Loading\.\.\.['"]/],
+      ['No warnings', /ed\.textContent\s*=\s*['"]No warnings['"]/],
+      ['Revoke button', /rb\.textContent\s*=\s*['"]Revoke['"]/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -66,7 +66,7 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     const allKeys = [...PHASE_2C_NEW_KEYS, 'btn_search', 'msg_loading'];
     for (const key of allKeys) {
       expect(src, `users.js should call tAdmin("${key}")`).toMatch(
-        new RegExp(`window\\.tAdmin\\("${key}"\\)`),
+        new RegExp(`window\\.tAdmin\\(['"]${key}['"]\\)`),
       );
     }
   });
@@ -76,12 +76,8 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'zh', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -98,14 +94,14 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
     }
   });
 
-  test('Korean locale: tAdmin returns Hangul for all 10 new keys', async ({ page, request }) => {
+  test('Chinese locale: tAdmin returns Han characters for all 10 new keys', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -135,7 +131,7 @@ test.describe('Admin users-tab button/toast i18n (Phase 2c)', () => {
       const value = t![key];
       expect(value, `tAdmin(${key}) should not be null`).not.toBeNull();
       expect(value, `tAdmin(${key}) should not be English`).not.toBe(englishValues[key]);
-      expect(value, `tAdmin(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
+      expect(value, `tAdmin(${key}) in ko should contain Han characters`).toMatch(/[一-鿿]/);
     }
   });
 });

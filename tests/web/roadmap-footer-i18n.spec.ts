@@ -45,7 +45,7 @@ test.describe('Roadmap footer i18n', () => {
   test('copyright falls back to English when locale lacks the key', async ({ page }) => {
     await page.addInitScript(() => {
       try {
-        localStorage.setItem('shytalk_language', 'ar');
+        localStorage.setItem('shytalk_language', 'th');
       } catch {
         /* localStorage may be unavailable on some webkit configs; ignore */
       }
@@ -62,7 +62,7 @@ test.describe('Roadmap footer i18n', () => {
     );
 
     const copyright = await page.locator('[data-i18n="copyright"]').textContent();
-    expect(copyright, 'copyright must contain Shyden Ltd brand even in Arabic locale').toContain('Shyden Ltd');
+    expect(copyright, 'copyright must contain Shyden Ltd brand even in Thai locale').toContain('Shyden Ltd');
   });
 
   test('roadmap-app.js defines copyright key (orphan-checker contract)', async ({ request }) => {
@@ -70,7 +70,7 @@ test.describe('Roadmap footer i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
     expect(src, 'copyright key must be defined to satisfy orphan-i18n-keys check').toMatch(
-      /copyright:\s*"[^"]*Shyden Ltd[^"]*"/,
+      /copyright:\s*['"][^'"]*Shyden Ltd[^'"]*['"]/,
     );
   });
 });

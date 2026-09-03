@@ -16,7 +16,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *
  * 2. portal-translations.js's `applyPortalTranslations` set
  *    document.documentElement.lang but NOT dir — same RTL gap PR #569
- *    fixed in language-selector.js. So Arabic would translate text but
+ *    fixed in language-selector.js. So Thai would translate text but
  *    leave layout LTR.
  *
  * The portal has a strict CSP (style-src 'self' — no `unsafe-inline`),
@@ -44,20 +44,24 @@ test.describe('Portal i18n', () => {
     await expect(btn).toBeVisible();
   });
 
-  test('Arabic preference applies dir=rtl + lang=ar on initial load', async ({ page }) => {
+  test('Thai preference applies dir + lang=th on initial load', async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('shytalk_language', 'ar');
+      localStorage.setItem('shytalk_language', 'th');
     });
     await page.goto(`${BASE}/portal/`);
     // portal-translations.js's bottom IIFE runs synchronously at script
     // parse time; by the time domcontentloaded fires, lang+dir are set.
     await page.waitForFunction(
-      () => document.documentElement.lang === 'ar' && document.documentElement.dir === 'rtl',
+      // Thai is left-to-right. This was Arabic, the only RTL language shipped,
+      // and it went with SHY-0289 — so `dir` is asserted as explicitly 'ltr'
+      // rather than left as the HTML default, which is the property that
+      // still matters.
+      () => document.documentElement.lang === 'th' && document.documentElement.dir === 'ltr',
       null,
       { timeout: 5_000 },
     );
-    expect(await page.locator('html').getAttribute('lang')).toBe('ar');
-    expect(await page.locator('html').getAttribute('dir')).toBe('rtl');
+    expect(await page.locator('html').getAttribute('lang')).toBe('th');
+    expect(await page.locator('html').getAttribute('dir')).toBe('ltr');
   });
 
   test('English (default) applies dir=ltr', async ({ page }) => {

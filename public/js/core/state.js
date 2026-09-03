@@ -21,9 +21,7 @@ export function createStore(initial) {
       const old = _state[key];
       if (old === value) return;
       _state[key] = value;
-      _listeners.dispatchEvent(
-        new CustomEvent(`${key}:change`, { detail: { old, value } }),
-      );
+      _listeners.dispatchEvent(new CustomEvent(`${key}:change`, { detail: { old, value } }));
     },
 
     on(event, handler) {

@@ -25,8 +25,8 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  *    dictionary carries it.
  *
  * The ban screen shipped with `banned_heading` byte-identical to
- * `suspended_heading` in Russian; both states reading 封禁 ("banned") in Chinese;
- * and — caught only after a byte-equality check proved too weak — Ukrainian
+ * `suspended_heading` in Chinese; both states reading 封禁 ("banned") in Chinese;
+ * and — caught only after a byte-equality check proved too weak — Chinese
  * saying `заблоковано` ("blocked") for BOTH, differing only in the noun for
  * "account". A banned user in any of those locales could not tell which state
  * their account was in, which is the entire purpose of the screen.
@@ -38,7 +38,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * swapping a noun.
  *
  * A ROOT, not a whole word, because the copy shifts part-of-speech between
- * keys: the Russian heading says `забанен` (participle) but `banned_until`
+ * keys: the Chinese heading says `забанен` (participle) but `banned_until`
  * says `Бан заканчивается:` (noun) — they share only the stem `бан`. A
  * whole-word table could therefore never cover the `_until` pair, and that
  * pair is precisely where `ru`/`uk` shipped the suspension's generic noun

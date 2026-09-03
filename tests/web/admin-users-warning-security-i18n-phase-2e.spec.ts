@@ -42,14 +42,14 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     const src = await res.text();
 
     const hardcoded: Array<[string, RegExp]> = [
-      ['Revoked inline label', /rs\.textContent\s*=\s*"Revoked"/],
-      ['Note: prefix', /textContent\s*=\s*"Note: "\s*\+/],
-      ['By: meta line', /textContent\s*=\s*"By: "\s*\+/],
-      ['Warning revoked toast', /showToast\("Warning revoked, \+"\s*\+/],
-      ['Revoke catch fallback', /btn\.textContent\s*=\s*"Revoke";/],
-      ['PIN lockout reset toast', /showToast\("PIN lockout reset"\)/],
-      ['Biometric key revoked toast', /showToast\("Biometric key revoked"\)/],
-      ['GCS reset toast', /showToast\("GCS reset to 100"\)/],
+      ['Revoked inline label', /rs\.textContent\s*=\s*['"]Revoked['"]/],
+      ['Note: prefix', /textContent\s*=\s*['"]Note: ['"]\s*\+/],
+      ['By: meta line', /textContent\s*=\s*['"]By: ['"]\s*\+/],
+      ['Warning revoked toast', /showToast\(['"]Warning revoked, \+['"]\s*\+/],
+      ['Revoke catch fallback', /btn\.textContent\s*=\s*['"]Revoke['"];/],
+      ['PIN lockout reset toast', /showToast\(['"]PIN lockout reset['"]\)/],
+      ['Biometric key revoked toast', /showToast\(['"]Biometric key revoked['"]\)/],
+      ['GCS reset toast', /showToast\(['"]GCS reset to 100['"]\)/],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -58,11 +58,11 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     // Each new key wired through tAdmin / tAdminFmt
     for (const key of PHASE_2E_KEYS) {
       expect(src, `users.js should reference "${key}"`).toMatch(
-        new RegExp(`tAdmin(?:Fmt)?\\("${key}"`),
+        new RegExp(`tAdmin(?:Fmt)?\\(['"]${key}['"]`),
       );
     }
     // Reused key — must appear at least twice (Phase 2c primary site + Phase 2e catch fallback)
-    const revokeMatches = src.match(/tAdmin\("btn_revoke"\)/g) || [];
+    const revokeMatches = src.match(/tAdmin\(['"]btn_revoke['"]\)/g) || [];
     expect(revokeMatches.length, 'btn_revoke should be referenced ≥2x (primary + catch)').toBeGreaterThanOrEqual(2);
   });
 
@@ -71,12 +71,8 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const locales = [
-      'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-    ];
-    const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
+    const locales = ['en', 'id', 'th', 'vi', 'zh'];
+    const multiLine = new Set(['en', 'id']);
 
     for (const locale of locales) {
       const localeBlock = multiLine.has(locale)
@@ -93,14 +89,14 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
     }
   });
 
-  test('Korean runtime: warning meta + security toasts interpolate', async ({ page, request }) => {
+  test('Chinese runtime: warning meta + security toasts interpolate', async ({ page, request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
 
     await page.goto('about:blank');
     await page.addScriptTag({
-      content: 'window.ShyTalkLanguage = { get: function() { return "ko"; } };',
+      content: 'window.ShyTalkLanguage = { get: function() { return "zh"; } };',
     });
     await page.addScriptTag({ content: translationsSrc });
 
@@ -123,28 +119,28 @@ test.describe('Admin users-tab warning + security i18n (Phase 2e)', () => {
 
     expect(result, 'tAdmin/tAdminFmt should be defined').not.toBeNull();
 
-    // Korean translations must contain Hangul AND must NOT match the English source
-    expect(result!.revoked).toMatch(/[가-힯]/);
+    // Chinese translations must contain Han characters AND must NOT match the English source
+    expect(result!.revoked).toMatch(/[一-鿿]/);
     expect(result!.revoked).not.toBe('Revoked');
 
-    expect(result!.note).toMatch(/[가-힯]/);
+    expect(result!.note).toMatch(/[一-鿿]/);
     expect(result!.note).toContain('spam detected');
 
-    expect(result!.meta).toMatch(/[가-힯]/);
+    expect(result!.meta).toMatch(/[一-鿿]/);
     expect(result!.meta).toContain('AdminBob');
     expect(result!.meta).toContain('90');
     expect(result!.meta).toContain('80');
 
-    expect(result!.revokedToast).toMatch(/[가-힯]/);
+    expect(result!.revokedToast).toMatch(/[一-鿿]/);
     expect(result!.revokedToast).toContain('10');
 
-    expect(result!.pinReset).toMatch(/[가-힯]/);
+    expect(result!.pinReset).toMatch(/[一-鿿]/);
     expect(result!.pinReset).not.toBe('PIN lockout reset');
 
-    expect(result!.biometric).toMatch(/[가-힯]/);
+    expect(result!.biometric).toMatch(/[一-鿿]/);
     expect(result!.biometric).not.toBe('Biometric key revoked');
 
-    expect(result!.gcsReset).toMatch(/[가-힯]/);
+    expect(result!.gcsReset).toMatch(/[一-鿿]/);
     expect(result!.gcsReset).not.toBe('GCS reset to 100');
   });
 });

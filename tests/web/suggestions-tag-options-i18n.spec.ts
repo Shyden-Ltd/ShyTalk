@@ -24,10 +24,7 @@ const TAG_KEYS = [
   'tagSocial', 'tagEconomy', 'tagAccessibility', 'tagOther',
 ];
 
-const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const SG_LOCALES = ['en', 'id', 'th', 'zh', 'zh'];
 
 test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
   test('TAG_OPTIONS labels are sgT()-driven, not hardcoded', async ({ request }) => {
@@ -46,7 +43,7 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
     }
     for (const key of TAG_KEYS) {
       expect(arrSrc, `TAG_OPTIONS should use sgT("${key}")`).toMatch(
-        new RegExp(`label:\\s*sgT\\("${key}"\\)`),
+        new RegExp(`label:\\s*sgT\\(['"]${key}['"]\\)`),
       );
     }
   });
@@ -65,9 +62,9 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
     }
   });
 
-  test('Korean locale: sgT() returns Hangul for all 9 tag keys', async ({ page }) => {
+  test('Chinese locale: sgT() returns Han characters for all 9 tag keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -82,11 +79,11 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
       return out;
     }, TAG_KEYS);
     // UI/UX is preserved as the literal "UI/UX" in many locales — accept
-    // either Hangul characters OR the literal "UI/UX" string.
+    // either Han characters OR the literal "UI/UX" string.
     for (const key of TAG_KEYS) {
       const v = results[key];
       expect(v, `sgT(${key}) in ko`).toBeTruthy();
-      expect(v, `sgT(${key}) in ko should contain Hangul or be UI/UX literal`).toMatch(/[가-힯]|UI\/UX/);
+      expect(v, `sgT(${key}) in ko should contain Han characters or be UI/UX literal`).toMatch(/[一-鿿]|UI\/UX/);
     }
   });
 });

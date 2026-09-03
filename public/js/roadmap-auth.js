@@ -46,7 +46,8 @@
 
     // Don't render login buttons until we know the auth state (prevents flash)
     if (!authStateKnown) {
-      container.innerHTML = '<div class="auth-loading" style="text-align:center;padding:16px;color:var(--text-secondary,#888);font-size:0.875rem;">Loading...</div>';
+      container.innerHTML =
+        '<div class="auth-loading" style="text-align:center;padding:16px;color:var(--text-secondary,#888);font-size:0.875rem;">Loading...</div>';
       return;
     }
 
@@ -54,51 +55,54 @@
       // Logged in with valid ShyTalk account — show status + sign out
       container.innerHTML =
         '<div class="auth-user-info" data-testid="auth-user-info">' +
-          (shytalkProfile.avatarUrl
-            ? '<img class="auth-avatar" data-testid="auth-avatar" src="' + escapeHtml(shytalkProfile.avatarUrl) + '" alt="Avatar" width="32" height="32" />'
-            : '') +
-          '<span class="auth-display-name" data-testid="auth-display-name">Logged in as: ' +
-            escapeHtml(shytalkProfile.displayName || 'User') +
-          '</span>' +
-          '<button class="auth-signout-btn" data-testid="auth-signout-btn" aria-label="Sign out">Sign out</button>' +
+        (shytalkProfile.avatarUrl
+          ? '<img class="auth-avatar" data-testid="auth-avatar" src="' +
+            escapeHtml(shytalkProfile.avatarUrl) +
+            '" alt="Avatar" width="32" height="32" />'
+          : '') +
+        '<span class="auth-display-name" data-testid="auth-display-name">Logged in as: ' +
+        escapeHtml(shytalkProfile.displayName || 'User') +
+        '</span>' +
+        '<button class="auth-signout-btn" data-testid="auth-signout-btn" aria-label="Sign out">Sign out</button>' +
         '</div>';
       container.querySelector('.auth-signout-btn').addEventListener('click', signOut);
     } else if (currentUser && shytalkProfile === false) {
       // Signed in but no ShyTalk account — sign out silently, show download prompt
-      if (auth) auth.signOut().catch(function (err) {
-        console.warn('Auto sign-out failed:', err && err.code);
-      });
+      if (auth)
+        auth.signOut().catch(function (err) {
+          console.warn('Auto sign-out failed:', err && err.code);
+        });
       currentUser = null;
       updateGlobalAuth();
       container.innerHTML =
         '<div class="auth-login-prompt" data-testid="auth-login-prompt">' +
-          '<p class="auth-prompt-text">We couldn\'t find a ShyTalk account linked to that login. Create your free account in the app, then come back to get involved!</p>' +
-          '<div class="auth-download-links">' +
-            '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
-              '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
-              '<span>Google Play</span>' +
-            '</a>' +
-            '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
-              '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
-              '<span>App Store</span>' +
-            '</a>' +
-          '</div>' +
+        '<p class="auth-prompt-text">We couldn\'t find a ShyTalk account linked to that login. Create your free account in the app, then come back to get involved!</p>' +
+        '<div class="auth-download-links">' +
+        '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
+        '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
+        '<span>Google Play</span>' +
+        '</a>' +
+        '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
+        '<span>App Store</span>' +
+        '</a>' +
+        '</div>' +
         '</div>';
     } else {
       // Not logged in — friendly welcome with download links, login happens on action
       container.innerHTML =
         '<div class="auth-login-prompt" data-testid="auth-login-prompt">' +
-          '<p class="auth-prompt-text" data-i18n="auth_login_prompt">Want to vote, suggest features, or subscribe to updates? Sign in with your ShyTalk account. Don\'t have one yet? Download the app to get started — or feel free to look around!</p>' +
-          '<div class="auth-download-links">' +
-            '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
-              '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
-              '<span>Google Play</span>' +
-            '</a>' +
-            '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
-              '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
-              '<span>App Store</span>' +
-            '</a>' +
-          '</div>' +
+        '<p class="auth-prompt-text" data-i18n="auth_login_prompt">Want to vote, suggest features, or subscribe to updates? Sign in with your ShyTalk account. Don\'t have one yet? Download the app to get started — or feel free to look around!</p>' +
+        '<div class="auth-download-links">' +
+        '<a href="https://play.google.com/store/apps/details?id=com.shyden.shytalk" target="_blank" rel="noopener noreferrer" data-testid="download-android" class="download-link" aria-label="Download from Google Play">' +
+        '<svg width="20" height="22" viewBox="0 0 20 22"><path fill="#3DDC84" d="M1.43 1.12L10.3 10l-8.9 8.88c-.5-.4-.82-1.02-.82-1.74V2.86c0-.72.32-1.34.85-1.74z"/><path fill="#4285F4" d="M14.15 6.16L2.6.5C2.2.28 1.76.2 1.35.25l8.95 8.95 3.85-3.04z"/><path fill="#FBBC04" d="M1.35 21.75c.41.05.85-.03 1.25-.25l11.55-5.66-3.85-3.04-8.95 8.95z"/><path fill="#EA4335" d="M17.45 9.4l-3.3-1.84L10.3 11l3.85 3.04 3.3-1.84c.9-.5.9-1.8 0-2.8z"/></svg>' +
+        '<span>Google Play</span>' +
+        '</a>' +
+        '<a href="https://apps.apple.com/app/shytalk/id6741488545" target="_blank" rel="noopener noreferrer" data-testid="download-ios" class="download-link" aria-label="Download from App Store">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
+        '<span>App Store</span>' +
+        '</a>' +
+        '</div>' +
         '</div>';
     }
   }
@@ -158,14 +162,17 @@
     }
 
     // Handle redirect result (user returning from Google/Apple OAuth page)
-    auth.getRedirectResult().then(function (result) {
-      // result.user is set if returning from a redirect sign-in
-      // onAuthStateChanged below will handle the state update
-    }).catch(function (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Redirect sign-in error:', err && err.code, err && err.message);
-      }
-    });
+    auth
+      .getRedirectResult()
+      .then(function (result) {
+        // result.user is set if returning from a redirect sign-in
+        // onAuthStateChanged below will handle the state update
+      })
+      .catch(function (err) {
+        if (err.code !== 'auth/popup-closed-by-user') {
+          console.error('Redirect sign-in error:', err && err.code, err && err.message);
+        }
+      });
 
     auth.onAuthStateChanged(function (user) {
       currentUser = user;
@@ -231,14 +238,17 @@
 
   function signOut() {
     if (!auth) return;
-    auth.signOut().then(function () {
-      currentUser = null;
-      shytalkProfile = null;
-      renderAuthUI();
-      updateGlobalAuth();
-    }).catch(function (err) {
-      console.error('Sign out failed:', err && err.code, err && err.message);
-    });
+    auth
+      .signOut()
+      .then(function () {
+        currentUser = null;
+        shytalkProfile = null;
+        renderAuthUI();
+        updateGlobalAuth();
+      })
+      .catch(function (err) {
+        console.error('Sign out failed:', err && err.code, err && err.message);
+      });
   }
 
   function signInWithEmail(email, password) {
@@ -285,9 +295,11 @@
 
   function updateGlobalAuth() {
     publishGlobalAuth();
-    document.dispatchEvent(new CustomEvent('shytalk-auth-changed', {
-      detail: { user: currentUser, profile: shytalkProfile },
-    }));
+    document.dispatchEvent(
+      new CustomEvent('shytalk-auth-changed', {
+        detail: { user: currentUser, profile: shytalkProfile },
+      }),
+    );
   }
 
   async function getToken() {
@@ -309,7 +321,13 @@
 
   // ─── Initialize ───────────────────────────────────────────────
 
-  window.shytalkAuth = { currentUser: null, profile: null, getToken: getToken, signOut: signOut, API_BASE: API_BASE };
+  window.shytalkAuth = {
+    currentUser: null,
+    profile: null,
+    getToken: getToken,
+    signOut: signOut,
+    API_BASE: API_BASE,
+  };
 
   // SHY-0148 — publish the contract IMMEDIATELY, before any async work.
   // Consumers (the shared header) need three states, and until this ran there

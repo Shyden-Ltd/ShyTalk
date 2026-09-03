@@ -73,47 +73,65 @@ export function init(deps) {
 
   // ── Filter + sort ──
   const filterBtn = document.getElementById('suggestions-filter-btn');
-  if (filterBtn) filterBtn.addEventListener('click', () => {
-    suggestionsFilterState.submitterFilter = document.getElementById('suggestions-filter-submitter').value;
-    suggestionsFilterState.sortBy = document.getElementById('suggestions-sort-select').value;
-    renderSuggestionsForCurrentTab();
-  });
+  if (filterBtn)
+    filterBtn.addEventListener('click', () => {
+      suggestionsFilterState.submitterFilter = document.getElementById(
+        'suggestions-filter-submitter',
+      ).value;
+      suggestionsFilterState.sortBy = document.getElementById('suggestions-sort-select').value;
+      renderSuggestionsForCurrentTab();
+    });
   const sortSelect = document.getElementById('suggestions-sort-select');
-  if (sortSelect) sortSelect.addEventListener('change', () => {
-    suggestionsFilterState.sortBy = sortSelect.value;
-    renderSuggestionsForCurrentTab();
-  });
+  if (sortSelect)
+    sortSelect.addEventListener('change', () => {
+      suggestionsFilterState.sortBy = sortSelect.value;
+      renderSuggestionsForCurrentTab();
+    });
 
   // ── Select All (canonical + legacy aliases) ──
   const selectAll = document.getElementById('suggestions-select-all');
-  if (selectAll) selectAll.addEventListener('change', (e) => {
-    const checked = e.target.checked;
-    document.querySelectorAll('#suggestions-pending-queue .sg-checkbox').forEach((cb) => {
-      cb.checked = checked;
+  if (selectAll)
+    selectAll.addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('#suggestions-pending-queue .sg-checkbox').forEach((cb) => {
+        cb.checked = checked;
+      });
     });
-  });
 
   // ── Bulk approve -- opens confirmation dialog, then approves all selected ──
   const bulkApproveBtn = document.getElementById('suggestions-bulk-approve-btn');
-  if (bulkApproveBtn) bulkApproveBtn.addEventListener('click', () => {
-    const selected = [...document.querySelectorAll('#suggestions-pending-queue .sg-checkbox:checked')].map((cb) => cb.dataset.sgId);
-    if (selected.length === 0) { showToast('No suggestions selected', 'error'); return; }
-    const dialog = document.getElementById('suggestions-bulk-confirm-dialog');
-    document.getElementById('bulk-confirm-message').textContent = 'Approve ' + selected.length + ' suggestion(s)?';
-    dialog.style.display = 'flex';
-    dialog.dataset.action = 'approve';
-    dialog.dataset.ids = JSON.stringify(selected);
-  });
+  if (bulkApproveBtn)
+    bulkApproveBtn.addEventListener('click', () => {
+      const selected = [
+        ...document.querySelectorAll('#suggestions-pending-queue .sg-checkbox:checked'),
+      ].map((cb) => cb.dataset.sgId);
+      if (selected.length === 0) {
+        showToast('No suggestions selected', 'error');
+        return;
+      }
+      const dialog = document.getElementById('suggestions-bulk-confirm-dialog');
+      document.getElementById('bulk-confirm-message').textContent =
+        'Approve ' + selected.length + ' suggestion(s)?';
+      dialog.style.display = 'flex';
+      dialog.dataset.action = 'approve';
+      dialog.dataset.ids = JSON.stringify(selected);
+    });
 
   // ── Bulk reject -- opens reject dialog with reason input ──
   const bulkRejectBtn = document.getElementById('suggestions-bulk-reject-btn');
-  if (bulkRejectBtn) bulkRejectBtn.addEventListener('click', () => {
-    const selected = [...document.querySelectorAll('#suggestions-pending-queue .sg-checkbox:checked')].map((cb) => cb.dataset.sgId);
-    if (selected.length === 0) { showToast('No suggestions selected', 'error'); return; }
-    const dialog = document.getElementById('suggestions-bulk-reject-dialog');
-    dialog.style.display = 'flex';
-    dialog.dataset.ids = JSON.stringify(selected);
-  });
+  if (bulkRejectBtn)
+    bulkRejectBtn.addEventListener('click', () => {
+      const selected = [
+        ...document.querySelectorAll('#suggestions-pending-queue .sg-checkbox:checked'),
+      ].map((cb) => cb.dataset.sgId);
+      if (selected.length === 0) {
+        showToast('No suggestions selected', 'error');
+        return;
+      }
+      const dialog = document.getElementById('suggestions-bulk-reject-dialog');
+      dialog.style.display = 'flex';
+      dialog.dataset.ids = JSON.stringify(selected);
+    });
 
   // Bulk handler — runs each id's primary endpoint, falls back to the
   // legacy PUT /status endpoint, and reports per-id success/failure.
@@ -122,130 +140,189 @@ export function init(deps) {
   // failure and showToast(`Approved N`) on the success path was firing
   // even when some/all ids individually failed both endpoints).
   async function runBulkSuggestionAction({ ids, primary, fallback, verb }) {
-    const settled = await Promise.allSettled(ids.map(async (id) => {
-      try { return await primary(id); } catch (_) { return await fallback(id); }
-    }));
+    const settled = await Promise.allSettled(
+      ids.map(async (id) => {
+        try {
+          return await primary(id);
+        } catch (_) {
+          return await fallback(id);
+        }
+      }),
+    );
     const failed = [];
-    settled.forEach((r, i) => { if (r.status === 'rejected') failed.push({ id: ids[i], error: r.reason?.message || String(r.reason) }); });
+    settled.forEach((r, i) => {
+      if (r.status === 'rejected')
+        failed.push({ id: ids[i], error: r.reason?.message || String(r.reason) });
+    });
     if (failed.length === 0) {
       showToast(`${verb} ${ids.length} suggestion(s)`, 'success');
     } else if (failed.length === ids.length) {
       showToast(`${verb} failed for all ${ids.length} suggestion(s): ${failed[0].error}`, 'error');
     } else {
-      const sample = failed.slice(0, 3).map((f) => f.id).join(', ');
+      const sample = failed
+        .slice(0, 3)
+        .map((f) => f.id)
+        .join(', ');
       const more = failed.length > 3 ? ` (+${failed.length - 3} more)` : '';
-      showToast(`${verb} ${ids.length - failed.length} of ${ids.length} — failed: ${sample}${more}`, 'error');
+      showToast(
+        `${verb} ${ids.length - failed.length} of ${ids.length} — failed: ${sample}${more}`,
+        'error',
+      );
     }
     loadSuggestions();
   }
 
   // ── Confirm bulk action ──
-  document.querySelector('#suggestions-bulk-confirm-dialog .btn-confirm-bulk').addEventListener('click', async () => {
-    const dialog = document.getElementById('suggestions-bulk-confirm-dialog');
-    const ids = JSON.parse(dialog.dataset.ids || '[]');
-    dialog.style.display = 'none';
-    await runBulkSuggestionAction({
-      ids,
-      verb: 'Approved',
-      primary: (id) => apiCall('POST', `/api/admin/suggestions/${id}/approve`),
-      fallback: (id) => apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'accepted' }),
+  document
+    .querySelector('#suggestions-bulk-confirm-dialog .btn-confirm-bulk')
+    .addEventListener('click', async () => {
+      const dialog = document.getElementById('suggestions-bulk-confirm-dialog');
+      const ids = JSON.parse(dialog.dataset.ids || '[]');
+      dialog.style.display = 'none';
+      await runBulkSuggestionAction({
+        ids,
+        verb: 'Approved',
+        primary: (id) => apiCall('POST', `/api/admin/suggestions/${id}/approve`),
+        fallback: (id) =>
+          apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'accepted' }),
+      });
     });
-  });
-  document.querySelector('#suggestions-bulk-confirm-dialog .btn-cancel-bulk').addEventListener('click', () => {
-    document.getElementById('suggestions-bulk-confirm-dialog').style.display = 'none';
-  });
+  document
+    .querySelector('#suggestions-bulk-confirm-dialog .btn-cancel-bulk')
+    .addEventListener('click', () => {
+      document.getElementById('suggestions-bulk-confirm-dialog').style.display = 'none';
+    });
 
   // ── Confirm bulk reject ──
-  document.querySelector('#suggestions-bulk-reject-dialog .btn-confirm-bulk-reject').addEventListener('click', async () => {
-    const dialog = document.getElementById('suggestions-bulk-reject-dialog');
-    const ids = JSON.parse(dialog.dataset.ids || '[]');
-    const reason = document.getElementById('bulk-reject-reason').value || '';
-    dialog.style.display = 'none';
-    await runBulkSuggestionAction({
-      ids,
-      verb: 'Rejected',
-      primary: (id) => apiCall('POST', `/api/admin/suggestions/${id}/reject`, { reason }),
-      fallback: (id) => apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'rejected', reason }),
+  document
+    .querySelector('#suggestions-bulk-reject-dialog .btn-confirm-bulk-reject')
+    .addEventListener('click', async () => {
+      const dialog = document.getElementById('suggestions-bulk-reject-dialog');
+      const ids = JSON.parse(dialog.dataset.ids || '[]');
+      const reason = document.getElementById('bulk-reject-reason').value || '';
+      dialog.style.display = 'none';
+      await runBulkSuggestionAction({
+        ids,
+        verb: 'Rejected',
+        primary: (id) => apiCall('POST', `/api/admin/suggestions/${id}/reject`, { reason }),
+        fallback: (id) =>
+          apiCall('PUT', `/api/admin/suggestions/${id}/status`, { status: 'rejected', reason }),
+      });
     });
-  });
-  document.querySelector('#suggestions-bulk-reject-dialog .btn-cancel-bulk-reject').addEventListener('click', () => {
-    document.getElementById('suggestions-bulk-reject-dialog').style.display = 'none';
-  });
+  document
+    .querySelector('#suggestions-bulk-reject-dialog .btn-cancel-bulk-reject')
+    .addEventListener('click', () => {
+      document.getElementById('suggestions-bulk-reject-dialog').style.display = 'none';
+    });
 
   // ── Per-suggestion reject dialog ──
-  const rejectDialogConfirm = document.querySelector('#suggestion-reject-dialog .btn-confirm-reject');
-  if (rejectDialogConfirm) rejectDialogConfirm.addEventListener('click', async () => {
-    const dialog = document.getElementById('suggestion-reject-dialog');
-    const suggestionId = dialog.dataset.suggestionId;
-    const reason = document.getElementById('reject-reason-input').value.trim();
-    const warning = dialog.querySelector('.reject-warning');
-    // First click without a reason: show the warning and wait for confirmation.
-    if (!reason && dialog.dataset.warningShown !== 'true') {
-      if (warning) warning.style.display = 'block';
-      dialog.dataset.warningShown = 'true';
-      return;
-    }
-    dialog.style.display = 'none';
-    try {
-      await apiCall('POST', `/api/admin/suggestions/${suggestionId}/reject`, { reason });
-      showToast('Suggestion rejected', 'success');
-      loadSuggestions();
-    } catch (err) {
-      showToast('Reject failed: ' + err.message, 'error');
-    }
-  });
+  const rejectDialogConfirm = document.querySelector(
+    '#suggestion-reject-dialog .btn-confirm-reject',
+  );
+  if (rejectDialogConfirm)
+    rejectDialogConfirm.addEventListener('click', async () => {
+      const dialog = document.getElementById('suggestion-reject-dialog');
+      const suggestionId = dialog.dataset.suggestionId;
+      const reason = document.getElementById('reject-reason-input').value.trim();
+      const warning = dialog.querySelector('.reject-warning');
+      // First click without a reason: show the warning and wait for confirmation.
+      if (!reason && dialog.dataset.warningShown !== 'true') {
+        if (warning) warning.style.display = 'block';
+        dialog.dataset.warningShown = 'true';
+        return;
+      }
+      dialog.style.display = 'none';
+      try {
+        await apiCall('POST', `/api/admin/suggestions/${suggestionId}/reject`, { reason });
+        showToast('Suggestion rejected', 'success');
+        loadSuggestions();
+      } catch (err) {
+        showToast('Reject failed: ' + err.message, 'error');
+      }
+    });
   const rejectDialogCancel = document.querySelector('#suggestion-reject-dialog .btn-cancel-reject');
-  if (rejectDialogCancel) rejectDialogCancel.addEventListener('click', () => {
-    document.getElementById('suggestion-reject-dialog').style.display = 'none';
-  });
+  if (rejectDialogCancel)
+    rejectDialogCancel.addEventListener('click', () => {
+      document.getElementById('suggestion-reject-dialog').style.display = 'none';
+    });
 
   // ── Complete dialog ──
-  document.querySelector('#suggestion-complete-dialog .btn-confirm-complete').addEventListener('click', async () => {
-    if (!completeSuggestionId) return;
-    try {
-      const result = await apiCall('PUT', `/api/admin/suggestions/${completeSuggestionId}/status`, { status: 'completed' });
-      window.PartialFailureToast?.showResultToast(showToast, result, 'Suggestion marked as completed');
+  document
+    .querySelector('#suggestion-complete-dialog .btn-confirm-complete')
+    .addEventListener('click', async () => {
+      if (!completeSuggestionId) return;
+      try {
+        const result = await apiCall(
+          'PUT',
+          `/api/admin/suggestions/${completeSuggestionId}/status`,
+          { status: 'completed' },
+        );
+        window.PartialFailureToast?.showResultToast(
+          showToast,
+          result,
+          'Suggestion marked as completed',
+        );
+        document.getElementById('suggestion-complete-dialog').style.display = 'none';
+        completeSuggestionId = null;
+        loadSuggestions();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  document
+    .querySelector('#suggestion-complete-dialog .btn-cancel-complete')
+    .addEventListener('click', () => {
       document.getElementById('suggestion-complete-dialog').style.display = 'none';
       completeSuggestionId = null;
-      loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
-  });
-  document.querySelector('#suggestion-complete-dialog .btn-cancel-complete').addEventListener('click', () => {
-    document.getElementById('suggestion-complete-dialog').style.display = 'none';
-    completeSuggestionId = null;
-  });
+    });
 
   // ── Overturn dialog ──
-  document.querySelector('#suggestion-overturn-dialog .btn-confirm-overturn').addEventListener('click', async () => {
-    if (!overturnSuggestionId) return;
-    const targetStatus = document.getElementById('overturn-target-status').value;
-    const reason = document.getElementById('overturn-reason-input').value.trim();
-    try {
-      await apiCall('POST', `/api/admin/suggestions/${overturnSuggestionId}/overturn`, { targetStatus, reason: reason || undefined });
-      showToast('Suggestion overturned to ' + targetStatus, 'success');
+  document
+    .querySelector('#suggestion-overturn-dialog .btn-confirm-overturn')
+    .addEventListener('click', async () => {
+      if (!overturnSuggestionId) return;
+      const targetStatus = document.getElementById('overturn-target-status').value;
+      const reason = document.getElementById('overturn-reason-input').value.trim();
+      try {
+        await apiCall('POST', `/api/admin/suggestions/${overturnSuggestionId}/overturn`, {
+          targetStatus,
+          reason: reason || undefined,
+        });
+        showToast('Suggestion overturned to ' + targetStatus, 'success');
+        document.getElementById('suggestion-overturn-dialog').style.display = 'none';
+        document.getElementById('overturn-reason-input').value = '';
+        overturnSuggestionId = null;
+        loadSuggestions();
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    });
+  document
+    .querySelector('#suggestion-overturn-dialog .btn-cancel-overturn')
+    .addEventListener('click', () => {
       document.getElementById('suggestion-overturn-dialog').style.display = 'none';
-      document.getElementById('overturn-reason-input').value = '';
       overturnSuggestionId = null;
-      loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
-  });
-  document.querySelector('#suggestion-overturn-dialog .btn-cancel-overturn').addEventListener('click', () => {
-    document.getElementById('suggestion-overturn-dialog').style.display = 'none';
-    overturnSuggestionId = null;
-  });
+    });
 
   // ── Roadmap link dialog ──
   document.getElementById('roadmap-link-confirm').addEventListener('click', async () => {
     const dropdown = document.getElementById('roadmap-link-dropdown');
     const featureId = dropdown.value;
-    if (!featureId || !roadmapLinkSuggestionId) { showToast('Select a feature first', 'error'); return; }
+    if (!featureId || !roadmapLinkSuggestionId) {
+      showToast('Select a feature first', 'error');
+      return;
+    }
     try {
-      await apiCall('PUT', `/api/admin/suggestions/${roadmapLinkSuggestionId}/link`, { roadmapFeatureId: featureId });
+      await apiCall('PUT', `/api/admin/suggestions/${roadmapLinkSuggestionId}/link`, {
+        roadmapFeatureId: featureId,
+      });
       showToast('Suggestion linked to roadmap', 'success');
       document.getElementById('roadmap-link-dialog').style.display = 'none';
       roadmapLinkSuggestionId = null;
       loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
   document.getElementById('roadmap-link-cancel').addEventListener('click', () => {
     document.getElementById('roadmap-link-dialog').style.display = 'none';
@@ -254,63 +331,79 @@ export function init(deps) {
 
   // ── Per-suggestion merge dialog ──
   const mergeSearchBtn = document.getElementById('merge-search-btn');
-  if (mergeSearchBtn) mergeSearchBtn.addEventListener('click', async () => {
-    const query = document.getElementById('merge-search-input').value.trim();
-    const resultsList = document.getElementById('merge-results-list');
-    resultsList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Searching\u2026</div>';
-    try {
-      const data = await apiCall('GET', '/api/admin/suggestions?q=' + encodeURIComponent(query));
-      const matches = (data.suggestions || []).filter((s) =>
-        (s.title || '').toLowerCase().includes(query.toLowerCase()),
-      );
-      resultsList.innerHTML = '';
-      if (matches.length === 0) {
-        resultsList.innerHTML = '<div style="color:var(--text2);font-size:12px;">No matches.</div>';
-        return;
-      }
-      matches.forEach((m) => {
-        const row = document.createElement('div');
-        row.className = 'merge-result';
-        row.dataset.id = m.id;
-        row.style.cssText = 'padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;';
-        row.innerHTML = '<div style="font-weight:600;">' + escapeHtml(m.title || '(no title)') + '</div>' +
-          '<div style="color:var(--text2);font-size:11px;">' + escapeHtml(m.status || '') + ' \u2014 ' + escapeHtml(m.id) + '</div>';
-        row.addEventListener('click', () => {
-          document.querySelectorAll('#merge-results-list .merge-result').forEach((r) => {
-            r.style.background = 'var(--surface2)';
+  if (mergeSearchBtn)
+    mergeSearchBtn.addEventListener('click', async () => {
+      const query = document.getElementById('merge-search-input').value.trim();
+      const resultsList = document.getElementById('merge-results-list');
+      resultsList.innerHTML =
+        '<div style="color:var(--text2);font-size:12px;">Searching\u2026</div>';
+      try {
+        const data = await apiCall('GET', '/api/admin/suggestions?q=' + encodeURIComponent(query));
+        const matches = (data.suggestions || []).filter((s) =>
+          (s.title || '').toLowerCase().includes(query.toLowerCase()),
+        );
+        resultsList.innerHTML = '';
+        if (matches.length === 0) {
+          resultsList.innerHTML =
+            '<div style="color:var(--text2);font-size:12px;">No matches.</div>';
+          return;
+        }
+        matches.forEach((m) => {
+          const row = document.createElement('div');
+          row.className = 'merge-result';
+          row.dataset.id = m.id;
+          row.style.cssText =
+            'padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:13px;';
+          row.innerHTML =
+            '<div style="font-weight:600;">' +
+            escapeHtml(m.title || '(no title)') +
+            '</div>' +
+            '<div style="color:var(--text2);font-size:11px;">' +
+            escapeHtml(m.status || '') +
+            ' \u2014 ' +
+            escapeHtml(m.id) +
+            '</div>';
+          row.addEventListener('click', () => {
+            document.querySelectorAll('#merge-results-list .merge-result').forEach((r) => {
+              r.style.background = 'var(--surface2)';
+            });
+            row.style.background = 'var(--accent)';
+            const dialog = document.getElementById('suggestion-merge-dialog');
+            dialog.dataset.targetId = m.id;
+            const confirmBtn = dialog.querySelector('.btn-confirm-merge');
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
           });
-          row.style.background = 'var(--accent)';
-          const dialog = document.getElementById('suggestion-merge-dialog');
-          dialog.dataset.targetId = m.id;
-          const confirmBtn = dialog.querySelector('.btn-confirm-merge');
-          confirmBtn.disabled = false;
-          confirmBtn.style.opacity = '1';
+          resultsList.appendChild(row);
         });
-        resultsList.appendChild(row);
-      });
-    } catch (err) {
-      resultsList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Search failed: ' + escapeHtml(err.message) + '</div>';
-    }
-  });
+      } catch (err) {
+        resultsList.innerHTML =
+          '<div style="color:var(--danger);font-size:12px;">Search failed: ' +
+          escapeHtml(err.message) +
+          '</div>';
+      }
+    });
   const mergeConfirm = document.querySelector('#suggestion-merge-dialog .btn-confirm-merge');
-  if (mergeConfirm) mergeConfirm.addEventListener('click', async () => {
-    const dialog = document.getElementById('suggestion-merge-dialog');
-    const suggestionId = dialog.dataset.suggestionId;
-    const targetId = dialog.dataset.targetId;
-    if (!targetId) return;
-    dialog.style.display = 'none';
-    try {
-      await apiCall('POST', `/api/admin/suggestions/${suggestionId}/merge`, { targetId });
-      showToast('Suggestion merged', 'success');
-      loadSuggestions();
-    } catch (err) {
-      showToast('Merge failed: ' + err.message, 'error');
-    }
-  });
+  if (mergeConfirm)
+    mergeConfirm.addEventListener('click', async () => {
+      const dialog = document.getElementById('suggestion-merge-dialog');
+      const suggestionId = dialog.dataset.suggestionId;
+      const targetId = dialog.dataset.targetId;
+      if (!targetId) return;
+      dialog.style.display = 'none';
+      try {
+        await apiCall('POST', `/api/admin/suggestions/${suggestionId}/merge`, { targetId });
+        showToast('Suggestion merged', 'success');
+        loadSuggestions();
+      } catch (err) {
+        showToast('Merge failed: ' + err.message, 'error');
+      }
+    });
   const mergeCancel = document.querySelector('#suggestion-merge-dialog .btn-cancel-merge');
-  if (mergeCancel) mergeCancel.addEventListener('click', () => {
-    document.getElementById('suggestion-merge-dialog').style.display = 'none';
-  });
+  if (mergeCancel)
+    mergeCancel.addEventListener('click', () => {
+      document.getElementById('suggestion-merge-dialog').style.display = 'none';
+    });
 }
 
 export function activate() {
@@ -365,8 +458,10 @@ async function loadSuggestions() {
   const disputeCount = $('#sg-dispute-count');
   const badge = $('#suggestions-badge');
 
-  pendingList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading suggestions...</div>';
-  disputeList.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading disputes...</div>';
+  pendingList.innerHTML =
+    '<div style="color:var(--text2);font-size:12px;">Loading suggestions...</div>';
+  disputeList.innerHTML =
+    '<div style="color:var(--text2);font-size:12px;">Loading disputes...</div>';
 
   try {
     const [suggestionsData, disputesData] = await Promise.all([
@@ -376,7 +471,7 @@ async function loadSuggestions() {
 
     const suggestions = suggestionsData.suggestions || [];
     suggestionsFilterState.cached = suggestions;
-    const pending = suggestions.filter(s => s.status === 'pending');
+    const pending = suggestions.filter((s) => s.status === 'pending');
     const disputes = disputesData.disputes || [];
 
     pendingCount.textContent = pending.length + ' Pending';
@@ -419,7 +514,7 @@ async function loadSuggestions() {
       disputeEmpty.style.display = 'block';
     } else {
       disputeEmpty.style.display = 'none';
-      disputes.forEach(d => {
+      disputes.forEach((d) => {
         disputeList.appendChild(renderDisputeCard(d));
       });
     }
@@ -427,7 +522,10 @@ async function loadSuggestions() {
     // Load legacy inline audit log if the section exists (backward compat)
     if (typeof loadAuditLog === 'function') loadAuditLog(1);
   } catch (err) {
-    pendingList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load: ' + escapeHtml(err.message) + '</div>';
+    pendingList.innerHTML =
+      '<div style="color:var(--danger);font-size:12px;">Failed to load: ' +
+      escapeHtml(err.message) +
+      '</div>';
     disputeList.innerHTML = '<div style="color:var(--danger);font-size:12px;">Failed to load</div>';
   }
 }
@@ -441,10 +539,12 @@ function renderSuggestionsForCurrentTab() {
 
   const status = suggestionsFilterState.statusTab;
   const submitterFilter = (suggestionsFilterState.submitterFilter || '').trim();
-  let filtered = (suggestionsFilterState.cached || []).filter(s => s.status === status);
+  let filtered = (suggestionsFilterState.cached || []).filter((s) => s.status === status);
   if (submitterFilter) {
-    filtered = filtered.filter(s =>
-      String(s.submitterUniqueId || s.submitterUid || s.submitterId || '').includes(submitterFilter),
+    filtered = filtered.filter((s) =>
+      String(s.submitterUniqueId || s.submitterUid || s.submitterId || '').includes(
+        submitterFilter,
+      ),
     );
   }
 
@@ -471,7 +571,7 @@ function renderSuggestionsForCurrentTab() {
     pendingList.appendChild(emptyText);
   } else {
     pendingEmpty.style.display = 'none';
-    filtered.forEach(sg => {
+    filtered.forEach((sg) => {
       pendingList.appendChild(renderSuggestionCard(sg));
     });
   }
@@ -508,8 +608,15 @@ function renderSuggestionCard(sg) {
   // Show the canonical numeric uniqueId when available so admins and
   // automated tests can filter/search by the same ID format that's shown.
   const submitterLabel = sg.submitterUniqueId || sg.submitterId || sg.submitterUid || 'Unknown';
-  meta.innerHTML = '<span>By: <a href="#" class="submitter-identity-link" data-uid="' + escapeHtml(String(submitterLabel)) + '" style="color:var(--accent);text-decoration:underline;cursor:pointer;">' + escapeHtml(String(submitterLabel)) + '</a></span>' +
-    '<span>' + (sg.createdAt ? new Date(sg.createdAt).toLocaleString() : 'Unknown date') + '</span>' +
+  meta.innerHTML =
+    '<span>By: <a href="#" class="submitter-identity-link" data-uid="' +
+    escapeHtml(String(submitterLabel)) +
+    '" style="color:var(--accent);text-decoration:underline;cursor:pointer;">' +
+    escapeHtml(String(submitterLabel)) +
+    '</a></span>' +
+    '<span>' +
+    (sg.createdAt ? new Date(sg.createdAt).toLocaleString() : 'Unknown date') +
+    '</span>' +
     (hasContactOptIn
       ? '<span class="sg-contact contact-opt-in-indicator">Open to contact</span>'
       : '<span class="sg-no-contact contact-opt-in-indicator contact-opt-in-indicator--none">No contact</span>');
@@ -536,7 +643,8 @@ function renderSuggestionCard(sg) {
   const contactBtn = document.createElement('button');
   contactBtn.className = 'btn-contact-submitter sg-btn-contact';
   contactBtn.textContent = 'Contact Submitter';
-  contactBtn.style.cssText = 'font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:4px;';
+  contactBtn.style.cssText =
+    'font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-top:4px;';
   if (!hasContactOptIn) {
     contactBtn.disabled = true;
     contactBtn.style.opacity = '0.5';
@@ -556,18 +664,28 @@ function renderSuggestionCard(sg) {
 
   // Duplicate highlighting -- show similar existing suggestions
   if (sg.status === 'pending') {
-    const sgWords = (sg.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
-    const similar = (suggestionsFilterState.cached || []).filter(other =>
-      other.id !== sg.id &&
-      other.status !== 'pending' &&
-      other.status !== 'rejected' &&
-      sgWords.some(w => (other.title || '').toLowerCase().includes(w))
+    const sgWords = (sg.title || '')
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 3);
+    const similar = (suggestionsFilterState.cached || []).filter(
+      (other) =>
+        other.id !== sg.id &&
+        other.status !== 'pending' &&
+        other.status !== 'rejected' &&
+        sgWords.some((w) => (other.title || '').toLowerCase().includes(w)),
     );
     if (similar.length > 0) {
       const dupDiv = document.createElement('div');
       dupDiv.className = 'duplicate-highlight';
-      dupDiv.style.cssText = 'margin-top:6px;padding:6px 10px;background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);border-radius:4px;font-size:12px;color:var(--text2);';
-      dupDiv.textContent = 'Similar: ' + similar.slice(0, 3).map(s => s.title).join(', ');
+      dupDiv.style.cssText =
+        'margin-top:6px;padding:6px 10px;background:rgba(255,193,7,0.1);border:1px solid rgba(255,193,7,0.3);border-radius:4px;font-size:12px;color:var(--text2);';
+      dupDiv.textContent =
+        'Similar: ' +
+        similar
+          .slice(0, 3)
+          .map((s) => s.title)
+          .join(', ');
       body.appendChild(dupDiv);
     }
   }
@@ -576,7 +694,8 @@ function renderSuggestionCard(sg) {
   const historyBtn = document.createElement('button');
   historyBtn.className = 'btn-view-history';
   historyBtn.textContent = 'View History';
-  historyBtn.style.cssText = 'font-size:12px;padding:4px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;margin-top:4px;margin-left:6px;';
+  historyBtn.style.cssText =
+    'font-size:12px;padding:4px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;margin-top:4px;margin-left:6px;';
   historyBtn.addEventListener('click', () => loadSuggestionTimeline(sg.id, body));
   body.appendChild(historyBtn);
 
@@ -584,20 +703,22 @@ function renderSuggestionCard(sg) {
   const timeline = document.createElement('div');
   timeline.id = 'suggestion-timeline-' + sg.id;
   timeline.className = 'suggestion-timeline';
-  timeline.style.cssText = 'display:none;margin-top:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:12px;';
+  timeline.style.cssText =
+    'display:none;margin-top:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;font-size:12px;';
   body.appendChild(timeline);
 
   // Reject reason input (hidden by default)
   const rejectWrap = document.createElement('div');
   rejectWrap.className = 'sg-reject-input';
-  rejectWrap.innerHTML = '<input type="text" placeholder="Rejection reason...">' +
-    '<button>Confirm Reject</button>';
+  rejectWrap.innerHTML =
+    '<input type="text" placeholder="Rejection reason...">' + '<button>Confirm Reject</button>';
   body.appendChild(rejectWrap);
 
   // Merge search input (hidden by default)
   const mergeWrap = document.createElement('div');
   mergeWrap.className = 'sg-merge-search';
-  mergeWrap.innerHTML = '<input type="text" placeholder="Original suggestion ID to merge into...">' +
+  mergeWrap.innerHTML =
+    '<input type="text" placeholder="Original suggestion ID to merge into...">' +
     '<button>Confirm Merge</button>';
   body.appendChild(mergeWrap);
 
@@ -612,10 +733,14 @@ function renderSuggestionCard(sg) {
   approveBtn.addEventListener('click', async () => {
     try {
       // Backend state machine uses "accepted", not "approved".
-      const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'accepted' });
+      const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, {
+        status: 'accepted',
+      });
       window.PartialFailureToast?.showResultToast(showToast, result, 'Suggestion approved');
       loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
 
   const rejectBtn = document.createElement('button');
@@ -630,10 +755,15 @@ function renderSuggestionCard(sg) {
   rejectWrap.querySelector('button').addEventListener('click', async () => {
     const reason = rejectWrap.querySelector('input').value.trim();
     try {
-      const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, { status: 'rejected', reason });
+      const result = await apiCall('PUT', `/api/admin/suggestions/${sg.id}/status`, {
+        status: 'rejected',
+        reason,
+      });
       window.PartialFailureToast?.showResultToast(showToast, result, 'Suggestion rejected');
       loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
 
   const mergeBtn = document.createElement('button');
@@ -646,33 +776,41 @@ function renderSuggestionCard(sg) {
   // Legacy inline merge input (backward compat)
   mergeWrap.querySelector('button').addEventListener('click', async () => {
     const targetId = mergeWrap.querySelector('input').value.trim();
-    if (!targetId) { showToast('Enter a target suggestion ID', 'error'); return; }
+    if (!targetId) {
+      showToast('Enter a target suggestion ID', 'error');
+      return;
+    }
     try {
       await apiCall('POST', `/api/admin/suggestions/${sg.id}/merge`, { targetId });
       showToast('Suggestion merged', 'success');
       loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
 
   // Link to Roadmap button
   const linkBtn = document.createElement('button');
   linkBtn.className = 'btn-link-roadmap';
   linkBtn.textContent = 'Link to Roadmap';
-  linkBtn.style.cssText = 'font-size:12px;padding:6px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;';
+  linkBtn.style.cssText =
+    'font-size:12px;padding:6px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;';
   linkBtn.addEventListener('click', () => openRoadmapLinkDialog(sg.id));
 
   // Complete button -- for planned suggestions
   const completeBtn = document.createElement('button');
   completeBtn.className = 'btn-complete';
   completeBtn.textContent = 'Complete';
-  completeBtn.style.cssText = 'font-size:12px;padding:6px 10px;background:var(--success);color:#fff;border:none;border-radius:4px;cursor:pointer;';
+  completeBtn.style.cssText =
+    'font-size:12px;padding:6px 10px;background:var(--success);color:#fff;border:none;border-radius:4px;cursor:pointer;';
   completeBtn.addEventListener('click', () => openSuggestionCompleteDialog(sg.id));
 
   // Overturn button -- for non-pending states
   const overturnBtn = document.createElement('button');
   overturnBtn.className = 'btn-overturn';
   overturnBtn.textContent = 'Overturn';
-  overturnBtn.style.cssText = 'font-size:12px;padding:6px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;';
+  overturnBtn.style.cssText =
+    'font-size:12px;padding:6px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;';
   overturnBtn.addEventListener('click', () => openSuggestionOverturnDialog(sg.id));
 
   actions.appendChild(approveBtn);
@@ -692,9 +830,16 @@ function renderDisputeCard(d) {
 
   const meta = document.createElement('div');
   meta.className = 'dispute-meta';
-  meta.innerHTML = '<strong>Dispute #' + escapeHtml(d.id || '') + '</strong> | ' +
-    'Original: ' + escapeHtml(d.originalId || '') + ' | ' +
-    'Merged into: ' + escapeHtml(d.targetId || '') + ' | ' +
+  meta.innerHTML =
+    '<strong>Dispute #' +
+    escapeHtml(d.id || '') +
+    '</strong> | ' +
+    'Original: ' +
+    escapeHtml(d.originalId || '') +
+    ' | ' +
+    'Merged into: ' +
+    escapeHtml(d.targetId || '') +
+    ' | ' +
     (d.createdAt ? new Date(d.createdAt).toLocaleString() : '');
   card.appendChild(meta);
 
@@ -716,7 +861,9 @@ function renderDisputeCard(d) {
       await apiCall('PUT', `/api/admin/suggestions/disputes/${d.id}`, { resolution: 'upheld' });
       showToast('Dispute resolved - merge upheld', 'success');
       loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
 
   const revertBtn = document.createElement('button');
@@ -727,7 +874,9 @@ function renderDisputeCard(d) {
       await apiCall('PUT', `/api/admin/suggestions/disputes/${d.id}`, { resolution: 'reverted' });
       showToast('Dispute resolved - merge reverted', 'success');
       loadSuggestions();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   });
 
   actions.appendChild(upholdBtn);
@@ -745,19 +894,22 @@ async function loadSuggestionTimeline(suggestionId, body) {
   const container = body && body.querySelector('#suggestion-timeline-' + suggestionId);
   if (!container) return;
   container.style.display = 'block';
-  container.innerHTML = '<div style="color:var(--text2);font-size:12px;">Loading history\u2026</div>';
+  container.innerHTML =
+    '<div style="color:var(--text2);font-size:12px;">Loading history\u2026</div>';
   try {
     const data = await apiCall('GET', '/api/admin/suggestions/' + suggestionId + '/history');
     const events = data.timeline || data.events || [];
     container.innerHTML = '';
     if (events.length === 0) {
-      container.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history entries.</div>';
+      container.innerHTML =
+        '<div style="color:var(--text2);font-size:12px;">No history entries.</div>';
       return;
     }
     events.forEach((evt) => {
       const entry = document.createElement('div');
       entry.className = 'timeline-entry';
-      entry.style.cssText = 'display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;';
+      entry.style.cssText =
+        'display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;';
 
       const header = document.createElement('div');
       header.style.cssText = 'display:flex;gap:8px;align-items:center;';
@@ -791,14 +943,17 @@ async function loadSuggestionTimeline(suggestionId, body) {
       if (evt.diff) {
         const diffEl = document.createElement('div');
         diffEl.className = 'edit-diff timeline-diff';
-        diffEl.style.cssText = 'color:var(--text2);font-family:monospace;font-size:11px;padding:4px 6px;background:var(--surface);border-radius:4px;';
-        diffEl.textContent = typeof evt.diff === 'object' ? JSON.stringify(evt.diff) : String(evt.diff);
+        diffEl.style.cssText =
+          'color:var(--text2);font-family:monospace;font-size:11px;padding:4px 6px;background:var(--surface);border-radius:4px;';
+        diffEl.textContent =
+          typeof evt.diff === 'object' ? JSON.stringify(evt.diff) : String(evt.diff);
         entry.appendChild(diffEl);
       }
       container.appendChild(entry);
     });
   } catch {
-    container.innerHTML = '<div style="color:var(--text2);font-size:12px;">No history available.</div>';
+    container.innerHTML =
+      '<div style="color:var(--text2);font-size:12px;">No history available.</div>';
   }
 }
 
@@ -849,8 +1004,8 @@ async function openRoadmapLinkDialog(suggestionId) {
       const resp = await fetch('/roadmap-data.json');
       const roadmap = await resp.json();
       dropdown.innerHTML = '<option value="">\u2014 Select a feature \u2014</option>';
-      for (const phase of (roadmap.phases || [])) {
-        for (const f of (phase.features || [])) {
+      for (const phase of roadmap.phases || []) {
+        for (const f of phase.features || []) {
           const opt = document.createElement('option');
           opt.value = f.id;
           opt.textContent = (phase.name ? phase.name + ': ' : '') + (f.name || f.title || f.id);

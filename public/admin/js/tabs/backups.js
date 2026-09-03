@@ -22,13 +22,9 @@ export function init(deps) {
   _apiBase = deps.apiBase;
   _getToken = deps.getToken;
 
-  document
-    .getElementById('backup-trigger-btn')
-    .addEventListener('click', triggerBackup);
+  document.getElementById('backup-trigger-btn').addEventListener('click', triggerBackup);
 
-  document
-    .getElementById('backup-refresh-btn')
-    .addEventListener('click', () => loadBackups());
+  document.getElementById('backup-refresh-btn').addEventListener('click', () => loadBackups());
 
   const recoverBtn = document.getElementById('backup-recover-photos-btn');
   if (recoverBtn) {
@@ -62,8 +58,7 @@ async function loadBackups() {
     list.textContent = '';
     list.style.color = '';
     if (backups.length === 0) {
-      list.textContent =
-        'No backups yet. Click "Backup Now" to create one.';
+      list.textContent = 'No backups yet. Click "Backup Now" to create one.';
       list.style.color = 'var(--text2)';
       return;
     }
@@ -91,22 +86,17 @@ async function loadBackups() {
 
       const restoreMissingBtn = document.createElement('button');
       restoreMissingBtn.textContent = 'Restore Missing';
-      restoreMissingBtn.title =
-        'Only fill in fields that are currently null/missing';
+      restoreMissingBtn.title = 'Only fill in fields that are currently null/missing';
       restoreMissingBtn.style.cssText =
         'padding:6px 14px;background:#f59e0b;color:#000;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;';
-      restoreMissingBtn.addEventListener('click', () =>
-        restoreBackup(b.date, 'missing-only'),
-      );
+      restoreMissingBtn.addEventListener('click', () => restoreBackup(b.date, 'missing-only'));
 
       const fullRestoreBtn = document.createElement('button');
       fullRestoreBtn.textContent = 'Full Restore';
       fullRestoreBtn.title = 'Overwrite all fields from backup';
       fullRestoreBtn.style.cssText =
         'padding:6px 14px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;';
-      fullRestoreBtn.addEventListener('click', () =>
-        restoreBackup(b.date, 'full'),
-      );
+      fullRestoreBtn.addEventListener('click', () => restoreBackup(b.date, 'full'));
 
       row.appendChild(info);
       row.appendChild(dlBtn);
@@ -148,19 +138,12 @@ async function restoreBackup(date, mode) {
         ? 'Restore collection'
         : 'Restore missing fields only';
   if (
-    !confirm(
-      label +
-        ' from backup ' +
-        date +
-        '?\n\nThis will update user profiles in Firestore.',
-    )
+    !confirm(label + ' from backup ' + date + '?\n\nThis will update user profiles in Firestore.')
   )
     return;
   if (
     mode === 'full' &&
-    !confirm(
-      'Are you SURE? Full restore will overwrite current data with backup data.',
-    )
+    !confirm('Are you SURE? Full restore will overwrite current data with backup data.')
   )
     return;
   try {
@@ -184,13 +167,7 @@ async function restoreBackup(date, mode) {
       { restored: 0, total: 0 },
     );
     showToast(
-      'Restored ' +
-        totals.restored +
-        '/' +
-        totals.total +
-        ' docs (' +
-        mode +
-        ')',
+      'Restored ' + totals.restored + '/' + totals.total + ' docs (' + mode + ')',
       'success',
     );
   } catch (err) {
@@ -225,8 +202,7 @@ async function recoverPhotos() {
   const btn = document.getElementById('backup-recover-photos-btn');
   if (!btn) return;
   if (btn.disabled) return;
-  if (!confirm('Recover missing profile/cover photos from R2 storage?'))
-    return;
+  if (!confirm('Recover missing profile/cover photos from R2 storage?')) return;
   btn.disabled = true;
   btn.textContent = 'Recovering...';
   try {
@@ -237,10 +213,7 @@ async function recoverPhotos() {
     });
     if (!res.ok) throw new Error(await res.text());
     const result = await res.json();
-    showToast(
-      `Recovered ${result.recovered || 0} photos`,
-      'success',
-    );
+    showToast(`Recovered ${result.recovered || 0} photos`, 'success');
   } catch (err) {
     showToast('Recovery failed: ' + err.message, 'error');
   } finally {

@@ -22,10 +22,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * Adds 7 new keys × 21 locales = 147 strings to PORTAL_T.
  */
 
-const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
-];
+const PORTAL_LOCALES = ['en', 'id', 'th', 'zh', 'zh'];
 
 const NEW_KEYS = [
   'recovery_code_sent',
@@ -73,9 +70,9 @@ test.describe('Portal TOTP + recovery + copy i18n', () => {
     expect(src).toContain("t('copy_feedback_copied')");
   });
 
-  test('Korean locale: portal t() resolves all 7 keys to Hangul', async ({ page }) => {
+  test('Chinese locale: portal t() resolves all 7 keys to Han characters', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(
@@ -95,7 +92,7 @@ test.describe('Portal TOTP + recovery + copy i18n', () => {
       return out;
     }, NEW_KEYS);
     for (const key of NEW_KEYS) {
-      expect(sample[key], `ko.${key}`).toMatch(/[가-힯]|2FA/);
+      expect(sample[key], `ko.${key}`).toMatch(/[一-鿿]|2FA/);
     }
   });
 });

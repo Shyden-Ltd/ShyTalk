@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Translate compose-resources string keys across all 19 non-EN locales.
+ * Translate compose-resources string keys across the four non-EN locales.
  *
  * Strategy (per the project's translation-source rule):
  *   1. Try Google Translate's free public endpoint first
@@ -39,47 +39,45 @@
  * can be resumed after a quota hit.
  */
 
-const fs = require('node:fs');
-const path = require('node:path');
+const fs = require("node:fs");
+const path = require("node:path");
 
 const { googleTranslate, sleep, GOOGLE_QUOTA_EXHAUSTED } = require(
-  path.join(__dirname, 'lib', 'google-translate.js'),
+  path.join(__dirname, "lib", "google-translate.js"),
 );
 
 const LOCALES = [
-  'ar',
-  'de',
-  'es',
-  'fr',
-  'hi',
-  'id',
-  'it',
-  'ja',
-  'km',
-  'ko',
-  'nl',
-  'pl',
-  'pt',
-  'ru',
-  'sv',
-  'th',
-  'tr',
-  'uk',
-  'vi',
-  'zh',
+  // SHY-0289 — four non-English locales, not nineteen. Supporting a language is
+  // a promise about the quality of what it says, and that promise is only made
+  // for the MVP five. Left as an explicit list rather than a directory scan: a
+  // translation run should write where somebody DECIDED it should, not wherever
+  // a folder happens to exist.
+  "id",
+  "th",
+  "vi",
+  "zh",
 ];
-const COMPOSE_RES_BASE = 'shared/src/commonMain/composeResources';
+const COMPOSE_RES_BASE = "shared/src/commonMain/composeResources";
 
 // ── CLI parsing ───────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const out = { keys: [], stringsEn: null, apply: false, retranslateClaude: false };
+  const out = {
+    keys: [],
+    stringsEn: null,
+    apply: false,
+    retranslateClaude: false,
+  };
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
-    if (arg === '--keys') out.keys = argv[++i].split(',').map((s) => s.trim()).filter(Boolean);
-    else if (arg === '--strings-en') out.stringsEn = argv[++i];
-    else if (arg === '--apply') out.apply = true;
-    else if (arg === '--retranslate-claude') out.retranslateClaude = true;
+    if (arg === "--keys")
+      out.keys = argv[++i]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    else if (arg === "--strings-en") out.stringsEn = argv[++i];
+    else if (arg === "--apply") out.apply = true;
+    else if (arg === "--retranslate-claude") out.retranslateClaude = true;
   }
   return out;
 }
@@ -87,7 +85,7 @@ function parseArgs(argv) {
 // ── XML parsing (regex-based — Compose strings.xml is line-oriented) ──
 
 function readEnglishStrings(filePath) {
-  const xml = fs.readFileSync(filePath, 'utf8');
+  const xml = fs.readFileSync(filePath, "utf8");
   const map = {};
   // Match <string name="key">value</string> across one line. Compose
   // strings.xml uses a simple flat layout — no CDATA, no plurals.
@@ -107,11 +105,11 @@ function unescapeXml(s) {
   // That is the shipped-escape defect one layer up. `&amp;` last prevents
   // double-decoding `&amp;apos;` straight to an apostrophe.
   return s
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
     .replace(/&apos;/g, "'")
     .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
+    .replace(/&amp;/g, "&")
     .replace(/\\'/g, "'");
 }
 
@@ -121,7 +119,7 @@ function escapeXml(s) {
   // apostrophe this function touched reached the screen with a visible
   // backslash — `Driver\'s license` shipped that way. An apostrophe needs no
   // escaping in XML element text; `&`, `<` and `>` genuinely do.
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // ── Locale file mutation ──────────────────────────────────────────
@@ -136,25 +134,28 @@ const TODAY = new Date().toISOString().slice(0, 10);
  * provenance comment. If new, append before `</resources>`.
  */
 function upsertTranslation(localeXmlPath, key, translated, source) {
-  let xml = fs.readFileSync(localeXmlPath, 'utf8');
+  let xml = fs.readFileSync(localeXmlPath, "utf8");
   const escapedTranslation = escapeXml(translated);
   const provenance = `<!-- ${source}-translated ${TODAY} -->`;
   const stringLine = `<string name="${key}">${escapedTranslation}</string>`;
 
   const existingRe = new RegExp(
     `(?:    <!-- (?:google|claude)-translated [\\d-]+ -->\\n)?    <string name="${escapeRegex(key)}">[^<]*</string>`,
-    'g',
+    "g",
   );
   if (existingRe.test(xml)) {
     xml = xml.replace(existingRe, `    ${provenance}\n    ${stringLine}`);
   } else {
-    xml = xml.replace(/\n<\/resources>/, `\n    ${provenance}\n    ${stringLine}\n</resources>`);
+    xml = xml.replace(
+      /\n<\/resources>/,
+      `\n    ${provenance}\n    ${stringLine}\n</resources>`,
+    );
   }
   fs.writeFileSync(localeXmlPath, xml);
 }
 
 function escapeRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ── Driver ────────────────────────────────────────────────────────
@@ -165,7 +166,11 @@ async function translateKeys(keys, englishMap, apply) {
   let skipCount = 0;
 
   for (const locale of LOCALES) {
-    const localePath = path.join(COMPOSE_RES_BASE, `values-${locale}`, 'strings.xml');
+    const localePath = path.join(
+      COMPOSE_RES_BASE,
+      `values-${locale}`,
+      "strings.xml",
+    );
     if (!fs.existsSync(localePath)) {
       console.warn(`  ! ${locale}: strings.xml missing — skipping locale`);
       continue;
@@ -179,8 +184,10 @@ async function translateKeys(keys, englishMap, apply) {
       }
       try {
         const translated = await googleTranslate(enValue, locale);
-        if (apply) upsertTranslation(localePath, key, translated, 'google');
-        console.log(`  ✓ ${locale}/${key}: ${translated.slice(0, 60)}${translated.length > 60 ? '…' : ''}`);
+        if (apply) upsertTranslation(localePath, key, translated, "google");
+        console.log(
+          `  ✓ ${locale}/${key}: ${translated.slice(0, 60)}${translated.length > 60 ? "…" : ""}`,
+        );
         googleCount++;
       } catch (err) {
         if (err.message === GOOGLE_QUOTA_EXHAUSTED) {
@@ -221,7 +228,7 @@ function findNonGoogleStrings(xml) {
   const out = [];
   // Match every <string> entry. The regex is line-anchored so we can
   // look at the previous line for a provenance comment.
-  const lines = xml.split('\n');
+  const lines = xml.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(/^\s*<string\s+name="([^"]+)">([^<]*)<\/string>/);
     if (!m) continue;
@@ -231,11 +238,12 @@ function findNonGoogleStrings(xml) {
     let provLine = null;
     for (let j = i - 1; j >= 0; j--) {
       const trimmed = lines[j].trim();
-      if (trimmed === '') continue;
-      if (trimmed.startsWith('<!--')) provLine = trimmed;
+      if (trimmed === "") continue;
+      if (trimmed.startsWith("<!--")) provLine = trimmed;
       break;
     }
-    const isGoogleTagged = provLine && /^<!--\s*google-translated\b/.test(provLine);
+    const isGoogleTagged =
+      provLine && /^<!--\s*google-translated\b/.test(provLine);
     if (!isGoogleTagged) {
       out.push({ key, value });
     }
@@ -245,7 +253,7 @@ function findNonGoogleStrings(xml) {
 
 async function retranslateClaudeStrings(apply) {
   const englishMap = readEnglishStrings(
-    path.join(COMPOSE_RES_BASE, 'values', 'strings.xml'),
+    path.join(COMPOSE_RES_BASE, "values", "strings.xml"),
   );
   let total = 0;
   let upgraded = 0;
@@ -255,9 +263,13 @@ async function retranslateClaudeStrings(apply) {
       console.warn(`Stopping early — Google quota exhausted. Resume later.`);
       break;
     }
-    const localePath = path.join(COMPOSE_RES_BASE, `values-${locale}`, 'strings.xml');
+    const localePath = path.join(
+      COMPOSE_RES_BASE,
+      `values-${locale}`,
+      "strings.xml",
+    );
     if (!fs.existsSync(localePath)) continue;
-    const xml = fs.readFileSync(localePath, 'utf8');
+    const xml = fs.readFileSync(localePath, "utf8");
     const candidates = findNonGoogleStrings(xml);
     if (candidates.length === 0) continue;
     console.log(`${locale}: ${candidates.length} non-google entries`);
@@ -273,12 +285,15 @@ async function retranslateClaudeStrings(apply) {
       }
       try {
         const translated = await googleTranslate(en, locale);
-        if (apply) upsertTranslation(localePath, key, translated, 'google');
+        if (apply) upsertTranslation(localePath, key, translated, "google");
         upgraded++;
-        if (upgraded % 50 === 0) console.log(`  ↑ ${locale} progress: ${upgraded}/${total}`);
+        if (upgraded % 50 === 0)
+          console.log(`  ↑ ${locale} progress: ${upgraded}/${total}`);
       } catch (err) {
         if (err.message === GOOGLE_QUOTA_EXHAUSTED) {
-          console.warn(`  ⚠ Google quota — stopping. Resume with same command later.`);
+          console.warn(
+            `  ⚠ Google quota — stopping. Resume with same command later.`,
+          );
           quotaHit = true;
           break;
         }
@@ -298,14 +313,16 @@ async function main() {
   if (args.retranslateClaude) {
     console.log(`Retranslate-claude mode (apply=${args.apply}):`);
     const { total, upgraded } = await retranslateClaudeStrings(args.apply);
-    console.log(`Found ${total} claude-translated entries; ${upgraded} upgraded to google.`);
+    console.log(
+      `Found ${total} claude-translated entries; ${upgraded} upgraded to google.`,
+    );
     return;
   }
 
   if (!args.stringsEn || args.keys.length === 0) {
     console.error(
-      'Usage: node scripts/translate-strings.js --keys k1,k2 --strings-en path/to/values/strings.xml [--apply]\n' +
-        '       node scripts/translate-strings.js --retranslate-claude [--apply]',
+      "Usage: node scripts/translate-strings.js --keys k1,k2 --strings-en path/to/values/strings.xml [--apply]\n" +
+        "       node scripts/translate-strings.js --retranslate-claude [--apply]",
     );
     process.exit(2);
   }
@@ -319,9 +336,11 @@ async function main() {
     englishMap,
     args.apply,
   );
-  console.log(`\nDone. google: ${googleCount}, skipped: ${skipCount}, claude-fallback: ${claudeTodo.length}`);
+  console.log(
+    `\nDone. google: ${googleCount}, skipped: ${skipCount}, claude-fallback: ${claudeTodo.length}`,
+  );
   if (claudeTodo.length > 0) {
-    const todoPath = path.resolve('translate-claude-todo.json');
+    const todoPath = path.resolve("translate-claude-todo.json");
     fs.writeFileSync(todoPath, JSON.stringify(claudeTodo, null, 2));
     console.log(`Claude-todo manifest written to ${todoPath}`);
   }

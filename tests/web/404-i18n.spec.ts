@@ -14,36 +14,36 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * `LEGAL_T.notfound[lang]` section for all 20 locales (excluding en
  * which falls back to the inline HTML default).
  *
- * Test design: hit Arabic (RTL + non-Latin script — easiest to detect
+ * Test design: hit Thai (non-Latin script — easiest to detect
  * remaining English) for the deepest functional check, plus a
  * structural test asserting all 20 locales define the 3 keys.
  */
 
 test.describe('404.html i18n', () => {
-  test('Arabic switch translates title, description, and home link', async ({ page }) => {
+  test('Thai switch translates title, description, and home link', async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem('shytalk_language', 'ar');
+      localStorage.setItem('shytalk_language', 'th');
     });
     await page.goto(`${BASE}/404.html`);
     // Wait for inline init bridge to apply translations.
     await page.waitForFunction(
-      () => document.documentElement.lang === 'ar',
+      () => document.documentElement.lang === 'th',
       null,
       { timeout: 5_000 },
     );
 
     // Each translated element must NOT contain its English default.
     const title = await page.locator('h1').textContent();
-    expect(title?.trim(), '404 title stayed in English after Arabic switch').not.toBe('Page not found');
-    expect(title, 'title should contain Arabic chars').toMatch(/[؀-ۿ]/);
+    expect(title?.trim(), '404 title stayed in English after Thai switch').not.toBe('Page not found');
+    expect(title, 'title should contain Thai chars').toMatch(/[ก-๛]/);
 
     const desc = await page.locator('main p').textContent();
-    expect(desc?.trim(), '404 description stayed in English after Arabic switch').not.toContain('The page you were looking for');
-    expect(desc, 'description should contain Arabic chars').toMatch(/[؀-ۿ]/);
+    expect(desc?.trim(), '404 description stayed in English after Thai switch').not.toContain('The page you were looking for');
+    expect(desc, 'description should contain Thai chars').toMatch(/[ก-๛]/);
 
     const home = await page.locator('[data-testid="404-home-link"]').textContent();
-    expect(home?.trim(), '404 home link stayed in English after Arabic switch').not.toBe('Back to ShyTalk');
-    expect(home, 'home link should contain Arabic chars').toMatch(/[؀-ۿ]/);
+    expect(home?.trim(), '404 home link stayed in English after Thai switch').not.toBe('Back to ShyTalk');
+    expect(home, 'home link should contain Thai chars').toMatch(/[ก-๛]/);
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {
@@ -51,7 +51,7 @@ test.describe('404.html i18n', () => {
       localStorage.setItem('shytalk_language', 'en');
     });
     await page.goto(`${BASE}/404.html`);
-    // No explicit Arabic-style wait needed — inline HTML is already English.
+    // No explicit Thai-style wait needed — inline HTML is already English.
     await expect(page.locator('h1')).toContainText('Page not found');
     await expect(page.locator('[data-testid="404-home-link"]')).toContainText('Back to ShyTalk');
   });
@@ -60,7 +60,7 @@ test.describe('404.html i18n', () => {
     const res = await request.get(`${BASE}/js/legal-translations.js`);
     expect(res.status()).toBe(200);
     const text = await res.text();
-    const locales = ['ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh'];
+    const locales = ['id', 'th', 'vi', 'zh'];
     // Find the notfound section block. Use a non-greedy match to find each
     // locale's line within the notfound object.
     const notfoundStart = text.indexOf('notfound: {');

@@ -103,7 +103,9 @@ fun SharedNavGraph(
     isBackendDegraded: Boolean = false,
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
-    onSignOut: () -> Unit,
+    // SHY-0497: suspend, so the navigation that follows cannot outrun it. See
+    // NavGraph.kt for the full sequence this prevents.
+    onSignOut: suspend () -> Unit,
     /**
      * SHY-0500 — non-null when the background cold-start confirmation found the
      * stored session dead, so the sign-in screen can say why the person is here

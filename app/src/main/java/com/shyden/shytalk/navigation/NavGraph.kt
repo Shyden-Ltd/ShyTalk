@@ -124,7 +124,10 @@ fun NavGraph(
     isBackendDegraded: Boolean = false,
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
-    onSignOut: () -> Unit,
+    // SHY-0497: suspend, so the navigation on the next line cannot outrun it.
+    // A `() -> Unit` here launched the sign-out and returned, and SignInScreen
+    // then composed an AuthViewModel that still saw a signed-in Firebase user.
+    onSignOut: suspend () -> Unit,
     /**
      * SHY-0500 — non-null when the background cold-start confirmation found the
      * stored session dead, so the sign-in screen can say why the person is here

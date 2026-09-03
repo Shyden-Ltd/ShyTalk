@@ -6,8 +6,8 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * Regression test for LANG_OPTIONS native-name labels in suggestions-board.js.
  *
  * Pre-fix, the language filter dropdown rendered English language NAMES
- * ("Arabic", "German", "Korean") for every locale option. A French user
- * filtering by Arabic suggestions would see the option as "Arabic"
+ * ("Thai", "Indonesian", "Chinese") for every locale option. A Vietnamese user
+ * filtering by Thai suggestions would see the option as "Thai"
  * instead of "العربية". This breaks the standard convention of
  * displaying language names in their NATIVE script (cf. Wikipedia's
  * language sidebar, YouTube's language picker).
@@ -56,7 +56,7 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const arrSrc = langBlock![1];
 
     for (const [code, native] of Object.entries(NATIVE_NAMES)) {
-      const re = new RegExp(`value:\\s*"${code}",\\s*label:\\s*"${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}"`);
+      const re = new RegExp(`value:\\s*['"]${code}['"],\\s*label:\\s*['"]${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}['"]`);
       expect(arrSrc, `${code} label should be native "${native}"`).toMatch(re);
     }
   });
@@ -68,14 +68,14 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const arrSrc = langBlock![1];
     // English language NAMES that should NOT appear (en is intentional).
     const englishNames = [
-      'Arabic', 'German', 'Spanish', 'French', 'Hindi', 'Indonesian',
-      'Italian', 'Japanese', 'Khmer', 'Korean', 'Dutch', 'Polish',
-      'Portuguese', 'Russian', 'Swedish', 'Thai', 'Turkish', 'Ukrainian',
+      'Thai', 'Indonesian', 'Thai', 'Vietnamese', 'Indonesian', 'Indonesian',
+      'Chinese', 'Chinese', 'Thai', 'Chinese', 'Indonesian', 'Vietnamese',
+      'Thai', 'Chinese', 'Indonesian', 'Thai', 'Vietnamese', 'Chinese',
       'Vietnamese', 'Chinese',
     ];
     for (const name of englishNames) {
       expect(arrSrc, `English name "${name}" should not be in LANG_OPTIONS`).not.toMatch(
-        new RegExp(`label:\\s*"${name}"`),
+        new RegExp(`label:\\s*['"]${name}['"]`),
       );
     }
   });

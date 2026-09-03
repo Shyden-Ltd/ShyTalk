@@ -14,7 +14,7 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * compact relative times like "5분 전" / "il y a 5 min" / "5 منذ" with
  * zero project-side translations needed.
  *
- * Test approach: open the suggestions board in Korean, evaluate
+ * Test approach: open the suggestions board in Chinese, evaluate
  * relativeTime() in-page (it's not exported but Intl.RelativeTimeFormat
  * is), and verify the formatter's output for several time deltas.
  *
@@ -30,7 +30,10 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
     // The old format strings should be gone.
-    expect(src, 'should not return hardcoded "just now"').not.toContain('"just now"');
+    // Quote-agnostic on purpose: public/ is Prettier-formatted as of SHY-0448,
+    // and a negative assertion pinned to one quote style stops being able to
+    // fail — it passes forever while protecting nothing.
+    expect(src, 'should not return hardcoded "just now"').not.toMatch(/['"]just now['"]/);
     expect(src, 'should not return hardcoded "m ago"').not.toMatch(/return\s+\w+\s*\+\s*"m ago"/);
     expect(src, 'should not return hardcoded "h ago"').not.toMatch(/return\s+\w+\s*\+\s*"h ago"/);
     expect(src, 'should not return hardcoded "d ago"').not.toMatch(/return\s+\w+\s*\+\s*"d ago"/);
@@ -38,9 +41,9 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
     expect(src, 'should use Intl.RelativeTimeFormat').toContain('Intl.RelativeTimeFormat');
   });
 
-  test('Korean locale: Intl.RelativeTimeFormat produces Hangul output', async ({ page }) => {
+  test('Chinese locale: Intl.RelativeTimeFormat produces Han characters output', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'zh'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -61,17 +64,17 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
         oneYearAgo: rtf.format(-1, 'year'),
       };
     });
-    expect(samples.lang, 'should be Korean').toBe('ko');
-    expect(samples.zero, 'rtf.format(0, "second") in ko').toMatch(/[가-힯]/);
-    expect(samples.fiveMinAgo, '5 min ago in ko').toMatch(/[가-힯]/);
+    expect(samples.lang, 'should be Chinese').toBe('zh');
+    expect(samples.zero, 'rtf.format(0, "second") in ko').toMatch(/[一-鿿]/);
+    expect(samples.fiveMinAgo, '5 min ago in ko').toMatch(/[一-鿿]/);
     expect(samples.fiveMinAgo, '5 min ago in ko should not be English').not.toContain('ago');
-    expect(samples.threeDaysAgo, '3 days ago in ko').toMatch(/[가-힯]/);
-    expect(samples.oneYearAgo, '1 year ago in ko').toMatch(/[가-힯]/);
+    expect(samples.threeDaysAgo, '3 days ago in ko').toMatch(/[一-鿿]/);
+    expect(samples.oneYearAgo, '1 year ago in ko').toMatch(/[一-鿿]/);
   });
 
-  test('Arabic locale: Intl.RelativeTimeFormat produces Arabic script output', async ({ page }) => {
+  test('Thai locale: Intl.RelativeTimeFormat produces Thai script output', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ar'); } catch { /* ignore */ }
+      try { localStorage.setItem('shytalk_language', 'th'); } catch { /* ignore */ }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -88,7 +91,7 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
         fiveMinAgo: rtf.format(-5, 'minute'),
       };
     });
-    expect(samples.lang).toBe('ar');
-    expect(samples.fiveMinAgo, '5 min ago in ar should contain Arabic').toMatch(/[؀-ۿ]/);
+    expect(samples.lang).toBe('th');
+    expect(samples.fiveMinAgo, '5 min ago in ar should contain Thai').toMatch(/[ก-๛]/);
   });
 });

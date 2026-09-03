@@ -72,8 +72,12 @@ test.describe('Admin age-verification i18n contract', () => {
     // Extract the `en: { ... }` block — the en row spans multiple lines
     // with grouped sections, terminated by `},` then the next locale row.
     // Use a non-greedy match anchored on `en: {` followed by the first
-    // `},\n  ar:` (ar is the next locale alphabetically in ADMIN_TRANSLATIONS).
-    const enMatch = src.match(/\ben:\s*\{([\s\S]*?)\},\s*\n\s*ar:/);
+    // `},\n  <next>:` — whichever locale follows English in the file.
+    // Anchored on "whatever locale comes next", not on a named one. It used to
+    // say `ar:` because Arabic happened to follow English alphabetically, and
+    // that broke the moment Arabic was retired (SHY-0289) — reporting "en block
+    // not found" about a file whose en block was perfectly fine.
+    const enMatch = src.match(/\ben:\s*\{([\s\S]*?)\},\s*\n\s*[a-z]{2}:/);
     expect(enMatch, 'en block not found in ADMIN_TRANSLATIONS').not.toBeNull();
     const enBlock = enMatch![1];
 

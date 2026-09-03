@@ -62,7 +62,11 @@ beforeEach(() => {
   fs.writeFileSync(process.env.TRANSLATION_CACHE_SEED_PATH, '{}');
   mockTranslateOne
     .mockReset()
-    .mockResolvedValue({ ok: true, translated: 'ÜBERSETZT', provider: 'gtx' });
+    .mockResolvedValue({ ok: true, translated: 'TRANSLATED', provider: 'gtx' });
+  // Targets are drawn from the five supported locales (SHY-0289). The mock
+  // returns the same marker whatever the target, so which one a test uses is
+  // arbitrary — and the fresh tmpdir below means two tests sharing a target
+  // cannot see each other's cache.
   // Fresh module per test so the route's cache/queue singletons bind to
   // this test's tmp paths (resetModules above clears the require cache).
   routerFresh = require('../../src/routes/translate');
@@ -79,42 +83,42 @@ const post = (body) => request(createApp()).post('/api/translate').send(body);
 
 describe('anonymous public flow — happy paths', () => {
   test('translates a batch, returns translations map, empty missed, header 0', async () => {
-    const res = await post({ texts: ['Roadmap', 'Done'], target: 'de' });
+    const res = await post({ texts: ['Roadmap', 'Done'], target: 'id' });
     expect(res.status).toBe(200);
-    expect(res.body.translations).toEqual({ Roadmap: 'ÜBERSETZT', Done: 'ÜBERSETZT' });
+    expect(res.body.translations).toEqual({ Roadmap: 'TRANSLATED', Done: 'TRANSLATED' });
     expect(res.body.missed).toEqual([]);
     expect(res.headers['x-translation-missed']).toBe('0');
     expect(mockTranslateOne).toHaveBeenCalledTimes(2);
   });
 
   test('cache hit: second identical request makes NO provider calls', async () => {
-    await post({ texts: ['Roadmap'], target: 'de' });
+    await post({ texts: ['Roadmap'], target: 'id' });
     mockTranslateOne.mockClear();
-    const res = await post({ texts: ['Roadmap'], target: 'de' });
+    const res = await post({ texts: ['Roadmap'], target: 'id' });
     expect(res.status).toBe(200);
-    expect(res.body.translations.Roadmap).toBe('ÜBERSETZT');
+    expect(res.body.translations.Roadmap).toBe('TRANSLATED');
     expect(mockTranslateOne).not.toHaveBeenCalled();
   });
 
   test('in-request dedupe: same text twice = one provider call', async () => {
-    await post({ texts: ['Same', 'Same'], target: 'fr' });
+    await post({ texts: ['Same', 'Same'], target: 'vi' });
     expect(mockTranslateOne).toHaveBeenCalledTimes(1);
   });
 
   test('mixed batch partial-fills from cache (only misses hit the provider)', async () => {
-    await post({ texts: ['Cached'], target: 'ja' });
+    await post({ texts: ['Cached'], target: 'th' });
     mockTranslateOne.mockClear();
-    const res = await post({ texts: ['Cached', 'Fresh'], target: 'ja' });
+    const res = await post({ texts: ['Cached', 'Fresh'], target: 'th' });
     expect(mockTranslateOne).toHaveBeenCalledTimes(1);
     expect(mockTranslateOne.mock.calls[0][0]).toBe('Fresh');
-    expect(res.body.translations).toMatchObject({ Cached: 'ÜBERSETZT', Fresh: 'ÜBERSETZT' });
+    expect(res.body.translations).toMatchObject({ Cached: 'TRANSLATED', Fresh: 'TRANSLATED' });
   });
 });
 
 describe('anonymous public flow — fail-silent contract', () => {
   test('full-chain failure: 200, English text, missed[], header, WARN, queue line', async () => {
     mockTranslateOne.mockResolvedValue({ ok: false, reason: 'gtx 503; libretranslate 500' });
-    const res = await post({ texts: ['Roadmap'], target: 'fr' });
+    const res = await post({ texts: ['Roadmap'], target: 'vi' });
     expect(res.status).toBe(200);
     expect(res.body.translations.Roadmap).toBe('Roadmap');
     expect(res.body.missed).toEqual(['Roadmap']);
@@ -122,21 +126,21 @@ describe('anonymous public flow — fail-silent contract', () => {
     expect(mockLogWarn).toHaveBeenCalledWith(
       'translate',
       expect.stringContaining('provider'),
-      expect.objectContaining({ target: 'fr' }),
+      expect.objectContaining({ target: 'vi' }),
     );
     const queue = fs
       .readFileSync(process.env.TRANSLATION_MISS_QUEUE_PATH, 'utf-8')
       .trim()
       .split('\n');
     expect(queue).toHaveLength(1);
-    expect(JSON.parse(queue[0])).toMatchObject({ text: 'Roadmap', target: 'fr' });
+    expect(JSON.parse(queue[0])).toMatchObject({ text: 'Roadmap', target: 'vi' });
   });
 
   test('partial failure: failed text English+missed, others translated, still 200', async () => {
     mockTranslateOne
       .mockResolvedValueOnce({ ok: true, translated: 'OK-1', provider: 'gtx' })
       .mockResolvedValueOnce({ ok: false, reason: 'both down' });
-    const res = await post({ texts: ['Alpha', 'Beta'], target: 'es' });
+    const res = await post({ texts: ['Alpha', 'Beta'], target: 'th' });
     expect(res.status).toBe(200);
     expect(res.body.translations).toEqual({ Alpha: 'OK-1', Beta: 'Beta' });
     expect(res.body.missed).toEqual(['Beta']);
@@ -144,9 +148,9 @@ describe('anonymous public flow — fail-silent contract', () => {
 
   test('queue dedupe: repeated misses of the same text+target append exactly once', async () => {
     mockTranslateOne.mockResolvedValue({ ok: false, reason: 'down' });
-    await post({ texts: ['Roadmap'], target: 'it' });
-    await post({ texts: ['Roadmap'], target: 'it' });
-    await post({ texts: ['Roadmap'], target: 'it' });
+    await post({ texts: ['Roadmap'], target: 'zh' });
+    await post({ texts: ['Roadmap'], target: 'zh' });
+    await post({ texts: ['Roadmap'], target: 'zh' });
     const queue = fs
       .readFileSync(process.env.TRANSLATION_MISS_QUEUE_PATH, 'utf-8')
       .trim()
@@ -156,9 +160,9 @@ describe('anonymous public flow — fail-silent contract', () => {
 
   test('failed translations are NOT cached (next request retries the provider)', async () => {
     mockTranslateOne.mockResolvedValueOnce({ ok: false, reason: 'down' });
-    await post({ texts: ['Retry'], target: 'ko' });
+    await post({ texts: ['Retry'], target: 'vi' });
     mockTranslateOne.mockResolvedValueOnce({ ok: true, translated: '재시도', provider: 'gtx' });
-    const res = await post({ texts: ['Retry'], target: 'ko' });
+    const res = await post({ texts: ['Retry'], target: 'vi' });
     expect(res.body.translations.Retry).toBe('재시도');
     expect(mockTranslateOne).toHaveBeenCalledTimes(2);
   });
@@ -168,13 +172,13 @@ describe('anonymous public flow — input rejection (400s)', () => {
   test.each([
     ['target en (no-op forbidden)', { texts: ['x'], target: 'en' }],
     ['unsupported locale', { texts: ['x'], target: 'xx' }],
-    ['missing texts', { target: 'de' }],
-    ['texts not an array', { texts: 'x', target: 'de' }],
-    ['empty texts array', { texts: [], target: 'de' }],
-    ['oversize text (>2000 chars)', { texts: ['y'.repeat(2001)], target: 'de' }],
+    ['missing texts', { target: 'id' }],
+    ['texts not an array', { texts: 'x', target: 'id' }],
+    ['empty texts array', { texts: [], target: 'id' }],
+    ['oversize text (>2000 chars)', { texts: ['y'.repeat(2001)], target: 'id' }],
     [
       'too many texts (>50)',
-      { texts: Array.from({ length: 51 }, (_, i) => `t${i}`), target: 'de' },
+      { texts: Array.from({ length: 51 }, (_, i) => `t${i}`), target: 'id' },
     ],
   ])('%s → 400, provider never called', async (_label, body) => {
     const res = await post(body);
@@ -263,13 +267,13 @@ describe('rate limiting (writeLimiter wired exactly as index.js mounts it)', () 
         Array.from({ length: 10 }, () =>
           request(app)
             .post('/api/translate')
-            .send({ texts: ['x'], target: 'de' }),
+            .send({ texts: ['x'], target: 'id' }),
         ),
       );
     }
     const res = await request(app)
       .post('/api/translate')
-      .send({ texts: ['x'], target: 'de' });
+      .send({ texts: ['x'], target: 'id' });
     expect(res.status).toBe(429);
   });
 });
