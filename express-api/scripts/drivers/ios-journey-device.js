@@ -51,6 +51,15 @@ const { execFileSync, spawn } = require('node:child_process');
  */
 const run = (bin, args) => execFileSync(bin, args, { encoding: 'utf8' });
 
+/**
+ * The app's PROCESS name in the device syslog: the Xcode target's executable,
+ * `iosApp` -- not the display name ("ShyTalk") and not the bundle id. A
+ * capture filtered on "ShyTalk" returned three lines and none of them the
+ * app's (2026-09-04); the same launch unfiltered showed 3,688 lines from
+ * `iosApp(...)`.
+ */
+const IOS_APP_PROCESS_NAME = 'iosApp';
+
 // Reused, never re-implemented. This is the same retry policy the Android
 // dumps use, it is unit-tested with an injected delay, and reusing it keeps
 // ONE retry policy across both platforms instead of two that can drift.
@@ -1107,7 +1116,12 @@ class IosDevice {
    */
   async clearAppLog() {
     this._stopSyslog();
-    const child = this._spawn('idevicesyslog', ['-u', this.hardwareUdid, '-p', 'ShyTalk']);
+    const child = this._spawn('idevicesyslog', [
+      '-u',
+      this.hardwareUdid,
+      '-p',
+      IOS_APP_PROCESS_NAME,
+    ]);
     const chunks = [];
     child.stdout.on('data', (d) => chunks.push(String(d)));
     child.stderr.on('data', () => {});

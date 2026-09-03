@@ -252,7 +252,9 @@ describe('the launch log and the network are device operations on BOTH backends'
       };
       await d.clearAppLog();
       expect(spawned[0][0]).toBe('idevicesyslog');
-      expect(spawned[0][1]).toEqual(['-u', TEST_HARDWARE_UDID, '-p', 'ShyTalk']);
+      // The process is the Xcode target's executable, `iosApp`; a capture
+      // filtered on the display name returned nothing from the app.
+      expect(spawned[0][1]).toEqual(['-u', TEST_HARDWARE_UDID, '-p', 'iosApp']);
       listeners.forEach((cb) =>
         cb(
           Buffer.from(
