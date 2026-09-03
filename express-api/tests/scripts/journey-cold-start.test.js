@@ -192,7 +192,12 @@ describe('the launch log and the network are device operations on BOTH backends'
       const d = new AndroidJourneyDevice('SERIAL');
       const run = jest.spyOn(d, 'adbRun').mockImplementation(() => '');
       await d.setOffline(true, { reversePorts: [3000, 9099] });
-      expect(run.mock.calls.map((c) => c[0])).toEqual(['reverse --remove-all']);
+      // The stack's tunnels alone: `--remove-all` would also cut the reverse
+      // socket scrcpy records through.
+      expect(run.mock.calls.map((c) => c[0])).toEqual([
+        'reverse --remove tcp:3000',
+        'reverse --remove tcp:9099',
+      ]);
       expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi disable', 'svc data disable']);
       expect(reverse).not.toHaveBeenCalled();
     });

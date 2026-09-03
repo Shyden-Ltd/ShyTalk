@@ -401,7 +401,9 @@ class Device {
    */
   async setOffline(on, { reversePorts = [] } = {}) {
     if (on) {
-      this.adbRun('reverse --remove-all');
+      // Only the stack's own tunnels. `--remove-all` would also take the
+      // reverse socket the screen recorder rides, mid-recording.
+      for (const port of reversePorts) this.adbRun(`reverse --remove tcp:${port}`);
       this.shell('svc wifi disable');
       this.shell('svc data disable');
       return;
