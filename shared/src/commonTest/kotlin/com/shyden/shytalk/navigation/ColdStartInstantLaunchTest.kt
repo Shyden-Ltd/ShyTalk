@@ -3,6 +3,8 @@ package com.shyden.shytalk.navigation
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -47,7 +49,9 @@ class ColdStartInstantLaunchTest {
         hasStoredCredential: Boolean = true,
         isAppLockEnabled: Boolean = false,
         isLockRequired: Boolean = false,
+        claimGate: ColdStartClaimGate = ColdStartClaimGate(),
     ) = ColdStartSequencer(
+        claimGate = claimGate,
         checkBans = {
             rec.events.add("ban-check")
             BanState(deviceBanned = deviceBanned, networkBanned = networkBanned)
@@ -117,6 +121,95 @@ class ColdStartInstantLaunchTest {
         )
         assertEquals(listOf("launch-state", "launch-state"), rec.events)
     }
+
+    @Test
+    fun confirm_refusesToRunBeforeAnythingWasDrawn() =
+        runTest {
+            // `confirm()` reasons about what `immediateDestination()` drew. Called
+            // alone it used to compare against nothing and answer with a
+            // reasonless Redirect on every launch (review, 2026-09-04).
+            val rec = Recorder()
+            val error = assertFailsWith<IllegalStateException> { sequencer(rec).confirm() }
+            assertTrue(error.message.orEmpty().contains("immediateDestination()"), error.message)
+        }
+
+    @Test
+    fun aRestoredSessionHoldsCohortScopedReadsUntilItIsConfirmed_thenReleasesThem() =
+        runTest {
+            // The shell mounts before confirm() returns, so the order "claim
+            // refreshed before any cohort-scoped read" lives in this gate now,
+            // not in when the NavHost mounts (review, 2026-09-04).
+            val gate = ColdStartClaimGate()
+            val s = sequencer(Recorder(), claimGate = gate)
+            assertFalse(gate.refreshInFlight.value)
+            s.immediateDestination()
+            assertTrue(gate.refreshInFlight.value, "drawing the room list from a stored session must hold reads")
+            s.confirm()
+            assertFalse(gate.refreshInFlight.value, "a confirmed claim releases them")
+        }
+
+    @Test
+    fun theGateReleasesOnEveryConfirmOutcome_notOnlySuccess() =
+        runTest {
+            // A dead session, an offline launch and a ban all settle the gate:
+            // a read that waits forever is a room list that never loads.
+            for (variant in listOf("dead", "offline", "banned")) {
+                val gate = ColdStartClaimGate()
+                val s =
+                    when (variant) {
+                        "dead" -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = false, claimGate = gate)
+                        "offline" -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = true, claimGate = gate)
+                        else -> sequencer(Recorder(), deviceBanned = true, claimGate = gate)
+                    }
+                s.immediateDestination()
+                assertTrue(gate.refreshInFlight.value, variant)
+                s.confirm()
+                assertFalse(gate.refreshInFlight.value, "$variant must settle the gate")
+            }
+        }
+
+    @Test
+    fun theGateReleasesEvenWhenConfirmThrows() =
+        runTest {
+            val gate = ColdStartClaimGate()
+            val s =
+                ColdStartSequencer(
+                    claimGate = gate,
+                    checkBans = { throw IllegalStateException("ban service exploded") },
+                    refreshToken = { true },
+                    isSessionAlive = { true },
+                    startCohortScopedReads = {},
+                    signOut = {},
+                    launchState = {
+                        LaunchState(
+                            hasStoredCredential = false,
+                            isAppLockEnabled = false,
+                            isLockRequired = false,
+                            isAuthenticated = true,
+                            hasResolvedUser = true,
+                        )
+                    },
+                )
+            s.immediateDestination()
+            assertTrue(gate.refreshInFlight.value)
+            assertFailsWith<IllegalStateException> { s.confirm() }
+            assertFalse(gate.refreshInFlight.value, "an exception must not leave reads held forever")
+        }
+
+    @Test
+    fun aSignInFirstLaunchNeverEngagesTheGate() =
+        runTest {
+            // Nothing cohort-scoped is drawn, so nothing waits: a fresh sign-in
+            // must reach its room list without a cold-start confirmation
+            // (the SHY-0024 failure shape, where a once-per-process flag
+            // stayed false after a normal sign-in).
+            val gate = ColdStartClaimGate()
+            val s = sequencer(Recorder(), isAuthenticated = false, hasStoredCredential = false, hasResolvedUser = false, claimGate = gate)
+            assertEquals(Screen.SignIn, s.immediateDestination())
+            assertFalse(gate.refreshInFlight.value)
+            s.confirm()
+            assertFalse(gate.refreshInFlight.value)
+        }
 
     @Test
     fun immediateDestination_isSignInWhenThereIsNoSessionAtAll() {
