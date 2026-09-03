@@ -4595,7 +4595,10 @@ function buildJourneys(ctx) {
       }
       await reporter.step(device, `Launch app`, async () => {
         await device.forceStop(ctx.pkg);
-        await device.launch(ctx.pkg);
+        // Credited as using the product: on iOS there is no reinstall above,
+        // so this launch is the smoke journey's only action, and a person's
+        // first (SHY-0457 failed it as "never touched the device").
+        await openApp(device, ctx.pkg);
         await sleep(2500);
         return 'launcher intent sent';
       });
