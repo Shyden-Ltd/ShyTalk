@@ -1,17 +1,35 @@
 package com.shyden.shytalk.core.util
 
+import platform.Foundation.NSLog
+
+/**
+ * iOS logging goes through the unified log, not stdout.
+ *
+ * `println` is the process's stdout, which only a debugger or a
+ * `devicectl --console` attach can see: a full device syslog captured across
+ * a launch carried none of it (SHY-0500, 2026-09-04). NSLog lands in the
+ * unified log, which `idevicesyslog` streams over USB with nothing attached —
+ * the same route the app's Swift side already uses.
+ *
+ * NSLog takes a FORMAT, so a message is escaped before it is handed over:
+ * "50% done" must print as written, not be read as a directive.
+ */
+private fun emit(line: String) {
+    NSLog(line.replace("%", "%%"))
+}
+
 actual fun logD(
     tag: String,
     message: String,
 ) {
-    println("D/$tag: $message")
+    emit("D/$tag: $message")
 }
 
 actual fun logI(
     tag: String,
     message: String,
 ) {
-    println("I/$tag: $message")
+    emit("I/$tag: $message")
 }
 
 actual fun logW(
@@ -19,8 +37,8 @@ actual fun logW(
     message: String,
     throwable: Throwable?,
 ) {
-    println("W/$tag: $message")
-    throwable?.let { println("W/$tag: ${it.stackTraceToString()}") }
+    emit("W/$tag: $message")
+    throwable?.let { emit("W/$tag: ${it.stackTraceToString()}") }
 }
 
 actual fun logE(
@@ -28,8 +46,8 @@ actual fun logE(
     message: String,
     throwable: Throwable?,
 ) {
-    println("E/$tag: $message")
-    throwable?.let { println("E/$tag: ${it.stackTraceToString()}") }
+    emit("E/$tag: $message")
+    throwable?.let { emit("E/$tag: ${it.stackTraceToString()}") }
 }
 
 actual fun logF(
@@ -37,6 +55,6 @@ actual fun logF(
     message: String,
     throwable: Throwable?,
 ) {
-    println("F/$tag: $message")
-    throwable?.let { println("F/$tag: ${it.stackTraceToString()}") }
+    emit("F/$tag: $message")
+    throwable?.let { emit("F/$tag: ${it.stackTraceToString()}") }
 }
