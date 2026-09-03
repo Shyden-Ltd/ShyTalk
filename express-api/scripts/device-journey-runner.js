@@ -1860,8 +1860,14 @@ const COLD_START_TAG = 'ColdStartSequencer';
  * (`signIn`), or nothing of its own yet (`blank` -- the launcher, the
  * springboard, or a window with no content).
  */
+const HOME_OVERLAY_IDS = ['dailyReward_dialog', 'dailyReward_claimButton'];
+
 function classifyFirstFrame(nodes) {
   if (anyMainTab(nodes)) return 'main';
+  // The daily-reward calendar is presented over Home and nowhere else, and a
+  // dialog window is all uiautomator reports while it is up -- so its
+  // presence IS the room list, drawn, with a sheet on top.
+  if (HOME_OVERLAY_IDS.some((id) => byId(nodes, id))) return 'main';
   if (atSignIn(nodes)) return 'signIn';
   return 'blank';
 }

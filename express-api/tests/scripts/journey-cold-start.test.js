@@ -50,6 +50,15 @@ describe('classifyFirstFrame — what the app drew', () => {
     expect(classifyFirstFrame(parseNodes(androidXml(['some_launcher_thing'])))).toBe('blank');
     expect(classifyFirstFrame([])).toBe('blank');
   });
+  test('an overlay Home presents on arrival means the room list was drawn', () => {
+    // On the real phone the first cold launch after sign-in showed
+    // `dailyReward_dialog` alone: uiautomator dumps the dialog window and
+    // hides the tabs beneath. The calendar is only ever presented over Home,
+    // so it IS the room list, with a sheet on top -- not a splash, not a
+    // spinner, and not "nothing drawn yet" (2026-09-04, run 2).
+    expect(classifyFirstFrame(parseNodes(androidXml(['dailyReward_dialog'])))).toBe('main');
+    expect(classifyFirstFrame(parseNodes(iosXml(['dailyReward_claimButton'])))).toBe('main');
+  });
   test('reads the iOS tree by the same rule', () => {
     expect(classifyFirstFrame(parseNodes(iosXml(['main_profileTab'])))).toBe('main');
     expect(classifyFirstFrame(parseNodes(iosXml(['persona_picker_open'])))).toBe('signIn');
