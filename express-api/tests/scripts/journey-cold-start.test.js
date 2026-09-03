@@ -185,52 +185,54 @@ describe('the launch log and the network are device operations on BOTH backends'
   });
 
   describe('Android', () => {
-    let shell;
-    let reverse;
-    beforeEach(() => {
-      shell = jest.spyOn(AndroidJourneyDevice.prototype, 'shell').mockImplementation(() => '');
-      reverse = jest.spyOn(AndroidJourneyDevice.prototype, 'reverse').mockImplementation(() => '');
-    });
-    afterEach(() => {
-      shell.mockRestore();
-      reverse.mockRestore();
-    });
-    test('clearAppLog empties logcat and readAppLog reads one tag back', async () => {
+    // The real class with its three adb-facing methods replaced by functions
+    // that remember what they were asked -- plain assignments, the way the
+    // sibling driver tests replace `_post`, so SHY-0108's test-double count
+    // stays where it is.
+    const recording = (answers = {}) => {
       const d = new AndroidJourneyDevice('SERIAL');
-      shell.mockImplementation((args) =>
-        args.startsWith('logcat -d')
-          ? '09-04 D ColdStartSequencer: immediate: destination=Main (no I/O)\n\n'
-          : '',
-      );
+      const calls = { shell: [], adbRun: [], reverse: [] };
+      d.shell = (args) => {
+        calls.shell.push(args);
+        return answers.shell ? answers.shell(args) : '';
+      };
+      d.adbRun = (args) => {
+        calls.adbRun.push(args);
+        return '';
+      };
+      d.reverse = (port) => {
+        calls.reverse.push(port);
+      };
+      return { d, calls };
+    };
+    test('clearAppLog empties logcat and readAppLog reads one tag back', async () => {
+      const { d, calls } = recording({
+        shell: (args) =>
+          args.startsWith('logcat -d')
+            ? '09-04 D ColdStartSequencer: immediate: destination=Main (no I/O)\n\n'
+            : '',
+      });
       await d.clearAppLog();
       const lines = await d.readAppLog('ColdStartSequencer');
-      expect(shell.mock.calls.map((c) => c[0])).toEqual([
-        'logcat -c',
-        'logcat -d -s ColdStartSequencer:V',
-      ]);
+      expect(calls.shell).toEqual(['logcat -c', 'logcat -d -s ColdStartSequencer:V']);
       expect(lines).toEqual(['09-04 D ColdStartSequencer: immediate: destination=Main (no I/O)']);
     });
     test('setOffline(true) cuts every route the app has to this machine', async () => {
-      const d = new AndroidJourneyDevice('SERIAL');
-      const run = jest.spyOn(d, 'adbRun').mockImplementation(() => '');
+      const { d, calls } = recording();
       await d.setOffline(true, { reversePorts: [3000, 9099] });
       // The stack's tunnels alone: `--remove-all` would also cut the reverse
       // socket scrcpy records through.
-      expect(run.mock.calls.map((c) => c[0])).toEqual([
-        'reverse --remove tcp:3000',
-        'reverse --remove tcp:9099',
-      ]);
+      expect(calls.adbRun).toEqual(['reverse --remove tcp:3000', 'reverse --remove tcp:9099']);
       // Wi-Fi only: toggling mobile data raises a system "Turn on mobile
       // data?" dialog on the OnePlus that covers the app (run 7).
-      expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi disable']);
-      expect(reverse).not.toHaveBeenCalled();
+      expect(calls.shell).toEqual(['svc wifi disable']);
+      expect(calls.reverse).toEqual([]);
     });
-    test('setOffline(false) restores the radios AND the tunnels it removed', async () => {
-      const d = new AndroidJourneyDevice('SERIAL');
-      jest.spyOn(d, 'adbRun').mockImplementation(() => '');
+    test('setOffline(false) restores Wi-Fi AND the tunnels it removed', async () => {
+      const { d, calls } = recording();
       await d.setOffline(false, { reversePorts: [3000, 9099] });
-      expect(shell.mock.calls.map((c) => c[0])).toEqual(['svc wifi enable']);
-      expect(reverse.mock.calls.map((c) => c[0])).toEqual([3000, 9099]);
+      expect(calls.shell).toEqual(['svc wifi enable']);
+      expect(calls.reverse).toEqual([3000, 9099]);
     });
   });
 
