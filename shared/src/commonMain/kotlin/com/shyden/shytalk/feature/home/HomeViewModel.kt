@@ -18,6 +18,7 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.data.repository.resolveEffectiveCohort
+import com.shyden.shytalk.navigation.ColdStartClaimGate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -48,6 +49,13 @@ class HomeViewModel(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
     private val bannerRepository: BannerRepository,
+    /**
+     * SHY-0500 — the cold-start claim gate. The room list is cohort-scoped and
+     * subscribes at mount, which is now BEFORE a restored session's claim
+     * refresh returns; waiting on this is what keeps that read behind the
+     * refresh.
+     */
+    private val claimGate: ColdStartClaimGate,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -150,6 +158,13 @@ class HomeViewModel(
 
     private fun observeRooms() {
         viewModelScope.launch {
+            // SHY-0500 — the shell mounts before the cold-start confirmation
+            // returns, so on a restored session the claim in hand may still be
+            // LAST session's cohort. Wait for the refresh to settle before the
+            // first cohort-scoped read: reading on the stale claim is the
+            // SHY-0132/0137 cross-cohort leak. The gate is open at rest, so a
+            // fresh sign-in or a PIN unlock never waits here.
+            claimGate.awaitSettled()
             // SHY-0102 — pin the caller's cohort so the rooms `list` query
             // satisfies the firestore.rules read gate (an unconstrained list
             // is denied → empty Rooms screen). Fails closed to "minor".

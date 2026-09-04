@@ -113,6 +113,12 @@ fun SharedNavGraph(
      */
     launchRedirect: LaunchRedirectReason? = null,
     /**
+     * SHY-0500 — called once the sign-in screen has shown the redirect's
+     * message. The owner clears [launchRedirect] then; a reason that is never
+     * cleared shows its message again on every later visit to sign-in.
+     */
+    onLaunchRedirectConsumed: () -> Unit = {},
+    /**
      * SHY-0143 — the ban facts behind a [Screen.BanDevice] / [Screen.BanNetwork]
      * start destination. Defaulted so existing callers are unaffected: an
      * unbanned launch never routes to either screen, so the default is never
@@ -314,6 +320,7 @@ fun SharedNavGraph(
                 platformScreens.signInScreen(
                     SignInScreenParams(
                         sessionExpired = launchRedirect == LaunchRedirectReason.SESSION_EXPIRED,
+                        onSessionExpiredShown = onLaunchRedirectConsumed,
                         pendingEmailLink = pendingEmailLink,
                         onEmailLinkConsumed = onEmailLinkConsumed,
                         onNavigateToEmail = {

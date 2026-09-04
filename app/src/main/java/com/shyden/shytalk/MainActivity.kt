@@ -74,6 +74,7 @@ import com.shyden.shytalk.feature.starting.StartingScreenComposable
 import com.shyden.shytalk.feature.suspension.BanScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.BanState
+import com.shyden.shytalk.navigation.ColdStartClaimGate
 import com.shyden.shytalk.navigation.ColdStartConfirmation
 import com.shyden.shytalk.navigation.ColdStartSequencer
 import com.shyden.shytalk.navigation.LaunchRedirectReason
@@ -119,6 +120,10 @@ class MainActivity : AppCompatActivity() {
     // SHY-0143 — the cold-start identity cache, read before routing so
     // `resolvedUniqueId` is real by the time any destination is chosen.
     private val sessionCache: SessionCache by inject()
+
+    // SHY-0500 — the cold-start claim gate. The same Koin instance is what
+    // HomeViewModel waits on, so the sequencer must engage THIS one.
+    private val claimGate: ColdStartClaimGate by inject()
 
     private val navigateToRoomState = mutableStateOf<String?>(null)
     private val navigateToChatState = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
@@ -353,6 +358,7 @@ class MainActivity : AppCompatActivity() {
                             val banDeferred = async { deviceRepository.checkBanStatus(deviceId) }
                             val sequencer =
                                 ColdStartSequencer(
+                                    claimGate = claimGate,
                                     // Awaits the deferred started above, so the
                                     // ban round-trip still overlaps the version
                                     // and health calls rather than adding a leg.
@@ -446,10 +452,13 @@ class MainActivity : AppCompatActivity() {
                             //      cohort-scoped read is issued.
                             //
                             // `startCohortScopedReads` is a no-op here because
-                            // in Compose that event IS the NavHost mounting, and
-                            // the NavHost cannot mount until `checkComplete`
-                            // below — which happens after `run()` returns. The
-                            // ordering is therefore structural, not conventional.
+                            // the NavHost mounts on `immediateDestination()`,
+                            // BEFORE this confirmation returns (SHY-0500). The
+                            // second ordering is carried by ColdStartClaimGate
+                            // instead: the sequencer engages it when it draws
+                            // the room list from a stored session and settles
+                            // it when `confirm()` returns, and HomeViewModel
+                            // waits on it before its cohort-scoped subscription.
                             val confirmation = sequencer.confirm()
                             when (confirmation) {
                                 is ColdStartConfirmation.Stay -> Unit
@@ -842,14 +851,16 @@ class MainActivity : AppCompatActivity() {
 
                                 val pendingEmailLink by pendingEmailLinkState
 
-                                // SHY-0187 / SHY-0143: the destination was
-                                // decided by ColdStartSequencer above, which is
-                                // what guarantees the ban verdict and the fresh
-                                // cohort claim both precede this mount. A null
-                                // route means the sequence has not finished — the
-                                // `!checkComplete` branch above is already showing
-                                // the spinner, and mounting a NavHost with no start
-                                // destination would crash.
+                                // SHY-0187 / SHY-0143 / SHY-0500: the destination
+                                // was drawn by ColdStartSequencer's
+                                // `immediateDestination()` above, from LOCAL facts.
+                                // The ban verdict arrives behind this mount and
+                                // renders above it; the fresh cohort claim is
+                                // what ColdStartClaimGate holds the room list's
+                                // reads for. A null route means nothing has been
+                                // drawn yet — the `!checkComplete` branch above is
+                                // showing the spinner, and mounting a NavHost with
+                                // no start destination would crash.
                                 initialRoute?.let { route ->
                                     // SHY-0500 — the background confirmation found
                                     // the stored session dead. The shell was drawn
@@ -865,6 +876,10 @@ class MainActivity : AppCompatActivity() {
                                         navController = navController,
                                         startDestination = route,
                                         launchRedirect = launchRedirect,
+                                        // Cleared once the sign-in screen has shown
+                                        // the message, so it cannot fire again on a
+                                        // later visit — after a deliberate sign-out.
+                                        onLaunchRedirectConsumed = { launchRedirect = null },
                                         coldStartBan = coldStartBan,
                                         isBackendDegraded = backendDegraded,
                                         pendingEmailLink = pendingEmailLink,

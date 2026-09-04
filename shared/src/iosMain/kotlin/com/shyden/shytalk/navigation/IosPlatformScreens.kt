@@ -16,6 +16,7 @@ fun createIosPlatformScreens(): PlatformScreens =
         signInScreen = { params ->
             com.shyden.shytalk.feature.auth.SignInScreen(
                 sessionExpired = params.sessionExpired,
+                onSessionExpiredShown = params.onSessionExpiredShown,
                 pendingEmailLink = params.pendingEmailLink,
                 onEmailLinkConsumed = params.onEmailLinkConsumed,
                 onNavigateToEmail = params.onNavigateToEmail,

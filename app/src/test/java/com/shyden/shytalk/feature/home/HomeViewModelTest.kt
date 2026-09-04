@@ -8,6 +8,7 @@ import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.navigation.ColdStartClaimGate
 import com.shyden.shytalk.testutil.MainDispatcherRule
 import com.shyden.shytalk.testutil.TestData
 import io.mockk.coEvery
@@ -84,12 +85,14 @@ class HomeViewModelTest {
             activeViewModels.clear()
         }
 
-    private fun createViewModel() =
+    // SHY-0500 — an open gate by default: only the cold-start tests below engage it.
+    private fun createViewModel(claimGate: ColdStartClaimGate = ColdStartClaimGate()) =
         HomeViewModel(
             roomRepository = roomRepository,
             authRepository = authRepository,
             userRepository = userRepository,
             bannerRepository = bannerRepository,
+            claimGate = claimGate,
         ).also { activeViewModels.add(it) }
 
     // region SHY-0102 — cohort threaded into the rooms `list` queries
@@ -130,6 +133,37 @@ class HomeViewModelTest {
             advanceUntilIdle()
 
             coVerify { roomRepository.findActiveRoomByOwner(currentUserId, "adult") }
+        }
+
+    // endregion
+
+    // region SHY-0500 — the room list waits on the cold-start claim gate
+
+    @Test
+    fun `observeRooms holds its cohort-scoped subscription until a restored session's claim is confirmed`() =
+        runTest {
+            // The shell mounts before the cold-start confirmation returns, so
+            // the ViewModel is created while the claim refresh is in flight.
+            val gate = ColdStartClaimGate().also { it.begin() }
+
+            createViewModel(claimGate = gate)
+            advanceUntilIdle()
+            verify(exactly = 0) { roomRepository.getActiveRooms(any()) }
+
+            gate.settle()
+            advanceUntilIdle()
+            verify(exactly = 1) { roomRepository.getActiveRooms(any()) }
+        }
+
+    @Test
+    fun `observeRooms subscribes at once when no cold start engaged the gate`() =
+        runTest {
+            // A fresh sign-in never goes through the cold-start confirmation;
+            // an open gate must not make its room list wait on anything.
+            createViewModel(claimGate = ColdStartClaimGate())
+            advanceUntilIdle()
+
+            verify(exactly = 1) { roomRepository.getActiveRooms(any()) }
         }
 
     // endregion

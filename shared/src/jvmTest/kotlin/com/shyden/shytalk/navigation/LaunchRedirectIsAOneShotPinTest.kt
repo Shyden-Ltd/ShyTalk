@@ -79,12 +79,17 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
-    fun `iOS applies a session-expired redirect by navigating, not by rewriting a mounted start destination`() {
+    fun `iOS applies a redirect by navigating, not by rewriting a mounted start destination`() {
         val src = read(controller)
-        val effect = src.indexOf("LaunchedEffect(launchRedirect)")
-        assertTrue(effect >= 0, "MainViewController must react to launchRedirect")
-        val body = src.substring(effect, minOf(effect + 600, src.length))
-        assertTrue(body.contains("navController.navigate(Screen.SignIn.route)"), "the reaction must navigate")
+        // EVERY redirect goes through the same state — a ban route as much as
+        // sign-in. iOS has no ban overlay above the graph the way Android does,
+        // so a ban found behind an optimistic room list must move the screen too.
+        assertTrue(src.contains("redirectTo = confirmation.screen"), "every Redirect must set redirectTo")
+        val effect = src.indexOf("LaunchedEffect(redirectTo)")
+        assertTrue(effect >= 0, "MainViewController must react to redirectTo")
+        val body = src.substring(effect, minOf(effect + 400, src.length))
+        assertTrue(body.contains("navController.navigate(target.route)"), "the reaction must navigate")
+        assertTrue(body.contains("popUpTo(0) { inclusive = true }"), "and clear the optimistic screen from the back stack")
         assertFalse(src.contains("value = confirmation.screen.route"), "rewriting the start destination after mount moves nothing")
     }
 

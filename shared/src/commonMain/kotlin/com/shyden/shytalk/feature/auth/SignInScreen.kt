@@ -83,6 +83,13 @@ fun SignInScreen(
      * having done nothing, reads as the app losing their account.
      */
     sessionExpired: Boolean = false,
+    /**
+     * SHY-0500 — called once the session-expired message has been shown, so
+     * its owner can clear the reason. Without it the reason stayed set for the
+     * life of the process and the message fired again on every later visit to
+     * this screen — after a deliberate sign-out, for one.
+     */
+    onSessionExpiredShown: () -> Unit = {},
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
     onNavigateToEmail: () -> Unit = {},
@@ -263,7 +270,13 @@ fun SignInScreen(
 
     LaunchedEffect(sessionExpired) {
         if (sessionExpired) {
-            snackbarHostState.showSnackbar(getString(Res.string.session_expired_sign_in_again))
+            try {
+                snackbarHostState.showSnackbar(getString(Res.string.session_expired_sign_in_again))
+            } finally {
+                // Consumed once shown — also when the person signs in before the
+                // snackbar times out and this effect is cancelled with it.
+                onSessionExpiredShown()
+            }
         }
     }
 

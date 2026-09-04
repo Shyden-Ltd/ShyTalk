@@ -25,12 +25,24 @@ import kotlinx.coroutines.CancellationException
  *     custom claims; the full `pm-lock-check` reconcile stays a background
  *     concern and must NOT gate the shell.
  *
+ * SHY-0500 draws the shell BEFORE [confirm] runs, so ordering 2 can no longer
+ * ride on when the NavHost mounts. [ColdStartClaimGate] carries it instead:
+ * [immediateDestination] engages the gate when it draws the room list, every
+ * exit from [confirm] settles it, and the cohort-scoped readers wait on it.
+ *
  * Collaborators are injected as functions, not interfaces, for one reason: the
  * thing worth testing is the sequence, and a function is the smallest surface
  * that lets a test observe it. Everything here is platform-free so Android and
  * iOS run the identical sequence.
  */
 class ColdStartSequencer(
+    /**
+     * SHY-0500 — engaged while the room list is drawn on an unconfirmed claim,
+     * settled on every exit from [confirm]. The cohort-scoped readers wait on
+     * the same instance, which is why it comes from the caller rather than
+     * being made here.
+     */
+    private val claimGate: ColdStartClaimGate,
     private val checkBans: suspend () -> BanState,
     private val refreshToken: suspend () -> Boolean,
     /**
@@ -129,6 +141,11 @@ class ColdStartSequencer(
             )
         drawnFirst = destination
         drawnFrom = state
+        if (destination == Screen.Main) {
+            // The room list is about to be drawn on LAST session's claim. Hold
+            // its cohort-scoped reads until confirm() has refreshed it.
+            claimGate.begin()
+        }
         logD(COLD_START_TAG, "immediate: destination=$destination (no I/O)")
         return destination
     }
@@ -142,12 +159,36 @@ class ColdStartSequencer(
      * refreshed before a single cohort-scoped read is issued.
      *
      * What changed is only WHEN the person sees something, not what is enforced.
+     *
+     * Settles the [ColdStartClaimGate] on EVERY exit — a redirect, a transport
+     * failure, a thrown exception — because a read left waiting is a room list
+     * that never loads. Requires [immediateDestination] to have run: there is
+     * nothing to confirm before something was drawn, and guessing here would
+     * decide from facts sampled at a different instant than the ones drawn on.
      */
     suspend fun confirm(): ColdStartConfirmation {
+        val drawn =
+            checkNotNull(drawnFirst) {
+                "confirm() before immediateDestination(): nothing has been drawn to confirm"
+            }
+        val state =
+            checkNotNull(drawnFrom) {
+                "immediateDestination() drew $drawn without recording the facts it drew on"
+            }
+        try {
+            return confirmDrawn(drawn, state)
+        } finally {
+            claimGate.settle()
+        }
+    }
+
+    private suspend fun confirmDrawn(
+        drawn: Screen,
+        state: LaunchState,
+    ): ColdStartConfirmation {
         // GATE 1 — bans, before anything can observe or render the person's data.
         val bans = checkBans()
         lastBan = bans
-        val state = drawnFrom ?: launchState()
 
         // Asked of the SHARED resolver rather than re-decided here, so "a ban
         // beats every other input" has exactly one definition and both platforms
@@ -162,14 +203,14 @@ class ColdStartSequencer(
                 isAuthenticated = state.isAuthenticated,
                 hasResolvedUser = state.hasResolvedUser,
             )
-        if (withBans != drawnFirst) {
-            logD(COLD_START_TAG, "confirm: bans move $drawnFirst -> $withBans")
+        if (withBans != drawn) {
+            logD(COLD_START_TAG, "confirm: bans move $drawn -> $withBans")
             return ColdStartConfirmation.Redirect(withBans, null)
         }
 
         // Nothing to confirm for a start that was never heading to the room list:
         // no session to validate, and no cohort-scoped data to gate.
-        if (drawnFirst != Screen.Main) return ColdStartConfirmation.Stay
+        if (drawn != Screen.Main) return ColdStartConfirmation.Stay
 
         // GATE 2 — the cohort claim must be CURRENT before any cohort-scoped read.
         if (refreshToken()) {

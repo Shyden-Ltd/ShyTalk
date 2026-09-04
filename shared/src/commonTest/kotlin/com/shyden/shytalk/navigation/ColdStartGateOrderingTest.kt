@@ -49,6 +49,7 @@ class ColdStartGateOrderingTest {
         hasResolvedUser: Boolean = true,
         hasStoredCredential: Boolean = true,
     ) = ColdStartSequencer(
+        claimGate = ColdStartClaimGate(),
         checkBans = {
             rec.log("ban-check")
             BanState(deviceBanned = deviceBanned, networkBanned = networkBanned)
@@ -147,6 +148,7 @@ class ColdStartGateOrderingTest {
             val rec = Recorder()
             val seq =
                 ColdStartSequencer(
+                    claimGate = ColdStartClaimGate(),
                     checkBans = {
                         rec.log("ban-check")
                         BanState(
