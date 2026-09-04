@@ -1,102 +1,109 @@
-# Handover — 2026-09-04 06:45 WIB (compact requested by the operator)
+# Handover — 2026-09-04 (after the review loop; branch NOT yet pushed)
 
-Branch `story/SHY-0500-instant-cold-start`, **29 commits ahead of origin, NOT
-pushed**. HEAD is a deliberately RED checkpoint (`d0e1620cb1a`): the pins for
-four review findings exist, the implementation does not yet, so
-`:shared:jvmTest` does not compile. **Do not push until the next commit turns
-it green.** Everything else below is committed and green.
+Branch `story/SHY-0500-instant-cold-start`, PR #2129 into develop. Every
+commit is green on `:shared:jvmTest`, `:app:testDevDebugUnitTest`,
+`:app:compileDevDebugAndroidTestKotlin`, `compileKotlinIosArm64`, ktlint,
+detekt, jest (65/65 across the runner and iOS driver suites), eslint and
+prettier. **Nothing is pushed**: the push happens once, after the review loop
+is declared finished and `Reviewed-up-to:` in the story is bumped to HEAD.
 
 ## What is proven
 
 - **Android device proof: 6/6 journeys green** on the OnePlus (CPH2653,
   Android 16), run `journey-results/runs/local-2026-09-03T19-05-01-168Z`
-  (report.json, 68 screenshots, walk video, four `J40-first-frame-*.png`).
-  APK built at `13d0e02` (the badge in every screenshot says so). J40 is the
-  story's device proof: signed in / invalidated / offline / signed out, each
-  read from the screen AND the app's own log.
+  (report.json, 64 screenshots, walk video, four `J40-first-frame-*.png`).
+  APK built at `13d0e02`. J40 is the story's device proof: signed in /
+  invalidated / offline / signed out, each read from the screen AND the app's
+  own log. The evidence page for the operator's sign-off is generated from
+  those frames (scratchpad `build-evidence-page.py`, every claim written after
+  opening its screenshot) and published as the artifact "SHY-0500 Cold Start
+  Proof".
 - **iPhone: 3/6, deferred by the operator** ("no devices available"). The
-  three reds each had a cause, all fixed and pinned (below). The rebuilt app
-  with all fixes is installed on the phone (over the network tunnel). The
-  rerun needs the phone on **USB** (its link dropped twice after iOS 27.0)
-  and the per-boot UI-automation consent approved on-device.
+  three reds each had a cause, all fixed and pinned. The rerun needs the phone
+  on **USB** (its link dropped twice after iOS 27.0) and the per-boot
+  UI-automation consent approved on-device. Until it runs green the story's
+  Definition of Done is open and it does not merge.
+- **Nothing since `13d0e02` is device-proven.** The review rounds changed
+  runtime behaviour (claim gate, one-shot redirect, navigate on redirect,
+  ban/dead-session hold); a J40 re-run on BOTH phones at the branch head is
+  owed, local first, then dev after the deploy.
 
-## Defects the device proof found (all fixed, tested, committed)
+## The review loop (eleven rounds against `origin/develop`)
 
-1. **Launch cascade** (`LaunchDestination.kt`): "no App-Lock credential" was
-   read as "no session" — every signed-in cold start drew sign-in first, then
-   reached Home through the network. Now last in the cascade. The story's own
-   fixture defaulted `hasStoredCredential = true`.
-2. **iOS device log**: `println` reached no device log; NSLog reached it
-   redacted as `<private>`. `IosLogSink` + `iOSApp.swift` installs
-   `os_log("%{public}@")`. `idevicesyslog -p iosApp` (process name is
-   `iosApp`, not ShyTalk).
-3. **iOS persisted user**: the SDK restores its user asynchronously;
-   `awaitPersistedSession()` (bounded, keychain, never network) runs before
-   the decision.
-4. **iOS keyboard never dismissed**: the driver posted `/wda/keyboard/dismiss`,
-   which Appium never routes for a client (404 swallowed); now
-   `mobile: hideKeyboard`.
-5. Infra: LiveKit chooser aborted on bash 3.2 (`serial[@]`); `stop.sh` never
-   matched the API it started; shared Appium started without `ANDROID_HOME`;
-   `svc data enable` raises a OnePlus system dialog (offline cut is Wi-Fi +
-   tunnels only); smoke journey's launch counts as using the product.
-6. Emulator ignores `revokeRefreshTokens` for the refresh exchange (verified);
-   J40 invalidates by DISABLING the account and restores it in `finally`;
-   `requiresLocalState: true`.
+Every real finding was fixed with a failing test first; the story's Notes
+carry the full record, including the four findings verified NOT to be defects
+and the two objections answered from the record. The commits, newest first:
 
-## In progress — the four review findings (`/code-review low origin/develop`)
+- `7a5d22cd5a4` round 10 — only a Stay releases the claim gate; every redirect
+  leaves it to the host, which settles after `popUpTo(0)`.
+- `1d340b4f626` round 9 — doc: a live session with no resolved identity draws
+  sign-in and `AuthViewModel`'s migration path resolves it (as before).
+- `8ac2a17278f` round 8 — `local/stop.sh` stops only node/java/firebase
+  listeners and names what it leaves alone.
+- `9d8a3d9a09d` round 7 — the sequencer's dead `run()` removed.
+- `934a4ba85ce` round 6 — a throw inside `confirm()` fails closed; the
+  cascade's defaults (App-Lock on by default, lock required without a
+  timestamp) documented.
+- `f6625e9c062` round 5 — a ban never releases the room list's reads; J40's
+  account-disabling lever refuses anything but a `demo-` project on its own
+  named app.
+- `2a2d069d7a8` round 4 — verdict applied before any other await; no silent
+  `awaitPersistedSession()` default; a failed iPhone log capture fails loudly.
+- `66e1087a818` round 3 — a new draw releases an abandoned gate; ban paths
+  pinned on both platforms.
+- `5d7274611d2` round 2 — re-readable iPhone log; honest iOS timeout log;
+  `confirm()` directly after the draw.
+- `b802458f740` round 1 — `ColdStartClaimGate`, one-shot session-expired
+  message, iOS navigates on a redirect, `checkNotNull` on confirm-before-draw.
 
-Pins written (RED). Implementation decided, not yet written:
+Rounds 10 and 11 re-raised two decisions already recorded (a throw holds the
+gate; the offline Stay reads from cache) and one product point (a mandatory
+update draws after the shell — the UX criterion's exception list now names
+it). If the next round produces only recorded decisions, the loop is finished:
+bump `Reviewed-up-to:`, push once, watch CI.
 
-- **Claim gate** — `ColdStartClaimGate` (commonMain, class with `begin()`,
-  `settle()`, `refreshInFlight: StateFlow<Boolean>`, `suspend awaitSettled()`).
-  Sequencer takes `claimGate` (default a shared instance): `begin()` when
-  `immediateDestination()` draws Main from a stored session; `settle()` in a
-  `finally` around `confirm()`. `HomeViewModel.observeRooms()` does
-  `claimGate.awaitSettled()` before `.getActiveRooms(cohort)` (new defaulted
-  ctor param `claimGate: ColdStartClaimGate = ColdStartClaimGate.shared`).
-  Reason: the shell mounts before `confirm()` now, so "claim refreshed before
-  any cohort-scoped read" is no longer structural. Rewrite the stale comment
-  at `MainActivity.kt` ~445-452 and name the gate there.
-- **One-shot redirect** — `SignInScreen(onSessionExpiredShown: () -> Unit = {})`
-  called AFTER `showSnackbar` inside `LaunchedEffect(sessionExpired)`;
-  `SignInScreenParams.onSessionExpiredShown`; `IosPlatformScreens` passes it;
-  `SharedNavGraph`/`NavGraph` take `onLaunchRedirectConsumed: () -> Unit = {}`
-  and pass `onSessionExpiredShown = onLaunchRedirectConsumed`; MainActivity +
-  MainViewController pass `onLaunchRedirectConsumed = { launchRedirect = null }`.
-- **iOS navigates on redirect** — `MainViewController`: add
-  `LaunchedEffect(launchRedirect) { if (launchRedirect != null) navController.navigate(Screen.SignIn.route) { popUpTo(0) { inclusive = true } } }`
-  next to `SharedNavGraph(...)`; DELETE `value = confirmation.screen.route`
-  (rewriting a mounted NavHost's start destination moves nothing; bans flow
-  through `coldStartBan` state).
-- **confirm() before draw** — `checkNotNull(drawnFirst) { "confirm() before immediateDestination(): ..." }`.
-- Then: `./gradlew :shared:jvmTest :app:testDevDebugUnitTest :shared:compileKotlinIosArm64 :shared:ktlintCheck :app:ktlintCheck detekt`,
-  commit, re-run `/code-review low origin/develop` until clean, bump
-  `Reviewed-up-to:` in the story, push ONCE, CI.
+## Two follow-ups worth filing (not this story)
 
-## Operator report under triage — dev admin page "Your account could not be identified"
+- After an OFFLINE cold start, confirm the claim when the network returns
+  instead of waiting for the SDK's hourly refresh.
+- Cache the last minimum-version verdict locally so a mandatory update can be
+  drawn first too.
+- The husky pre-push hook diffs `origin/main...HEAD` and runs the full
+  Playwright suite even for `git push --delete` (memory
+  `feedback-pre-push-hook-runs-playwright-even-for-a-ref-delete`).
 
-- Message = `express-api/src/middleware/auth.js` `rejectMissingIdentity` (403
-  `no_identity`): `resolveUniqueId(uid)` = `users where firebaseUid == uid`
-  returned empty (cached 5 min per uid). Middleware unchanged since 08-27.
-- Dev API serves sha `47255b6a64f` (health endpoint) — **#2131 (SHY-0289) is
-  merged on develop but NOT deployed to dev** (rule: deploy after every
-  develop merge). Deploy is owed; it is unlikely to be the cause.
-- Admin console (`public/admin`) calls `/api/portal/me` first (strict auth).
-  Next steps: (1) reproduce with the admin persona on dev: sign in
-  `admin@shytalk.dev` via Firebase REST (`FIREBASE_DEV_API_KEY` +
-  `PERSONAS_PASSWORD` in `~/.shytalk/dev-personas.env`), call
-  `GET https://dev-api.shytalk.shyden.co.uk/api/portal/me` — persona refused
-  too ⇒ systemic; persona fine ⇒ the operator's account has no `users` doc
-  with his `firebaseUid` on dev (ask which account he signed in with).
-  (2) Dev VM logs: `ssh -i $SSH_KEY ubuntu@$DEV_HOST` per
-  `express-api/scripts/dev-runner-deploy-and-run.sh`; pm2 logs carry
-  "Refused a caller with no resolved identity {uid, method, path}".
+## Operator report — dev admin page "Your account could not be identified"
 
-## Also owed
+Triaged and answered. The message is `rejectMissingIdentity` (403
+`no_identity`): the caller's Firebase uid has no `users` document with a
+matching `firebaseUid` on dev. The admin persona works: signed in against
+`FIREBASE_DEV_API_KEY` with the ROTATED password from
+`~/.shytalk/dev-personas-credentials` (NOT `dev-personas.env`, which still
+holds the pre-rotation value — memory
+`reference-dev-persona-password-lives-in-dev-personas-credentials`),
+`GET /api/portal/me` answers 200 `isAdmin: true` (uniqueId 90000001). So the
+middleware is healthy and the failure is specific to the account the operator
+used; the dev API log had no "no resolved identity" line in its pm2 output.
+Dev still serves `47255b6a64f` — #2131 (SHY-0289) is merged on develop but not
+deployed; the deploy is owed and is part of the next develop merge.
 
-- Evidence page for the operator's sign-off (Android proof + iPhone marked
-  owed). Media prepared: `scratchpad/evidence/` (J40 cut, 1080w/12fps,
-  2.4MB; 20 PNGs). Every claim must be written after OPENING its screenshot.
-- Handover PR #2136 (docs-only) still open: the permission classifier refused
-  `gh pr merge` twice.
+## Branch cleanup (operator-requested, 2026-09-04)
+
+104 local branches deleted after a `git bundle` backup
+(`~/.shytalk/backups/branch-cleanup-2026-09-04*.bundle` + `.txt` map), 18
+stale stashes dropped, local develop/main fast-forwarded. The permission
+classifier refused worktree removal and remote deletion; the operator has the
+one-line command (four worktrees, two tmp branches, eleven remote branches via
+`gh api -X DELETE`). Kept: SHY-0146 (iOS integrity, in flight), SHY-0227
+(pushed deliberately by an earlier session), SHY-0335 (self-mute fix, Draft
+story), the handover branch behind PR #2136, and this branch.
+
+## Next steps, in order
+
+1. Run one more `/code-review low origin/develop`; if it only re-raises
+   recorded decisions, bump `Reviewed-up-to:` to HEAD in the story, commit.
+2. `git push </dev/null` once (the pre-push hook runs Playwright when the
+   stack is up — expect minutes), then watch PR #2129's checks BY NAME.
+3. Evidence page: republish with the final review state; operator sign-off.
+4. When a phone is on USB: J40 on both phones at the branch head (local),
+   then the iPhone core set; then merge to develop, deploy to dev, J40 on dev.
