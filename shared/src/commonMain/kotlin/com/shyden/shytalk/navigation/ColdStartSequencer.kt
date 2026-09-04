@@ -28,7 +28,7 @@ import kotlinx.coroutines.CancellationException
  * SHY-0500 draws the shell BEFORE [confirm] runs, so ordering 2 can no longer
  * ride on when the NavHost mounts. [ColdStartClaimGate] carries it instead:
  * [immediateDestination] engages the gate when it draws the room list, a
- * verdict from [confirm] settles it (a ban and a throw deliberately do not —
+ * Stay from [confirm] settles it (a redirect and a throw deliberately do not —
  * see [confirm]), and the cohort-scoped readers wait on it.
  *
  * Collaborators are injected as functions, not interfaces, for one reason: the
@@ -39,7 +39,7 @@ import kotlinx.coroutines.CancellationException
 class ColdStartSequencer(
     /**
      * SHY-0500 — engaged while the room list is drawn on an unconfirmed claim,
-     * settled by a verdict from [confirm] (a ban and a throw keep it engaged —
+     * settled by a Stay from [confirm] (a redirect and a throw keep it engaged —
      * see [confirm]). The cohort-scoped readers wait on the same instance,
      * which is why it comes from the caller rather than being made here.
      */
@@ -173,20 +173,23 @@ class ColdStartSequencer(
      *
      * What changed is only WHEN the person sees something, not what is enforced.
      *
-     * Settles the [ColdStartClaimGate] on a VERDICT that leaves something to
-     * read with — a confirmed claim, a dead session (nothing left to read
-     * with; the next sign-in mints a fresh claim), a transport failure (the
-     * claim cannot be refreshed offline and the cached room list is all there
-     * is). Two outcomes keep it engaged, and fail closed:
+     * Settles the [ColdStartClaimGate] on a [ColdStartConfirmation.Stay] only:
+     * the screen already drawn was right, so its reads may proceed — on the
+     * refreshed claim when the refresh succeeded, or on the cached room list
+     * when the network could not be reached (the claim cannot be refreshed
+     * offline, and holding would be a room list that never loads on a train).
      *
-     *  - a BAN: the room list drawn underneath must never read on the claim
-     *    this confirmation did not refresh. The host settles the gate once the
-     *    ban screen has replaced that room list (both hosts are pinned to do
-     *    so after they navigate);
-     *  - a THROW: there is no verdict at all. The exception propagates to the
+     * Every other outcome leaves the gate engaged, and fails closed:
+     *
+     *  - a REDIRECT — a ban, or a dead session that has just been signed out.
+     *    The room list drawn underneath is still mounted until the host
+     *    navigates; releasing its reads here would fire them on a claim this
+     *    confirmation did not refresh, or against a session that no longer
+     *    exists. The host settles the gate AFTER `popUpTo(0)` has cleared that
+     *    room list and its ViewModel (both hosts are pinned to do so);
+     *  - a THROW — there is no verdict at all. The exception propagates to the
      *    host, the reads stay held, and the next draw supersedes the gate
-     *    ([immediateDestination] resets it). Releasing here would be a
-     *    cohort-scoped read with no ban verdict on an unconfirmed claim.
+     *    ([immediateDestination] resets it).
      *
      * Requires [immediateDestination] to have run: there is nothing to confirm
      * before something was drawn, and guessing here would decide from facts
@@ -202,8 +205,7 @@ class ColdStartSequencer(
                 "immediateDestination() drew $drawn without recording the facts it drew on"
             }
         val outcome = confirmDrawn(drawn, state)
-        val banned = outcome is ColdStartConfirmation.Redirect && outcome.screen.isBanScreen()
-        if (!banned) claimGate.settle()
+        if (outcome is ColdStartConfirmation.Stay) claimGate.settle()
         return outcome
     }
 
@@ -264,9 +266,6 @@ class ColdStartSequencer(
 }
 
 private const val COLD_START_TAG = "ColdStartSequencer"
-
-/** The two destinations a ban verdict can name — the ONLY outcomes that keep the claim gate engaged. */
-private fun Screen.isBanScreen(): Boolean = this == Screen.BanDevice || this == Screen.BanNetwork
 
 /**
  * The outcome of the pre-routing ban check.

@@ -79,14 +79,15 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
-    fun `both hosts apply a redirect by navigating, and release the gate only once a ban has replaced the room list`() {
+    fun `both hosts apply a redirect by navigating, and release the gate only once the corrected screen has replaced the room list`() {
         // EVERY redirect goes through the same state — a ban route as much as
         // sign-in — and navigates with popUpTo(0), which clears the optimistic
         // room list and its ViewModel from the back stack. That clearing is
-        // what makes the ban path safe: the sequencer keeps the claim gate
-        // engaged on a ban, so the room list drawn underneath can never read
-        // on the unrefreshed claim, and the host settles the gate AFTER the
-        // navigation so nothing is left waiting for a later sign-in.
+        // what makes a redirect safe: the sequencer keeps the claim gate
+        // engaged on every Redirect, so the room list drawn underneath can
+        // read neither on the unrefreshed claim (a ban) nor against a session
+        // just signed out (a dead session), and the host settles the gate
+        // AFTER the navigation so nothing is left waiting for a later sign-in.
         for (owner in listOf(mainActivity, controller)) {
             val src = read(owner)
             assertTrue(src.contains("redirectTo = confirmation.screen"), "$owner: every Redirect must set redirectTo")

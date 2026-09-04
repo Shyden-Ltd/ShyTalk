@@ -149,25 +149,35 @@ class ColdStartInstantLaunchTest {
         }
 
     @Test
-    fun theGateReleasesWhenThereIsNothingLeftToProtect_aDeadSessionOrAnUnreachableNetwork() =
+    fun anUnreachableNetworkReleasesTheGate_theCachedRoomListIsAllThereIs() =
         runTest {
-            // A dead session has been signed out — there is no claim left to
-            // read with, and the next sign-in mints a fresh one. Offline, the
-            // claim cannot be refreshed at all and the room list serves the
-            // cache it was authorised to fill last time. Both release: a read
-            // that waits forever is a room list that never loads.
-            for (variant in listOf("dead", "offline")) {
-                val gate = ColdStartClaimGate()
-                val s =
-                    when (variant) {
-                        "dead" -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = false, claimGate = gate)
-                        else -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = true, claimGate = gate)
-                    }
-                s.immediateDestination()
-                assertTrue(gate.refreshInFlight.value, variant)
-                s.confirm()
-                assertFalse(gate.refreshInFlight.value, "$variant must settle the gate")
-            }
+            // Offline, the claim cannot be refreshed at all and the room list
+            // serves the cache it was authorised to fill last time — the same
+            // as before this story. Holding it would be a room list that never
+            // loads for anyone who opens the app on a train.
+            val gate = ColdStartClaimGate()
+            val s = sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = true, claimGate = gate)
+            s.immediateDestination()
+            assertTrue(gate.refreshInFlight.value)
+            assertTrue(s.confirm() is ColdStartConfirmation.Stay)
+            assertFalse(gate.refreshInFlight.value, "a transport failure must settle the gate")
+        }
+
+    @Test
+    fun aDeadSessionKeepsTheGateEngagedUntilTheHostHasMovedTheScreen() =
+        runTest {
+            // confirm() signs the dead session out and answers Redirect. The
+            // room list is still mounted until the host navigates; releasing
+            // its reads here would fire them against a session that no longer
+            // exists (review, 2026-09-04). Every Redirect leaves the gate to
+            // the host, which settles it AFTER popUpTo(0) has cleared the room
+            // list and its ViewModel — the same rule as a ban.
+            val gate = ColdStartClaimGate()
+            val s = sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = false, claimGate = gate)
+            s.immediateDestination()
+            val outcome = s.confirm()
+            assertTrue(outcome is ColdStartConfirmation.Redirect && outcome.screen == Screen.SignIn)
+            assertTrue(gate.refreshInFlight.value, "a dead-session redirect must leave the gate to the host")
         }
 
     @Test

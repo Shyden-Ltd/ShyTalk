@@ -19,24 +19,24 @@ import kotlinx.coroutines.flow.first
  * session, and a cohort-scoped reader calls [awaitSettled] before subscribing.
  * What [settle]s it, exactly:
  *
- *  - a CONFIRMED claim — the reads proceed on the refreshed claim;
- *  - a DEAD session — it has been signed out, there is no claim left to read
- *    with, and the next sign-in mints a fresh one;
- *  - a TRANSPORT failure — the claim cannot be refreshed offline, and the room
- *    list serves the cache it was authorised to fill last time (the same as
- *    before SHY-0500; the background reconcile and the SDK's own refresh
- *    correct the claim once the network is back);
+ *  - a STAY from the confirmation — the screen drawn was right. Its reads
+ *    proceed on the refreshed claim, or, when the network could not be
+ *    reached, on the cached room list (the claim cannot be refreshed offline;
+ *    the same as before SHY-0500, and the background reconcile and the SDK's
+ *    own refresh correct the claim once the network is back);
+ *  - the HOST, after it has navigated on a REDIRECT — a ban, or a dead session
+ *    just signed out. The room list drawn underneath stays mounted until then,
+ *    and its reads must fire neither on a claim the confirmation did not
+ *    refresh nor against a session that no longer exists; `popUpTo(0)` clears
+ *    that room list and its ViewModel first, and the host settles afterwards
+ *    so nothing is left waiting for a later sign-in;
  *  - the NEXT draw — [ColdStartSequencer.immediateDestination] resets the gate
  *    to whatever it is drawing now, so a launch that was cancelled or threw
  *    before it could settle cannot hold a later launch's room list.
  *
- * Two outcomes leave it engaged, on purpose. A BAN: the room list drawn
- * underneath must never read on the claim the confirmation did not refresh,
- * so the gate stays engaged until the host has navigated to the ban screen —
- * which pops that room list and its ViewModel — and settles it afterwards, so
- * nothing is left waiting for a later sign-in. A THROW inside the
- * confirmation: there is no verdict, so there is nothing to release the reads
- * on; the exception reaches the host and the next draw supersedes the gate.
+ * A THROW inside the confirmation leaves it engaged, on purpose: there is no
+ * verdict, so there is nothing to release the reads on; the exception reaches
+ * the host and the next draw supersedes the gate.
  *
  * Open at rest. A fresh sign-in, a PIN unlock and an offline launch never go
  * through [begin], so nothing they do waits here. That is the SHY-0024 lesson:
