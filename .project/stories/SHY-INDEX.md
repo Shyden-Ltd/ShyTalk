@@ -328,6 +328,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0494](SHY-0494-one-device-identifier-claimed-by-many-accounts.md) | P1 | M | bug | One device's push identifier is claimed by every account that signed in on it | 👀 In Review | — |  |
 | [SHY-0495](SHY-0495-make-the-seven-skipped-journeys-assertable-on-dev.md) | P1 | M | chore | Make the seven local-only journeys assertable on dev | 📝 Draft | — |  |
 | [SHY-0496](SHY-0496-installation-ids-follow-every-path-the-token-took.md) | P0 | S | bug | Installation IDs must follow every path the registration token took | 👀 In Review | — |  |
+| [SHY-0521](SHY-0521-both-lockfiles-resolve-outside-every-open-advisory-range.md) | P0 | XS | chore | Both lockfiles resolve outside every open advisory range | 👀 In Review | — |  |
 | [SHY-0497](SHY-0497-the-app-returns-to-home-after-reaching-signin.md) | P2 | M | bug | The app returns to Home after sign-out has reached the SignIn screen | 👀 In Review | — |  |
 | [SHY-0498](SHY-0498-image-load-failures-are-never-counted.md) | P2 | M | chore | Nobody can tell how often an image fails to load | 📝 Draft | — |  |
 | [SHY-0499](SHY-0499-untrusted-text-reaches-innerHTML-unchecked.md) | P1 | M | bug | Text written by the public reaches innerHTML with nothing checking it | 📝 Draft | — |  |
