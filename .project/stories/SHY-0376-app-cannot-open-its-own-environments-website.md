@@ -178,12 +178,3 @@ environment it does not belong to.
   What renders is the unstyled `text/plain` 401 body from the lockdown — see
   SHY-0377. Fixing this story removes the symptom; SHY-0377 makes the failure
   legible whenever it does occur.
-- **2026-09-04 — reproduced again by the operator on dev**, unchanged: tapping
-  the cyber-bullying banner in the dev app opens the dev page, and the dev
-  restriction refuses it. Operator: *"when on the dev version of the app, all
-  the dev links should work as normal without restrictions."* Same rule as the
-  2026-08-20 quote above — environment-matched access, dev app → dev site with
-  no prompt. Still `Draft`, still `P1`, still `mvp: true`; fifteen days open.
-  Related copy defect found the same day: SHY-0512 (the device-lock and
-  suspension screens send people to shyden.co.uk for support instead of the
-  ShyTalk site).

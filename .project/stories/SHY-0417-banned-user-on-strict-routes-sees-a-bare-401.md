@@ -8,7 +8,6 @@ effort: S
 type: bug
 roadmap_ids: []
 mvp: false
-epic: EPIC-0013
 ---
 
 # SHY-0417: A banned user on portal/admin routes is told nothing, not that they are banned

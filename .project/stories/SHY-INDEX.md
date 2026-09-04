@@ -348,6 +348,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0515](SHY-0515-an-offline-cold-start-confirms-the-session-when-the-network-returns.md) | P2 | M | feature | An offline cold start confirms the session when the network returns | 📝 Draft | — |  |
 | [SHY-0516](SHY-0516-a-mandatory-update-is-drawn-first-from-a-cached-verdict.md) | P2 | S | feature | A mandatory update is drawn first, from a verdict the app already has | 📝 Draft | — |  |
 | [SHY-0517](SHY-0517-the-pre-push-hook-tests-the-wrong-diff.md) | P2 | S | infra | The pre-push hook tests the wrong diff | 📝 Draft | — |  |
+| [SHY-0518](SHY-0518-the-pre-merge-gate-refuses-backlog-maintenance-on-draft-stories.md) | P2 | XS | infra | The pre-merge gate refuses backlog maintenance on Draft stories | 📝 Draft | — |  |
 
 ## Done
 

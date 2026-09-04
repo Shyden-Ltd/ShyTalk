@@ -184,3 +184,9 @@ story uses it rather than adding a second one.
   strings and all ten locale instances listed above so the fix is a sweep, not
   a single edit. The same day the operator re-reported SHY-0376 (dev site
   refusing the dev app); that story is the dependency here.
+- **2026-09-04** — SHY-0376 reproduction, recorded here because the pre-merge
+  gate refuses a notes append on a Draft story (SHY-0518): tapping the
+  cyber-bullying banner in the dev app opens the dev page and the dev
+  restriction refuses it. Operator: *"when on the dev version of the app, all
+  the dev links should work as normal without restrictions."* Same rule as
+  SHY-0376's 2026-08-20 quote; still Draft, P1, MVP after fifteen days.

@@ -157,6 +157,10 @@ Two web surfaces, two doors, two identity rules — and one of them is wrong.
   sign-up for everyone later as its own post-MVP epic* (EPIC-0014); *the admin
   dashboard folds into the portal*. Design alternatives and rationale are in
   the decisions table above.
+- **2026-09-04** — SHY-0417 is adopted here by `child_shys` only. Its own
+  `epic:` field could not be set in the filing PR: the pre-merge gate refuses
+  any modification to a Draft story, including a one-line frontmatter link
+  (SHY-0518). It gets the field when SHY-0518 lands or when it is picked up.
 - **2026-09-04** — Checked before filing: no portal epic or story existed in
   the working tree, on any remote branch, or in the trees of the 135 branch
   tips deleted in the 2026-09-04 cleanup. EPIC-0012 names "the website
