@@ -344,6 +344,10 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0511](SHY-0511-retire-the-separate-admin-page.md) | P2 | S | chore | Retire the separate admin page | 📝 Draft | — |  |
 | [SHY-0512](SHY-0512-support-copy-sends-people-to-the-wrong-website.md) | P2 | S | bug | The device-lock and suspension screens send people to the wrong website for support | 📝 Draft | — |  |
 | [SHY-0513](SHY-0513-the-index-reconciler-cannot-insert-rows.md) | P2 | XS | bug | The story-index reconciler cannot insert the rows it finds missing | 📝 Draft | — |  |
+| [SHY-0514](SHY-0514-in-app-web-pages-must-show-only-the-intended-page.md) | P1 | M | bug | A web page opened inside the app must show only that page and allow no navigation | 📝 Draft | — |  |
+| [SHY-0515](SHY-0515-an-offline-cold-start-confirms-the-session-when-the-network-returns.md) | P2 | M | feature | An offline cold start confirms the session when the network returns | 📝 Draft | — |  |
+| [SHY-0516](SHY-0516-a-mandatory-update-is-drawn-first-from-a-cached-verdict.md) | P2 | S | feature | A mandatory update is drawn first, from a verdict the app already has | 📝 Draft | — |  |
+| [SHY-0517](SHY-0517-the-pre-push-hook-tests-the-wrong-diff.md) | P2 | S | infra | The pre-push hook tests the wrong diff | 📝 Draft | — |  |
 
 ## Done
 
