@@ -103,6 +103,26 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
+    fun `both hosts confirm straight after drawing, so nothing can cancel between begin() and settle()`() {
+        // The gate is engaged by immediateDestination() and settled only when
+        // confirm() returns. A suspension point between the two is a window in
+        // which a cancelled effect, or a throw, leaves every cohort-scoped read
+        // waiting for the life of the process (review, 2026-09-04): the room
+        // list never loads. Anything else the launch awaits runs before the
+        // draw as a deferred, or after the confirmation.
+        for (owner in listOf(mainActivity, controller)) {
+            val src = read(owner)
+            val drawn = src.indexOf("sequencer.immediateDestination()")
+            val confirmed = src.indexOf("sequencer.confirm()")
+            assertTrue(drawn in 0..<confirmed, "$owner must draw, then confirm")
+            val between = src.substring(drawn, confirmed)
+            for (suspendCall in listOf(".await(", "getLatestVersionInfo(", "checkBackendHealth(", "delay(")) {
+                assertFalse(between.contains(suspendCall), "$owner awaits $suspendCall between drawing and confirming")
+            }
+        }
+    }
+
+    @Test
     fun `MainActivity no longer claims an ordering the NavHost stopped providing`() {
         val src = read(mainActivity)
         assertFalse(

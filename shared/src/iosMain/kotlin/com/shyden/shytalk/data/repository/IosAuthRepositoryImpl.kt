@@ -54,8 +54,15 @@ class IosAuthRepositoryImpl(
      * not a launch that never draws; the launch then decides on what it has.
      */
     override suspend fun awaitPersistedSession() {
-        val restored = withTimeoutOrNull(PERSISTED_SESSION_TIMEOUT_MS) { auth.authStateChanged.first() }
-        if (restored == null && auth.currentUser == null) {
+        // `first()` returns null on every signed-out start — that IS the SDK
+        // reporting "no persisted user", so the emission's value cannot say
+        // whether it arrived. Only the timeout may read as "not reported".
+        val reported =
+            withTimeoutOrNull(PERSISTED_SESSION_TIMEOUT_MS) {
+                auth.authStateChanged.first()
+                true
+            } ?: false
+        if (!reported) {
             logI(TAG, "persisted session not reported within ${PERSISTED_SESSION_TIMEOUT_MS}ms; deciding on what is known")
         }
     }

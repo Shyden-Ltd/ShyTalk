@@ -269,7 +269,11 @@ describe('the launch log and the network are device operations on BOTH backends'
       expect(lines).toEqual([
         'Sep 4 ShyTalk[1] <Notice>: D/ColdStartSequencer: immediate: destination=Main (no I/O)',
       ]);
-      expect(spawned[spawned.length - 1]).toEqual(['kill']);
+      // A read leaves the capture streaming — J40 reads the same launch twice
+      // (review, 2026-09-04). The next clear is what ends it.
+      expect(spawned.some((s) => s[0] === 'kill')).toBe(false);
+      await d.clearAppLog();
+      expect(spawned.filter((s) => s[0] === 'kill')).toHaveLength(1);
     });
     test('readAppLog before clearAppLog is a programming error, not an empty log', async () => {
       await expect(ios().readAppLog('ColdStartSequencer')).rejects.toThrow(/clearAppLog/);

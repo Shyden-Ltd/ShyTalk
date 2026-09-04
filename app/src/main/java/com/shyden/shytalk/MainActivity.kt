@@ -415,10 +415,21 @@ class MainActivity : AppCompatActivity() {
                             // this screen — to a ban, or back to sign-in with a reason.
                             // Nothing of the person's own renders in the meantime:
                             // cohort-scoped reads wait for the refreshed claim.
+                            // Started BEFORE the draw so they overlap the confirmation
+                            // rather than sitting between it and the draw: the claim
+                            // gate is engaged by `immediateDestination()` and settled
+                            // only when `confirm()` returns, and a suspension point in
+                            // between is a window in which a cancelled effect leaves
+                            // every cohort-scoped read waiting for the life of the
+                            // process (review, 2026-09-04).
+                            val versionDeferred = async { appConfigService.getLatestVersionInfo() }
+                            val healthDeferred = async { appConfigService.checkBackendHealth() }
+
                             initialRoute = sequencer.immediateDestination().route
                             checkComplete = true
+                            val confirmation = sequencer.confirm()
 
-                            when (val result = appConfigService.getLatestVersionInfo()) {
+                            when (val result = versionDeferred.await()) {
                                 is Resource.Success -> {
                                     val (minVersionCode, latestVersionCode, latestVersionName) = result.data
                                     updateRequired = appConfigService.currentVersionCode < minVersionCode
@@ -433,7 +444,7 @@ class MainActivity : AppCompatActivity() {
 
                                 is Resource.Loading -> { /* wait */ }
                             }
-                            when (val healthResult = appConfigService.checkBackendHealth()) {
+                            when (val healthResult = healthDeferred.await()) {
                                 is Resource.Success -> {
                                     backendDegraded = healthResult.data.status == "degraded"
                                 }
@@ -459,7 +470,6 @@ class MainActivity : AppCompatActivity() {
                             // the room list from a stored session and settles
                             // it when `confirm()` returns, and HomeViewModel
                             // waits on it before its cohort-scoped subscription.
-                            val confirmation = sequencer.confirm()
                             when (confirmation) {
                                 is ColdStartConfirmation.Stay -> Unit
 

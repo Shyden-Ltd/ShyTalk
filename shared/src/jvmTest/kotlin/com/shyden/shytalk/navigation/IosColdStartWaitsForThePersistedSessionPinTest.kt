@@ -2,6 +2,7 @@ package com.shyden.shytalk.navigation
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -62,6 +63,22 @@ class IosColdStartWaitsForThePersistedSessionPinTest {
             src.contains("withTimeoutOrNull"),
             "the wait must be bounded: a launch may never hang on it",
         )
+    }
+
+    @Test
+    fun `a null emission is the SDK reporting no persisted user, not a timeout`() {
+        // `first()` returns null on every signed-out start — that IS the report
+        // arriving. Reading the emission's value as "did it arrive" logged a
+        // timeout that never happened on every signed-out launch (review,
+        // 2026-09-04). The timeout is told apart by what the bounded block
+        // RETURNS, never by what the SDK emitted.
+        val src = read(iosRepo)
+        assertFalse(src.contains("restored == null"), "the emission's value must not stand in for whether it arrived")
+        val wait = src.indexOf("withTimeoutOrNull(PERSISTED_SESSION_TIMEOUT_MS)")
+        assertTrue(wait >= 0, "the wait must be the bounded one")
+        val block = src.substring(wait, minOf(wait + 300, src.length))
+        assertTrue(block.contains("auth.authStateChanged.first()"), "the block must still wait on the SDK's emission")
+        assertTrue(block.contains("?: false"), "only the TIMEOUT may read as 'not reported'")
     }
 
     @Test

@@ -1123,7 +1123,8 @@ class IosDevice {
    * unified log, and `idevicesyslog` streams that over USB -- no debugger
    * attached, which is what SHY-0500's observability criterion asks for.
    * "Clear" on iOS means "start from here": the syslog cannot be emptied, so
-   * a fresh capture is what makes the next read hold only what follows.
+   * a fresh capture is what makes the next read hold only what follows. The
+   * capture then runs until the next clear, or `quit()`; reads do not end it.
    */
   async clearAppLog() {
     this._stopSyslog();
@@ -1140,14 +1141,20 @@ class IosDevice {
     this._syslog = { child, chunks };
   }
 
-  /** The captured lines that carry `tag`, and the end of the capture. */
+  /**
+   * The lines captured so far that carry `tag`.
+   *
+   * Leaves the capture running, the way a logcat dump can be taken again and
+   * again: J40 reads the log once for the first frame and again for the
+   * `confirm:` verdict of the same launch. This used to STOP the capture, so
+   * the second read threw and anything the app logged after the first read
+   * was never seen (review, 2026-09-04). Only [clearAppLog] starts over.
+   */
   async readAppLog(tag) {
     if (!this._syslog) {
       throw new Error('readAppLog() before clearAppLog(): nothing was being captured');
     }
-    const { chunks } = this._syslog;
-    this._stopSyslog();
-    return chunks
+    return this._syslog.chunks
       .join('')
       .split('\n')
       .map((l) => l.trimEnd())
@@ -1234,6 +1241,9 @@ class IosDevice {
    * Best-effort per id: one refusal must not strand the rest.
    */
   async quit() {
+    // A read no longer stops the capture, so the last one of the run is
+    // still streaming here; without this an idevicesyslog outlives the run.
+    this._stopSyslog();
     const ids = [...this._allSessionIds];
     if (this._sessionId) ids.push(this._sessionId);
     for (const id of new Set(ids)) {

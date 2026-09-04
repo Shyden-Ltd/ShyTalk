@@ -221,8 +221,10 @@ describe('every device command survives a WebDriverAgent restart', () => {
     clearAppLog:
       'never reaches WDA — it starts an idevicesyslog capture over USB (SHY-0500), and a ' +
       'lost WebDriverAgent session has nothing to do with the device log',
-    readAppLog: 'never reaches WDA — it stops the capture clearAppLog started and reads it',
-    _stopSyslog: 'the capture teardown behind readAppLog — a child process, not a session',
+    readAppLog:
+      'never reaches WDA — it reads what the capture clearAppLog started has streamed so far',
+    _stopSyslog:
+      'the capture teardown behind clearAppLog and quit — a child process, not a session',
   };
 
   /** How to invoke each command that must recover. */
