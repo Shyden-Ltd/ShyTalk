@@ -79,18 +79,33 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
-    fun `iOS applies a redirect by navigating, not by rewriting a mounted start destination`() {
-        val src = read(controller)
+    fun `both hosts apply a redirect by navigating, and release the gate only once a ban has replaced the room list`() {
         // EVERY redirect goes through the same state — a ban route as much as
-        // sign-in. iOS has no ban overlay above the graph the way Android does,
-        // so a ban found behind an optimistic room list must move the screen too.
-        assertTrue(src.contains("redirectTo = confirmation.screen"), "every Redirect must set redirectTo")
-        val effect = src.indexOf("LaunchedEffect(redirectTo)")
-        assertTrue(effect >= 0, "MainViewController must react to redirectTo")
-        val body = src.substring(effect, minOf(effect + 400, src.length))
-        assertTrue(body.contains("navController.navigate(target.route)"), "the reaction must navigate")
-        assertTrue(body.contains("popUpTo(0) { inclusive = true }"), "and clear the optimistic screen from the back stack")
-        assertFalse(src.contains("value = confirmation.screen.route"), "rewriting the start destination after mount moves nothing")
+        // sign-in — and navigates with popUpTo(0), which clears the optimistic
+        // room list and its ViewModel from the back stack. That clearing is
+        // what makes the ban path safe: the sequencer keeps the claim gate
+        // engaged on a ban, so the room list drawn underneath can never read
+        // on the unrefreshed claim, and the host settles the gate AFTER the
+        // navigation so nothing is left waiting for a later sign-in.
+        for (owner in listOf(mainActivity, controller)) {
+            val src = read(owner)
+            assertTrue(src.contains("redirectTo = confirmation.screen"), "$owner: every Redirect must set redirectTo")
+            val effect = src.indexOf("LaunchedEffect(redirectTo)")
+            assertTrue(effect >= 0, "$owner must react to redirectTo")
+            val body = src.substring(effect, minOf(effect + 900, src.length))
+            val navigate = body.indexOf("navController.navigate(target.route)")
+            assertTrue(navigate >= 0, "$owner: the reaction must navigate")
+            assertTrue(
+                body.contains("popUpTo(0) { inclusive = true }"),
+                "$owner: and clear the optimistic screen from the back stack",
+            )
+            val settle = body.indexOf("claimGate.settle()")
+            assertTrue(settle > navigate, "$owner: the gate is released after the navigation, never before")
+        }
+        assertFalse(
+            read(controller).contains("value = confirmation.screen.route"),
+            "rewriting the start destination after mount moves nothing",
+        )
     }
 
     @Test
@@ -103,12 +118,12 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
-    fun `a ban verdict moves the screen on both platforms, each the way its host renders bans`() {
-        // Android renders BanScreen ABOVE the NavHost from the confirmation's ban
-        // facts, so its Redirect branch only has to carry the sign-in reason;
-        // iOS has no such overlay and navigates to the ban route. A reviewer
-        // reading one host without the other concludes the ban is dropped
-        // (2026-09-04); this pin is the answer.
+    fun `a ban verdict replaces the room list on both platforms, and Android also covers it`() {
+        // Both hosts navigate to the ban route (the pin above), which pops the
+        // room list and its ViewModel. Android additionally renders BanScreen
+        // ABOVE the NavHost from the confirmation's ban facts, so even a frame
+        // in which the navigation has not landed yet shows the ban. iOS has no
+        // overlay; the navigation is the whole answer there.
         val android = read(mainActivity)
         assertTrue(android.contains("coldStartBan = sequencer.lastBan"), "Android must publish the ban facts the confirmation found")
         val overlay = android.indexOf("coldStartBan.deviceBanned || coldStartBan.networkBanned ->")
@@ -116,7 +131,6 @@ class LaunchRedirectIsAOneShotPinTest {
         assertTrue(android.indexOf("BanScreen(", overlay) in overlay..overlay + 200, "and render BanScreen there")
         val ios = read(controller)
         assertTrue(ios.contains("coldStartBan = sequencer.lastBan"), "iOS must publish the ban facts for the ban route")
-        assertTrue(ios.contains("redirectTo = confirmation.screen"), "and navigate to it, since nothing renders above its graph")
     }
 
     @Test

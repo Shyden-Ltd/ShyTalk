@@ -149,22 +149,48 @@ class ColdStartInstantLaunchTest {
         }
 
     @Test
-    fun theGateReleasesOnEveryConfirmOutcome_notOnlySuccess() =
+    fun theGateReleasesWhenThereIsNothingLeftToProtect_aDeadSessionOrAnUnreachableNetwork() =
         runTest {
-            // A dead session, an offline launch and a ban all settle the gate:
-            // a read that waits forever is a room list that never loads.
-            for (variant in listOf("dead", "offline", "banned")) {
+            // A dead session has been signed out — there is no claim left to
+            // read with, and the next sign-in mints a fresh one. Offline, the
+            // claim cannot be refreshed at all and the room list serves the
+            // cache it was authorised to fill last time. Both release: a read
+            // that waits forever is a room list that never loads.
+            for (variant in listOf("dead", "offline")) {
                 val gate = ColdStartClaimGate()
                 val s =
                     when (variant) {
                         "dead" -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = false, claimGate = gate)
-                        "offline" -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = true, claimGate = gate)
-                        else -> sequencer(Recorder(), deviceBanned = true, claimGate = gate)
+                        else -> sequencer(Recorder(), refreshSucceeds = false, sessionStillAlive = true, claimGate = gate)
                     }
                 s.immediateDestination()
                 assertTrue(gate.refreshInFlight.value, variant)
                 s.confirm()
                 assertFalse(gate.refreshInFlight.value, "$variant must settle the gate")
+            }
+        }
+
+    @Test
+    fun aBanKeepsTheGateEngaged_theRoomListDrawnUnderneathMustNeverRead() =
+        runTest {
+            // Before SHY-0500 a banned cold start never mounted the room list.
+            // Now it is drawn first, so the ban verdict must NOT release its
+            // reads: nothing cohort-scoped may load for a banned person, on a
+            // claim the confirmation never refreshed (review, 2026-09-04). The
+            // host settles the gate itself once the ban screen has replaced
+            // the room list and its ViewModel is gone.
+            for (variant in listOf("device", "network")) {
+                val gate = ColdStartClaimGate()
+                val s =
+                    if (variant == "device") {
+                        sequencer(Recorder(), deviceBanned = true, claimGate = gate)
+                    } else {
+                        sequencer(Recorder(), networkBanned = true, claimGate = gate)
+                    }
+                s.immediateDestination()
+                val outcome = s.confirm()
+                assertTrue(outcome is ColdStartConfirmation.Redirect, variant)
+                assertTrue(gate.refreshInFlight.value, "a $variant ban must leave the gate engaged")
             }
         }
 

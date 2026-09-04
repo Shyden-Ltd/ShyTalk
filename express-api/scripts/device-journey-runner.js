@@ -1950,14 +1950,35 @@ async function firstAppFrame(device, timeoutMs) {
  * the refresh fails with an auth error and the user is signed out locally.
  * Local only: dev offers no such handle from a laptop, which is why J40
  * declares `requiresLocalState`.
+ *
+ * Disabling an account is a real, destructive lever, so this never borrows
+ * whatever admin app the process already has — one initialised for a real
+ * project would disable the persona on the real service (review, 2026-09-04).
+ * It refuses any project id that is not a demo project (the only kind the
+ * emulator serves) and uses its own named app, pointed at the Auth emulator.
+ *
+ * `deps` exists so the guard can be tested without firebase-admin in the room.
  */
-async function localAdminAuth() {
-  process.env.FIREBASE_AUTH_EMULATOR_HOST =
-    process.env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
-  if (!require('firebase-admin/app').getApps().length) {
-    admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-shytalk' });
+const LOCAL_AUTH_EMULATOR_APP = 'shy-journey-auth-emulator';
+
+async function localAdminAuth(deps = {}) {
+  const env = deps.env || process.env;
+  const getApps = deps.getApps || require('firebase-admin/app').getApps;
+  const initializeApp = deps.initializeApp || require('firebase-admin/app').initializeApp;
+  const getAuth = deps.getAuth || require('firebase-admin/auth').getAuth;
+
+  const projectId = env.GCLOUD_PROJECT || 'demo-shytalk';
+  if (!projectId.startsWith('demo-')) {
+    throw new Error(
+      `refusing to disable accounts in project "${projectId}": the journey runner only ever ` +
+        'does this against the Auth emulator, and only a demo- project can be one',
+    );
   }
-  return require('firebase-admin/auth').getAuth();
+  env.FIREBASE_AUTH_EMULATOR_HOST = env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+  const app =
+    getApps().find((a) => a.name === LOCAL_AUTH_EMULATOR_APP) ||
+    initializeApp({ projectId }, LOCAL_AUTH_EMULATOR_APP);
+  return getAuth(app);
 }
 
 async function invalidateSession(email) {
@@ -2052,7 +2073,14 @@ async function signOutFlow(device) {
 function initDb(target) {
   if (target !== 'local') return null;
   process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
-  if (!require('firebase-admin/app').getApps().length) {
+  // The DEFAULT app specifically: `getApps().length` would also count the
+  // named Auth-emulator app behind J40 and then hand getFirestore() an app
+  // that does not exist.
+  if (
+    !require('firebase-admin/app')
+      .getApps()
+      .some((a) => a.name === '[DEFAULT]')
+  ) {
     admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-shytalk' });
   }
   return require('firebase-admin/firestore').getFirestore();
@@ -4949,6 +4977,10 @@ if (require.main === module) {
 // housekeeping script that authenticates differently from the runs it exists
 // to unblock.
 module.exports = {
+  // SHY-0500 — the Auth-emulator-only admin handle behind J40's revoked launch,
+  // exported so its refusal of a real project can be asserted without a phone.
+  localAdminAuth,
+  LOCAL_AUTH_EMULATOR_APP,
   PICKER_OPEN_TIMEOUT_MS,
   // The Android backend, exported so the two journey backends can be compared
   // against each other without a phone (SHY-0446).

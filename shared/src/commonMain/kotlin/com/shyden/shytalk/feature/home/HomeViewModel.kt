@@ -160,9 +160,12 @@ class HomeViewModel(
         viewModelScope.launch {
             // SHY-0500 — the shell mounts before the cold-start confirmation
             // returns, so on a restored session the claim in hand may still be
-            // LAST session's cohort. Wait for the refresh to settle before the
-            // first cohort-scoped read: reading on the stale claim is the
-            // SHY-0132/0137 cross-cohort leak. The gate is open at rest, so a
+            // LAST session's cohort. Wait for the confirmation before the first
+            // cohort-scoped read: reading on a stale claim online is the
+            // SHY-0132/0137 cross-cohort leak. A ban never releases this wait —
+            // the ban screen replaces this room list and clears this ViewModel
+            // first. Offline, the claim cannot be refreshed and the cached list
+            // is what loads, as it always did. The gate is open at rest, so a
             // fresh sign-in or a PIN unlock never waits here.
             claimGate.awaitSettled()
             // SHY-0102 — pin the caller's cohort so the rooms `list` query

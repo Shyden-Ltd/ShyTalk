@@ -172,11 +172,17 @@ class ColdStartSequencer(
      *
      * What changed is only WHEN the person sees something, not what is enforced.
      *
-     * Settles the [ColdStartClaimGate] on EVERY exit — a redirect, a transport
-     * failure, a thrown exception — because a read left waiting is a room list
-     * that never loads. Requires [immediateDestination] to have run: there is
-     * nothing to confirm before something was drawn, and guessing here would
-     * decide from facts sampled at a different instant than the ones drawn on.
+     * Settles the [ColdStartClaimGate] on every exit but one — a confirmed
+     * claim, a dead session, a transport failure, a thrown exception — because
+     * a read left waiting is a room list that never loads. The exception is a
+     * BAN: the room list drawn underneath must never read on the claim this
+     * confirmation did not refresh, so the gate stays engaged and the host
+     * settles it once the ban screen has replaced that room list (both hosts
+     * are pinned to do so after they navigate).
+     *
+     * Requires [immediateDestination] to have run: there is nothing to confirm
+     * before something was drawn, and guessing here would decide from facts
+     * sampled at a different instant than the ones drawn on.
      */
     suspend fun confirm(): ColdStartConfirmation {
         val drawn =
@@ -187,10 +193,13 @@ class ColdStartSequencer(
             checkNotNull(drawnFrom) {
                 "immediateDestination() drew $drawn without recording the facts it drew on"
             }
+        var banned = false
         try {
-            return confirmDrawn(drawn, state)
+            val outcome = confirmDrawn(drawn, state)
+            banned = outcome is ColdStartConfirmation.Redirect && outcome.screen.isBanScreen()
+            return outcome
         } finally {
-            claimGate.settle()
+            if (!banned) claimGate.settle()
         }
     }
 
@@ -266,6 +275,9 @@ class ColdStartSequencer(
 }
 
 private const val COLD_START_TAG = "ColdStartSequencer"
+
+/** The two destinations a ban verdict can name — the ONLY outcomes that keep the claim gate engaged. */
+private fun Screen.isBanScreen(): Boolean = this == Screen.BanDevice || this == Screen.BanNetwork
 
 /**
  * The outcome of the pre-routing ban check.

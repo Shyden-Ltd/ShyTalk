@@ -243,6 +243,13 @@ class MainActivity : AppCompatActivity() {
                         // than silently deposited on the sign-in screen.
                         var launchRedirect by remember { mutableStateOf<LaunchRedirectReason?>(null) }
 
+                        // SHY-0500 — where the background confirmation moved the
+                        // person, if anywhere. Every redirect NAVIGATES (a ban
+                        // route as much as sign-in): that pops the optimistic
+                        // room list and its ViewModel, which is what makes a
+                        // ban safe while the claim gate is still engaged.
+                        var redirectTo by remember { mutableStateOf<Screen?>(null) }
+
                         // SHY-0143 — gates the background cohort reconcile,
                         // which is only worth running once the claim has been
                         // confirmed fresh. NOT the nav graph's user-flag
@@ -451,13 +458,16 @@ class MainActivity : AppCompatActivity() {
                                 is ColdStartConfirmation.Stay -> Unit
 
                                 is ColdStartConfirmation.Redirect -> {
-                                    // A ban is rendered above the NavHost by the
-                                    // `coldStartBan` branch; a dead session has to move
-                                    // the graph, and carries the reason so the person is
-                                    // told to sign in again rather than just deposited.
+                                    // Every redirect navigates (below). A ban is ALSO
+                                    // rendered above the NavHost by the `coldStartBan`
+                                    // branch, so even a frame the navigation has not
+                                    // reached yet shows it; a dead session carries the
+                                    // reason so the person is told to sign in again
+                                    // rather than just deposited.
                                     if (confirmation.screen == Screen.SignIn) {
                                         launchRedirect = confirmation.reason
                                     }
+                                    redirectTo = confirmation.screen
                                 }
                             }
                             coldStartBan = sequencer.lastBan
@@ -876,14 +886,21 @@ class MainActivity : AppCompatActivity() {
                                 // showing the spinner, and mounting a NavHost with
                                 // no start destination would crash.
                                 initialRoute?.let { route ->
-                                    // SHY-0500 — the background confirmation found
-                                    // the stored session dead. The shell was drawn
-                                    // optimistically, so the correction happens here.
-                                    LaunchedEffect(launchRedirect) {
-                                        if (launchRedirect != null) {
-                                            navController.navigate(Screen.SignIn.route) {
+                                    // SHY-0500 — the background confirmation moved the
+                                    // person: a dead session to sign-in, a ban to its
+                                    // route. The shell was drawn optimistically, so the
+                                    // correction happens here, and `popUpTo(0)` pops the
+                                    // optimistic room list and its ViewModel. The claim
+                                    // gate is settled only AFTER that navigation: on a
+                                    // ban the sequencer left it engaged so the room list
+                                    // underneath could not read, and nothing may be left
+                                    // waiting on it for a later sign-in.
+                                    LaunchedEffect(redirectTo) {
+                                        redirectTo?.let { target ->
+                                            navController.navigate(target.route) {
                                                 popUpTo(0) { inclusive = true }
                                             }
+                                            claimGate.settle()
                                         }
                                     }
                                     NavGraph(

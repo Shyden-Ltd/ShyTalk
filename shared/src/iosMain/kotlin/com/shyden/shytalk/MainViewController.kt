@@ -220,6 +220,12 @@ private fun IosApp() {
                 // a suspend lambda, so it needs a scope that outlives the click.
                 val signOutScope = rememberCoroutineScope()
                 val authRepo: AuthRepository = koinInject()
+
+                // SHY-0500 — the cold-start claim gate. The same Koin instance is
+                // what HomeViewModel waits on, so the sequencer must engage THIS
+                // one, and the redirect below settles it after a ban has moved
+                // the screen.
+                val claimGate: ColdStartClaimGate = koinInject()
                 val startDestination by
                     produceState<String?>(initialValue = null) {
                         val koin = KoinPlatformTools.defaultContext().get()
@@ -268,12 +274,10 @@ private fun IosApp() {
                         // `startCohortScopedReads` is a no-op: the graph mounts on
                         // `immediateDestination()`, BEFORE `confirm()` returns
                         // (SHY-0500), so the cohort-scoped readers wait on the
-                        // claim gate themselves. It is the Koin instance
-                        // HomeViewModel waits on, which is why it is fetched
-                        // rather than made here.
+                        // claim gate themselves.
                         val sequencer =
                             ColdStartSequencer(
-                                claimGate = koin.get<ColdStartClaimGate>(),
+                                claimGate = claimGate,
                                 // Lenient on a transient failure, matching Android
                                 // and the behaviour AuthViewModelBanTest pins: a
                                 // real ban is authoritative, an unreachable ban
@@ -381,15 +385,20 @@ private fun IosApp() {
                 // cohort-scoped reads it could expose wait on ColdStartClaimGate.
                 startDestination?.let { route ->
                     // SHY-0500 — the shell was drawn optimistically; a correction
-                    // has to NAVIGATE, as Android always has. `popUpTo(0)` clears
-                    // the optimistic room list from the back stack so Back cannot
-                    // return to it. Keyed on state set at most once per cold
-                    // start, so it cannot navigate twice.
+                    // has to NAVIGATE, as Android does. `popUpTo(0)` pops the
+                    // optimistic room list and its ViewModel from the back stack,
+                    // so Back cannot return to it and, on a ban, nothing is left
+                    // to read on the unrefreshed claim — the sequencer kept the
+                    // gate engaged for exactly that, and it is settled only
+                    // AFTER the navigation so no later sign-in waits on it.
+                    // Keyed on state set at most once per cold start, so it
+                    // cannot navigate twice.
                     LaunchedEffect(redirectTo) {
                         redirectTo?.let { target ->
                             navController.navigate(target.route) {
                                 popUpTo(0) { inclusive = true }
                             }
+                            claimGate.settle()
                         }
                     }
                     SharedNavGraph(

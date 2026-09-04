@@ -16,10 +16,24 @@ import kotlinx.coroutines.flow.first
  * other than when the NavHost happens to mount. This is that something.
  *
  * The sequencer [begin]s the gate when it draws the room list from a stored
- * session and [settle]s it when [ColdStartSequencer.confirm] returns — on EVERY
- * outcome, including a thrown exception, because a read that waits forever is
- * a room list that never loads. A cohort-scoped reader calls [awaitSettled]
- * before subscribing.
+ * session, and a cohort-scoped reader calls [awaitSettled] before subscribing.
+ * What [settle]s it, exactly:
+ *
+ *  - a CONFIRMED claim — the reads proceed on the refreshed claim;
+ *  - a DEAD session — it has been signed out, there is no claim left to read
+ *    with, and the next sign-in mints a fresh one;
+ *  - a TRANSPORT failure — the claim cannot be refreshed offline, and the room
+ *    list serves the cache it was authorised to fill last time (the same as
+ *    before SHY-0500; the background reconcile and the SDK's own refresh
+ *    correct the claim once the network is back);
+ *  - a thrown exception or a cancelled launch — a read that waits forever is a
+ *    room list that never loads, and the next draw supersedes this one.
+ *
+ * A BAN does not settle it. The room list drawn underneath must never read on
+ * the claim the confirmation did not refresh, so the gate stays engaged until
+ * the host has navigated to the ban screen — which pops that room list and its
+ * ViewModel — and settles it afterwards, so nothing is left waiting for a
+ * later sign-in.
  *
  * Open at rest. A fresh sign-in, a PIN unlock and an offline launch never go
  * through [begin], so nothing they do waits here. That is the SHY-0024 lesson:
