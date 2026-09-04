@@ -185,6 +185,170 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0152](SHY-0152-clear-sonar-new-code-gate.md) | P1  | S      | bug      | Clear the SonarCloud new-code quality gate | 📝 Draft       |                  |                                                          |
 | [SHY-0372](SHY-0372-lucky-spin-dead-after-cancelling-age-dialog.md) | P1  | S      | bug      | Lucky Spin goes dead after cancelling the age dialog | 📝 Draft       |                  |                                                          |
 | [SHY-0376](SHY-0376-app-cannot-open-its-own-environments-website.md) | P1  | M      | bug      | The app cannot open its own environment's website | 📝 Draft       |                  |                                                          |
+| [SHY-0226](SHY-0226-setup-java-pin-drift-heal-and-guards.md) | P1 | S | infra | Heal the main-side setup-java pin drift and make CI-action pin drift structurally impossible | ✅ Done | — |  |
+| [SHY-0245](SHY-0245-eradicate-test-sleeps.md) | P0 | L | bug | Eradicate every sleep from the test suites and make them impossible to reintroduce | ✅ Done | — |  |
+| [SHY-0268](SHY-0268-age-gate-cta-crash.md) | P0 | M | bug | The 18+ "Verify now" button closes the app on Android | ✅ Done | — |  |
+| [SHY-0271](SHY-0271-locale-content-is-untested.md) | P0 | M | bug | Translations are never checked for what they actually say | 👀 In Review | — |  |
+| [SHY-0272](SHY-0272-mic-cannot-be-muted.md) | P0 | S | bug | The microphone cannot be muted | 👀 In Review | — |  |
+| [SHY-0273](SHY-0273-livekit-local-unreachable-ice.md) | P1 | S | bug | Voice never connects from a real device on the local stack | 👀 In Review | — |  |
+| [SHY-0275](SHY-0275-ios-local-cannot-reach-stack.md) | P1 | M | bug | The iOS local build points a real iPhone at itself | ✅ Done | — |  |
+| [SHY-0303](SHY-0303-ios-deploy-runtime-check.md) | P1 | S | bug | Every iOS deploy to dev dies before it builds anything | ✅ Done | — |  |
+| [SHY-0304](SHY-0304-runner-process-identity.md) | P1 | S | bug | The gauntlet finds runners by name, so it reports and kills the wrong processes | ✅ Done | — |  |
+| [SHY-0305](SHY-0305-podfile-lock-sync.md) | P0 | S | bug | Every iOS build fails, and the guard that should have caught it was skipped by the same omission | ✅ Done | — |  |
+| [SHY-0306](SHY-0306-ios-bridge-facade-name.md) | P0 | S | bug | Swift calls a Kotlin facade whose name the file it lives in cannot produce | ✅ Done | — |  |
+| [SHY-0307](SHY-0307-appcheck-bridge-behavioural-coverage.md) | P2 | S | bug | The App Check bridge has no behavioural test, and its own diagnostic has no caller | 📝 Draft | — |  |
+| [SHY-0308](SHY-0308-banned-user-api-test-intermittently-401.md) | P1 | S | bug | The banned-user API test intermittently gets 401 where it demands 403 | ✅ Done | — |  |
+| [SHY-0329](SHY-0329-driver-checks-cold-install-timeout.md) | P0 | XS | infra | A driver PR cannot merge whenever the Playwright cache misses | ✅ Done | — |  |
+| [SHY-0339](SHY-0339-pr-runs-one-browser.md) | P1 | S | infra | CI runs test suites that the change cannot possibly affect | ✅ Done | — |  |
+| [SHY-0355](SHY-0355-sonar-timeout-cancels-the-job.md) | P1 | XS | infra | SonarCloud runs out of time and cancels itself, failing pull requests that did nothing wrong | ✅ Done | — |  |
+| [SHY-0356](SHY-0356-scope-playwright-deps-to-shard-browser.md) | P1 | S | infra | A browser shard installs every other browser's dependencies | ✅ Done | — |  |
+| [SHY-0358](SHY-0358-remove-claude-md.md) | P2 | XS | chore | Remove CLAUDE.md | ✅ Done | — |  |
+| [SHY-0365](SHY-0365-unawaited-async-matcher-is-vacuous.md) | P1 | XS | bug | A test asserts nothing, because its async matcher is never awaited | ✅ Done | — |  |
+| [SHY-0366](SHY-0366-epic-0004-status-table-had-drifted.md) | P2 | XS | docs | EPIC-0004's child statuses say nothing has started, when half of it has | ✅ Done | — |  |
+| [SHY-0367](SHY-0367-playwright-deps-refetched-every-run.md) | P1 | M | infra | A slow apt mirror can fail any build, because every run re-fetches the same packages | 📝 Draft | — |  |
+| [SHY-0368](SHY-0368-storage-upload-returns-500-html-on-oversized-file.md) | P1 | XS | bug | Uploading a file over 10 MB returns a 500 HTML page instead of "too large" | ✅ Done | — |  |
+| [SHY-0369](SHY-0369-missing-secret-took-down-the-whole-api.md) | P0 | XS | bug | One feature's missing secret took the whole dev API down | ✅ Done | — |  |
+| [SHY-0370](SHY-0370-second-module-load-throw-kept-dev-down.md) | P0 | XS | bug | A second module-load throw kept dev down after the first fix | ✅ Done | — |  |
+| [SHY-0371](SHY-0371-firebase-admin-14-removed-the-namespaced-api.md) | P0 | S | bug | firebase-admin 14 removed the namespaced API and dev crash-looped | ✅ Done | — |  |
+| [SHY-0378](SHY-0378-provision-api-signing-secrets.md) | P1 | M | infra | The two API signing secrets are unset, so signatures use a public key | ✅ Done | — |  |
+| [SHY-0379](SHY-0379-hide-age-gated-features-from-known-minors.md) | P1 | M | feature | Stop offering under-18s things they can never have | 📝 Draft | — |  |
+| [SHY-0380](SHY-0380-contact-support-button-does-nothing.md) | P1 | M | feature | A support-ticket queue an admin can action | ✅ Done | — |  |
+| [SHY-0381](SHY-0381-admin-search-helper-waits-on-the-wrong-condition.md) | P2 | S | bug | The admin search helper waits for the wrong thing, so specs flake | 📝 Draft | — |  |
+| [SHY-0382](SHY-0382-create-room-fails-silently.md) | P2 | S | bug | Creating a room can do nothing at all, with no error and no log | 📝 Draft | — |  |
+| [SHY-0383](SHY-0383-local-flavour-defaults-to-retired-emulator-host.md) | P3 | XS | chore | The local build still defaults to the retired emulator's address | 📝 Draft | — |  |
+| [SHY-0384](SHY-0384-hide-the-inert-contact-support-control.md) | P1 | S | bug | Stop showing a Contact support button that does nothing | ✅ Done | — |  |
+| [SHY-0385](SHY-0385-in-app-support-form.md) | P1 | M | feature | Let someone raise a support ticket from inside the app | ✅ Done | — |  |
+| [SHY-0386](SHY-0386-dead-health-route-file.md) | P3 | XS | chore | A health-check route file that has never been mounted | 📝 Draft | — |  |
+| [SHY-0387](SHY-0387-support-page-with-categories-and-attachments.md) | P1 | M | feature | Make contacting support a proper page, not a dialog | 👀 In Review | — |  |
+| [SHY-0388](SHY-0388-warn-at-dob-entry-about-false-data.md) | P1 | S | feature | Warn people what a false date of birth costs, before they enter one | 📝 Draft | — |  |
+| [SHY-0389](SHY-0389-suspend-on-verified-age-mismatch.md) | P1 | M | feature | Entering a false adult date of birth costs the account | 📝 Draft | — |  |
+| [SHY-0390](SHY-0390-message-report-reasons-are-not-localised.md) | P2 | XS | bug | Message-report reasons show in English to everyone | 📝 Draft | — |  |
+| [SHY-0391](SHY-0391-age-is-private-by-default.md) | P1 | S | feature | Age should be private unless somebody chooses to show it | 📝 Draft | — |  |
+| [SHY-0392](SHY-0392-is-this-wrong-dob-correction.md) | P1 | M | feature | "Is this wrong?" — a way to correct a date of birth | 📝 Draft | — |  |
+| [SHY-0393](SHY-0393-account-reset.md) | P1 | L | feature | Resetting an account, without losing what was paid for | 📝 Draft | — |  |
+| [SHY-0394](SHY-0394-spec-only-refinement-of-a-draft-story.md) | P2 | S | chore | Refining a Draft story should not need a false status | 📝 Draft | — |  |
+| [SHY-0395](SHY-0395-email-domains-and-a-mailbox-that-receives.md) | P0 | M | chore | ShyTalk's email is unauthenticated and can receive nothing | 📝 Draft | — |  |
+| [SHY-0396](SHY-0396-more-than-one-support-ticket.md) | P1 | S | feature | Let somebody raise a second ticket, and tell them why not to | 👀 In Review | — |  |
+| [SHY-0397](SHY-0397-email-the-customer-about-their-ticket.md) | P1 | M | feature | Tell somebody, by email, what happened to their ticket | 📝 Draft | — |  |
+| [SHY-0398](SHY-0398-reply-to-the-email-to-update-the-ticket.md) | P1 | L | feature | Replying to the email updates the ticket | 📝 Draft | — |  |
+| [SHY-0399](SHY-0399-see-and-manage-your-own-support-tickets.md) | P1 | L | feature | See your own support tickets, add to them, reopen and close them | 📝 Draft | — |  |
+| [SHY-0400](SHY-0400-report-evidence-cannot-be-video.md) | P1 | M | bug | Report evidence was built for video and can only ever be an image | 📝 Draft | — |  |
+| [SHY-0401](SHY-0401-no-journey-walks-an-upload-except-age-verification.md) | P0 | L | chore | Every file a person can send is unwalked, except an ID | 📝 Draft | — |  |
+| [SHY-0402](SHY-0402-money-surfaces-are-barely-walked.md) | P1 | M | chore | The surfaces that handle money are barely walked | 📝 Draft | — |  |
+| [SHY-0403](SHY-0403-safety-surfaces-with-no-journey.md) | P1 | M | chore | Safety and identity surfaces nobody walks | 📝 Draft | — |  |
+| [SHY-0404](SHY-0404-nobody-ever-translates-a-message.md) | P0 | L | chore | Nobody in 471 scenarios ever translates a message | 📝 Draft | — |  |
+| [SHY-0405](SHY-0405-gdpr-export-and-deletion-are-unwalked.md) | P0 | L | chore | Nobody has ever exported their data or deleted their account | 📝 Draft | — |  |
+| [SHY-0406](SHY-0406-security-surfaces-are-smoke-tested-only.md) | P0 | M | chore | App lock and linked accounts are proven to render, not to work | 📝 Draft | — |  |
+| [SHY-0407](SHY-0407-nobody-ever-subscribes.md) | P1 | M | chore | Nobody ever subscribes, renews, lapses or cancels | 📝 Draft | — |  |
+| [SHY-0408](SHY-0408-group-conversations-and-unblock-are-unwalked.md) | P1 | M | chore | Group conversations are proven to have a name field | 📝 Draft | — |  |
+| [SHY-0409](SHY-0409-two-factor-and-account-recovery-are-unwalked.md) | P0 | M | chore | Nobody has ever used two-factor authentication | 📝 Draft | — |  |
+| [SHY-0410](SHY-0410-backpack-trials-and-banners-are-unwalked.md) | P1 | M | chore | The things people own, and the messages we push at them | 📝 Draft | — |  |
+| [SHY-0411](SHY-0411-suggestion-moderation-and-unban.md) | P1 | M | chore | The suggestion dispute process, and the way back from a ban | 📝 Draft | — |  |
+| [SHY-0412](SHY-0412-destructive-admin-operations-are-unwalked.md) | P0 | M | chore | Twenty-six endpoints that wipe collections, walked by nobody | 📝 Draft | — |  |
+| [SHY-0413](SHY-0413-the-last-user-facing-edges.md) | P2 | S | chore | The last four user-facing paths with no journey | 📝 Draft | — |  |
+| [SHY-0414](SHY-0414-the-safety-net-itself-is-untested.md) | P0 | M | chore | The backup, the alarm, and the DOB an admin can change | 📝 Draft | — |  |
+| [SHY-0415](SHY-0415-the-app-has-no-accessibility-journey.md) | P1 | M | chore | The app cannot be shown to work for somebody who cannot see it | 📝 Draft | — |  |
+| [SHY-0416](SHY-0416-ios-dev-builds-cannot-sign-in.md) | P0 | S | bug | No iOS dev build can sign in, which is why iOS is never walked | ✅ Done | — |  |
+| [SHY-0417](SHY-0417-banned-user-on-strict-routes-sees-a-bare-401.md) | P2 | S | bug | A banned user on portal/admin routes is told nothing, not that they are banned | 📝 Draft | — |  |
+| [SHY-0418](SHY-0418-wall-clock-perf-assertions-fail-under-suite-load.md) | P2 | XS | bug | Two wall-clock assertions go red when the machine is busy | ✅ Done | — |  |
+| [SHY-0419](SHY-0419-ios-support-form-cannot-be-sent.md) | P1 | M | bug | On iPhone you can fill in the support form but you cannot send it | 👀 In Review | — |  |
+| [SHY-0420](SHY-0420-attachment-limits-virus-scanning-and-sandboxed-admin-viewing.md) | P1 | L | feature | Attachments — bounded, virus-scanned, and never downloadable by an admin | 👀 In Review | — |  |
+| [SHY-0421](SHY-0421-support-tickets-are-missing-from-a-data-export.md) | P1 | S | bug | Somebody's data export leaves out everything they told support | 👀 In Review | — |  |
+| [SHY-0422](SHY-0422-the-app-tells-people-to-email-an-address-nobody-reads.md) | P1 | M | bug | The app tells people to email an address nobody reads | 👀 In Review | — |  |
+| [SHY-0423](SHY-0423-the-resolved-cohort-goes-stale-after-the-dob-gate.md) | P3 | XS | bug | The resolved cohort is never recomputed after somebody sets their date of birth | 📝 Draft | — |  |
+| [SHY-0424](SHY-0424-the-open-request-count-is-a-display-cap-not-a-count.md) | P3 | S | bug | "You already have 5 requests open" is a display cap, not a count | 👀 In Review | — |  |
+| [SHY-0426](SHY-0426-a-caller-with-no-resolved-identity-is-treated-as-an-account.md) | P1 | M | bug | A caller whose account cannot be identified is treated as an account | 👀 In Review | — |  |
+| [SHY-0427](SHY-0427-ios-pickers-lose-their-delegate-to-the-garbage-collector.md) | P1 | S | bug | On iOS, choosing a photo or video does nothing | 👀 In Review | — |  |
+| [SHY-0428](SHY-0428-send-is-drawn-under-the-android-navigation-bar.md) | P1 | XS | bug | On Android, pressing Send goes to the home screen | 👀 In Review | — |  |
+| [SHY-0429](SHY-0429-pmsyncservice-is-killed-for-outstaying-its-foreground-timeout.md) | P1 | M | bug | The app is killed for leaving a sync service running too long | 📝 Draft | — |  |
+| [SHY-0430](SHY-0430-the-debug-overlay-covers-copy-that-tests-assert-on.md) | P3 | XS | bug | The debug overlay sits on top of the words being tested | 👀 In Review | — |  |
+| [SHY-0431](SHY-0431-the-support-bar-leaves-a-black-gutter-on-ios.md) | P3 | XS | bug | On iPhone, a black strip sits under the Send bar | 👀 In Review | — |  |
+| [SHY-0432](SHY-0432-a-journey-assertion-can-pass-on-a-previous-runs-data.md) | P2 | S | bug | A journey step can pass on data left by an earlier run | 👀 In Review | — |  |
+| [SHY-0433](SHY-0433-attachments-show-a-filename-not-what-you-attached.md) | P2 | M | feature | See what you attached before you send it | 👀 In Review | — |  |
+| [SHY-0434](SHY-0434-a-removed-attachment-is-never-deleted-from-storage.md) | P1 | S | bug | A file you remove is kept for ever | 👀 In Review | — |  |
+| [SHY-0435](SHY-0435-abandoned-uploads-are-orphaned-for-ever.md) | P1 | M | bug | Files uploaded to a request nobody sent are kept for ever | 👀 In Review | — |  |
+| [SHY-0436](SHY-0436-closed-tickets-and-their-attachments-are-deleted-after-seven-days.md) | P1 | M | feature | A closed request is deleted after seven days | 👀 In Review | — |  |
+| [SHY-0437](SHY-0437-teach-people-to-report-before-offering-a-ticket.md) | P1 | L | feature | Show people how to report, before offering them a ticket | 👀 In Review | — |  |
+| [SHY-0438](SHY-0438-an-admin-turns-a-support-ticket-into-a-report.md) | P1 | M | feature | An admin can turn a support ticket into a report | 👀 In Review | — |  |
+| [SHY-0439](SHY-0439-a-converted-ticket-closes-for-good.md) | P1 | S | feature | A ticket that became a report closes for good | 👀 In Review | — |  |
+| [SHY-0440](SHY-0440-a-room-cannot-be-reported.md) | P2 | M | feature | A room cannot be reported | 📝 Draft | — |  |
+| [SHY-0441](SHY-0441-a-walk-taps-buttons-it-cannot-see.md) | P1 | M | bug | The walk taps buttons it cannot see | 👀 In Review | — |  |
+| [SHY-0442](SHY-0442-the-app-shows-unable-to-connect-on-a-cold-start.md) | P1 | M | bug | The app says it cannot connect, then works when reopened | 👀 In Review | — |  |
+| [SHY-0443](SHY-0443-the-app-flashes-white-before-it-draws.md) | P2 | XS | bug | The app flashes white every time it opens | 👀 In Review | — |  |
+| [SHY-0444](SHY-0444-an-image-that-fails-to-load-shows-a-broken-picture.md) | P2 | M | bug | An image that fails to load shows a broken picture | 👀 In Review | — |  |
+| [SHY-0445](SHY-0445-a-still-screen-is-treated-as-a-broken-recorder.md) | P1 | S | bug | A phone sitting still is treated as a broken recorder | 👀 In Review | — |  |
+| [SHY-0446](SHY-0446-eight-of-thirteen-journeys-cannot-run-on-iphone.md) | P1 | M | bug | Eight of the thirteen journeys cannot run on the iPhone | 📝 Draft | — |  |
+| [SHY-0447](SHY-0447-the-journeys-spend-their-life-reading-the-screen.md) | P1 | M | bug | The journeys spend their whole life reading the screen | 👀 In Review | — |  |
+| [SHY-0448](SHY-0448-the-admin-dashboard-javascript-is-never-linted.md) | P2 | S | bug | The admin dashboard's JavaScript is never linted | 👀 In Review | — |  |
+| [SHY-0449](SHY-0449-a-moderator-cannot-see-any-support-attachment.md) | P1 | S | bug | A moderator cannot see any support attachment | 👀 In Review | — |  |
+| [SHY-0450](SHY-0450-a-failed-screenshot-loses-the-whole-report.md) | P1 | S | bug | A failed screenshot loses the whole report | 👀 In Review | — |  |
+| [SHY-0451](SHY-0451-one-iphone-journey-a-run-stalls-for-five-minutes.md) | P1 | M | bug | One iPhone journey a run stalls for five minutes | 👀 In Review | — |  |
+| [SHY-0452](SHY-0452-webdriveragent-wedges-and-the-reconnect-is-refused.md) | P1 | M | bug | WebDriverAgent wedges and the phone stops answering for one journey | ✅ Done | — |  |
+| [SHY-0453](SHY-0453-a-status-page-the-app-can-point-at.md) | P3 | M | feature | A status page the app can point at | 📝 Draft | — |  |
+| [SHY-0454](SHY-0454-one-screen-for-cannot-connect-and-it-never-takes-blame.md) | P1 | S | bug | One screen for "cannot connect", and it never takes blame | ✅ Done | — |  |
+| [SHY-0455](SHY-0455-see-the-screen-on-a-passing-step.md) | P3 | S | feature | See the screen on a passing step, not only a failing one | ✅ Done | — |  |
+| [SHY-0456](SHY-0456-a-core-set-that-always-runs-before-we-believe-a-green-report.md) | P1 | L | feature | A core set that always runs, before we believe a green report | ✅ Done | — |  |
+| [SHY-0457](SHY-0457-a-journey-that-never-touches-the-phone-must-not-pass.md) | P0 | L | bug | A journey that never touches the phone must not pass | ✅ Done | — |  |
+| [SHY-0458](SHY-0458-conversations-read-path-through-the-api.md) | P0 | L | bug | The conversations read path goes through the API, and private messaging works again | ✅ Done | — |  |
+| [SHY-0459](SHY-0459-a-minor-sees-controls-they-are-not-allowed-to-use.md) | P2 | M | bug | A minor sees controls they are not allowed to use | ✅ Done | — |  |
+| [SHY-0460](SHY-0460-the-in-app-report-review-screen-cannot-be-reached.md) | P3 | S | bug | The in-app report-review screen cannot be reached | ✅ Done | — |  |
+| [SHY-0461](SHY-0461-a-suspended-person-is-told-the-app-cannot-connect.md) | P1 | S | bug | A suspended person is told the app cannot connect, and can never appeal | ✅ Done | — |  |
+| [SHY-0462](SHY-0462-every-compose-dialog-is-invisible-to-the-device-tests.md) | P2 | M | bug | Every Compose dialog is invisible to the device tests | 👀 In Review | — |  |
+| [SHY-0463](SHY-0463-an-appeal-sent-from-the-phone-reaches-nobody.md) | P1 | S | bug | An appeal sent from the phone reaches nobody, and can only ever be sent once | ✅ Done | — |  |
+| [SHY-0464](SHY-0464-the-test-suite-destroys-the-personas-the-journeys-need.md) | P1 | S | bug | Running the test suite destroys the personas the device journeys need | ✅ Done | — |  |
+| [SHY-0465](SHY-0465-the-local-stack-hands-the-phone-a-voice-address-it-cannot-reach.md) | P1 | S | bug | The local stack hands the phone a voice address it cannot reach | ✅ Done | — |  |
+| [SHY-0466](SHY-0466-a-room-should-open-even-when-voice-cannot.md) | P2 | M | bug | A room should open even when voice cannot | ✅ Done | — |  |
+| [SHY-0467](SHY-0467-nothing-checks-how-a-new-conversation-is-stored.md) | P1 | S | bug | Nothing checks how a new conversation is stored | 📝 Draft | — |  |
+| [SHY-0468](SHY-0468-an-adult-can-open-a-thread-with-a-minor.md) | P0 | S | bug | An adult can open a direct-message thread with a minor | ✅ Done | — |  |
+| [SHY-0469](SHY-0469-the-stuck-run-reaper-cannot-say-why-it-failed.md) | P2 | S | bug | The stuck-run reaper cannot say why it failed to reap | 📝 Draft | — |  |
+| [SHY-0470](SHY-0470-the-moderation-queue-client-api-has-no-caller.md) | P3 | S | chore | The moderation-queue client API has no caller | 👀 In Review | — |  |
+| [SHY-0471](SHY-0471-fcm-registration-migration-blocks-firebase-bom.md) | P2 | L | chore | Push registration must move to FIDs before Firebase can be updated | ❌ Cancelled | — |  |
+| [SHY-0472](SHY-0472-five-journeys-declared-ui-and-never-touched-the-phone.md) | P1 | M | bug | Five journeys declared themselves UI and never touched the phone | ✅ Done | — |  |
+| [SHY-0473](SHY-0473-dev-journey-target-asserts-against-localhost.md) | P0 | M | bug | A `--target dev` run asserts against localhost while the phone talks to dev | ✅ Done | — |  |
+| [SHY-0474](SHY-0474-android-instrumentation-suite-is-red.md) | P0 | M | bug | The Android instrumentation suite is red — eight failures, three causes | ✅ Done | — |  |
+| [SHY-0475](SHY-0475-room-instrumentation-tests-fail-on-a-real-device.md) | P2 | M | bug | Four room instrumentation tests fail on a real device and pass on the emulator | 📝 Draft | — |  |
+| [SHY-0476](SHY-0476-webkit-signin-test-races-the-header.md) | P1 | S | bug | The shared-header Sign In test races the header it clicks | ✅ Done | — |  |
+| [SHY-0477](SHY-0477-board-sync-skip-ci-blocks-promotions.md) | P1 | S | bug | The board-sync commit's `[skip ci]` blocks every open promotion PR | 👀 In Review | — |  |
+| [SHY-0478](SHY-0478-promotion-pr-must-not-use-develop-as-its-head.md) | P0 | M | infra | A promotion PR must not use develop as its head branch | 👀 In Review | — |  |
+| [SHY-0479](SHY-0479-rooms-same-cohort-tests-on-the-real-emulator.md) | P0 | M | refactor | The room cross-cohort gate is proven against a fake, not against Firestore | 👀 In Review | — |  |
+| [SHY-0480](SHY-0480-rooms-route-tests-on-the-real-emulator.md) | P0 | L | refactor | The rooms invite and seat-request routes are proven against a fake Firestore | 👀 In Review | — |  |
+| [SHY-0481](SHY-0481-seat-lifecycle-on-the-real-emulator.md) | P0 | L | refactor | The seat lifecycle is proven against a fake transaction | 👀 In Review | — |  |
+| [SHY-0482](SHY-0482-room-moderation-on-the-real-emulator.md) | P0 | M | refactor | Room moderation powers are proven against a fake transaction | 👀 In Review | — |  |
+| [SHY-0483](SHY-0483-room-membership-on-the-real-emulator.md) | P0 | M | refactor | Room membership is proven against a fake transaction | 👀 In Review | — |  |
+| [SHY-0484](SHY-0484-room-settings-on-the-real-emulator.md) | P0 | S | refactor | Room settings are proven against a fake transaction | 👀 In Review | — |  |
+| [SHY-0485](SHY-0485-room-lifecycle-on-the-real-emulator.md) | P0 | M | refactor | Closing a room is proven against a fake batch | 👀 In Review | — |  |
+| [SHY-0486](SHY-0486-pre-merge-gate-blocks-an-in-progress-running-log.md) | P2 | S | infra | The pre-merge gate blocks updating an In Progress story's running log | 👀 In Review | — |  |
+| [SHY-0487](SHY-0487-redistribute-the-hardening-group.md) | P1 | S | refactor | A hardening group tests routes that have already moved | 👀 In Review | — |  |
+| [SHY-0488](SHY-0488-the-dev-journey-leg-is-unwalkable.md) | P0 | L | bug | The dev leg of the release gate cannot be walked, and does not say why | 👀 In Review | — |  |
+| [SHY-0489](SHY-0489-the-provisioner-never-resets-moderation-state.md) | P1 | S | bug | Re-seeding dev personas does not clear moderation state | 👀 In Review | — |  |
+| [SHY-0490](SHY-0490-the-purchase-journey-buys-a-local-only-product.md) | P2 | S | bug | The purchase journey buys a product that only exists locally | 👀 In Review | — |  |
+| [SHY-0491](SHY-0491-persona-picker-not-found-on-dev.md) | P2 | S | bug | The persona picker is sometimes gone by the time dev tries to tap it | 👀 In Review | — |  |
+| [SHY-0492](SHY-0492-presence-routes-on-the-real-emulator.md) | P0 | M | refactor | The presence-gated routes are proven against a fake RTDB | 👀 In Review | — |  |
+| [SHY-0493](SHY-0493-migrate-ios-firebase-to-swift-package-manager.md) | P1 | L | refactor | Move the iOS Firebase SDK from CocoaPods to Swift Package Manager | 📝 Draft | — |  |
+| [SHY-0494](SHY-0494-one-device-identifier-claimed-by-many-accounts.md) | P1 | M | bug | One device's push identifier is claimed by every account that signed in on it | 👀 In Review | — |  |
+| [SHY-0495](SHY-0495-make-the-seven-skipped-journeys-assertable-on-dev.md) | P1 | M | chore | Make the seven local-only journeys assertable on dev | 📝 Draft | — |  |
+| [SHY-0496](SHY-0496-installation-ids-follow-every-path-the-token-took.md) | P0 | S | bug | Installation IDs must follow every path the registration token took | 👀 In Review | — |  |
+| [SHY-0497](SHY-0497-the-app-returns-to-home-after-reaching-signin.md) | P2 | M | bug | The app returns to Home after sign-out has reached the SignIn screen | 👀 In Review | — |  |
+| [SHY-0498](SHY-0498-image-load-failures-are-never-counted.md) | P2 | M | chore | Nobody can tell how often an image fails to load | 📝 Draft | — |  |
+| [SHY-0499](SHY-0499-untrusted-text-reaches-innerHTML-unchecked.md) | P1 | M | bug | Text written by the public reaches innerHTML with nothing checking it | 📝 Draft | — |  |
+| [SHY-0501](SHY-0501-an-aborted-download-leaks-an-r2-socket-forever.md) | P1 | M | bug | An abandoned download leaks a connection until nothing can reach storage | 👀 In Review | — |  |
+| [SHY-0502](SHY-0502-the-cyber-bullying-policy-is-translated-into-no-shipped-language.md) | P1 | S | bug | The cyber-bullying policy is translated into no language we ship | 📝 Draft | — |  |
+| [SHY-0503](SHY-0503-the-admin-dashboard-lets-a-login-with-no-shytalk-account-in.md) | P1 | S | bug | The admin dashboard lets a login with no ShyTalk account in | 📝 Draft | — |  |
+| [SHY-0504](SHY-0504-staff-sign-in-to-the-dashboard-with-google-or-apple.md) | P1 | S | feature | Staff sign in to the admin dashboard with Google or Apple, like the app | 📝 Draft | — |  |
+| [SHY-0505](SHY-0505-admin-rights-are-granted-through-an-audited-action.md) | P1 | M | feature | Administrator rights are granted and removed through an audited action, never the console | 📝 Draft | — |  |
+| [SHY-0506](SHY-0506-the-server-tells-the-portal-which-modules-an-account-may-use.md) | P1 | M | feature | The server tells the portal which modules an account may use | 📝 Draft | — |  |
+| [SHY-0507](SHY-0507-the-portal-shell-loads-only-the-modules-the-server-allows.md) | P1 | L | feature | The portal shell loads only the modules the server allows | 📝 Draft | — |  |
+| [SHY-0508](SHY-0508-safety-tools-move-into-the-portal.md) | P2 | L | refactor | The safety tools move into the portal | 📝 Draft | — |  |
+| [SHY-0509](SHY-0509-configuration-tools-move-into-the-portal.md) | P2 | L | refactor | The configuration tools move into the portal | 📝 Draft | — |  |
+| [SHY-0510](SHY-0510-operations-tools-move-into-the-portal.md) | P2 | L | refactor | The operations tools move into the portal | 📝 Draft | — |  |
+| [SHY-0511](SHY-0511-retire-the-separate-admin-page.md) | P2 | S | chore | Retire the separate admin page | 📝 Draft | — |  |
+| [SHY-0512](SHY-0512-support-copy-sends-people-to-the-wrong-website.md) | P2 | S | bug | The device-lock and suspension screens send people to the wrong website for support | 📝 Draft | — |  |
+| [SHY-0513](SHY-0513-the-index-reconciler-cannot-insert-rows.md) | P2 | XS | bug | The story-index reconciler cannot insert the rows it finds missing | 📝 Draft | — |  |
+| [SHY-0514](SHY-0514-in-app-web-pages-must-show-only-the-intended-page.md) | P1 | M | bug | A web page opened inside the app must show only that page and allow no navigation | 📝 Draft | — |  |
+| [SHY-0515](SHY-0515-an-offline-cold-start-confirms-the-session-when-the-network-returns.md) | P2 | M | feature | An offline cold start confirms the session when the network returns | 📝 Draft | — |  |
+| [SHY-0516](SHY-0516-a-mandatory-update-is-drawn-first-from-a-cached-verdict.md) | P2 | S | feature | A mandatory update is drawn first, from a verdict the app already has | 📝 Draft | — |  |
+| [SHY-0517](SHY-0517-the-pre-push-hook-tests-the-wrong-diff.md) | P2 | S | infra | The pre-push hook tests the wrong diff | 📝 Draft | — |  |
+| [SHY-0518](SHY-0518-the-pre-merge-gate-refuses-backlog-maintenance-on-draft-stories.md) | P2 | XS | infra | The pre-merge gate refuses backlog maintenance on Draft stories | 📝 Draft | — |  |
 
 ## Done
 
@@ -327,6 +491,8 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | EPIC-0011 | Server-driven UI — change look, menus, options and copy without a store release | Draft | SHY-0310..0320 (11 SHYs); gated behind EPIC-0004 |
 | EPIC-0007 | Correct web surface — every owned web page in the right language AND environment                          | In Progress | SHY-0181, SHY-0182, SHY-0184 (3 SHYs)                                                      |
 | EPIC-0008 | Comprehensive, self-serve, publicly-visible testing — every kind of test, one command, public health page | Draft       | SHY-0212..0225 (14 SHYs) — MVP hard-blocker                                                |
+| EPIC-0013 | ShyTalk portal — one sign-in for every ShyTalk account, modules loaded by permission and account type | Draft       | SHY-0503..0511 + SHY-0417 (10 SHYs); SHY-0503..0505 are MVP; EPIC-0012 gated on SHY-0506/0507 |
+| EPIC-0014 | Email sign-up and sign-in for everyone — post-MVP                                                          | Draft       | (none yet — filed when picked up)                                                          |
 
 EPICs are validated by `scripts/check-epic-frontmatter.sh` (separate from the SHY validator). The `epic:` field on SHY frontmatter is optional — most SHYs need not belong to an EPIC. See `CLAUDE.md` § "Agile Way of Working" → "### EPICs" for the full spec.
 
