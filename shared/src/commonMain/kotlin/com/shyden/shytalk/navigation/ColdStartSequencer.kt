@@ -128,6 +128,14 @@ class ColdStartSequencer(
      * for them is the thing being removed. [confirm] still enforces them, and a
      * shell rendered before the verdict shows none of the person's data because
      * cohort-scoped reads do not start until the claim is confirmed.
+     *
+     * Engages the [ColdStartClaimGate] when it draws the room list, and ONLY
+     * [confirm] settles it — so a host must call [confirm] next, with no
+     * suspension point in between (a cancelled launch between the two would
+     * leave the gate engaged; `LaunchRedirectIsAOneShotPinTest` pins both
+     * hosts). A new draw also supersedes an earlier one that never got to
+     * confirm: the gate reflects what is on screen NOW, not a run that a
+     * recreated host abandoned.
      */
     fun immediateDestination(): Screen {
         val state = launchState()
@@ -145,6 +153,10 @@ class ColdStartSequencer(
             // The room list is about to be drawn on LAST session's claim. Hold
             // its cohort-scoped reads until confirm() has refreshed it.
             claimGate.begin()
+        } else {
+            // Nothing cohort-scoped is drawn — and this draw supersedes any
+            // earlier one that a torn-down host never got to confirm.
+            claimGate.settle()
         }
         logD(COLD_START_TAG, "immediate: destination=$destination (no I/O)")
         return destination

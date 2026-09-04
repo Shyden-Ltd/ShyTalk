@@ -103,6 +103,23 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
+    fun `a ban verdict moves the screen on both platforms, each the way its host renders bans`() {
+        // Android renders BanScreen ABOVE the NavHost from the confirmation's ban
+        // facts, so its Redirect branch only has to carry the sign-in reason;
+        // iOS has no such overlay and navigates to the ban route. A reviewer
+        // reading one host without the other concludes the ban is dropped
+        // (2026-09-04); this pin is the answer.
+        val android = read(mainActivity)
+        assertTrue(android.contains("coldStartBan = sequencer.lastBan"), "Android must publish the ban facts the confirmation found")
+        val overlay = android.indexOf("coldStartBan.deviceBanned || coldStartBan.networkBanned ->")
+        assertTrue(overlay >= 0, "Android must branch to the ban overlay on those facts")
+        assertTrue(android.indexOf("BanScreen(", overlay) in overlay..overlay + 200, "and render BanScreen there")
+        val ios = read(controller)
+        assertTrue(ios.contains("coldStartBan = sequencer.lastBan"), "iOS must publish the ban facts for the ban route")
+        assertTrue(ios.contains("redirectTo = confirmation.screen"), "and navigate to it, since nothing renders above its graph")
+    }
+
+    @Test
     fun `both hosts confirm straight after drawing, so nothing can cancel between begin() and settle()`() {
         // The gate is engaged by immediateDestination() and settled only when
         // confirm() returns. A suspension point between the two is a window in

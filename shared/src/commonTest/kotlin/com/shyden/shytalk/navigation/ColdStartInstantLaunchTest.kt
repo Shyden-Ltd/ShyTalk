@@ -212,6 +212,36 @@ class ColdStartInstantLaunchTest {
         }
 
     @Test
+    fun aNewDrawSupersedesAnEarlierOneThatWasNeverConfirmed() =
+        runTest {
+            // The gate is one instance per process and a host can be torn down
+            // between drawing and confirming (an Activity recreated mid-launch).
+            // The NEXT draw is the truth about what is on screen now: it must
+            // release an engagement the earlier run never got to settle, or the
+            // room list of every later launch waits forever (review, 2026-09-04).
+            val gate = ColdStartClaimGate()
+            sequencer(Recorder(), claimGate = gate).immediateDestination()
+            assertTrue(gate.refreshInFlight.value, "the abandoned run engaged the gate")
+
+            val next =
+                sequencer(
+                    Recorder(),
+                    isAuthenticated = false,
+                    hasStoredCredential = false,
+                    hasResolvedUser = false,
+                    claimGate = gate,
+                )
+            assertEquals(Screen.SignIn, next.immediateDestination())
+            assertFalse(gate.refreshInFlight.value, "a draw that holds nothing cohort-scoped must leave the gate open")
+
+            val redrawn = sequencer(Recorder(), claimGate = gate)
+            redrawn.immediateDestination()
+            assertTrue(gate.refreshInFlight.value, "a fresh room-list draw engages it again")
+            redrawn.confirm()
+            assertFalse(gate.refreshInFlight.value)
+        }
+
+    @Test
     fun immediateDestination_isSignInWhenThereIsNoSessionAtAll() {
         // Answerable locally, so it must not cost a round trip. Somebody with no
         // session should see sign-in as the first thing drawn, not after one.
