@@ -33,6 +33,14 @@ package com.shyden.shytalk.navigation
  * every signed-in person who never enrolled a PIN. Routing it to Lock would
  * present a lock nothing can open; routing it to Sign-In is the SHY-0500
  * defect. The credential is what makes a lock possible, and step 1 says so.
+ *
+ * A live session whose identity is NOT resolved (the `SessionCache` read
+ * missed — a wiped cache, or the first launch after it was introduced) draws
+ * Sign-In, as it did before SHY-0500. That is not a dead end: `AuthViewModel`
+ * sees the live Firebase user with no PIN and resolves the identity over the
+ * network itself (its migration path), so this is the one launch that still
+ * goes through the network — by necessity, since nothing local names the
+ * account — and it corrects itself without a cold-start redirect.
  */
 fun resolveLaunchDestination(
     hasStoredCredential: Boolean,
