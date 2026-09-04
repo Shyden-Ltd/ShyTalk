@@ -39,9 +39,9 @@ import kotlinx.coroutines.CancellationException
 class ColdStartSequencer(
     /**
      * SHY-0500 — engaged while the room list is drawn on an unconfirmed claim,
-     * settled on every exit from [confirm]. The cohort-scoped readers wait on
-     * the same instance, which is why it comes from the caller rather than
-     * being made here.
+     * settled by a verdict from [confirm] (a ban and a throw keep it engaged —
+     * see [confirm]). The cohort-scoped readers wait on the same instance,
+     * which is why it comes from the caller rather than being made here.
      */
     private val claimGate: ColdStartClaimGate,
     private val checkBans: suspend () -> BanState,
@@ -64,7 +64,7 @@ class ColdStartSequencer(
     private val launchState: () -> LaunchState,
 ) {
     /**
-     * The ban facts from the most recent [run], for the screen that renders
+     * The ban facts from the most recent [confirm], for the screen that renders
      * them.
      *
      * `BanScreen` takes `(banType, reason, expiresAt)`. A sequencer that
@@ -74,7 +74,7 @@ class ColdStartSequencer(
      * how to appeal. A correct gate that cannot explain itself is an unusable
      * one.
      *
-     * Read-only to callers, and only ever written by [run].
+     * Read-only to callers, and only ever written by [confirm].
      */
     var lastBan: BanState = BanState()
         private set
@@ -114,7 +114,7 @@ class ColdStartSequencer(
     /**
      * What to draw BEFORE anything is awaited. Performs no I/O whatsoever.
      *
-     * SHY-0500. [run] awaited a ban check and a token refresh — two network round
+     * SHY-0500. The old `run()` awaited a ban check and a token refresh — two network round
      * trips — before returning any destination, and nothing rendered until it
      * did. On a slow connection that is a spinner; on a dead one it is a spinner
      * for the length of a timeout. EPIC-0004 exists to remove exactly that, and
@@ -261,21 +261,6 @@ class ColdStartSequencer(
         logD(COLD_START_TAG, "confirm: transport failure, staying unverified")
         return ColdStartConfirmation.Stay
     }
-
-    /**
-     * Runs the sequence and returns the destination to start at.
-     *
-     * Deliberately returns the destination rather than navigating: routing is
-     * the caller's job on each platform, and keeping the decision returnable is
-     * what makes the whole sequence testable without a UI.
-     */
-    suspend fun run(): Screen {
-        val immediate = immediateDestination()
-        return when (val confirmation = confirm()) {
-            is ColdStartConfirmation.Stay -> immediate
-            is ColdStartConfirmation.Redirect -> confirmation.screen
-        }
-    }
 }
 
 private const val COLD_START_TAG = "ColdStartSequencer"
@@ -355,7 +340,7 @@ fun BanStatus.toBanState(): BanState =
  * birthday passed stayed in the minor cohort until they happened to sign in
  * again. In a minors-facing app that is a safety gap, not a staleness one.
  *
- * **Deliberately not part of [ColdStartSequencer.run].** The story requires
+ * **Deliberately not part of the cold-start sequence itself.** The story requires
  * this to run AFTER the shell is shown, off the critical path — it is a
  * server-side recompute and can be slow. Callers LAUNCH it; nothing awaits it,
  * and nothing routes on it.
