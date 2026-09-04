@@ -161,3 +161,8 @@ The four `fast-uri` rows for the root lockfile go green when Dependabot PR
 
 - **2026-09-04** — Found in the EPIC-0013 handover's owed list. Red run
   recorded above; `qs` bumped in the same session.
+- **2026-09-04 (later)** — Pushed as PR #2155 at `7074a103593`. Pre-push
+  chromium gate: 1425 passed, 1 flaky (`admin-users-profile` "search shows
+  correct seeded user data", passed on retry — unrelated to this change; see
+  SHY-0381), 37 skipped, 16.9 min. Full jest suite against the local stack:
+  530 suites, 15,315 tests, 0 failures, 347 s.
