@@ -18,10 +18,27 @@ fi
 # "port 3000 held by PID ... (node)" (2026-09-04). This list must equal the
 # pre-flight list in start.sh; a test pins the two together.
 STACK_PORTS="4000 8080 9000 9099 3000 7880 9002 8025 8888"
+# Only the stack's own process kinds are stopped: the emulators are java, the
+# API, the web server and the emulator UI are node. Anything else on one of
+# these ports -- Docker's port proxy for LiveKit and MailHog, an unrelated dev
+# server on 8080 -- is left alone and NAMED, because a listener that survives
+# is exactly why the next start refuses at pre-flight (review, 2026-09-04).
 if command -v lsof > /dev/null 2>&1; then
   for port in $STACK_PORTS; do
     for pid in $(lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null); do
-      kill "$pid" 2>/dev/null || true
+      comm="$(basename "$(ps -o comm= -p "$pid" 2>/dev/null)" 2>/dev/null)"
+      case "$comm" in
+        node|java|firebase)
+          if kill "$pid" 2>/dev/null; then
+            echo "stop.sh: stopped ${comm} (pid ${pid}) on port ${port}"
+          fi
+          ;;
+        "")
+          ;;
+        *)
+          echo "stop.sh: left ${comm} (pid ${pid}) on port ${port} alone -- not part of the stack"
+          ;;
+      esac
     done
   done
 fi

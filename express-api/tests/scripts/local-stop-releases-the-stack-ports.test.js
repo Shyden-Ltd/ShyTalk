@@ -53,6 +53,18 @@ describe('local/stop.sh releases what local/start.sh guards', () => {
     expect(STOP).toMatch(/lsof -tiTCP:"?\$\{?port\}?"? -sTCP:LISTEN/);
   });
 
+  test("the sweep kills only the stack's own process kinds, and names what it left alone", () => {
+    // The stack is node (API, web server, emulator UI) and java (emulators).
+    // Docker's port proxy for LiveKit and MailHog, or an unrelated dev server
+    // on 8080, must not be SIGTERMed by a stop (review, 2026-09-04) — and a
+    // listener that is left alone is the reason the next start refuses, so
+    // it is named.
+    expect(STOP).toMatch(/ps -o comm= -p "\$pid"/);
+    expect(STOP).toMatch(/node\|java\|firebase\)/);
+    expect(STOP).toMatch(/left \$\{comm\} \(pid \$\{pid\}\) on port \$\{port\} alone/);
+    expect(STOP).toMatch(/stopped \$\{comm\} \(pid \$\{pid\}\) on port \$\{port\}/);
+  });
+
   test('the API is not matched by a path start.sh never uses', () => {
     // start.sh: `cd express-api && node src/index.js`. A pattern with the
     // directory in it matches nothing that is actually running.
