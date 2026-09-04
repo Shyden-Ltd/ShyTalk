@@ -98,6 +98,10 @@ assumptions rather than a real surface.
 
 - **Blocked on the website portal.** This is a hard sequencing constraint from
   the operator, not an estimate. Do not start child stories before it exists.
+  **2026-09-04:** the portal is now EPIC-0013. The agent stories here are gated
+  on SHY-0506 (the server-side permission model, where `support.tickets` and
+  the agent account type slot in) and SHY-0507 (the portal shell that loads the
+  agent module) reaching Done.
 - The **appeals** flow (`express-api/src/routes/reports.js:1363-1500`,
   `public/admin/js/tabs/appeals.js`) is the closest existing shape and is the
   template SHY-0380 follows. If this epic later unifies appeals, reports, and
