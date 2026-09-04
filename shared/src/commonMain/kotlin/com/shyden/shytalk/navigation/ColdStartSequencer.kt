@@ -27,8 +27,9 @@ import kotlinx.coroutines.CancellationException
  *
  * SHY-0500 draws the shell BEFORE [confirm] runs, so ordering 2 can no longer
  * ride on when the NavHost mounts. [ColdStartClaimGate] carries it instead:
- * [immediateDestination] engages the gate when it draws the room list, every
- * exit from [confirm] settles it, and the cohort-scoped readers wait on it.
+ * [immediateDestination] engages the gate when it draws the room list, a
+ * verdict from [confirm] settles it (a ban and a throw deliberately do not —
+ * see [confirm]), and the cohort-scoped readers wait on it.
  *
  * Collaborators are injected as functions, not interfaces, for one reason: the
  * thing worth testing is the sequence, and a function is the smallest surface
@@ -172,13 +173,20 @@ class ColdStartSequencer(
      *
      * What changed is only WHEN the person sees something, not what is enforced.
      *
-     * Settles the [ColdStartClaimGate] on every exit but one — a confirmed
-     * claim, a dead session, a transport failure, a thrown exception — because
-     * a read left waiting is a room list that never loads. The exception is a
-     * BAN: the room list drawn underneath must never read on the claim this
-     * confirmation did not refresh, so the gate stays engaged and the host
-     * settles it once the ban screen has replaced that room list (both hosts
-     * are pinned to do so after they navigate).
+     * Settles the [ColdStartClaimGate] on a VERDICT that leaves something to
+     * read with — a confirmed claim, a dead session (nothing left to read
+     * with; the next sign-in mints a fresh claim), a transport failure (the
+     * claim cannot be refreshed offline and the cached room list is all there
+     * is). Two outcomes keep it engaged, and fail closed:
+     *
+     *  - a BAN: the room list drawn underneath must never read on the claim
+     *    this confirmation did not refresh. The host settles the gate once the
+     *    ban screen has replaced that room list (both hosts are pinned to do
+     *    so after they navigate);
+     *  - a THROW: there is no verdict at all. The exception propagates to the
+     *    host, the reads stay held, and the next draw supersedes the gate
+     *    ([immediateDestination] resets it). Releasing here would be a
+     *    cohort-scoped read with no ban verdict on an unconfirmed claim.
      *
      * Requires [immediateDestination] to have run: there is nothing to confirm
      * before something was drawn, and guessing here would decide from facts
@@ -193,14 +201,10 @@ class ColdStartSequencer(
             checkNotNull(drawnFrom) {
                 "immediateDestination() drew $drawn without recording the facts it drew on"
             }
-        var banned = false
-        try {
-            val outcome = confirmDrawn(drawn, state)
-            banned = outcome is ColdStartConfirmation.Redirect && outcome.screen.isBanScreen()
-            return outcome
-        } finally {
-            if (!banned) claimGate.settle()
-        }
+        val outcome = confirmDrawn(drawn, state)
+        val banned = outcome is ColdStartConfirmation.Redirect && outcome.screen.isBanScreen()
+        if (!banned) claimGate.settle()
+        return outcome
     }
 
     private suspend fun confirmDrawn(

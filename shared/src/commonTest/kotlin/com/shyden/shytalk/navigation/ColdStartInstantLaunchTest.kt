@@ -195,8 +195,13 @@ class ColdStartInstantLaunchTest {
         }
 
     @Test
-    fun theGateReleasesEvenWhenConfirmThrows() =
+    fun aThrowInsideConfirmLeavesTheGateEngaged_failClosed() =
         runTest {
+            // Before SHY-0500 a throw here meant nothing rendered. Now the room
+            // list is already drawn, so releasing its reads on a throw would be
+            // a cohort-scoped read with no verdict and an unconfirmed claim
+            // (review, 2026-09-04). Fail closed: the gate stays engaged, the
+            // throw propagates to the host, and the next draw supersedes it.
             val gate = ColdStartClaimGate()
             val s =
                 ColdStartSequencer(
@@ -219,7 +224,7 @@ class ColdStartInstantLaunchTest {
             s.immediateDestination()
             assertTrue(gate.refreshInFlight.value)
             assertFailsWith<IllegalStateException> { s.confirm() }
-            assertFalse(gate.refreshInFlight.value, "an exception must not leave reads held forever")
+            assertTrue(gate.refreshInFlight.value, "a throw must not release the reads: there is no verdict to release them on")
         }
 
     @Test

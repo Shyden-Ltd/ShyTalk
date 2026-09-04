@@ -26,6 +26,13 @@ package com.shyden.shytalk.navigation
  * launch through the network round trip this resolver exists to avoid. An
  * unenrolled credential gates nothing: with nothing enrolled there is nothing
  * to lock behind, which is also what [shouldRelockOnResume] says.
+ *
+ * That combination is not an edge case. `AppLockRepositoryImpl` has App-Lock
+ * ENABLED by default and reports the lock as REQUIRED whenever no last-active
+ * timestamp exists, so "enabled, required, no credential" is the state of
+ * every signed-in person who never enrolled a PIN. Routing it to Lock would
+ * present a lock nothing can open; routing it to Sign-In is the SHY-0500
+ * defect. The credential is what makes a lock possible, and step 1 says so.
  */
 fun resolveLaunchDestination(
     hasStoredCredential: Boolean,

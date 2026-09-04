@@ -26,14 +26,17 @@ import kotlinx.coroutines.flow.first
  *    list serves the cache it was authorised to fill last time (the same as
  *    before SHY-0500; the background reconcile and the SDK's own refresh
  *    correct the claim once the network is back);
- *  - a thrown exception or a cancelled launch — a read that waits forever is a
- *    room list that never loads, and the next draw supersedes this one.
+ *  - the NEXT draw — [ColdStartSequencer.immediateDestination] resets the gate
+ *    to whatever it is drawing now, so a launch that was cancelled or threw
+ *    before it could settle cannot hold a later launch's room list.
  *
- * A BAN does not settle it. The room list drawn underneath must never read on
- * the claim the confirmation did not refresh, so the gate stays engaged until
- * the host has navigated to the ban screen — which pops that room list and its
- * ViewModel — and settles it afterwards, so nothing is left waiting for a
- * later sign-in.
+ * Two outcomes leave it engaged, on purpose. A BAN: the room list drawn
+ * underneath must never read on the claim the confirmation did not refresh,
+ * so the gate stays engaged until the host has navigated to the ban screen —
+ * which pops that room list and its ViewModel — and settles it afterwards, so
+ * nothing is left waiting for a later sign-in. A THROW inside the
+ * confirmation: there is no verdict, so there is nothing to release the reads
+ * on; the exception reaches the host and the next draw supersedes the gate.
  *
  * Open at rest. A fresh sign-in, a PIN unlock and an offline launch never go
  * through [begin], so nothing they do waits here. That is the SHY-0024 lesson:
