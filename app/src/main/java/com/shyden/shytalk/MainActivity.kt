@@ -428,29 +428,6 @@ class MainActivity : AppCompatActivity() {
                             initialRoute = sequencer.immediateDestination().route
                             checkComplete = true
                             val confirmation = sequencer.confirm()
-
-                            when (val result = versionDeferred.await()) {
-                                is Resource.Success -> {
-                                    val (minVersionCode, latestVersionCode, latestVersionName) = result.data
-                                    updateRequired = appConfigService.currentVersionCode < minVersionCode
-                                    if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
-                                        softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
-                                    }
-                                }
-
-                                is Resource.Error -> {
-                                    updateRequired = false
-                                }
-
-                                is Resource.Loading -> { /* wait */ }
-                            }
-                            when (val healthResult = healthDeferred.await()) {
-                                is Resource.Success -> {
-                                    backendDegraded = healthResult.data.status == "degraded"
-                                }
-
-                                else -> {}
-                            }
                             // SHY-0143 — the whole cold-start sequence, in one
                             // shared object both platforms run.
                             //
@@ -490,6 +467,33 @@ class MainActivity : AppCompatActivity() {
                                 "Cold-launch: drew $initialRoute, confirmation=$confirmation " +
                                     "(banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
                             )
+
+                            // Awaited AFTER the verdict is applied: a banned device must not keep
+                            // the optimistic room list on screen for as long as these two calls
+                            // take (review, 2026-09-04). They were started before the draw, so
+                            // nothing here waits longer than it did.
+                            when (val result = versionDeferred.await()) {
+                                is Resource.Success -> {
+                                    val (minVersionCode, latestVersionCode, latestVersionName) = result.data
+                                    updateRequired = appConfigService.currentVersionCode < minVersionCode
+                                    if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
+                                        softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
+                                    }
+                                }
+
+                                is Resource.Error -> {
+                                    updateRequired = false
+                                }
+
+                                is Resource.Loading -> { /* wait */ }
+                            }
+                            when (val healthResult = healthDeferred.await()) {
+                                is Resource.Success -> {
+                                    backendDegraded = healthResult.data.status == "degraded"
+                                }
+
+                                else -> {}
+                            }
 
                             // SHY-0143 I5 — the cohort reconcile, AFTER the
                             // shell is released and deliberately not awaited.

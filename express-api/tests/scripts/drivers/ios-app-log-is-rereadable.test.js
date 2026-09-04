@@ -117,3 +117,42 @@ describe('the iPhone app log can be read more than once per capture, like logcat
     expect(spawned[0].child.kills).toBe(1);
   });
 });
+
+describe('a capture that could not run fails the read loudly, instead of reading as an empty log', () => {
+  // A missing or failing idevicesyslog used to leave `chunks` empty, so
+  // readAppLog() returned [] and the launch verdict became
+  // {immediate: null, confirm: null} — a wrong-screen failure that named
+  // nothing about the capture (review, 2026-09-04).
+  test('a spawn error surfaces from the next read, naming idevicesyslog', async () => {
+    const { d, spawned } = device();
+    await d.clearAppLog();
+    spawned[0].child.emit('error', new Error('spawn idevicesyslog ENOENT'));
+    await expect(d.readAppLog(TAG)).rejects.toThrow(/idevicesyslog.*ENOENT/);
+  });
+
+  test('a capture that exits early surfaces its exit and what it said on stderr', async () => {
+    const { d, spawned } = device();
+    await d.clearAppLog();
+    spawned[0].child.stderr.emit('data', 'ERROR: Could not connect to lockdownd\n');
+    spawned[0].child.emit('exit', 255, null);
+    await expect(d.readAppLog(TAG)).rejects.toThrow(/idevicesyslog.*255.*lockdownd/s);
+  });
+
+  test('the capture ending because clearAppLog() or quit() stopped it is not a failure', async () => {
+    const { d, spawned } = device();
+    await d.clearAppLog();
+    spawned[0].child.stdout.emit(
+      'data',
+      syslogLine(`${TAG}: immediate: destination=Main (no I/O)`),
+    );
+    await d.clearAppLog();
+    spawned[0].child.emit('exit', null, 'SIGTERM');
+    spawned[1].child.stdout.emit(
+      'data',
+      syslogLine(`${TAG}: immediate: destination=SignIn (no I/O)`),
+    );
+    const lines = await d.readAppLog(TAG);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('destination=SignIn');
+  });
+});

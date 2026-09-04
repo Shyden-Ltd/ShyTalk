@@ -1134,11 +1134,20 @@ class IosDevice {
       '-p',
       IOS_APP_PROCESS_NAME,
     ]);
-    const chunks = [];
-    child.stdout.on('data', (d) => chunks.push(String(d)));
-    child.stderr.on('data', () => {});
-    child.on('error', (e) => this._warn(`[ios] idevicesyslog: ${e.message}`));
-    this._syslog = { child, chunks };
+    const capture = { child, chunks: [], stderr: [], failure: null, stopped: false };
+    child.stdout.on('data', (d) => capture.chunks.push(String(d)));
+    child.stderr.on('data', (d) => capture.stderr.push(String(d)));
+    child.on('error', (e) => {
+      capture.failure = e.message;
+      this._warn(`[ios] idevicesyslog: ${e.message}`);
+    });
+    child.on('exit', (code, signal) => {
+      // Ended by clearAppLog() or quit() is the normal end of a capture. Any
+      // other exit is a capture that died under the journey, and the next
+      // read must say so rather than read as an empty log.
+      if (!capture.stopped) capture.failure = `exited ${code ?? signal}`;
+    });
+    this._syslog = capture;
   }
 
   /**
@@ -1154,7 +1163,15 @@ class IosDevice {
     if (!this._syslog) {
       throw new Error('readAppLog() before clearAppLog(): nothing was being captured');
     }
-    return this._syslog.chunks
+    const { chunks, stderr, failure } = this._syslog;
+    if (failure) {
+      // An empty log from a capture that never ran is not evidence of anything;
+      // it used to read as {immediate: null, confirm: null} and fail the
+      // journey on the wrong screen, naming nothing about the capture.
+      const said = stderr.join('').trim();
+      throw new Error(`idevicesyslog capture failed (${failure})${said ? `: ${said}` : ''}`);
+    }
+    return chunks
       .join('')
       .split('\n')
       .map((l) => l.trimEnd())
@@ -1163,11 +1180,11 @@ class IosDevice {
 
   _stopSyslog() {
     if (!this._syslog) return;
-    try {
-      this._syslog.child.kill();
-    } catch (_e) {
-      /* already gone */
-    }
+    // Marked before the kill so the exit it causes is not recorded as a
+    // failure of the capture. kill() on a child that has already exited is a
+    // no-op in Node; it does not throw.
+    this._syslog.stopped = true;
+    this._syslog.child.kill();
     this._syslog = null;
   }
 

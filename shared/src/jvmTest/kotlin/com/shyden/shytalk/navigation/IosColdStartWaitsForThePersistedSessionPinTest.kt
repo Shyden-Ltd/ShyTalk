@@ -40,11 +40,29 @@ class IosColdStartWaitsForThePersistedSessionPinTest {
     private val iosRepo = "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosAuthRepositoryImpl.kt"
     private val contract = "shared/src/commonMain/kotlin/com/shyden/shytalk/data/repository/AuthRepository.kt"
 
+    private val androidRepo = "app/src/main/java/com/shyden/shytalk/data/repository/AuthRepositoryImpl.kt"
+
     @Test
     fun `the contract names the wait, so both platforms speak the same word`() {
         assertTrue(
             Regex("suspend fun awaitPersistedSession\\(\\)").containsMatchIn(read(contract)),
             "AuthRepository must declare awaitPersistedSession()",
+        )
+    }
+
+    @Test
+    fun `the contract has no silent default, so every platform must say how long its SDK takes`() {
+        // A `{}` body on the interface let a platform that forgot the wait
+        // compile and draw sign-in for a signed-in person (review, 2026-09-04).
+        // Android's answer is a documented no-op — its SDK restores the user
+        // synchronously — written where the compiler can see it is deliberate.
+        assertFalse(
+            Regex("suspend fun awaitPersistedSession\\(\\)\\s*\\{").containsMatchIn(read(contract)),
+            "AuthRepository must not default awaitPersistedSession() to nothing",
+        )
+        assertTrue(
+            read(androidRepo).contains("override suspend fun awaitPersistedSession()"),
+            "the Android repository must state its (synchronous) answer explicitly",
         )
     }
 

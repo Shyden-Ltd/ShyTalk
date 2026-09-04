@@ -4,6 +4,9 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.repository.AuthRepository
 
 class FakeAuthRepository : AuthRepository {
+    // Nothing asynchronous to wait for in a fake (SHY-0500).
+    override suspend fun awaitPersistedSession() = Unit
+
     var fakeUserId: String? = "test-user-1"
     var fakeAuthenticated: Boolean = true
     var fakeUserEmail: String? = "test@example.com"

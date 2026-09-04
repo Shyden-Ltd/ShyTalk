@@ -25,8 +25,13 @@ interface AuthRepository {
      * keyed by that uid misses, and a cold start draws sign-in first for a
      * signed-in person (SHY-0500). A cold start calls this before it decides
      * what to draw. Bounded on every platform: a launch may never hang on it.
+     *
+     * Deliberately no default. A platform whose SDK restores the user
+     * synchronously says so in its own override; a `{}` here let a platform
+     * that simply forgot the wait compile, and draw sign-in for a signed-in
+     * person.
      */
-    suspend fun awaitPersistedSession() {}
+    suspend fun awaitPersistedSession()
 
     /**
      * Set by AuthViewModel after successful identity resolution.

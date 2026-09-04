@@ -715,6 +715,9 @@ class LockScreenViewModelTest {
         }
 
     private class FakeAuthRepository : AuthRepository {
+        // Nothing asynchronous to wait for in a fake (SHY-0500).
+        override suspend fun awaitPersistedSession() = Unit
+
         var fakeAuthenticated: Boolean = true
         var customTokenResult: Resource<String> = Resource.Success("uid-1")
         val customTokenSignIns = mutableListOf<String>()

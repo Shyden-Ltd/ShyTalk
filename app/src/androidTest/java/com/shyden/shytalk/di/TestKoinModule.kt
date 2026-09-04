@@ -70,6 +70,7 @@ import com.shyden.shytalk.feature.settings.AppSettingsViewModel
 import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
+import com.shyden.shytalk.navigation.ColdStartClaimGate
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
@@ -200,7 +201,10 @@ val testModule =
 
         // ViewModels — same wiring as production, Koin resolves fakes automatically
         viewModel { AuthViewModel(get(), get(), get(), get(), get(named("deviceId"))) }
-        viewModel { HomeViewModel(get(), get(), get(), get()) }
+        // SHY-0500 — the cold-start claim gate HomeViewModel waits on; open at
+        // rest, and nothing in these tests engages it.
+        single { ColdStartClaimGate() }
+        viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }
         viewModel { RequiredDOBViewModel(get(), get()) }
         viewModel { params -> FollowListViewModel(params[0], params[1], get(), get()) }

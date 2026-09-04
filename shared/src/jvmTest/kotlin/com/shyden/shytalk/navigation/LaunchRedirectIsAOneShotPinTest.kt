@@ -120,6 +120,29 @@ class LaunchRedirectIsAOneShotPinTest {
     }
 
     @Test
+    fun `both hosts apply the verdict before they await anything else`() {
+        // The verdict is a ban or a dead session; applying it late leaves a banned
+        // device on the optimistic room list for as long as the other launch
+        // calls take (review, 2026-09-04). Publishing the ban facts and the
+        // redirect is the FIRST thing after confirm() returns.
+        for (owner in listOf(mainActivity, controller)) {
+            val src = read(owner)
+            val confirmed = src.indexOf("sequencer.confirm()")
+            assertTrue(confirmed >= 0, "$owner must confirm")
+            val nextAwait = src.indexOf(".await(", confirmed).let { if (it < 0) src.length else it }
+            val beforeAnyAwait = src.substring(confirmed, nextAwait)
+            assertTrue(
+                beforeAnyAwait.contains("coldStartBan = sequencer.lastBan"),
+                "$owner must publish the ban facts before it awaits anything",
+            )
+            assertTrue(
+                beforeAnyAwait.contains("ColdStartConfirmation.Redirect"),
+                "$owner must apply the redirect before it awaits anything",
+            )
+        }
+    }
+
+    @Test
     fun `both hosts confirm straight after drawing, so nothing can cancel between begin() and settle()`() {
         // The gate is engaged by immediateDestination() and settled only when
         // confirm() returns. A suspension point between the two is a window in
