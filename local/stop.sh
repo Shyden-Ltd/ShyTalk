@@ -41,6 +41,29 @@ if command -v lsof > /dev/null 2>&1; then
       esac
     done
   done
+
+  # kill(1) returns before the process has exited. `stop.sh && start.sh` hit
+  # start.sh's pre-flight while the emulators were still shutting down
+  # ("port 9000 held by PID ... (java)", 2026-09-04): a stop that returns while
+  # its ports are still held has not stopped anything yet. Wait, bounded, for
+  # every stack port to close; name whatever is still there at the end.
+  STACK_PORTS_RELEASE_TIMEOUT_S=15
+  waited=0
+  held=""
+  while [ "$waited" -lt "$STACK_PORTS_RELEASE_TIMEOUT_S" ]; do
+    held=""
+    for port in $STACK_PORTS; do
+      if [ -n "$(lsof -tiTCP:"${port}" -sTCP:LISTEN 2>/dev/null)" ]; then
+        held="${held} ${port}"
+      fi
+    done
+    [ -z "$held" ] && break
+    sleep 1
+    waited=$((waited + 1))
+  done
+  if [ -n "$held" ]; then
+    echo "stop.sh: ports${held} still held after ${STACK_PORTS_RELEASE_TIMEOUT_S}s -- a listener that is not part of the stack, or one that ignored SIGTERM" >&2
+  fi
 fi
 
 # Windows fallback: kill java (emulators) and node processes on known ports

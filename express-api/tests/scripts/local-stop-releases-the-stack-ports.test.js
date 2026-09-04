@@ -65,6 +65,18 @@ describe('local/stop.sh releases what local/start.sh guards', () => {
     expect(STOP).toMatch(/stopped \$\{comm\} \(pid \$\{pid\}\) on port \$\{port\}/);
   });
 
+  test('stop.sh waits for the ports it released to close, so a start straight after it is not refused', () => {
+    // kill(1) returns before the process has exited. `stop.sh && start.sh`
+    // hit start.sh's pre-flight while the Firestore emulator and the Auth
+    // emulator were still shutting down (2026-09-04): "port 9000 held by
+    // PID … (java)". A stop that returns while its ports are still held has
+    // not stopped anything yet.
+    expect(STOP).toMatch(
+      /for port in \$STACK_PORTS; do[\s\S]*lsof -tiTCP:"\$\{port\}" -sTCP:LISTEN[\s\S]*still held after/,
+    );
+    expect(STOP).toMatch(/STACK_PORTS_RELEASE_TIMEOUT_S=/);
+  });
+
   test('the API is not matched by a path start.sh never uses', () => {
     // start.sh: `cd express-api && node src/index.js`. A pattern with the
     // directory in it matches nothing that is actually running.
