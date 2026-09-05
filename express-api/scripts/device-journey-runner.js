@@ -61,6 +61,7 @@ const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
 const { createIosJourneyDevice, selectCoreDeviceUuid } = require('./drivers/ios-journey-device');
+const { AppProcessDiedError } = require('./drivers/app-process-death');
 const {
   createAndroidSourceSession,
   ANDROID_SOURCE_UNAVAILABLE,
@@ -329,6 +330,11 @@ function selectSerial(preferred) {
   );
 }
 
+// The phone's clock and the Mac's disagree by seconds; a crash-buffer entry
+// this much older than the launch is still this launch's.
+const APP_CRASH_CLOCK_SKEW_MS = 60_000;
+const APP_CRASH_BUFFER_LINES = 40;
+
 class Device {
   constructor(serial) {
     this.serial = serial;
@@ -337,6 +343,9 @@ class Device {
     // `device.kind === 'ios'` worked by accident of `undefined` — and any
     // check the other way round would have been silently false.
     this.kind = 'android';
+    // The pid launch() started, and when — what assertAppAlive judges against.
+    this._launchedPid = null;
+    this._launchedAt = null;
     // Set by attachSourceSession() when a warm reader is available. Absent is
     // a supported state, not a broken one.
     this.sourceSession = null;
@@ -440,9 +449,76 @@ class Device {
     }
   }
 
-  launch(pkg) {
+  async launch(pkg) {
     // monkey launches the LAUNCHER activity without us knowing its name.
     this.shell(`monkey -p ${pkg} -c android.intent.category.LAUNCHER 1`);
+    // One adb round trip (tens of ms), so a later assertAppAlive can tell "the
+    // process I started" from "a process": a different pid is a relaunch.
+    this._launchedPid = this._pidsOf(pkg)[0] ?? null;
+    this._launchedAt = Date.now();
+  }
+
+  /**
+   * The pids running as exactly `pkg` (sub-processes are `pkg:name` and do
+   * not match). Quoted so `|| echo NONE` runs on the PHONE: pidof exits 1
+   * when nothing matches, and an exit status cannot tell that from adb
+   * failing — "device offline" must stay an error, not read as a death.
+   */
+  _pidsOf(pkg) {
+    const out = this.shell(`'pidof ${pkg} || echo NONE'`).trim();
+    if (out === 'NONE' || out === '') return [];
+    return out.split(/\s+/).map(Number);
+  }
+
+  /**
+   * Prove the app is still the process this run launched, or throw the death.
+   *
+   * Alive means a `pkg` process is running AND it is the pid `launch()`
+   * recorded — or none was recorded, in which case the running one is
+   * adopted. A different pid is a relaunch, not survival. On a death the
+   * crash buffer (`logcat -b crash`) since the launch is read into the error,
+   * so the step fails naming the exception rather than "SignIn not reached".
+   * Mirrors the iOS backend, where a lost WebDriverAgent session RELAUNCHES a
+   * dead app and passed J40 over a crash (SHY-0523).
+   */
+  async assertAppAlive(pkg, label) {
+    const pids = this._pidsOf(pkg);
+    if (pids.length && (this._launchedPid === null || pids.includes(this._launchedPid))) {
+      if (this._launchedPid === null) {
+        this._launchedPid = pids[0];
+        this._launchedAt ??= Date.now();
+      }
+      return { pid: this._launchedPid };
+    }
+    const launched =
+      this._launchedPid === null
+        ? 'the launch pid was not recorded'
+        : `pid ${this._launchedPid} is gone`;
+    const now = pids.length
+      ? `a different ${pkg} process (pid ${pids[0]}) is running now: something relaunched the app after it died`
+      : `no ${pkg} process is running`;
+    throw new AppProcessDiedError(
+      label,
+      `the app process died. ${launched} and ${now}. ${this._crashBufferSinceLaunch()}`,
+    );
+  }
+
+  /** The crash buffer since the launch (minus clock skew), or why it could not be read. */
+  _crashBufferSinceLaunch() {
+    const since =
+      this._launchedAt === null
+        ? ['-t', '40']
+        : ['-T', ((this._launchedAt - APP_CRASH_CLOCK_SKEW_MS) / 1000).toFixed(3)];
+    let lines;
+    try {
+      lines = this.shell(`logcat -d -b crash -v epoch ${since.join(' ')}`)
+        .split('\n')
+        .filter((line) => line.trim() !== '');
+    } catch (e) {
+      return `Reading the crash buffer failed: ${e.message}`;
+    }
+    if (!lines.length) return 'Last lines of the crash buffer: (empty)';
+    return `Last lines of the crash buffer:\n${lines.slice(-APP_CRASH_BUFFER_LINES).join('\n')}`;
   }
 
   // uiautomator can transiently fail while the UI is animating; retry.
@@ -2004,7 +2080,7 @@ const REDIRECT_WATCH_MS = 15000;
 async function revokedColdStart(
   device,
   reporter,
-  { coldLaunch, launchLog, expectLog, drawnFirst, watchMs = REDIRECT_WATCH_MS },
+  { pkg, coldLaunch, launchLog, expectLog, drawnFirst, watchMs = REDIRECT_WATCH_MS },
 ) {
   let redirect = null;
   await reporter.step(
@@ -2019,6 +2095,11 @@ async function revokedColdStart(
 
   await reporter.step(device, 'Revoked: sent back to sign-in AND told why', async () => {
     await advanceUntil(device, atSignIn, 30000, 'SignIn after the revoked session');
+    // SignIn being on screen is not enough: on the iPhone the app ABORTED
+    // 218ms after drawing it (SHY-0523) and WebDriverAgent's session recovery
+    // relaunched it, so the next reads judged a second launch. The process
+    // must be the one the cold launch started.
+    await device.assertAppAlive(pkg, 'after the revoked-session redirect');
     const log = await launchLog();
     expectLog(log, 'Main', /^confirm: refresh FAILED; sessionAlive=false/);
     if (!redirect.seen) {
@@ -4556,7 +4637,13 @@ const J40 = {
     // that follows.
     await invalidateSession(COLD_START_PERSONA);
     try {
-      await revokedColdStart(device, reporter, { coldLaunch, launchLog, expectLog, drawnFirst });
+      await revokedColdStart(device, reporter, {
+        pkg,
+        coldLaunch,
+        launchLog,
+        expectLog,
+        drawnFirst,
+      });
     } finally {
       await restoreSession(COLD_START_PERSONA);
     }

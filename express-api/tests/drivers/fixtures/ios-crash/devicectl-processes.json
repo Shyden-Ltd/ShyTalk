@@ -1,0 +1,27 @@
+{
+  "info": {
+    "jsonVersion": 2,
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6",
+    "runningProcesses": [
+      {
+        "executable": "file:///System/Library/CoreServices/SpringBoard.app/SpringBoard",
+        "processIdentifier": 39
+      },
+      {
+        "executable": "file:///private/var/containers/Bundle/Application/3D663277-1F15-43CE-8FDC-BC7F751EDEF8/WebDriverAgentRunner-Runner.app/WebDriverAgentRunner-Runner",
+        "processIdentifier": 984
+      },
+      {
+        "executable": "file:///private/var/containers/Bundle/Application/A9E1154B-4CA5-4D48-B55A-9D591E633998/iosApp.app/iosApp",
+        "processIdentifier": 1648
+      },
+      {
+        "executable": "file:///private/var/containers/Bundle/Application/DECOY/iosAppHelper.app/iosAppHelper",
+        "processIdentifier": 999
+      }
+    ]
+  }
+}

@@ -226,6 +226,19 @@ describe('every device command survives a WebDriverAgent restart', () => {
       'process out of it from the mark',
     _runLogTool:
       'the USB log tools behind clearAppLog and readAppLog — a child process, not a session',
+    assertAppAlive:
+      'never reaches WDA — it asks devicectl for the app process and, on a death, pulls the ' +
+      'crash report over USB (SHY-0500). It is what runs when the session WAS lost, to tell a ' +
+      'crashed app from a restarted WebDriverAgent; recovering it into a new session would ' +
+      'relaunch the dead app it exists to catch.',
+    _refuseToRelaunchADeadApp:
+      'runs INSIDE session establishment, before a reopen — the same circularity as ensureSession',
+    _newestCrashReportSinceLaunch:
+      'the retrying crash-report pull behind assertAppAlive — USB tools, not a session',
+    _devicectlLaunch: 'devicectl, not WDA — the process launch behind launch()',
+    _listProcesses: 'devicectl, not WDA — the process listing behind assertAppAlive',
+    _pullCrashReports: 'idevicecrashreport over USB — a child process, not a session',
+    _scratchDir: 'pure — a temp directory for the devicectl JSON and the pulled crash reports',
   };
 
   /** How to invoke each command that must recover. */

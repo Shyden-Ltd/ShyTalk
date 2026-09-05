@@ -62,6 +62,26 @@ const run = (bin, args) => execFileSync(bin, args, { encoding: 'utf8' });
  * `iosApp(...)`.
  */
 const IOS_APP_PROCESS_NAME = 'iosApp';
+// A crash report is written by the system a moment AFTER the process dies, so a
+// pull that lands in that gap finds nothing. Three pulls, two seconds apart,
+// cover the gap seen on the device (report filed ~1s after the abort) with room;
+// the interval is injectable so the retry is provable without waiting it out.
+const CRASH_REPORT_RETRY_MS = 2000;
+const CRASH_REPORT_PULLS = 3;
+// The phone's clock and the Mac's disagree by seconds, not minutes. A report
+// this much older than the launch is still "this launch"; one older than that
+// is an earlier death and must not be pinned on the current step.
+const CRASH_REPORT_CLOCK_SKEW_MS = 60_000;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** devicectl writes its answer — success OR failure — to `--json-output`. */
+function readDevicectlJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    throw new Error(`devicectl left no parsable JSON at ${file}`, { cause: e });
+  }
+}
 
 /** `YYYY-MM-DD HH:MM:SS` in the Mac's local zone, which is what `log show --start` reads. */
 const localTimestamp = (epochSeconds) => {
@@ -90,6 +110,14 @@ const stampedBefore = (line, markEpochSeconds) => {
 // ONE retry policy across both platforms instead of two that can drift.
 const { dumpWithRetry } = require('./ui-dump-retry');
 const { selectUdid } = require('./ios-appium-driver');
+const { AppProcessDiedError } = require('./app-process-death');
+const {
+  describeAppDeath,
+  findCrashReportsSince,
+  findRunningProcess,
+  launchedProcessId,
+  summarizeCrashReport,
+} = require('./ios-crash-report');
 
 const DEFAULT_APPIUM_BASE_URL = process.env.APPIUM_BASE_URL || 'http://localhost:4723';
 
@@ -367,6 +395,7 @@ class IosDevice {
     sessionRecoveryTimeoutMs = SESSION_RECOVERY_TIMEOUT_MS,
     settingsTimeoutMs = SETTINGS_TIMEOUT_MS,
     quitTimeoutMs = QUIT_TIMEOUT_MS,
+    crashReportRetryMs = CRASH_REPORT_RETRY_MS,
     // Injected so a test can READ what the driver said without patching the
     // console. The warnings below are part of the contract -- a tolerated
     // lost click, a retyped field -- and a contract has to be assertable.
@@ -409,6 +438,20 @@ class IosDevice {
     // budget from the set meant the attempt after a wedge recovery looked
     // COLD and waited 210s — the stall SHY-0451 exists to have removed.
     this._everOpened = false;
+    // The process `devicectl … launch` reported, and when. `assertAppAlive`
+    // judges against it: a DIFFERENT iosApp pid is not survival but a
+    // relaunch — which is exactly how J40's step-8 crash hid (SHY-0523): the
+    // app aborted, the next WebDriverAgent session launched it again, and the
+    // step read the second launch's screen.
+    this._launchedPid = null;
+    this._launchedAt = null;
+    this._createdAt = Date.now();
+    // Set by launch() when IT drops the session. That drop is not a loss, so
+    // the reopen must not spend a devicectl round trip (~1.1s) looking for a
+    // crash right before J40's first-frame read; an error path never sets it.
+    this._sessionDroppedOnPurpose = false;
+    this._crashReportRetryMs = crashReportRetryMs;
+    this._scratch = null;
     this._size = null;
     this._commandTimeoutMs = commandTimeoutMs;
     this._sessionColdTimeoutMs = sessionColdTimeoutMs;
@@ -457,6 +500,7 @@ class IosDevice {
    */
   async _session() {
     if (this._sessionId) return this._sessionId;
+    await this._refuseToRelaunchADeadApp();
     // A session has been opened before, so WebDriverAgent is installed and
     // this is a reattach, not a build.
     const isReconnect = this._everOpened;
@@ -707,6 +751,12 @@ class IosDevice {
       try {
         return await operation();
       } catch (again) {
+        // The reopen found the app dead: THAT is the finding, under the command
+        // that met it, with what WebDriverAgent saw as its cause. Wrapping it
+        // in "failed twice across a restart" would re-hide the crash.
+        if (again instanceof AppProcessDiedError) {
+          throw new AppProcessDiedError(label, again.detail, { cause: e });
+        }
         // BOTH errors, because they say different things and only one of them
         // is the cause. J39, 2026-08-24, reported only the second:
         //
@@ -1087,25 +1137,157 @@ class IosDevice {
     if (this._sessionId) {
       try {
         await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
+        // activate_app brings up whatever process results — a NEW one after
+        // forceStop() — and reports no pid. Forget the old one, so the first
+        // assertAppAlive adopts the running process instead of calling it a
+        // relaunch.
+        this._launchedPid = null;
+        this._launchedAt = null;
         return;
       } catch (_e) {
         // Fall through: the session is unusable, so drop it and start cold.
         this._sessionId = null;
       }
     }
+    const launched = this._devicectlLaunch();
+    this._launchedPid = launchedProcessId(launched);
+    this._launchedAt = Date.now();
+    // A session created BEFORE this launch is attached to the process that has
+    // just been replaced. Dropping it makes the next command open one against
+    // the app that is actually running — and marks the drop as deliberate, so
+    // that reopen is not mistaken for a lost session and checked for a crash.
+    this._sessionId = null;
+    this._sessionDroppedOnPurpose = true;
+  }
+
+  /** `devicectl … process launch`, answered as its JSON — the failure too. */
+  _devicectlLaunch() {
+    const out = nodePath.join(this._scratchDir(), 'launch.json');
+    fs.rmSync(out, { force: true });
+    try {
+      run('xcrun', [
+        'devicectl',
+        'device',
+        'process',
+        'launch',
+        '--device',
+        this.serial,
+        '--json-output',
+        out,
+        this.bundleId,
+      ]);
+    } catch (e) {
+      // devicectl exits non-zero AND writes the reason to the JSON ("… is not
+      // installed"). The exit status says nothing; the JSON does — so the
+      // caller reads it and names the reason. No JSON means devicectl itself
+      // never ran, and that error stands.
+      if (!fs.existsSync(out)) throw e;
+    }
+    return readDevicectlJson(out);
+  }
+
+  /** `devicectl device info processes`, as its JSON. ~1.1s on the device. */
+  _listProcesses() {
+    const out = nodePath.join(this._scratchDir(), 'processes.json');
+    fs.rmSync(out, { force: true });
     run('xcrun', [
       'devicectl',
       'device',
-      'process',
-      'launch',
+      'info',
+      'processes',
       '--device',
       this.serial,
-      this.bundleId,
+      '--json-output',
+      out,
     ]);
-    // A session created BEFORE this launch is attached to the process that has
-    // just been replaced. Dropping it makes the next command open one against
-    // the app that is actually running.
-    this._sessionId = null;
+    return readDevicectlJson(out);
+  }
+
+  /**
+   * Copy the app's crash reports off the phone into `dir` (they land under
+   * `dir/Retired/`). `-k` KEEPS them on the device: a run must not destroy
+   * evidence a person may want to read in Settings › Analytics Data.
+   */
+  _pullCrashReports(dir) {
+    run('idevicecrashreport', ['-k', '-u', this.hardwareUdid, '-f', IOS_APP_PROCESS_NAME, dir]);
+  }
+
+  _scratchDir() {
+    this._scratch ??= fs.mkdtempSync(nodePath.join(os.tmpdir(), 'shytalk-ios-journey-'));
+    return this._scratch;
+  }
+
+  /**
+   * Prove the app is still the process this run launched, or throw the death.
+   *
+   * `_pkg` is the Android package the runner passes on both backends; iOS
+   * knows its own bundle. Alive means an `iosApp` process is running AND it is
+   * the pid `launch()` recorded — or no pid was recorded (activate_app, or a
+   * session-only start), in which case the running one is adopted. A running
+   * iosApp with a DIFFERENT pid is a relaunch: the app died and something
+   * (WebDriverAgent creating a session) brought it back, so the screen being
+   * read belongs to a second launch. Either way the crash report is pulled and
+   * summarised into the error, so the step fails naming the signal and the
+   * Kotlin frame rather than "SignIn not reached".
+   */
+  async assertAppAlive(_pkg, label) {
+    const running = findRunningProcess(this._listProcesses(), IOS_APP_PROCESS_NAME);
+    if (running && (this._launchedPid === null || running.pid === this._launchedPid)) {
+      if (this._launchedPid === null) {
+        this._launchedPid = running.pid;
+        this._launchedAt ??= Date.now();
+      }
+      return running;
+    }
+    const { report, pullError } = await this._newestCrashReportSinceLaunch();
+    const detail = describeAppDeath({
+      launchedPid: this._launchedPid,
+      launchedAt: this._launchedAt,
+      running,
+      report,
+    });
+    throw new AppProcessDiedError(
+      label,
+      pullError
+        ? `${detail} Pulling the crash reports failed as well: ${pullError.message}`
+        : detail,
+    );
+  }
+
+  /** The newest `iosApp` crash report filed since the launch, or null after the retries. */
+  async _newestCrashReportSinceLaunch() {
+    const dir = fs.mkdtempSync(nodePath.join(this._scratchDir(), 'crash-'));
+    const since = (this._launchedAt ?? this._createdAt) - CRASH_REPORT_CLOCK_SKEW_MS;
+    let pullError = null;
+    for (let attempt = 1; attempt <= CRASH_REPORT_PULLS; attempt += 1) {
+      if (attempt > 1) await sleep(this._crashReportRetryMs);
+      try {
+        this._pullCrashReports(dir);
+      } catch (e) {
+        pullError = e;
+        continue;
+      }
+      const [newest] = findCrashReportsSince(dir, IOS_APP_PROCESS_NAME, since);
+      if (newest) {
+        const summary = summarizeCrashReport(fs.readFileSync(newest.path, 'utf8'));
+        return { report: { path: newest.path, summary }, pullError: null };
+      }
+    }
+    return { report: null, pullError };
+  }
+
+  /**
+   * Opening a WebDriverAgent session LAUNCHES the app when none is running.
+   * So a reopen after a lost session, with the app dead, would bring it back
+   * and let the step judge a second launch — the SHY-0523 crash passed J40
+   * this way. Before any reopen that was not deliberate, prove the app is
+   * alive; a dead one is reported as the crash it is.
+   */
+  async _refuseToRelaunchADeadApp() {
+    const droppedOnPurpose = this._sessionDroppedOnPurpose;
+    this._sessionDroppedOnPurpose = false;
+    if (!this._everOpened || droppedOnPurpose) return;
+    await this.assertAppAlive(this.bundleId, 'reopening the WebDriverAgent session');
   }
 
   /**
@@ -1347,7 +1529,14 @@ function listMethods() {
  * Factory, matching the shape every other driver in this directory exports —
  * `create*` plus `listMethods` — so `--check-drivers` can discover it.
  */
-function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl, warn } = {}) {
+function createIosJourneyDevice({
+  udid,
+  hardwareUdid,
+  bundleId,
+  appiumBaseUrl,
+  warn,
+  crashReportRetryMs,
+} = {}) {
   const coreDeviceUuid = selectCoreDeviceUuid(udid);
   if (!coreDeviceUuid) {
     throw new Error(
@@ -1375,6 +1564,7 @@ function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl, w
     // Passed through so the warnings stay assertable through the factory, which
     // is how every journey and every test builds this device.
     ...(warn ? { warn } : {}),
+    ...(crashReportRetryMs !== undefined ? { crashReportRetryMs } : {}),
   });
 }
 

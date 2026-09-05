@@ -41,6 +41,11 @@ const HELPER_FILES = new Set([
   'ios-driver-loader.js',
   'driver-screenshot-helper.js',
   'ui-dump-retry.js', // SHY-0154: pure retry helper for androidUiDump — not a driver
+  // SHY-0500: pure readers of devicectl JSON and .ips crash reports, and the
+  // error both device backends throw when the app process has died. They
+  // drive nothing; the iOS driver and the runner's Android Device call them.
+  'ios-crash-report.js',
+  'app-process-death.js',
   // SHY-0328: shared webSignIn sequence, wired into all 7 web drivers. It owns
   // the auth steps, never page acquisition, so it is a helper and not a driver.
   'web-sign-in.js',
