@@ -24,7 +24,9 @@ interface AuthRepository {
      * asynchronously: read too early they say "nobody", the identity cache
      * keyed by that uid misses, and a cold start draws sign-in first for a
      * signed-in person (SHY-0500). A cold start calls this before it decides
-     * what to draw. Bounded on every platform: a launch may never hang on it.
+     * what to draw. The wait is gated by the identity cache's own record — the
+     * only local sign that a user is coming — so a signed-out start does not
+     * wait at all, and bounded on every platform: a launch may never hang on it.
      *
      * Deliberately no default. A platform whose SDK restores the user
      * synchronously says so in its own override; a `{}` here let a platform

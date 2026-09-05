@@ -647,4 +647,54 @@ class SessionCacheContractTest {
         assertEquals("dev-1", appLock.storedDeviceId)
         assertEquals("hash", appLock.localPinHash)
     }
+
+    // ── hasRecord (SHY-0500: gates the iPhone's wait for its async keychain restore) ──
+    //
+    // Firebase iOS restores its user asynchronously and fires a fresh listener
+    // at once with whatever it holds. The only local sign that a user is coming
+    // is this cache's own record from the last signed-in session, so the cold
+    // start waits (bounded) only when one exists. hasRecord() says whether the
+    // wait is worth it; read() still judges the record itself.
+
+    @Test
+    fun `hasRecord is false on a fresh store, so a signed-out start does not wait`() {
+        assertFalse(cache.hasRecord())
+    }
+
+    @Test
+    fun `hasRecord is true after a complete write and false again after clear`() {
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+        assertTrue(cache.hasRecord(), "a signed-in session leaves the sign that a user is coming")
+
+        cache.clear()
+
+        assertFalse(cache.hasRecord(), "sign-out must take the sign with it")
+    }
+
+    @Test
+    fun `hasRecord is false after an incomplete write, which erases rather than half-writes`() {
+        cache.write(firebaseUid = "fb-uid-1", uniqueId = "10000005", cohort = "adult")
+        cache.write(firebaseUid = null, uniqueId = "10000005", cohort = "adult")
+
+        assertFalse(cache.hasRecord())
+    }
+
+    @Test
+    fun `hasRecord ignores a legacy three-key record, which read never trusts`() {
+        storage.putString(SessionCache.LEGACY_KEY_FIREBASE_UID, "fb-uid-1")
+        storage.putString(SessionCache.LEGACY_KEY_UNIQUE_ID, "10000005")
+        storage.putString(SessionCache.LEGACY_KEY_COHORT, "adult")
+
+        assertFalse(cache.hasRecord(), "a superseded record is not a sign of anything")
+    }
+
+    @Test
+    fun `hasRecord does not judge the record, so an unreadable one still counts as present`() {
+        // Whether the record is usable is read()'s verdict, made once the live
+        // uid is known. hasRecord() only says the wait is worth it.
+        storage.putString(SessionCache.KEY_SESSION, "not a record")
+
+        assertTrue(cache.hasRecord())
+        assertNull(cache.read("fb-uid-1"), "presence is not trust")
+    }
 }

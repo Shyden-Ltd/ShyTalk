@@ -78,25 +78,38 @@ class IosColdStartWaitsForThePersistedSessionPinTest {
             "the iOS wait must be the SDK's own auth-state emission",
         )
         assertTrue(
-            src.contains("withTimeoutOrNull"),
+            src.contains("awaitRestoredUser("),
+            "the wait must be the common, behaviour-tested one (PersistedSessionOutcomeTest)",
+        )
+        assertTrue(
+            src.contains("timeoutMs = PERSISTED_SESSION_TIMEOUT_MS"),
             "the wait must be bounded: a launch may never hang on it",
         )
     }
 
     @Test
-    fun `a null emission is the SDK reporting no persisted user, not a timeout`() {
-        // `first()` returns null on every signed-out start — that IS the report
-        // arriving. Reading the emission's value as "did it arrive" logged a
-        // timeout that never happened on every signed-out launch (review,
-        // 2026-09-04). The timeout is told apart by what the bounded block
-        // RETURNS, never by what the SDK emitted.
+    fun `the SDK's first emission is not the keychain load, so the wait targets a USER and is gated by the cache record`() {
+        // Firebase iOS fires a freshly added listener at once with whatever it
+        // holds — nil until its asynchronous keychain load finishes. Waiting
+        // for `first()` therefore returned BEFORE the restore on the iPhone
+        // (J40, 2026-09-05: `Cold-start identity cache miss`, then
+        // `authenticated=true` 560 ms later). Only the identity cache's own
+        // record says a user is coming; without one a signed-out start must
+        // not wait at all. The behaviour itself is proven in
+        // PersistedSessionOutcomeTest; this pins that the iPhone uses it.
         val src = read(iosRepo)
-        assertFalse(src.contains("restored == null"), "the emission's value must not stand in for whether it arrived")
-        val wait = src.indexOf("withTimeoutOrNull(PERSISTED_SESSION_TIMEOUT_MS)")
-        assertTrue(wait >= 0, "the wait must be the bounded one")
-        val block = src.substring(wait, minOf(wait + 300, src.length))
-        assertTrue(block.contains("auth.authStateChanged.first()"), "the block must still wait on the SDK's emission")
-        assertTrue(block.contains("?: false"), "only the TIMEOUT may read as 'not reported'")
+        assertFalse(
+            src.contains("authStateChanged.first()"),
+            "the first emission must not stand in for the keychain load",
+        )
+        assertTrue(
+            src.contains("expectUser = sessionCache.hasRecord()"),
+            "the wait must be gated by the identity cache's own record",
+        )
+        assertTrue(
+            Regex("authStateChanged\\.map \\{ it\\?\\.uid \\}").containsMatchIn(src),
+            "the wait must watch the emitted USER, not the emission",
+        )
     }
 
     @Test
