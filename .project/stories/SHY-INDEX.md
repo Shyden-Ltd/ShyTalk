@@ -349,6 +349,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0516](SHY-0516-a-mandatory-update-is-drawn-first-from-a-cached-verdict.md) | P2 | S | feature | A mandatory update is drawn first, from a verdict the app already has | 📝 Draft | — |  |
 | [SHY-0517](SHY-0517-the-pre-push-hook-tests-the-wrong-diff.md) | P2 | S | infra | The pre-push hook tests the wrong diff | 📝 Draft | — |  |
 | [SHY-0518](SHY-0518-the-pre-merge-gate-refuses-backlog-maintenance-on-draft-stories.md) | P2 | XS | infra | The pre-merge gate refuses backlog maintenance on Draft stories | 📝 Draft | — |  |
+| [SHY-0524](SHY-0524-fixed-duration-waits-still-hide-behind-sleep-helpers-in-the-journey-tooling.md) | P2 | M | refactor | Fixed-duration waits still hide behind `sleep` helpers in the journey tooling | 📝 Draft | — |  |
 
 ## Done
 
