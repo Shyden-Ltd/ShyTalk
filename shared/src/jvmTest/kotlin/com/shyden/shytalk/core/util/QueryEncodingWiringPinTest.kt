@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.util
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -20,15 +21,6 @@ import kotlin.test.assertTrue
  * into a query string, on either platform.
  */
 class QueryEncodingWiringPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root not found")
-    }
-
     /** Every Kotlin source that ships in a client. */
     private fun clientSources(): List<File> =
         listOf("app/src/main", "shared/src/commonMain", "shared/src/androidMain", "shared/src/iosMain")

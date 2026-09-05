@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.support
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,15 +21,6 @@ import kotlin.test.assertTrue
  * them, because a scan that silently matches no files passes forever.
  */
 class SupportContactRouteWiringPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root not found")
-    }
-
     private fun localeFiles(): List<File> =
         File(repoRoot(), "shared/src/commonMain/composeResources")
             .listFiles()

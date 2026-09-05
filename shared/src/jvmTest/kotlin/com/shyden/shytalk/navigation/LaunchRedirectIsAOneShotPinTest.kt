@@ -1,6 +1,6 @@
 package com.shyden.shytalk.navigation
 
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -23,21 +23,6 @@ import kotlin.test.assertTrue
  *     stays true after the shell stopped waiting for the network.
  */
 class LaunchRedirectIsAOneShotPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("settings.gradle.kts not found above ${System.getProperty("user.dir")}")
-    }
-
-    private fun read(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "moved: $relative")
-        return f.readText()
-    }
-
     private val signIn = "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/auth/SignInScreen.kt"
     private val params = "shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/PlatformScreens.kt"
     private val iosScreens = "shared/src/iosMain/kotlin/com/shyden/shytalk/navigation/IosPlatformScreens.kt"

@@ -1,6 +1,6 @@
 package com.shyden.shytalk.navigation
 
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -21,21 +21,6 @@ import kotlin.test.assertTrue
  * SHY-0187 wiring pins.
  */
 class IosColdStartWaitsForThePersistedSessionPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("settings.gradle.kts not found above ${System.getProperty("user.dir")}")
-    }
-
-    private fun read(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "moved: $relative")
-        return f.readText()
-    }
-
     private val controller = "shared/src/iosMain/kotlin/com/shyden/shytalk/MainViewController.kt"
     private val iosRepo = "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosAuthRepositoryImpl.kt"
     private val contract = "shared/src/commonMain/kotlin/com/shyden/shytalk/data/repository/AuthRepository.kt"

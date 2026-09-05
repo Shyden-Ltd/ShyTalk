@@ -1,6 +1,6 @@
 package com.shyden.shytalk.core.util
 
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -26,21 +26,6 @@ import kotlin.test.assertTrue
  * `immediate: destination=Main` on the iPhone.
  */
 class IosKeychainResultsAreBridgedPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("settings.gradle.kts not found above ${System.getProperty("user.dir")}")
-    }
-
-    private fun read(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "moved: $relative")
-        return f.readText()
-    }
-
     private val secureStorage = "shared/src/iosMain/kotlin/com/shyden/shytalk/core/util/SecureStorage.ios.kt"
     private val keyPair = "shared/src/iosMain/kotlin/com/shyden/shytalk/core/util/CryptoKeyPair.ios.kt"
 

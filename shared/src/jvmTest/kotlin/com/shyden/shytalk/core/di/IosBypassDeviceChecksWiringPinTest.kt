@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.di
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -23,15 +24,6 @@ import kotlin.test.assertTrue
  * so that specific string is what this pin forbids.
  */
 class IosBypassDeviceChecksWiringPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root (settings.gradle.kts) not found from ${System.getProperty("user.dir")}")
-    }
-
     private fun read(relative: String): String {
         val f = File(repoRoot(), relative)
         assertTrue(f.exists(), "expected source file to exist: $relative")

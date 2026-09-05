@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.util
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,15 +22,6 @@ import kotlin.test.assertTrue
  * println would compile, run, and leave the phone silent again.
  */
 class IosLoggerReachesTheDeviceLogPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("settings.gradle.kts not found above ${System.getProperty("user.dir")}")
-    }
-
     private val source: String by lazy {
         val f = File(repoRoot(), "shared/src/iosMain/kotlin/com/shyden/shytalk/core/util/Logger.ios.kt")
         assertTrue(f.exists(), "the iOS logger has moved: ${f.path}")
