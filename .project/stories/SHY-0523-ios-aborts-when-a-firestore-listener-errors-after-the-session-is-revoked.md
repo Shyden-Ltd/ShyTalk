@@ -208,5 +208,10 @@ instead of vanishing, so that I understand what happened and can act on it.
   cancellation; the baseline entry sits in sorted position and wraps listeners
   that were already in the baseline. Minor, accepted: a `Query` listener logs
   only "query" because gitlive exposes no path for it (documented in KDoc).
+- 2026-09-05 19:20 WIB — merged develop (`99009bd192a`) after #2154, #2155 and
+  #2136 landed. The only conflict was the SHY-INDEX.md row order (SHY-0519 vs
+  SHY-0523), resolved by keeping both rows in ID order. The incoming commits
+  (docs, the SHY-0521 express-api lockfile and its test) were reviewed in their
+  own PRs and touch no app code, so the iPhone proof at `df1635ad267` stands.
 
-Reviewed-up-to: 959739240a7
+Reviewed-up-to: 99009bd192a
