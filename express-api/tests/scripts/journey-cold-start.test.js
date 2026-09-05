@@ -26,6 +26,7 @@ const {
   SESSION_ENDED_TEXT,
 } = require(RUNNER);
 const { createIosJourneyDevice } = require('../../scripts/drivers/ios-journey-device');
+const { AppProcessDiedError } = require('../../scripts/drivers/app-process-death');
 
 const TEST_HARDWARE_UDID = '00008150-000954D90A20401C';
 
@@ -650,6 +651,34 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
     expect(reporter.steps[0].result).toContain('J40-first-frame-revoked.png');
     expect(reporter.steps[1].result).toContain(SESSION_ENDED_TEXT);
     expect(reporter.steps[1].result).toMatch(/on read \d+/);
+  });
+
+  test('fails the "told why" step with the process death itself when the app is gone at the verdict', async () => {
+    // SHY-0523: the app ABORTED right after drawing sign-in and WebDriverAgent
+    // relaunched it. launchLog asserts the process before it reads the log, and
+    // that failure must reach the reporter as the death it is, not as the
+    // message timeout a second launch would produce.
+    const device = showing([mainTree]);
+    const reporter = fakeReporter((n) => {
+      if (n === 1) device.show([signInTree]);
+    });
+    const death = new AppProcessDiedError(
+      'after the revoked-session redirect',
+      'pid 42 is gone; WebDriverAgent relaunched the app as pid 43',
+    );
+    device.assertAppAlive = async () => {
+      throw death;
+    };
+
+    await expect(
+      revokedColdStart(device, reporter, { ...pieces(device), watchMs: 5000 }),
+    ).rejects.toBe(death);
+
+    expect(reporter.steps.map((s) => s.name)).toEqual([
+      'Revoked on the server: the room list is STILL what is drawn first',
+      'Revoked: sent back to sign-in AND told why',
+    ]);
+    expect(reporter.steps[1].error).toBe(death);
   });
 
   test('fails the "told why" step, naming the text and the reads, when the message never appears', async () => {
