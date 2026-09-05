@@ -21,6 +21,9 @@ const {
   firstAppFrame,
   uiOps,
   parseNodes,
+  watchForText,
+  revokedColdStart,
+  SESSION_ENDED_TEXT,
 } = require(RUNNER);
 const { createIosJourneyDevice } = require('../../scripts/drivers/ios-journey-device');
 
@@ -310,5 +313,134 @@ describe('the launch log and the network are device operations on BOTH backends'
       await d.setOffline(false);
       expect(switchValue).toBe('0');
     });
+  });
+});
+
+// ── The revoked launch's redirect message (2026-09-05) ─────────────────────
+//
+// On the OnePlus the snackbar "Your session has ended. Please sign in again."
+// was in the kept first frame, yet the step that asserted it went red: it
+// read the screen only after the launch step's screenshots and `advanceUntil`,
+// ~5.6 s after launch, and the snackbar lives ~4 s. A transient message has
+// to be asserted on the frames read WHILE it can exist — the seam is the
+// launch, not a screen that has already moved on.
+
+const SNACKBAR = 'Your session has ended';
+const mainTree = androidXml(['main_roomsTab']);
+const mainWithSnackbar =
+  '<hierarchy>' +
+  '<node resource-id="main_roomsTab" bounds="[0,0][100,100]" clickable="true" />' +
+  '<node text="Your session has ended. Please sign in again." bounds="[0,900][100,1000]" />' +
+  '</hierarchy>';
+const signInTree = androidXml(['persona_picker_open']);
+
+/** A fake phone whose successive reads walk `trees` (the last one repeats). */
+const showing = (initial) => {
+  let trees = initial;
+  let i = 0;
+  return {
+    reads: 0,
+    show(next) {
+      trees = next;
+      i = 0;
+    },
+    async dumpXml() {
+      this.reads += 1;
+      return trees[Math.min(i++, trees.length - 1)];
+    },
+  };
+};
+
+describe('watchForText — a transient message, asserted on the frames read while it can exist', () => {
+  test('a message already on the seed frame costs no read at all', async () => {
+    const device = showing([mainTree]);
+    const r = await watchForText(device, SNACKBAR, 500, { seed: parseNodes(mainWithSnackbar) });
+    expect(r.seen).toBe(true);
+    expect(r.reads).toBe(0);
+    expect(device.reads).toBe(0);
+  });
+
+  test('a message that appears on a later frame is seen, and the read that saw it is counted', async () => {
+    const device = showing([mainTree, mainTree, mainWithSnackbar]);
+    const r = await watchForText(device, SNACKBAR, 5000, { seed: parseNodes(mainTree) });
+    expect(r.seen).toBe(true);
+    expect(r.reads).toBe(3);
+    expect(r.afterMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('a message that never appears is reported, not thrown — the caller says what it means', async () => {
+    const device = showing([mainTree]);
+    const r = await watchForText(device, SNACKBAR, 300);
+    expect(r.seen).toBe(false);
+    expect(r.reads).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('revokedColdStart — the redirect is proven on the frames read while the message exists', () => {
+  const launchFrame = {
+    kind: 'main',
+    nodes: parseNodes(mainTree),
+    afterMs: 120,
+    shot: 'J40-first-frame-revoked.png',
+  };
+  const fakeReporter = (onStepEnd) => ({
+    steps: [],
+    async step(_device, name, fn) {
+      let result;
+      try {
+        result = await fn();
+      } catch (error) {
+        this.steps.push({ name, error });
+        throw error;
+      }
+      this.steps.push({ name, result });
+      onStepEnd(this.steps.length);
+    },
+  });
+  const pieces = (device) => ({
+    coldLaunch: async () => launchFrame,
+    launchLog: async () => ({
+      immediate: 'Main',
+      confirm: 'confirm: refresh FAILED; sessionAlive=false',
+    }),
+    expectLog: (log, immediate, confirmRe) => {
+      if (log.immediate !== immediate || !confirmRe.test(log.confirm))
+        throw new Error(`log mismatch: ${JSON.stringify(log)}`);
+    },
+    drawnFirst: async (frame, expected) => `${expected} drawn ${frame.afterMs}ms after launch`,
+    device,
+  });
+
+  test('passes when the message is on a frame read right after the launch, before sign-in is reached', async () => {
+    // The phone: room list, then the snackbar over it, and (after the launch
+    // step ends) the persona picker — the message is GONE by then.
+    const device = showing([mainTree, mainWithSnackbar]);
+    const reporter = fakeReporter((n) => {
+      if (n === 1) device.show([signInTree]);
+    });
+
+    await revokedColdStart(device, reporter, { ...pieces(device), watchMs: 5000 });
+
+    expect(reporter.steps.map((s) => s.name)).toEqual([
+      'Revoked on the server: the room list is STILL what is drawn first',
+      'Revoked: sent back to sign-in AND told why',
+    ]);
+    expect(reporter.steps[0].result).toContain('J40-first-frame-revoked.png');
+    expect(reporter.steps[1].result).toContain(SESSION_ENDED_TEXT);
+    expect(reporter.steps[1].result).toMatch(/on read \d+/);
+  });
+
+  test('fails the "told why" step, naming the text and the reads, when the message never appears', async () => {
+    const device = showing([mainTree]);
+    const reporter = fakeReporter((n) => {
+      if (n === 1) device.show([signInTree]);
+    });
+
+    await expect(
+      revokedColdStart(device, reporter, { ...pieces(device), watchMs: 300 }),
+    ).rejects.toThrow(/"Your session has ended" never appeared on the \d+ frames? read/);
+
+    expect(reporter.steps[0].result).toBeDefined();
+    expect(reporter.steps[1].error).toBeDefined();
   });
 });

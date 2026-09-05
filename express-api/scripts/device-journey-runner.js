@@ -1519,6 +1519,42 @@ async function waitForText(device, sub, timeoutMs = 8000) {
   );
 }
 
+/**
+ * Watch for a message that may be on screen only briefly, and SAY whether it
+ * was seen — never throw. `seed` is a tree already in hand (the launch frame),
+ * checked before any read so a message that was there from the start costs
+ * nothing. Returns `{ seen, reads, afterMs, where }`; the caller decides what
+ * "not seen" means, because only it knows whether the message was owed.
+ *
+ * `waitForText` throws on a timeout, which is right when the text IS the next
+ * screen. It is wrong for a transient one: that failure has to say how many
+ * frames were read while the message could still have existed (2026-09-05).
+ */
+async function watchForText(device, sub, timeoutMs, { seed = null } = {}) {
+  const started = Date.now();
+  let reads = 0;
+  if (seed && byTextContains(seed, sub)) {
+    return { seen: true, reads, afterMs: 0, where: 'on the launch frame itself' };
+  }
+  const deadline = started + timeoutMs;
+  while (Date.now() < deadline) {
+    const tick = Date.now();
+    const nodes = await dump(device);
+    reads += 1;
+    if (byTextContains(nodes, sub)) {
+      const afterMs = Date.now() - started;
+      return {
+        seen: true,
+        reads,
+        afterMs,
+        where: `on read ${reads}, ${afterMs}ms after the launch frame`,
+      };
+    }
+    await pollGap(tick, device);
+  }
+  return { seen: false, reads, afterMs: Date.now() - started, where: null };
+}
+
 // Persona picker rows carry NO testTag — only visible text (display name,
 // email, cohort). Match the unique email and scroll the dialog when the row
 // sits below the fold (P-10+ start off-screen).
@@ -1936,6 +1972,63 @@ async function firstAppFrame(device, timeoutMs) {
     await sleep(50);
   }
   throw new Error(`the app drew neither the room list nor sign-in within ${timeoutMs}ms of launch`);
+}
+
+/** The one-shot message a revoked session draws over sign-in (ColdStartSequencer's redirect). */
+const SESSION_ENDED_TEXT = 'Your session has ended';
+
+/**
+ * How long after the launch frame the redirect message is watched for. The
+ * confirmation behind the room list fails within ~2 s of launch; the snackbar
+ * it raises then lives ~4 s. Generous, because the cost of the bound is paid
+ * only when the message never comes — which is the failure being looked for.
+ */
+const REDIRECT_WATCH_MS = 15000;
+
+/**
+ * J40's revoked launch: the room list is STILL drawn first from local facts,
+ * the confirmation behind it fails, and the person is sent to sign-in AND told
+ * why.
+ *
+ * The message is watched for INSIDE the launch step, on the frames read
+ * straight after the launch frame, and only judged in the step that owns it.
+ * On the OnePlus (2026-09-05) the snackbar was in the kept first frame and the
+ * "told why" step still went red: it read the screen only after the launch
+ * step's screenshots and `advanceUntil`, ~5.6 s in, and a ~4 s snackbar was
+ * gone. A transient message is asserted on the frames read while it can exist.
+ *
+ * The launch pieces (`coldLaunch`, `launchLog`, `expectLog`, `drawnFirst`)
+ * are the journey's own closures, passed in so this can be driven without a
+ * phone; `watchMs` is injectable for the same reason.
+ */
+async function revokedColdStart(
+  device,
+  reporter,
+  { coldLaunch, launchLog, expectLog, drawnFirst, watchMs = REDIRECT_WATCH_MS },
+) {
+  let redirect = null;
+  await reporter.step(
+    device,
+    'Revoked on the server: the room list is STILL what is drawn first',
+    async () => {
+      const f = await coldLaunch('revoked');
+      redirect = await watchForText(device, SESSION_ENDED_TEXT, watchMs, { seed: f.nodes });
+      return `${await drawnFirst(f, 'main')}, session invalidated beforehand (${f.shot})`;
+    },
+  );
+
+  await reporter.step(device, 'Revoked: sent back to sign-in AND told why', async () => {
+    await advanceUntil(device, atSignIn, 30000, 'SignIn after the revoked session');
+    const log = await launchLog();
+    expectLog(log, 'Main', /^confirm: refresh FAILED; sessionAlive=false/);
+    if (!redirect.seen) {
+      throw new Error(
+        `"${SESSION_ENDED_TEXT}" never appeared on the ${redirect.reads} frame${redirect.reads === 1 ? '' : 's'} read ` +
+          `in the ${redirect.afterMs}ms after the launch frame; the person was sent to sign-in without being told why`,
+      );
+    }
+    return `sign-in reached; "${SESSION_ENDED_TEXT}" was on screen ${redirect.where}; log: ${log.confirm}`;
+  });
 }
 
 /**
@@ -4463,22 +4556,7 @@ const J40 = {
     // that follows.
     await invalidateSession(COLD_START_PERSONA);
     try {
-      await reporter.step(
-        device,
-        'Revoked on the server: the room list is STILL what is drawn first',
-        async () => {
-          const f = await coldLaunch('revoked');
-          return `${await drawnFirst(f, 'main')}, session invalidated beforehand (${f.shot})`;
-        },
-      );
-
-      await reporter.step(device, 'Revoked: sent back to sign-in AND told why', async () => {
-        await advanceUntil(device, atSignIn, 30000, 'SignIn after the revoked session');
-        await waitForText(device, 'Your session has ended', 8000);
-        const log = await launchLog();
-        expectLog(log, 'Main', /^confirm: refresh FAILED; sessionAlive=false/);
-        return `sign-in reached with "Your session has ended. Please sign in again." on screen; log: ${log.confirm}`;
-      });
+      await revokedColdStart(device, reporter, { coldLaunch, launchLog, expectLog, drawnFirst });
     } finally {
       await restoreSession(COLD_START_PERSONA);
     }
@@ -5000,6 +5078,9 @@ module.exports = {
   uiOps,
   // SHY-0500 -- the cold-start journey's pure pieces.
   classifyFirstFrame,
+  watchForText,
+  revokedColdStart,
+  SESSION_ENDED_TEXT,
   summarizeLaunchLog,
   openApp,
   firstAppFrame,
