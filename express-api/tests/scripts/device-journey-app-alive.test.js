@@ -99,20 +99,53 @@ describe('AndroidJourneyDevice.assertAppAlive', () => {
 describe('J40 revoked cold start asserts the app survived the redirect', () => {
   const src = fs.readFileSync(RUNNER, 'utf8');
 
-  test('revokedColdStart checks liveness after sign-in is reached and before it reads the log', () => {
+  test('revokedColdStart reads the log through the liveness-checking launchLog once sign-in is reached', () => {
     const start = src.indexOf('async function revokedColdStart(');
     expect(start).toBeGreaterThan(0);
     const body = src.slice(start, src.indexOf('\n}\n', start));
     const signIn = body.indexOf("'SignIn after the revoked session'");
-    const alive = body.indexOf('await device.assertAppAlive(pkg,');
-    const log = body.indexOf('await launchLog()');
+    const log = body.indexOf("await launchLog('after the revoked-session redirect')");
     expect(signIn).toBeGreaterThan(0);
     expect(log).toBeGreaterThan(signIn);
-    expect(alive).toBeGreaterThan(signIn);
-    expect(alive).toBeLessThan(log);
+    expect(body).not.toContain('device.readAppLog(');
   });
 
-  test('the call site hands revokedColdStart the package it must check', () => {
-    expect(src).toMatch(/await revokedColdStart\(device, reporter, \{[^}]*\bpkg\b[^}]*\}\)/);
+  test('the call site hands revokedColdStart the launchLog that carries the check', () => {
+    expect(src).toMatch(/await revokedColdStart\(device, reporter, \{[^}]*\blaunchLog\b[^}]*\}\)/);
+  });
+});
+
+describe('J40 checks the launched process at EVERY cold-start verdict, not only the revoked one', () => {
+  const src = fs.readFileSync(RUNNER, 'utf8');
+  const j40 = src.slice(
+    src.indexOf('const coldLaunch = async (name) => {'),
+    src.indexOf('module.exports = {'),
+  );
+
+  test('launchLog asserts liveness before it reads the log, so no verdict can skip the check', () => {
+    const def = j40.indexOf('const launchLog = async (label) => {');
+    expect(def).toBeGreaterThan(0);
+    const body = j40.slice(def, j40.indexOf('};', def));
+    const alive = body.indexOf('await device.assertAppAlive(pkg, label)');
+    const read = body.indexOf('device.readAppLog(COLD_START_TAG)');
+    expect(alive).toBeGreaterThan(0);
+    expect(read).toBeGreaterThan(alive);
+  });
+
+  test('the cold-start log is read nowhere else', () => {
+    expect(src.match(/readAppLog\(COLD_START_TAG\)/g)).toHaveLength(1);
+  });
+
+  test('every read names the verdict it checks liveness at', () => {
+    expect(j40).not.toContain('launchLog()');
+    const labels = [...j40.matchAll(/launchLog\('([^']+)'\)/g)].map((m) => m[1]);
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'at the first frame',
+        'after the signed-in confirmation',
+        'after the offline verdict',
+        'after the signed-out cold start',
+      ]),
+    );
   });
 });

@@ -2080,7 +2080,7 @@ const REDIRECT_WATCH_MS = 15000;
 async function revokedColdStart(
   device,
   reporter,
-  { pkg, coldLaunch, launchLog, expectLog, drawnFirst, watchMs = REDIRECT_WATCH_MS },
+  { coldLaunch, launchLog, expectLog, drawnFirst, watchMs = REDIRECT_WATCH_MS },
 ) {
   let redirect = null;
   await reporter.step(
@@ -2095,12 +2095,7 @@ async function revokedColdStart(
 
   await reporter.step(device, 'Revoked: sent back to sign-in AND told why', async () => {
     await advanceUntil(device, atSignIn, 30000, 'SignIn after the revoked session');
-    // SignIn being on screen is not enough: on the iPhone the app ABORTED
-    // 218ms after drawing it (SHY-0523) and WebDriverAgent's session recovery
-    // relaunched it, so the next reads judged a second launch. The process
-    // must be the one the cold launch started.
-    await device.assertAppAlive(pkg, 'after the revoked-session redirect');
-    const log = await launchLog();
+    const log = await launchLog('after the revoked-session redirect');
     expectLog(log, 'Main', /^confirm: refresh FAILED; sessionAlive=false/);
     if (!redirect.seen) {
       throw new Error(
@@ -4568,7 +4563,15 @@ const J40 = {
       const frame = await firstAppFrame(device, 15000);
       return { ...frame, shot: await keepFrame(name) };
     };
-    const launchLog = async () => summarizeLaunchLog(await device.readAppLog(COLD_START_TAG));
+    // Every verdict reads the launch log through here, and a verdict is exactly
+    // where a dead app would slip through: on the iPhone the app ABORTED 218ms
+    // after drawing sign-in (SHY-0523) and WebDriverAgent's session recovery
+    // relaunched it, so the next reads judged a second launch. The process is
+    // asserted to be the one the cold launch started before its log counts.
+    const launchLog = async (label) => {
+      await device.assertAppAlive(pkg, label);
+      return summarizeLaunchLog(await device.readAppLog(COLD_START_TAG));
+    };
     const expectLog = (log, immediate, confirmRe) => {
       if (log.immediate !== immediate) {
         throw new Error(
@@ -4589,7 +4592,7 @@ const J40 = {
     // so, with the read latency, rather than claiming a picture it did not get.
     const drawnFirst = async (frame, expected) => {
       if (frame.kind === expected) return `${expected} drawn ${frame.afterMs}ms after launch`;
-      const log = await launchLog();
+      const log = await launchLog('at the first frame');
       if (log.immediate?.toLowerCase() === expected.toLowerCase()) {
         return (
           `first tree read only ${frame.afterMs}ms after launch already showed "${frame.kind}"; ` +
@@ -4618,7 +4621,7 @@ const J40 = {
       async () => {
         const nodes = await settle(device, 20000);
         if (!anyMainTab(nodes) || atSignIn(nodes)) throw new Error('the room list did not stay');
-        const log = await launchLog();
+        const log = await launchLog('after the signed-in confirmation');
         expectLog(log, 'Main', /^confirmed: claim refreshed/);
         return `log: immediate=${log.immediate}; ${log.confirm}`;
       },
@@ -4648,7 +4651,6 @@ const J40 = {
     await invalidateSession(COLD_START_PERSONA);
     try {
       await revokedColdStart(device, reporter, {
-        pkg,
         coldLaunch,
         launchLog,
         expectLog,
@@ -4681,7 +4683,7 @@ const J40 = {
           if (byTextContains(nodes, 'session has ended')) {
             throw new Error('a transport failure was announced as an ended session');
           }
-          const log = await launchLog();
+          const log = await launchLog('after the offline verdict');
           expectLog(log, 'Main', /^confirm: transport failure, staying unverified/);
           return `${first}; still the room list 8s later, unverified (${f.shot}); log: ${log.confirm}`;
         },
@@ -4704,7 +4706,7 @@ const J40 = {
         }
         const nodes = await settle(device, 20000);
         if (!atSignIn(nodes)) throw new Error('sign-in did not stay');
-        const log = await launchLog();
+        const log = await launchLog('after the signed-out cold start');
         expectLog(log, 'SignIn', null);
         return `sign-in drawn ${f.afterMs}ms after launch, nothing before it (${f.shot}); log: immediate=${log.immediate}`;
       },

@@ -614,10 +614,12 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
   });
   const pieces = (device) => ({
     coldLaunch: async () => launchFrame,
-    launchLog: async () => ({
-      immediate: 'Main',
-      confirm: 'confirm: refresh FAILED; sessionAlive=false',
-    }),
+    // Models J40's launchLog: the process is asserted alive, under the label
+    // the caller gives, before the log is read (SHY-0523).
+    launchLog: async (label) => {
+      await device.assertAppAlive('com.example', label);
+      return { immediate: 'Main', confirm: 'confirm: refresh FAILED; sessionAlive=false' };
+    },
     expectLog: (log, immediate, confirmRe) => {
       if (log.immediate !== immediate || !confirmRe.test(log.confirm))
         throw new Error(`log mismatch: ${JSON.stringify(log)}`);
@@ -636,7 +638,6 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
 
     await revokedColdStart(device, reporter, {
       ...pieces(device),
-      pkg: 'com.example',
       watchMs: 5000,
     });
 
@@ -644,7 +645,7 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
       'Revoked on the server: the room list is STILL what is drawn first',
       'Revoked: sent back to sign-in AND told why',
     ]);
-    // The process is checked once, after the redirect, before the log is read.
+    // The log is read once, through launchLog, under the redirect's label.
     expect(device.aliveChecks).toEqual([['com.example', 'after the revoked-session redirect']]);
     expect(reporter.steps[0].result).toContain('J40-first-frame-revoked.png');
     expect(reporter.steps[1].result).toContain(SESSION_ENDED_TEXT);
