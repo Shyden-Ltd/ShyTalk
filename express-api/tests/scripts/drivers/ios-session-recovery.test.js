@@ -239,6 +239,10 @@ describe('every device command survives a WebDriverAgent restart', () => {
     _listProcesses: 'devicectl, not WDA — the process listing behind assertAppAlive',
     _pullCrashReports: 'idevicecrashreport over USB — a child process, not a session',
     _scratchDir: 'pure — a temp directory for the devicectl JSON and the pulled crash reports',
+    _awaitAirplaneModeSwitch:
+      "runs inside setOffline's withSessionRecovery closure; a lost session propagates out of it",
+    _settingsScreenTitle:
+      "diagnostic read inside setOffline's closure — its own failure is folded into the error text",
   };
 
   /** How to invoke each command that must recover. */

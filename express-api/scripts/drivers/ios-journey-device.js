@@ -72,6 +72,18 @@ const CRASH_REPORT_PULLS = 3;
 // this much older than the launch is still "this launch"; one older than that
 // is an earlier death and must not be pinned on the current step.
 const CRASH_REPORT_CLOCK_SKEW_MS = 60_000;
+// setOffline: `activate_app` for Settings returns before WebDriverAgent's
+// snapshot has moved off the app under test. On the iPhone a lookup 131 ms
+// after activation missed (404); the same lookup 1.5 s later found the switch
+// (2026-09-05, J40 run 5). So the switch is polled for, up to this long.
+const OFFLINE_SWITCH_WAIT_MS = 8000;
+const OFFLINE_SWITCH_POLL_MS = 250;
+// The accessibility identifier is the same in every locale; the label is
+// "Aeroplane Mode" on a UK phone.
+const AIRPLANE_MODE_SWITCH =
+  "type == 'XCUIElementTypeSwitch' AND " +
+  "(name == 'com.apple.settings.airplaneMode' OR label == 'Airplane Mode' OR label == 'Aeroplane Mode')";
+const isElementMissing = (e) => /-> 404\b/.test(String(e?.message));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** devicectl writes its answer — success OR failure — to `--json-output`. */
@@ -396,6 +408,7 @@ class IosDevice {
     settingsTimeoutMs = SETTINGS_TIMEOUT_MS,
     quitTimeoutMs = QUIT_TIMEOUT_MS,
     crashReportRetryMs = CRASH_REPORT_RETRY_MS,
+    offlineSwitchWaitMs = OFFLINE_SWITCH_WAIT_MS,
     // Injected so a test can READ what the driver said without patching the
     // console. The warnings below are part of the contract -- a tolerated
     // lost click, a retyped field -- and a contract has to be assertable.
@@ -451,6 +464,7 @@ class IosDevice {
     // crash right before J40's first-frame read; an error path never sets it.
     this._sessionDroppedOnPurpose = false;
     this._crashReportRetryMs = crashReportRetryMs;
+    this._offlineSwitchWaitMs = offlineSwitchWaitMs;
     this._scratch = null;
     this._size = null;
     this._commandTimeoutMs = commandTimeoutMs;
@@ -1422,6 +1436,12 @@ class IosDevice {
    * answering over USB while the radios are off, which is what lets the
    * journey go on reading the screen. Always returns to the app under test,
    * even when the switch was not found.
+   *
+   * The switch is waited for, not looked up once: activating Settings returns
+   * before WDA's snapshot has moved off the app under test, and the first
+   * lookup misses. When it never appears, the error names the screen Settings
+   * is actually showing, so a run that left Settings on a sub-page reads as
+   * exactly that.
    */
   async setOffline(on) {
     const SETTINGS = 'com.apple.Preferences';
@@ -1429,14 +1449,7 @@ class IosDevice {
     return this.withSessionRecovery(`setOffline(${on})`, async () => {
       await this._post('/appium/device/activate_app', { bundleId: SETTINGS });
       try {
-        const el = await this._post('/element', {
-          using: '-ios predicate string',
-          value:
-            "type == 'XCUIElementTypeSwitch' AND " +
-            "(label == 'Airplane Mode' OR name == 'Airplane Mode')",
-        });
-        const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
-        if (!id) throw new Error('Settings showed no "Airplane Mode" switch');
+        const id = await this._awaitAirplaneModeSwitch();
         const current = String(await this._get(`/element/${id}/attribute/value`));
         if (current !== want) {
           await this._post(`/element/${id}/click`, {});
@@ -1449,6 +1462,55 @@ class IosDevice {
         await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
       }
     });
+  }
+
+  /**
+   * The Airplane Mode switch's element id, polled for until Settings has drawn
+   * it. A 404 from `/element` is "not yet"; any other failure (a lost session
+   * above all) propagates so `withSessionRecovery` sees it.
+   */
+  async _awaitAirplaneModeSwitch() {
+    const waitMs = this._offlineSwitchWaitMs;
+    const started = Date.now();
+    for (;;) {
+      try {
+        const el = await this._post('/element', {
+          using: '-ios predicate string',
+          value: AIRPLANE_MODE_SWITCH,
+        });
+        const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
+        if (id) return id;
+      } catch (e) {
+        if (!isElementMissing(e)) throw e;
+      }
+      const elapsed = Date.now() - started;
+      if (elapsed >= waitMs) {
+        throw new Error(
+          `Settings showed no Airplane Mode switch within ${waitMs}ms; ` +
+            `the screen open in Settings is "${await this._settingsScreenTitle()}"`,
+        );
+      }
+      await sleep(Math.min(OFFLINE_SWITCH_POLL_MS, waitMs / 4, waitMs - elapsed));
+    }
+  }
+
+  /**
+   * What Settings is showing, for the error above. Best effort by design: this
+   * runs while an error is already being raised, so its own failure is
+   * reported inside that error rather than replacing it.
+   */
+  async _settingsScreenTitle() {
+    try {
+      const bar = await this._post('/element', {
+        using: 'class name',
+        value: 'XCUIElementTypeNavigationBar',
+      });
+      const id = bar?.['element-6066-11e4-a52e-4f735466cecf'] || bar?.ELEMENT;
+      if (!id) return '(no navigation bar)';
+      return String(await this._get(`/element/${id}/attribute/name`));
+    } catch (e) {
+      return `(unreadable: ${e.message})`;
+    }
   }
 
   size() {
@@ -1536,6 +1598,7 @@ function createIosJourneyDevice({
   appiumBaseUrl,
   warn,
   crashReportRetryMs,
+  offlineSwitchWaitMs,
 } = {}) {
   const coreDeviceUuid = selectCoreDeviceUuid(udid);
   if (!coreDeviceUuid) {
@@ -1565,6 +1628,7 @@ function createIosJourneyDevice({
     // is how every journey and every test builds this device.
     ...(warn ? { warn } : {}),
     ...(crashReportRetryMs !== undefined ? { crashReportRetryMs } : {}),
+    ...(offlineSwitchWaitMs !== undefined ? { offlineSwitchWaitMs } : {}),
   });
 }
 

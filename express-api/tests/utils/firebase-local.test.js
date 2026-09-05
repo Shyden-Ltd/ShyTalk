@@ -51,6 +51,7 @@ describe('firebase.js local mode', () => {
     // rather than on the code. The sibling firebase.test.js already does this.
     delete process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.METADATA_SERVER_DETECTION;
   });
 
   afterAll(() => {
@@ -61,6 +62,7 @@ describe('firebase.js local mode', () => {
     delete process.env.FIRESTORE_EMULATOR_HOST;
     delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
     delete process.env.FIREBASE_DATABASE_EMULATOR_HOST;
+    delete process.env.METADATA_SERVER_DETECTION;
   });
 
   test('sets emulator env vars when NODE_ENV is local', () => {
@@ -73,10 +75,24 @@ describe('firebase.js local mode', () => {
     expect(process.env.FIRESTORE_EMULATOR_HOST).toBe('localhost:8080');
     expect(process.env.FIREBASE_AUTH_EMULATOR_HOST).toBe('localhost:9099');
     expect(process.env.FIREBASE_DATABASE_EMULATOR_HOST).toBe('localhost:9000');
+    // Against the emulators there are no credentials, so google-auth-library
+    // would probe the GCE metadata server and print MetadataLookupWarning on
+    // every boot; 'none' tells gcp-metadata not to look.
+    expect(process.env.METADATA_SERVER_DETECTION).toBe('none');
 
     // Calling again should be idempotent
     configureLocalEmulators();
     expect(process.env.FIRESTORE_EMULATOR_HOST).toBe('localhost:8080');
+  });
+
+  test('keeps an operator-set METADATA_SERVER_DETECTION in local mode', () => {
+    process.env.NODE_ENV = 'local';
+    process.env.METADATA_SERVER_DETECTION = 'ping-only';
+    setupFirebaseAdminMock(0);
+
+    require('../../src/utils/firebase');
+
+    expect(process.env.METADATA_SERVER_DETECTION).toBe('ping-only');
   });
 
   test('does not set emulator env vars in production', () => {
@@ -89,6 +105,8 @@ describe('firebase.js local mode', () => {
     expect(process.env.FIRESTORE_EMULATOR_HOST).toBeUndefined();
     expect(process.env.FIREBASE_AUTH_EMULATOR_HOST).toBeUndefined();
     expect(process.env.FIREBASE_DATABASE_EMULATOR_HOST).toBeUndefined();
+    // Production detects its platform for real; the local shortcut must not leak.
+    expect(process.env.METADATA_SERVER_DETECTION).toBeUndefined();
 
     // Calling explicitly should still not set them
     configureLocalEmulators();

@@ -2149,6 +2149,9 @@ async function localAdminAuth(deps = {}) {
     );
   }
   env.FIREBASE_AUTH_EMULATOR_HOST = env.FIREBASE_AUTH_EMULATOR_HOST || 'localhost:9099';
+  // No credentials here either: without this, google-auth-library probes the
+  // GCE metadata server and prints MetadataLookupWarning into the run log.
+  env.METADATA_SERVER_DETECTION = env.METADATA_SERVER_DETECTION || 'none';
   const app =
     getApps().find((a) => a.name === LOCAL_AUTH_EMULATOR_APP) ||
     initializeApp({ projectId }, LOCAL_AUTH_EMULATOR_APP);

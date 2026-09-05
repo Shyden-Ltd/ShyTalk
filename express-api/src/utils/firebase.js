@@ -28,6 +28,11 @@ function configureLocalEmulators() {
     process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
     process.env.FIREBASE_AUTH_EMULATOR_HOST = 'localhost:9099';
     process.env.FIREBASE_DATABASE_EMULATOR_HOST = 'localhost:9000';
+    // There are no credentials against the emulators, so google-auth-library
+    // would probe the GCE metadata server and gcp-metadata would print
+    // MetadataLookupWarning on every boot. 'none' turns the probe off; a value
+    // the operator already chose wins.
+    process.env.METADATA_SERVER_DETECTION = process.env.METADATA_SERVER_DETECTION || 'none';
   }
 }
 

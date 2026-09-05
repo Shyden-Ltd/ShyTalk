@@ -46,6 +46,9 @@ describe('the journey runner disables persona accounts only inside the Auth emul
     const { deps, calls } = harness({});
     const auth = await localAdminAuth(deps);
     expect(deps.env.FIREBASE_AUTH_EMULATOR_HOST).toBe('localhost:9099');
+    // No credentials in the emulator, so google-auth-library would otherwise
+    // probe the GCE metadata server and print MetadataLookupWarning mid-run.
+    expect(deps.env.METADATA_SERVER_DETECTION).toBe('none');
     expect(calls.initializeApp).toEqual([
       { options: { projectId: 'demo-shytalk' }, name: LOCAL_AUTH_EMULATOR_APP },
     ]);

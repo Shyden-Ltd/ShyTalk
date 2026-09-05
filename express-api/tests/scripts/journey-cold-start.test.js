@@ -240,43 +240,59 @@ describe('the launch log and the network are device operations on BOTH backends'
   });
 
   describe('iOS', () => {
-    test('the launch log is captured from the device syslog for the app process', async () => {
+    test('the launch log is read from the persisted device archive, from the clock mark clearAppLog took', async () => {
       const d = ios();
-      const spawned = [];
-      const listeners = [];
-      d._spawn = (bin, args) => {
-        spawned.push([bin, args]);
-        return {
-          stdout: { on: (ev, cb) => ev === 'data' && listeners.push(cb) },
-          stderr: { on: () => {} },
-          on: () => {},
-          kill: () => {
-            spawned.push(['kill']);
-          },
-        };
+      const ran = [];
+      // The phone's own clock at clearAppLog(); the device stamps its log with
+      // it, so the mark must come from the phone, not the Mac.
+      const MARK = 1757050000.25;
+      const stamp = (offsetSeconds) => {
+        const iso = new Date((MARK + offsetSeconds) * 1000).toISOString();
+        return `${iso.slice(0, 10)} ${iso.slice(11, 23)}000+0000`;
+      };
+      const before = `${stamp(-1)} 0x1 Default 0x0 501 0 iosApp: D/ColdStartSequencer: from the previous launch`;
+      const wanted = `${stamp(2)} 0x1 Default 0x0 501 0 iosApp: D/ColdStartSequencer: immediate: destination=Main (no I/O)`;
+      const other = `${stamp(3)} 0x1 Default 0x0 501 0 iosApp: something else`;
+      d._run = (bin, args) => {
+        ran.push([bin, args]);
+        if (bin === 'ideviceinfo') return `${MARK}\n`;
+        if (bin === '/usr/bin/log') return `${before}\n${wanted}\n${other}\n`;
+        return '';
       };
       await d.clearAppLog();
-      expect(spawned[0][0]).toBe('idevicesyslog');
+      expect(ran).toEqual([
+        ['ideviceinfo', ['-u', TEST_HARDWARE_UDID, '-k', 'TimeIntervalSince1970']],
+      ]);
+
+      const lines = await d.readAppLog('ColdStartSequencer');
+      // Only the tagged line stamped AFTER the mark: the archive holds the
+      // previous launch too, and idevicesyslog's own start-time is coarse.
+      expect(lines).toEqual([wanted]);
+      const [, archive, untar, show] = ran;
+      expect(archive[0]).toBe('idevicesyslog');
+      expect(archive[1]).toEqual([
+        '-u',
+        TEST_HARDWARE_UDID,
+        'archive',
+        expect.stringMatching(/device-log\.tar$/),
+        '--start-time',
+        String(Math.floor(MARK) - 2),
+      ]);
+      expect(untar[0]).toBe('tar');
+      expect(show[0]).toBe('/usr/bin/log');
       // The process is the Xcode target's executable, `iosApp`; a capture
       // filtered on the display name returned nothing from the app.
-      expect(spawned[0][1]).toEqual(['-u', TEST_HARDWARE_UDID, '-p', 'iosApp']);
-      listeners.forEach((cb) =>
-        cb(
-          Buffer.from(
-            'Sep 4 ShyTalk[1] <Notice>: D/ColdStartSequencer: immediate: destination=Main (no I/O)\n' +
-              'Sep 4 ShyTalk[1] <Notice>: something else\n',
-          ),
-        ),
+      expect(show[1]).toEqual(
+        expect.arrayContaining(['--archive', '--predicate', 'process == "iosApp"', '--start']),
       );
-      const lines = await d.readAppLog('ColdStartSequencer');
-      expect(lines).toEqual([
-        'Sep 4 ShyTalk[1] <Notice>: D/ColdStartSequencer: immediate: destination=Main (no I/O)',
-      ]);
-      // A read leaves the capture streaming — J40 reads the same launch twice
-      // (review, 2026-09-04). The next clear is what ends it.
-      expect(spawned.some((s) => s[0] === 'kill')).toBe(false);
-      await d.clearAppLog();
-      expect(spawned.filter((s) => s[0] === 'kill')).toHaveLength(1);
+      expect(show[1][show[1].indexOf('--start') + 1]).toMatch(
+        /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+      );
+    });
+    test('clearAppLog refuses a device clock it cannot read', async () => {
+      const d = ios();
+      d._run = () => 'nonsense';
+      await expect(d.clearAppLog()).rejects.toThrow(/device clock: "nonsense"/);
     });
     test('readAppLog before clearAppLog is a programming error, not an empty log', async () => {
       await expect(ios().readAppLog('ColdStartSequencer')).rejects.toThrow(/clearAppLog/);
@@ -313,6 +329,85 @@ describe('the launch log and the network are device operations on BOTH backends'
       await d.setOffline(false);
       expect(switchValue).toBe('0');
     });
+
+    // ── The switch is not there the instant Settings is activated (2026-09-05) ─
+    //
+    // On the iPhone, `activate_app` for Settings returns before WebDriverAgent's
+    // snapshot has moved off ShyTalk: an `/element` lookup 131 ms later misses
+    // (404), the same lookup 1.5 s later finds the switch. J40 on the iPhone
+    // reached the offline step for the first time at run 5 and died right
+    // there, outside any step, with nothing but "POST /element -> 404".
+    const NOT_FOUND = new Error(
+      'POST /element -> 404: An element could not be located on the page using the given search parameters.',
+    );
+    const isAirplaneLookup = (p, body) =>
+      p === '/element' && /airplaneMode|Airplane Mode/.test(String(body?.value));
+    const iosWaiting = () =>
+      createIosJourneyDevice({
+        udid: 'A'.repeat(36),
+        hardwareUdid: TEST_HARDWARE_UDID,
+        bundleId: 'com.example',
+        offlineSwitchWaitMs: 40,
+      });
+
+    test('setOffline waits for Settings to draw the Airplane Mode switch instead of failing on the first miss', async () => {
+      const d = iosWaiting();
+      const posts = [];
+      let lookups = 0;
+      let switchValue = '0';
+      d._post = async (p, body) => {
+        posts.push([p, body]);
+        if (isAirplaneLookup(p, body)) {
+          lookups += 1;
+          if (lookups < 3) throw NOT_FOUND;
+          return { ELEMENT: 'sw1' };
+        }
+        if (p === '/element/sw1/click') switchValue = switchValue === '0' ? '1' : '0';
+        return {};
+      };
+      d._get = async (p) => (p === '/element/sw1/attribute/value' ? switchValue : null);
+      await d.setOffline(true);
+      expect(lookups).toBeGreaterThanOrEqual(3);
+      expect(switchValue).toBe('1');
+      // The switch's accessibility identifier is stable across locales; a UK
+      // phone labels it "Aeroplane Mode". The label alone would miss it.
+      const [, lookup] = posts.find(([p, b]) => isAirplaneLookup(p, b));
+      expect(lookup.value).toMatch(/name == 'com\.apple\.settings\.airplaneMode'/);
+      expect(posts[posts.length - 1]).toEqual([
+        '/appium/device/activate_app',
+        { bundleId: 'com.example' },
+      ]);
+    });
+
+    test('setOffline names the Settings screen when the switch never appears', async () => {
+      const d = iosWaiting();
+      const posts = [];
+      d._post = async (p, body) => {
+        posts.push([p, body]);
+        if (isAirplaneLookup(p, body)) throw NOT_FOUND;
+        if (p === '/element') return { ELEMENT: 'nav1' };
+        return {};
+      };
+      d._get = async (p) => (p === '/element/nav1/attribute/name' ? 'Developer' : null);
+      await expect(d.setOffline(true)).rejects.toThrow(
+        /no Airplane Mode switch within 40ms; the screen open in Settings is "Developer"/,
+      );
+      // Still comes back to the app under test, as the contract says.
+      expect(posts[posts.length - 1]).toEqual([
+        '/appium/device/activate_app',
+        { bundleId: 'com.example' },
+      ]);
+    });
+
+    test('setOffline lets a lost WebDriverAgent session surface instead of polling past it', async () => {
+      const d = iosWaiting();
+      d._post = async (p, body) => {
+        if (isAirplaneLookup(p, body)) throw new Error('fetch failed: ECONNREFUSED');
+        return {};
+      };
+      d._get = async () => null;
+      await expect(d.setOffline(true)).rejects.toThrow(/ECONNREFUSED/);
+    });
   });
 });
 
@@ -340,6 +435,7 @@ const showing = (initial) => {
   let i = 0;
   return {
     reads: 0,
+    aliveChecks: [],
     show(next) {
       trees = next;
       i = 0;
@@ -347,6 +443,12 @@ const showing = (initial) => {
     async dumpXml() {
       this.reads += 1;
       return trees[Math.min(i++, trees.length - 1)];
+    },
+    // The runner asks whether the app process survived the redirect before it
+    // reads the launch log (SHY-0500 run 5: a relaunched app read as a pass).
+    async assertAppAlive(pkg, label) {
+      this.aliveChecks.push([pkg, label]);
+      return { pid: 1 };
     },
   };
 };
@@ -419,12 +521,18 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
       if (n === 1) device.show([signInTree]);
     });
 
-    await revokedColdStart(device, reporter, { ...pieces(device), watchMs: 5000 });
+    await revokedColdStart(device, reporter, {
+      ...pieces(device),
+      pkg: 'com.example',
+      watchMs: 5000,
+    });
 
     expect(reporter.steps.map((s) => s.name)).toEqual([
       'Revoked on the server: the room list is STILL what is drawn first',
       'Revoked: sent back to sign-in AND told why',
     ]);
+    // The process is checked once, after the redirect, before the log is read.
+    expect(device.aliveChecks).toEqual([['com.example', 'after the revoked-session redirect']]);
     expect(reporter.steps[0].result).toContain('J40-first-frame-revoked.png');
     expect(reporter.steps[1].result).toContain(SESSION_ENDED_TEXT);
     expect(reporter.steps[1].result).toMatch(/on read \d+/);
@@ -442,5 +550,8 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
 
     expect(reporter.steps[0].result).toBeDefined();
     expect(reporter.steps[1].error).toBeDefined();
+    // A dead process would have been reported as a death, not as "never told
+    // why": the liveness check runs before the verdict on the message.
+    expect(device.aliveChecks).toHaveLength(1);
   });
 });
