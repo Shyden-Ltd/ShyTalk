@@ -12,6 +12,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.guardedSnapshots
 import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.firestore.dataMap
@@ -83,7 +84,7 @@ class IosPrivateMessageRepositoryImpl(
                     "crossCohortAtMigration" equalTo false,
                 )
             }.orderBy("lastMessageAt", Direction.DESCENDING)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
@@ -148,7 +149,7 @@ class IosPrivateMessageRepositoryImpl(
         firestore
             .collection("conversations/$conversationId/userSettings")
             .document(userId)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 if (!snapshot.exists) {
                     ConversationSettings.default(userId)
@@ -166,7 +167,7 @@ class IosPrivateMessageRepositoryImpl(
             .collection("conversations/$conversationId/messages")
             .orderBy("createdAt", Direction.DESCENDING)
             .limit(limit)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents
                     .mapNotNull { doc ->
