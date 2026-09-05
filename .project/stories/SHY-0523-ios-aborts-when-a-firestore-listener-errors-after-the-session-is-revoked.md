@@ -185,3 +185,28 @@ instead of vanishing, so that I understand what happened and can act on it.
   access path — it is the guard the repositories call instead of
   `Query.snapshots` — so the baseline was regenerated (Firestore 17 → 18).
   The entry leaves again when the iOS listeners move behind the Express API.
+
+- 2026-09-05 14:30 WIB — **Device-proven again at the SHY-0500 head** (iPhone
+  run 9, `journey-results/runs/local-2026-09-05T07-20-39-776Z`, build
+  `65bc19f7403`, which contains `b588919f303` + `959739240a7`): J40 15/15 —
+  the revoked-session redirect drew sign-in at 526 ms and the app stayed alive
+  through the offline and signed-out scenarios; `idevicecrashreport` before
+  and after the run listed the same 28 retired reports and no new
+  `iosApp-*.ips`. Runner side: `journey-cold-start.test.js` now pins that a
+  process death at the verdict reaches the reporter as the death itself
+  (`674c33b539c`, on the SHY-0500 branch).
+- 2026-09-05 15:30 WIB — **Review round 1 (inline, `origin/develop..959739240a7`)
+  — CLEAN.** Checked: no raw `.snapshots` code line remains in `iosMain`
+  outside `GuardedSnapshots.kt` (the one other hit is a SHY-0185 comment, which
+  the pin's `codeLines` drops); all six repositories call `guardedSnapshots`;
+  the pin anchors on the guard file existing, ≥ 2 raw uses inside it, > 20
+  iosMain sources and ≥ 1 guarded call, so a moved or deleted file cannot pass
+  it vacuously; `completeOnListenerError` logs WARN naming the listener and
+  completes the Flow (no silent swallow), rethrows a fatal `Error` and leaves
+  cancellation to `catch`; `ListenerFlowCompletionTest` covers the error path
+  with the real `PERMISSION_DENIED` message, pass-through, fatal `Error` and
+  cancellation; the baseline entry sits in sorted position and wraps listeners
+  that were already in the baseline. Minor, accepted: a `Query` listener logs
+  only "query" because gitlive exposes no path for it (documented in KDoc).
+
+Reviewed-up-to: 959739240a7
