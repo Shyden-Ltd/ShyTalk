@@ -297,17 +297,49 @@ describe('the launch log and the network are device operations on BOTH backends'
     test('readAppLog before clearAppLog is a programming error, not an empty log', async () => {
       await expect(ios().readAppLog('ColdStartSequencer')).rejects.toThrow(/clearAppLog/);
     });
-    test('setOffline drives the Airplane Mode switch in Settings and comes back', async () => {
-      const d = ios();
+    // The Settings row IS the switch element (runs 6 and 7, 2026-09-05):
+    // WebDriverAgent reports one XCUIElementTypeSwitch 380 points wide, so its
+    // element click lands on the label and iOS does nothing. The 51-point
+    // toggle control sits at the trailing edge behind about 16 points of
+    // padding, and only a touch inside it flips the switch, exactly like the
+    // phone. These fakes are that strict on purpose.
+    const SWITCH_ROW = { x: 20, y: 349, width: 380, height: 50 };
+    const toggleHit = (row, at) =>
+      Boolean(at) &&
+      at.x >= row.x + row.width - 67 &&
+      at.x <= row.x + row.width - 16 &&
+      at.y >= row.y &&
+      at.y <= row.y + row.height;
+    const pointerAt = (body) => {
+      const move = body?.actions?.[0]?.actions?.find((a) => a.type === 'pointerMove');
+      return move ? { x: move.x, y: move.y } : null;
+    };
+    const switchRowFake = (d, row = SWITCH_ROW) => {
       const posts = [];
       let switchValue = '0';
       d._post = async (p, body) => {
         posts.push([p, body]);
         if (p === '/element') return { ELEMENT: 'sw1' };
-        if (p === '/element/sw1/click') switchValue = switchValue === '0' ? '1' : '0';
+        if (p === '/actions' && toggleHit(row, pointerAt(body))) {
+          switchValue = switchValue === '0' ? '1' : '0';
+        }
         return {};
       };
-      d._get = async (p) => (p === '/element/sw1/attribute/value' ? switchValue : null);
+      d._get = async (p) => {
+        if (p === '/element/sw1/attribute/value') return switchValue;
+        if (p === '/element/sw1/rect') return { ...row };
+        return null;
+      };
+      return {
+        posts,
+        taps: () => posts.filter(([p]) => p === '/actions').map(([, b]) => pointerAt(b)),
+        current: () => switchValue,
+      };
+    };
+    test('setOffline drives the Airplane Mode switch in Settings and comes back', async () => {
+      const d = ios();
+      const sw = switchRowFake(d);
+      const { posts } = sw;
       await d.setOffline(true);
       expect(posts[0]).toEqual([
         '/appium/device/activate_app',
@@ -316,8 +348,11 @@ describe('the launch log and the network are device operations on BOTH backends'
       expect(
         posts.find(([p, b]) => p === '/element' && /Airplane Mode/.test(b.value)),
       ).toBeTruthy();
-      expect(posts.some(([p]) => p === '/element/sw1/click')).toBe(true);
-      expect(switchValue).toBe('1');
+      // One touch, 40 points in from the row's trailing edge on its vertical
+      // centre — never WebDriverAgent's element click, which lands on the label.
+      expect(posts.some(([p]) => p === '/element/sw1/click')).toBe(false);
+      expect(sw.taps()).toEqual([{ x: 360, y: 374 }]);
+      expect(sw.current()).toBe('1');
       expect(posts[posts.length - 1]).toEqual([
         '/appium/device/activate_app',
         { bundleId: 'com.example' },
@@ -325,9 +360,17 @@ describe('the launch log and the network are device operations on BOTH backends'
       // Already on: a second call must not toggle it back off.
       posts.length = 0;
       await d.setOffline(true);
-      expect(posts.some(([p]) => p === '/element/sw1/click')).toBe(false);
+      expect(sw.taps()).toEqual([]);
       await d.setOffline(false);
-      expect(switchValue).toBe('0');
+      expect(sw.current()).toBe('0');
+    });
+    test('setOffline places the tap from the frame the phone reports, not a fixed point', async () => {
+      const d = ios();
+      const wideRow = { x: 40, y: 500, width: 700, height: 44 };
+      const sw = switchRowFake(d, wideRow);
+      await d.setOffline(true);
+      expect(sw.taps()).toEqual([{ x: 700, y: 522 }]);
+      expect(sw.current()).toBe('1');
     });
 
     // ── The switch is not there the instant Settings is activated (2026-09-05) ─
@@ -360,19 +403,23 @@ describe('the launch log and the network are device operations on BOTH backends'
     // The switch now gets a settle window to report the new value, and a tap
     // that missed is repeated once; the second miss is the failure.
     const switchThatFlipsOnTap = (d, flipOnTap, { staleReadsAfterTap = 0 } = {}) => {
-      const clicks = [];
+      const taps = [];
       let value = '0';
       let staleReadsLeft = 0;
       d._post = async (p, body) => {
         if (isAirplaneLookup(p, body)) return { ELEMENT: 'sw1' };
         if (p === '/element/sw1/click') {
-          clicks.push(body);
-          if (clicks.length === flipOnTap) value = value === '0' ? '1' : '0';
+          throw new Error('the element click lands on the label; tap the toggle control');
+        }
+        if (p === '/actions') {
+          taps.push(pointerAt(body));
+          if (taps.length === flipOnTap) value = value === '0' ? '1' : '0';
           staleReadsLeft = staleReadsAfterTap;
         }
         return {};
       };
       d._get = async (p) => {
+        if (p === '/element/sw1/rect') return { ...SWITCH_ROW };
         if (p !== '/element/sw1/attribute/value') return null;
         if (staleReadsLeft > 0) {
           staleReadsLeft -= 1;
@@ -380,20 +427,20 @@ describe('the launch log and the network are device operations on BOTH backends'
         }
         return value;
       };
-      return { clicks, current: () => value };
+      return { taps, current: () => value };
     };
     test('setOffline lets a tapped switch settle: a stale value right after the tap is polled, not judged', async () => {
       const d = iosWaiting();
       const sw = switchThatFlipsOnTap(d, 1, { staleReadsAfterTap: 2 });
       await d.setOffline(true);
-      expect(sw.clicks).toHaveLength(1);
+      expect(sw.taps).toHaveLength(1);
       expect(sw.current()).toBe('1');
     });
     test('setOffline taps once more when the first tap misses', async () => {
       const d = iosWaiting();
       const sw = switchThatFlipsOnTap(d, 2);
       await d.setOffline(true);
-      expect(sw.clicks).toHaveLength(2);
+      expect(sw.taps).toHaveLength(2);
       expect(sw.current()).toBe('1');
     });
     test('setOffline stops after the second miss, names both taps, and still comes back to the app', async () => {
@@ -406,7 +453,7 @@ describe('the launch log and the network are device operations on BOTH backends'
         return post(p, body);
       };
       await expect(d.setOffline(true)).rejects.toThrow(/reads 0 after 2 taps; wanted 1/);
-      expect(sw.clicks).toHaveLength(2);
+      expect(sw.taps).toHaveLength(2);
       expect(activated).toEqual(['com.apple.Preferences', 'com.example']);
     });
 
@@ -422,10 +469,16 @@ describe('the launch log and the network are device operations on BOTH backends'
           if (lookups < 3) throw NOT_FOUND;
           return { ELEMENT: 'sw1' };
         }
-        if (p === '/element/sw1/click') switchValue = switchValue === '0' ? '1' : '0';
+        if (p === '/actions' && toggleHit(SWITCH_ROW, pointerAt(body))) {
+          switchValue = switchValue === '0' ? '1' : '0';
+        }
         return {};
       };
-      d._get = async (p) => (p === '/element/sw1/attribute/value' ? switchValue : null);
+      d._get = async (p) => {
+        if (p === '/element/sw1/attribute/value') return switchValue;
+        if (p === '/element/sw1/rect') return { ...SWITCH_ROW };
+        return null;
+      };
       await d.setOffline(true);
       expect(lookups).toBeGreaterThanOrEqual(3);
       expect(switchValue).toBe('1');

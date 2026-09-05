@@ -82,6 +82,11 @@ const OFFLINE_SWITCH_POLL_MS = 250;
 // setOffline will spend before calling the switch unresponsive.
 const OFFLINE_SETTLE_MS = 3000;
 const OFFLINE_TAPS = 2;
+// Where the toggle control sits inside a Settings switch row: the row is one
+// XCUIElementTypeSwitch 380 points wide on the iPhone, the 51-point control is
+// at its trailing edge behind about 16 points of padding, so this far in from
+// the frame's right edge lands in the control's middle (run 7, 2026-09-05).
+const OFFLINE_SWITCH_KNOB_INSET = 40;
 // The accessibility identifier is the same in every locale; the label is
 // "Aeroplane Mode" on a UK phone.
 const AIRPLANE_MODE_SWITCH =
@@ -1010,22 +1015,27 @@ class IosDevice {
    * an identifier should go through `tapElement`.
    */
   async tap(x, y) {
-    return this.withSessionRecovery(`tap(${Math.round(x)},${Math.round(y)})`, async () => {
-      await this._post('/actions', {
-        actions: [
-          {
-            type: 'pointer',
-            id: 'finger1',
-            parameters: { pointerType: 'touch' },
-            actions: [
-              { type: 'pointerMove', duration: 0, x: Math.round(x), y: Math.round(y) },
-              { type: 'pointerDown', button: 0 },
-              { type: 'pause', duration: 60 },
-              { type: 'pointerUp', button: 0 },
-            ],
-          },
-        ],
-      });
+    return this.withSessionRecovery(`tap(${Math.round(x)},${Math.round(y)})`, () =>
+      this._tapPoint(x, y),
+    );
+  }
+
+  /** One touch at a screen point, as a W3C pointer action. */
+  async _tapPoint(x, y) {
+    await this._post('/actions', {
+      actions: [
+        {
+          type: 'pointer',
+          id: 'finger1',
+          parameters: { pointerType: 'touch' },
+          actions: [
+            { type: 'pointerMove', duration: 0, x: Math.round(x), y: Math.round(y) },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pause', duration: 60 },
+            { type: 'pointerUp', button: 0 },
+          ],
+        },
+      ],
     });
   }
 
@@ -1449,10 +1459,11 @@ class IosDevice {
    * is actually showing, so a run that left Settings on a sub-page reads as
    * exactly that.
    *
-   * The tap is judged by the switch's value, but not the instant after: XCUITest
-   * can report the pre-tap value for a moment, and a tap that lands while
-   * Settings is still sliding in (run 6, 2026-09-05) does not register at all.
-   * So the value is polled for up to `offlineSettleMs`, a tap that changed
+   * The tap is a touch on the toggle control, placed from the frame the phone
+   * reports: WebDriverAgent hands back the whole Settings row as the switch, so
+   * its element click lands on the label and iOS does nothing (runs 6 and 7,
+   * 2026-09-05). The value is then polled for up to `offlineSettleMs`, because
+   * XCUITest can report the pre-tap value for a moment; a tap that changed
    * nothing is repeated once, and the second miss is the failure.
    */
   async setOffline(on) {
@@ -1468,7 +1479,7 @@ class IosDevice {
           if (taps === OFFLINE_TAPS) {
             throw new Error(`Airplane Mode reads ${value} after ${taps} taps; wanted ${want}`);
           }
-          await this._post(`/element/${id}/click`, {});
+          await this._tapSwitchKnob(id);
           taps += 1;
           value = await this._awaitAirplaneModeValue(id, want);
         }
@@ -1483,9 +1494,19 @@ class IosDevice {
   }
 
   /**
+   * One touch on the toggle control of a Settings switch row, placed from the
+   * frame the phone reports rather than the element's centre — see
+   * OFFLINE_SWITCH_KNOB_INSET.
+   */
+  async _tapSwitchKnob(id) {
+    const rect = await this._get(`/element/${id}/rect`);
+    await this._tapPoint(rect.x + rect.width - OFFLINE_SWITCH_KNOB_INSET, rect.y + rect.height / 2);
+  }
+
+  /**
    * The switch's value once it has had `offlineSettleMs` to report a tap:
    * XCUITest can hand back the pre-tap value for a moment, and a tap that
-   * landed while Settings was still sliding in never changes it at all. Returns
+   * missed the toggle control never changes it at all. Returns
    * the last value read, wanted or not, so the caller can decide to tap again.
    */
   async _awaitAirplaneModeValue(id, want) {
