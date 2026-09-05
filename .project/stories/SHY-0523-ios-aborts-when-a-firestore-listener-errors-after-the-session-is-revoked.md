@@ -172,3 +172,16 @@ instead of vanishing, so that I understand what happened and can act on it.
 - 2026-09-05 10:50 WIB — **Filed** from the SHY-0500 iPhone J40 crash analysis:
   crash report `iosApp-2026-09-05-102748.ips`, launchd `exited due to SIGABRT`
   at 10:27:47.047, 218 ms after `Redirect(screen=SignIn, reason=SESSION_EXPIRED)`.
+- 2026-09-05 12:20 WIB — **Device-proven on the iPhone** (SHY-0500 run 5, the
+  branch merged into `story/SHY-0500-instant-cold-start` at `d1e74846a62`):
+  J40 walked the revoked-session redirect and the following steps 8-13 with
+  no new `iosApp-*.ips` in the run window; the SIGABRT is gone. J40 then
+  failed at the offline step for an unrelated runner defect (WebDriverAgent's
+  snapshot lags `activate_app` for Settings), fixed on the SHY-0500 branch.
+- 2026-09-05 12:20 WIB — **Ratchet finding**: PR #2156's `lint` and
+  `sonarcloud` jobs failed because `scripts/check-no-direct-backend.js` found
+  `core/util/GuardedSnapshots.kt` (it imports `dev.gitlive.firebase.firestore`)
+  outside `scripts/direct-backend-baseline.json`. The file adds no backend
+  access path — it is the guard the repositories call instead of
+  `Query.snapshots` — so the baseline was regenerated (Firestore 17 → 18).
+  The entry leaves again when the iOS listeners move behind the Express API.
