@@ -46,6 +46,9 @@ const HELPER_FILES = new Set([
   // drive nothing; the iOS driver and the runner's Android Device call them.
   'ios-crash-report.js',
   'app-process-death.js',
+  // SHY-0500 (2026-09-05): the one place a driver or the runner waits on the
+  // clock — pollUntil(probe, accept, bound). A wait primitive, not a driver.
+  'poll-until.js',
   // SHY-0328: shared webSignIn sequence, wired into all 7 web drivers. It owns
   // the auth steps, never page acquisition, so it is a helper and not a driver.
   'web-sign-in.js',

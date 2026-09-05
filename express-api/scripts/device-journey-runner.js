@@ -62,6 +62,7 @@ const path = require('path');
 const admin = require('firebase-admin');
 const { createIosJourneyDevice, selectCoreDeviceUuid } = require('./drivers/ios-journey-device');
 const { AppProcessDiedError } = require('./drivers/app-process-death');
+const { pollUntil } = require('./drivers/poll-until');
 const {
   createAndroidSourceSession,
   ANDROID_SOURCE_UNAVAILABLE,
@@ -295,7 +296,18 @@ function parseArgs(argv) {
   return a;
 }
 
+// SHY-0245 debt: every call to this `sleep` is a fixed-duration wait the
+// ratchet now counts (scripts/no-test-sleeps-baseline.json holds the number so
+// it can only shrink). New waits go through pollUntil with a named interval.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// How often the cold-start steps look again: the first frame changes fast and
+// is cheap to dump; the room list arrives over the network.
+const FIRST_FRAME_POLL_MS = 50;
+const ROOM_LIST_POLL_MS = 300;
+const ROOM_LIST_WAIT_MS = 15000;
+// How long an offline launch must stay on the room list to count as kept
+// there. The soak IS the check, so its length is the requested duration.
+const OFFLINE_SOAK_MS = 8000;
 
 // --------------------------------------------------------------------------
 // adb primitives (all pinned to one serial)
@@ -2040,13 +2052,15 @@ async function openApp(device, pkg) {
  */
 async function firstAppFrame(device, timeoutMs) {
   const started = Date.now();
-  const deadline = started + timeoutMs;
-  while (Date.now() < deadline) {
-    const nodes = await dump(device);
-    const kind = classifyFirstFrame(nodes);
-    if (kind !== 'blank') return { kind, nodes, afterMs: Date.now() - started };
-    await sleep(50);
-  }
+  const frame = await pollUntil(
+    async () => {
+      const nodes = await dump(device);
+      return { kind: classifyFirstFrame(nodes), nodes, afterMs: Date.now() - started };
+    },
+    (f) => f.kind !== 'blank',
+    { intervalMs: FIRST_FRAME_POLL_MS, deadlineMs: timeoutMs },
+  );
+  if (frame.kind !== 'blank') return frame;
   throw new Error(`the app drew neither the room list nor sign-in within ${timeoutMs}ms of launch`);
 }
 
@@ -4631,16 +4645,21 @@ const J40 = {
       device,
       'Signed in: private data reaches the room list without the shell having waited',
       async () => {
-        const deadline = Date.now() + 15000;
-        let seen = null;
-        while (Date.now() < deadline && !seen) {
-          const nodes = await dump(device);
-          const card = byIdPrefix(nodes, 'roomList_roomCard_');
-          if (card) seen = card.id;
-          else if (byId(nodes, 'roomList_emptyState')) seen = 'roomList_emptyState';
-          else await sleep(300);
+        const seen = await pollUntil(
+          async () => {
+            const nodes = await dump(device);
+            const card = byIdPrefix(nodes, 'roomList_roomCard_');
+            if (card) return card.id;
+            return byId(nodes, 'roomList_emptyState') ? 'roomList_emptyState' : null;
+          },
+          Boolean,
+          { intervalMs: ROOM_LIST_POLL_MS, deadlineMs: ROOM_LIST_WAIT_MS },
+        );
+        if (!seen) {
+          throw new Error(
+            `neither a room card nor the empty state arrived within ${ROOM_LIST_WAIT_MS / 1000}s`,
+          );
         }
-        if (!seen) throw new Error('neither a room card nor the empty state arrived within 15s');
         return `room list content: ${seen}`;
       },
     );
@@ -4670,14 +4689,14 @@ const J40 = {
         async () => {
           const f = await coldLaunch('offline');
           const first = await drawnFirst(f, 'main');
-          await sleep(8000);
+          await sleep(OFFLINE_SOAK_MS); // sleep-ok: the soak IS the check — the person must still be on the room list this long after an offline launch
           const nodes = await dump(device);
           // Overlay-aware, like the first frame: run 4 on the OnePlus had the
           // daily-reward sheet over Home here, and a raw tab check called that
           // "signed out" while the person was exactly where they should be.
           if (classifyFirstFrame(nodes) !== 'main') {
             throw new Error(
-              `an offline launch read as "${classifyFirstFrame(nodes)}" 8s in -- not the room list`,
+              `an offline launch read as "${classifyFirstFrame(nodes)}" ${OFFLINE_SOAK_MS / 1000}s in -- not the room list`,
             );
           }
           if (byTextContains(nodes, 'session has ended')) {
@@ -4685,7 +4704,7 @@ const J40 = {
           }
           const log = await launchLog('after the offline verdict');
           expectLog(log, 'Main', /^confirm: transport failure, staying unverified/);
-          return `${first}; still the room list 8s later, unverified (${f.shot}); log: ${log.confirm}`;
+          return `${first}; still the room list ${OFFLINE_SOAK_MS / 1000}s later, unverified (${f.shot}); log: ${log.confirm}`;
         },
       );
     } finally {

@@ -93,7 +93,6 @@ const AIRPLANE_MODE_SWITCH =
   "type == 'XCUIElementTypeSwitch' AND " +
   "(name == 'com.apple.settings.airplaneMode' OR label == 'Airplane Mode' OR label == 'Aeroplane Mode')";
 const isElementMissing = (e) => /-> 404\b/.test(String(e?.message));
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** devicectl writes its answer — success OR failure — to `--json-output`. */
 function readDevicectlJson(file) {
@@ -130,6 +129,7 @@ const stampedBefore = (line, markEpochSeconds) => {
 // dumps use, it is unit-tested with an injected delay, and reusing it keeps
 // ONE retry policy across both platforms instead of two that can drift.
 const { dumpWithRetry } = require('./ui-dump-retry');
+const { pollUntil } = require('./poll-until');
 const { selectUdid } = require('./ios-appium-driver');
 const { AppProcessDiedError } = require('./app-process-death');
 const {
@@ -1289,21 +1289,24 @@ class IosDevice {
     const dir = fs.mkdtempSync(nodePath.join(this._scratchDir(), 'crash-'));
     const since = (this._launchedAt ?? this._createdAt) - CRASH_REPORT_CLOCK_SKEW_MS;
     let pullError = null;
-    for (let attempt = 1; attempt <= CRASH_REPORT_PULLS; attempt += 1) {
-      if (attempt > 1) await sleep(this._crashReportRetryMs);
+    const pull = () => {
       try {
         this._pullCrashReports(dir);
       } catch (e) {
         pullError = e;
-        continue;
+        return { report: null, pullError };
       }
       const [newest] = findCrashReportsSince(dir, IOS_APP_PROCESS_NAME, since);
-      if (newest) {
-        const summary = summarizeCrashReport(fs.readFileSync(newest.path, 'utf8'));
-        return { report: { path: newest.path, summary }, pullError: null };
-      }
-    }
-    return { report: null, pullError };
+      if (!newest) return { report: null, pullError };
+      const summary = summarizeCrashReport(fs.readFileSync(newest.path, 'utf8'));
+      return { report: { path: newest.path, summary }, pullError: null };
+    };
+    // The device files the report a moment after the death, so the pull is a
+    // poll: up to CRASH_REPORT_PULLS looks, CRASH_REPORT_RETRY_MS apart.
+    return pollUntil(pull, (found) => found.report !== null, {
+      intervalMs: this._crashReportRetryMs,
+      maxLooks: CRASH_REPORT_PULLS,
+    });
   }
 
   /**
@@ -1510,14 +1513,14 @@ class IosDevice {
    * the last value read, wanted or not, so the caller can decide to tap again.
    */
   async _awaitAirplaneModeValue(id, want) {
-    const settleMs = this._offlineSettleMs;
-    const started = Date.now();
-    for (;;) {
-      const value = await this._airplaneModeValue(id);
-      const elapsed = Date.now() - started;
-      if (value === want || elapsed >= settleMs) return value;
-      await sleep(Math.min(OFFLINE_SWITCH_POLL_MS, settleMs / 4, settleMs - elapsed));
-    }
+    return pollUntil(
+      () => this._airplaneModeValue(id),
+      (value) => value === want,
+      {
+        intervalMs: OFFLINE_SWITCH_POLL_MS,
+        deadlineMs: this._offlineSettleMs,
+      },
+    );
   }
 
   /**
@@ -1527,27 +1530,27 @@ class IosDevice {
    */
   async _awaitAirplaneModeSwitch() {
     const waitMs = this._offlineSwitchWaitMs;
-    const started = Date.now();
-    for (;;) {
+    const lookForSwitch = async () => {
       try {
         const el = await this._post('/element', {
           using: '-ios predicate string',
           value: AIRPLANE_MODE_SWITCH,
         });
-        const id = el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT;
-        if (id) return id;
+        return el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT || null;
       } catch (e) {
         if (!isElementMissing(e)) throw e;
+        return null;
       }
-      const elapsed = Date.now() - started;
-      if (elapsed >= waitMs) {
-        throw new Error(
-          `Settings showed no Airplane Mode switch within ${waitMs}ms; ` +
-            `the screen open in Settings is "${await this._settingsScreenTitle()}"`,
-        );
-      }
-      await sleep(Math.min(OFFLINE_SWITCH_POLL_MS, waitMs / 4, waitMs - elapsed));
-    }
+    };
+    const id = await pollUntil(lookForSwitch, Boolean, {
+      intervalMs: OFFLINE_SWITCH_POLL_MS,
+      deadlineMs: waitMs,
+    });
+    if (id) return id;
+    throw new Error(
+      `Settings showed no Airplane Mode switch within ${waitMs}ms; ` +
+        `the screen open in Settings is "${await this._settingsScreenTitle()}"`,
+    );
   }
 
   /**

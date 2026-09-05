@@ -205,3 +205,52 @@ describe('check-no-test-sleeps.sh — reasoned exemption (SHY-0245)', () => {
     expect(res.stdout + res.stderr).toMatch(/driver\.js:2:/);
   });
 });
+
+describe('check-no-test-sleeps.sh — a helper cannot launder a wait (SHY-0500 finding, 2026-09-05)', () => {
+  // PR #2129: the iOS driver defined `const sleep = (ms) => new Promise(...)`
+  // once and called it three times; the runner called its own thirty-two
+  // times. The guard counted the definitions and none of the calls.
+  test('a CALL to a sleep/delay/pause helper is REJECTED, naming the call line — not only the helper', () => {
+    const root = makeTree({
+      'scripts/runner.js':
+        'const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // sleep-ok: the poll interval inside pollUntil\n' +
+        'async function run() {\n' +
+        '  await sleep(300);\n' +
+        '  await this.delay(50);\n' +
+        '  return pause (10);\n' +
+        '}\n',
+    });
+    const r = runGuard(root);
+    expect(r.status).not.toBe(0);
+    const out = r.stdout + r.stderr;
+    expect(out).toMatch(/scripts\/runner\.js:3:/);
+    expect(out).toMatch(/scripts\/runner\.js:4:/);
+    expect(out).toMatch(/scripts\/runner\.js:5:/);
+    expect(out).toMatch(/3 fixed-duration wait\(s\) found/);
+  });
+
+  test("Node's promisified timers are REJECTED — `timers/promises` is a sleep by import", () => {
+    const root = makeTree({
+      'scripts/a.js': "const { setTimeout: sleep } = require('node:timers/promises');\n",
+      'scripts/b.ts': "import { setTimeout as delay } from 'timers/promises';\n",
+    });
+    const r = runGuard(root);
+    expect(r.status).not.toBe(0);
+    expect(r.stdout + r.stderr).toMatch(/scripts\/a\.js:1:/);
+    expect(r.stdout + r.stderr).toMatch(/scripts\/b\.ts:1:/);
+  });
+
+  test('a condition wait whose name merely STARTS with sleep/wait/pause is not a hit', () => {
+    const root = makeTree({
+      'scripts/c.js':
+        'await sleepUntil(() => ready);\n' +
+        'await waitFor(cond);\n' +
+        "await page.waitForSelector('x');\n" +
+        'const pauses = await pauseCount();\n' +
+        'await pollUntil(probe, Boolean, { intervalMs: 250, deadlineMs: 3000 });\n',
+    });
+    const r = runGuard(root);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/0 fixed-duration waits found/);
+  });
+});
