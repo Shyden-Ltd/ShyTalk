@@ -2247,20 +2247,27 @@ async function signOutFlow(device) {
 // emulator host is hardcoded for local so a DB assertion can never touch a
 // real project. dev/prod DB assertions are deferred (would need creds): db is
 // null there and DB steps are skipped with a clear note.
-function initDb(target) {
+// `deps` (env, getApps, initializeApp, getFirestore) exists for the unit tests,
+// exactly as it does on localAdminAuth.
+function initDb(target, deps = {}) {
   if (target !== 'local') return null;
-  process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
+  const env = deps.env || process.env;
+  const getApps = deps.getApps || require('firebase-admin/app').getApps;
+  const initializeApp = deps.initializeApp || ((options) => admin.initializeApp(options));
+  const getFirestore = deps.getFirestore || require('firebase-admin/firestore').getFirestore;
+  env.FIRESTORE_EMULATOR_HOST = env.FIRESTORE_EMULATOR_HOST || 'localhost:8080';
+  // No credentials against the emulator, so google-auth-library would probe
+  // the GCE metadata server and gcp-metadata would print MetadataLookupWarning
+  // right after "State assertions: ON". 'none' turns the probe off; a value
+  // the operator already chose wins. Same fix as localAdminAuth.
+  env.METADATA_SERVER_DETECTION = env.METADATA_SERVER_DETECTION || 'none';
   // The DEFAULT app specifically: `getApps().length` would also count the
   // named Auth-emulator app behind J40 and then hand getFirestore() an app
   // that does not exist.
-  if (
-    !require('firebase-admin/app')
-      .getApps()
-      .some((a) => a.name === '[DEFAULT]')
-  ) {
-    admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-shytalk' });
+  if (!getApps().some((a) => a.name === '[DEFAULT]')) {
+    initializeApp({ projectId: env.GCLOUD_PROJECT || 'demo-shytalk' });
   }
-  return require('firebase-admin/firestore').getFirestore();
+  return getFirestore();
 }
 
 async function dbGet(db, docPath) {
@@ -5148,6 +5155,7 @@ module.exports = {
   // SHY-0500 — the Auth-emulator-only admin handle behind J40's revoked launch,
   // exported so its refusal of a real project can be asserted without a phone.
   localAdminAuth,
+  initDb,
   LOCAL_AUTH_EMULATOR_APP,
   PICKER_OPEN_TIMEOUT_MS,
   // The Android backend, exported so the two journey backends can be compared
