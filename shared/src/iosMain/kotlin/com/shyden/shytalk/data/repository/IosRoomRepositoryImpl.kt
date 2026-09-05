@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.guardedSnapshots
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
@@ -54,7 +55,7 @@ class IosRoomRepositoryImpl(
                     "cohort" equalTo cohort,
                     "state" inArray listOf("ACTIVE", "OWNER_AWAY"),
                 )
-            }.snapshots
+            }.guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.map { doc ->
                     val data = doc.dataMap()
@@ -66,7 +67,7 @@ class IosRoomRepositoryImpl(
         firestore
             .collection("rooms")
             .document(roomId)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 if (!snapshot.exists) return@map null
                 val data = snapshot.dataMap()

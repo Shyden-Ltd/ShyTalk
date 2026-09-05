@@ -37,3 +37,30 @@ fun <T> Flow<T>.recoverListenerErrors(fallback: T): Flow<T> =
         if (e !is Exception) throw e
         emit(fallback)
     }
+
+/**
+ * Completes a realtime-listener [Flow] on an [Exception] instead of letting it
+ * escape (SHY-0523).
+ *
+ * gitlive's `.snapshots` closes its Flow with the listener's
+ * `FirebaseFirestoreException` (a rules denial after the session is revoked, a
+ * network drop). On Kotlin/Native an exception escaping a `launch` reaches the
+ * final-resort handler and aborts the process: the iPhone died 218 ms after the
+ * SESSION_EXPIRED redirect because `config/economy` was denied. Android's native
+ * listeners swallow the same error, so this gives iOS the same outcome, with a
+ * WARN line that names the listener ([what]) instead of Android's silence.
+ *
+ * The Flow completes; values already emitted are kept and nothing replaces the
+ * error. Use [recoverListenerErrors] downstream when a screen needs a safe
+ * default value as well. Same boundary as [recoverListenerErrors]: a fatal
+ * [Error] is rethrown, and `kotlinx` `catch` never sees a
+ * [kotlinx.coroutines.CancellationException].
+ */
+fun <T> Flow<T>.completeOnListenerError(
+    tag: String,
+    what: String,
+): Flow<T> =
+    catch { e ->
+        if (e !is Exception) throw e
+        logW(tag, "$what listener failed; completing the flow instead of crashing (SHY-0523)", e)
+    }

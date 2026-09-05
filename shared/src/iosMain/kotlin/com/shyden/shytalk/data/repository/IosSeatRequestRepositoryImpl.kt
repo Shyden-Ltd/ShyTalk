@@ -4,6 +4,7 @@ import com.shyden.shytalk.core.model.SeatRequest
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.guardedSnapshots
 import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.FirebaseFirestore
@@ -20,7 +21,7 @@ class IosSeatRequestRepositoryImpl(
         firestore
             .collection("rooms/$roomId/seatRequests")
             .where { "status" equalTo "PENDING" }
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
@@ -39,7 +40,7 @@ class IosSeatRequestRepositoryImpl(
         firestore
             .collection("rooms/$roomId/seatRequests")
             .where { "userId" equalTo userId }
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {

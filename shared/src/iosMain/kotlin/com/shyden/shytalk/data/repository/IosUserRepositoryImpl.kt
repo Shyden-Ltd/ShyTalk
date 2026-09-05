@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.guardedSnapshots
 import com.shyden.shytalk.core.util.jsonToMap
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.core.util.recoverListenerErrors
@@ -243,7 +244,7 @@ class IosUserRepositoryImpl(
         firestore
             .collection("users")
             .document(userId)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 if (!snapshot.exists) return@map UserFlags()
                 val data = snapshot.dataMap()
@@ -278,7 +279,7 @@ class IosUserRepositoryImpl(
                 firestore
                     .collection("users")
                     .document(userId)
-                    .snapshots
+                    .guardedSnapshots
                     // Skip non-existent docs (deletion or never-created):
                     // dataMap() on a missing doc yields an empty map, and
                     // User.fromMap of an empty map produces a zero-value
