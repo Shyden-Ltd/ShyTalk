@@ -328,6 +328,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0494](SHY-0494-one-device-identifier-claimed-by-many-accounts.md) | P1 | M | bug | One device's push identifier is claimed by every account that signed in on it | 👀 In Review | — |  |
 | [SHY-0495](SHY-0495-make-the-seven-skipped-journeys-assertable-on-dev.md) | P1 | M | chore | Make the seven local-only journeys assertable on dev | 📝 Draft | — |  |
 | [SHY-0496](SHY-0496-installation-ids-follow-every-path-the-token-took.md) | P0 | S | bug | Installation IDs must follow every path the registration token took | 👀 In Review | — |  |
+| [SHY-0521](SHY-0521-both-lockfiles-resolve-outside-every-open-advisory-range.md) | P0 | XS | chore | Both lockfiles resolve outside every open advisory range | 👀 In Review | — |  |
 | [SHY-0497](SHY-0497-the-app-returns-to-home-after-reaching-signin.md) | P2 | M | bug | The app returns to Home after sign-out has reached the SignIn screen | 👀 In Review | — |  |
 | [SHY-0498](SHY-0498-image-load-failures-are-never-counted.md) | P2 | M | chore | Nobody can tell how often an image fails to load | 📝 Draft | — |  |
 | [SHY-0499](SHY-0499-untrusted-text-reaches-innerHTML-unchecked.md) | P1 | M | bug | Text written by the public reaches innerHTML with nothing checking it | 📝 Draft | — |  |
@@ -345,10 +346,12 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0512](SHY-0512-support-copy-sends-people-to-the-wrong-website.md) | P2 | S | bug | The device-lock and suspension screens send people to the wrong website for support | 📝 Draft | — |  |
 | [SHY-0513](SHY-0513-the-index-reconciler-cannot-insert-rows.md) | P2 | XS | bug | The story-index reconciler cannot insert the rows it finds missing | 📝 Draft | — |  |
 | [SHY-0514](SHY-0514-in-app-web-pages-must-show-only-the-intended-page.md) | P1 | M | bug | A web page opened inside the app must show only that page and allow no navigation | 📝 Draft | — |  |
+| [SHY-0520](SHY-0520-dependabot-security-updates-open-against-main-and-never-reach-the-develop-gate.md) | P1 | S | infra | Dependabot security updates open against main and never reach the develop gate | 📝 Draft | — |  |
 | [SHY-0515](SHY-0515-an-offline-cold-start-confirms-the-session-when-the-network-returns.md) | P2 | M | feature | An offline cold start confirms the session when the network returns | 📝 Draft | — |  |
 | [SHY-0516](SHY-0516-a-mandatory-update-is-drawn-first-from-a-cached-verdict.md) | P2 | S | feature | A mandatory update is drawn first, from a verdict the app already has | 📝 Draft | — |  |
 | [SHY-0517](SHY-0517-the-pre-push-hook-tests-the-wrong-diff.md) | P2 | S | infra | The pre-push hook tests the wrong diff | 📝 Draft | — |  |
 | [SHY-0518](SHY-0518-the-pre-merge-gate-refuses-backlog-maintenance-on-draft-stories.md) | P2 | XS | infra | The pre-merge gate refuses backlog maintenance on Draft stories | 📝 Draft | — |  |
+| [SHY-0519](SHY-0519-the-dev-roadmap-page-lags-develop-until-a-promotion.md) | P2 | XS | infra | The dev roadmap page lags develop until a promotion | 📝 Draft | — |  |
 | [SHY-0524](SHY-0524-fixed-duration-waits-still-hide-behind-sleep-helpers-in-the-journey-tooling.md) | P2 | M | refactor | Fixed-duration waits still hide behind `sleep` helpers in the journey tooling | 📝 Draft | — |  |
 
 ## Done
