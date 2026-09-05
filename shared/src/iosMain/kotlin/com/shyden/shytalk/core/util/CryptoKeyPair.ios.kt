@@ -100,8 +100,15 @@ actual class CryptoKeyPair {
         val alias = currentTag ?: return null
         val privateKey = getPrivateKeyRef(alias) ?: return null
         val publicKey = SecKeyCopyPublicKey(privateKey)
+        if (publicKey == null) {
+            // Security can hand back no public key for a private key it did open;
+            // SecKeyCopyExternalRepresentation must never see that NULL.
+            logW(TAG, "getPublicKeyBase64: SecKeyCopyPublicKey produced no key")
+            CFRelease(privateKey)
+            return null
+        }
         val data = CFBridgingRelease(SecKeyCopyExternalRepresentation(publicKey, null)) as? NSData
-        publicKey?.let { CFRelease(it) }
+        CFRelease(publicKey)
         CFRelease(privateKey)
         if (data == null) logW(TAG, "getPublicKeyBase64: SecKeyCopyExternalRepresentation produced no data")
         return data?.base64EncodedStringWithOptions(0u)

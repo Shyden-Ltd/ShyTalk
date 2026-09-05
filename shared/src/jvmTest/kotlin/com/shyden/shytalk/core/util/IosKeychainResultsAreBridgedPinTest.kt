@@ -117,4 +117,23 @@ class IosKeychainResultsAreBridgedPinTest {
             }
         }
     }
+
+    @Test
+    fun `the public-key export refuses a missing public key instead of handing NULL to Security`() {
+        val src = read(keyPair)
+        val start = src.indexOf("actual fun getPublicKeyBase64(): String? {")
+        assertTrue(start >= 0, "CryptoKeyPair.ios.kt no longer defines getPublicKeyBase64 — re-pin")
+        val body = src.substring(start, src.indexOf("\n    }\n", start))
+        val copy = body.indexOf("SecKeyCopyPublicKey(privateKey)")
+        val export = body.indexOf("SecKeyCopyExternalRepresentation(publicKey")
+        assertTrue(copy >= 0 && export > copy, "getPublicKeyBase64 must copy the public key before exporting it")
+        val guard = body.indexOf("if (publicKey == null)")
+        assertTrue(
+            guard in (copy + 1) until export,
+            "SecKeyCopyPublicKey can return NULL: getPublicKeyBase64 must return null before " +
+                "SecKeyCopyExternalRepresentation is handed the missing key",
+        )
+        val released = body.indexOf("CFRelease(privateKey)", guard)
+        assertTrue(released in (guard + 1) until export, "the early return must release the private key it copied")
+    }
 }
