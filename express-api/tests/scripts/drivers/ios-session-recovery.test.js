@@ -243,6 +243,10 @@ describe('every device command survives a WebDriverAgent restart', () => {
       "runs inside setOffline's withSessionRecovery closure; a lost session propagates out of it",
     _settingsScreenTitle:
       "diagnostic read inside setOffline's closure — its own failure is folded into the error text",
+    _airplaneModeValue:
+      "one attribute read inside setOffline's closure; a lost session propagates out of it",
+    _awaitAirplaneModeValue:
+      "polls _airplaneModeValue inside setOffline's closure; a lost session propagates out of it",
   };
 
   /** How to invoke each command that must recover. */

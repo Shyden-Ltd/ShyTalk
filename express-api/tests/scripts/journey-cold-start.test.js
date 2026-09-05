@@ -348,7 +348,67 @@ describe('the launch log and the network are device operations on BOTH backends'
         hardwareUdid: TEST_HARDWARE_UDID,
         bundleId: 'com.example',
         offlineSwitchWaitMs: 40,
+        offlineSettleMs: 40,
       });
+
+    // ── A tap on the switch can miss, and its value can lag (2026-09-05, run 6) ─
+    //
+    // With the lookup race fixed, J40 died one line later: "Airplane Mode reads
+    // 0 after the tap; wanted 1". The walk video's last frame shows Settings
+    // still sliding in with the switch off: the tap landed on a screen in
+    // motion and missed, and the value was judged the instant after the tap.
+    // The switch now gets a settle window to report the new value, and a tap
+    // that missed is repeated once; the second miss is the failure.
+    const switchThatFlipsOnTap = (d, flipOnTap, { staleReadsAfterTap = 0 } = {}) => {
+      const clicks = [];
+      let value = '0';
+      let staleReadsLeft = 0;
+      d._post = async (p, body) => {
+        if (isAirplaneLookup(p, body)) return { ELEMENT: 'sw1' };
+        if (p === '/element/sw1/click') {
+          clicks.push(body);
+          if (clicks.length === flipOnTap) value = value === '0' ? '1' : '0';
+          staleReadsLeft = staleReadsAfterTap;
+        }
+        return {};
+      };
+      d._get = async (p) => {
+        if (p !== '/element/sw1/attribute/value') return null;
+        if (staleReadsLeft > 0) {
+          staleReadsLeft -= 1;
+          return value === '0' ? '1' : '0';
+        }
+        return value;
+      };
+      return { clicks, current: () => value };
+    };
+    test('setOffline lets a tapped switch settle: a stale value right after the tap is polled, not judged', async () => {
+      const d = iosWaiting();
+      const sw = switchThatFlipsOnTap(d, 1, { staleReadsAfterTap: 2 });
+      await d.setOffline(true);
+      expect(sw.clicks).toHaveLength(1);
+      expect(sw.current()).toBe('1');
+    });
+    test('setOffline taps once more when the first tap misses', async () => {
+      const d = iosWaiting();
+      const sw = switchThatFlipsOnTap(d, 2);
+      await d.setOffline(true);
+      expect(sw.clicks).toHaveLength(2);
+      expect(sw.current()).toBe('1');
+    });
+    test('setOffline stops after the second miss, names both taps, and still comes back to the app', async () => {
+      const d = iosWaiting();
+      const activated = [];
+      const sw = switchThatFlipsOnTap(d, Infinity);
+      const post = d._post;
+      d._post = async (p, body) => {
+        if (p === '/appium/device/activate_app') activated.push(body.bundleId);
+        return post(p, body);
+      };
+      await expect(d.setOffline(true)).rejects.toThrow(/reads 0 after 2 taps; wanted 1/);
+      expect(sw.clicks).toHaveLength(2);
+      expect(activated).toEqual(['com.apple.Preferences', 'com.example']);
+    });
 
     test('setOffline waits for Settings to draw the Airplane Mode switch instead of failing on the first miss', async () => {
       const d = iosWaiting();

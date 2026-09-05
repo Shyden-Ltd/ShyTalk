@@ -78,6 +78,10 @@ const CRASH_REPORT_CLOCK_SKEW_MS = 60_000;
 // (2026-09-05, J40 run 5). So the switch is polled for, up to this long.
 const OFFLINE_SWITCH_WAIT_MS = 8000;
 const OFFLINE_SWITCH_POLL_MS = 250;
+// How long a tapped switch gets to report its new value, and how many taps
+// setOffline will spend before calling the switch unresponsive.
+const OFFLINE_SETTLE_MS = 3000;
+const OFFLINE_TAPS = 2;
 // The accessibility identifier is the same in every locale; the label is
 // "Aeroplane Mode" on a UK phone.
 const AIRPLANE_MODE_SWITCH =
@@ -409,6 +413,7 @@ class IosDevice {
     quitTimeoutMs = QUIT_TIMEOUT_MS,
     crashReportRetryMs = CRASH_REPORT_RETRY_MS,
     offlineSwitchWaitMs = OFFLINE_SWITCH_WAIT_MS,
+    offlineSettleMs = OFFLINE_SETTLE_MS,
     // Injected so a test can READ what the driver said without patching the
     // console. The warnings below are part of the contract -- a tolerated
     // lost click, a retyped field -- and a contract has to be assertable.
@@ -465,6 +470,7 @@ class IosDevice {
     this._sessionDroppedOnPurpose = false;
     this._crashReportRetryMs = crashReportRetryMs;
     this._offlineSwitchWaitMs = offlineSwitchWaitMs;
+    this._offlineSettleMs = offlineSettleMs;
     this._scratch = null;
     this._size = null;
     this._commandTimeoutMs = commandTimeoutMs;
@@ -1442,6 +1448,12 @@ class IosDevice {
    * lookup misses. When it never appears, the error names the screen Settings
    * is actually showing, so a run that left Settings on a sub-page reads as
    * exactly that.
+   *
+   * The tap is judged by the switch's value, but not the instant after: XCUITest
+   * can report the pre-tap value for a moment, and a tap that lands while
+   * Settings is still sliding in (run 6, 2026-09-05) does not register at all.
+   * So the value is polled for up to `offlineSettleMs`, a tap that changed
+   * nothing is repeated once, and the second miss is the failure.
    */
   async setOffline(on) {
     const SETTINGS = 'com.apple.Preferences';
@@ -1450,18 +1462,41 @@ class IosDevice {
       await this._post('/appium/device/activate_app', { bundleId: SETTINGS });
       try {
         const id = await this._awaitAirplaneModeSwitch();
-        const current = String(await this._get(`/element/${id}/attribute/value`));
-        if (current !== want) {
-          await this._post(`/element/${id}/click`, {});
-          const after = String(await this._get(`/element/${id}/attribute/value`));
-          if (after !== want) {
-            throw new Error(`Airplane Mode reads ${after} after the tap; wanted ${want}`);
+        let value = await this._airplaneModeValue(id);
+        let taps = 0;
+        while (value !== want) {
+          if (taps === OFFLINE_TAPS) {
+            throw new Error(`Airplane Mode reads ${value} after ${taps} taps; wanted ${want}`);
           }
+          await this._post(`/element/${id}/click`, {});
+          taps += 1;
+          value = await this._awaitAirplaneModeValue(id, want);
         }
       } finally {
         await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
       }
     });
+  }
+
+  async _airplaneModeValue(id) {
+    return String(await this._get(`/element/${id}/attribute/value`));
+  }
+
+  /**
+   * The switch's value once it has had `offlineSettleMs` to report a tap:
+   * XCUITest can hand back the pre-tap value for a moment, and a tap that
+   * landed while Settings was still sliding in never changes it at all. Returns
+   * the last value read, wanted or not, so the caller can decide to tap again.
+   */
+  async _awaitAirplaneModeValue(id, want) {
+    const settleMs = this._offlineSettleMs;
+    const started = Date.now();
+    for (;;) {
+      const value = await this._airplaneModeValue(id);
+      const elapsed = Date.now() - started;
+      if (value === want || elapsed >= settleMs) return value;
+      await sleep(Math.min(OFFLINE_SWITCH_POLL_MS, settleMs / 4, settleMs - elapsed));
+    }
   }
 
   /**
@@ -1599,6 +1634,7 @@ function createIosJourneyDevice({
   warn,
   crashReportRetryMs,
   offlineSwitchWaitMs,
+  offlineSettleMs,
 } = {}) {
   const coreDeviceUuid = selectCoreDeviceUuid(udid);
   if (!coreDeviceUuid) {
@@ -1629,6 +1665,7 @@ function createIosJourneyDevice({
     ...(warn ? { warn } : {}),
     ...(crashReportRetryMs !== undefined ? { crashReportRetryMs } : {}),
     ...(offlineSwitchWaitMs !== undefined ? { offlineSwitchWaitMs } : {}),
+    ...(offlineSettleMs !== undefined ? { offlineSettleMs } : {}),
   });
 }
 
