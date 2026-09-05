@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.support
 
+import com.shyden.shytalk.testsupport.RepoSource.read
 import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
@@ -21,8 +22,6 @@ import kotlin.test.assertTrue
  * built, this test is where the new step is registered.
  */
 class ReportGuideTeachesRealRoutesTest {
-    private fun read(relative: String): String = File(repoRoot(), relative).readText()
-
     /**
      * Comments name the things they explain.
      *

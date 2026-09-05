@@ -1,7 +1,6 @@
 package com.shyden.shytalk.navigation
 
-import com.shyden.shytalk.testsupport.RepoSource.repoRoot
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -28,12 +27,6 @@ import kotlin.test.assertTrue
  * pin the forwarding hops that the compiler cannot infer intent for).
  */
 class AgeVerificationCtaWiringPinTest {
-    private fun read(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "expected source file to exist: $relative")
-        return f.readText()
-    }
-
     /** Matches `onNavigateToAgeVerification: () -> Unit = {}` in any spacing. */
     private val silentDefault = Regex("""onNavigateToAgeVerification\s*:\s*\(\s*\)\s*->\s*Unit\s*=""")
 

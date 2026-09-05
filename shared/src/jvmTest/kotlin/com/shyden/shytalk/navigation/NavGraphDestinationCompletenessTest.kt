@@ -1,7 +1,6 @@
 package com.shyden.shytalk.navigation
 
-import com.shyden.shytalk.testsupport.RepoSource.repoRoot
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -32,15 +31,11 @@ import kotlin.test.assertTrue
  */
 class NavGraphDestinationCompletenessTest {
     /** Source with `//` line comments and block comments removed. */
-    private fun readStripped(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "expected source file to exist: $relative")
-        return f
-            .readText()
+    private fun readStripped(relative: String): String =
+        read(relative)
             .replace(BLOCK_COMMENT, "")
             .lines()
             .joinToString("\n") { it.substringBefore("//") }
-    }
 
     /**
      * Destinations the graph declares, i.e. `composable(Screen.X.route)`

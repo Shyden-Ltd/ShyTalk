@@ -1,7 +1,6 @@
 package com.shyden.shytalk.core.di
 
-import com.shyden.shytalk.testsupport.RepoSource.repoRoot
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -24,12 +23,6 @@ import kotlin.test.assertTrue
  * so that specific string is what this pin forbids.
  */
 class IosBypassDeviceChecksWiringPinTest {
-    private fun read(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "expected source file to exist: $relative")
-        return f.readText()
-    }
-
     @Test
     fun `iOS DI binds the bypass flag to BuildVariant, never a hardcoded literal`() {
         val di = read("shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt")
