@@ -658,7 +658,9 @@ describe('revokedColdStart — the redirect is proven on the frames read while t
     // relaunched it. launchLog asserts the process before it reads the log, and
     // that failure must reach the reporter as the death it is, not as the
     // message timeout a second launch would produce.
-    const device = showing([mainTree]);
+    // The message IS on the frames here so step 1's watch returns at once;
+    // this test is about the death at the verdict, not the message.
+    const device = showing([mainTree, mainWithSnackbar]);
     const reporter = fakeReporter((n) => {
       if (n === 1) device.show([signInTree]);
     });
