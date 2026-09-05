@@ -39,7 +39,10 @@
  *   - a REAL iPhone. Never a simulator: the operator's rule, and SHY-0419 is why.
  */
 
-const { execFileSync, spawn } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const nodePath = require('node:path');
 
 /**
  * Run a command with an ARGUMENT ARRAY, never a shell string.
@@ -59,6 +62,28 @@ const run = (bin, args) => execFileSync(bin, args, { encoding: 'utf8' });
  * `iosApp(...)`.
  */
 const IOS_APP_PROCESS_NAME = 'iosApp';
+
+/** `YYYY-MM-DD HH:MM:SS` in the Mac's local zone, which is what `log show --start` reads. */
+const localTimestamp = (epochSeconds) => {
+  const d = new Date(epochSeconds * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+
+/** The stamp that opens a `log show --style syslog` line: `2026-09-05 08:36:24.687692+0700  localhost iosApp[1501]: ...` */
+const SYSLOG_STAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})\.(\d+)([+-]\d{2})(\d{2})\b/;
+
+/**
+ * True when the line's own timestamp is earlier than the mark. A line with no
+ * stamp (a continuation) is not judged here; the tag filter decides it.
+ */
+const stampedBefore = (line, markEpochSeconds) => {
+  const m = SYSLOG_STAMP.exec(line);
+  if (!m) return false;
+  const millis = m[3].slice(0, 3).padEnd(3, '0');
+  const at = Date.parse(`${m[1]}T${m[2]}.${millis}${m[4]}:${m[5]}`);
+  return Number.isFinite(at) && at < markEpochSeconds * 1000;
+};
 
 // Reused, never re-implemented. This is the same retry policy the Android
 // dumps use, it is unit-tested with an injected delay, and reusing it keeps
@@ -365,10 +390,10 @@ class IosDevice {
       );
     }
     this.kind = 'ios';
-    // The syslog capture behind clearAppLog()/readAppLog(). `_spawn` is a
-    // field so a test can hand in a fake process; the default is the real one.
-    this._spawn = spawn;
-    this._syslog = null;
+    // The tools behind clearAppLog()/readAppLog(). `_run` is a field so a test
+    // can hand in a recorded fake; the default is the real execFileSync.
+    this._run = run;
+    this._logMark = null;
     this.coreDeviceUuid = coreDeviceUuid;
     this.hardwareUdid = hardwareUdid;
     // `serial` is the runner-wide name for "the thing that identifies this
@@ -1117,75 +1142,92 @@ class IosDevice {
   }
 
   /**
-   * Start capturing the device log for the app's process.
+   * Mark the start of the next launch on the DEVICE clock.
    *
-   * Kotlin/Native's `println` is the app's stdout, which iOS folds into the
-   * unified log, and `idevicesyslog` streams that over USB -- no debugger
-   * attached, which is what SHY-0500's observability criterion asks for.
-   * "Clear" on iOS means "start from here": the syslog cannot be emptied, so
-   * a fresh capture is what makes the next read hold only what follows. The
-   * capture then runs until the next clear, or `quit()`; reads do not end it.
+   * iOS keeps its unified log in a persisted archive on the phone, so "clear"
+   * means "everything from here". The live relay (a streaming `idevicesyslog`)
+   * is not used any more: under WebDriverAgent load it silently stopped
+   * delivering nearly every process's lines mid-run on 2026-09-05, before J40
+   * began, and a read from it looked exactly like an app that logged nothing.
+   * The mark is the phone's own clock so that drift between the Mac and the
+   * device cannot move a launch across the boundary.
    */
   async clearAppLog() {
-    this._stopSyslog();
-    const child = this._spawn('idevicesyslog', [
-      '-u',
-      this.hardwareUdid,
-      '-p',
-      IOS_APP_PROCESS_NAME,
-    ]);
-    const capture = { child, chunks: [], stderr: [], failure: null, stopped: false };
-    child.stdout.on('data', (d) => capture.chunks.push(String(d)));
-    child.stderr.on('data', (d) => capture.stderr.push(String(d)));
-    child.on('error', (e) => {
-      capture.failure = e.message;
-      this._warn(`[ios] idevicesyslog: ${e.message}`);
-    });
-    child.on('exit', (code, signal) => {
-      // Ended by clearAppLog() or quit() is the normal end of a capture. Any
-      // other exit is a capture that died under the journey, and the next
-      // read must say so rather than read as an empty log.
-      if (!capture.stopped) capture.failure = `exited ${code ?? signal}`;
-    });
-    this._syslog = capture;
+    const said = String(
+      this._run('ideviceinfo', ['-u', this.hardwareUdid, '-k', 'TimeIntervalSince1970']),
+    ).trim();
+    const mark = Number.parseFloat(said);
+    if (!Number.isFinite(mark) || mark <= 0) {
+      throw new Error(`ideviceinfo did not report the device clock: "${said}"`);
+    }
+    this._logMark = mark;
   }
 
   /**
-   * The lines captured so far that carry `tag`.
+   * The lines the app has logged since the mark that carry `tag`.
    *
-   * Leaves the capture running, the way a logcat dump can be taken again and
-   * again: J40 reads the log once for the first frame and again for the
-   * `confirm:` verdict of the same launch. This used to STOP the capture, so
-   * the second read threw and anything the app logged after the first read
-   * was never seen (review, 2026-09-04). Only [clearAppLog] starts over.
+   * Pulls the persisted archive from the phone (`idevicesyslog archive`: about
+   * nine seconds and 250 MB whatever the window, the cost is metadata), unpacks
+   * it into a `.logarchive` bundle and reads the app's process out of it with
+   * `/usr/bin/log show` (the full path: zsh has a `log` builtin). Lines are
+   * kept by their OWN timestamp against the mark, so `--start`'s one-second
+   * resolution and pad cannot let the previous launch in. Reading leaves the
+   * mark in place, the way a logcat dump can be taken again and again: J40
+   * reads once for the first frame and again for the `confirm:` verdict.
    */
   async readAppLog(tag) {
-    if (!this._syslog) {
-      throw new Error('readAppLog() before clearAppLog(): nothing was being captured');
+    if (this._logMark === null) {
+      throw new Error('readAppLog() before clearAppLog(): there is no mark to read from');
     }
-    const { chunks, stderr, failure } = this._syslog;
-    if (failure) {
-      // An empty log from a capture that never ran is not evidence of anything;
-      // it used to read as {immediate: null, confirm: null} and fail the
-      // journey on the wrong screen, naming nothing about the capture.
-      const said = stderr.join('').trim();
-      throw new Error(`idevicesyslog capture failed (${failure})${said ? `: ${said}` : ''}`);
+    const mark = this._logMark;
+    const workDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'shytalk-ios-applog-'));
+    try {
+      const tar = nodePath.join(workDir, 'device-log.tar');
+      const archive = nodePath.join(workDir, 'device-log.logarchive');
+      this._runLogTool('idevicesyslog', [
+        '-u',
+        this.hardwareUdid,
+        'archive',
+        tar,
+        '--start-time',
+        String(Math.floor(mark) - 2),
+      ]);
+      fs.mkdirSync(archive);
+      this._runLogTool('tar', ['-xf', tar, '-C', archive]);
+      const shown = this._runLogTool('/usr/bin/log', [
+        'show',
+        '--archive',
+        archive,
+        '--predicate',
+        `process == "${IOS_APP_PROCESS_NAME}"`,
+        '--start',
+        localTimestamp(Math.floor(mark) - 1),
+        '--info',
+        '--debug',
+        '--style',
+        'syslog',
+      ]);
+      return String(shown)
+        .split('\n')
+        .map((l) => l.trimEnd())
+        .filter((l) => l.includes(tag) && !stampedBefore(l, mark));
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
     }
-    return chunks
-      .join('')
-      .split('\n')
-      .map((l) => l.trimEnd())
-      .filter((l) => l.includes(tag));
   }
 
-  _stopSyslog() {
-    if (!this._syslog) return;
-    // Marked before the kill so the exit it causes is not recorded as a
-    // failure of the capture. kill() on a child that has already exited is a
-    // no-op in Node; it does not throw.
-    this._syslog.stopped = true;
-    this._syslog.child.kill();
-    this._syslog = null;
+  /**
+   * A log tool that fails must say so in its own words. An empty log from a
+   * pull that never ran used to read as {immediate: null, confirm: null} and
+   * fail the journey on the wrong screen, naming nothing about the capture.
+   */
+  _runLogTool(bin, args) {
+    try {
+      return this._run(bin, args);
+    } catch (e) {
+      const said = String(e.stderr || '').trim();
+      throw new Error(`${bin} ${args[0] ?? ''} failed: ${said || e.message}`, { cause: e });
+    }
   }
 
   /**
@@ -1258,9 +1300,6 @@ class IosDevice {
    * Best-effort per id: one refusal must not strand the rest.
    */
   async quit() {
-    // A read no longer stops the capture, so the last one of the run is
-    // still streaming here; without this an idevicesyslog outlives the run.
-    this._stopSyslog();
     const ids = [...this._allSessionIds];
     if (this._sessionId) ids.push(this._sessionId);
     for (const id of new Set(ids)) {
