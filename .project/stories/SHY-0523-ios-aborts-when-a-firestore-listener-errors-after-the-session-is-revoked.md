@@ -213,10 +213,16 @@ instead of vanishing, so that I understand what happened and can act on it.
   SHY-0523), resolved by keeping both rows in ID order. The incoming commits
   (docs, the SHY-0521 express-api lockfile and its test) were reviewed in their
   own PRs and touch no app code, so the iPhone proof at `df1635ad267` stands.
-- 2026-09-05 22:05 WIB — merged develop (`a36e06bbd5c`) after #2157 (the
+- 2026-09-06 07:05 WIB — merged develop (`a36e06bbd5c`) after #2157 (the
   2026-09-05 handover) landed. The only conflict was again the SHY-INDEX.md
   row order (SHY-0523 vs SHY-0524), resolved by keeping both rows in ID
   order. The incoming commit is docs-only (handover file, the SHY-0524 story
   and its index row), so the iPhone proof at `df1635ad267` stands.
 
 Reviewed-up-to: a36e06bbd5c
+
+- 2026-09-06 12:25 WIB — **Merged into develop** as `5e1f94247f2` (PR #2156,
+  operator-run merge); deploy-dev run 34001508417 SUCCESS. Dev iPhone run
+  `dev-2026-09-06T02-54-12-660Z` from develop: J-SMOKE pass; J02 and J08
+  stopped at "Land on Home" on the device lock (SHY-0526, PR #2164), so the
+  listener guard's dev proof past the lock is owed with the SHY-0526 rerun.

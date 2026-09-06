@@ -348,3 +348,102 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
   });
 });
+
+/**
+ * SHY-0528 — Gate 3 must judge only the commits the branch ADDS.
+ *
+ * `git rev-list marker..HEAD` also contains every base-branch commit made
+ * since the marker, so a note on a merged story was reported as unreviewed
+ * work done by someone else. These drive the real script against real repos.
+ */
+describe('SHY-0528 Gate 3 — only the branch’s own commits', () => {
+  /** The story is reviewed up to A on main; main then gains code commit B
+   * (another story, reviewed before IT merged); the branch cut from B adds
+   * only a note to the merged story. The branch introduces no code at all. */
+  function baseAdvancedAfterReview() {
+    const dir = init();
+    git(dir, ['checkout', '-q', 'main']);
+    fs.writeFileSync(path.join(dir, 'code.js'), 'x\n');
+    writeStory(dir, 'In Review', 'PLACEHOLDER');
+    const a = commit(dir, 'code + story');
+    writeStory(dir, 'In Review', a);
+    commit(dir, 'bump Reviewed-up-to marker');
+    fs.writeFileSync(path.join(dir, 'code.js'), 'y\n');
+    const b = commit(dir, 'another story merged into main');
+    git(dir, ['checkout', '-q', '-B', 'feature']);
+    return { dir, a, b };
+  }
+
+  test('a note on a merged story passes though the base branch moved on', () => {
+    const { dir } = baseAdvancedAfterReview();
+    fs.appendFileSync(path.join(dir, '.project/stories/SHY-0999-x.md'), '\n- outcome noted\n');
+    commit(dir, 'docs: record the outcome on the merged story');
+    const { code, stdout, stderr } = run(dir);
+    expect(stderr).not.toMatch(/unreviewed commit/);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+    expect(code).toBe(0);
+  });
+
+  test('a handover and the generated board file are review-neutral', () => {
+    const { dir } = baseAdvancedAfterReview();
+    fs.mkdirSync(path.join(dir, '.project/handoff'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.project/handoff/2026-09-06-x.md'), 'handover\n');
+    fs.writeFileSync(path.join(dir, '.project/board-items.json'), '{"items":[]}\n');
+    fs.appendFileSync(path.join(dir, '.project/stories/SHY-0999-x.md'), '\n- outcome noted\n');
+    commit(dir, 'docs: handover + board sync + story note');
+    const { code, stdout, stderr } = run(dir);
+    expect(stderr).not.toMatch(/unreviewed commit/);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+    expect(code).toBe(0);
+  });
+
+  test('code the branch itself adds after the marker is still refused', () => {
+    const { dir } = baseAdvancedAfterReview();
+    fs.appendFileSync(path.join(dir, '.project/stories/SHY-0999-x.md'), '\n- outcome noted\n');
+    commit(dir, 'docs: note');
+    fs.writeFileSync(path.join(dir, 'code.js'), 'unreviewed\n');
+    commit(dir, 'feat: written after the review');
+    const { code, stderr } = run(dir);
+    expect(stderr).toMatch(/unreviewed commit since .*feat: written after the review/s);
+    expect(code).not.toBe(0);
+  });
+
+  test('a script under .project/ is code, not a tracking document', () => {
+    const { dir } = baseAdvancedAfterReview();
+    fs.mkdirSync(path.join(dir, '.project/tools'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.project/tools/gen.sh'), '#!/bin/sh\necho x\n');
+    fs.appendFileSync(path.join(dir, '.project/stories/SHY-0999-x.md'), '\n- outcome noted\n');
+    commit(dir, 'chore: add a generator under .project');
+    const { code, stderr } = run(dir);
+    expect(stderr).toMatch(/unreviewed commit since .*add a generator/s);
+    expect(code).not.toBe(0);
+  });
+
+  test('an unresolvable BASE_REF fails closed, never exempting every commit', () => {
+    const { dir } = baseAdvancedAfterReview();
+    fs.appendFileSync(path.join(dir, '.project/stories/SHY-0999-x.md'), '\n- outcome noted\n');
+    commit(dir, 'docs: note');
+    const r = spawnSync('bash', [SCRIPT, '42', '--skip-ci-check'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, BASE_REF: 'origin/nope' },
+    });
+    expect(String(r.stderr)).toMatch(/BASE_REF 'origin\/nope' is not a commit/);
+    expect(r.status).not.toBe(0);
+  });
+
+  test('a branch that merged the base in passes when its own work is reviewed', () => {
+    const { dir } = baseAdvancedAfterReview();
+    fs.appendFileSync(path.join(dir, '.project/stories/SHY-0999-x.md'), '\n- outcome noted\n');
+    commit(dir, 'docs: note');
+    git(dir, ['checkout', '-q', 'main']);
+    fs.writeFileSync(path.join(dir, 'other.js'), 'moved on\n');
+    commit(dir, 'another merge landed on main');
+    git(dir, ['checkout', '-q', 'feature']);
+    git(dir, ['merge', '-q', '--no-edit', 'main']);
+    const { code, stdout, stderr } = run(dir);
+    expect(stderr).not.toMatch(/unreviewed commit/);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+    expect(code).toBe(0);
+  });
+});
