@@ -2024,7 +2024,6 @@ const COLD_START_TAG = 'ColdStartSequencer';
  * (`signIn`), or nothing of its own yet (`blank` -- the launcher, the
  * springboard, or a window with no content).
  */
-
 function classifyFirstFrame(nodes) {
   if (anyMainTab(nodes)) return 'main';
   // The daily-reward calendar is presented over Home and nowhere else, and a
