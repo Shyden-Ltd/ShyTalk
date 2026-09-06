@@ -211,7 +211,7 @@ it does not — and it is currently answered after the same two round trips.
 - 2026-09-05 14:58 WIB — **Review round 16 (Sonnet, 32 tool uses) over `65bc19f7403..9ac896961a6`: 0 Critical, 1 Important, 1 informational.** Important: the new death test seeded a device that never showed the redirect message, so step 1's watch polled its full 5 s before the death at the verdict — fixed in ``b2ab6c7351b`` by seeding the snackbar frame (254 ms instead of ~5.5 s), verified by the same reviewer. Informational: RepoSource's assertion message differs from the removed readers' ("moved:" vs "expected source file to exist:"); nothing asserts on it, and ReportGuide's reader gained the existence assertion it lacked. Verified clean: the comment-stripping pipeline in NavGraph is unchanged, no dangling imports, the death propagates unwrapped so the identity assertion is strict, the fake reporter records exactly once per step.
 
 - 2026-09-05 17:10 WIB — **CI flagged `lint / Lint` at `f964075a9e4`: the SHY-0245 ratchet counted 2 > 1 fixed-duration waits in `ios-journey-device.js`.** Root cause: the branch added a `const sleep = …` helper and the ratchet counted the helper's DEFINITION but none of its CALLS — the runner already carried 29 `await sleep(...)` calls the pattern never saw, so a name laundered the debt. Fix (TDD, red first): new `express-api/scripts/drivers/poll-until.js` — `pollUntil(probe, accept, { intervalMs, deadlineMs | maxLooks })` returns the first accepted value or the last one probed when the bound is spent, refuses an unbounded poll, pauses at most a quarter of the window; the driver's crash-report pull, Airplane Mode value wait and Airplane Mode switch wait, and the runner's first-frame and room-list waits now poll a condition. The offline soak keeps its fixed wait under a reasoned `sleep-ok:` because the soak IS the check. `scripts/check-no-test-sleeps.sh` now also matches `await|return <x>.sleep|delay|pause(` and `timers/promises`, honours same-line `sleep-ok: <reason>` exemptions, and its harness proves a helper cannot launder a wait. Baseline regenerated at 346 across 62 files: every increase is PRE-EXISTING debt the hardened pattern made visible (runner 1→30, ui-dump-retry 1→2, safety-audit 1→2, three translate scripts), none from this branch — follow-up **SHY-0524**. `poll-until.js` is listed as a helper in `driver-contract.test.js` (the first full gate caught that at 6 failures). Gates: ratchet 346 ≤ baseline; full `npm test` 541 suites / 15440 tests green; prettier, eslint, shellcheck clean. Inline review of the driver and runner diffs: CLEAN, one round. Journey audit: J40 first frame, room-list arrival and offline soak, plus the crash-report pull path — pinned by the unit suites, owed on-device at the dev deploy (J40 + core set, both phones).
-- 2026-09-05 22:40 WIB — merged develop (`40cae39372b`) once, after #2157 (the
+- 2026-09-06 07:40 WIB — merged develop (`40cae39372b`) once, after #2157 (the
   handover) and #2156 (SHY-0523) landed. Conflicts: the SHY-0523 story
   (add/add — develop's copy taken, it differed only by a newer review marker)
   and the SHY-INDEX.md row block (develop's SHY-0519/0523/0524 rows kept in
@@ -220,3 +220,19 @@ it does not — and it is currently answered after the same two round trips.
   and `androidApp/` are byte-identical, so both phone proofs stand.
 
 Reviewed-up-to: 40cae39372b
+
+- 2026-09-06 12:25 WIB — **Merged into develop** as `7e8902c0d12` (PR #2129,
+  operator-run merge after the classifier denials) behind #2157 and #2156;
+  deploy-dev run 34004769513 SUCCESS (build notes name SHY-0500). Dev device
+  proof from develop: Android CPH2653 `dev-2026-09-06T02-52-39-583Z` J-SMOKE
+  and J02 pass, J08 failed at "Confirm the phone is signed in as 50000040"
+  because the daily-reward sheet covered the debug overlay (filed SHY-0527,
+  PR #2165); the two earlier Android runs (`dev-2026-09-06T02-34-23-007Z`,
+  `dev-2026-09-06T02-50-44-767Z`) failed at "Pick persona" because the reused
+  dev APK carried no persona credential (SHY-0488; rebuilt with
+  `DEV_QA_PERSONAS_PASSWORD` and `--rebuild`). iPhone
+  `dev-2026-09-06T02-54-12-660Z` J-SMOKE pass, J02 and J08 failed at "Land on
+  Home" on the device lock: the Debug-Dev build enforced the lock that Android
+  devDebug bypasses (filed SHY-0526, PR #2164). J40, J09 and J07 are not
+  dev-assertable by design (SHY-0488). The dev rerun of J-SMOKE, J02 and J08
+  on both phones plus the core set is owed once #2164 and #2165 land.
