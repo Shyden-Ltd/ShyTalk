@@ -213,5 +213,10 @@ instead of vanishing, so that I understand what happened and can act on it.
   SHY-0523), resolved by keeping both rows in ID order. The incoming commits
   (docs, the SHY-0521 express-api lockfile and its test) were reviewed in their
   own PRs and touch no app code, so the iPhone proof at `df1635ad267` stands.
+- 2026-09-05 22:05 WIB — merged develop (`a36e06bbd5c`) after #2157 (the
+  2026-09-05 handover) landed. The only conflict was again the SHY-INDEX.md
+  row order (SHY-0523 vs SHY-0524), resolved by keeping both rows in ID
+  order. The incoming commit is docs-only (handover file, the SHY-0524 story
+  and its index row), so the iPhone proof at `df1635ad267` stands.
 
-Reviewed-up-to: 99009bd192a
+Reviewed-up-to: a36e06bbd5c
