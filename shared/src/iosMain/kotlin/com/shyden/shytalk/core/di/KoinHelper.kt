@@ -92,9 +92,10 @@ fun doInitKoin(
     // connect".
     BuildVariant.initApiBaseUrl(apiBaseUrl)
     // Auth-stage device checks (device-lock + ban application). Default
-    // false = enforce; Swift passes true ONLY for the `.local` variant
-    // (AppEnvironment.resolve), mirroring Android's per-flavor
-    // BuildConfig.BYPASS_DEVICE_CHECKS. Fixes the SHY-0170 iOS gap where
+    // false = enforce; Swift passes true for the `.local` variant and for
+    // any Debug configuration (AppEnvironment.resolve, SHY-0526) -- the same
+    // effective rule as Android's BYPASS_DEVICE_CHECKS, where buildTypes.debug
+    // overrides the per-flavour value. Fixes the SHY-0170 iOS gap where
     // IosPlatformModule hardcoded the bypass to true for EVERY build.
     BuildVariant.initBypassDeviceChecks(bypassDeviceChecks)
     // SHY-0275 — same fail-closed shape as apiBaseUrl. Express omits `url` from

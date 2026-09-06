@@ -120,7 +120,16 @@ struct iOSApp: App {
         let gitDirty = ((Bundle.main.infoDictionary?["ShyTalkGitDirty"] as? String) ?? "") == "1"
         let builtAt = Self.binaryBuiltAt()
 
-        let env = AppEnvironment.resolve(variant: variant, personasPassword: personasPassword)
+        let env = AppEnvironment.resolve(
+            variant: variant,
+            personasPassword: personasPassword,
+            isDebugBuild: AppEnvironment.isDebugBuild
+        )
+        if env.bypassDeviceChecks {
+            NSLog("[ShyTalk] auth-stage device checks BYPASSED (local variant or Debug configuration)")
+        } else {
+            NSLog("[ShyTalk] auth-stage device checks ENFORCED")
+        }
         KoinHelperKt.doInitKoin(
             useEmulators: env.useEmulators,
             devPersonasPassword: env.devPersonasPassword,
