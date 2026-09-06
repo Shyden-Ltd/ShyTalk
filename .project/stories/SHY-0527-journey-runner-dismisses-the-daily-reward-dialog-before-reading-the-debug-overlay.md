@@ -124,12 +124,17 @@ first-of-the-day sheet that hides the debug overlay it needs to read.
   through its Close button, fails naming the ids when neither button is
   tagged with zero taps, taps nothing on a clean Home, and keeps the
   wrong-account and missing-overlay failures; `handleRewardCalendar` never
-  taps the claim button. The ordering test's fixture gains the tag.
+  taps the claim button; every clearance is appended to the exported
+  `overlays.cleared` trace so the reporter can credit it to the running step
+  (`overlaysCleared` in report.json) and the account message names what it
+  dismissed first. The ordering test's fixture gains the tag.
 - Source pin (jvmTest, `RepoSource.read`): both tags present in
   `DailyRewardDialog.kt`, the "Later" button guarded by `hasClaimedToday`,
   no empty-label `Text("")`.
 - Device (post-merge, dev from `develop`): J-SMOKE, J02, J08 on both phones;
-  a persona whose sheet is up at launch; run dirs linked in Notes.
+  a persona whose sheet is up at launch; run dirs linked in Notes, and the
+  report's `overlaysCleared` entry naming the step that dismissed the sheet
+  (a green run with no entry proves nothing about this fix).
 
 ## Out of Scope
 
@@ -164,4 +169,20 @@ first-of-the-day sheet that hides the debug overlay it needs to read.
 
 - 2026-09-06 11:10 WIB — PR #2165 opened into develop. Inline review round 1 over origin/develop..7844bc5ac24 (runner: tag-driven daily-reward dismissal, one clearOverlays shared by advanceUntil and confirmAccountOnDevice, a loud error when the sheet carries neither button; DailyRewardDialog: dailyReward_dismissButton / dailyReward_closeButton tags, no empty dismiss button once claimed): nothing to fix. Unit: 23/23 in the three touched files, 215 across the 14 device-journey unit files; jvmTest pins green; ktlint, ESLint, Prettier and Gherkin gates green. Local Android J-SMOKE + J08 proof and the evidence page are linked from the PR.
 
-Reviewed-up-to: 7844bc5ac24
+- 2026-09-06 12:24 WIB — **Round 2** (fix diff 7844bc5ac24..a6281b9cb75
+  re-reviewed inline). The green local run `local-2026-09-06T04-07-40-651Z`
+  credited every "Confirm the phone is signed in" step with zero UI operations,
+  so the report could not show where (or whether) the sheet was dismissed by
+  tag — a passing step asserting nothing. Added the exported `overlays.cleared`
+  trace: the reporter credits each step with `overlaysCleared` in report.json,
+  `handleRewardCalendar` returns the tag it tapped and the account message
+  names what it dismissed first. Dismissal suite 10/10 (10 failed against
+  develop), 216 green across the runner suites, Prettier and ESLint clean.
+  Local Android rerun `local-2026-09-06T05-19-19-676Z` on CPH2653 (3b402284):
+  5/5 pass; the report credits "Land on Home" (J09, J07, J02, J08) and "Reach
+  SignIn" (J07, J02) with `the daily-reward sheet via
+  dailyReward_dismissButton`, and every "Confirm" step then read the overlay
+  with zero taps because the local API answers before the Home check. Dev must
+  show the entry on the "Confirm" step (the failing shape) after the merge.
+
+Reviewed-up-to: a6281b9cb75
