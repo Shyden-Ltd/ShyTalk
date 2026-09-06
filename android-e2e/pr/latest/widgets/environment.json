@@ -1,0 +1,1 @@
+[{"values":["Integration"],"name":"integration.tier"},{"values":["localhost:3000"],"name":"integration.base_url"},{"values":["Local Emulators (Firestore, Auth, RTDB, MinIO, LiveKit)"],"name":"integration.stack"}]

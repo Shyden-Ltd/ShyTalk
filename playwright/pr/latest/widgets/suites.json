@@ -1,0 +1,1 @@
+{"total":2,"items":[{"uid":"36c900977e1d8b81a2c6893cc82bfc01","name":"chromium","statistic":{"failed":0,"broken":0,"skipped":37,"passed":1426,"unknown":0,"total":1463}},{"uid":"6ea4842005451d12810945a76d356406","name":"integration","statistic":{"failed":0,"broken":0,"skipped":0,"passed":137,"unknown":0,"total":137}}]}

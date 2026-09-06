@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=edge"/>
+<title>Test results - com.shyden.shytalk.core.room.ActiveRoomManagerTest</title>
+<link href="../css/base-style.css" rel="stylesheet" type="text/css"/>
+<link href="../css/style.css" rel="stylesheet" type="text/css"/>
+<script src="../js/report.js" type="text/javascript"></script>
+</head>
+<body>
+<div id="content">
+<div class="breadcrumbs">
+<a class="breadcrumb" href="../index.html">all</a> &gt; 
+<span class="breadcrumb">com.shyden.shytalk.core.room.ActiveRoomManagerTest</span>
+</div>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a class="successGroup" href="#">Gradle Test Run :app:testDevDebugUnitTest</a>
+</li>
+</ul>
+<div class="tab">
+<h2>Gradle Test Run :app:testDevDebugUnitTest</h2>
+<h1>ActiveRoomManagerTest</h1>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a class="" href="#">summary</a>
+</li>
+</ul>
+<div class="tab">
+<h2>summary</h2>
+<div>
+<div class="summary">
+<table>
+<tr>
+<td>
+<div class="summaryGroup">
+<table>
+<tr>
+<td>
+<div class="infoBox">
+<div class="counter">65</div>
+<p>tests</p>
+</div>
+</td>
+<td>
+<div class="infoBox">
+<div class="counter">0</div>
+<p>failures</p>
+</div>
+</td>
+<td>
+<div class="infoBox">
+<div class="counter">0</div>
+<p>skipped</p>
+</div>
+</td>
+<td>
+<div class="infoBox duration">
+<div class="counter">7.875s</div>
+<p>duration</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</td>
+<td>
+<div class="infoBox success successRate">
+<div class="percent">100%</div>
+<p>successful</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<table class="test-results sortable">
+<thead>
+<tr>
+<th>Child</th>
+<th hidden="">Name</th>
+<th data-sort-default="desc">Tests</th>
+<th data-sort-default="desc">Failures</th>
+<th data-sort-default="desc">Skipped</th>
+<th data-sort-default="desc">Duration</th>
+<th>Success rate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="success">acceptInvite - finds first empty seat</td>
+<td class="path" hidden="">acceptInvite - finds first empty seat</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="28">0.028s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">clearError clears error state</td>
+<td class="path" hidden="">clearError clears error state</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="11">0.011s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">closeRoom - leaves voice and closes</td>
+<td class="path" hidden="">closeRoom - leaves voice and closes</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="233">0.233s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">closeRoom - no-op when not in room</td>
+<td class="path" hidden="">closeRoom - no-op when not in room</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="19">0.019s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">connection monitor - non-owner disconnect removes from seat after grace period</td>
+<td class="path" hidden="">connection monitor - non-owner disconnect removes from seat after grace period</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="42">0.042s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">connection monitor - owner disconnect does NOT trigger leaveRoom</td>
+<td class="path" hidden="">connection monitor - owner disconnect does NOT trigger leaveRoom</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="47">0.047s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">declineInvite calls cancelInvite</td>
+<td class="path" hidden="">declineInvite calls cancelInvite</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="29">0.029s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">disconnectedUserIds - cleared on cleanup via leaveRoom</td>
+<td class="path" hidden="">disconnectedUserIds - cleared on cleanup via leaveRoom</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="26">0.026s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">disconnectedUserIds - cleared on untrackRoom</td>
+<td class="path" hidden="">disconnectedUserIds - cleared on untrackRoom</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="259">0.259s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">disconnectedUserIds - cleared when user reappears</td>
+<td class="path" hidden="">disconnectedUserIds - cleared when user reappears</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="30">0.030s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">disconnectedUserIds - contains absent user during grace period</td>
+<td class="path" hidden="">disconnectedUserIds - contains absent user during grace period</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="11">0.011s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">disconnectedUserIds - initially empty</td>
+<td class="path" hidden="">disconnectedUserIds - initially empty</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="11">0.011s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">ensureSingleRoom - closes owned rooms</td>
+<td class="path" hidden="">ensureSingleRoom - closes owned rooms</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="31">0.031s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">ensureSingleRoom - pins the caller's resolved cohort on the owner-dedup query</td>
+<td class="path" hidden="">ensureSingleRoom - pins the caller's resolved cohort on the owner-dedup query</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="44">0.044s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">forceMuteUser - cannot mute owner</td>
+<td class="path" hidden="">forceMuteUser - cannot mute owner</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="59">0.059s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">forceMuteUser - host cannot force-mute another host</td>
+<td class="path" hidden="">forceMuteUser - host cannot force-mute another host</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="52">0.052s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">forceMuteUser - owner can force-mute a host</td>
+<td class="path" hidden="">forceMuteUser - owner can force-mute a host</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="76">0.076s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">inviteUser - attendee is blocked</td>
+<td class="path" hidden="">inviteUser - attendee is blocked</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="23">0.023s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">inviteUser - owner can invite</td>
+<td class="path" hidden="">inviteUser - owner can invite</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="31">0.031s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">isInAnyRoom returns true when any room tracked</td>
+<td class="path" hidden="">isInAnyRoom returns true when any room tracked</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="20">0.020s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">isInRoom returns true when matching room tracked</td>
+<td class="path" hidden="">isInRoom returns true when matching room tracked</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="5">0.005s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">kickUser - cannot kick host</td>
+<td class="path" hidden="">kickUser - cannot kick host</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="39">0.039s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">kickUser - cannot kick owner</td>
+<td class="path" hidden="">kickUser - cannot kick owner</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="41">0.041s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">kickUser - host cannot kick another host</td>
+<td class="path" hidden="">kickUser - host cannot kick another host</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="31">0.031s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">kickUser - owner can kick a host</td>
+<td class="path" hidden="">kickUser - owner can kick a host</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="41">0.041s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveRoom - clears active state</td>
+<td class="path" hidden="">leaveRoom - clears active state</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="22">0.022s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveRoom - no-op when not in room</td>
+<td class="path" hidden="">leaveRoom - no-op when not in room</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="34">0.034s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveRoom - owner alone closes room</td>
+<td class="path" hidden="">leaveRoom - owner alone closes room</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="41">0.041s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveRoom - owner with others on mic sets owner away</td>
+<td class="path" hidden="">leaveRoom - owner with others on mic sets owner away</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="44">0.044s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveRoom - removes presence</td>
+<td class="path" hidden="">leaveRoom - removes presence</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="62">0.062s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveRoom - vacates seats and leaves voice</td>
+<td class="path" hidden="">leaveRoom - vacates seats and leaves voice</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="40">0.040s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveSeat - non-owner seat calls repository</td>
+<td class="path" hidden="">leaveSeat - non-owner seat calls repository</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="20">0.020s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">leaveSeat - owner cannot leave seat 0</td>
+<td class="path" hidden="">leaveSeat - owner cannot leave seat 0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="32">0.032s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">moveSeat - cannot move from owner seat</td>
+<td class="path" hidden="">moveSeat - cannot move from owner seat</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="41">0.041s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">moveSeat - occupied destination triggers swap</td>
+<td class="path" hidden="">moveSeat - occupied destination triggers swap</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="31">0.031s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">ownerReturn - only works for owner</td>
+<td class="path" hidden="">ownerReturn - only works for owner</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="20">0.020s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">ownerReturn - owner can return</td>
+<td class="path" hidden="">ownerReturn - owner can return</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="30">0.030s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">presence monitor - does not remove self</td>
+<td class="path" hidden="">presence monitor - does not remove self</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="47">0.047s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">presence monitor - does not remove user who reappears before timeout</td>
+<td class="path" hidden="">presence monitor - does not remove user who reappears before timeout</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="27">0.027s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">presence monitor - logs but does not crash when removeDisconnectedUser returns Error</td>
+<td class="path" hidden="">presence monitor - logs but does not crash when removeDisconnectedUser returns Error</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="31">0.031s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">presence monitor - no-op when all participants present</td>
+<td class="path" hidden="">presence monitor - no-op when all participants present</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="21">0.021s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">presence monitor - removes disconnected non-owner after timeout</td>
+<td class="path" hidden="">presence monitor - removes disconnected non-owner after timeout</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="34">0.034s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">presence monitor - removes multiple absent users</td>
+<td class="path" hidden="">presence monitor - removes multiple absent users</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="42">0.042s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">removeFromSeat - attendee is blocked</td>
+<td class="path" hidden="">removeFromSeat - attendee is blocked</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="15">0.015s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">removeFromSeat - cannot remove from owner seat</td>
+<td class="path" hidden="">removeFromSeat - cannot remove from owner seat</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="40">0.040s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">removeFromSeat - host cannot remove another host</td>
+<td class="path" hidden="">removeFromSeat - host cannot remove another host</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="28">0.028s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">resolveRole returns ATTENDEE for regular user</td>
+<td class="path" hidden="">resolveRole returns ATTENDEE for regular user</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="29">0.029s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">resolveRole returns HOST when userId in hostIds</td>
+<td class="path" hidden="">resolveRole returns HOST when userId in hostIds</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="6">0.006s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">resolveRole returns OWNER when userId matches ownerId</td>
+<td class="path" hidden="">resolveRole returns OWNER when userId matches ownerId</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="8">0.008s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">sendMessage - blank text is ignored</td>
+<td class="path" hidden="">sendMessage - blank text is ignored</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="35">0.035s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">sendMessage - valid text forwards to repository</td>
+<td class="path" hidden="">sendMessage - valid text forwards to repository</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="481">0.481s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">takeSeat - attendee creates request instead</td>
+<td class="path" hidden="">takeSeat - attendee creates request instead</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="30">0.030s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">takeSeat - host with requireApproval ON is blocked</td>
+<td class="path" hidden="">takeSeat - host with requireApproval ON is blocked</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="26">0.026s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">takeSeat - non-owner cannot take seat 0</td>
+<td class="path" hidden="">takeSeat - non-owner cannot take seat 0</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="30">0.030s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">takeSeat - occupied seat is rejected</td>
+<td class="path" hidden="">takeSeat - occupied seat is rejected</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="35">0.035s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">takeSeat - owner cannot take non-zero seat</td>
+<td class="path" hidden="">takeSeat - owner cannot take non-zero seat</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="32">0.032s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">takeSeat - owner takes seat 0 calls repository</td>
+<td class="path" hidden="">takeSeat - owner takes seat 0 calls repository</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="48">0.048s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">toggleSelfMute - allows mute when voice disconnected</td>
+<td class="path" hidden="">toggleSelfMute - allows mute when voice disconnected</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="67">0.067s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">toggleSelfMute - only works for own seat</td>
+<td class="path" hidden="">toggleSelfMute - only works for own seat</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="68">0.068s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">toggleSelfMute - rejects unmute when voice not connected</td>
+<td class="path" hidden="">toggleSelfMute - rejects unmute when voice not connected</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="115">0.115s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">toggleSelfMute - toggles mute state for own seat</td>
+<td class="path" hidden="">toggleSelfMute - toggles mute state for own seat</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="82">0.082s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">trackRoom - starts connection monitor without crashing</td>
+<td class="path" hidden="">trackRoom - starts connection monitor without crashing</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="4765">4.765s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">trackRoom sets activeRoomId</td>
+<td class="path" hidden="">trackRoom sets activeRoomId</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="21">0.021s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">untrackRoom clears all state</td>
+<td class="path" hidden="">untrackRoom clears all state</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="19">0.019s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+<tr>
+<td class="success">updateTrackedRoom sets activeRoom</td>
+<td class="path" hidden="">updateTrackedRoom sets activeRoom</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td data-sort-value="13">0.013s</td>
+<td class="success" data-sort-value="100">100%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<p>
+<div>
+<label class="hidden" id="label-for-line-wrapping-toggle" for="line-wrapping-toggle">Wrap lines
+<input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
+</label>
+</div>Generated by 
+<a href="https://www.gradle.org">Gradle 9.7.1</a> at Sep 6, 2026, 9:37:29 AM</p>
+</div>
+</div>
+</body>
+</html>

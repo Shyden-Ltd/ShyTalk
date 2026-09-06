@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="IE=edge"/>
+<title>Test results - viewModelModule verifies all ViewModel dependency graphs</title>
+<link href="../css/base-style.css" rel="stylesheet" type="text/css"/>
+<link href="../css/style.css" rel="stylesheet" type="text/css"/>
+<script src="../js/report.js" type="text/javascript"></script>
+</head>
+<body>
+<div id="content">
+<div class="breadcrumbs">
+<a class="breadcrumb" href="../index.html">all</a> &gt; 
+<a class="breadcrumb" href="index.html">com.shyden.shytalk.core.di.ViewModelModuleTest</a> &gt; 
+<span class="breadcrumb">viewModelModule verifies all ViewModel dependency graphs</span>
+</div>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a class="successGroup" href="#">Gradle Test Run :shared:jvmTest[jvm]</a>
+</li>
+</ul>
+<div class="tab">
+<h2>Gradle Test Run :shared:jvmTest[jvm]</h2>
+<h1>viewModelModule verifies all ViewModel dependency graphs[jvm]</h1>
+<div class="tab-container">
+<ul class="tabLinks">
+<li>
+<a class="" href="#">summary</a>
+</li>
+<li>
+<a class="" href="#">standard output</a>
+</li>
+</ul>
+<div class="tab">
+<h2>summary</h2>
+<div>
+<div class="summary">
+<table>
+<tr>
+<td>
+<div class="summaryGroup">
+<table>
+<tr>
+<td>
+<div class="infoBox">
+<div class="counter">1</div>
+<p>tests</p>
+</div>
+</td>
+<td>
+<div class="infoBox">
+<div class="counter">0</div>
+<p>failures</p>
+</div>
+</td>
+<td>
+<div class="infoBox">
+<div class="counter">0</div>
+<p>skipped</p>
+</div>
+</td>
+<td>
+<div class="infoBox duration">
+<div class="counter">1.518s</div>
+<p>duration</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</td>
+<td>
+<div class="infoBox success successRate">
+<div class="percent">100%</div>
+<p>successful</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="tab">
+<h2>standard output</h2>
+<span class="code">
+<pre id="root-0-test-stdout-viewModelModule verifies all ViewModel dependency graphs">Verifying module 'org.koin.core.module.Module@27dc0776' ...
+
+|-&gt; definition [Singleton: 'com.shyden.shytalk.feature.ageverification.AgeRestrictionService']
+| bind types: [class com.shyden.shytalk.feature.ageverification.AgeRestrictionService]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(): com.shyden.shytalk.feature.ageverification.AgeRestrictionService
+| no dependency to check
+
+|-&gt; definition [Singleton: 'com.shyden.shytalk.navigation.ColdStartClaimGate']
+| bind types: [class com.shyden.shytalk.navigation.ColdStartClaimGate]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(): com.shyden.shytalk.navigation.ColdStartClaimGate
+| no dependency to check
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.auth.AuthViewModel']
+| bind types: [class com.shyden.shytalk.feature.auth.AuthViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.DeviceRepository, com.shyden.shytalk.data.repository.IdentityRepository, kotlin.String, kotlin.Boolean, com.shyden.shytalk.data.repository.AppLockRepository?, com.shyden.shytalk.data.repository.BiometricRepository?): com.shyden.shytalk.feature.auth.AuthViewModel
+| 8 dependencies to check
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'deviceRepository' is whitelisted
+| dependency 'identityRepository' is whitelisted
+| dependency 'deviceId' is whitelisted
+| dependency 'bypassDeviceChecks' is whitelisted
+| dependency 'appLockRepository' is whitelisted
+| dependency 'biometricRepository' is whitelisted
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'deviceRepository' - com.shyden.shytalk.data.repository.DeviceRepository is verified!
+|- dependency 'identityRepository' - com.shyden.shytalk.data.repository.IdentityRepository is verified!
+|- dependency 'deviceId' - kotlin.String is verified!
+|- dependency 'bypassDeviceChecks' - kotlin.Boolean is verified!
+|- dependency 'appLockRepository' - com.shyden.shytalk.data.repository.AppLockRepository is verified!
+|- dependency 'biometricRepository' - com.shyden.shytalk.data.repository.BiometricRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.auth.LockScreenViewModel']
+| bind types: [class com.shyden.shytalk.feature.auth.LockScreenViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.PinRepository, com.shyden.shytalk.data.repository.BiometricRepository, com.shyden.shytalk.core.util.BiometricAuth, com.shyden.shytalk.core.util.CryptoKeyPair, com.shyden.shytalk.data.repository.AppLockRepository, com.shyden.shytalk.data.repository.AuthRepository): com.shyden.shytalk.feature.auth.LockScreenViewModel
+| 6 dependencies to check
+| dependency 'pinRepository' is whitelisted
+| dependency 'biometricRepository' is whitelisted
+| dependency 'biometricAuth' is whitelisted
+| dependency 'cryptoKeyPair' is whitelisted
+| dependency 'appLockRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+|- dependency 'pinRepository' - com.shyden.shytalk.data.repository.PinRepository is verified!
+|- dependency 'biometricRepository' - com.shyden.shytalk.data.repository.BiometricRepository is verified!
+|- dependency 'biometricAuth' - com.shyden.shytalk.core.util.BiometricAuth is verified!
+|- dependency 'cryptoKeyPair' - com.shyden.shytalk.core.util.CryptoKeyPair is verified!
+|- dependency 'appLockRepository' - com.shyden.shytalk.data.repository.AppLockRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.auth.PinSetupViewModel']
+| bind types: [class com.shyden.shytalk.feature.auth.PinSetupViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.PinRepository, com.shyden.shytalk.data.repository.AppLockRepository, com.shyden.shytalk.data.repository.AuthRepository, kotlin.String): com.shyden.shytalk.feature.auth.PinSetupViewModel
+| 4 dependencies to check
+| dependency 'pinRepository' is whitelisted
+| dependency 'appLockRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'deviceId' is whitelisted
+|- dependency 'pinRepository' - com.shyden.shytalk.data.repository.PinRepository is verified!
+|- dependency 'appLockRepository' - com.shyden.shytalk.data.repository.AppLockRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'deviceId' - kotlin.String is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.auth.EmailOtpViewModel']
+| bind types: [class com.shyden.shytalk.feature.auth.EmailOtpViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.OtpRepository): com.shyden.shytalk.feature.auth.EmailOtpViewModel
+| 1 dependencies to check
+| dependency 'otpRepository' is whitelisted
+|- dependency 'otpRepository' - com.shyden.shytalk.data.repository.OtpRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.home.HomeViewModel']
+| bind types: [class com.shyden.shytalk.feature.home.HomeViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.RoomRepository, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.BannerRepository, com.shyden.shytalk.navigation.ColdStartClaimGate): com.shyden.shytalk.feature.home.HomeViewModel
+| 5 dependencies to check
+| dependency 'roomRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'bannerRepository' is whitelisted
+|- dependency 'roomRepository' - com.shyden.shytalk.data.repository.RoomRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'bannerRepository' - com.shyden.shytalk.data.repository.BannerRepository is verified!
+|- dependency 'claimGate' - com.shyden.shytalk.navigation.ColdStartClaimGate is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.profile.ProfileViewModel']
+| bind types: [class com.shyden.shytalk.feature.profile.ProfileViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.StorageRepository, com.shyden.shytalk.data.repository.RoomRepository, com.shyden.shytalk.data.repository.ReportRepository, com.shyden.shytalk.data.repository.EconomyRepository, com.shyden.shytalk.data.repository.IdentityRepository): com.shyden.shytalk.feature.profile.ProfileViewModel
+| 7 dependencies to check
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'storageRepository' is whitelisted
+| dependency 'roomRepository' is whitelisted
+| dependency 'reportRepository' is whitelisted
+| dependency 'economyRepository' is whitelisted
+| dependency 'identityRepository' is whitelisted
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'storageRepository' - com.shyden.shytalk.data.repository.StorageRepository is verified!
+|- dependency 'roomRepository' - com.shyden.shytalk.data.repository.RoomRepository is verified!
+|- dependency 'reportRepository' - com.shyden.shytalk.data.repository.ReportRepository is verified!
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+|- dependency 'identityRepository' - com.shyden.shytalk.data.repository.IdentityRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.profile.RequiredDOBViewModel']
+| bind types: [class com.shyden.shytalk.feature.profile.RequiredDOBViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository): com.shyden.shytalk.feature.profile.RequiredDOBViewModel
+| 2 dependencies to check
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitViewModel']
+| bind types: [class com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.AgeVerificationRepository, kotlin.Boolean): com.shyden.shytalk.feature.ageverification.AgeVerificationSubmitViewModel
+| 2 dependencies to check
+| dependency 'repository' is whitelisted
+| dependency 'isPreviewBuild' is whitelisted
+|- dependency 'repository' - com.shyden.shytalk.data.repository.AgeVerificationRepository is verified!
+|- dependency 'isPreviewBuild' - kotlin.Boolean is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.support.SupportFormViewModel']
+| bind types: [class com.shyden.shytalk.feature.support.SupportFormViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.SupportRepository, com.shyden.shytalk.data.repository.SupportCategory, kotlin.collections.Map&lt;kotlin.String, kotlin.String&gt;): com.shyden.shytalk.feature.support.SupportFormViewModel
+| 3 dependencies to check
+| dependency 'supportRepository' is whitelisted
+| dependency 'initialCategory' is whitelisted
+| dependency 'context' is whitelisted
+|- dependency 'supportRepository' - com.shyden.shytalk.data.repository.SupportRepository is verified!
+|- dependency 'initialCategory' - com.shyden.shytalk.data.repository.SupportCategory is verified!
+|- dependency 'context' - kotlin.collections.Map is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.profile.FollowListViewModel']
+| bind types: [class com.shyden.shytalk.feature.profile.FollowListViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(kotlin.String, kotlin.String, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository): com.shyden.shytalk.feature.profile.FollowListViewModel
+| 4 dependencies to check
+| dependency 'profileUserId' is whitelisted
+| dependency 'initialTab' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+|- dependency 'profileUserId' - kotlin.String is verified!
+|- dependency 'initialTab' - kotlin.String is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.room.RoomViewModel']
+| bind types: [class com.shyden.shytalk.feature.room.RoomViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(kotlin.String, com.shyden.shytalk.data.repository.RoomRepository, com.shyden.shytalk.data.repository.MessageRepository, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.SeatRequestRepository, com.shyden.shytalk.data.remote.VoiceService, com.shyden.shytalk.data.remote.PresenceService, com.shyden.shytalk.core.room.RoomLifecycleManager, com.shyden.shytalk.data.repository.ReportRepository, com.shyden.shytalk.data.repository.StorageRepository, com.shyden.shytalk.data.repository.EconomyRepository, com.shyden.shytalk.data.repository.TranslationRepository?): com.shyden.shytalk.feature.room.RoomViewModel
+| 13 dependencies to check
+| dependency 'roomId' is whitelisted
+| dependency 'roomRepository' is whitelisted
+| dependency 'messageRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'seatRequestRepository' is whitelisted
+| dependency 'voiceService' is whitelisted
+| dependency 'presenceService' is whitelisted
+| dependency 'roomLifecycleManager' is whitelisted
+| dependency 'reportRepository' is whitelisted
+| dependency 'storageRepository' is whitelisted
+| dependency 'economyRepository' is whitelisted
+| dependency 'translationRepository' is whitelisted
+|- dependency 'roomId' - kotlin.String is verified!
+|- dependency 'roomRepository' - com.shyden.shytalk.data.repository.RoomRepository is verified!
+|- dependency 'messageRepository' - com.shyden.shytalk.data.repository.MessageRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'seatRequestRepository' - com.shyden.shytalk.data.repository.SeatRequestRepository is verified!
+|- dependency 'voiceService' - com.shyden.shytalk.data.remote.VoiceService is verified!
+|- dependency 'presenceService' - com.shyden.shytalk.data.remote.PresenceService is verified!
+|- dependency 'roomLifecycleManager' - com.shyden.shytalk.core.room.RoomLifecycleManager is verified!
+|- dependency 'reportRepository' - com.shyden.shytalk.data.repository.ReportRepository is verified!
+|- dependency 'storageRepository' - com.shyden.shytalk.data.repository.StorageRepository is verified!
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+|- dependency 'translationRepository' - com.shyden.shytalk.data.repository.TranslationRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.settings.AppSettingsViewModel']
+| bind types: [class com.shyden.shytalk.feature.settings.AppSettingsViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.remote.AppConfigService, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.IdentityRepository): com.shyden.shytalk.feature.settings.AppSettingsViewModel
+| 4 dependencies to check
+| dependency 'appConfigService' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'identityRepository' is whitelisted
+|- dependency 'appConfigService' - com.shyden.shytalk.data.remote.AppConfigService is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'identityRepository' - com.shyden.shytalk.data.repository.IdentityRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.settings.RoomSettingsViewModel']
+| bind types: [class com.shyden.shytalk.feature.settings.RoomSettingsViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.RoomRepository, com.shyden.shytalk.data.repository.SeatRequestRepository, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository): com.shyden.shytalk.feature.settings.RoomSettingsViewModel
+| 4 dependencies to check
+| dependency 'roomRepository' is whitelisted
+| dependency 'seatRequestRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+|- dependency 'roomRepository' - com.shyden.shytalk.data.repository.RoomRepository is verified!
+|- dependency 'seatRequestRepository' - com.shyden.shytalk.data.repository.SeatRequestRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.messaging.ConversationListViewModel']
+| bind types: [class com.shyden.shytalk.feature.messaging.ConversationListViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.PrivateMessageRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.AuthRepository): com.shyden.shytalk.feature.messaging.ConversationListViewModel
+| 3 dependencies to check
+| dependency 'pmRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+|- dependency 'pmRepository' - com.shyden.shytalk.data.repository.PrivateMessageRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.messaging.PrivateChatViewModel']
+| bind types: [class com.shyden.shytalk.feature.messaging.PrivateChatViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(kotlin.String, com.shyden.shytalk.data.repository.PrivateMessageRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.TypingRepository, com.shyden.shytalk.data.repository.ReportRepository, com.shyden.shytalk.data.repository.StorageRepository, com.shyden.shytalk.data.local.StickerStorage?, kotlin.String?, com.shyden.shytalk.data.remote.ConversationWebSocketService?, com.shyden.shytalk.data.repository.RoomRepository?, com.shyden.shytalk.data.repository.TranslationRepository?, com.shyden.shytalk.feature.ageverification.AgeRestrictionService?): com.shyden.shytalk.feature.messaging.PrivateChatViewModel
+| 13 dependencies to check
+| dependency 'otherUserId' is whitelisted
+| dependency 'pmRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'typingRepository' is whitelisted
+| dependency 'reportRepository' is whitelisted
+| dependency 'storageRepository' is whitelisted
+| dependency 'stickerStorage' is whitelisted
+| dependency 'initialConversationId' is whitelisted
+| dependency 'conversationWs' is whitelisted
+| dependency 'roomRepository' is whitelisted
+| dependency 'translationRepository' is whitelisted
+|- dependency 'otherUserId' - kotlin.String is verified!
+|- dependency 'pmRepository' - com.shyden.shytalk.data.repository.PrivateMessageRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'typingRepository' - com.shyden.shytalk.data.repository.TypingRepository is verified!
+|- dependency 'reportRepository' - com.shyden.shytalk.data.repository.ReportRepository is verified!
+|- dependency 'storageRepository' - com.shyden.shytalk.data.repository.StorageRepository is verified!
+|- dependency 'stickerStorage' - com.shyden.shytalk.data.local.StickerStorage is verified!
+|- dependency 'initialConversationId' - kotlin.String is verified!
+|- dependency 'conversationWs' - com.shyden.shytalk.data.remote.ConversationWebSocketService is verified!
+|- dependency 'roomRepository' - com.shyden.shytalk.data.repository.RoomRepository is verified!
+|- dependency 'translationRepository' - com.shyden.shytalk.data.repository.TranslationRepository is verified!
+|- dependency 'ageRestrictionService' - com.shyden.shytalk.feature.ageverification.AgeRestrictionService is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.messaging.NewMessageViewModel']
+| bind types: [class com.shyden.shytalk.feature.messaging.NewMessageViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.PrivateMessageRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.AuthRepository): com.shyden.shytalk.feature.messaging.NewMessageViewModel
+| 3 dependencies to check
+| dependency 'pmRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+|- dependency 'pmRepository' - com.shyden.shytalk.data.repository.PrivateMessageRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.messaging.GroupSetupViewModel']
+| bind types: [class com.shyden.shytalk.feature.messaging.GroupSetupViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(kotlin.String, com.shyden.shytalk.data.repository.PrivateMessageRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.StorageRepository): com.shyden.shytalk.feature.messaging.GroupSetupViewModel
+| 5 dependencies to check
+| dependency 'selectedIdsString' is whitelisted
+| dependency 'pmRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'storageRepository' is whitelisted
+|- dependency 'selectedIdsString' - kotlin.String is verified!
+|- dependency 'pmRepository' - com.shyden.shytalk.data.repository.PrivateMessageRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'storageRepository' - com.shyden.shytalk.data.repository.StorageRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.gacha.GachaViewModel']
+| bind types: [class com.shyden.shytalk.feature.gacha.GachaViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.EconomyRepository, com.shyden.shytalk.data.repository.GiftRepository, com.shyden.shytalk.data.repository.AuthRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.feature.ageverification.AgeRestrictionService): com.shyden.shytalk.feature.gacha.GachaViewModel
+| 5 dependencies to check
+| dependency 'economyRepository' is whitelisted
+| dependency 'giftRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+|- dependency 'giftRepository' - com.shyden.shytalk.data.repository.GiftRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'ageRestrictionService' - com.shyden.shytalk.feature.ageverification.AgeRestrictionService is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.shop.WalletViewModel']
+| bind types: [class com.shyden.shytalk.feature.shop.WalletViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.EconomyRepository, com.shyden.shytalk.data.repository.UserRepository, com.shyden.shytalk.data.repository.AuthRepository): com.shyden.shytalk.feature.shop.WalletViewModel
+| 3 dependencies to check
+| dependency 'economyRepository' is whitelisted
+| dependency 'userRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+|- dependency 'userRepository' - com.shyden.shytalk.data.repository.UserRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.shop.TransactionHistoryViewModel']
+| bind types: [class com.shyden.shytalk.feature.shop.TransactionHistoryViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.EconomyRepository): com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
+| 1 dependencies to check
+| dependency 'economyRepository' is whitelisted
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.gifting.GiftingViewModel']
+| bind types: [class com.shyden.shytalk.feature.gifting.GiftingViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.GiftRepository, com.shyden.shytalk.data.repository.EconomyRepository, com.shyden.shytalk.data.repository.AuthRepository): com.shyden.shytalk.feature.gifting.GiftingViewModel
+| 3 dependencies to check
+| dependency 'giftRepository' is whitelisted
+| dependency 'economyRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+|- dependency 'giftRepository' - com.shyden.shytalk.data.repository.GiftRepository is verified!
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.profile.GiftWallViewModel']
+| bind types: [class com.shyden.shytalk.feature.profile.GiftWallViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(kotlin.String, com.shyden.shytalk.data.repository.GiftRepository): com.shyden.shytalk.feature.profile.GiftWallViewModel
+| 2 dependencies to check
+| dependency 'userId' is whitelisted
+| dependency 'giftRepository' is whitelisted
+|- dependency 'userId' - kotlin.String is verified!
+|- dependency 'giftRepository' - com.shyden.shytalk.data.repository.GiftRepository is verified!
+
+|-&gt; definition [Factory: 'com.shyden.shytalk.feature.daily.DailyRewardViewModel']
+| bind types: [class com.shyden.shytalk.feature.daily.DailyRewardViewModel]
+| found constructors: 1
+| constructor(0) - fun `&lt;init&gt;`(com.shyden.shytalk.data.repository.EconomyRepository, com.shyden.shytalk.data.repository.AuthRepository): com.shyden.shytalk.feature.daily.DailyRewardViewModel
+| 2 dependencies to check
+| dependency 'economyRepository' is whitelisted
+| dependency 'authRepository' is whitelisted
+|- dependency 'economyRepository' - com.shyden.shytalk.data.repository.EconomyRepository is verified!
+|- dependency 'authRepository' - com.shyden.shytalk.data.repository.AuthRepository is verified!
+
+[SUCCESS] module 'org.koin.test.verify.Verify@4cee7fa0' has been verified in 1.337777987s.
+</pre>
+<button class="clipboard-copy-btn" aria-label="Copy to clipboard" data-copy-element-id="root-0-test-stdout-viewModelModule verifies all ViewModel dependency graphs">Copy</button>
+</span>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<p>
+<div>
+<label class="hidden" id="label-for-line-wrapping-toggle" for="line-wrapping-toggle">Wrap lines
+<input id="line-wrapping-toggle" type="checkbox" autocomplete="off"/>
+</label>
+</div>Generated by 
+<a href="https://www.gradle.org">Gradle 9.7.1</a> at Sep 6, 2026, 9:33:47 AM</p>
+</div>
+</div>
+</body>
+</html>
