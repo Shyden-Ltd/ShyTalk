@@ -29,11 +29,21 @@ Supersedes `2026-09-05-session-handover-shy0500-shy0523-pushed.md`.
   Local Android `local-2026-09-06T05-19-19-676Z` 5/5 with the sheet dismissed via
   `dailyReward_dismissButton`. Evidence page:
   https://claude.ai/code/artifact/697f66ab-fcab-42e8-b7d5-3bc6ffab854c
-- Merge order: #2164, then #2165 (expect an SHY-INDEX row conflict on the second; resolve by
-  keeping both rows). Then deploy develop naming the story, rebuild the iPhone's Debug-Dev app
+- **SHY-0528** PR #2167 (`story/SHY-0528-pre-merge-gate-flags-base-branch-commits` @ `bc234fed864`,
+  reviewed up to `d23f0d59c7d`): Gate 3 of `scripts/pre-merge-check.sh` walked
+  `git rev-list "${marker}..HEAD"`, which also contains every commit the *base* branch gained since
+  the marker — so this very handover branch was refused for nine commits already on develop. Fixed
+  three ways: exclude `^${BASE_REF}`, widen the neutral rule to `^\.project/.*\.(md|json)$` (a
+  handover and the generated `board-items.json` are tracking documents, a script under `.project/`
+  is not), and fail closed when `BASE_REF` does not resolve. Six new tests against real temp repos,
+  4 red before the fix, 45/45 after. **No `Reviewed-up-to` marker was bumped anywhere.** Evidence
+  page: https://claude.ai/code/artifact/c076c7a5-8c0c-4722-a0e9-7b43d5c53952
+- Merge order: **#2167 first** (it unblocks the local gate), then #2166 (this handover), then
+  #2164, then #2165 (expect an SHY-INDEX row conflict on the last two; resolve by keeping both
+  rows). Then deploy develop naming the story, rebuild the iPhone's Debug-Dev app
   from develop, rerun J-SMOKE/J02/J08 on both phones against dev plus the mandatory core set
   (create a room, mute/unmute, sign-in), add Notes, remove the worktrees
-  (`ShyTalk-shy0526`, `ShyTalk-shy0527`, `ShyTalk-docs0906`).
+  (`ShyTalk-shy0526`, `ShyTalk-shy0527`, `ShyTalk-shy0528`, `ShyTalk-docs0906`).
 - **SHY-0525** (persona credential from one source) is filed, not started.
 
 ## Findings the next session must not rediscover
@@ -54,8 +64,12 @@ Supersedes `2026-09-05-session-handover-shy0500-shy0523-pushed.md`.
 - Classifier ceiling is two denials: `gh pr merge` and the dev admin-API helper were both denied;
   hand those to the operator.
 
+- `scripts/pre-merge-check.sh` defaults `BASE_REF` to `origin/main`; for a PR into develop run it
+  as `BASE_REF=origin/develop ./scripts/pre-merge-check.sh`. Unchanged by SHY-0528.
+
 ## Memory
 
 `project-shy0500-state-2026-09-05` (updated to this state), `reference-shy0500-evidence-page`,
 `project-shy0523-ios-firestore-listener-guard`, `reference-fresh-worktree-needs-gitignored-local-files`,
-`reference-auto-mode-classifier-denies-gh-pr-merge`.
+`reference-auto-mode-classifier-denies-gh-pr-merge`,
+`feedback-an-insertion-must-not-orphan-the-comment-above-it` (new — caught twice this session).
