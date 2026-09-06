@@ -814,6 +814,7 @@ class Reporter {
     const rec = { name, status: 'running', startedAt: Date.now(), preamble };
     // Snapshot the counter so this step is credited only with what IT did.
     const uiOpsBefore = uiOps.count;
+    const overlaysBefore = overlays.cleared.length;
     process.stdout.write(`  ▶ ${name} ... `);
     let caught = null;
     try {
@@ -833,6 +834,8 @@ class Reporter {
       }
     }
     rec.uiOps = uiOps.count - uiOpsBefore;
+    const cleared = overlays.cleared.slice(overlaysBefore);
+    if (cleared.length) rec.overlaysCleared = cleared;
     rec.durationMs = Date.now() - rec.startedAt;
     // Screenshot every step (cheap and invaluable for "see the results").
     //
@@ -980,6 +983,11 @@ const dumpCost = { count: 0, ms: 0 };
  * not a use of the product.
  */
 const uiOps = { count: 0 };
+// What the interstitial clearers dismissed, in order. The reporter credits each
+// step with the entries added while it ran (the uiOps pattern), so a run's
+// report says WHERE the daily-reward sheet or a permission dialog was cleared
+// and an evidence page can prove the path ran instead of assuming it (SHY-0527).
+const overlays = { cleared: [] };
 
 /** The kinds a journey may declare. Closed set: an unknown kind is a bug. */
 const JOURNEY_KINDS = Object.freeze(['ui', 'api-contract']);
@@ -1882,12 +1890,40 @@ async function handlePermissionDialog(device, nodes) {
 // Daily check-in / rewards calendar pops over Home right after sign-in. It's
 // a Compose dialog (text only, no testTags), so match button text. Dismiss
 // via "Later" (no side effects); fall back to claiming if that's all there is.
+// Ids that exist only while the daily-reward sheet is up. It is presented over
+// Home and nowhere else, and on Android its dialog window is all uiautomator
+// reports while it is showing.
+const HOME_OVERLAY_IDS = [
+  'dailyReward_dialog',
+  'dailyReward_claimButton',
+  'dailyReward_dismissButton',
+  'dailyReward_closeButton',
+];
+// The buttons that close the sheet WITHOUT claiming: "Later" while the reward
+// is unclaimed, "Close" once it has been claimed today.
+const REWARD_SHEET_BUTTON_IDS = ['dailyReward_dismissButton', 'dailyReward_closeButton'];
+
+// SHY-0527 -- closed by test tag only. The old handler located "Later" and
+// "Claim Today" by their English labels and CLAIMED the reward on the
+// persona's behalf when "Later" was absent; in the already-claimed state (an
+// empty "Later" label, an untagged "Close") it found nothing and the sheet
+// stayed up. A sheet that cannot be closed by tag is a tag defect in the
+// build, so it fails here with what the screen showed rather than being
+// walked around.
 async function handleRewardCalendar(device, nodes) {
-  const btn = byText(nodes, 'Later') || byTextContains(nodes, 'Claim Today');
-  if (!btn) return false;
-  await dismissOverlay(device, btn);
+  if (!HOME_OVERLAY_IDS.some((id) => byId(nodes, id))) return false;
+  const hit = REWARD_SHEET_BUTTON_IDS.map((id) => ({ id, node: byId(nodes, id) })).find(
+    (h) => h.node,
+  );
+  if (!hit) {
+    throw new Error(
+      `the daily-reward sheet is up but carries neither ${REWARD_SHEET_BUTTON_IDS.join(' nor ')}; ` +
+        `screen showed: ${summarizeScreen(nodes).testTags.join(', ')}`,
+    );
+  }
+  await dismissOverlay(device, hit.node);
   await sleep(900);
-  return true;
+  return hit.id;
 }
 
 // The app's "Display over other apps" rationale (floating-bubble overlay
@@ -1905,6 +1941,30 @@ async function handleOverlayBubbleDialog(device, nodes) {
   await dismissOverlay(device, n);
   await sleep(800);
   return true;
+}
+
+/**
+ * One pass of the overlay handlers, in the order the walk meets them. True
+ * when something was dismissed (the caller must re-dump before deciding
+ * anything), false when the screen carried none of them. Shared by the walk
+ * and by every read that must not be answered by a sheet (SHY-0527).
+ */
+// Clears one interstitial and names it (a truthy string), or returns false when
+// the screen carried none. Every clearance is also appended to `overlays.cleared`
+// so the reporter can credit it to the running step.
+async function clearOverlays(device, nodes, tick) {
+  let cleared = false;
+  if (await handlePermissionDialog(device, nodes)) {
+    await pollGap(tick, device);
+    cleared = 'a permission dialog';
+  } else {
+    const sheetButton = await handleRewardCalendar(device, nodes);
+    if (sheetButton) cleared = `the daily-reward sheet via ${sheetButton}`;
+    else if (await handleOverlayBubbleDialog(device, nodes)) cleared = 'the overlay-bubble dialog';
+    else if (await handleLegalGate(device, nodes)) cleared = 'the legal gate';
+  }
+  if (cleared) overlays.cleared.push(cleared);
+  return cleared;
 }
 
 // Generic "drive forward through interstitials until <isDone>". Observed
@@ -1930,13 +1990,7 @@ async function advanceUntil(device, isDone, timeoutMs, label) {
     //
     // Checking the overlays first costs a pass of cheap lookups on a screen
     // that has none, and removes the window entirely.
-    if (await handlePermissionDialog(device, nodes)) {
-      await pollGap(tick, device);
-      continue;
-    }
-    if (await handleRewardCalendar(device, nodes)) continue;
-    if (await handleOverlayBubbleDialog(device, nodes)) continue;
-    if (await handleLegalGate(device, nodes)) continue;
+    if (await clearOverlays(device, nodes, tick)) continue;
 
     if (isDone(nodes)) return nodes;
 
@@ -1987,8 +2041,6 @@ const COLD_START_TAG = 'ColdStartSequencer';
  * (`signIn`), or nothing of its own yet (`blank` -- the launcher, the
  * springboard, or a window with no content).
  */
-const HOME_OVERLAY_IDS = ['dailyReward_dialog', 'dailyReward_claimButton'];
-
 function classifyFirstFrame(nodes) {
   if (anyMainTab(nodes)) return 'main';
   // The daily-reward calendar is presented over Home and nowhere else, and a
@@ -2670,6 +2722,52 @@ function accountOnDevice(nodes) {
 }
 
 /**
+ * Confirm WHO the device is signed in as, from the debug badge.
+ *
+ * The badge samples its inputs on a 2s tick, so the account can lag the
+ * sign-in by a frame or two. Polled rather than slept on: a fixed wait is
+ * either too short on a cold device or dead time on a warm one.
+ *
+ * SHY-0527: the daily-reward sheet is presented a moment after Home, so it
+ * can arrive between "Land on Home" and this read. On Android its dialog
+ * window is all uiautomator reports while it is up, which hid the badge for
+ * the whole poll. Every poll therefore clears overlays first -- the same
+ * handlers, in the same order, as the walk itself -- and a missing account
+ * line reports what the screen showed instead.
+ */
+async function confirmAccountOnDevice(device, expected, email, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs;
+  let seen = null;
+  let lastTags = [];
+  const cleared = [];
+  while (Date.now() < deadline) {
+    const tick = Date.now();
+    const nodes = await dump(device);
+    const what = await clearOverlays(device, nodes, tick);
+    if (what) {
+      cleared.push(what);
+      continue;
+    }
+    seen = accountOnDevice(nodes);
+    if (seen === expected) {
+      const suffix = cleared.length ? ` after dismissing ${cleared.join(', ')}` : '';
+      return `debug overlay shows account ${seen}${suffix}`;
+    }
+    lastTags = summarizeScreen(nodes).testTags;
+    await sleep(500);
+  }
+  throw new Error(
+    seen === null
+      ? `the debug overlay is not showing an account id, so who is signed in ` +
+          `cannot be confirmed (expected ${expected} for ${email}); ` +
+          `screen showed: ${lastTags.join(', ') || '(none)'}` +
+          (cleared.length ? `; dismissed first: ${cleared.join(', ')}` : '')
+      : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
+          `every assertion after this would be about the wrong person`,
+  );
+}
+
+/**
  * @param {string} email seeded persona to sign in as. WHO ends up signed in
  *   is then confirmed against that persona's account id — see
  *   [accountOnDevice]. It used to be confirmed against a prefix of the
@@ -2746,25 +2844,7 @@ async function signInAs(device, reporter, ctx, email, { expectHome = true } = {}
   await reporter.step(
     device,
     `Confirm the phone is signed in as ${expected}`,
-    async () => {
-      const deadline = Date.now() + 8000;
-      let seen = null;
-      // The badge samples its inputs on a 2s tick, so the account can lag the
-      // sign-in by a frame or two. Polled rather than slept on: a fixed wait is
-      // either too short on a cold device or dead time on a warm one.
-      while (Date.now() < deadline) {
-        seen = accountOnDevice(await dump(device));
-        if (seen === expected) return `debug overlay shows account ${seen}`;
-        await sleep(500);
-      }
-      throw new Error(
-        seen === null
-          ? `the debug overlay is not showing an account id, so who is signed in ` +
-              `cannot be confirmed (expected ${expected} for ${email})`
-          : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
-              `every assertion after this would be about the wrong person`,
-      );
-    },
+    () => confirmAccountOnDevice(device, expected, email),
     { preamble: true },
   );
 }
@@ -5195,8 +5275,15 @@ module.exports = {
   assertJourneyTouchedTheUi,
   dismissKeyboard,
   uiOps,
+  overlays,
   // SHY-0500 -- the cold-start journey's pure pieces.
   classifyFirstFrame,
+  // SHY-0527 -- the account read that clears the reward sheet first, the
+  // shared overlay pass, and the handler that closes the sheet by tag.
+  confirmAccountOnDevice,
+  clearOverlays,
+  handleRewardCalendar,
+  REWARD_SHEET_BUTTON_IDS,
   watchForText,
   revokedColdStart,
   SESSION_ENDED_TEXT,
