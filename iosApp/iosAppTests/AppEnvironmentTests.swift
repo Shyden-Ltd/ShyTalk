@@ -1,7 +1,7 @@
 import XCTest
 @testable import iosApp
 
-/// Tests for `AppEnvironment.resolve(variant:personasPassword:)` — the pure,
+/// Tests for `AppEnvironment.resolve(variant:personasPassword:isDebugBuild:)` — the pure,
 /// side-effect-free env-resolution function extracted from `iOSApp.swift`'s
 /// `init()` (SHY-0104). Keeping the env selection in a Bundle/Firebase/UIKit-
 /// free function is what makes it unit-testable from the iosAppTests bundle.
@@ -28,20 +28,20 @@ final class AppEnvironmentTests: XCTestCase {
     // ── .dev — public dev backend WITH the persona picker (Happy path) ──
 
     func test_dev_usesPublicDevBackend_notEmulators() {
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw, isDebugBuild: false)
         XCTAssertFalse(cfg.useEmulators, "dev must NOT use the local emulators")
         XCTAssertEqual(cfg.environment, "dev")
         XCTAssertEqual(cfg.apiBaseUrl, "https://dev-api.shytalk.shyden.co.uk")
     }
 
     func test_dev_withPassword_enablesPicker() {
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw, isDebugBuild: false)
         XCTAssertEqual(cfg.devPersonasPassword, injectedDevPw,
                        "a non-empty injected password must reach BuildVariant → picker visible")
     }
 
     func test_dev_carriesDevGoogleWebClientId() {
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: "pw")
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: "pw", isDebugBuild: false)
         XCTAssertEqual(cfg.googleWebClientId,
                        "881846974606-kv99pjv92i6me0emb2j3uacbhnqqvfj4.apps.googleusercontent.com")
         XCTAssertEqual(cfg.googleWebClientId, AppEnvironment.devGoogleWebClientId)
@@ -50,7 +50,7 @@ final class AppEnvironmentTests: XCTestCase {
     // ── .dev — fail-closed when the password is absent (Error path) ──
 
     func test_dev_withEmptyPassword_hidesPicker_butStaysOnDev() {
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: "")
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: "", isDebugBuild: false)
         XCTAssertNil(cfg.devPersonasPassword, "empty password must coerce to nil (fail-closed)")
         // Critical: an absent password must NOT fall back to the emulators.
         XCTAssertFalse(cfg.useEmulators, "no localhost fallback when the picker is unavailable")
@@ -59,7 +59,7 @@ final class AppEnvironmentTests: XCTestCase {
     }
 
     func test_dev_withNilPassword_hidesPicker() {
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: nil)
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: nil, isDebugBuild: false)
         XCTAssertNil(cfg.devPersonasPassword)
         XCTAssertFalse(cfg.useEmulators)
         XCTAssertEqual(cfg.apiBaseUrl, "https://dev-api.shytalk.shyden.co.uk")
@@ -73,14 +73,14 @@ final class AppEnvironmentTests: XCTestCase {
         // The xcconfig default is empty (not whitespace), so this only bites a
         // build-time override of "   "; if either side is ever tightened to
         // trim, this test catches the divergence.
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: "   ")
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: "   ", isDebugBuild: false)
         XCTAssertEqual(cfg.devPersonasPassword, "   ")
     }
 
     // ── .local — existing emulator behaviour is UNCHANGED (Edge case) ──
 
     func test_local_usesEmulators_andLocalhostApi() {
-        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed, isDebugBuild: false)
         XCTAssertTrue(cfg.useEmulators)
         XCTAssertEqual(cfg.environment, "local")
         XCTAssertEqual(cfg.apiBaseUrl, "http://localhost:3000")
@@ -90,7 +90,7 @@ final class AppEnvironmentTests: XCTestCase {
     }
 
     func test_local_withEmptyPassword_coercesToNil() {
-        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: "")
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: "", isDebugBuild: false)
         XCTAssertNil(cfg.devPersonasPassword)
     }
 
@@ -102,12 +102,12 @@ final class AppEnvironmentTests: XCTestCase {
         // must never enable the picker. (The literal is ALSO compile-stripped
         // because the release branch in iOSApp.swift passes nil — this is the
         // belt to that braces.)
-        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: "leaked")
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: "leaked", isDebugBuild: false)
         XCTAssertNil(cfg.devPersonasPassword, "release must NEVER expose the picker")
     }
 
     func test_release_targetsDevBackend_withoutPicker() {
-        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil)
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil, isDebugBuild: false)
         XCTAssertFalse(cfg.useEmulators)
         XCTAssertEqual(cfg.environment, "dev")
         XCTAssertEqual(cfg.apiBaseUrl, "https://dev-api.shytalk.shyden.co.uk")
@@ -118,8 +118,8 @@ final class AppEnvironmentTests: XCTestCase {
     // ── dev vs release: same backend, the ONLY difference is the picker ──
 
     func test_devAndRelease_shareBackend_differOnlyByPicker() {
-        let dev = AppEnvironment.resolve(variant: .dev, personasPassword: "pw")
-        let rel = AppEnvironment.resolve(variant: .release, personasPassword: "pw")
+        let dev = AppEnvironment.resolve(variant: .dev, personasPassword: "pw", isDebugBuild: false)
+        let rel = AppEnvironment.resolve(variant: .release, personasPassword: "pw", isDebugBuild: false)
         XCTAssertEqual(dev.apiBaseUrl, rel.apiBaseUrl)
         XCTAssertEqual(dev.environment, rel.environment)
         XCTAssertEqual(dev.useEmulators, rel.useEmulators)
@@ -129,27 +129,54 @@ final class AppEnvironmentTests: XCTestCase {
     }
 
     // ── bypassDeviceChecks — auth-stage device checks (Security, SHY-0170) ──
+    //
+    // SHY-0526: mirrors Android's REAL rule, not its flavour line. On Android
+    // `buildTypes.debug` sets BYPASS_DEVICE_CHECKS=true for EVERY *-debug
+    // build (devDebug included), overriding the flavour's `false`. So the iOS
+    // rule is: bypass = `.local` || debug configuration. Release configurations
+    // (the only ones archived for TestFlight) enforce.
 
-    func test_local_bypassesDeviceChecks_forEmulatorE2E() {
-        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+    func test_local_bypassesDeviceChecks_inEveryConfiguration() {
+        for isDebug in [true, false] {
+            let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed, isDebugBuild: isDebug)
+            XCTAssertTrue(cfg.bypassDeviceChecks,
+                          "local mirrors Android's local flavour (emulator/E2E journeys), isDebugBuild=\(isDebug)")
+        }
+    }
+
+    func test_dev_debugConfiguration_bypassesDeviceChecks_likeAndroidDevDebug() {
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw, isDebugBuild: true)
         XCTAssertTrue(cfg.bypassDeviceChecks,
-                      "local mirrors Android's BYPASS_DEVICE_CHECKS=true (emulator/E2E journeys)")
+                      "Debug-Dev mirrors Android devDebug: buildTypes.debug overrides the dev flavour — personas must rotate on one real iPhone")
     }
 
-    func test_dev_enforcesDeviceChecks() {
-        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+    func test_dev_releaseConfiguration_enforcesDeviceChecks() {
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw, isDebugBuild: false)
         XCTAssertFalse(cfg.bypassDeviceChecks,
-                       "dev mirrors Android's BYPASS_DEVICE_CHECKS=false — device-lock + ban checks must run")
+                       "a Release configuration on the dev backend enforces the device-lock + ban checks, like Android devRelease")
     }
 
-    func test_release_enforcesDeviceChecks() {
+    func test_release_releaseConfiguration_enforcesDeviceChecks() {
         // The regression this section exists for: IosPlatformModule used to
         // hardcode the bypass to `true` for EVERY build — TestFlight included —
-        // silently skipping the SHY-0170 device-lock and SHY-0149 ban checks
-        // on iOS while Android enforced them.
-        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil)
+        // silently skipping the SHY-0170 device-lock and SHY-0149 ban checks.
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil, isDebugBuild: false)
         XCTAssertFalse(cfg.bypassDeviceChecks,
                        "distributable builds must NEVER skip device-lock/ban checks")
+    }
+
+    func test_release_debugConfiguration_bypassesDeviceChecks_likeAndroidProdDebug() {
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil, isDebugBuild: true)
+        XCTAssertTrue(cfg.bypassDeviceChecks,
+                      "a debugger build on the prod backend mirrors Android prodDebug; archives use Release, so this never ships")
+    }
+
+    func test_isDebugBuild_isTrueUnderTheDebugCompilationCondition() {
+        // This test bundle is built with a Debug* configuration, all of which
+        // define DEBUG. The Release side is pinned from the pbxproj by
+        // IosDebugBuildBypassPinTest (host JVM).
+        XCTAssertTrue(AppEnvironment.isDebugBuild,
+                      "the flag must come from `#if DEBUG`, which every Debug* configuration defines")
     }
 
     // ── SHY-0275 — the local host a real iPhone uses to reach the Mac ──
@@ -208,7 +235,7 @@ final class AppEnvironmentTests: XCTestCase {
     func test_localVariant_carriesTheLocalApiBaseUrl() {
         // Ties the resolved host to what actually reaches Koin: `.local` must
         // hand over the host-derived URL, not a literal.
-        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed, isDebugBuild: false)
         XCTAssertEqual(cfg.apiBaseUrl, AppEnvironment.localApiBaseUrl)
         XCTAssertTrue(cfg.apiBaseUrl.contains(AppEnvironment.localHost))
     }

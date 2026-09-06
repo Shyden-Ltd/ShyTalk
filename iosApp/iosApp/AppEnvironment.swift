@@ -20,11 +20,14 @@ struct AppEnvironmentConfig: Equatable {
     let devPersonasPassword: String?
     let googleWebClientId: String?
     /// Auth-stage device checks (server-authoritative device-lock +
-    /// ban application) are bypassed ONLY on `.local` — mirroring
-    /// Android's per-flavor `BuildConfig.BYPASS_DEVICE_CHECKS`
-    /// (local → true, dev → false, prod → false). Threaded through
-    /// `doInitKoin(bypassDeviceChecks:)`; Kotlin defaults to false
-    /// (enforce) if this is ever dropped from the call.
+    /// ban application) are bypassed on `.local`, and on ANY Debug
+    /// configuration regardless of variant (SHY-0526) — the same
+    /// effective rule as Android, where `buildTypes.debug` sets
+    /// `BYPASS_DEVICE_CHECKS=true` for every `*Debug` build on top of
+    /// the per-flavour value (local → true, dev/prod → false). Release
+    /// configurations (TestFlight, App Store) always enforce. Threaded
+    /// through `doInitKoin(bypassDeviceChecks:)`; Kotlin defaults to
+    /// false (enforce) if this is ever dropped from the call.
     let bypassDeviceChecks: Bool
 }
 
@@ -90,6 +93,17 @@ enum AppEnvironment {
     static let devGoogleWebClientId =
         "881846974606-kv99pjv92i6me0emb2j3uacbhnqqvfj4.apps.googleusercontent.com"
 
+    /// True when compiled under a Debug configuration (the `DEBUG` Swift
+    /// compilation condition: Debug, Debug-Local, Debug-Dev). The boot path
+    /// passes it into `resolve(variant:personasPassword:isDebugBuild:)`.
+    static var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     /// - Parameters:
     ///   - variant: the compile-time-selected build variant.
     ///   - personasPassword: the variant-appropriate seed/injected password
@@ -97,7 +111,14 @@ enum AppEnvironment {
     ///     `DEV_QA_PERSONAS_PASSWORD` for `.dev`; nil for `.release`). Empty
     ///     strings coerce to nil so the picker fails CLOSED, matching
     ///     `BuildVariant`'s `devPersonasPassword?.takeIf { it.isNotEmpty() }`.
-    static func resolve(variant: AppBuildVariant, personasPassword: String?) -> AppEnvironmentConfig {
+    ///   - isDebugBuild: whether this binary was compiled under a Debug
+    ///     configuration (`AppEnvironment.isDebugBuild` at the boot call
+    ///     site); injected so the rule is testable with either value.
+    static func resolve(
+        variant: AppBuildVariant,
+        personasPassword: String?,
+        isDebugBuild: Bool
+    ) -> AppEnvironmentConfig {
         let cleaned = (personasPassword?.isEmpty == false) ? personasPassword : nil
         switch variant {
         case .local:
@@ -116,7 +137,7 @@ enum AppEnvironment {
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: cleaned,
                 googleWebClientId: devGoogleWebClientId,
-                bypassDeviceChecks: false
+                bypassDeviceChecks: isDebugBuild
             )
         case .release:
             // Distributable build: NEVER carry the persona picker, regardless
@@ -128,7 +149,7 @@ enum AppEnvironment {
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: nil,
                 googleWebClientId: devGoogleWebClientId,
-                bypassDeviceChecks: false
+                bypassDeviceChecks: isDebugBuild
             )
         }
     }

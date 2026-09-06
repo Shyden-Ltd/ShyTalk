@@ -163,9 +163,12 @@ object BuildVariant {
     /**
      * Whether the auth-stage device checks (server-authoritative
      * device-lock + ban application, SHY-0170/SHY-0149 —
-     * `AuthViewModel.resolveIdentityAndProceed`) are BYPASSED. Mirrors
-     * Android's per-flavor `BuildConfig.BYPASS_DEVICE_CHECKS` (local →
-     * true for emulator/E2E; dev + prod → false). Default `false` =
+     * `AuthViewModel.resolveIdentityAndProceed`) are BYPASSED. The
+     * effective rule is the same on both platforms: the local
+     * flavour/variant, or ANY debug build (Android's `buildTypes.debug`
+     * sets `BuildConfig.BYPASS_DEVICE_CHECKS = true` over the per-flavour
+     * value; iOS `AppEnvironment.resolve` ORs the `DEBUG` compilation
+     * condition, SHY-0526). Release builds enforce. Default `false` =
      * fail-closed: a platform that never calls [initBypassDeviceChecks]
      * gets ENFORCEMENT — bypass must be asked for explicitly, per build,
      * so the pre-fix iOS state (DI hardcoding `true` for every build,
