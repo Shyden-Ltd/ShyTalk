@@ -43,15 +43,15 @@ fail() {
 
 [ -n "$PR" ] || fail "usage: pre-merge-check.sh <PR#> [--skip-ci-check]"
 
-# name-status (not name-only): each line is "<code>\t<path>" — or for a rename,
-# "<code>\t<old>\t<new>". The change code (A/M/R…) lets us apply the SHY-0131
-# added-Draft filing exemption (a brand-new Draft story is a legitimate filing).
 # Gate 3 excludes commits already on the base branch, so an unresolvable BASE_REF
 # must stop the run: an empty exclusion would silently re-admit the false
 # positives, and a broken diff would gate nothing at all. Fail closed (SHY-0528).
 git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
   fail "BASE_REF '${BASE_REF}' is not a commit in this repo — pass the PR's base (e.g. BASE_REF=origin/develop)"
 
+# name-status (not name-only): each line is "<code>\t<path>" — or for a rename,
+# "<code>\t<old>\t<new>". The change code (A/M/R…) lets us apply the SHY-0131
+# added-Draft filing exemption (a brand-new Draft story is a legitimate filing).
 STATUS_LINES=$(git diff --name-status --diff-filter=ACMR "${BASE_REF}...HEAD")
 
 # Validate each changed story: status In Review + a REAL Reviewed-up-to commit —
