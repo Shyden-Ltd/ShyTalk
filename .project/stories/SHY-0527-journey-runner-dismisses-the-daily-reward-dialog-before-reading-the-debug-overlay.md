@@ -1,6 +1,6 @@
 ---
 id: SHY-0527
-status: Draft
+status: In Review
 owner: claude
 created: 2026-09-06
 priority: P1
@@ -161,3 +161,7 @@ first-of-the-day sheet that hides the debug overlay it needs to read.
   `dev-2026-09-06T02-52-39-583Z`, J08 preamble "Confirm the phone is signed
   in as 50000040" failed with "the debug overlay is not showing an account
   id"; the dump held only `dailyReward_dialog` and `dailyReward_claimButton`.
+
+- 2026-09-06 11:10 WIB — PR #2165 opened into develop. Inline review round 1 over origin/develop..7844bc5ac24 (runner: tag-driven daily-reward dismissal, one clearOverlays shared by advanceUntil and confirmAccountOnDevice, a loud error when the sheet carries neither button; DailyRewardDialog: dailyReward_dismissButton / dailyReward_closeButton tags, no empty dismiss button once claimed): nothing to fix. Unit: 23/23 in the three touched files, 215 across the 14 device-journey unit files; jvmTest pins green; ktlint, ESLint, Prettier and Gherkin gates green. Local Android J-SMOKE + J08 proof and the evidence page are linked from the PR.
+
+Reviewed-up-to: 7844bc5ac24
