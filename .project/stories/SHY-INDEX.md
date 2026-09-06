@@ -354,6 +354,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0519](SHY-0519-the-dev-roadmap-page-lags-develop-until-a-promotion.md) | P2 | XS | infra | The dev roadmap page lags develop until a promotion | 📝 Draft | — |  |
 | [SHY-0523](SHY-0523-ios-aborts-when-a-firestore-listener-errors-after-the-session-is-revoked.md) | P0 | S | bug | iOS aborts when a Firestore listener errors after the session is revoked | 👀 In Review | — |  |
 | [SHY-0524](SHY-0524-fixed-duration-waits-still-hide-behind-sleep-helpers-in-the-journey-tooling.md) | P2 | M | refactor | Fixed-duration waits still hide behind `sleep` helpers in the journey tooling | 📝 Draft | — |  |
+| [SHY-0527](SHY-0527-journey-runner-dismisses-the-daily-reward-dialog-before-reading-the-debug-overlay.md) | P1 | S | bug | Journey runner dismisses the daily-reward dialog before it reads the debug overlay | 📝 Draft | — |  |
 
 ## Done
 
