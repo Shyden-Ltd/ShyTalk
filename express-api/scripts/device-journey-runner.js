@@ -814,6 +814,7 @@ class Reporter {
     const rec = { name, status: 'running', startedAt: Date.now(), preamble };
     // Snapshot the counter so this step is credited only with what IT did.
     const uiOpsBefore = uiOps.count;
+    const overlaysBefore = overlays.cleared.length;
     process.stdout.write(`  ▶ ${name} ... `);
     let caught = null;
     try {
@@ -833,6 +834,8 @@ class Reporter {
       }
     }
     rec.uiOps = uiOps.count - uiOpsBefore;
+    const cleared = overlays.cleared.slice(overlaysBefore);
+    if (cleared.length) rec.overlaysCleared = cleared;
     rec.durationMs = Date.now() - rec.startedAt;
     // Screenshot every step (cheap and invaluable for "see the results").
     //
@@ -980,6 +983,11 @@ const dumpCost = { count: 0, ms: 0 };
  * not a use of the product.
  */
 const uiOps = { count: 0 };
+// What the interstitial clearers dismissed, in order. The reporter credits each
+// step with the entries added while it ran (the uiOps pattern), so a run's
+// report says WHERE the daily-reward sheet or a permission dialog was cleared
+// and an evidence page can prove the path ran instead of assuming it (SHY-0527).
+const overlays = { cleared: [] };
 
 /** The kinds a journey may declare. Closed set: an unknown kind is a bug. */
 const JOURNEY_KINDS = Object.freeze(['ui', 'api-contract']);
@@ -1904,16 +1912,18 @@ const REWARD_SHEET_BUTTON_IDS = ['dailyReward_dismissButton', 'dailyReward_close
 // walked around.
 async function handleRewardCalendar(device, nodes) {
   if (!HOME_OVERLAY_IDS.some((id) => byId(nodes, id))) return false;
-  const btn = REWARD_SHEET_BUTTON_IDS.map((id) => byId(nodes, id)).find(Boolean);
-  if (!btn) {
+  const hit = REWARD_SHEET_BUTTON_IDS.map((id) => ({ id, node: byId(nodes, id) })).find(
+    (h) => h.node,
+  );
+  if (!hit) {
     throw new Error(
       `the daily-reward sheet is up but carries neither ${REWARD_SHEET_BUTTON_IDS.join(' nor ')}; ` +
         `screen showed: ${summarizeScreen(nodes).testTags.join(', ')}`,
     );
   }
-  await dismissOverlay(device, btn);
+  await dismissOverlay(device, hit.node);
   await sleep(900);
-  return true;
+  return hit.id;
 }
 
 // The app's "Display over other apps" rationale (floating-bubble overlay
@@ -1939,15 +1949,22 @@ async function handleOverlayBubbleDialog(device, nodes) {
  * anything), false when the screen carried none of them. Shared by the walk
  * and by every read that must not be answered by a sheet (SHY-0527).
  */
+// Clears one interstitial and names it (a truthy string), or returns false when
+// the screen carried none. Every clearance is also appended to `overlays.cleared`
+// so the reporter can credit it to the running step.
 async function clearOverlays(device, nodes, tick) {
+  let cleared = false;
   if (await handlePermissionDialog(device, nodes)) {
     await pollGap(tick, device);
-    return true;
+    cleared = 'a permission dialog';
+  } else {
+    const sheetButton = await handleRewardCalendar(device, nodes);
+    if (sheetButton) cleared = `the daily-reward sheet via ${sheetButton}`;
+    else if (await handleOverlayBubbleDialog(device, nodes)) cleared = 'the overlay-bubble dialog';
+    else if (await handleLegalGate(device, nodes)) cleared = 'the legal gate';
   }
-  if (await handleRewardCalendar(device, nodes)) return true;
-  if (await handleOverlayBubbleDialog(device, nodes)) return true;
-  if (await handleLegalGate(device, nodes)) return true;
-  return false;
+  if (cleared) overlays.cleared.push(cleared);
+  return cleared;
 }
 
 // Generic "drive forward through interstitials until <isDone>". Observed
@@ -2722,12 +2739,20 @@ async function confirmAccountOnDevice(device, expected, email, timeoutMs = 8000)
   const deadline = Date.now() + timeoutMs;
   let seen = null;
   let lastTags = [];
+  const cleared = [];
   while (Date.now() < deadline) {
     const tick = Date.now();
     const nodes = await dump(device);
-    if (await clearOverlays(device, nodes, tick)) continue;
+    const what = await clearOverlays(device, nodes, tick);
+    if (what) {
+      cleared.push(what);
+      continue;
+    }
     seen = accountOnDevice(nodes);
-    if (seen === expected) return `debug overlay shows account ${seen}`;
+    if (seen === expected) {
+      const suffix = cleared.length ? ` after dismissing ${cleared.join(', ')}` : '';
+      return `debug overlay shows account ${seen}${suffix}`;
+    }
     lastTags = summarizeScreen(nodes).testTags;
     await sleep(500);
   }
@@ -2735,7 +2760,8 @@ async function confirmAccountOnDevice(device, expected, email, timeoutMs = 8000)
     seen === null
       ? `the debug overlay is not showing an account id, so who is signed in ` +
           `cannot be confirmed (expected ${expected} for ${email}); ` +
-          `screen showed: ${lastTags.join(', ') || '(none)'}`
+          `screen showed: ${lastTags.join(', ') || '(none)'}` +
+          (cleared.length ? `; dismissed first: ${cleared.join(', ')}` : '')
       : `the phone is signed in as ${seen} but ${email} is account ${expected} — ` +
           `every assertion after this would be about the wrong person`,
   );
@@ -5249,6 +5275,7 @@ module.exports = {
   assertJourneyTouchedTheUi,
   dismissKeyboard,
   uiOps,
+  overlays,
   // SHY-0500 -- the cold-start journey's pure pieces.
   classifyFirstFrame,
   // SHY-0527 -- the account read that clears the reward sheet first, the

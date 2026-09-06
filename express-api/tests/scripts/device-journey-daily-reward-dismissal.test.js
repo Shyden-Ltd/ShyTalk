@@ -18,6 +18,7 @@
 
 const {
   confirmAccountOnDevice,
+  overlays,
   handleRewardCalendar,
   dump,
 } = require('../../scripts/device-journey-runner');
@@ -87,7 +88,8 @@ describe('confirmAccountOnDevice clears the daily-reward sheet before reading th
     const message = await confirmAccountOnDevice(device, 50000040, 'adult-prober@shytalk.dev');
 
     expect({ message, taps: device.taps }).toEqual({
-      message: 'debug overlay shows account 50000040',
+      message:
+        'debug overlay shows account 50000040 after dismissing the daily-reward sheet via dailyReward_dismissButton',
       taps: [DISMISS_CENTRE],
     });
   });
@@ -95,9 +97,24 @@ describe('confirmAccountOnDevice clears the daily-reward sheet before reading th
   test('the already-claimed sheet is closed through its Close button', async () => {
     const device = deviceServing([SHEET_CLAIMED, HOME_AS(50000040)]);
 
+    const message = await confirmAccountOnDevice(device, 50000040, 'adult-prober@shytalk.dev');
+
+    expect({ message, taps: device.taps }).toEqual({
+      message:
+        'debug overlay shows account 50000040 after dismissing the daily-reward sheet via dailyReward_closeButton',
+      taps: [CLOSE_CENTRE],
+    });
+  });
+
+  test('what was cleared is recorded for the step report, not only in the account message', async () => {
+    const before = overlays.cleared.length;
+    const device = deviceServing([SHEET_UNCLAIMED, HOME_AS(50000040)]);
+
     await confirmAccountOnDevice(device, 50000040, 'adult-prober@shytalk.dev');
 
-    expect(device.taps).toEqual([CLOSE_CENTRE]);
+    expect(overlays.cleared.slice(before)).toEqual([
+      'the daily-reward sheet via dailyReward_dismissButton',
+    ]);
   });
 
   test('a clean Home is read without a single tap', async () => {
@@ -142,7 +159,10 @@ describe('handleRewardCalendar closes the sheet by tag and never claims the rewa
 
     const handled = await handleRewardCalendar(device, await dump(device));
 
-    expect({ handled, taps: device.taps }).toEqual({ handled: true, taps: [DISMISS_CENTRE] });
+    expect({ handled, taps: device.taps }).toEqual({
+      handled: 'dailyReward_dismissButton',
+      taps: [DISMISS_CENTRE],
+    });
   });
 
   test('a sheet reachable only by label is refused, not claimed', async () => {
