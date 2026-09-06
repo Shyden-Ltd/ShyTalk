@@ -1,6 +1,6 @@
 ---
 id: SHY-0526
-status: Draft
+status: In Review
 owner: claude
 created: 2026-09-06
 priority: P1
@@ -170,3 +170,7 @@ debugger build has bound.
   "Account Restricted"; dev carries two bindings (owners 10000001 and
   50000010), neither a persona of that run; Android's devDebug bypassed the
   lock through `buildTypes.debug`.
+
+- 2026-09-06 11:10 WIB — PR #2164 opened into develop. Inline review round 1 over origin/develop..d6125b9820f (AppEnvironment.swift: `isDebugBuild` derived from `#if DEBUG` and injected into `resolve`; iOSApp.swift passes it through and logs BYPASSED/ENFORCED at boot; KoinHelper.kt comment and BuildVariant.kt docs state the effective rule): nothing to fix. Proof: AppEnvironmentTests red at exit 65 (16 × "extra argument 'isDebugBuild'"), then 24 tests with 0 failures on the real iPhone under Debug-Dev; jvmTest pins IosDebugBuildBypassPinTest (3) and IosBypassDeviceChecksWiringPinTest green; ktlint and Gherkin gates green. Design note for sign-off: the `.release` variant under the Debug configuration now bypasses exactly like Android `prodDebug`; every Release configuration still enforces, and the pbxproj pin proves no Release configuration defines DEBUG.
+
+Reviewed-up-to: d6125b9820f
