@@ -47,7 +47,7 @@ const MID_PRESENTATION = `<hierarchy>${TABS.join('')}${nodeXml({
   bounds: '[100,700][1160,2100]',
   enabled: 'true',
 })}${nodeXml({
-  'resource-id': '',
+  'resource-id': 'dailyReward_dismissButton',
   text: 'Later',
   bounds: '[300,1900][500,2000]',
   enabled: 'true',
@@ -61,7 +61,7 @@ const MODAL_SETTLED = `<hierarchy>${nodeXml({
   bounds: '[100,700][1160,2100]',
   enabled: 'true',
 })}${nodeXml({
-  'resource-id': '',
+  'resource-id': 'dailyReward_dismissButton',
   text: 'Later',
   bounds: '[300,1900][500,2000]',
   enabled: 'true',

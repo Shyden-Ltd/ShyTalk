@@ -243,10 +243,13 @@ fun DailyRewardDialog(
         },
         confirmButton = {
             if (state.hasClaimedToday) {
-                Button(onClick = {
-                    viewModel.dismissDialog()
-                    onDismiss()
-                }) {
+                Button(
+                    onClick = {
+                        viewModel.dismissDialog()
+                        onDismiss()
+                    },
+                    modifier = Modifier.testTag("dailyReward_closeButton"),
+                ) {
                     Text(stringResource(Res.string.close))
                 }
             } else {
@@ -266,14 +269,25 @@ fun DailyRewardDialog(
                 }
             }
         },
-        dismissButton = {
-            TextButton(onClick = {
-                viewModel.dismissDialog()
-                onDismiss()
-            }) {
-                Text(if (state.hasClaimedToday) "" else stringResource(Res.string.later))
-            }
-        },
+        // SHY-0527: once the reward is claimed there is no "Later" -- the slot is
+        // absent rather than an empty-labelled button, and both buttons carry the
+        // tags the device-journey runner closes the sheet by.
+        dismissButton =
+            if (state.hasClaimedToday) {
+                null
+            } else {
+                {
+                    TextButton(
+                        onClick = {
+                            viewModel.dismissDialog()
+                            onDismiss()
+                        },
+                        modifier = Modifier.testTag("dailyReward_dismissButton"),
+                    ) {
+                        Text(stringResource(Res.string.later))
+                    }
+                }
+            },
     )
 }
 

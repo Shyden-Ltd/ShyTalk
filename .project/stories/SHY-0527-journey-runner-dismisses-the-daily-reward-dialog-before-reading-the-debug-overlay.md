@@ -28,22 +28,26 @@ first-of-the-day sheet that hides the debug overlay it needs to read.
   `dailyReward_claimButton`: while a dialog window is up, uiautomator
   reports that window alone, so the debug overlay in the main window is
   invisible to the reader.
-- The runner already knows the sheet (`HOME_OVERLAY_IDS` in
-  `device-journey-runner.js`) and lets "Land on Home" pass with it up, but
-  no step ever closes it, so every later dump-reading step inherits the
-  problem.
-- Nothing can close it deterministically: only the claim button carries a
-  test tag. The "Later" text button and the "Close" button shown once the
-  reward is claimed are untagged, and when the reward is already claimed the
-  "Later" button still renders with an empty label.
+- "Land on Home" clears the sheet through `handleRewardCalendar`, but the
+  sheet is presented a moment after Home renders, so the landing step can
+  declare arrival before it appears; the signed-in step then polls raw dumps
+  with no overlay handling and stares at the dialog window for eight seconds.
+- The handler finds the buttons by their English labels ("Later", "Claim
+  Today") and taps "Claim Today" when "Later" is absent, so it claims the
+  reward on a persona's behalf and does nothing at all in the already-claimed
+  state, where the "Later" button renders with an empty label and the "Close"
+  button is untagged. Only the claim button carries a test tag.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-- [ ] "Land on Home" closes the daily-reward sheet when any id in
-      `HOME_OVERLAY_IDS` is present: it taps `dailyReward_dismissButton`,
-      re-reads the screen and asserts no overlay id remains.
+- [ ] `handleRewardCalendar` closes the sheet by test tag: it taps
+      `dailyReward_dismissButton`, or `dailyReward_closeButton` in the
+      already-claimed state, and never any label.
+- [ ] "Confirm the phone is signed in as …" clears overlays on every poll,
+      through the same handlers "Land on Home" uses, before it reads the
+      debug overlay.
 - [ ] The dismissal never claims the reward, so a persona's bean balance and
       claim calendar are exactly as the journey found them.
 - [ ] `DailyRewardDialog` carries `dailyReward_dismissButton` on the "Later"
@@ -55,13 +59,13 @@ first-of-the-day sheet that hides the debug overlay it needs to read.
 
 ### Error paths
 
-- [ ] If the sheet is still present after the tap, "Land on Home" fails and
-      names the overlay ids it still sees.
-- [ ] "Confirm the phone is signed in as …" fails with "the `<id>` overlay
-      hides the debug overlay" when an overlay id is in the dump, instead of
-      the current "not showing an account id".
-- [ ] A dismiss button that is missing from the dump (tags removed, dialog
-      redesigned) fails the step with the ids seen, never a silent skip.
+- [ ] A sheet whose dismiss and close buttons are both missing from the dump
+      (tags removed, dialog redesigned, older build) fails the step at once
+      with the ids seen, never a silent skip and never a tap on the claim
+      button.
+- [ ] "Confirm the phone is signed in as …" keeps its two failure texts and
+      appends the overlay ids still on screen when the account line is
+      missing, so the message says what hid it.
 
 ### Edge cases
 
@@ -114,11 +118,13 @@ first-of-the-day sheet that hides the debug overlay it needs to read.
 
 ## Test Plan
 
-- Unit (`express-api/tests/scripts/device-journey-dismisses-the-daily-reward-dialog.test.js`):
-  the J08 dump from `report.json` as a fixture; the dismiss helper taps the
-  dismiss button, then the close button, fails naming the ids when neither
-  is present, and does nothing on a clean Home; the signed-in reader's
-  message names the overlay.
+- Unit (`express-api/tests/scripts/device-journey-daily-reward-dismissal.test.js`):
+  the J08 dump shape as a fixture; `confirmAccountOnDevice` dismisses the
+  sheet by tag and then reads the account, closes the already-claimed sheet
+  through its Close button, fails naming the ids when neither button is
+  tagged with zero taps, taps nothing on a clean Home, and keeps the
+  wrong-account and missing-overlay failures; `handleRewardCalendar` never
+  taps the claim button. The ordering test's fixture gains the tag.
 - Source pin (jvmTest, `RepoSource.read`): both tags present in
   `DailyRewardDialog.kt`, the "Later" button guarded by `hasClaimedToday`,
   no empty-label `Text("")`.

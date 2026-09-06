@@ -180,8 +180,8 @@ function rewardCalendarThenSignIn() {
   const MODAL =
     '<hierarchy>' +
     '<node resource-id="android:id/content" bounds="[0,0][440,1600]" />' +
-    '<node text="Claim Today\'s Reward" class="android.widget.Button" bounds="[120,1200][380,1270]" enabled="true" />' +
-    '<node text="Later" class="android.widget.Button" bounds="[40,1200][110,1270]" enabled="true" />' +
+    '<node resource-id="dailyReward_claimButton" text="Claim Today\'s Reward" class="android.widget.Button" bounds="[120,1200][380,1270]" enabled="true" />' +
+    '<node resource-id="dailyReward_dismissButton" text="Later" class="android.widget.Button" bounds="[40,1200][110,1270]" enabled="true" />' +
     '</hierarchy>';
   const SIGN_IN =
     '<hierarchy>' +
