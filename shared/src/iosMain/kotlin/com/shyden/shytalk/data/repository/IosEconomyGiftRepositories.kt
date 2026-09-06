@@ -14,6 +14,7 @@ import com.shyden.shytalk.core.model.MilestoneReward
 import com.shyden.shytalk.core.model.Transaction
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.guardedSnapshots
 import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
@@ -38,7 +39,7 @@ class IosEconomyRepositoryImpl(
         return firestore
             .collection("users")
             .document(uniqueId)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 if (!snapshot.exists) {
                     0L
@@ -68,7 +69,7 @@ class IosEconomyRepositoryImpl(
         return firestore
             .collection("config")
             .document("economy")
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 if (!snapshot.exists) return@map defaultConfig
                 val data = snapshot.dataMap()
@@ -343,7 +344,7 @@ class IosGiftRepositoryImpl(
         firestore
             .collection("gifts")
             .where { "showInStore" equalTo true }
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents
                     .mapNotNull { doc ->
@@ -359,7 +360,7 @@ class IosGiftRepositoryImpl(
     override fun observeAllGifts(): Flow<List<Gift>> =
         firestore
             .collection("gifts")
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents
                     .mapNotNull { doc ->
@@ -375,7 +376,7 @@ class IosGiftRepositoryImpl(
     override fun observeBackpack(userId: String): Flow<List<BackpackItem>> =
         firestore
             .collection("users/$userId/backpack")
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
@@ -390,7 +391,7 @@ class IosGiftRepositoryImpl(
     override fun observeGiftWall(userId: String): Flow<List<GiftWallEntry>> =
         firestore
             .collection("users/$userId/giftWall")
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {
@@ -407,7 +408,7 @@ class IosGiftRepositoryImpl(
             .collection("broadcasts")
             .orderBy("timestamp", Direction.DESCENDING)
             .limit(50)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
                     try {

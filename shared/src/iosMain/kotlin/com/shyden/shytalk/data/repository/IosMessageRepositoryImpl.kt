@@ -5,6 +5,7 @@ import com.shyden.shytalk.core.model.MessageType
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.guardedSnapshots
 import com.shyden.shytalk.data.firestore.dataMap
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
@@ -19,7 +20,7 @@ class IosMessageRepositoryImpl(
             .collection("rooms/$roomId/messages")
             .orderBy("createdAt", Direction.DESCENDING)
             .limit(200)
-            .snapshots
+            .guardedSnapshots
             .map { snapshot ->
                 snapshot.documents
                     .mapNotNull { doc ->

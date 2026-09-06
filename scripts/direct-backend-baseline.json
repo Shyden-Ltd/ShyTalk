@@ -10,6 +10,7 @@
     "app/src/main/java/com/shyden/shytalk/data/repository/UserRepositoryImpl.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/core/util/GuardedSnapshots.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/firestore/DocumentSnapshotIosExt.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosEconomyGiftRepositories.kt",
     "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosMessageRepositoryImpl.kt",
