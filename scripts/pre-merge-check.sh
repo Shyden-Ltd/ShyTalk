@@ -29,10 +29,12 @@ SKIP_CI=false
 BASE_REF="${BASE_REF:-origin/main}"
 # STORY_RE: a SHY story file (has a `status:` to gate on).
 STORY_RE='^\.project/stories/SHY-[0-9]{4}-.*\.md$'
-# NEUTRAL_RE: a commit touching ONLY story-tracking docs (a SHY story, SHY-INDEX,
-# or an EPIC file — all under .project/stories/*.md) is review-neutral for Gate 3:
-# status flips, marker bumps + the index row that accompany them aren't code.
-NEUTRAL_RE='^\.project/stories/.*\.md$'
+# NEUTRAL_RE: a commit touching ONLY project-tracking documents is review-neutral
+# for Gate 3 — a story, SHY-INDEX, an epic, a handover, or the generated
+# board-items.json. Status flips, marker bumps, the index row that accompanies
+# them and a session's handover aren't code. Prose and generated state only:
+# .md and .json under .project/, so a script parked there stays gated (SHY-0528).
+NEUTRAL_RE='^\.project/.*\.(md|json)$'
 
 fail() {
   echo "REFUSE: $*" >&2
@@ -44,6 +46,12 @@ fail() {
 # name-status (not name-only): each line is "<code>\t<path>" — or for a rename,
 # "<code>\t<old>\t<new>". The change code (A/M/R…) lets us apply the SHY-0131
 # added-Draft filing exemption (a brand-new Draft story is a legitimate filing).
+# Gate 3 excludes commits already on the base branch, so an unresolvable BASE_REF
+# must stop the run: an empty exclusion would silently re-admit the false
+# positives, and a broken diff would gate nothing at all. Fail closed (SHY-0528).
+git rev-parse --verify --quiet "${BASE_REF}^{commit}" >/dev/null ||
+  fail "BASE_REF '${BASE_REF}' is not a commit in this repo — pass the PR's base (e.g. BASE_REF=origin/develop)"
+
 STATUS_LINES=$(git diff --name-status --diff-filter=ACMR "${BASE_REF}...HEAD")
 
 # Validate each changed story: status In Review + a REAL Reviewed-up-to commit —
@@ -98,9 +106,17 @@ while IFS= read -r line; do
 done <<< "$STATUS_LINES"
 [ "$FOUND_STORY" = true ] || fail "no SHY story .md changed on this branch (BASE_REF=$BASE_REF) — nothing to gate"
 
-# Gate 3: for EVERY story's marker, a commit after it that touches anything other
-# than a story .md is unreviewed code. Checking every marker keeps multi-story PRs
-# honest. (grep -qvE returns 0 iff a non-story-md path is present in the commit.)
+# Gate 3: for EVERY story's marker, a commit THIS BRANCH ADDS after it that
+# touches anything other than a tracking document is unreviewed code. Checking
+# every marker keeps multi-story PRs honest. (grep -qvE returns 0 iff a
+# non-neutral path is present in the commit.)
+#
+# `^${BASE_REF}` is what makes the range the branch's own work: `marker..HEAD`
+# alone also contains every base-branch commit made since the marker, so a note
+# added to a story that merged long ago was reported as unreviewed code written
+# by someone else — and the only ways out were to launder the marker over that
+# code or to stop recording outcomes on stories at all (SHY-0528). Anything on
+# the base branch passed this same gate to get there.
 UNREVIEWED=0
 while IFS= read -r rs; do
   [ -z "$rs" ] && continue
@@ -110,7 +126,7 @@ while IFS= read -r rs; do
       UNREVIEWED=$((UNREVIEWED + 1))
       echo "  unreviewed commit since ${rs}: $(git log -1 --oneline "$c")" >&2
     fi
-  done < <(git rev-list "${rs}..HEAD")
+  done < <(git rev-list "${rs}..HEAD" "^${BASE_REF}")
 done <<< "$MARKERS"
 [ "$UNREVIEWED" -eq 0 ] || fail "$UNREVIEWED unreviewed commit(s) since a Reviewed-up-to marker — re-review them + bump the marker"
 
