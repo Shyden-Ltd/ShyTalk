@@ -110,7 +110,12 @@ adb_ping_probe() {
   local target="$1"
   local -a serial=()
   [ -n "${ANDROID_SERIAL:-}" ] && serial=(-s "$ANDROID_SERIAL")
-  "$ADB_BIN" "${serial[@]}" shell "ping -c 1 -W 2 $target" 2>/dev/null |
+  # `${serial[@]+"${serial[@]}"}` rather than `"${serial[@]}"`: the bash macOS
+  # ships (3.2) treats an EMPTY array as unset under `set -u`, so the plain
+  # form aborted the probe with `serial[@]: unbound variable` whenever
+  # ANDROID_SERIAL was not set -- and the chooser fell through to loopback on a
+  # phone that could reach this machine perfectly well (2026-09-04).
+  "$ADB_BIN" ${serial[@]+"${serial[@]}"} shell "ping -c 1 -W 2 $target" 2>/dev/null |
     grep -qE '1 (packets )?received|bytes from'
 }
 

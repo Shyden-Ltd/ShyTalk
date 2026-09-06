@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.support
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,15 +33,6 @@ import kotlin.test.assertTrue
  * being skipped as up-to-date.
  */
 class SupportFormWiringPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root not found")
-    }
-
     /**
      * Code only: a KDoc mention is not a call, and an import is a declaration of
      * availability rather than of use. Both have made an earlier pin in this repo

@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.auth
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,12 +33,6 @@ import kotlin.test.assertTrue
  * journeys. See [[feedback-assert-rendered-text-not-just-tags]].
  */
 class ConnectionCopyTakesNoBlameTest {
-    private fun repoRoot(): File {
-        var dir = File(System.getProperty("user.dir"))
-        while (!File(dir, "settings.gradle.kts").exists() && dir.parentFile != null) dir = dir.parentFile
-        return dir
-    }
-
     private val english: String by lazy {
         File(repoRoot(), "shared/src/commonMain/composeResources/values/strings.xml").readText()
     }

@@ -8,16 +8,39 @@ package com.shyden.shytalk.navigation
  * state can never resolve differently per platform.
  *
  * Pure and synchronous by contract: no I/O, no clock reads — callers pass the
- * already-known repository facts. Cascade (mirrors `AuthViewModel`'s init
- * semantics):
- *  1. No stored credential → [Screen.SignIn].
- *  2. App-Lock enabled AND the lock timeout has expired → [Screen.Lock]
- *     (the gate outranks a restorable session — physical access must not
- *     reveal the account).
- *  3. Live session with a resolved user → [Screen.Main] (silent restore).
- *  4. Otherwise (credential present, session dead/unresolved) → [Screen.Lock]:
- *     PIN re-entry drives session restore; its `requiresReauth` path routes
- *     to Sign-In when restore is impossible.
+ * already-known repository facts. Cascade:
+ *  1. An enrolled App-Lock credential, App-Lock enabled AND the lock timeout
+ *     expired → [Screen.Lock] (the gate outranks a restorable session —
+ *     physical access must not reveal the account).
+ *  2. Live session with a resolved user → [Screen.Main] (silent restore).
+ *  3. Otherwise, with a credential enrolled (session dead/unresolved) →
+ *     [Screen.Lock]: PIN re-entry drives session restore; its `requiresReauth`
+ *     path routes to Sign-In when restore is impossible.
+ *  4. Otherwise → [Screen.SignIn].
+ *
+ * SHY-0500 moved "no stored credential" from the FRONT of the cascade to the
+ * end. The credential is App-Lock's PIN, enrolled only from the Lock screen's
+ * reset path — so "none enrolled" is every signed-in person's normal state,
+ * not evidence that nobody is signed in. Reading it as "no session" drew the
+ * sign-in screen first for a signed-in person on a real phone and sent the
+ * launch through the network round trip this resolver exists to avoid. An
+ * unenrolled credential gates nothing: with nothing enrolled there is nothing
+ * to lock behind, which is also what [shouldRelockOnResume] says.
+ *
+ * That combination is not an edge case. `AppLockRepositoryImpl` has App-Lock
+ * ENABLED by default and reports the lock as REQUIRED whenever no last-active
+ * timestamp exists, so "enabled, required, no credential" is the state of
+ * every signed-in person who never enrolled a PIN. Routing it to Lock would
+ * present a lock nothing can open; routing it to Sign-In is the SHY-0500
+ * defect. The credential is what makes a lock possible, and step 1 says so.
+ *
+ * A live session whose identity is NOT resolved (the `SessionCache` read
+ * missed — a wiped cache, or the first launch after it was introduced) draws
+ * Sign-In, as it did before SHY-0500. That is not a dead end: `AuthViewModel`
+ * sees the live Firebase user with no PIN and resolves the identity over the
+ * network itself (its migration path), so this is the one launch that still
+ * goes through the network — by necessity, since nothing local names the
+ * account — and it corrects itself without a cold-start redirect.
  */
 fun resolveLaunchDestination(
     hasStoredCredential: Boolean,
@@ -27,10 +50,10 @@ fun resolveLaunchDestination(
     hasResolvedUser: Boolean,
 ): Screen =
     when {
-        !hasStoredCredential -> Screen.SignIn
-        isAppLockEnabled && isLockRequired -> Screen.Lock
+        hasStoredCredential && isAppLockEnabled && isLockRequired -> Screen.Lock
         isAuthenticated && hasResolvedUser -> Screen.Main
-        else -> Screen.Lock
+        hasStoredCredential -> Screen.Lock
+        else -> Screen.SignIn
     }
 
 /**

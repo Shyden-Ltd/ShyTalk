@@ -128,11 +128,28 @@ describe('source-level guard', () => {
     // uuid — which is not what had changed. That is the failure mode of every
     // source-scanning guard, and the reason `foundLaunchMethod` is asserted
     // separately: it names the drift instead of blaming the payload.
-    const block = src.match(/^ {2}(?:async )?launch\(\) \{[\s\S]*?^ {2}\}/m)?.[0] ?? '';
-    expect({ foundLaunchMethod: block !== '' }).toEqual({ foundLaunchMethod: true });
-    expect({
-      passesCoreDevice: /'--device',\s*\n\s*this\.serial,/.test(block),
-    }).toEqual({ passesCoreDevice: true });
+    //
+    // Widened for SHY-0500: devicectl is no longer called from launch() alone
+    // (`_devicectlLaunch`, `_listProcesses`), so the guard reads EVERY
+    // `run('xcrun', ['devicectl', …])` inside the class and holds each one to
+    // the rule — a per-method slice would have blessed the method it named and
+    // missed the next one. Module-level helpers (list devices, the dormant
+    // probe) take no `this` and are outside the slice on purpose.
+    const classStart = src.indexOf('\nclass IosDevice');
+    const classEnd = src.indexOf('\nfunction createIosJourneyDevice');
+    expect({ foundClass: classStart > 0 && classEnd > classStart }).toEqual({ foundClass: true });
+    const calls = [
+      ...src.slice(classStart, classEnd).matchAll(/run\('xcrun', \[\s*'devicectl',([\s\S]*?)\]\)/g),
+    ].map((m) => m[1]);
+    // Anchor: launch and the process listing at least. Zero calls would mean
+    // the call shape drifted, not that the rule holds.
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    for (const args of calls) {
+      expect({ args, passesCoreDevice: /'--device',\s*\n\s*this\.serial,/.test(args) }).toEqual({
+        args,
+        passesCoreDevice: true,
+      });
+    }
   });
 });
 

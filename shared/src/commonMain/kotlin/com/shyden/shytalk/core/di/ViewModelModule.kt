@@ -24,6 +24,7 @@ import com.shyden.shytalk.feature.settings.RoomSettingsViewModel
 import com.shyden.shytalk.feature.shop.TransactionHistoryViewModel
 import com.shyden.shytalk.feature.shop.WalletViewModel
 import com.shyden.shytalk.feature.support.SupportFormViewModel
+import com.shyden.shytalk.navigation.ColdStartClaimGate
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
@@ -42,11 +43,16 @@ val viewModelModule =
         // future PrivateMessageViewModel) can `get()` it.
         single { AgeRestrictionService() }
 
+        // SHY-0500 — one claim gate per process: the cold-start sequencer
+        // engages it and HomeViewModel waits on it, so both must resolve the
+        // same instance.
+        single { ColdStartClaimGate() }
+
         viewModel { AuthViewModel(get(), get(), get(), get(), get(named("deviceId")), get(named("bypassDeviceChecks")), get(), get()) }
         viewModel { LockScreenViewModel(get(), get(), get(), get(), get(), get()) }
         viewModel { PinSetupViewModel(get(), get(), get(), get(named("deviceId"))) }
         viewModel { EmailOtpViewModel(get()) }
-        viewModel { HomeViewModel(get(), get(), get(), get()) }
+        viewModel { HomeViewModel(get(), get(), get(), get(), get()) }
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }
         viewModel { RequiredDOBViewModel(get(), get()) }
         viewModel { AgeVerificationSubmitViewModel(get()) }

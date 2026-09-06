@@ -1,6 +1,6 @@
 package com.shyden.shytalk.navigation
 
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -33,21 +33,6 @@ import kotlin.test.assertTrue
  * semantic backstop.
  */
 class AppLockWiringPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root (settings.gradle.kts) not found from ${System.getProperty("user.dir")}")
-    }
-
-    private fun read(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "expected source file to exist: $relative")
-        return f.readText()
-    }
-
     private val mainActivity = "app/src/main/java/com/shyden/shytalk/MainActivity.kt"
     private val mainViewController = "shared/src/iosMain/kotlin/com/shyden/shytalk/MainViewController.kt"
     private val sharedNavGraph = "shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/SharedNavGraph.kt"

@@ -1,6 +1,6 @@
 package com.shyden.shytalk.navigation
 
-import java.io.File
+import com.shyden.shytalk.testsupport.RepoSource.read
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -30,25 +30,12 @@ import kotlin.test.assertTrue
  * body lives in the same file. Device journeys are the semantic backstop.
  */
 class NavGraphDestinationCompletenessTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root (settings.gradle.kts) not found from ${System.getProperty("user.dir")}")
-    }
-
     /** Source with `//` line comments and block comments removed. */
-    private fun readStripped(relative: String): String {
-        val f = File(repoRoot(), relative)
-        assertTrue(f.exists(), "expected source file to exist: $relative")
-        return f
-            .readText()
+    private fun readStripped(relative: String): String =
+        read(relative)
             .replace(BLOCK_COMMENT, "")
             .lines()
             .joinToString("\n") { it.substringBefore("//") }
-    }
 
     /**
      * Destinations the graph declares, i.e. `composable(Screen.X.route)`

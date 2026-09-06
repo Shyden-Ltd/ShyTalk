@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
@@ -136,7 +137,10 @@ fun RoomListContent(
                                 Modifier
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
-                                    .testTag("roomList_emptyState"),
+                                    .testTag("roomList_emptyState")
+                                    // One accessibility element: XCUITest sees the tag on
+                                    // iOS and VoiceOver reads the texts as a single item.
+                                    .semantics(mergeDescendants = true) {},
                             contentAlignment = Alignment.Center,
                         ) {
                             Column(

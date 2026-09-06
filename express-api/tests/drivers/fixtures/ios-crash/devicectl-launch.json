@@ -1,0 +1,13 @@
+{
+  "info": {
+    "jsonVersion": 2,
+    "outcome": "success"
+  },
+  "result": {
+    "deviceIdentifier": "74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6",
+    "process": {
+      "executable": "file:///private/var/containers/Bundle/Application/A9E1154B-4CA5-4D48-B55A-9D591E633998/iosApp.app/iosApp",
+      "processIdentifier": 1648
+    }
+  }
+}

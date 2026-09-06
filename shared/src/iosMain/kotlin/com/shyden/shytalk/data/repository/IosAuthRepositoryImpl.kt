@@ -2,10 +2,13 @@ package com.shyden.shytalk.data.repository
 
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.logD
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.auth.FirebaseAuth
 import dev.gitlive.firebase.auth.GoogleAuthProvider
 import dev.gitlive.firebase.auth.OAuthProvider
+import kotlinx.coroutines.flow.map
 
 class IosAuthRepositoryImpl(
     private val auth: FirebaseAuth,
@@ -42,6 +45,35 @@ class IosAuthRepositoryImpl(
 
     override val currentFirebaseUid: String?
         get() = auth.currentUser?.uid
+
+    /**
+     * Firebase iOS restores its keychain user asynchronously and fires a freshly
+     * added auth-state listener at once with whatever it holds — nil until that
+     * load finishes. So the SDK's first emission is NOT the keychain load: a
+     * wait that returned on it read `currentUser == null`, missed the identity
+     * cache, and drew sign-in first for a signed-in person (J40 on the iPhone,
+     * 2026-09-05: `Cold-start identity cache miss`, `authenticated=true` 560 ms
+     * later). The identity cache's own record is the local sign that a user is
+     * coming: with one, hold (bounded) for the emission that carries a user;
+     * without one, do not wait at all. No network is involved either way. The
+     * wait itself is common code, proven in PersistedSessionOutcomeTest.
+     */
+    override suspend fun awaitPersistedSession() {
+        val outcome =
+            awaitRestoredUser(
+                expectUser = sessionCache.hasRecord(),
+                userIds = auth.authStateChanged.map { it?.uid },
+                timeoutMs = PERSISTED_SESSION_TIMEOUT_MS,
+            )
+        when (outcome) {
+            PersistedSessionOutcome.NoneExpected -> logD(TAG, "persisted session: no record, not waiting")
+
+            PersistedSessionOutcome.Restored -> logD(TAG, "persisted session: restored by the SDK")
+
+            is PersistedSessionOutcome.NotRestoredWithin ->
+                logI(TAG, "persisted session expected but not reported within ${outcome.timeoutMs}ms; deciding on what is known")
+        }
+    }
 
     override val isAuthenticated: Boolean
         get() = auth.currentUser != null
@@ -163,3 +195,7 @@ class IosAuthRepositoryImpl(
             user.getIdToken(true).let { }
         }
 }
+
+/** How long a cold start with a cached identity waits for the SDK to report its persisted user. */
+private const val PERSISTED_SESSION_TIMEOUT_MS = 1_500L
+private const val TAG = "IosAuthRepository"

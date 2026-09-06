@@ -12,15 +12,16 @@ import platform.CoreFoundation.CFDictionaryCreateMutable
 import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFMutableDictionaryRef
 import platform.CoreFoundation.CFTypeRef
+import platform.CoreFoundation.CFTypeRefVar
 import platform.CoreFoundation.kCFBooleanTrue
+import platform.Foundation.CFBridgingRelease
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSData
-import platform.Foundation.NSString
-import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.create
 import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
+import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
 import platform.Security.kSecAttrAccount
 import platform.Security.kSecAttrService
@@ -32,6 +33,7 @@ import platform.Security.kSecReturnData
 import platform.Security.kSecValueData
 
 private const val SERVICE_NAME = "com.shyden.shytalk.secure"
+private const val TAG = "SecureStorage"
 
 actual class SecureStorage {
     private fun createQuery(
@@ -58,20 +60,24 @@ actual class SecureStorage {
                 ),
             )
         memScoped {
-            val result = alloc<platform.CoreFoundation.CFTypeRefVar>()
+            val result = alloc<CFTypeRefVar>()
             val status = SecItemCopyMatching(query, result.ptr)
-            if (status != errSecSuccess) return null
-            // Toll-free bridging: CFTypeRef returned by SecItemCopyMatching with
-            // kSecReturnData=true is an NSData. Kotlin/Native's compile-time
-            // type checker can't see the bridge, so the cast looks dubious; at
-            // runtime the same bytes are an NSData reference. The same applies
-            // to NSString.create(data:encoding:) — the factory returns an
-            // NSString that bridges to kotlin.String via the K/N runtime.
-            @Suppress("UNCHECKED_CAST", "CAST_NEVER_SUCCEEDS")
-            val data = result.value as? NSData ?: return null
-
-            @Suppress("CAST_NEVER_SUCCEEDS")
-            return NSString.create(data = data, encoding = NSUTF8StringEncoding) as? String
+            if (status != errSecSuccess) {
+                // errSecItemNotFound is the ordinary miss; anything else is a read that failed.
+                if (status != errSecItemNotFound) logW(TAG, "getString: SecItemCopyMatching failed for '$key', OSStatus=$status")
+                return null
+            }
+            // SecItemCopyMatching hands back a +1 CoreFoundation reference. Kotlin/Native
+            // sees a raw pointer, and `pointer as? NSData` is a check on the Kotlin wrapper
+            // that never passes (the compiler said so; it was suppressed, and every Keychain
+            // read on iOS missed — SHY-0500). CFBridgingRelease crosses the toll-free bridge
+            // to the NSData it really is and balances the +1.
+            val data = CFBridgingRelease(result.value) as? NSData
+            if (data == null) {
+                logW(TAG, "getString: SecItemCopyMatching returned something other than data for '$key'")
+                return null
+            }
+            return data.toByteArray().decodeToString()
         }
     }
 
@@ -91,7 +97,8 @@ actual class SecureStorage {
                 key,
                 mapOf(kSecValueData to CFBridgingRetain(data)),
             )
-        SecItemAdd(query, null)
+        val status = SecItemAdd(query, null)
+        if (status != errSecSuccess) logW(TAG, "putString: SecItemAdd failed for '$key', OSStatus=$status")
     }
 
     actual fun getInt(
@@ -144,11 +151,13 @@ actual class SecureStorage {
         val dict = CFDictionaryCreateMutable(null, 0, null, null)!!
         CFDictionarySetValue(dict, kSecClass, kSecClassGenericPassword)
         CFDictionarySetValue(dict, kSecAttrService, CFBridgingRetain(SERVICE_NAME))
-        SecItemDelete(dict)
+        val status = SecItemDelete(dict)
+        if (status != errSecSuccess && status != errSecItemNotFound) logW(TAG, "clear: SecItemDelete failed, OSStatus=$status")
     }
 
     private fun delete(key: String) {
         val query = createQuery(key)
-        SecItemDelete(query)
+        val status = SecItemDelete(query)
+        if (status != errSecSuccess && status != errSecItemNotFound) logW(TAG, "delete: SecItemDelete failed for '$key', OSStatus=$status")
     }
 }

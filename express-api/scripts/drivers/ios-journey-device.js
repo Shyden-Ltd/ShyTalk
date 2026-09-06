@@ -40,6 +40,9 @@
  */
 
 const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const nodePath = require('node:path');
 
 /**
  * Run a command with an ARGUMENT ARRAY, never a shell string.
@@ -51,11 +54,91 @@ const { execFileSync } = require('node:child_process');
  */
 const run = (bin, args) => execFileSync(bin, args, { encoding: 'utf8' });
 
+/**
+ * The app's PROCESS name in the device syslog: the Xcode target's executable,
+ * `iosApp` -- not the display name ("ShyTalk") and not the bundle id. A
+ * capture filtered on "ShyTalk" returned three lines and none of them the
+ * app's (2026-09-04); the same launch unfiltered showed 3,688 lines from
+ * `iosApp(...)`.
+ */
+const IOS_APP_PROCESS_NAME = 'iosApp';
+// A crash report is written by the system a moment AFTER the process dies, so a
+// pull that lands in that gap finds nothing. Three pulls, two seconds apart,
+// cover the gap seen on the device (report filed ~1s after the abort) with room;
+// the interval is injectable so the retry is provable without waiting it out.
+const CRASH_REPORT_RETRY_MS = 2000;
+const CRASH_REPORT_PULLS = 3;
+// The phone's clock and the Mac's disagree by seconds, not minutes. A report
+// this much older than the launch is still "this launch"; one older than that
+// is an earlier death and must not be pinned on the current step.
+const CRASH_REPORT_CLOCK_SKEW_MS = 60_000;
+// setOffline: `activate_app` for Settings returns before WebDriverAgent's
+// snapshot has moved off the app under test. On the iPhone a lookup 131 ms
+// after activation missed (404); the same lookup 1.5 s later found the switch
+// (2026-09-05, J40 run 5). So the switch is polled for, up to this long.
+const OFFLINE_SWITCH_WAIT_MS = 8000;
+const OFFLINE_SWITCH_POLL_MS = 250;
+// How long a tapped switch gets to report its new value, and how many taps
+// setOffline will spend before calling the switch unresponsive.
+const OFFLINE_SETTLE_MS = 3000;
+const OFFLINE_TAPS = 2;
+// Where the toggle control sits inside a Settings switch row: the row is one
+// XCUIElementTypeSwitch 380 points wide on the iPhone, the 51-point control is
+// at its trailing edge behind about 16 points of padding, so this far in from
+// the frame's right edge lands in the control's middle (run 7, 2026-09-05).
+const OFFLINE_SWITCH_KNOB_INSET = 40;
+// The accessibility identifier is the same in every locale; the label is
+// "Aeroplane Mode" on a UK phone.
+const AIRPLANE_MODE_SWITCH =
+  "type == 'XCUIElementTypeSwitch' AND " +
+  "(name == 'com.apple.settings.airplaneMode' OR label == 'Airplane Mode' OR label == 'Aeroplane Mode')";
+const isElementMissing = (e) => /-> 404\b/.test(String(e?.message));
+
+/** devicectl writes its answer — success OR failure — to `--json-output`. */
+function readDevicectlJson(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (e) {
+    throw new Error(`devicectl left no parsable JSON at ${file}`, { cause: e });
+  }
+}
+
+/** `YYYY-MM-DD HH:MM:SS` in the Mac's local zone, which is what `log show --start` reads. */
+const localTimestamp = (epochSeconds) => {
+  const d = new Date(epochSeconds * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+
+/** The stamp that opens a `log show --style syslog` line: `2026-09-05 08:36:24.687692+0700  localhost iosApp[1501]: ...` */
+const SYSLOG_STAMP = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})\.(\d+)([+-]\d{2})(\d{2})\b/;
+
+/**
+ * True when the line's own timestamp is earlier than the mark. A line with no
+ * stamp (a continuation) is not judged here; the tag filter decides it.
+ */
+const stampedBefore = (line, markEpochSeconds) => {
+  const m = SYSLOG_STAMP.exec(line);
+  if (!m) return false;
+  const millis = m[3].slice(0, 3).padEnd(3, '0');
+  const at = Date.parse(`${m[1]}T${m[2]}.${millis}${m[4]}:${m[5]}`);
+  return Number.isFinite(at) && at < markEpochSeconds * 1000;
+};
+
 // Reused, never re-implemented. This is the same retry policy the Android
 // dumps use, it is unit-tested with an injected delay, and reusing it keeps
 // ONE retry policy across both platforms instead of two that can drift.
 const { dumpWithRetry } = require('./ui-dump-retry');
+const { pollUntil } = require('./poll-until');
 const { selectUdid } = require('./ios-appium-driver');
+const { AppProcessDiedError } = require('./app-process-death');
+const {
+  describeAppDeath,
+  findCrashReportsSince,
+  findRunningProcess,
+  launchedProcessId,
+  summarizeCrashReport,
+} = require('./ios-crash-report');
 
 const DEFAULT_APPIUM_BASE_URL = process.env.APPIUM_BASE_URL || 'http://localhost:4723';
 
@@ -333,6 +416,9 @@ class IosDevice {
     sessionRecoveryTimeoutMs = SESSION_RECOVERY_TIMEOUT_MS,
     settingsTimeoutMs = SETTINGS_TIMEOUT_MS,
     quitTimeoutMs = QUIT_TIMEOUT_MS,
+    crashReportRetryMs = CRASH_REPORT_RETRY_MS,
+    offlineSwitchWaitMs = OFFLINE_SWITCH_WAIT_MS,
+    offlineSettleMs = OFFLINE_SETTLE_MS,
     // Injected so a test can READ what the driver said without patching the
     // console. The warnings below are part of the contract -- a tolerated
     // lost click, a retyped field -- and a contract has to be assertable.
@@ -356,6 +442,10 @@ class IosDevice {
       );
     }
     this.kind = 'ios';
+    // The tools behind clearAppLog()/readAppLog(). `_run` is a field so a test
+    // can hand in a recorded fake; the default is the real execFileSync.
+    this._run = run;
+    this._logMark = null;
     this.coreDeviceUuid = coreDeviceUuid;
     this.hardwareUdid = hardwareUdid;
     // `serial` is the runner-wide name for "the thing that identifies this
@@ -371,6 +461,22 @@ class IosDevice {
     // budget from the set meant the attempt after a wedge recovery looked
     // COLD and waited 210s — the stall SHY-0451 exists to have removed.
     this._everOpened = false;
+    // The process `devicectl … launch` reported, and when. `assertAppAlive`
+    // judges against it: a DIFFERENT iosApp pid is not survival but a
+    // relaunch — which is exactly how J40's step-8 crash hid (SHY-0523): the
+    // app aborted, the next WebDriverAgent session launched it again, and the
+    // step read the second launch's screen.
+    this._launchedPid = null;
+    this._launchedAt = null;
+    this._createdAt = Date.now();
+    // Set by launch() when IT drops the session. That drop is not a loss, so
+    // the reopen must not spend a devicectl round trip (~1.1s) looking for a
+    // crash right before J40's first-frame read; an error path never sets it.
+    this._sessionDroppedOnPurpose = false;
+    this._crashReportRetryMs = crashReportRetryMs;
+    this._offlineSwitchWaitMs = offlineSwitchWaitMs;
+    this._offlineSettleMs = offlineSettleMs;
+    this._scratch = null;
     this._size = null;
     this._commandTimeoutMs = commandTimeoutMs;
     this._sessionColdTimeoutMs = sessionColdTimeoutMs;
@@ -419,6 +525,7 @@ class IosDevice {
    */
   async _session() {
     if (this._sessionId) return this._sessionId;
+    await this._refuseToRelaunchADeadApp();
     // A session has been opened before, so WebDriverAgent is installed and
     // this is a reattach, not a build.
     const isReconnect = this._everOpened;
@@ -669,6 +776,12 @@ class IosDevice {
       try {
         return await operation();
       } catch (again) {
+        // The reopen found the app dead: THAT is the finding, under the command
+        // that met it, with what WebDriverAgent saw as its cause. Wrapping it
+        // in "failed twice across a restart" would re-hide the crash.
+        if (again instanceof AppProcessDiedError) {
+          throw new AppProcessDiedError(label, again.detail, { cause: e });
+        }
         // BOTH errors, because they say different things and only one of them
         // is the cause. J39, 2026-08-24, reported only the second:
         //
@@ -833,10 +946,16 @@ class IosDevice {
    * and this driver did not, so on iOS the keyboard was never dismissed and
    * the guard silently did nothing (SHY-0457).
    *
-   * Best effort on purpose: WDA answers 404 for this route on some iOS
-   * versions, and a keyboard that will not close is a worse screenshot, not a
-   * failed journey. It warns instead of throwing, so the tolerance is part of
-   * the output rather than a silence.
+   * Through `mobile: hideKeyboard`, the command Appium routes. The raw
+   * WebDriverAgent endpoint (`/wda/keyboard/dismiss`) is one the xcuitest
+   * driver proxies INTERNALLY; posted by a client it is Appium's own 404, on
+   * every iOS version -- which the tolerance below read as "WDA would not
+   * dismiss the keyboard" for weeks, until iOS 27.0's taller keyboard put the
+   * send button under it and J07 tapped a key (SHY-0500, 2026-09-04).
+   *
+   * Still best effort: a keyboard that will not close is a worse screenshot,
+   * not a failed journey. It warns instead of throwing, so the tolerance is
+   * part of the output rather than a silence.
    */
   async hideKeyboard() {
     // The tolerance sits OUTSIDE withSessionRecovery, not inside it. Catching
@@ -846,7 +965,12 @@ class IosDevice {
     // defect that wrapper exists to prevent.
     try {
       return await this.withSessionRecovery('hideKeyboard()', async () => {
-        await this._post('/wda/keyboard/dismiss', {});
+        await this._post('/execute/sync', {
+          script: 'mobile: hideKeyboard',
+          // The keys WebDriverAgent will tap to close it, in order tried; a
+          // search field's keyboard says "search", a message field's "return".
+          args: [{ keys: ['done', 'return', 'search', 'go', 'send'] }],
+        });
         return true;
       });
     } catch (err) {
@@ -891,22 +1015,27 @@ class IosDevice {
    * an identifier should go through `tapElement`.
    */
   async tap(x, y) {
-    return this.withSessionRecovery(`tap(${Math.round(x)},${Math.round(y)})`, async () => {
-      await this._post('/actions', {
-        actions: [
-          {
-            type: 'pointer',
-            id: 'finger1',
-            parameters: { pointerType: 'touch' },
-            actions: [
-              { type: 'pointerMove', duration: 0, x: Math.round(x), y: Math.round(y) },
-              { type: 'pointerDown', button: 0 },
-              { type: 'pause', duration: 60 },
-              { type: 'pointerUp', button: 0 },
-            ],
-          },
-        ],
-      });
+    return this.withSessionRecovery(`tap(${Math.round(x)},${Math.round(y)})`, () =>
+      this._tapPoint(x, y),
+    );
+  }
+
+  /** One touch at a screen point, as a W3C pointer action. */
+  async _tapPoint(x, y) {
+    await this._post('/actions', {
+      actions: [
+        {
+          type: 'pointer',
+          id: 'finger1',
+          parameters: { pointerType: 'touch' },
+          actions: [
+            { type: 'pointerMove', duration: 0, x: Math.round(x), y: Math.round(y) },
+            { type: 'pointerDown', button: 0 },
+            { type: 'pause', duration: 60 },
+            { type: 'pointerUp', button: 0 },
+          ],
+        },
+      ],
     });
   }
 
@@ -1038,25 +1167,160 @@ class IosDevice {
     if (this._sessionId) {
       try {
         await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
+        // activate_app brings up whatever process results — a NEW one after
+        // forceStop() — and reports no pid. Forget the old one, so the first
+        // assertAppAlive adopts the running process instead of calling it a
+        // relaunch.
+        this._launchedPid = null;
+        this._launchedAt = null;
         return;
       } catch (_e) {
         // Fall through: the session is unusable, so drop it and start cold.
         this._sessionId = null;
       }
     }
+    const launched = this._devicectlLaunch();
+    this._launchedPid = launchedProcessId(launched);
+    this._launchedAt = Date.now();
+    // A session created BEFORE this launch is attached to the process that has
+    // just been replaced. Dropping it makes the next command open one against
+    // the app that is actually running — and marks the drop as deliberate, so
+    // that reopen is not mistaken for a lost session and checked for a crash.
+    this._sessionId = null;
+    this._sessionDroppedOnPurpose = true;
+  }
+
+  /** `devicectl … process launch`, answered as its JSON — the failure too. */
+  _devicectlLaunch() {
+    const out = nodePath.join(this._scratchDir(), 'launch.json');
+    fs.rmSync(out, { force: true });
+    try {
+      run('xcrun', [
+        'devicectl',
+        'device',
+        'process',
+        'launch',
+        '--device',
+        this.serial,
+        '--json-output',
+        out,
+        this.bundleId,
+      ]);
+    } catch (e) {
+      // devicectl exits non-zero AND writes the reason to the JSON ("… is not
+      // installed"). The exit status says nothing; the JSON does — so the
+      // caller reads it and names the reason. No JSON means devicectl itself
+      // never ran, and that error stands.
+      if (!fs.existsSync(out)) throw e;
+    }
+    return readDevicectlJson(out);
+  }
+
+  /** `devicectl device info processes`, as its JSON. ~1.1s on the device. */
+  _listProcesses() {
+    const out = nodePath.join(this._scratchDir(), 'processes.json');
+    fs.rmSync(out, { force: true });
     run('xcrun', [
       'devicectl',
       'device',
-      'process',
-      'launch',
+      'info',
+      'processes',
       '--device',
       this.serial,
-      this.bundleId,
+      '--json-output',
+      out,
     ]);
-    // A session created BEFORE this launch is attached to the process that has
-    // just been replaced. Dropping it makes the next command open one against
-    // the app that is actually running.
-    this._sessionId = null;
+    return readDevicectlJson(out);
+  }
+
+  /**
+   * Copy the app's crash reports off the phone into `dir` (they land under
+   * `dir/Retired/`). `-k` KEEPS them on the device: a run must not destroy
+   * evidence a person may want to read in Settings › Analytics Data.
+   */
+  _pullCrashReports(dir) {
+    run('idevicecrashreport', ['-k', '-u', this.hardwareUdid, '-f', IOS_APP_PROCESS_NAME, dir]);
+  }
+
+  _scratchDir() {
+    this._scratch ??= fs.mkdtempSync(nodePath.join(os.tmpdir(), 'shytalk-ios-journey-'));
+    return this._scratch;
+  }
+
+  /**
+   * Prove the app is still the process this run launched, or throw the death.
+   *
+   * `_pkg` is the Android package the runner passes on both backends; iOS
+   * knows its own bundle. Alive means an `iosApp` process is running AND it is
+   * the pid `launch()` recorded — or no pid was recorded (activate_app, or a
+   * session-only start), in which case the running one is adopted. A running
+   * iosApp with a DIFFERENT pid is a relaunch: the app died and something
+   * (WebDriverAgent creating a session) brought it back, so the screen being
+   * read belongs to a second launch. Either way the crash report is pulled and
+   * summarised into the error, so the step fails naming the signal and the
+   * Kotlin frame rather than "SignIn not reached".
+   */
+  async assertAppAlive(_pkg, label) {
+    const running = findRunningProcess(this._listProcesses(), IOS_APP_PROCESS_NAME);
+    if (running && (this._launchedPid === null || running.pid === this._launchedPid)) {
+      if (this._launchedPid === null) {
+        this._launchedPid = running.pid;
+        this._launchedAt ??= Date.now();
+      }
+      return running;
+    }
+    const { report, pullError } = await this._newestCrashReportSinceLaunch();
+    const detail = describeAppDeath({
+      launchedPid: this._launchedPid,
+      launchedAt: this._launchedAt,
+      running,
+      report,
+    });
+    throw new AppProcessDiedError(
+      label,
+      pullError
+        ? `${detail} Pulling the crash reports failed as well: ${pullError.message}`
+        : detail,
+    );
+  }
+
+  /** The newest `iosApp` crash report filed since the launch, or null after the retries. */
+  async _newestCrashReportSinceLaunch() {
+    const dir = fs.mkdtempSync(nodePath.join(this._scratchDir(), 'crash-'));
+    const since = (this._launchedAt ?? this._createdAt) - CRASH_REPORT_CLOCK_SKEW_MS;
+    let pullError = null;
+    const pull = () => {
+      try {
+        this._pullCrashReports(dir);
+      } catch (e) {
+        pullError = e;
+        return { report: null, pullError };
+      }
+      const [newest] = findCrashReportsSince(dir, IOS_APP_PROCESS_NAME, since);
+      if (!newest) return { report: null, pullError };
+      const summary = summarizeCrashReport(fs.readFileSync(newest.path, 'utf8'));
+      return { report: { path: newest.path, summary }, pullError: null };
+    };
+    // The device files the report a moment after the death, so the pull is a
+    // poll: up to CRASH_REPORT_PULLS looks, CRASH_REPORT_RETRY_MS apart.
+    return pollUntil(pull, (found) => found.report !== null, {
+      intervalMs: this._crashReportRetryMs,
+      maxLooks: CRASH_REPORT_PULLS,
+    });
+  }
+
+  /**
+   * Opening a WebDriverAgent session LAUNCHES the app when none is running.
+   * So a reopen after a lost session, with the app dead, would bring it back
+   * and let the step judge a second launch — the SHY-0523 crash passed J40
+   * this way. Before any reopen that was not deliberate, prove the app is
+   * alive; a dead one is reported as the crash it is.
+   */
+  async _refuseToRelaunchADeadApp() {
+    const droppedOnPurpose = this._sessionDroppedOnPurpose;
+    this._sessionDroppedOnPurpose = false;
+    if (!this._everOpened || droppedOnPurpose) return;
+    await this.assertAppAlive(this.bundleId, 'reopening the WebDriverAgent session');
   }
 
   /**
@@ -1090,6 +1354,222 @@ class IosDevice {
       const b64 = await this._get('/screenshot');
       require('node:fs').writeFileSync(absPath, Buffer.from(String(b64), 'base64'));
     });
+  }
+
+  /**
+   * Mark the start of the next launch on the DEVICE clock.
+   *
+   * iOS keeps its unified log in a persisted archive on the phone, so "clear"
+   * means "everything from here". The live relay (a streaming `idevicesyslog`)
+   * is not used any more: under WebDriverAgent load it silently stopped
+   * delivering nearly every process's lines mid-run on 2026-09-05, before J40
+   * began, and a read from it looked exactly like an app that logged nothing.
+   * The mark is the phone's own clock so that drift between the Mac and the
+   * device cannot move a launch across the boundary.
+   */
+  async clearAppLog() {
+    const said = String(
+      this._run('ideviceinfo', ['-u', this.hardwareUdid, '-k', 'TimeIntervalSince1970']),
+    ).trim();
+    const mark = Number.parseFloat(said);
+    if (!Number.isFinite(mark) || mark <= 0) {
+      throw new Error(`ideviceinfo did not report the device clock: "${said}"`);
+    }
+    this._logMark = mark;
+  }
+
+  /**
+   * The lines the app has logged since the mark that carry `tag`.
+   *
+   * Pulls the persisted archive from the phone (`idevicesyslog archive`: about
+   * nine seconds and 250 MB whatever the window, the cost is metadata), unpacks
+   * it into a `.logarchive` bundle and reads the app's process out of it with
+   * `/usr/bin/log show` (the full path: zsh has a `log` builtin). Lines are
+   * kept by their OWN timestamp against the mark, so `--start`'s one-second
+   * resolution and pad cannot let the previous launch in. Reading leaves the
+   * mark in place, the way a logcat dump can be taken again and again: J40
+   * reads once for the first frame and again for the `confirm:` verdict.
+   */
+  async readAppLog(tag) {
+    if (this._logMark === null) {
+      throw new Error('readAppLog() before clearAppLog(): there is no mark to read from');
+    }
+    const mark = this._logMark;
+    const workDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'shytalk-ios-applog-'));
+    try {
+      const tar = nodePath.join(workDir, 'device-log.tar');
+      const archive = nodePath.join(workDir, 'device-log.logarchive');
+      this._runLogTool('idevicesyslog', [
+        '-u',
+        this.hardwareUdid,
+        'archive',
+        tar,
+        '--start-time',
+        String(Math.floor(mark) - 2),
+      ]);
+      fs.mkdirSync(archive);
+      this._runLogTool('tar', ['-xf', tar, '-C', archive]);
+      const shown = this._runLogTool('/usr/bin/log', [
+        'show',
+        '--archive',
+        archive,
+        '--predicate',
+        `process == "${IOS_APP_PROCESS_NAME}"`,
+        '--start',
+        localTimestamp(Math.floor(mark) - 1),
+        '--info',
+        '--debug',
+        '--style',
+        'syslog',
+      ]);
+      return String(shown)
+        .split('\n')
+        .map((l) => l.trimEnd())
+        .filter((l) => l.includes(tag) && !stampedBefore(l, mark));
+    } finally {
+      fs.rmSync(workDir, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * A log tool that fails must say so in its own words. An empty log from a
+   * pull that never ran used to read as {immediate: null, confirm: null} and
+   * fail the journey on the wrong screen, naming nothing about the capture.
+   */
+  _runLogTool(bin, args) {
+    try {
+      return this._run(bin, args);
+    } catch (e) {
+      const said = String(e.stderr || '').trim();
+      throw new Error(`${bin} ${args[0] ?? ''} failed: ${said || e.message}`, { cause: e });
+    }
+  }
+
+  /**
+   * Airplane Mode on, or off, through the Settings app (SHY-0500's offline
+   * launch).
+   *
+   * Nothing toggles the radios of a real iPhone from a Mac: not devicectl,
+   * not WebDriverAgent, not Appium. What a person does is open Settings and
+   * flip the first switch, so that is what this does. WebDriverAgent keeps
+   * answering over USB while the radios are off, which is what lets the
+   * journey go on reading the screen. Always returns to the app under test,
+   * even when the switch was not found.
+   *
+   * The switch is waited for, not looked up once: activating Settings returns
+   * before WDA's snapshot has moved off the app under test, and the first
+   * lookup misses. When it never appears, the error names the screen Settings
+   * is actually showing, so a run that left Settings on a sub-page reads as
+   * exactly that.
+   *
+   * The tap is a touch on the toggle control, placed from the frame the phone
+   * reports: WebDriverAgent hands back the whole Settings row as the switch, so
+   * its element click lands on the label and iOS does nothing (runs 6 and 7,
+   * 2026-09-05). The value is then polled for up to `offlineSettleMs`, because
+   * XCUITest can report the pre-tap value for a moment; a tap that changed
+   * nothing is repeated once, and the second miss is the failure.
+   */
+  async setOffline(on) {
+    const SETTINGS = 'com.apple.Preferences';
+    const want = on ? '1' : '0';
+    return this.withSessionRecovery(`setOffline(${on})`, async () => {
+      await this._post('/appium/device/activate_app', { bundleId: SETTINGS });
+      try {
+        const id = await this._awaitAirplaneModeSwitch();
+        let value = await this._airplaneModeValue(id);
+        let taps = 0;
+        while (value !== want) {
+          if (taps === OFFLINE_TAPS) {
+            throw new Error(`Airplane Mode reads ${value} after ${taps} taps; wanted ${want}`);
+          }
+          await this._tapSwitchKnob(id);
+          taps += 1;
+          value = await this._awaitAirplaneModeValue(id, want);
+        }
+      } finally {
+        await this._post('/appium/device/activate_app', { bundleId: this.bundleId });
+      }
+    });
+  }
+
+  async _airplaneModeValue(id) {
+    return String(await this._get(`/element/${id}/attribute/value`));
+  }
+
+  /**
+   * One touch on the toggle control of a Settings switch row, placed from the
+   * frame the phone reports rather than the element's centre — see
+   * OFFLINE_SWITCH_KNOB_INSET.
+   */
+  async _tapSwitchKnob(id) {
+    const rect = await this._get(`/element/${id}/rect`);
+    await this._tapPoint(rect.x + rect.width - OFFLINE_SWITCH_KNOB_INSET, rect.y + rect.height / 2);
+  }
+
+  /**
+   * The switch's value once it has had `offlineSettleMs` to report a tap:
+   * XCUITest can hand back the pre-tap value for a moment, and a tap that
+   * missed the toggle control never changes it at all. Returns
+   * the last value read, wanted or not, so the caller can decide to tap again.
+   */
+  async _awaitAirplaneModeValue(id, want) {
+    return pollUntil(
+      () => this._airplaneModeValue(id),
+      (value) => value === want,
+      {
+        intervalMs: OFFLINE_SWITCH_POLL_MS,
+        deadlineMs: this._offlineSettleMs,
+      },
+    );
+  }
+
+  /**
+   * The Airplane Mode switch's element id, polled for until Settings has drawn
+   * it. A 404 from `/element` is "not yet"; any other failure (a lost session
+   * above all) propagates so `withSessionRecovery` sees it.
+   */
+  async _awaitAirplaneModeSwitch() {
+    const waitMs = this._offlineSwitchWaitMs;
+    const lookForSwitch = async () => {
+      try {
+        const el = await this._post('/element', {
+          using: '-ios predicate string',
+          value: AIRPLANE_MODE_SWITCH,
+        });
+        return el?.['element-6066-11e4-a52e-4f735466cecf'] || el?.ELEMENT || null;
+      } catch (e) {
+        if (!isElementMissing(e)) throw e;
+        return null;
+      }
+    };
+    const id = await pollUntil(lookForSwitch, Boolean, {
+      intervalMs: OFFLINE_SWITCH_POLL_MS,
+      deadlineMs: waitMs,
+    });
+    if (id) return id;
+    throw new Error(
+      `Settings showed no Airplane Mode switch within ${waitMs}ms; ` +
+        `the screen open in Settings is "${await this._settingsScreenTitle()}"`,
+    );
+  }
+
+  /**
+   * What Settings is showing, for the error above. Best effort by design: this
+   * runs while an error is already being raised, so its own failure is
+   * reported inside that error rather than replacing it.
+   */
+  async _settingsScreenTitle() {
+    try {
+      const bar = await this._post('/element', {
+        using: 'class name',
+        value: 'XCUIElementTypeNavigationBar',
+      });
+      const id = bar?.['element-6066-11e4-a52e-4f735466cecf'] || bar?.ELEMENT;
+      if (!id) return '(no navigation bar)';
+      return String(await this._get(`/element/${id}/attribute/name`));
+    } catch (e) {
+      return `(unreadable: ${e.message})`;
+    }
   }
 
   size() {
@@ -1170,7 +1650,16 @@ function listMethods() {
  * Factory, matching the shape every other driver in this directory exports —
  * `create*` plus `listMethods` — so `--check-drivers` can discover it.
  */
-function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl, warn } = {}) {
+function createIosJourneyDevice({
+  udid,
+  hardwareUdid,
+  bundleId,
+  appiumBaseUrl,
+  warn,
+  crashReportRetryMs,
+  offlineSwitchWaitMs,
+  offlineSettleMs,
+} = {}) {
   const coreDeviceUuid = selectCoreDeviceUuid(udid);
   if (!coreDeviceUuid) {
     throw new Error(
@@ -1198,6 +1687,9 @@ function createIosJourneyDevice({ udid, hardwareUdid, bundleId, appiumBaseUrl, w
     // Passed through so the warnings stay assertable through the factory, which
     // is how every journey and every test builds this device.
     ...(warn ? { warn } : {}),
+    ...(crashReportRetryMs !== undefined ? { crashReportRetryMs } : {}),
+    ...(offlineSwitchWaitMs !== undefined ? { offlineSwitchWaitMs } : {}),
+    ...(offlineSettleMs !== undefined ? { offlineSettleMs } : {}),
   });
 }
 

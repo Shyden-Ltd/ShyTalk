@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.support
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,15 +23,6 @@ import kotlin.test.assertTrue
  * other half, and this stops the shape drifting between runs.
  */
 class SupportPageInsetWiringPinTest {
-    private fun repoRoot(): File {
-        var dir: File? = File(System.getProperty("user.dir"))
-        while (dir != null) {
-            if (File(dir, "settings.gradle.kts").exists()) return dir
-            dir = dir.parentFile
-        }
-        error("repo root not found")
-    }
-
     private fun source(): String =
         File(
             repoRoot(),

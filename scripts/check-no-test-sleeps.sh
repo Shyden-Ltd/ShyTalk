@@ -20,6 +20,12 @@
 # (`until <cond>; do sleep 0.05; done`) exit the instant the condition holds and
 # are correct at any machine speed, so shell is not scanned here.
 #
+# A helper (`const sleep = (ms) => new Promise(...)`) is counted where it is
+# DEFINED and at every CALL (`await sleep(300)`), so it cannot launder a wait;
+# the one reasoned exemption is the poll interval inside pollUntil
+# (express-api/scripts/drivers/poll-until.js), which exits the instant its
+# condition holds.
+#
 # Usage: check-no-test-sleeps.sh [ROOT] [--baseline FILE]
 #   no --baseline : STRICT — any sleep fails (the end state).
 #   --baseline F  : RATCHET — per-file counts in F may only SHRINK, so the
@@ -50,11 +56,14 @@ fi
 # -I skips binaries: a woff2/png whose bytes happen to contain a banned token
 # must never fail the build (see feedback-text-guards-must-skip-binaries).
 # This file and its own meta-test quote the banned tokens by necessity.
-HITS="$(grep -rnI -E \
-  'waitForTimeout\(|Thread\.sleep\(|usleep\(|asyncAfter\(|new Promise\(.*=>[[:space:]]*setTimeout' \
+PATTERN='waitForTimeout\(|Thread\.sleep\(|usleep\(|asyncAfter\(|new Promise\(.*=>[[:space:]]*setTimeout'
+# A helper named sleep/delay/pause is a fixed wait at every CALL, not only where
+# it is defined, and `timers/promises` is a sleep by import (SHY-0500, 2026-09-05:
+# the definitions were counted, the calls were not).
+PATTERN="$PATTERN"'|(^|[^[:alnum:]_])(await|return)[[:space:]]+([[:alnum:]_$.]+\.)?(sleep|delay|pause)[[:space:]]*\(|timers/promises'
+HITS="$(grep -rnI -E "$PATTERN" \
   --include='*.ts' --include='*.js' --include='*.kt' --include='*.swift' \
   --exclude='check-no-test-sleeps*' \
-  --exclude='wait-for.js' \
   --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.git \
   --exclude-dir=dist --exclude-dir=test-results --exclude-dir=playwright-report \
   --exclude-dir=allure-results --exclude-dir=.gradle \
@@ -108,6 +117,8 @@ if [ -n "$BASELINE" ]; then
     exit 2
   fi
   PER_FILE="$(PER_FILE_COUNTS)"
+  # The node program below is literal on purpose: its ${} are JavaScript.
+  # shellcheck disable=SC2016
   VERDICT="$(PER_FILE="$PER_FILE" BASELINE="$BASELINE" node -e '
     const fs = require("node:fs");
     const base = JSON.parse(fs.readFileSync(process.env.BASELINE, "utf8"));

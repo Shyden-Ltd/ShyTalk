@@ -187,6 +187,11 @@ iPhone Settings → Safari → Advanced → enable **Web Inspector**. (Required 
 ### Run the Appium server
 
 ```bash
+# The Android driver needs the SDK location in the SERVER's own environment, or
+# it refuses every session with "Neither ANDROID_HOME nor ANDROID_SDK_ROOT
+# environment variable was exported" — and the journey runner falls back to
+# `uiautomator dump` at ~2.3 s per read (it prints the refusal at startup).
+export ANDROID_HOME="$HOME/Library/Android/sdk" ANDROID_SDK_ROOT="$HOME/Library/Android/sdk"
 appium server -p 4723
 ```
 

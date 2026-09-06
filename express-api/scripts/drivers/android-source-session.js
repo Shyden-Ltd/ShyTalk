@@ -166,6 +166,9 @@ async function createAndroidSourceSession({
   // milliseconds. Racing jest's own timeout against the production value
   // tests which number is larger, not whether a signal is attached.
   requestTimeoutMs = APPIUM_REQUEST_TIMEOUT_MS,
+  // Where a refused session says why. Injectable so the sentence can be asserted.
+  // eslint-disable-next-line no-console -- operator-facing: the runner's console is the interface
+  log = console.log,
 } = {}) {
   const call =
     request ||
@@ -201,9 +204,12 @@ async function createAndroidSourceSession({
 
   try {
     await open();
-  } catch (_e) {
+  } catch (e) {
     // Not installed, no ANDROID_HOME, no device — all the same to the caller,
-    // which falls back and prints ANDROID_SOURCE_UNAVAILABLE.
+    // which falls back and prints ANDROID_SOURCE_UNAVAILABLE. Not the same to
+    // the operator: the 500 naming the missing ANDROID_HOME was swallowed
+    // here while a whole run read the screen 36x slower (2026-09-05).
+    log(`  ⚠ UiAutomator2 session refused: ${e.message}`);
     return null;
   }
 

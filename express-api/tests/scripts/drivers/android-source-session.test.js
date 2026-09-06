@@ -70,11 +70,41 @@ describe('createAndroidSourceSession', () => {
     expect(appium.calls.filter((c) => c.endsWith('/source'))).toHaveLength(3);
   });
 
-  test('an Appium that cannot serve Android returns null rather than throwing', async () => {
-    // The runner must still work on a machine without the driver installed.
+  test('an Appium that cannot serve Android returns null rather than throwing, and says why', async () => {
+    // The runner must still work on a machine without the driver installed —
+    // but the REASON must reach the operator. On 2026-09-05 every Android
+    // read silently took 2.3 s for a whole run because the server had no
+    // ANDROID_HOME; the 500 that said so was swallowed here.
     const appium = fakeAppium({ sessionFails: true });
-    const s = await createAndroidSourceSession({ serial: 'S1', request: appium.request });
+    const said = [];
+    const s = await createAndroidSourceSession({
+      serial: 'S1',
+      request: appium.request,
+      log: (line) => said.push(line),
+    });
     expect(s).toBeNull();
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/UiAutomator2 session refused/);
+    expect(said[0]).toMatch(/Could not find a driver for automationName/);
+  });
+
+  test("the refusal reason is Appium's own sentence, so a missing ANDROID_HOME reads as exactly that", async () => {
+    const said = [];
+    const request = async (method, path) => {
+      if (method === 'POST' && path === '/session') {
+        throw new Error(
+          'POST /session -> 500: Neither ANDROID_HOME nor ANDROID_SDK_ROOT environment variable was exported',
+        );
+      }
+      throw new Error(`unexpected ${method} ${path}`);
+    };
+    const s = await createAndroidSourceSession({
+      serial: 'S1',
+      request,
+      log: (line) => said.push(line),
+    });
+    expect(s).toBeNull();
+    expect(said[0]).toMatch(/ANDROID_HOME nor ANDROID_SDK_ROOT/);
   });
 
   test('a reply that is not a hierarchy is a failure, not an empty screen', async () => {

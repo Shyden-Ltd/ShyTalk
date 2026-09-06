@@ -107,6 +107,18 @@ fun SharedNavGraph(
     // NavGraph.kt for the full sequence this prevents.
     onSignOut: suspend () -> Unit,
     /**
+     * SHY-0500 — non-null when the background cold-start confirmation found the
+     * stored session dead, so the sign-in screen can say why the person is here
+     * rather than leaving them to guess.
+     */
+    launchRedirect: LaunchRedirectReason? = null,
+    /**
+     * SHY-0500 — called once the sign-in screen has shown the redirect's
+     * message. The owner clears [launchRedirect] then; a reason that is never
+     * cleared shows its message again on every later visit to sign-in.
+     */
+    onLaunchRedirectConsumed: () -> Unit = {},
+    /**
      * SHY-0143 — the ban facts behind a [Screen.BanDevice] / [Screen.BanNetwork]
      * start destination. Defaulted so existing callers are unaffected: an
      * unbanned launch never routes to either screen, so the default is never
@@ -307,6 +319,8 @@ fun SharedNavGraph(
             composable(Screen.SignIn.route) {
                 platformScreens.signInScreen(
                     SignInScreenParams(
+                        sessionExpired = launchRedirect == LaunchRedirectReason.SESSION_EXPIRED,
+                        onSessionExpiredShown = onLaunchRedirectConsumed,
                         pendingEmailLink = pendingEmailLink,
                         onEmailLinkConsumed = onEmailLinkConsumed,
                         onNavigateToEmail = {

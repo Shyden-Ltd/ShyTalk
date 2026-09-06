@@ -218,6 +218,39 @@ describe('every device command survives a WebDriverAgent restart', () => {
       'warning: a slower run is worth more than no run.',
     install: 'never reaches WDA — refuses by design, see SHY-0446',
     uninstall: 'never reaches WDA — refuses by design, see SHY-0446',
+    clearAppLog:
+      'never reaches WDA — it reads the device clock over USB as the mark for the next ' +
+      'launch (SHY-0500); a lost WebDriverAgent session has nothing to do with the device log',
+    readAppLog:
+      'never reaches WDA — it pulls the persisted log archive over USB and reads the app ' +
+      'process out of it from the mark',
+    _runLogTool:
+      'the USB log tools behind clearAppLog and readAppLog — a child process, not a session',
+    assertAppAlive:
+      'never reaches WDA — it asks devicectl for the app process and, on a death, pulls the ' +
+      'crash report over USB (SHY-0500). It is what runs when the session WAS lost, to tell a ' +
+      'crashed app from a restarted WebDriverAgent; recovering it into a new session would ' +
+      'relaunch the dead app it exists to catch.',
+    _refuseToRelaunchADeadApp:
+      'runs INSIDE session establishment, before a reopen — the same circularity as ensureSession',
+    _newestCrashReportSinceLaunch:
+      'the retrying crash-report pull behind assertAppAlive — USB tools, not a session',
+    _devicectlLaunch: 'devicectl, not WDA — the process launch behind launch()',
+    _listProcesses: 'devicectl, not WDA — the process listing behind assertAppAlive',
+    _pullCrashReports: 'idevicecrashreport over USB — a child process, not a session',
+    _scratchDir: 'pure — a temp directory for the devicectl JSON and the pulled crash reports',
+    _awaitAirplaneModeSwitch:
+      "runs inside setOffline's withSessionRecovery closure; a lost session propagates out of it",
+    _settingsScreenTitle:
+      "diagnostic read inside setOffline's closure — its own failure is folded into the error text",
+    _airplaneModeValue:
+      "one attribute read inside setOffline's closure; a lost session propagates out of it",
+    _awaitAirplaneModeValue:
+      "polls _airplaneModeValue inside setOffline's closure; a lost session propagates out of it",
+    _tapPoint:
+      "the pointer action behind tap() and setOffline's toggle touch; both callers' closures recover",
+    _tapSwitchKnob:
+      "one frame read and one _tapPoint inside setOffline's closure; a lost session propagates out of it",
   };
 
   /** How to invoke each command that must recover. */
@@ -232,6 +265,7 @@ describe('every device command survives a WebDriverAgent restart', () => {
     swipe: (d) => d.swipe(100, 800, 100, 200),
     screencap: (d) => d.screencap(path.join(tmp, 'shot.png')),
     measure: (d) => d.measure(),
+    setOffline: (d) => d.setOffline(true),
   };
 
   const commands = Object.getOwnPropertyNames(
@@ -271,6 +305,9 @@ describe('every device command survives a WebDriverAgent restart', () => {
     swipe: 'ACCEPTED: a repeated scroll overshoots at worst, and the callers re-read after',
     screencap: 'idempotent — overwrites the same file',
     measure: 'idempotent — reads the window size',
+    setOffline:
+      'idempotent — it READS the Airplane Mode switch before touching it, so a replay ' +
+      'after a lost answer flips nothing a second time',
   };
 
   test('every replayed command has DECIDED how it survives running twice', () => {
@@ -322,6 +359,9 @@ describe('every device command survives a WebDriverAgent restart', () => {
     d._sessionId = 'dead-session';
     let failed = false;
     const reply = (routePath) => {
+      // The Airplane Mode switch setOffline(true) reads: already on, so the
+      // replay has nothing to flip.
+      if (String(routePath).includes('/attribute/value')) return '1';
       if (String(routePath).includes('/element') && !String(routePath).includes('/click'))
         return { 'element-6066-11e4-a52e-4f735466cecf': 'el-1' };
       if (String(routePath).includes('/screenshot')) return Buffer.from('png').toString('base64');

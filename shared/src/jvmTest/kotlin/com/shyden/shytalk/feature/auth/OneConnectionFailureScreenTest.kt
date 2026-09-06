@@ -1,5 +1,6 @@
 package com.shyden.shytalk.feature.auth
 
+import com.shyden.shytalk.testsupport.RepoSource.repoRoot
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -29,12 +30,6 @@ import kotlin.test.assertTrue
  * that exists. See [[feedback-source-scanning-guards-need-their-own-anchors]].
  */
 class OneConnectionFailureScreenTest {
-    private fun repoRoot(): File {
-        var dir = File(System.getProperty("user.dir"))
-        while (!File(dir, "settings.gradle.kts").exists() && dir.parentFile != null) dir = dir.parentFile
-        return dir
-    }
-
     @Test
     fun `the degraded-mode screen is gone`() {
         val screen = File(repoRoot(), "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/update/DegradedModeScreen.kt")

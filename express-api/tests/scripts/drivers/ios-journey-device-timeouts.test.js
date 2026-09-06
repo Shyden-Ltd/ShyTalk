@@ -87,8 +87,8 @@ async function startServer(onRequest) {
   };
 }
 
-const buildAgainst = (baseUrl, over = {}) =>
-  new IosDevice({
+const buildAgainst = (baseUrl, over = {}) => {
+  const device = new IosDevice({
     coreDeviceUuid: CORE_DEVICE_UUID,
     hardwareUdid: HARDWARE_UDID,
     bundleId: 'com.shyden.shytalk.local',
@@ -99,6 +99,16 @@ const buildAgainst = (baseUrl, over = {}) =>
     quitTimeoutMs: TEST_TIMEOUT_MS,
     ...over,
   });
+  // Before a reopen the driver asks devicectl whether the app is still running
+  // (SHY-0500: a lost session must not relaunch a crashed app). These tests
+  // are about the SOCKET, so the app is reported alive without a phone.
+  device._listProcesses = () => ({
+    result: {
+      runningProcesses: [{ executable: 'file:///Bundle/iosApp.app/iosApp', processIdentifier: 1 }],
+    },
+  });
+  return device;
+};
 
 /** The healthy answer to POST /session. */
 const respondWithSession = (res, sessionId = 'sess-1') => {

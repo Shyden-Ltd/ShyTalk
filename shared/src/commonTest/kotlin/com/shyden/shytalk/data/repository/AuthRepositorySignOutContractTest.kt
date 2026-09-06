@@ -59,6 +59,9 @@ class AuthRepositorySignOutContractTest {
         initialResolvedDisplayName: String? = null,
         initialResolvedCohort: String? = null,
     ) : AuthRepository {
+        // Nothing asynchronous to wait for in a fake (SHY-0500).
+        override suspend fun awaitPersistedSession() = Unit
+
         var signOutCalled = false
         var signOutShouldThrow = false
 

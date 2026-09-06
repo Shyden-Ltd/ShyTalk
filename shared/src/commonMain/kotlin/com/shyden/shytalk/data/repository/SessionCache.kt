@@ -90,7 +90,9 @@ class SessionCache(
      * the reads one shape.
      */
     fun read(liveFirebaseUid: String?): CachedSession? {
-        val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return null
+        // Each miss says why. The silent form hid, for a day, that the iPhone
+        // read this before its SDK had restored the user (SHY-0500).
+        val liveUid = liveFirebaseUid?.takeIf { it.isNotBlank() } ?: return miss("no live Firebase user to match against")
 
         // The pre-I6 three-key format. `clear()` also removes these, but on the
         // real upgrade path clear() is NEVER called: a cold start reads a miss,
@@ -114,7 +116,7 @@ class SessionCache(
         // and the catch below already routes that to the same miss. A branch
         // whose only observable difference is a log string is a branch whose
         // test cannot fail.
-        val raw = storage.getString(KEY_SESSION) ?: return null
+        val raw = storage.getString(KEY_SESSION) ?: return miss("no stored record")
 
         // The ENTIRE decode is inside the try, field reads included.
         // `JsonElement.jsonPrimitive` throws when the element is not a
@@ -139,7 +141,7 @@ class SessionCache(
             // well-formed and belongs to whoever it names. Erasing it here
             // would throw away the previous user's identity every time the
             // current one launches.
-            if (storedUid != liveUid) return null
+            if (storedUid != liveUid) return miss("the stored record belongs to a different user")
 
             CachedSession(
                 firebaseUid = storedUid,
@@ -243,6 +245,22 @@ class SessionCache(
     }
 
     /**
+     * Whether any session record is stored, whoever it belongs to and whatever
+     * state it is in. The iOS cold start uses it to decide whether to wait for
+     * its SDK's asynchronous keychain restore at all (SHY-0500): a record is
+     * the sign that a user is coming; without one a signed-out start must not
+     * wait. Presence is not trust — [read] still judges the record once the
+     * live uid is known. Legacy three-key records do not count: [read] never
+     * trusts them, it only sweeps them.
+     */
+    fun hasRecord(): Boolean = storage.getString(KEY_SESSION) != null
+
+    private fun miss(why: String): CachedSession? {
+        logD(TAG, "read: miss — $why")
+        return null
+    }
+
+    /**
      * Reports an unusable record as a miss.
      *
      * Deliberately does NOT erase it. An earlier version did, then a
@@ -254,10 +272,10 @@ class SessionCache(
      * `read()` no longer touches the record at all, which closes the class of
      * bug rather than narrowing it. (The legacy sweep below is the one write
      * `read()` performs, and it is safe for a different reason: nothing writes
-     * those keys any more, so there is no writer to race with.) The cost is that a permanently malformed record is
-     * re-parsed once per launch until the next `write()` overwrites it or a
-     * sign-out clears it — one failed JSON parse, against losing a good
-     * record. Not a close call.
+     * those keys any more, so there is no writer to race with.) The cost is
+     * that a permanently malformed record is re-parsed once per launch until
+     * the next `write()` overwrites it or a sign-out clears it — one failed
+     * JSON parse, against losing a good record. Not a close call.
      */
     private fun unusableRecord(why: String): CachedSession? {
         logW(TAG, "Ignoring the stored session record — $why")

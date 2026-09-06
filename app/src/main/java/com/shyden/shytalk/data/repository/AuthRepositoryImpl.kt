@@ -189,6 +189,16 @@ class AuthRepositoryImpl(
             result.user?.uid ?: throw Exception("Sign in failed: no user returned")
         }
 
+    /**
+     * Nothing to wait for on Android: the SDK restores its current user
+     * synchronously while FirebaseAuth initialises, so `currentUser` is
+     * already right when a cold start asks. Stated here, not defaulted on the
+     * interface, so a platform that forgets the wait fails to compile
+     * (SHY-0500 — the iPhone did forget, and drew sign-in for a signed-in
+     * person).
+     */
+    override suspend fun awaitPersistedSession() = Unit
+
     override suspend fun signOut() {
         // SHY-0497: the app has been observed back on Home AFTER sign-out
         // reached the sign-in screen, and nothing in the log said so -- there

@@ -129,6 +129,18 @@ fun NavGraph(
     // then composed an AuthViewModel that still saw a signed-in Firebase user.
     onSignOut: suspend () -> Unit,
     /**
+     * SHY-0500 — non-null when the background cold-start confirmation found the
+     * stored session dead, so the sign-in screen can say why the person is here
+     * rather than leaving them to guess.
+     */
+    launchRedirect: LaunchRedirectReason? = null,
+    /**
+     * SHY-0500 — called once the sign-in screen has shown the redirect's
+     * message. The owner clears [launchRedirect] then; a reason that is never
+     * cleared shows its message again on every later visit to sign-in.
+     */
+    onLaunchRedirectConsumed: () -> Unit = {},
+    /**
      * SHY-0143. Android normally renders `BanScreen` ABOVE this NavHost, so
      * these routes are belt-and-braces — but `initialRoute` can legitimately
      * hold `ban_device`/`ban_network`, and a NavHost whose start destination
@@ -314,6 +326,8 @@ fun NavGraph(
 
             composable(Screen.SignIn.route) {
                 SignInScreen(
+                    sessionExpired = launchRedirect == LaunchRedirectReason.SESSION_EXPIRED,
+                    onSessionExpiredShown = onLaunchRedirectConsumed,
                     pendingEmailLink = pendingEmailLink,
                     onEmailLinkConsumed = onEmailLinkConsumed,
                     onNavigateToEmail = {

@@ -6,17 +6,31 @@ import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
-import platform.CoreFoundation.CFDictionaryRef
+import platform.CoreFoundation.CFDataCreate
+import platform.CoreFoundation.CFDataRef
+import platform.CoreFoundation.CFDictionaryCreateMutable
+import platform.CoreFoundation.CFDictionarySetValue
+import platform.CoreFoundation.CFMutableDictionaryRef
+import platform.CoreFoundation.CFRelease
+import platform.CoreFoundation.CFTypeRefVar
+import platform.CoreFoundation.kCFBooleanTrue
+import platform.Foundation.CFBridgingRelease
+import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSData
+import platform.Foundation.NSNumber
 import platform.Foundation.base64EncodedStringWithOptions
-import platform.Foundation.create
+import platform.Foundation.numberWithInt
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
 import platform.Security.SecKeyCopyExternalRepresentation
+import platform.Security.SecKeyCopyPublicKey
 import platform.Security.SecKeyCreateRandomKey
 import platform.Security.SecKeyCreateSignature
+import platform.Security.SecKeyRef
+import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
 import platform.Security.kSecAttrApplicationTag
 import platform.Security.kSecAttrIsPermanent
@@ -33,103 +47,144 @@ import platform.Security.kSecMatchLimitOne
 import platform.Security.kSecPrivateKeyAttrs
 import platform.Security.kSecReturnRef
 
-@Suppress("UNCHECKED_CAST", "CAST_NEVER_SUCCEEDS")
+private const val TAG = "CryptoKeyPair"
+private const val KEY_SIZE_BITS = 256
+
+/**
+ * EC P-256 key pair in the iOS Keychain, for biometric challenge signing.
+ *
+ * Everything here is CoreFoundation, so results come back as raw CF references.
+ * Kotlin/Native cannot narrow those with `as?` — that checks the Kotlin pointer
+ * wrapper and never passes — so every `CFDataRef` result goes through
+ * `CFBridgingRelease`, which crosses the toll-free bridge to the `NSData` it is
+ * and balances the +1 that the Copy/Create functions return (SHY-0500 found the
+ * same cast defeating every Keychain read in [SecureStorage]). The queries are
+ * real `CFDictionary`s for the same reason: a Kotlin `Map` cast to
+ * `CFDictionaryRef` is not a dictionary the Security framework can read.
+ */
 actual class CryptoKeyPair {
     private var currentTag: String? = null
 
     actual fun generateOrLoad(alias: String): Boolean {
         currentTag = alias
-        // Try to load existing key first
-        if (getPrivateKeyRef(alias) != null) return true
+        getPrivateKeyRef(alias)?.let {
+            CFRelease(it)
+            return true
+        }
 
-        // Generate new keypair
-        val tagData = alias.encodeToByteArray().toNSData()
+        val tag = alias.toCFData()
+        val keySize = CFBridgingRetain(NSNumber.numberWithInt(KEY_SIZE_BITS))
+        val privateKeyAttrs =
+            cfDictionary {
+                CFDictionarySetValue(it, kSecAttrIsPermanent, kCFBooleanTrue)
+                CFDictionarySetValue(it, kSecAttrApplicationTag, tag)
+            }
         val attributes =
-            mapOf<Any?, Any?>(
-                kSecAttrKeyType to kSecAttrKeyTypeECSECPrimeRandom,
-                kSecAttrKeySizeInBits to 256,
-                kSecPrivateKeyAttrs to
-                    mapOf<Any?, Any?>(
-                        kSecAttrIsPermanent to true,
-                        kSecAttrApplicationTag to tagData,
-                    ),
-            )
-
-        val key = SecKeyCreateRandomKey(attributes as CFDictionaryRef, null)
-        return key != null
+            cfDictionary {
+                CFDictionarySetValue(it, kSecAttrKeyType, kSecAttrKeyTypeECSECPrimeRandom)
+                CFDictionarySetValue(it, kSecAttrKeySizeInBits, keySize)
+                CFDictionarySetValue(it, kSecPrivateKeyAttrs, privateKeyAttrs)
+            }
+        val key = SecKeyCreateRandomKey(attributes, null)
+        listOf(attributes, privateKeyAttrs, keySize, tag).forEach { CFRelease(it) }
+        if (key == null) {
+            logW(TAG, "generateOrLoad: SecKeyCreateRandomKey produced no key")
+            return false
+        }
+        // The key is permanent in the Keychain; this reference is only the +1 from Create.
+        CFRelease(key)
+        return true
     }
 
     actual fun getPublicKeyBase64(): String? {
         val alias = currentTag ?: return null
         val privateKey = getPrivateKeyRef(alias) ?: return null
-
-        val publicKey = platform.Security.SecKeyCopyPublicKey(privateKey) ?: return null
-        val data = SecKeyCopyExternalRepresentation(publicKey, null) as? NSData ?: return null
-        return data.base64EncodedStringWithOptions(0u)
+        val publicKey = SecKeyCopyPublicKey(privateKey)
+        if (publicKey == null) {
+            // Security can hand back no public key for a private key it did open;
+            // SecKeyCopyExternalRepresentation must never see that NULL.
+            logW(TAG, "getPublicKeyBase64: SecKeyCopyPublicKey produced no key")
+            CFRelease(privateKey)
+            return null
+        }
+        val data = CFBridgingRelease(SecKeyCopyExternalRepresentation(publicKey, null)) as? NSData
+        CFRelease(publicKey)
+        CFRelease(privateKey)
+        if (data == null) logW(TAG, "getPublicKeyBase64: SecKeyCopyExternalRepresentation produced no data")
+        return data?.base64EncodedStringWithOptions(0u)
     }
 
     actual fun sign(data: ByteArray): ByteArray? {
         val alias = currentTag ?: return null
         val privateKey = getPrivateKeyRef(alias) ?: return null
-        val nsData = data.toNSData()
-
+        val message = data.toCFData()
         val signature =
-            SecKeyCreateSignature(
-                privateKey,
-                kSecKeyAlgorithmECDSASignatureMessageX962SHA256,
-                nsData as platform.CoreFoundation.CFDataRef,
-                null,
-            ) as? NSData ?: return null
-        return signature.toByteArray()
+            CFBridgingRelease(
+                SecKeyCreateSignature(privateKey, kSecKeyAlgorithmECDSASignatureMessageX962SHA256, message, null),
+            ) as? NSData
+        CFRelease(message)
+        CFRelease(privateKey)
+        if (signature == null) logW(TAG, "sign: SecKeyCreateSignature produced no signature")
+        return signature?.toByteArray()
     }
 
     actual fun delete(alias: String) {
-        val tagData = alias.encodeToByteArray().toNSData()
+        val tag = alias.toCFData()
         val query =
-            mapOf<Any?, Any?>(
-                kSecClass to kSecClassKey,
-                kSecAttrApplicationTag to tagData,
-            )
-        SecItemDelete(query as CFDictionaryRef)
+            cfDictionary {
+                CFDictionarySetValue(it, kSecClass, kSecClassKey)
+                CFDictionarySetValue(it, kSecAttrApplicationTag, tag)
+            }
+        val status = SecItemDelete(query)
+        CFRelease(query)
+        CFRelease(tag)
+        if (status != errSecSuccess && status != errSecItemNotFound) {
+            logW(TAG, "delete: SecItemDelete failed, OSStatus=$status")
+        }
         if (currentTag == alias) currentTag = null
     }
 
-    private fun getPrivateKeyRef(alias: String): platform.Security.SecKeyRef? {
-        val tagData = alias.encodeToByteArray().toNSData()
+    /** Returns a +1 reference the caller must `CFRelease`, or null when there is no such key. */
+    private fun getPrivateKeyRef(alias: String): SecKeyRef? {
+        val tag = alias.toCFData()
         val query =
-            mapOf<Any?, Any?>(
-                kSecClass to kSecClassKey,
-                kSecAttrApplicationTag to tagData,
-                kSecAttrKeyClass to kSecAttrKeyClassPrivate,
-                kSecReturnRef to true,
-                kSecMatchLimit to kSecMatchLimitOne,
-            )
+            cfDictionary {
+                CFDictionarySetValue(it, kSecClass, kSecClassKey)
+                CFDictionarySetValue(it, kSecAttrApplicationTag, tag)
+                CFDictionarySetValue(it, kSecAttrKeyClass, kSecAttrKeyClassPrivate)
+                CFDictionarySetValue(it, kSecReturnRef, kCFBooleanTrue)
+                CFDictionarySetValue(it, kSecMatchLimit, kSecMatchLimitOne)
+            }
         memScoped {
-            val result = alloc<platform.CoreFoundation.CFTypeRefVar>()
-            val status = SecItemCopyMatching(query as CFDictionaryRef, result.ptr)
-            if (status != errSecSuccess) return null
-            @Suppress("UNCHECKED_CAST")
-            return result.value as? platform.Security.SecKeyRef
+            val result = alloc<CFTypeRefVar>()
+            val status = SecItemCopyMatching(query, result.ptr)
+            CFRelease(query)
+            CFRelease(tag)
+            if (status != errSecSuccess) {
+                if (status != errSecItemNotFound) logW(TAG, "getPrivateKeyRef: SecItemCopyMatching failed, OSStatus=$status")
+                return null
+            }
+            // A SecKeyRef is itself a CF reference: only the pointer's static type narrows here.
+            return result.value?.reinterpret()
         }
     }
 }
 
-// Extension helpers
-@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-private fun ByteArray.toNSData(): NSData {
-    if (isEmpty()) return NSData()
-    return this.usePinned { pinned ->
-        NSData.create(bytes = pinned.addressOf(0), length = size.toULong())
-    }
+private inline fun cfDictionary(fill: (CFMutableDictionaryRef) -> Unit): CFMutableDictionaryRef {
+    val dict = CFDictionaryCreateMutable(null, 0, null, null) ?: error("CFDictionaryCreateMutable returned null")
+    fill(dict)
+    return dict
 }
 
-@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-private fun NSData.toByteArray(): ByteArray {
-    val size = this.length.toInt()
-    if (size == 0) return ByteArray(0)
-    val bytes = ByteArray(size)
-    bytes.usePinned { pinned ->
-        platform.posix.memcpy(pinned.addressOf(0), this@toByteArray.bytes, this@toByteArray.length)
-    }
-    return bytes
+private fun String.toCFData(): CFDataRef = encodeToByteArray().toCFData()
+
+/** A +1 CFData copy of the bytes; the caller must `CFRelease` it. */
+private fun ByteArray.toCFData(): CFDataRef {
+    val data =
+        if (isEmpty()) {
+            CFDataCreate(null, null, 0)
+        } else {
+            usePinned { pinned -> CFDataCreate(null, pinned.addressOf(0).reinterpret(), size.toLong()) }
+        }
+    return data ?: error("CFDataCreate returned null")
 }

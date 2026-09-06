@@ -49,6 +49,7 @@ class ColdStartGateOrderingTest {
         hasResolvedUser: Boolean = true,
         hasStoredCredential: Boolean = true,
     ) = ColdStartSequencer(
+        claimGate = ColdStartClaimGate(),
         checkBans = {
             rec.log("ban-check")
             BanState(deviceBanned = deviceBanned, networkBanned = networkBanned)
@@ -95,7 +96,7 @@ class ColdStartGateOrderingTest {
             // cohort-scoped read — precedes the ban check, and that is pinned
             // by the ban tests below (which fail 3× if bans are ignored).
             val rec = Recorder()
-            sequencer(rec).run()
+            sequencer(rec).runToDestination()
             assertEquals("ban-check", rec.events.first())
         }
 
@@ -103,7 +104,7 @@ class ColdStartGateOrderingTest {
     fun `a device ban routes to BanDevice and starts NO cohort-scoped reads`() =
         runTest {
             val rec = Recorder()
-            val destination = sequencer(rec, deviceBanned = true).run()
+            val destination = sequencer(rec, deviceBanned = true).runToDestination()
             assertEquals(Screen.BanDevice, destination)
             assertEquals(0, rec.subscriptionsStarted)
             assertTrue("token-refresh" !in rec.events, "a banned start must not even refresh a token")
@@ -113,7 +114,7 @@ class ColdStartGateOrderingTest {
     fun `a network ban routes to BanNetwork and starts NO cohort-scoped reads`() =
         runTest {
             val rec = Recorder()
-            val destination = sequencer(rec, networkBanned = true).run()
+            val destination = sequencer(rec, networkBanned = true).runToDestination()
             assertEquals(Screen.BanNetwork, destination)
             assertEquals(0, rec.subscriptionsStarted)
         }
@@ -129,7 +130,7 @@ class ColdStartGateOrderingTest {
                     hasStoredCredential = false,
                     isAuthenticated = false,
                     hasResolvedUser = false,
-                ).run()
+                ).runToDestination()
             assertEquals(Screen.BanDevice, destination)
             assertEquals(0, rec.subscriptionsStarted)
         }
@@ -147,6 +148,7 @@ class ColdStartGateOrderingTest {
             val rec = Recorder()
             val seq =
                 ColdStartSequencer(
+                    claimGate = ColdStartClaimGate(),
                     checkBans = {
                         rec.log("ban-check")
                         BanState(
@@ -169,7 +171,7 @@ class ColdStartGateOrderingTest {
                         )
                     },
                 )
-            assertEquals(Screen.BanDevice, seq.run())
+            assertEquals(Screen.BanDevice, seq.runToDestination())
             assertEquals("Evading a prior suspension", seq.lastBan.reason)
             assertEquals("2026-09-01T00:00:00Z", seq.lastBan.expiresAt)
         }
@@ -180,7 +182,7 @@ class ColdStartGateOrderingTest {
     fun `the token refresh completes BEFORE the first cohort-scoped read`() =
         runTest {
             val rec = Recorder()
-            sequencer(rec).run()
+            sequencer(rec).runToDestination()
             val refresh = rec.events.indexOf("token-refresh")
             val subs = rec.events.indexOf("subscriptions")
             assertTrue(refresh >= 0, "the cohort gate must run at all: ${rec.events}")
@@ -195,7 +197,7 @@ class ColdStartGateOrderingTest {
             // be confirmed. Rendering cohort-scoped data on last session's claim
             // is the leak; signing out is the only safe answer.
             val rec = Recorder()
-            val destination = sequencer(rec, refreshSucceeds = false, sessionStillAlive = false).run()
+            val destination = sequencer(rec, refreshSucceeds = false, sessionStillAlive = false).runToDestination()
             assertEquals(Screen.SignIn, destination)
             assertEquals(0, rec.subscriptionsStarted)
             assertTrue(rec.signedOut, "a failed refresh must sign out, not silently continue")
@@ -206,7 +208,7 @@ class ColdStartGateOrderingTest {
         runTest {
             val rec = Recorder()
             val seq = sequencer(rec)
-            val destination = seq.run()
+            val destination = seq.runToDestination()
             assertEquals(Screen.Main, destination)
             assertEquals(1, rec.subscriptionsStarted)
             assertEquals(listOf("ban-check", "token-refresh", "subscriptions"), rec.events)
@@ -230,7 +232,7 @@ class ColdStartGateOrderingTest {
             // answer is to render the shell and issue NOTHING.
             val rec = Recorder()
             val seq = sequencer(rec, refreshSucceeds = false, sessionStillAlive = true)
-            val destination = seq.run()
+            val destination = seq.runToDestination()
 
             assertEquals(Screen.Main, destination, "an offline launch must not bounce the user to sign-in")
             assertFalse(rec.signedOut, "a transport failure is not an auth event")
@@ -247,7 +249,7 @@ class ColdStartGateOrderingTest {
             val rec = Recorder()
             val seq = sequencer(rec, refreshSucceeds = false, sessionStillAlive = false)
 
-            assertEquals(Screen.SignIn, seq.run())
+            assertEquals(Screen.SignIn, seq.runToDestination())
             assertTrue(rec.signedOut)
             assertEquals(0, rec.subscriptionsStarted)
             assertFalse(seq.cohortVerified)
@@ -264,7 +266,7 @@ class ColdStartGateOrderingTest {
                 sequencer(Recorder(), networkBanned = true),
                 sequencer(Recorder(), hasStoredCredential = false, isAuthenticated = false, hasResolvedUser = false),
             ).forEach { seq ->
-                seq.run()
+                seq.runToDestination()
                 assertFalse(seq.cohortVerified, "no destination but Main may claim a verified cohort")
             }
         }
@@ -275,7 +277,7 @@ class ColdStartGateOrderingTest {
             // No session: nothing to gate, and no cohort-scoped data to leak.
             val rec = Recorder()
             val destination =
-                sequencer(rec, hasStoredCredential = false, isAuthenticated = false, hasResolvedUser = false).run()
+                sequencer(rec, hasStoredCredential = false, isAuthenticated = false, hasResolvedUser = false).runToDestination()
             assertEquals(Screen.SignIn, destination)
             assertEquals(0, rec.subscriptionsStarted)
             assertTrue("token-refresh" !in rec.events, "no session ⇒ no token to refresh: ${rec.events}")
@@ -367,4 +369,17 @@ class CohortReconcileTest {
             assertFalse(rotated)
             assertEquals(0, checks, "a blank id must never reach the server")
         }
+}
+
+/**
+ * What the sequencer's `run()` used to do before SHY-0500 removed it — the
+ * hosts draw with `immediateDestination()` and correct with `confirm()` — kept
+ * here so the ordering assertions read as one sequence.
+ */
+private suspend fun ColdStartSequencer.runToDestination(): Screen {
+    val immediate = immediateDestination()
+    return when (val confirmation = confirm()) {
+        is ColdStartConfirmation.Stay -> immediate
+        is ColdStartConfirmation.Redirect -> confirmation.screen
+    }
 }

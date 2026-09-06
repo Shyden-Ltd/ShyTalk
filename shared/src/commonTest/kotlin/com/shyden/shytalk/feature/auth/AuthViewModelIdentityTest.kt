@@ -60,6 +60,9 @@ class AuthViewModelIdentityTest {
         override val currentUserEmail: String? = null,
         private val providerInfo: Pair<String, String>? = null,
     ) : AuthRepository {
+        // Nothing asynchronous to wait for in a fake (SHY-0500).
+        override suspend fun awaitPersistedSession() = Unit
+
         override var resolvedUniqueId: String? = null
         override var resolvedDisplayName: String? = null
         override var resolvedCohort: String? = null

@@ -31,8 +31,11 @@ import com.shyden.shytalk.feature.legal.LegalAcceptanceScreen
 import com.shyden.shytalk.feature.legal.TermsAndConditionsScreen
 import com.shyden.shytalk.feature.privacy.PrivacyPolicyScreen
 import com.shyden.shytalk.navigation.BanState
+import com.shyden.shytalk.navigation.ColdStartClaimGate
+import com.shyden.shytalk.navigation.ColdStartConfirmation
 import com.shyden.shytalk.navigation.ColdStartSequencer
 import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
+import com.shyden.shytalk.navigation.LaunchRedirectReason
 import com.shyden.shytalk.navigation.LaunchState
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
@@ -197,6 +200,16 @@ private fun IosApp() {
                 // the room list before being stopped.
                 var coldStartBan by remember { mutableStateOf(BanState()) }
 
+                // SHY-0500 — set when the background confirmation finds the stored
+                // session dead, so the sign-in screen can say why the person is
+                // there rather than leaving them to guess.
+                var launchRedirect by remember { mutableStateOf<LaunchRedirectReason?>(null) }
+
+                // SHY-0500 — where the background confirmation moved the person,
+                // if anywhere. State, because the graph mounts on the first frame
+                // and only a navigation can move it afterwards.
+                var redirectTo by remember { mutableStateOf<Screen?>(null) }
+
                 // SHY-0143 — gates the background cohort reconcile, which is
                 // only worth running once the claim has been confirmed fresh.
                 // NOT the nav graph's user-flag subscription: that keys on
@@ -207,6 +220,12 @@ private fun IosApp() {
                 // a suspend lambda, so it needs a scope that outlives the click.
                 val signOutScope = rememberCoroutineScope()
                 val authRepo: AuthRepository = koinInject()
+
+                // SHY-0500 — the cold-start claim gate. The same Koin instance is
+                // what HomeViewModel waits on, so the sequencer must engage THIS
+                // one, and the redirect below settles it after a ban has moved
+                // the screen.
+                val claimGate: ColdStartClaimGate = koinInject()
                 val startDestination by
                     produceState<String?>(initialValue = null) {
                         val koin = KoinPlatformTools.defaultContext().get()
@@ -232,6 +251,12 @@ private fun IosApp() {
                         // keyed on the live Firebase uid and refuses a record
                         // belonging to anyone else.
                         val sessionCache = koin.get<SessionCache>()
+                        // The iOS SDK restores its user from the keychain
+                        // asynchronously. Read before that, `currentFirebaseUid`
+                        // is null, the cache misses, and a signed-in person is
+                        // drawn sign-in first (SHY-0500, J40 on the iPhone).
+                        // A bounded keychain wait, never the network.
+                        authRepo.awaitPersistedSession()
                         val cached = sessionCache.read(authRepo.currentFirebaseUid)
                         if (cached != null) {
                             authRepo.resolvedUniqueId = cached.uniqueId
@@ -246,12 +271,13 @@ private fun IosApp() {
                         // startup gates any more than they can on the routing
                         // decision.
                         //
-                        // `startCohortScopedReads` is a no-op because in Compose
-                        // that event IS the nav graph mounting, and the graph
-                        // below does not mount until this produceState yields a
-                        // non-null route — which happens after `run()` returns.
+                        // `startCohortScopedReads` is a no-op: the graph mounts on
+                        // `immediateDestination()`, BEFORE `confirm()` returns
+                        // (SHY-0500), so the cohort-scoped readers wait on the
+                        // claim gate themselves.
                         val sequencer =
                             ColdStartSequencer(
+                                claimGate = claimGate,
                                 // Lenient on a transient failure, matching Android
                                 // and the behaviour AuthViewModelBanTest pins: a
                                 // real ban is authoritative, an unreachable ban
@@ -283,16 +309,39 @@ private fun IosApp() {
                                     )
                                 },
                             )
-                        val destination = sequencer.run()
+                        // SHY-0500 — DRAW FIRST, confirm behind it.
+                        //
+                        // `immediateDestination()` performs no I/O, so the graph mounts
+                        // on the first frame instead of after a ban round trip and a
+                        // token refresh. Everything the sequence enforces still runs, in
+                        // the same order, behind the screen already on display.
+                        val immediate = sequencer.immediateDestination()
+                        value = immediate.route
+
+                        val confirmation = sequencer.confirm()
                         coldStartBan = sequencer.lastBan
                         cohortVerified = sequencer.cohortVerified
+                        when (confirmation) {
+                            is ColdStartConfirmation.Stay -> Unit
+
+                            is ColdStartConfirmation.Redirect -> {
+                                // The graph already mounted on `immediate`, and rewriting
+                                // a mounted NavHost's start destination moves nothing
+                                // (review, 2026-09-04). `redirectTo` is what NAVIGATES:
+                                // to a ban route, whose facts travel in `coldStartBan`,
+                                // or to sign-in, which carries its reason so the person
+                                // is TOLD to sign in again.
+                                if (confirmation.screen == Screen.SignIn) {
+                                    launchRedirect = confirmation.reason
+                                }
+                                redirectTo = confirmation.screen
+                            }
+                        }
                         logI(
                             "MainViewController",
-                            "Cold-launch destination: ${destination.route} " +
-                                "(lockGated=${destination == Screen.Lock}, " +
-                                "banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
+                            "Cold-launch: drew ${immediate.route}, confirmation=$confirmation " +
+                                "(banned=${sequencer.lastBan.deviceBanned || sequencer.lastBan.networkBanned})",
                         )
-                        value = destination.route
 
                         // SHY-0143 I5 — the cohort reconcile, after the shell
                         // is released. `produceState`'s block runs in its own
@@ -331,12 +380,34 @@ private fun IosApp() {
                         }
                     }
 
-                // Nothing renders until the gate answers, so there is no frame
-                // in which content exists for a banned or stale-cohort session.
+                // The graph mounts on the immediate destination. The confirmation
+                // corrects it through `redirectTo` and `coldStartBan`, and the
+                // cohort-scoped reads it could expose wait on ColdStartClaimGate.
                 startDestination?.let { route ->
+                    // SHY-0500 — the shell was drawn optimistically; a correction
+                    // has to NAVIGATE, as Android does. `popUpTo(0)` pops the
+                    // optimistic room list and its ViewModel from the back stack,
+                    // so Back cannot return to it and, on a ban, nothing is left
+                    // to read on the unrefreshed claim — the sequencer kept the
+                    // gate engaged for exactly that, and it is settled only
+                    // AFTER the navigation so no later sign-in waits on it.
+                    // Keyed on state set at most once per cold start, so it
+                    // cannot navigate twice.
+                    LaunchedEffect(redirectTo) {
+                        redirectTo?.let { target ->
+                            navController.navigate(target.route) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                            claimGate.settle()
+                        }
+                    }
                     SharedNavGraph(
                         navController = navController,
                         startDestination = route,
+                        launchRedirect = launchRedirect,
+                        // Cleared once the sign-in screen has shown the message,
+                        // so it cannot fire again after a deliberate sign-out.
+                        onLaunchRedirectConsumed = { launchRedirect = null },
                         // SHY-0143 — this used to ONLY navigate. `SharedNavGraph`
                         // invokes it on the mid-session suspension path, so a
                         // suspended iPhone user was shown the Sign-In screen

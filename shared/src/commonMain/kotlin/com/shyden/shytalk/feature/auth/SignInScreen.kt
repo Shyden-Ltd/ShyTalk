@@ -61,10 +61,12 @@ import com.shyden.shytalk.resources.google_sign_in_failed
 import com.shyden.shytalk.resources.ok
 import com.shyden.shytalk.resources.retry
 import com.shyden.shytalk.resources.retrying
+import com.shyden.shytalk.resources.session_expired_sign_in_again
 import com.shyden.shytalk.resources.sign_in_not_available_on_local
 import com.shyden.shytalk.resources.unable_to_connect
 import com.shyden.shytalk.resources.voice_chat_reimagined
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -73,6 +75,21 @@ private const val KEY_EMAIL_FOR_LINK = "email_for_sign_in_link"
 
 @Composable
 fun SignInScreen(
+    /**
+     * SHY-0500 — true when the person was brought here because their stored
+     * session turned out to be dead, rather than because they asked to sign in.
+     *
+     * They are told so. Being returned to a sign-in screen with no explanation,
+     * having done nothing, reads as the app losing their account.
+     */
+    sessionExpired: Boolean = false,
+    /**
+     * SHY-0500 — called once the session-expired message has been shown, so
+     * its owner can clear the reason. Without it the reason stayed set for the
+     * life of the process and the message fired again on every later visit to
+     * this screen — after a deliberate sign-out, for one.
+     */
+    onSessionExpiredShown: () -> Unit = {},
     pendingEmailLink: String? = null,
     onEmailLinkConsumed: () -> Unit = {},
     onNavigateToEmail: () -> Unit = {},
@@ -249,6 +266,18 @@ fun SignInScreen(
                 }
             },
         )
+    }
+
+    LaunchedEffect(sessionExpired) {
+        if (sessionExpired) {
+            try {
+                snackbarHostState.showSnackbar(getString(Res.string.session_expired_sign_in_again))
+            } finally {
+                // Consumed once shown — also when the person signs in before the
+                // snackbar times out and this effect is cancelled with it.
+                onSessionExpiredShown()
+            }
+        }
     }
 
     LaunchedEffect(uiState.error) {

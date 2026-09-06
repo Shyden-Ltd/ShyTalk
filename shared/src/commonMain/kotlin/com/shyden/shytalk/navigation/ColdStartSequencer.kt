@@ -25,12 +25,25 @@ import kotlinx.coroutines.CancellationException
  *     custom claims; the full `pm-lock-check` reconcile stays a background
  *     concern and must NOT gate the shell.
  *
+ * SHY-0500 draws the shell BEFORE [confirm] runs, so ordering 2 can no longer
+ * ride on when the NavHost mounts. [ColdStartClaimGate] carries it instead:
+ * [immediateDestination] engages the gate when it draws the room list, a
+ * Stay from [confirm] settles it (a redirect and a throw deliberately do not —
+ * see [confirm]), and the cohort-scoped readers wait on it.
+ *
  * Collaborators are injected as functions, not interfaces, for one reason: the
  * thing worth testing is the sequence, and a function is the smallest surface
  * that lets a test observe it. Everything here is platform-free so Android and
  * iOS run the identical sequence.
  */
 class ColdStartSequencer(
+    /**
+     * SHY-0500 — engaged while the room list is drawn on an unconfirmed claim,
+     * settled by a Stay from [confirm] (a redirect and a throw keep it engaged —
+     * see [confirm]). The cohort-scoped readers wait on the same instance,
+     * which is why it comes from the caller rather than being made here.
+     */
+    private val claimGate: ColdStartClaimGate,
     private val checkBans: suspend () -> BanState,
     private val refreshToken: suspend () -> Boolean,
     /**
@@ -51,7 +64,7 @@ class ColdStartSequencer(
     private val launchState: () -> LaunchState,
 ) {
     /**
-     * The ban facts from the most recent [run], for the screen that renders
+     * The ban facts from the most recent [confirm], for the screen that renders
      * them.
      *
      * `BanScreen` takes `(banType, reason, expiresAt)`. A sequencer that
@@ -61,7 +74,7 @@ class ColdStartSequencer(
      * how to appeal. A correct gate that cannot explain itself is an unusable
      * one.
      *
-     * Read-only to callers, and only ever written by [run].
+     * Read-only to callers, and only ever written by [confirm].
      */
     var lastBan: BanState = BanState()
         private set
@@ -86,19 +99,128 @@ class ColdStartSequencer(
     var cohortVerified: Boolean = false
         private set
 
+    /** The destination chosen by [immediateDestination], for [confirm] to reason about. */
+    private var drawnFirst: Screen? = null
+
     /**
-     * Runs the sequence and returns the destination to start at.
+     * The local facts [immediateDestination] routed on, kept so [confirm] can ask
+     * the SAME shared resolver what those facts mean once the bans are known.
      *
-     * Deliberately returns the destination rather than navigating: routing is
-     * the caller's job on each platform, and keeping the decision returnable is
-     * what makes the whole sequence testable without a UI.
+     * Re-reading them would be the bug: a decision assembled from facts sampled at
+     * two different instants is a decision no test can pin.
      */
-    suspend fun run(): Screen {
-        // GATE 1 — bans, before anything else can observe or render state.
-        val bans = checkBans()
-        lastBan = bans
+    private var drawnFrom: LaunchState? = null
+
+    /**
+     * What to draw BEFORE anything is awaited. Performs no I/O whatsoever.
+     *
+     * SHY-0500. The old `run()` awaited a ban check and a token refresh — two network round
+     * trips — before returning any destination, and nothing rendered until it
+     * did. On a slow connection that is a spinner; on a dead one it is a spinner
+     * for the length of a timeout. EPIC-0004 exists to remove exactly that, and
+     * SHY-0143 reintroduced it in the act of securing the routing.
+     *
+     * The question "is there a session" is LOCAL — Firebase either holds a user
+     * or it does not — so it is answered here, immediately, and drawn. Everything
+     * that needs the network happens in [confirm], behind the screen the person
+     * is already looking at.
+     *
+     * Deliberately excludes the ban inputs: they are not known yet, and waiting
+     * for them is the thing being removed. [confirm] still enforces them, and a
+     * shell rendered before the verdict shows none of the person's data because
+     * cohort-scoped reads do not start until the claim is confirmed.
+     *
+     * Engages the [ColdStartClaimGate] when it draws the room list, and ONLY
+     * [confirm] settles it — so a host must call [confirm] next, with no
+     * suspension point in between (a cancelled launch between the two would
+     * leave the gate engaged; `LaunchRedirectIsAOneShotPinTest` pins both
+     * hosts). A new draw also supersedes an earlier one that never got to
+     * confirm: the gate reflects what is on screen NOW, not a run that a
+     * recreated host abandoned.
+     */
+    fun immediateDestination(): Screen {
         val state = launchState()
         val destination =
+            resolveLaunchDestination(
+                hasStoredCredential = state.hasStoredCredential,
+                isAppLockEnabled = state.isAppLockEnabled,
+                isLockRequired = state.isLockRequired,
+                isAuthenticated = state.isAuthenticated,
+                hasResolvedUser = state.hasResolvedUser,
+            )
+        drawnFirst = destination
+        drawnFrom = state
+        if (destination == Screen.Main) {
+            // The room list is about to be drawn on LAST session's claim. Hold
+            // its cohort-scoped reads until confirm() has refreshed it.
+            claimGate.begin()
+        } else {
+            // Nothing cohort-scoped is drawn — and this draw supersedes any
+            // earlier one that a torn-down host never got to confirm.
+            claimGate.settle()
+        }
+        logD(COLD_START_TAG, "immediate: destination=$destination (no I/O)")
+        return destination
+    }
+
+    /**
+     * Confirms — over the network — the screen [immediateDestination] already
+     * drew, and says whether it must change.
+     *
+     * The gate ORDER from SHY-0143 is unchanged and still carries the security:
+     * bans are resolved before the session is touched, and the cohort claim is
+     * refreshed before a single cohort-scoped read is issued.
+     *
+     * What changed is only WHEN the person sees something, not what is enforced.
+     *
+     * Settles the [ColdStartClaimGate] on a [ColdStartConfirmation.Stay] only:
+     * the screen already drawn was right, so its reads may proceed — on the
+     * refreshed claim when the refresh succeeded, or on the cached room list
+     * when the network could not be reached (the claim cannot be refreshed
+     * offline, and holding would be a room list that never loads on a train).
+     *
+     * Every other outcome leaves the gate engaged, and fails closed:
+     *
+     *  - a REDIRECT — a ban, or a dead session that has just been signed out.
+     *    The room list drawn underneath is still mounted until the host
+     *    navigates; releasing its reads here would fire them on a claim this
+     *    confirmation did not refresh, or against a session that no longer
+     *    exists. The host settles the gate AFTER `popUpTo(0)` has cleared that
+     *    room list and its ViewModel (both hosts are pinned to do so);
+     *  - a THROW — there is no verdict at all. The exception propagates to the
+     *    host, the reads stay held, and the next draw supersedes the gate
+     *    ([immediateDestination] resets it).
+     *
+     * Requires [immediateDestination] to have run: there is nothing to confirm
+     * before something was drawn, and guessing here would decide from facts
+     * sampled at a different instant than the ones drawn on.
+     */
+    suspend fun confirm(): ColdStartConfirmation {
+        val drawn =
+            checkNotNull(drawnFirst) {
+                "confirm() before immediateDestination(): nothing has been drawn to confirm"
+            }
+        val state =
+            checkNotNull(drawnFrom) {
+                "immediateDestination() drew $drawn without recording the facts it drew on"
+            }
+        val outcome = confirmDrawn(drawn, state)
+        if (outcome is ColdStartConfirmation.Stay) claimGate.settle()
+        return outcome
+    }
+
+    private suspend fun confirmDrawn(
+        drawn: Screen,
+        state: LaunchState,
+    ): ColdStartConfirmation {
+        // GATE 1 — bans, before anything can observe or render the person's data.
+        val bans = checkBans()
+        lastBan = bans
+
+        // Asked of the SHARED resolver rather than re-decided here, so "a ban
+        // beats every other input" has exactly one definition and both platforms
+        // still route through it.
+        val withBans =
             resolveColdStartDestination(
                 deviceBanned = bans.deviceBanned,
                 networkBanned = bans.networkBanned,
@@ -108,59 +230,38 @@ class ColdStartSequencer(
                 isAuthenticated = state.isAuthenticated,
                 hasResolvedUser = state.hasResolvedUser,
             )
+        if (withBans != drawn) {
+            logD(COLD_START_TAG, "confirm: bans move $drawn -> $withBans")
+            return ColdStartConfirmation.Redirect(withBans, null)
+        }
 
-        // SHY-0497: the inputs AND the verdict, on one line.
-        //
-        // The app has been seen on Home immediately after a sign-out that
-        // completed cleanly (firebase user=null), and the activity is recreated
-        // at that moment because it declares no configChanges. Which branch
-        // below sends it to Main is the open question, and it cannot be
-        // answered from the outside -- every one of these values is read here
-        // and nowhere else.
-        logD(
-            COLD_START_TAG,
-            "decision: destination=$destination deviceBanned=${bans.deviceBanned} " +
-                "networkBanned=${bans.networkBanned} storedCredential=${state.hasStoredCredential} " +
-                "appLock=${state.isAppLockEnabled} lockRequired=${state.isLockRequired} " +
-                "authenticated=${state.isAuthenticated} resolvedUser=${state.hasResolvedUser}",
-        )
+        // Nothing to confirm for a start that was never heading to the room list:
+        // no session to validate, and no cohort-scoped data to gate.
+        if (drawn != Screen.Main) return ColdStartConfirmation.Stay
 
-        // Anything that is not Main renders no cohort-scoped data, so there is
-        // nothing to gate and no token worth refreshing. Returning early keeps
-        // a banned start from touching the network at all.
-        if (destination != Screen.Main) return destination
-
-        // GATE 2 — the cohort claim must be CURRENT before a single
-        // cohort-scoped read is issued.
+        // GATE 2 — the cohort claim must be CURRENT before any cohort-scoped read.
         if (refreshToken()) {
-            logD(COLD_START_TAG, "token refreshed; staying on Main")
+            logD(COLD_START_TAG, "confirmed: claim refreshed, reads starting")
             cohortVerified = true
             startCohortScopedReads()
-            return Screen.Main
+            return ColdStartConfirmation.Stay
         }
 
-        // The refresh failed, and WHY decides everything.
-        logD(COLD_START_TAG, "token refresh FAILED; sessionAlive=${isSessionAlive()}")
+        logD(COLD_START_TAG, "confirm: refresh FAILED; sessionAlive=${isSessionAlive()}")
         if (!isSessionAlive()) {
             // Firebase dropped the local user, so the refresh token really is
-            // expired or revoked. The claim can never be confirmed and the
-            // session is already gone; signing out makes that explicit.
+            // expired or revoked. Sign out and say why — SHY-0500 requires the
+            // person be told to sign in again rather than silently deposited on
+            // the sign-in screen.
             signOut()
-            return Screen.SignIn
+            return ColdStartConfirmation.Redirect(Screen.SignIn, LaunchRedirectReason.SESSION_EXPIRED)
         }
 
-        // The session survives, so the failure was transport — offline, a
-        // timeout, a blip. Signing out here is what turned "rotate the phone in
-        // airplane mode" into "you are logged out". Render the shell, leave the
-        // session alone, and issue nothing: `cohortVerified` stays false, so the
-        // graphs hold their cohort-scoped subscription until a later refresh
-        // confirms the claim.
-        // SHY-0497 candidate: this is the only path that returns Main without a
-        // live auth confirmation, and it does so on purpose -- signing out on a
-        // transport blip is what turned "rotate the phone in airplane mode"
-        // into "you are logged out".
-        logD(COLD_START_TAG, "refresh failed but session alive; rendering Main unverified")
-        return Screen.Main
+        // The session survives, so the failure was transport. Signing out here is
+        // what turned "rotate the phone in airplane mode" into "you are logged
+        // out". Stay put, issue nothing: `cohortVerified` stays false.
+        logD(COLD_START_TAG, "confirm: transport failure, staying unverified")
+        return ColdStartConfirmation.Stay
     }
 }
 
@@ -238,7 +339,7 @@ fun BanStatus.toBanState(): BanState =
  * birthday passed stayed in the minor cohort until they happened to sign in
  * again. In a minors-facing app that is a safety gap, not a staleness one.
  *
- * **Deliberately not part of [ColdStartSequencer.run].** The story requires
+ * **Deliberately not part of the cold-start sequence itself.** The story requires
  * this to run AFTER the shell is shown, off the critical path — it is a
  * server-side recompute and can be slow. Callers LAUNCH it; nothing awaits it,
  * and nothing routes on it.
@@ -289,4 +390,35 @@ suspend fun reconcileCohortInBackground(
         log("cohort reconcile failed (non-fatal): ${e.message}")
         false
     }
+}
+
+/**
+ * What [ColdStartSequencer.confirm] decided about the screen already drawn.
+ *
+ * A sealed type rather than a nullable [Screen] so "nothing changes" is a value
+ * somebody has to handle, not an absence that is easy to forget.
+ */
+sealed interface ColdStartConfirmation {
+    /** The screen already drawn was right. Leave it alone. */
+    data object Stay : ColdStartConfirmation
+
+    /**
+     * Move to [screen]. [reason] is shown to the person when there is one —
+     * a ban screen explains itself, a bounce to sign-in does not.
+     */
+    data class Redirect(
+        val screen: Screen,
+        val reason: LaunchRedirectReason?,
+    ) : ColdStartConfirmation
+}
+
+/**
+ * Why somebody was moved off the screen they were already looking at.
+ *
+ * An enum rather than a message: the copy belongs in the resource bundle where
+ * it can be translated, and a reason code cannot arrive on screen untranslated.
+ */
+enum class LaunchRedirectReason {
+    /** The stored session is expired or revoked — they must sign in again. */
+    SESSION_EXPIRED,
 }

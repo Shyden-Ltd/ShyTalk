@@ -10,6 +10,13 @@ import com.shyden.shytalk.feature.support.SupportSource
 
 /** Parameters for the sign-in screen. */
 data class SignInScreenParams(
+    /**
+     * SHY-0500 — true when the person is here because their stored session
+     * turned out to be dead, rather than because they asked to sign in.
+     */
+    val sessionExpired: Boolean = false,
+    /** SHY-0500 — reports the session-expired message shown, so its owner clears the reason. */
+    val onSessionExpiredShown: () -> Unit = {},
     val pendingEmailLink: String? = null,
     val onEmailLinkConsumed: () -> Unit = {},
     val onNavigateToEmail: () -> Unit = {},

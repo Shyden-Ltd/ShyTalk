@@ -53,6 +53,9 @@ class AuthRepositoryRefreshIdTokenContractTest {
         }
 
     private class FakeAuthRepository : AuthRepository {
+        // Nothing asynchronous to wait for in a fake (SHY-0500).
+        override suspend fun awaitPersistedSession() = Unit
+
         var refreshIdTokenCalled = false
         var refreshShouldFail = false
 
