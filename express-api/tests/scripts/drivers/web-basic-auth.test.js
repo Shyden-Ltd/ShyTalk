@@ -19,10 +19,17 @@
 const {
   classifyWebTarget,
   basicAuthFor,
+  describeWebTarget,
+  assertWallAccepts,
+  BASIC_AUTH_ENV_VAR,
   WALLED,
   UNWALLED,
   UNRECOGNISED,
 } = require('../../../scripts/drivers/web-basic-auth.js');
+// The consumer of the error code, imported so these tests assert the seam
+// (does the matrix classify this as setup failure?) and not merely one side
+// of it (is a string property set?).
+const { isInitError } = require('../../../scripts/matrix-dispatch');
 
 // sonarjs/no-hardcoded-passwords keys on password-shaped identifiers. This
 // value is never authenticated with — it only has to survive a round trip
@@ -30,6 +37,28 @@ const {
 // suppression-free.
 const WALL_FIXTURE = 'not-a-real-secret-test-fixture';
 const envWith = (password) => (password === undefined ? {} : { DEV_BASIC_AUTH_PASSWORD: password });
+
+// SHY-0529 AC5: a wall failure is a broken ENVIRONMENT, not a broken product.
+// manual-qa-runner's top-level catch routes every throw through
+// matrix-dispatch's classifyCrashExit; only errors isInitError() accepts get
+// the reserved exit 3 that makes matrix-cell-dispatch mark the cell 'skip'
+// instead of 'fail'. Both halves are asserted deliberately: err.code forbids
+// the wrong fix (bolting another regex onto INIT_ERROR_SIGNATURES), and
+// isInitError forbids a sentinel rename that leaves the code cosmetic.
+const expectClassifiedAsSetupFailure = (err) => {
+  expect(err).toBeInstanceOf(Error);
+  expect(err.code).toBe('DRIVER_INIT_FAILED');
+  expect(isInitError(err)).toBe(true);
+};
+
+const catchThrown = (fn) => {
+  try {
+    fn();
+  } catch (err) {
+    return err;
+  }
+  throw new Error('expected the call to throw, but it returned');
+};
 
 describe('web-basic-auth — classifyWebTarget', () => {
   test('the live public site is unwalled', () => {
@@ -120,6 +149,9 @@ describe('web-basic-auth — basicAuthFor', () => {
     expect(() => basicAuthFor('https://dev.shytalk.shyden.co.uk', envWith(undefined))).toThrow(
       /DEV_BASIC_AUTH_PASSWORD/,
     );
+    expectClassifiedAsSetupFailure(
+      catchThrown(() => basicAuthFor('https://dev.shytalk.shyden.co.uk', envWith(undefined))),
+    );
   });
 
   test('treats an empty-string password as absent', () => {
@@ -129,12 +161,20 @@ describe('web-basic-auth — basicAuthFor', () => {
     expect(() => basicAuthFor('https://dev.shytalk.shyden.co.uk', envWith(''))).toThrow(
       /DEV_BASIC_AUTH_PASSWORD/,
     );
+    expectClassifiedAsSetupFailure(
+      catchThrown(() => basicAuthFor('https://dev.shytalk.shyden.co.uk', envWith(''))),
+    );
   });
 
   test('refuses an unrecognised target rather than sending it the password', () => {
     expect(() =>
       basicAuthFor('https://shytalk.shyden.co.uk.evil.com', envWith(WALL_FIXTURE)),
     ).toThrow(/unrecognised|not a recognised/i);
+    expectClassifiedAsSetupFailure(
+      catchThrown(() =>
+        basicAuthFor('https://shytalk.shyden.co.uk.evil.com', envWith(WALL_FIXTURE)),
+      ),
+    );
   });
 
   test('the error text never contains the password', () => {
@@ -161,5 +201,145 @@ describe('web-basic-auth — basicAuthFor', () => {
       if (original === undefined) delete process.env.DEV_BASIC_AUTH_PASSWORD;
       else process.env.DEV_BASIC_AUTH_PASSWORD = original;
     }
+  });
+});
+
+/**
+ * SHY-0529 observability AC: "the run's startup output records whether the
+ * target was treated as walled, unwalled, or refused ... names the target
+ * address and the classification only, never the password."
+ *
+ * describeWebTarget() returns the line instead of printing it, so these tests
+ * assert the text directly rather than through a console spy — a spy would pin
+ * the stream (a formatting choice) alongside the wording (the contract).
+ */
+describe('describeWebTarget', () => {
+  it('names the address and reports a walled target as walled', () => {
+    const line = describeWebTarget('https://dev.shytalk.shyden.co.uk');
+    expect(line).toContain('dev.shytalk.shyden.co.uk');
+    expect(line).toContain('walled');
+  });
+
+  it('reports the live site as unwalled, not merely "not walled"', () => {
+    const line = describeWebTarget('https://shytalk.shyden.co.uk');
+    expect(line).toContain('shytalk.shyden.co.uk');
+    expect(line).toContain('unwalled');
+  });
+
+  it('reports a loopback target as unwalled', () => {
+    expect(describeWebTarget('http://localhost:8888')).toContain('unwalled');
+  });
+
+  it('reports a lookalike address as refused', () => {
+    const line = describeWebTarget('https://shytalk.shyden.co.uk.evil.example.com');
+    expect(line).toContain('refused');
+  });
+
+  it('never echoes an unparseable address back into the log', () => {
+    // An unparseable string could be anything the operator typed, including a
+    // URL carrying inline credentials. Classification is still reportable; the
+    // input is not.
+    const line = describeWebTarget('https://dev:hunter2@@@not a url');
+    expect(line).toContain('refused');
+    expect(line).not.toContain('hunter2');
+  });
+
+  it('never contains the password, even when one is set', () => {
+    const line = describeWebTarget('https://dev.shytalk.shyden.co.uk');
+    // The env var *name* is a useful diagnostic; its value never is.
+    expect(line).not.toContain(WALL_FIXTURE);
+  });
+});
+
+/**
+ * SHY-0529 error-path AC: "given a password is supplied but the wall rejects
+ * it, when the run starts, then the failure names the rejected password as the
+ * cause rather than reporting hundreds of unrelated scenario failures."
+ *
+ * The wall is real (functions/_lib/lockdown.js returns 401 with a
+ * WWW-Authenticate challenge); fetch is injected here so the *reaction* to each
+ * status is pinned without a network. Per the mocked-collaborator rule, the
+ * arguments are asserted too — a fake that only records "was called" could not
+ * report a probe sent without its Authorization header.
+ */
+describe('assertWallAccepts', () => {
+  const CREDS = { username: 'dev', password: WALL_FIXTURE };
+  const expectedHeader = `Basic ${Buffer.from(`dev:${WALL_FIXTURE}`).toString('base64')}`;
+
+  it('sends one authenticated GET to the target and resolves on 200', async () => {
+    const calls = [];
+    const fetchImpl = (url, init) => {
+      calls.push([url, init]);
+      return Promise.resolve({ status: 200 });
+    };
+    await expect(
+      assertWallAccepts('https://dev.shytalk.shyden.co.uk', CREDS, { fetchImpl }),
+    ).resolves.toBeUndefined();
+
+    expect(calls).toHaveLength(1);
+    const [url, init] = calls[0];
+    expect(url).toBe('https://dev.shytalk.shyden.co.uk');
+    expect(init.method).toBe('GET');
+    expect(init.headers.authorization).toBe(expectedHeader);
+  });
+
+  it('throws on 401, naming the variable to fix and the target', async () => {
+    const fetchImpl = () => Promise.resolve({ status: 401 });
+    await expect(
+      assertWallAccepts('https://dev.shytalk.shyden.co.uk', CREDS, { fetchImpl }),
+    ).rejects.toThrow(/DEV_BASIC_AUTH_PASSWORD/);
+  });
+
+  it('classifies a 401 as a setup failure, so the matrix skips rather than fails', async () => {
+    const fetchImpl = () => Promise.resolve({ status: 401 });
+    const err = await assertWallAccepts('https://dev.shytalk.shyden.co.uk', CREDS, {
+      fetchImpl,
+    }).catch((e) => e);
+    expectClassifiedAsSetupFailure(err);
+  });
+
+  it('does not put the rejected password itself into the failure', async () => {
+    const fetchImpl = () => Promise.resolve({ status: 401 });
+    // "Names the rejected password as the cause" means names the *variable*.
+    // The security AC forbids the value from reaching any error message.
+    // Caught by hand rather than with .rejects.toThrow(asymmetricMatcher): a
+    // negative matcher that jest silently ignored would pass while asserting
+    // nothing, which is the failure mode this test exists to rule out.
+    let caught;
+    try {
+      await assertWallAccepts('https://dev.shytalk.shyden.co.uk', CREDS, { fetchImpl });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.message).not.toContain(WALL_FIXTURE);
+    expect(caught.message).toContain(BASIC_AUTH_ENV_VAR);
+  });
+
+  it('proceeds on a non-401 status, which does not prove the password wrong', async () => {
+    const fetchImpl = () => Promise.resolve({ status: 503 });
+    await expect(
+      assertWallAccepts('https://dev.shytalk.shyden.co.uk', CREDS, { fetchImpl }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('proceeds when the probe itself fails, rather than inventing a new abort', async () => {
+    // Offline, DNS failure, timeout. Aborting here would turn a transient
+    // network blip into a dead run — a new mass-failure mode, which is the
+    // thing this ticket exists to remove, not add.
+    const fetchImpl = () => Promise.reject(new Error('getaddrinfo ENOTFOUND'));
+    await expect(
+      assertWallAccepts('https://dev.shytalk.shyden.co.uk', CREDS, { fetchImpl }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('sends nothing at all when the target needs no credentials', async () => {
+    let called = false;
+    const fetchImpl = () => {
+      called = true;
+      return Promise.resolve({ status: 200 });
+    };
+    await assertWallAccepts('http://localhost:8888', undefined, { fetchImpl });
+    expect(called).toBe(false);
   });
 });

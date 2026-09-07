@@ -29,7 +29,7 @@
  */
 const path = require('path');
 const { makeWebSignIn } = require('./web-sign-in');
-const { basicAuthFor } = require('./web-basic-auth');
+const { basicAuthFor, describeWebTarget, assertWallAccepts } = require('./web-basic-auth');
 
 let _playwright;
 function loadPlaywright() {
@@ -189,6 +189,9 @@ async function createWebDriver({
   headless = true,
   browser: browserName = 'chromium',
   httpCredentials,
+  // Injection seam for the startup wall probe below. Defaults to the real
+  // fetch; unit tests pass a stand-in so no test reaches a live host.
+  fetchImpl,
 } = {}) {
   if (!BROWSER_LAUNCHERS[browserName]) {
     throw new Error(
@@ -208,7 +211,14 @@ async function createWebDriver({
   // then exits 3, "driver init failed". Resolving lazily inside pageFor() would
   // instead surface as a per-scenario failure, which is how run 20260906-184009-dev
   // reported 559 product bugs for one missing environment variable (SHY-0529).
+  // Logged before the credentials are resolved, so the classification is on the
+  // record even when resolution is what fails.
+  const override = httpCredentials === undefined ? '' : ' (credentials overridden by caller)';
+  console.error(`[web-driver] ${describeWebTarget(baseURL)}${override}`);
   const credentials = httpCredentials === undefined ? basicAuthFor(baseURL) : httpCredentials;
+  // Prove the wall accepts them here, where a failure aborts construction, not
+  // inside pageFor(), where it would be recorded as a scenario failure.
+  await assertWallAccepts(baseURL, credentials, { fetchImpl });
   const pw = loadPlaywright();
   const browser = await BROWSER_LAUNCHERS[browserName](pw, { headless });
   const pages = new Map(); // persona name → Page

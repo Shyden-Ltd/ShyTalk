@@ -119,16 +119,26 @@ function prepareMockPages(pagesByPersona) {
 const TEST_DEV_WALL_FIXTURE = 'not-a-real-secret-test-fixture';
 
 /**
- * Runs `fn` with DEV_BASIC_AUTH_PASSWORD set, restoring the previous value
- * afterwards even if `fn` throws. Walled targets refuse to construct without
- * it (SHY-0529), so any test using a dev/preview baseURL must go through here.
+ * Runs `fn` with DEV_BASIC_AUTH_PASSWORD set and a wall that accepts it,
+ * restoring both afterwards even if `fn` throws. Walled targets refuse to
+ * construct without the password and probe the wall over the network before
+ * launching a browser (SHY-0529), so any test using a dev/preview baseURL must
+ * go through here — without the stub the probe reaches the real dev host,
+ * where the fixture password earns a genuine 401.
+ *
+ * The stub lives here rather than at each call site so isolation is structural:
+ * a test added later cannot reach the network by forgetting an argument. Tests
+ * that assert the probe itself pass `fetchImpl`, which takes precedence.
  */
 async function withDevPassword(fn) {
   const original = process.env.DEV_BASIC_AUTH_PASSWORD;
+  const originalFetch = globalThis.fetch;
   process.env.DEV_BASIC_AUTH_PASSWORD = TEST_DEV_WALL_FIXTURE;
+  globalThis.fetch = () => Promise.resolve({ status: 200 });
   try {
     return await fn();
   } finally {
+    globalThis.fetch = originalFetch;
     if (original === undefined) delete process.env.DEV_BASIC_AUTH_PASSWORD;
     else process.env.DEV_BASIC_AUTH_PASSWORD = original;
   }
@@ -613,5 +623,96 @@ describe('web-playwright-driver — Basic-auth wall (SHY-0529)', () => {
     }
     expect(message).not.toContain(TEST_DEV_WALL_FIXTURE);
     expect(message).toContain('shytalk.shyden.co.uk.evil.com');
+  });
+});
+
+describe('createWebDriver wall probe (SHY-0529)', () => {
+  const EXPECTED_HEADER = `Basic ${Buffer.from(`dev:${TEST_DEV_WALL_FIXTURE}`).toString('base64')}`;
+
+  test('probes the wall with the resolved credentials before launching a browser', async () => {
+    // Asserting the arguments, not merely that some branch ran: a stand-in
+    // cannot report a wrong call shape, so a probe sent without the header —
+    // or to the wrong address — would otherwise pass unnoticed.
+    prepareMockPages({ Alice: makeMockPage() });
+    const calls = [];
+    const fetchImpl = (url, init) => {
+      calls.push({ url, init });
+      return Promise.resolve({ status: 200 });
+    };
+
+    await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk', fetchImpl }),
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://dev.shytalk.shyden.co.uk');
+    expect(calls[0].init.method).toBe('GET');
+    expect(calls[0].init.headers.authorization).toBe(EXPECTED_HEADER);
+  });
+
+  test('a rejected password aborts before the browser launches', async () => {
+    // The mass-failure path. A wrong password used to 401 every page.goto(),
+    // which the runner records as hundreds of product failures.
+    prepareMockPages({ Alice: makeMockPage() });
+    const fetchImpl = () => Promise.resolve({ status: 401 });
+
+    await expect(
+      withDevPassword(() =>
+        createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk', fetchImpl }),
+      ),
+    ).rejects.toThrow(/DEV_BASIC_AUTH_PASSWORD/);
+
+    // Zero launches is the strong claim. "Construction threw" is satisfied by
+    // a throw from anywhere, including one after a browser process started and
+    // was left behind; only the call count pins the ordering.
+    expect(playwright.chromium.launch).not.toHaveBeenCalled();
+  });
+
+  test('an unreachable wall is not treated as a wrong password', async () => {
+    // Ambiguity proceeds: a DNS failure or a blip must not invent a new
+    // mass-failure mode in the code that exists to abolish one.
+    const { newContext } = prepareMockPages({ Alice: makeMockPage() });
+    const fetchImpl = () => Promise.reject(new Error('getaddrinfo ENOTFOUND'));
+
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk', fetchImpl }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+
+    expect(newContext.mock.calls[0][0].httpCredentials).toEqual({
+      username: 'dev',
+      password: TEST_DEV_WALL_FIXTURE,
+    });
+  });
+
+  test('resolves the wall once at construction, not on every page open', async () => {
+    // AC11. `credentials` is a construction-time const and the probe runs
+    // before the browser launches, so paying the cost once is structural —
+    // but structure only holds until someone moves it. A refactor that
+    // resolved either inside pageFor() would re-probe per persona, which on
+    // the 559-scenario matrix is 559 extra round trips to the wall.
+    const { newContext } = prepareMockPages({ Alice: makeMockPage(), Tariq: makeMockPage() });
+    let probes = 0;
+    const fetchImpl = () => {
+      probes += 1;
+      return Promise.resolve({ status: 200 });
+    };
+
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk', fetchImpl }),
+    );
+    await driver.pageFor('Alice');
+    await driver.pageFor('Tariq');
+    await driver.pageFor('Alice'); // cached — no second context for the same persona
+
+    // Both halves matter. The context list stops this passing vacuously (a
+    // driver that opened no pages would also probe once) and proves the
+    // once-resolved credentials are still applied to every later context;
+    // the probe count is AC11 itself.
+    expect(newContext.mock.calls.map(([options]) => options.httpCredentials)).toEqual([
+      { username: 'dev', password: TEST_DEV_WALL_FIXTURE },
+      { username: 'dev', password: TEST_DEV_WALL_FIXTURE },
+    ]);
+    expect(probes).toBe(1);
   });
 });

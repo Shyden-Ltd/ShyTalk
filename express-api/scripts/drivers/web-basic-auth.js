@@ -46,6 +46,37 @@ const BASIC_AUTH_ENV_VAR = 'DEV_BASIC_AUTH_PASSWORD';
 const BASIC_AUTH_USERNAME = 'dev';
 
 /** The wall is Cloudflare middleware; a server on the loopback never runs it. */
+/**
+ * How long the startup wall probe waits before giving up and proceeding. A slow
+ * wall is not a wrong password, so the timeout is generous and non-fatal.
+ */
+const WALL_PROBE_TIMEOUT_MS = 10_000;
+
+/**
+ * Sentinel `err.code` marking a throw as "the environment could not be
+ * bootstrapped", as opposed to "the product misbehaved".
+ * `matrix-dispatch.js::isInitError` checks this first; the runner's top-level
+ * catch then exits with the reserved code that makes the matrix mark the cell
+ * `skip` rather than `fail`. Without it a missing or wrong password is reported
+ * as hundreds of product failures — the confusion SHY-0529 exists to remove.
+ */
+const DRIVER_INIT_FAILED = 'DRIVER_INIT_FAILED';
+
+/**
+ * Builds a setup-failure error. Every throw in this module is an environment
+ * problem, so all of them go through here rather than stamping the code at each
+ * site — a fourth throw added later inherits the classification instead of
+ * silently regressing to `RUNNER_CRASH`.
+ *
+ * @param {string} message Operator-facing cause and the command that fixes it.
+ * @returns {Error} An error carrying `code = 'DRIVER_INIT_FAILED'`.
+ */
+function initError(message) {
+  const err = new Error(message);
+  err.code = DRIVER_INIT_FAILED;
+  return err;
+}
+
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
 
 /**
@@ -140,7 +171,7 @@ function basicAuthFor(baseURL, env = process.env) {
   const target = hostnameOf(baseURL) ?? '<unparseable target>';
 
   if (classification === UNRECOGNISED) {
-    throw new Error(
+    throw initError(
       `Refusing to run web journeys against "${target}": it is not a recognised ShyTalk ` +
         `web target, so it must not be sent the non-live Basic-auth password. Recognised ` +
         `targets are the live site, a loopback address, and subdomains of ` +
@@ -153,7 +184,7 @@ function basicAuthFor(baseURL, env = process.env) {
   // closed on an empty expected password, so an empty value here would 401 on
   // every page — the same mass failure, one layer later.
   if (typeof password !== 'string' || password.length === 0) {
-    throw new Error(
+    throw initError(
       `"${target}" is behind the non-live Basic-auth wall but ${BASIC_AUTH_ENV_VAR} is not ` +
         `set. Source it with: set -a && source ~/.shytalk/dev-web-auth.env && set +a`,
     );
@@ -162,7 +193,88 @@ function basicAuthFor(baseURL, env = process.env) {
   return { username: BASIC_AUTH_USERNAME, password };
 }
 
+/**
+ * A one-line, password-free account of how a target was classified, for the
+ * run's startup output (SHY-0529).
+ *
+ * Returns the line rather than printing it: the caller owns the stream, and the
+ * wording can be asserted without a console spy — a spy would pin the choice of
+ * stream (a formatting decision) alongside the wording (the contract).
+ *
+ * @param {unknown} baseURL
+ * @returns {string} names the address and the classification, never the password
+ */
+function describeWebTarget(baseURL) {
+  const classification = classifyWebTarget(baseURL);
+  const hostname = hostnameOf(baseURL);
+  // Never echo the raw input back: an unparseable string is whatever the
+  // operator typed, which may be a URL carrying inline credentials. The
+  // classification is still reportable; the input is not.
+  const target = hostname === null ? '(unparseable address)' : hostname;
+
+  if (classification === WALLED) {
+    return `target ${target} \u2014 walled (Basic auth required; password from $${BASIC_AUTH_ENV_VAR})`;
+  }
+  if (classification === UNWALLED) {
+    return `target ${target} \u2014 unwalled (no password sent)`;
+  }
+  return `target ${target} \u2014 refused (not a recognised ShyTalk web host)`;
+}
+
+/**
+ * Startup probe: confirm the wall actually accepts the credentials we resolved.
+ *
+ * Wiring credentials in is not enough. A *wrong* password reproduces the exact
+ * defect this module exists to abolish \u2014 every page.goto() answers 401 and the
+ * runner reports hundreds of product failures for one bad environment variable
+ * (run 20260906-184009-dev: 0 passed / 559 failed). Catching the 401 inside
+ * pageFor() would be too late: the runner records a per-scenario throw as a
+ * scenario failure, which is precisely the shape being removed.
+ *
+ * Only an explicit 401 is fatal. A timeout, a DNS failure or a 5xx does not
+ * prove the credential wrong, and aborting on those would trade one mass-failure
+ * mode for another. Ambiguity proceeds; only the unambiguous signal stops the run.
+ *
+ * @param {unknown} baseURL
+ * @param {{username: string, password: string}|null|undefined} credentials
+ * @param {{fetchImpl?: typeof fetch, timeoutMs?: number}} [options]
+ * @returns {Promise<void>}
+ * @throws when the wall answers 401, naming the variable to fix \u2014 never its value
+ */
+async function assertWallAccepts(baseURL, credentials, options = {}) {
+  // Nothing to prove for a target that needs none, and a local run should not
+  // pay for a network round trip it has no use for.
+  if (!credentials) return;
+
+  const { fetchImpl = globalThis.fetch, timeoutMs = WALL_PROBE_TIMEOUT_MS } = options;
+  const encoded = Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64');
+
+  let response;
+  try {
+    response = await fetchImpl(baseURL, {
+      method: 'GET',
+      // A redirect is not a verdict on the credentials; don't chase it.
+      redirect: 'manual',
+      headers: { authorization: `Basic ${encoded}` },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch {
+    return; // Offline, DNS failure, timeout: ambiguous, so proceed.
+  }
+
+  if (response.status !== 401) return;
+
+  const hostname = hostnameOf(baseURL) ?? '(unparseable address)';
+  throw initError(
+    `The password wall at ${hostname} rejected the credentials (HTTP 401).\n` +
+      `  ${BASIC_AUTH_ENV_VAR} is set, but does not match the wall's password.\n` +
+      '  Refresh it with:  set -a && source ~/.shytalk/dev-web-auth.env && set +a\n' +
+      '  Stopping now: continuing would report every scenario as a product failure.',
+  );
+}
+
 module.exports = {
+  DRIVER_INIT_FAILED,
   UNWALLED,
   WALLED,
   UNRECOGNISED,
@@ -170,4 +282,6 @@ module.exports = {
   BASIC_AUTH_USERNAME,
   classifyWebTarget,
   basicAuthFor,
+  describeWebTarget,
+  assertWallAccepts,
 };
