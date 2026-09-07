@@ -88,20 +88,50 @@ function makeMockPage(overrides = {}) {
 function prepareMockPages(pagesByPersona) {
   const orderedPages = Object.values(pagesByPersona);
   let pageIdx = 0;
+  // `newContext` is hoisted out of the browser factory so tests can assert
+  // on the options the driver passes to it. Before SHY-0529 it was created
+  // inline, so no handle escaped and the context options were unobservable
+  // — which is precisely why a missing `httpCredentials` survived every
+  // unit test here and only surfaced as 0 passed / 559 failed on dev.
+  const newContext = jest.fn(async () => ({
+    newPage: jest.fn(async () => {
+      const p = orderedPages[pageIdx] ?? makeMockPage();
+      pageIdx += 1;
+      return p;
+    }),
+    close: jest.fn(),
+  }));
   const browserMock = jest.fn(async () => ({
-    newContext: jest.fn(async () => ({
-      newPage: jest.fn(async () => {
-        const p = orderedPages[pageIdx] ?? makeMockPage();
-        pageIdx += 1;
-        return p;
-      }),
-      close: jest.fn(),
-    })),
+    newContext,
     close: jest.fn(),
   }));
   playwright.chromium.launch.mockImplementation(browserMock);
   playwright.firefox.launch.mockImplementation(browserMock);
   playwright.webkit.launch.mockImplementation(browserMock);
+  return { newContext, browserMock };
+}
+
+/**
+ * Stand-in for the Basic-auth wall's password. The mocked browser never
+ * authenticates with it, so it is a fixture rather than a credential — which is
+ * also why it needs no sonarjs/no-hardcoded-passwords suppression.
+ */
+const TEST_DEV_WALL_FIXTURE = 'not-a-real-secret-test-fixture';
+
+/**
+ * Runs `fn` with DEV_BASIC_AUTH_PASSWORD set, restoring the previous value
+ * afterwards even if `fn` throws. Walled targets refuse to construct without
+ * it (SHY-0529), so any test using a dev/preview baseURL must go through here.
+ */
+async function withDevPassword(fn) {
+  const original = process.env.DEV_BASIC_AUTH_PASSWORD;
+  process.env.DEV_BASIC_AUTH_PASSWORD = TEST_DEV_WALL_FIXTURE;
+  try {
+    return await fn();
+  } finally {
+    if (original === undefined) delete process.env.DEV_BASIC_AUTH_PASSWORD;
+    else process.env.DEV_BASIC_AUTH_PASSWORD = original;
+  }
 }
 
 beforeEach(() => {
@@ -226,7 +256,11 @@ describe('web-playwright-driver — webRefreshRoomsList', () => {
   test('uses dev baseURL when provided', async () => {
     const alicePage = makeMockPage();
     prepareMockPages({ Alice: alicePage });
-    const driver = await createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk' });
+    // dev sits behind the Basic-auth wall, so the driver now refuses to
+    // construct without the password (SHY-0529).
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk' }),
+    );
     await driver.webRefreshRoomsList('Alice');
     expect(alicePage.goto).toHaveBeenCalledWith('https://dev.shytalk.shyden.co.uk/rooms');
   });
@@ -447,5 +481,137 @@ describe('web-playwright-driver — webSignIn (SHY-0328)', () => {
       email: 'adult-power@shytalk.dev',
       secret: LOCAL_PERSONA_CREDENTIAL,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SHY-0529 — the Basic-auth wall on non-prod web targets
+//
+// Every ShyTalk web host except the live site and localhost sits behind the
+// Cloudflare Pages HTTP Basic wall (functions/_lib/lockdown.js). The driver
+// created its contexts without credentials, so on dev every page.goto()
+// returned 401 and matrix run 20260906-184009-dev scored 0/559.
+//
+// Credentials are derived from the baseURL rather than passed in, because the
+// wall is a property of the TARGET, not of any one driver: manual-qa-runner.js
+// builds five web drivers and every future browser cell would otherwise have to
+// remember to pass a credentials argument. These tests pin both halves of the
+// fix — the credentials that must be sent, and the loud refusal when they are
+// missing or the host is not ours.
+// ---------------------------------------------------------------------------
+describe('web-playwright-driver — Basic-auth wall (SHY-0529)', () => {
+  test('sends credentials to the browser context for a walled target', async () => {
+    const alicePage = makeMockPage();
+    const { newContext } = prepareMockPages({ Alice: alicePage });
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk' }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+    expect(newContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseURL: 'https://dev.shytalk.shyden.co.uk',
+        httpCredentials: { username: 'dev', password: TEST_DEV_WALL_FIXTURE },
+      }),
+    );
+  });
+
+  test('sends credentials to a Cloudflare Pages preview deployment', async () => {
+    const alicePage = makeMockPage();
+    const { newContext } = prepareMockPages({ Alice: alicePage });
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://abc1234.shytalk-site-dev.pages.dev' }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+    expect(newContext.mock.calls[0][0].httpCredentials).toEqual({
+      username: 'dev',
+      password: TEST_DEV_WALL_FIXTURE,
+    });
+  });
+
+  test('sends no credentials to localhost', async () => {
+    const alicePage = makeMockPage();
+    const { newContext } = prepareMockPages({ Alice: alicePage });
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'http://localhost:8888' }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+    expect(newContext.mock.calls[0][0].httpCredentials).toBeUndefined();
+  });
+
+  test('sends no credentials to the live site', async () => {
+    // The live site is not walled. Sending the dev password there would put
+    // it in a public server's logs.
+    const alicePage = makeMockPage();
+    const { newContext } = prepareMockPages({ Alice: alicePage });
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://shytalk.shyden.co.uk' }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+    expect(newContext.mock.calls[0][0].httpCredentials).toBeUndefined();
+  });
+
+  test('every persona page gets the credentials, not just the first', async () => {
+    // pageFor() creates one context per persona. A fix applied to only the
+    // first would leave multi-actor scenarios failing.
+    const alicePage = makeMockPage();
+    const bobPage = makeMockPage();
+    const { newContext } = prepareMockPages({ Alice: alicePage, Bob: bobPage });
+    const driver = await withDevPassword(() =>
+      createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk' }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+    await driver.webRefreshRoomsList('Bob');
+    expect(newContext).toHaveBeenCalledTimes(2);
+    for (const call of newContext.mock.calls) {
+      expect(call[0].httpCredentials).toEqual({ username: 'dev', password: TEST_DEV_WALL_FIXTURE });
+    }
+  });
+
+  test('refuses to construct when a walled target has no password', async () => {
+    // The loud-failure half. Without this the runner walks 559 scenarios
+    // that all 401, reporting 559 product failures and no cause.
+    const original = process.env.DEV_BASIC_AUTH_PASSWORD;
+    delete process.env.DEV_BASIC_AUTH_PASSWORD;
+    try {
+      await expect(
+        createWebDriver({ baseURL: 'https://dev.shytalk.shyden.co.uk' }),
+      ).rejects.toThrow(/DEV_BASIC_AUTH_PASSWORD/);
+    } finally {
+      if (original !== undefined) process.env.DEV_BASIC_AUTH_PASSWORD = original;
+    }
+  });
+
+  test('refuses to construct for a host that is not ours', async () => {
+    await expect(
+      withDevPassword(() => createWebDriver({ baseURL: 'https://shytalk.shyden.co.uk.evil.com' })),
+    ).rejects.toThrow(/unrecognised|not a recognised/i);
+  });
+
+  test('an explicit null suppresses credential derivation', async () => {
+    // Escape hatch for a caller that has already decided the target needs
+    // none. `undefined` still means "derive"; only an explicit null opts out.
+    const alicePage = makeMockPage();
+    const { newContext } = prepareMockPages({ Alice: alicePage });
+    const driver = await withDevPassword(() =>
+      createWebDriver({
+        baseURL: 'https://dev.shytalk.shyden.co.uk',
+        httpCredentials: null,
+      }),
+    );
+    await driver.webRefreshRoomsList('Alice');
+    expect(newContext.mock.calls[0][0].httpCredentials).toBeUndefined();
+  });
+
+  test('the password never reaches a thrown error message', async () => {
+    let message = '';
+    try {
+      await withDevPassword(() =>
+        createWebDriver({ baseURL: 'https://shytalk.shyden.co.uk.evil.com' }),
+      );
+    } catch (err) {
+      message = err.message;
+    }
+    expect(message).not.toContain(TEST_DEV_WALL_FIXTURE);
+    expect(message).toContain('shytalk.shyden.co.uk.evil.com');
   });
 });

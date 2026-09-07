@@ -29,6 +29,7 @@
  */
 const path = require('path');
 const { makeWebSignIn } = require('./web-sign-in');
+const { basicAuthFor } = require('./web-basic-auth');
 
 let _playwright;
 function loadPlaywright() {
@@ -187,19 +188,37 @@ async function createWebDriver({
   baseURL = 'http://localhost:8888',
   headless = true,
   browser: browserName = 'chromium',
+  httpCredentials,
 } = {}) {
   if (!BROWSER_LAUNCHERS[browserName]) {
     throw new Error(
       `Unknown browser "${browserName}" — supported: ${SUPPORTED_BROWSERS.join(', ')}. Mobile-browser variants (Mobile Chrome / Mobile Safari / Samsung Internet / Mobile Firefox / Mobile Edge / Chrome iOS / Firefox iOS / Edge iOS) ship via separate drivers (mobile-chrome-cdp-driver.js, appium-ios-webview-driver.js, etc.) — not this one.`,
     );
   }
+  // Every ShyTalk web host except the live site and localhost sits behind the
+  // Cloudflare Pages HTTP Basic wall (functions/_lib/lockdown.js). The wall is a
+  // property of the TARGET, not of any one caller, so credentials are derived
+  // from `baseURL` rather than passed in — otherwise all five construction sites
+  // in manual-qa-runner.js, and every browser cell added later, would have to
+  // remember an extra argument. `undefined` means derive; an explicit `null`
+  // opts out for a caller that has already decided the target needs none.
+  //
+  // Resolved here, before the browser launches, so a walled target with no
+  // password (or a host that isn't ours) aborts driver construction — the runner
+  // then exits 3, "driver init failed". Resolving lazily inside pageFor() would
+  // instead surface as a per-scenario failure, which is how run 20260906-184009-dev
+  // reported 559 product bugs for one missing environment variable (SHY-0529).
+  const credentials = httpCredentials === undefined ? basicAuthFor(baseURL) : httpCredentials;
   const pw = loadPlaywright();
   const browser = await BROWSER_LAUNCHERS[browserName](pw, { headless });
   const pages = new Map(); // persona name → Page
 
   async function pageFor(name) {
     if (pages.has(name)) return pages.get(name);
-    const ctx = await browser.newContext({ baseURL });
+    const ctx = await browser.newContext({
+      baseURL,
+      ...(credentials ? { httpCredentials: credentials } : {}),
+    });
     const page = await ctx.newPage();
     pages.set(name, page);
     return page;
