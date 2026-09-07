@@ -57,6 +57,11 @@ const HELPER_FILES = new Set([
   // start/stop, not tap/dump/screencap, and a listMethods() here would claim a
   // parity it does not have.
   'journey-screen-recorder.js',
+  // SHY-0529: decides which web targets sit behind the Cloudflare Pages Basic
+  // wall and supplies the credentials for them. A pure classifier — it holds no
+  // browser, page or session, so it has classifyWebTarget/basicAuthFor, not a
+  // driver surface, and the web driver calls it before launching anything.
+  'web-basic-auth.js',
   // SHY-0447: owns ONE Appium session used only to READ the Android screen,
   // because `uiautomator dump` costs ~2332ms per call against ~65ms warm and
   // was 86% of a walk. It drives nothing — taps and swipes stay on adb — so it
