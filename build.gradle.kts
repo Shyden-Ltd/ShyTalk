@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.play.publisher) apply false
     alias(libs.plugins.ktlint) apply false
     alias(libs.plugins.detekt)
-    id("org.sonarqube") version "7.4.0.8496"
+    id("org.sonarqube") version "7.5.0.8588"
 }
 
 subprojects {
