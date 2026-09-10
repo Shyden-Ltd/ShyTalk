@@ -1,0 +1,109 @@
+name: Dependabot — retarget security updates onto develop
+
+# Spec: .project/stories/SHY-0520-dependabot-security-updates-open-against-main-and-never-reach-the-develop-gate.md
+#
+# Why this exists: .github/dependabot.yml sets `target-branch: "develop"` for
+# all four ecosystems, but GitHub honours that for VERSION updates only.
+# SECURITY updates are always raised against the default branch, so they land
+# on main, never meet develop's required checks, and dependabot-auto-merge.yml
+# — which listens on `branches: [develop]` — never sees them. They then sit
+# open until a human notices, which is how the alert backlog accrued.
+#
+# Why pull_request_target: a `pull_request` run on a bot-owned branch gets a
+# read-only token, so it cannot edit the PR. pull_request_target runs against
+# the base repo with a writable context — which is also why it is the classic
+# injection surface. This job is safe by construction rather than by escaping:
+# it checks nothing out, runs no code from the pull request, and reads only the
+# PR number, its author login and its base ref. Those three fields, and the
+# absence of a checkout, are asserted by
+# express-api/tests/scripts/dependabot-retarget-security-updates.test.js.
+#
+# Why close and reopen: changing a PR's base emits no event of its own, so the
+# retargeted PR would sit with zero check runs. Reopening emits `reopened`,
+# which is in dependabot-auto-merge.yml's types list, so CI and auto-merge pick
+# it up exactly as if it had just been raised. Minting a Release App token is
+# what makes that work — events raised by the repository's default token start
+# no further workflow runs.
+
+on:
+  pull_request_target:
+    types: [opened]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  retarget:
+    name: Retarget onto develop
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.base.ref == 'main'
+    steps:
+      - name: Mint a Release App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          # client-id accepts the numeric App ID stored in RELEASE_APP_ID (the
+          # action aliases client-id to appId internally, and replaced the
+          # deprecated app-id input in v3.x). Same secret pair, and the same
+          # pinned SHA, as release.yml and sync-roadmap-data.yml.
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Retarget onto develop and restart checks
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # This job runs no checkout, so gh has no git remote to infer the
+          # repository from and must be told explicitly.
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          echo "PR #${PR}: Dependabot security update opened against main; retargeting."
+          gh pr edit "${PR}" --base develop
+
+          gh pr close "${PR}"
+          gh pr reopen "${PR}"
+
+          # Bounded and condition-driven, the same shape as the health-check
+          # waits in e2e-tests.yml: it stops the instant a check run appears
+          # rather than burning a fixed delay, and gives up instead of hanging
+          # if none ever does.
+          started=no
+          attempt=0
+          while [ "${attempt}" -lt 20 ]; do
+            count="$(gh pr checks "${PR}" --json name --jq 'length' 2>/dev/null || true)"
+            case "${count}" in '' | *[!0-9]*) count=0 ;; esac
+            if [ "${count}" -gt 0 ]; then
+              started=yes
+              break
+            fi
+            attempt=$((attempt + 1))
+            sleep 3
+          done
+
+          {
+            echo "### SHY-0520 — Dependabot security update retargeted"
+            echo ''
+            echo '| Field | Value |'
+            echo '| --- | --- |'
+            echo "| Pull request | #${PR} |"
+            echo '| Base before | main |'
+            echo '| Base after | develop |'
+            echo "| Checks started | ${started} |"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [ "${started}" != yes ]; then
+            gh pr comment "${PR}" --body-file - <<'MD'
+          SHY-0520: retargeted this security update from `main` onto `develop`, but no check runs appeared after reopening it. Auto-merge waits on develop's required checks, so this PR is stranded until someone re-runs CI on it.
+          MD
+            echo "::error::PR #${PR} retargeted onto develop but no checks started — stranded."
+            exit 1
+          fi
+
+          gh pr comment "${PR}" --body-file - <<'MD'
+          SHY-0520: security updates ignore `target-branch`, so this PR opened against `main`. Retargeted onto `develop` and reopened to start CI; dependabot-auto-merge.yml takes it from here.
+          MD
