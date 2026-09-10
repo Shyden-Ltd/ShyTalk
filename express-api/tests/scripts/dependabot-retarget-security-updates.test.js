@@ -41,7 +41,15 @@ describe('.github/workflows/dependabot-retarget-security-updates.yml', () => {
   describe('trigger', () => {
     test('fires on pull_request_target, opened only, scoped to main', () => {
       expect(content).toMatch(/^on:/m);
-      expect(content).toMatch(/pull_request_target:/);
+      // ANCHORED TO A YAML KEY, not to the token anywhere in the file. Line 12
+      // is `# Why pull_request_target: ...`, so an unanchored match is
+      // satisfied by the prose explaining the setting. Measured 2026-09-10:
+      // with the real trigger deleted and that comment left in place, all 22
+      // assertions still passed — the guard could not see the workflow stop
+      // firing. A comment line begins with `#`, so requiring leading
+      // whitespace before the key excludes it. Same shape as the
+      // `pull_request` check below, which already had this right.
+      expect(content).toMatch(/^[ \t]+pull_request_target:/m);
       expect(content).toMatch(/types:[ \t]*\[[ \t]*opened[ \t]*\]/);
       expect(content).toMatch(/branches:[ \t]*\[[ \t]*main[ \t]*\]/);
     });
