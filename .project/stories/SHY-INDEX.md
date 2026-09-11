@@ -357,6 +357,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0526](SHY-0526-ios-debug-configurations-bypass-device-checks-like-android-debug-builds.md) | P1 | S | bug | iOS Debug configurations bypass the auth-stage device checks like Android's debug build type | 👀 In Review | — |  |
 | [SHY-0527](SHY-0527-journey-runner-dismisses-the-daily-reward-dialog-before-reading-the-debug-overlay.md) | P1 | S | bug | Journey runner dismisses the daily-reward dialog before it reads the debug overlay | 👀 In Review | — |  |
 | [SHY-0528](SHY-0528-the-pre-merge-gate-counts-base-branch-commits-as-unreviewed.md) | P2 | XS | infra | The pre-merge gate counts base-branch commits as unreviewed | 👀 In Review | — |  |
+| [SHY-0531](SHY-0531-weekday-abbreviations-machine-translated-as-verbs-in-four-locales.md) | P1 | S | bug | Weekday abbreviations machine-translated as verbs in four locales — Indonesian "Wed" reads "Menikahi" (to marry) | 📝 Draft | — |  |
 
 ## Done
 
