@@ -22,7 +22,7 @@ navigationCompose = "2.10.0"
 # be taken until SHY-0244 is done — which is why that story is next up rather
 # than "someday". Deliberately NOT added to dependabot ignore: an ignore would
 # also hide that security patch.
-firebaseBom = "34.18.0"
+firebaseBom = "34.19.0"
 googleServices = "4.5.0"
 coroutines = "1.11.0"
 coil3 = "3.6.1"
