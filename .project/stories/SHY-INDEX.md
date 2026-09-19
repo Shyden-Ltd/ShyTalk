@@ -360,6 +360,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0500](SHY-0500-cold-start-blocks-on-the-network-before-showing-anything.md) | P1 | L | bug | Opening the app waits on the network before it shows anything | 👀 In Review | — |  |
 | [SHY-0532](SHY-0532-agents-act-on-shytalk-under-their-own-least-privilege-github-identity.md) | P0 | L | infra | Agents act on ShyTalk under their own least-privilege GitHub identity | 📝 Draft | — |  |
 | [SHY-0533](SHY-0533-ci-refuses-a-pull-request-that-leaves-the-story-index-out-of-step.md) | P1 | S | infra | CI refuses a pull request that leaves the story index out of step | 📝 Draft | — |  |
+| [SHY-0534](SHY-0534-every-develop-merge-reaches-dev-without-anyone-dispatching-it.md) | P1 | M | infra | Every develop merge reaches dev without anyone dispatching it | 📝 Draft | — |  |
 
 ## Done
 
