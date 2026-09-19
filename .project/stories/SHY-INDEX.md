@@ -357,7 +357,12 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0526](SHY-0526-ios-debug-configurations-bypass-device-checks-like-android-debug-builds.md) | P1 | S | bug | iOS Debug configurations bypass the auth-stage device checks like Android's debug build type | 👀 In Review | — |  |
 | [SHY-0527](SHY-0527-journey-runner-dismisses-the-daily-reward-dialog-before-reading-the-debug-overlay.md) | P1 | S | bug | Journey runner dismisses the daily-reward dialog before it reads the debug overlay | 👀 In Review | — |  |
 | [SHY-0528](SHY-0528-the-pre-merge-gate-counts-base-branch-commits-as-unreviewed.md) | P2 | XS | infra | The pre-merge gate counts base-branch commits as unreviewed | 👀 In Review | — |  |
+| [SHY-0500](SHY-0500-cold-start-blocks-on-the-network-before-showing-anything.md) | P1 | L | bug | Opening the app waits on the network before it shows anything | 👀 In Review | — |  |
+| [SHY-0530](SHY-0530-sweep-source-text-guards-for-unanchored-presence-assertions.md) | P1 | M | infra | Sweep source-text guards for unanchored presence assertions | 📝 Draft | — |  |
 | [SHY-0531](SHY-0531-weekday-abbreviations-machine-translated-as-verbs-in-four-locales.md) | P1 | S | bug | Weekday abbreviations machine-translated as verbs in four locales — Indonesian "Wed" reads "Menikahi" (to marry) | 📝 Draft | — |  |
+| [SHY-0532](SHY-0532-agents-act-on-shytalk-under-their-own-least-privilege-github-identity.md) | P0 | L | infra | Agents act on ShyTalk under their own least-privilege GitHub identity | 📝 Draft | — |  |
+| [SHY-0533](SHY-0533-ci-refuses-a-pull-request-that-leaves-the-story-index-out-of-step.md) | P1 | S | infra | CI refuses a pull request that leaves the story index out of step | 📝 Draft | — |  |
+| [SHY-0534](SHY-0534-every-develop-merge-reaches-dev-without-anyone-dispatching-it.md) | P1 | M | infra | Every develop merge reaches dev without anyone dispatching it | 📝 Draft | — |  |
 
 ## Done
 
