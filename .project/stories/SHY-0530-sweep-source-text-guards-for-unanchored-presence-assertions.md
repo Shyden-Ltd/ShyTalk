@@ -61,6 +61,8 @@ needed.
 
 ## Acceptance Criteria
 
+### Happy path
+
 - [ ] The file set is **derived from the filesystem**, not from a list written
       into this story. A hand-written scope is the failure that has already
       been paid for more than once.
@@ -77,23 +79,89 @@ needed.
       evidence rather than relief.
 - [ ] A guard-on-guards prevents a new unanchored presence assertion from
       landing, detecting it **structurally rather than by name**.
+
+### Error paths
+
+- [ ] A test file the sweep cannot parse, or an assertion whose target file it
+      cannot resolve, is reported by path as UNRESOLVED and fails the sweep. A
+      skipped file must never read the same as a clean one.
+- [ ] A pattern built at runtime (a variable, a helper, `new RegExp(...)`) that
+      the sweep cannot reduce to a literal is listed for inspection by hand
+      and counted. It is never dropped from the total.
+
+### Edge cases
+
+- [ ] The comments-only projection lexes each target's own comment syntax:
+      `#` in YAML and shell, `//` and `/* */` in JS, TS and Kotlin, `<!-- -->`
+      in XML and HTML. A `#` inside a quoted YAML value, `https://` inside a
+      string, and a regex literal are not comments.
+- [ ] A token inside a YAML block scalar (`run: |`) is script text, not a key.
+      An anchor for a key is not satisfied by the same word in a script body.
+- [ ] A setting named both in a comment and in real config is a finding only
+      if the deletion mutation leaves its guard green. The comment match only
+      shortlists.
+
+### Performance
+
+- [ ] The guard-on-guards runs inside the existing unit test job, with no new
+      CI job. Its added time is measured before and after and recorded here,
+      within a budget of 5 seconds.
+
+### Security
+
+- [ ] Guards over security-relevant settings (workflow triggers,
+      `permissions:` blocks, and environment and secret references) are listed
+      separately in the sweep record. A vacuous guard there can hide a
+      security regression, not just a broken feature.
+- [ ] The sweep and the guard-on-guards only read files. They execute nothing
+      they scan and need no secrets or network access.
+
+### UX
+
+- [ ] The guard-on-guards' failure names the test file and line, the
+      unanchored pattern, and an anchored form of it (for example
+      `/^[ \t]+pull_request_target:/m`). A developer who has never read this
+      story can fix the assertion from the failure alone.
+
+### i18n
+
+- [ ] N/A: there are no user-facing strings. All output is developer-facing
+      test and sweep text, in English.
+
+### Observability
+
 - [ ] The count of guards inspected and the count fixed are both recorded, so
       "swept" is a number rather than an adjective.
+- [ ] The sweep record lists every finding with its file, line and pattern,
+      and the mutation result in both directions, so any one can be re-run on
+      its own.
 
 ## BDD Scenarios
 
-```gherkin
-Scenario: a presence assertion cannot survive deletion of what it guards
-  Given a guard asserting that a workflow sets `pull_request_target`
-  And a comment in that workflow explaining why it does
-  When the real setting is deleted and the comment is left in place
-  Then the guard fails
+**Scenario: A presence assertion cannot survive deletion of what it guards**
 
-Scenario: the guard-on-guards rejects a new unanchored assertion
-  Given a new test asserting a setting exists by scanning whole file content
-  When the suite runs
-  Then it fails, naming the assertion and the anchor it needs
-```
+- **Given** a guard asserting that a workflow sets `pull_request_target`
+- **And** a comment in that workflow explaining why it does
+- **When** the real setting is deleted and the comment is left in place
+- **Then** the guard fails
+
+**Scenario: The guard-on-guards rejects a new unanchored assertion**
+
+- **Given** a new test asserting a setting exists by scanning whole file content
+- **When** the suite runs
+- **Then** it fails, naming the assertion and the anchor it needs
+
+**Scenario: A URL in a string is not read as a comment**
+
+- **Given** a guarded file with `https://` inside a quoted string
+- **When** the comments-only projection is built
+- **Then** the URL is not in the projection
+
+**Scenario: The sweep never skips a file in silence**
+
+- **Given** a test file the sweep cannot parse
+- **When** the sweep runs
+- **Then** it names the file as unresolved and fails
 
 ## Test Plan
 
